@@ -20,6 +20,7 @@ import { GuaranteeForm } from "./GuaranteeForm";
 import { EndContractForm } from "./EndContractForm";
 import { EditInfoForm } from "./EditInfoForm";
 import { LedgerView } from "./LedgerView";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 
 export // ──────────────────────────────────────────────────────────
 // UNIT ACTION DIALOG (4 tabs + ledger)
@@ -39,18 +40,19 @@ function UnitActionDialog({
 }) {
   const apiBase = useApiBase();
   const { selectedCompany } = useCompany();
+  // View Only and Create Only roles cannot change an existing unit or contract.
+  // Create Only may start a contract on a vacant unit but cannot record payments.
+  const recordChanges = useExistingRecordChangeAccess();
+  const recordChangeReason = recordChanges.reason ?? undefined;
+  const showPaymentTab = !recordChanges.isCreateOnly;
+  const contractTabDefault = showPaymentTab ? "payment" : "ledger";
   // Source-module references can read their original contract when the same
   // company is active; a cross-company projection remains read-only.
   const referenceBase =
-    unit.sourceModule === "ERP"
-      ? "/api/erp/rental"
-      : unit.sourceModule === "FACTORY"
-        ? "/api/factory/rental"
-        : apiBase;
+    unit.sourceModule === "ERP" ? "/api/erp/rental" : unit.sourceModule === "FACTORY" ? "/api/factory/rental" : apiBase;
   const detailApiBase = unit.isInternalLeaseProjection ? referenceBase : apiBase;
   const canReadSourceDetail =
-    !unit.isInternalLeaseProjection ||
-    (unit.sourceCompanyId === selectedCompany?.id && Boolean(unit.sourceModule));
+    !unit.isInternalLeaseProjection || (unit.sourceCompanyId === selectedCompany?.id && Boolean(unit.sourceModule));
   const { data: detail, isLoading } = useQuery<{
     unit: Unit;
     contract: Contract | null;
@@ -102,7 +104,12 @@ function UnitActionDialog({
             <Tabs defaultValue="contract" className="w-full">
               <div className="erp-mobile-scroll-tabs pb-1">
                 <TabsList className="w-max min-w-full sm:min-w-0 sm:w-fit" aria-label="Rental unit actions">
-                  <TabsTrigger value="info" data-testid={`tab-${testIdPrefix}-unit-info`}>
+                  <TabsTrigger
+                    value="info"
+                    disabled={!recordChanges.allowed}
+                    title={recordChangeReason}
+                    data-testid={`tab-${testIdPrefix}-unit-info`}
+                  >
                     <UserCog className="h-4 w-4 mr-1" />
                     Edit Info
                   </TabsTrigger>
@@ -137,27 +144,31 @@ function UnitActionDialog({
             />
           </div>
         ) : isShared ? (
-          <Tabs defaultValue="payment" className="w-full">
+          <Tabs defaultValue={contractTabDefault} className="w-full">
             <div className="erp-mobile-scroll-tabs pb-1">
               <TabsList className="w-max min-w-full sm:min-w-0 sm:w-fit" aria-label="Rental unit actions">
-                <TabsTrigger value="payment" data-testid={`tab-${testIdPrefix}-payment`}>
-                  <DollarSign className="h-4 w-4 mr-1" />
-                  Payment
-                </TabsTrigger>
+                {showPaymentTab && (
+                  <TabsTrigger value="payment" data-testid={`tab-${testIdPrefix}-payment`}>
+                    <DollarSign className="h-4 w-4 mr-1" />
+                    Payment
+                  </TabsTrigger>
+                )}
                 <TabsTrigger value="ledger" data-testid={`tab-${testIdPrefix}-ledger`}>
                   Statement
                 </TabsTrigger>
               </TabsList>
             </div>
-            <TabsContent value="payment">
-              <PaymentForm
-                contract={contract}
-                cashAccounts={cashAccounts}
-                testIdPrefix={testIdPrefix}
-                unitId={unit.id}
-                ledger={detail?.ledger}
-              />
-            </TabsContent>
+            {showPaymentTab && (
+              <TabsContent value="payment">
+                <PaymentForm
+                  contract={contract}
+                  cashAccounts={cashAccounts}
+                  testIdPrefix={testIdPrefix}
+                  unitId={unit.id}
+                  ledger={detail?.ledger}
+                />
+              </TabsContent>
+            )}
             <TabsContent value="ledger">
               <LedgerView
                 ledger={detail?.ledger ?? []}
@@ -171,43 +182,67 @@ function UnitActionDialog({
             </TabsContent>
           </Tabs>
         ) : (
-          <Tabs defaultValue="payment" className="w-full">
+          <Tabs defaultValue={contractTabDefault} className="w-full">
             <div className="erp-mobile-scroll-tabs pb-1">
               <TabsList className="w-max min-w-full sm:min-w-0 sm:w-fit" aria-label="Rental unit actions">
-                <TabsTrigger value="payment" data-testid={`tab-${testIdPrefix}-payment`}>
-                  <DollarSign className="h-4 w-4 mr-1" />
-                  Payment
-                </TabsTrigger>
+                {showPaymentTab && (
+                  <TabsTrigger value="payment" data-testid={`tab-${testIdPrefix}-payment`}>
+                    <DollarSign className="h-4 w-4 mr-1" />
+                    Payment
+                  </TabsTrigger>
+                )}
                 <TabsTrigger value="ledger" data-testid={`tab-${testIdPrefix}-ledger`}>
                   Statement
                 </TabsTrigger>
-                <TabsTrigger value="edit" data-testid={`tab-${testIdPrefix}-edit`}>
+                <TabsTrigger
+                  value="edit"
+                  disabled={!recordChanges.allowed}
+                  title={recordChangeReason}
+                  data-testid={`tab-${testIdPrefix}-edit`}
+                >
                   <UserCog className="h-4 w-4 mr-1" />
                   Edit Info
                 </TabsTrigger>
-                <TabsTrigger value="modify" data-testid={`tab-${testIdPrefix}-modify`}>
+                <TabsTrigger
+                  value="modify"
+                  disabled={!recordChanges.allowed}
+                  title={recordChangeReason}
+                  data-testid={`tab-${testIdPrefix}-modify`}
+                >
                   <FileEdit className="h-4 w-4 mr-1" />
                   Modify Rent
                 </TabsTrigger>
-                <TabsTrigger value="guarantee" data-testid={`tab-${testIdPrefix}-guarantee`}>
+                <TabsTrigger
+                  value="guarantee"
+                  disabled={!recordChanges.allowed}
+                  title={recordChangeReason}
+                  data-testid={`tab-${testIdPrefix}-guarantee`}
+                >
                   <Send className="h-4 w-4 mr-1" />
                   Guarantee
                 </TabsTrigger>
-                <TabsTrigger value="end" data-testid={`tab-${testIdPrefix}-end`}>
+                <TabsTrigger
+                  value="end"
+                  disabled={!recordChanges.allowed}
+                  title={recordChangeReason}
+                  data-testid={`tab-${testIdPrefix}-end`}
+                >
                   <XCircle className="h-4 w-4 mr-1" />
                   End Contract
                 </TabsTrigger>
               </TabsList>
             </div>
-            <TabsContent value="payment">
-              <PaymentForm
-                contract={contract}
-                cashAccounts={cashAccounts}
-                testIdPrefix={testIdPrefix}
-                unitId={unit.id}
-                ledger={detail?.ledger}
-              />
-            </TabsContent>
+            {showPaymentTab && (
+              <TabsContent value="payment">
+                <PaymentForm
+                  contract={contract}
+                  cashAccounts={cashAccounts}
+                  testIdPrefix={testIdPrefix}
+                  unitId={unit.id}
+                  ledger={detail?.ledger}
+                />
+              </TabsContent>
+            )}
             <TabsContent value="ledger">
               <LedgerView
                 ledger={detail?.ledger ?? []}
@@ -216,6 +251,7 @@ function UnitActionDialog({
                 guaranteePayments={detail?.guaranteePayments ?? []}
                 contract={contract}
                 unitId={unit.id}
+                readOnly={!recordChanges.allowed}
                 onNoteUpdated={() =>
                   queryClient.invalidateQueries({ queryKey: [apiBase + "/units", unit.id, "detail"] })
                 }

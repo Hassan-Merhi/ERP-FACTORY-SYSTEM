@@ -1,16 +1,18 @@
 import type { SaleRow, InventoryItem } from "../pos-components/posTypes";
-import { POS_COLUMNS, getPosPickerInventory } from "../utils/posCalculations";
+import { POS_COLUMNS, getPosPickerInventory, getPosKeyboardHighlightedIndex, stepPosKeyboardHighlight } from "../utils/posCalculations";
 
 interface PosKeyboardNavigationParams {
   rows: SaleRow[];
   activeRow: number | null;
   highlightedIndex: number;
   inventory: InventoryItem[];
+  canSellNegativeStock?: boolean;
   setSelectedCell: React.Dispatch<React.SetStateAction<{ row: number; col: number }>>;
   setHighlightedIndex: React.Dispatch<React.SetStateAction<number>>;
   setRows: React.Dispatch<React.SetStateAction<SaleRow[]>>;
   toast: (opts: { title: string; description?: string; variant?: "destructive" | "default" }) => void;
   focusCell: (row: number, col: number) => void;
+  focusInventoryPicker?: () => void;
   selectItem: (item: InventoryItem, targetRowOverride?: number) => void;
 }
 
@@ -24,11 +26,13 @@ export function usePosKeyboardNavigation({
   activeRow,
   highlightedIndex,
   inventory,
+  canSellNegativeStock = false,
   setSelectedCell,
   setHighlightedIndex,
   setRows,
   toast,
   focusCell,
+  focusInventoryPicker,
   selectItem,
 }: PosKeyboardNavigationParams) {
   // ISSUE 9: Real keyboard navigation — returns a handler bound to current searchTerm
@@ -37,28 +41,51 @@ export function usePosKeyboardNavigation({
     const isItemNameField = POS_COLUMNS[colIndex]?.key === "itemName";
     // Must match InventoryPicker's order exactly or the highlighted row and
     // Enter/Tab can resolve to different stock items.
-    const filteredItems = getPosPickerInventory(inventory, searchTerm);
+    // Read the active row input directly, avoiding a one-render stale search
+    // when the cashier types and immediately presses an arrow.
+    const visibleTerm = isItemNameField ? (e.currentTarget as HTMLInputElement).value : searchTerm;
+    const filteredItems = getPosPickerInventory(inventory, visibleTerm);
+    const selectedIndex = getPosKeyboardHighlightedIndex(filteredItems, highlightedIndex, canSellNegativeStock);
 
     if (isItemNameField && filteredItems.length > 0) {
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        setHighlightedIndex((prev) => Math.min(prev + 1, filteredItems.length - 1));
+        setHighlightedIndex((prev) => stepPosKeyboardHighlight(filteredItems, prev, 1, canSellNegativeStock));
         return;
       }
-      if (e.key === "ArrowUp" && highlightedIndex > 0) {
+      if (e.key === "ArrowUp") {
         e.preventDefault();
-        setHighlightedIndex((prev) => Math.max(prev - 1, 0));
+        setHighlightedIndex((prev) => stepPosKeyboardHighlight(filteredItems, prev, -1, canSellNegativeStock));
         return;
       }
       if (e.key === "Enter") {
         e.preventDefault();
-        if (filteredItems[highlightedIndex]) selectItem(filteredItems[highlightedIndex], rowIndex);
+        const item = filteredItems[selectedIndex] ?? (selectedIndex === -1 ? filteredItems[0] : undefined);
+        if (item) selectItem(item, rowIndex);
         return;
       }
     }
 
     const currentRow = rows[rowIndex];
     const hasUnselectedItem = isItemNameField && currentRow?.itemName?.trim() && !currentRow?.stockItemId;
+
+    // From the sale-line Item field, Right Arrow opens the actual inventory
+    // search in the sidebar. Previously it showed "Invalid item" and trapped
+    // cashiers in the grid even while matching products were visible.
+    if (isItemNameField && e.key === "ArrowRight" && hasUnselectedItem) {
+      e.preventDefault();
+      focusInventoryPicker?.();
+      return;
+    }
+
+    // A partial name is a search query, not an invalid item yet. Keep the
+    // cursor in the input when there are no matches; never show the old
+    // misleading validation warning simply for pressing navigation keys.
+    if (isItemNameField && hasUnselectedItem && filteredItems.length === 0 &&
+        (e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "Enter")) {
+      e.preventDefault();
+      return;
+    }
 
     switch (e.key) {
       case "ArrowUp":
@@ -130,6 +157,9 @@ export function usePosKeyboardNavigation({
         }
         break;
       case "ArrowLeft":
+        // Allow normal caret motion inside an item search; Left Arrow never
+        // needs to navigate to a negative grid column.
+        if (isItemNameField) return;
         e.preventDefault();
         if (colIndex > 0) {
           setSelectedCell({ row: rowIndex, col: colIndex - 1 });
@@ -151,7 +181,8 @@ export function usePosKeyboardNavigation({
       case "Tab":
         if (isItemNameField && activeRow === rowIndex && filteredItems.length > 0 && !e.shiftKey) {
           e.preventDefault();
-          if (filteredItems[highlightedIndex]) selectItem(filteredItems[highlightedIndex], rowIndex);
+          const item = filteredItems[selectedIndex] ?? (selectedIndex === -1 ? filteredItems[0] : undefined);
+          if (item) selectItem(item, rowIndex);
           return;
         }
         if (hasUnselectedItem) {

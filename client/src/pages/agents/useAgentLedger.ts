@@ -38,7 +38,7 @@ export function useAgentLedger(
 
   // Preserve the server envelope in the shared cache and normalize only for
   // this screen. That keeps navigation safe for pages that share this query key.
-  const { data: allAccounts = [], isLoading: accountsLoading } = useQuery<
+  const { data: allAccounts = [], isLoading: accountsLoading, isError: accountsError, refetch: retryAccounts } = useQuery<
     AccountsAllPayload<Account>,
     Error,
     Account[]
@@ -46,11 +46,13 @@ export function useAgentLedger(
     queryKey: [accountsUrl, selectedCompany?.id],
     select: selectAccountsArray,
     enabled: !!selectedCompany,
+    staleTime: 30_000,
   });
 
-  const { data: agentAccountRows = [], isLoading: agentsLoading } = useQuery<AgentAccount[]>({
-    queryKey: isFactory ? [pinnedUrl, selectedCompany?.id] : [pinnedUrl],
+  const { data: agentAccountRows = [], isLoading: agentsLoading, isError: agentsError, refetch: retryAgents } = useQuery<AgentAccount[]>({
+    queryKey: [pinnedUrl, selectedCompany?.id],
     enabled: !!selectedCompany,
+    staleTime: 30_000,
   });
 
   const accountTypeUrl = selectedAccount
@@ -139,6 +141,10 @@ export function useAgentLedger(
     accountsLoading,
     agentAccountRows,
     agentsLoading,
+    accountsError,
+    agentsError,
+    retryAccounts,
+    retryAgents,
     transactions,
     transactionsLoading,
     prePeriodData,

@@ -27,7 +27,7 @@ const normalizeOverviewTab = (tab: string | null) => (tab === "ledger" ? "produc
  * component is a layout shell and the two heavy tab panels can live in their own
  * files without prop-drilling a dozen arguments each.
  */
-export function useDailyProductionReport() {
+export function useDailyProductionReport(loadProductionData = true) {
   const search = useSearch();
   const initialTab = normalizeOverviewTab(new URLSearchParams(search).get("tab"));
   const [activeTab, setActiveTab] = useState(initialTab);
@@ -140,7 +140,7 @@ export function useDailyProductionReport() {
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
-    enabled: valuationReady && (preset === "alltime" || (!!from && !!to)),
+    enabled: loadProductionData && valuationReady && (preset === "alltime" || (!!from && !!to)),
   });
 
   const { data: attendanceData } = useQuery<{
@@ -164,7 +164,7 @@ export function useDailyProductionReport() {
       if (!res.ok) throw new Error("Failed to load attendance");
       return res.json();
     },
-    enabled: canReadWorkerAttendanceReport && !!from && !!to,
+    enabled: loadProductionData && canReadWorkerAttendanceReport && !!from && !!to,
   });
 
   const payrollDateParam = to || todayStr();
@@ -197,7 +197,7 @@ export function useDailyProductionReport() {
       return res.json();
     },
     staleTime: 60_000,
-    enabled: canReadWorkerPayrollSummary,
+    enabled: loadProductionData && canReadWorkerPayrollSummary,
   });
 
   const salaryKpi = useMemo(() => {

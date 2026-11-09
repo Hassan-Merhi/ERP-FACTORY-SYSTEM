@@ -6,6 +6,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { FlaskConical, ArrowDown, Tag, Layers, Calculator } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { queryClient } from "@/lib/queryClient";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
@@ -42,6 +43,7 @@ export default function ProductionRawStock() {
   const { wrapAdminAction, AdminDialog } = useAdminOverride();
   const { formatDisplayDate } = useDateFormat();
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
   const appMode = useAppMode();
   const { language } = useApplicationLanguage();
   const modeApiRequest = getApiRequest(appMode);
@@ -63,7 +65,11 @@ export default function ProductionRawStock() {
 
   const mixBatchPrintRef = useRef<HTMLDivElement>(null);
 
-  const { data: rawStock, isFetching: rawStockLoading, isError: rawStockError } = useQuery<RawStockRow[]>({
+  const {
+    data: rawStock,
+    isFetching: rawStockLoading,
+    isError: rawStockError,
+  } = useQuery<RawStockRow[]>({
     queryKey: ["/api/factory/raw-stock"],
   });
 
@@ -71,7 +77,11 @@ export default function ProductionRawStock() {
     queryKey: ["/api/factory/mix-batches"],
   });
 
-  const { data: factorySuppliers = [], isFetching: suppliersLoading, isError: suppliersError } = useQuery<OffloadSupplierOption[]>({
+  const {
+    data: factorySuppliers = [],
+    isFetching: suppliersLoading,
+    isError: suppliersError,
+  } = useQuery<OffloadSupplierOption[]>({
     queryKey: ["/api/factory/suppliers"],
   });
 
@@ -91,12 +101,15 @@ export default function ProductionRawStock() {
     enabled: !!mixBatchDate,
   });
 
-  const { data: reportCategories = [], isLoading: reportCategoriesLoading, isError: reportCategoriesError } =
-    useQuery<MixBatchSupplierCategory[]>({
-      queryKey: ["/api/factory/supplier-categories"],
-      staleTime: 60_000,
-      refetchOnWindowFocus: false,
-    });
+  const {
+    data: reportCategories = [],
+    isLoading: reportCategoriesLoading,
+    isError: reportCategoriesError,
+  } = useQuery<MixBatchSupplierCategory[]>({
+    queryKey: ["/api/factory/supplier-categories"],
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+  });
 
   const {
     data: fixedProductionPlan,
@@ -107,10 +120,16 @@ export default function ProductionRawStock() {
     staleTime: 60_000,
     refetchOnWindowFocus: false,
   });
-  const reportAllocations = fixedProductionPlan && fixedProductionPlan.revision > 0
-    ? fixedProductionPlan.allocations20t : null;
-  const reportLoading = mixBatchesByDateLoading || reportCategoriesLoading || suppliersLoading ||
-    fixedProductionPlanLoading || reportCategoriesError || suppliersError || fixedProductionPlanError;
+  const reportAllocations =
+    fixedProductionPlan && fixedProductionPlan.revision > 0 ? fixedProductionPlan.allocations20t : null;
+  const reportLoading =
+    mixBatchesByDateLoading ||
+    reportCategoriesLoading ||
+    suppliersLoading ||
+    fixedProductionPlanLoading ||
+    reportCategoriesError ||
+    suppliersError ||
+    fixedProductionPlanError;
 
   const offloadMutation = useMutation({
     mutationFn: async (data: OffloadPayload) => {
@@ -195,7 +214,8 @@ export default function ProductionRawStock() {
   const sendWhatsAppMutation = useMutation({
     mutationFn: async () => {
       if (!mixBatchPrintRef.current) throw new Error("Nothing to capture");
-      if (!reportAllocations || reportLoading) throw new Error("Save a Fixed Production Plan before sending a target comparison.");
+      if (!reportAllocations || reportLoading)
+        throw new Error("Save a Fixed Production Plan before sending a target comparison.");
       const html2canvas = (await import("html2canvas")).default;
       const canvas = await html2canvas(mixBatchPrintRef.current, { backgroundColor: "#111827", scale: 2 });
       const imageBase64 = canvas.toDataURL("image/png");
@@ -262,29 +282,35 @@ export default function ProductionRawStock() {
           >
             <Calculator className="h-4 w-4" /> {translateFixedProductionPlanner("title", language)}
           </Button>
-          <Button
-            onClick={() => setCreateMixBatchOpen(true)}
-            className="h-11 gap-2 rounded-xl bg-blue-600 px-3 text-xs font-bold text-white shadow-sm shadow-blue-500/20 transition-all hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-md dark:bg-blue-500 dark:text-white dark:hover:bg-blue-400 sm:h-10"
-            data-testid="button-create-mix-batch"
-          >
-            <Layers className="h-4 w-4" /> <span className="hidden sm:inline">New Mix Batch</span>
-            <span className="sm:hidden">New Batch</span>
-          </Button>
-          <Button
-            onClick={() => setOffloadDialogOpen(true)}
-            className="h-11 gap-2 rounded-xl bg-emerald-600 px-3 text-xs font-bold text-white shadow-sm shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700 hover:shadow-md dark:bg-emerald-500 dark:text-emerald-950 dark:hover:bg-emerald-400 sm:h-10"
-            data-testid="button-offload-container"
-          >
-            <ArrowDown className="h-4 w-4" /> Offload Container
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => setCategoriesDialogOpen(true)}
-            className="h-11 gap-2 rounded-xl border-amber-500/40 bg-amber-500/5 px-3 text-xs font-bold text-amber-700 shadow-sm transition-all hover:-translate-y-0.5 hover:border-amber-500/70 hover:bg-amber-500/10 hover:shadow-md dark:text-amber-300 min-[360px]:col-span-2 sm:h-10 sm:w-auto"
-            data-testid="button-manage-categories"
-          >
-            <Tag className="h-4 w-4" /> Categories
-          </Button>
+          {!recordChanges.isCreateOnly && (
+            <Button
+              onClick={() => setCreateMixBatchOpen(true)}
+              className="h-11 gap-2 rounded-xl bg-blue-600 px-3 text-xs font-bold text-white shadow-sm shadow-blue-500/20 transition-all hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-md dark:bg-blue-500 dark:text-white dark:hover:bg-blue-400 sm:h-10"
+              data-testid="button-create-mix-batch"
+            >
+              <Layers className="h-4 w-4" /> <span className="hidden sm:inline">New Mix Batch</span>
+              <span className="sm:hidden">New Batch</span>
+            </Button>
+          )}
+          {recordChanges.allowed && (
+            <Button
+              onClick={() => setOffloadDialogOpen(true)}
+              className="h-11 gap-2 rounded-xl bg-emerald-600 px-3 text-xs font-bold text-white shadow-sm shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700 hover:shadow-md dark:bg-emerald-500 dark:text-emerald-950 dark:hover:bg-emerald-400 sm:h-10"
+              data-testid="button-offload-container"
+            >
+              <ArrowDown className="h-4 w-4" /> Offload Container
+            </Button>
+          )}
+          {recordChanges.allowed && (
+            <Button
+              variant="outline"
+              onClick={() => setCategoriesDialogOpen(true)}
+              className="h-11 gap-2 rounded-xl border-amber-500/40 bg-amber-500/5 px-3 text-xs font-bold text-amber-700 shadow-sm transition-all hover:-translate-y-0.5 hover:border-amber-500/70 hover:bg-amber-500/10 hover:shadow-md dark:text-amber-300 min-[360px]:col-span-2 sm:h-10 sm:w-auto"
+              data-testid="button-manage-categories"
+            >
+              <Tag className="h-4 w-4" /> Categories
+            </Button>
+          )}
         </div>
       </div>
 

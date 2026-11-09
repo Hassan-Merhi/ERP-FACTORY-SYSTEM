@@ -69,8 +69,10 @@ export const FACTORY_TAB_REGISTRY: readonly FactoryTabDefinition[] = [
 
   { key: "hide_tab_overview_otw_tracking", label: "OTW Tracking", group: "Overview" },
   { key: "hide_tab_overview_production", label: "Production", group: "Overview" },
-  { key: "hide_tab_overview_comparison", label: "Comparison", group: "Overview" },
-  { key: "hide_tab_overview_product_comparison", label: "Product Comparison", group: "Overview" },
+  { key: "hide_tab_overview_monthly_production", label: "Monthly Production", group: "Overview" },
+  { key: "hide_tab_overview_sheets_sacks", label: "Sheets & Sacks", group: "Overview" },
+  { key: "hide_tab_overview_comparison", label: "Comparison", group: "Others" },
+  { key: "hide_tab_overview_product_comparison", label: "Product Comparison", group: "Others" },
   { key: "hide_tab_overview_shipping", label: "Shipping", group: "Overview" },
   { key: "hide_tab_overview_sheets", label: "Sheets", group: "Overview" },
 
@@ -144,7 +146,7 @@ export function canEmptyFactoryLoadingContainer(access: {
   hiddenCostFields?: readonly string[];
 }): boolean {
   if (["Admin", "Owner", "Developer"].includes(access.role ?? "")) return true;
-  if (!access.hasFactoryAccess || access.role === "View Only") return false;
+  if (!access.hasFactoryAccess || access.role === "View Only" || access.role === "Create Only") return false;
   if (access.pageKeys?.length && !access.pageKeys.includes("factory/invoicing")) return false;
   return access.hiddenCostFields?.includes(FACTORY_EMPTY_CONTAINER_GRANT_KEY) === true;
 }

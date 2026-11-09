@@ -8,33 +8,35 @@
 
 @layer utilities {
   .factory-attendance-refresh {
-    --attendance-border: rgba(99, 112, 159, 0.21);
+    --attendance-border: hsl(var(--factory-hue) 24% 51% / 0.21);
     --attendance-panel: #fff;
-    --attendance-panel-soft: #f8f9ff;
-    --attendance-ink: #202641;
+    --attendance-panel-soft: hsl(var(--factory-hue) 100% 99%);
+    --attendance-ink: hsl(var(--factory-hue) 34% 19%);
     --attendance-muted: #64708d;
-    --attendance-accent: #7145d8;
+    --attendance-accent: hsl(var(--factory-hue) 65% 56%);
     --attendance-field: #fff;
-    --attendance-row-hover: #f3f1ff;
-    --attendance-purple-soft: #f0ebff;
-    background: radial-gradient(ellipse at 91% 1%, rgba(124, 71, 235, .09), transparent 420px),
-      radial-gradient(ellipse at 2% 0%, rgba(54, 121, 235, .06), transparent 370px);
+    --attendance-row-hover: hsl(var(--factory-hue) 100% 97%);
+    --attendance-purple-soft: hsl(var(--factory-hue) 100% 96%);
+    background:
+      radial-gradient(ellipse at 91% 1%, hsl(var(--factory-hue) 80% 60% / 0.09), transparent 420px),
+      radial-gradient(ellipse at 2% 0%, hsl(var(--factory-hue) 82% 57% / 0.06), transparent 370px);
     color: var(--attendance-ink);
   }
 
   .dark .factory-attendance-refresh {
-    --attendance-border: rgba(120, 139, 192, 0.24);
-    --attendance-panel: #10172b;
-    --attendance-panel-soft: #131c34;
-    --attendance-ink: #f3f5ff;
-    --attendance-muted: #aab4ce;
-    --attendance-accent: #a784ff;
-    --attendance-field: #111a30;
-    --attendance-row-hover: #1b2543;
-    --attendance-purple-soft: #30235f;
-    background: radial-gradient(ellipse at 89% 0%, rgba(117, 45, 236, .17), transparent 430px),
-      radial-gradient(ellipse at 5% 15%, rgba(53, 81, 180, .10), transparent 390px),
-      #0d1323;
+    --attendance-border: hsl(var(--factory-hue) 36% 61% / 0.24);
+    --attendance-panel: hsl(var(--factory-hue) 46% 12%);
+    --attendance-panel-soft: hsl(var(--factory-hue) 46% 14%);
+    --attendance-ink: hsl(var(--factory-hue) 100% 98%);
+    --attendance-muted: hsl(var(--factory-hue) 27% 74%);
+    --attendance-accent: hsl(var(--factory-hue) 100% 76%);
+    --attendance-field: hsl(var(--factory-hue) 48% 13%);
+    --attendance-row-hover: hsl(var(--factory-hue) 43% 18%);
+    --attendance-purple-soft: hsl(var(--factory-hue) 46% 25%);
+    background:
+      radial-gradient(ellipse at 89% 0%, hsl(var(--factory-hue) 83% 55% / 0.17), transparent 430px),
+      radial-gradient(ellipse at 5% 15%, hsl(var(--factory-hue) 55% 46% / 0.1), transparent 390px),
+      hsl(var(--factory-hue) 46% 9%);
   }
 
   .factory-attendance-refresh > .space-y-4 {
@@ -50,16 +52,27 @@
     border-radius: 22px;
     padding: 22px 24px;
     background: linear-gradient(115deg, var(--attendance-panel), var(--attendance-panel-soft));
-    box-shadow: 0 16px 36px -33px rgba(47, 33, 103, .42);
+    box-shadow: 0 16px 36px -33px hsl(var(--factory-hue) 51% 27% / 0.42);
   }
 
   .dark .factory-attendance-refresh > .space-y-4 > .attendance-hero {
-    background: linear-gradient(110deg, #141b33, #17152d 70%, #241944);
+    background: linear-gradient(
+      110deg,
+      hsl(var(--factory-hue) 44% 14%),
+      hsl(var(--factory-hue) 36% 13%) 70%,
+      hsl(var(--factory-hue) 46% 18%)
+    );
   }
 
   .factory-attendance-refresh > .space-y-4 > .attendance-hero::before {
     height: 3px;
-    background: linear-gradient(90deg, #327fff, #8a50ff, #bb87ff, transparent 90%);
+    background: linear-gradient(
+      90deg,
+      hsl(var(--factory-hue) 100% 60%),
+      hsl(var(--factory-hue) 100% 66%),
+      hsl(var(--factory-hue) 100% 76%),
+      transparent 90%
+    );
   }
 
   .factory-attendance-refresh > .space-y-4 > .attendance-hero::after {
@@ -70,9 +83,11 @@
     height: 290px;
     top: -185px;
     right: -45px;
-    border: 1px solid rgba(144, 91, 250, .24);
+    border: 1px solid hsl(var(--factory-hue) 94% 67% / 0.24);
     border-radius: 50%;
-    box-shadow: 0 0 0 40px rgba(133, 73, 231, .05), 0 0 0 85px rgba(122, 71, 217, .035);
+    box-shadow:
+      0 0 0 40px hsl(var(--factory-hue) 77% 60% / 0.05),
+      0 0 0 85px hsl(var(--factory-hue) 66% 56% / 0.035);
     pointer-events: none;
   }
 
@@ -80,18 +95,18 @@
     color: var(--attendance-ink);
     font-size: clamp(1.25rem, 1.6vw, 1.7rem);
     font-weight: 750;
-    letter-spacing: -.035em;
+    letter-spacing: -0.035em;
   }
 
   .factory-attendance-refresh .attendance-hero .grid.place-items-center {
-    color: #794de4;
-    border-color: rgba(124, 76, 226, .27);
-    background: linear-gradient(145deg, rgba(136, 81, 250, .19), rgba(68, 111, 244, .10));
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12);
+    color: hsl(var(--factory-hue) 74% 60%);
+    border-color: hsl(var(--factory-hue) 72% 59% / 0.27);
+    background: linear-gradient(145deg, hsl(var(--factory-hue) 94% 65% / 0.19), hsl(var(--factory-hue) 89% 61% / 0.1));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
   }
 
   .dark .factory-attendance-refresh .attendance-hero .grid.place-items-center {
-    color: #c2a6ff;
+    color: hsl(var(--factory-hue) 100% 83%);
   }
 
   /* Do not move or remove the original save, bulk-action, WhatsApp and date-range controls. */
@@ -100,13 +115,13 @@
     border: 1px solid var(--attendance-border);
     border-radius: 20px;
     background: var(--attendance-panel);
-    box-shadow: 0 14px 38px -35px rgba(40, 36, 92, .6);
+    box-shadow: 0 14px 38px -35px hsl(var(--factory-hue) 44% 25% / 0.6);
   }
 
   .dark .factory-attendance-refresh .attendance-command-card,
   .dark .factory-attendance-refresh .attendance-register {
-    background: linear-gradient(165deg, #151d35, #101728 74%);
-    box-shadow: 0 16px 42px -33px rgba(0, 0, 0, .75);
+    background: linear-gradient(165deg, hsl(var(--factory-hue) 43% 15%), hsl(var(--factory-hue) 43% 11%) 74%);
+    box-shadow: 0 16px 42px -33px rgba(0, 0, 0, 0.75);
   }
 
   .factory-attendance-refresh .attendance-command-card > div {
@@ -118,7 +133,7 @@
   }
 
   .factory-attendance-refresh .attendance-command-card .grid.h-8 {
-    border: 1px solid rgba(125, 83, 224, .2);
+    border: 1px solid hsl(var(--factory-hue) 69% 60% / 0.2);
     background: var(--attendance-purple-soft);
     color: var(--attendance-accent);
   }
@@ -142,15 +157,15 @@
 
   .factory-attendance-refresh button[data-testid="button-save-attendance"],
   .factory-attendance-refresh button[data-testid="button-save-attendance-sticky"] {
-    background: linear-gradient(115deg, #7949ee, #5835c3);
-    border: 1px solid rgba(179, 156, 255, .4);
+    background: linear-gradient(115deg, hsl(var(--factory-hue) 83% 61%), hsl(var(--factory-hue) 57% 49%));
+    border: 1px solid hsl(var(--factory-hue) 100% 81% / 0.4);
     color: #fff;
-    box-shadow: 0 6px 18px -10px rgba(120, 58, 239, .9);
+    box-shadow: 0 6px 18px -10px hsl(var(--factory-hue) 85% 58% / 0.9);
   }
 
   .factory-attendance-refresh button[data-testid="button-save-attendance"]:hover,
   .factory-attendance-refresh button[data-testid="button-save-attendance-sticky"]:hover {
-    background: linear-gradient(115deg, #8b5af6, #6745da);
+    background: linear-gradient(115deg, hsl(var(--factory-hue) 90% 66%), hsl(var(--factory-hue) 67% 56%));
   }
 
   /* Summary cards: all values still originate from counts, including "Other" statuses. */
@@ -162,9 +177,9 @@
     min-height: 112px;
     isolation: isolate;
     border-radius: 18px;
-    border: 1px solid rgba(75, 119, 220, .3);
-    background: linear-gradient(125deg, #f6f9ff, #eaf1ff);
-    box-shadow: 0 10px 30px -25px rgba(28, 55, 115, .65);
+    border: 1px solid hsl(var(--factory-hue) 67% 58% / 0.3);
+    background: linear-gradient(125deg, hsl(var(--factory-hue) 100% 98%), hsl(var(--factory-hue) 100% 96%));
+    box-shadow: 0 10px 30px -25px hsl(var(--factory-hue) 61% 28% / 0.65);
   }
 
   .factory-attendance-refresh .attendance-kpi-grid > .group::after {
@@ -177,39 +192,44 @@
     height: 110px;
     transform: rotate(-22deg);
     border-radius: 50%;
-    background: rgba(62, 123, 255, .09);
+    background: hsl(var(--factory-hue) 100% 62% / 0.09);
     pointer-events: none;
   }
 
   .factory-attendance-refresh .attendance-kpi-grid > .group:nth-child(2) {
-    border-color: rgba(16, 185, 129, .36);
+    border-color: rgba(16, 185, 129, 0.36);
     background: linear-gradient(125deg, #f1fdf9, #e4faf2);
   }
 
   .factory-attendance-refresh .attendance-kpi-grid > .group:nth-child(2)::after {
-    background: rgba(16, 185, 129, .12);
+    background: rgba(16, 185, 129, 0.12);
   }
 
   .factory-attendance-refresh .attendance-kpi-grid > .group:nth-child(3) {
-    border-color: rgba(244, 63, 94, .32);
+    border-color: rgba(244, 63, 94, 0.32);
     background: linear-gradient(125deg, #fff5f7, #ffeaef);
   }
 
   .factory-attendance-refresh .attendance-kpi-grid > .group:nth-child(3)::after {
-    background: rgba(244, 63, 94, .12);
+    background: rgba(244, 63, 94, 0.12);
   }
 
   .factory-attendance-refresh .attendance-kpi-grid > .group:nth-child(4) {
-    border-color: rgba(245, 158, 11, .36);
+    border-color: rgba(245, 158, 11, 0.36);
     background: linear-gradient(125deg, #fffbf2, #fff3dc);
   }
 
   .factory-attendance-refresh .attendance-kpi-grid > .group:nth-child(4)::after {
-    background: rgba(245, 158, 11, .12);
+    background: rgba(245, 158, 11, 0.12);
   }
 
   .dark .factory-attendance-refresh .attendance-kpi-grid > .group {
-    background: linear-gradient(120deg, #172a4a, #15203a 67%, #1a2951);
+    background: linear-gradient(
+      120deg,
+      hsl(var(--factory-hue) 53% 19%),
+      hsl(var(--factory-hue) 47% 15%) 67%,
+      hsl(var(--factory-hue) 51% 21%)
+    );
   }
 
   .dark .factory-attendance-refresh .attendance-kpi-grid > .group:nth-child(2) {
@@ -217,7 +237,12 @@
   }
 
   .dark .factory-attendance-refresh .attendance-kpi-grid > .group:nth-child(3) {
-    background: linear-gradient(120deg, #3b2136, #2c1b2d 70%, #471c38);
+    background: linear-gradient(
+      120deg,
+      hsl(var(--factory-hue) 28% 18%),
+      hsl(var(--factory-hue) 25% 14%) 70%,
+      hsl(var(--factory-hue) 43% 19%)
+    );
   }
 
   .dark .factory-attendance-refresh .attendance-kpi-grid > .group:nth-child(4) {
@@ -240,26 +265,31 @@
   .factory-attendance-refresh .attendance-kpi-grid > .group p:nth-child(2) {
     font-size: 2rem;
     font-weight: 800;
-    letter-spacing: -.055em;
+    letter-spacing: -0.055em;
   }
 
   .factory-attendance-refresh .attendance-kpi-grid > .group > div > div:last-child {
     height: 46px;
     width: 46px;
     border-radius: 14px;
-    border-color: rgba(108, 126, 183, .22);
-    background: rgba(116, 139, 225, .12);
+    border-color: hsl(var(--factory-hue) 34% 57% / 0.22);
+    background: hsl(var(--factory-hue) 64% 67% / 0.12);
   }
 
   /* Search, totals and status controls */
   .factory-attendance-refresh .attendance-register-header {
-    background: linear-gradient(120deg, rgba(114, 79, 225, .045), transparent);
+    background: linear-gradient(120deg, hsl(var(--factory-hue) 71% 60% / 0.045), transparent);
     padding: 20px 22px;
     border-color: var(--attendance-border);
   }
 
   .dark .factory-attendance-refresh .attendance-register-header {
-    background: linear-gradient(115deg, #1a2440, #181e34 58%, #231c47);
+    background: linear-gradient(
+      115deg,
+      hsl(var(--factory-hue) 42% 18%),
+      hsl(var(--factory-hue) 37% 15%) 58%,
+      hsl(var(--factory-hue) 43% 19%)
+    );
   }
 
   .factory-attendance-refresh .attendance-register-header [data-testid="input-attendance-worker-search"] {
@@ -270,13 +300,13 @@
     color: var(--attendance-ink);
     font-size: 1.1rem;
     font-weight: 750;
-    letter-spacing: -.02em;
+    letter-spacing: -0.02em;
   }
 
   .factory-attendance-refresh .attendance-register-header .rounded-full {
     background: var(--attendance-purple-soft);
     color: var(--attendance-accent);
-    border-color: rgba(139, 93, 230, .24);
+    border-color: hsl(var(--factory-hue) 73% 63% / 0.24);
     font-weight: 700;
   }
 
@@ -292,11 +322,11 @@
   }
 
   .factory-attendance-refresh .attendance-table thead {
-    background: #ece8fa;
+    background: hsl(var(--factory-hue) 64% 95%);
   }
 
   .dark .factory-attendance-refresh .attendance-table thead {
-    background: #2d245c;
+    background: hsl(var(--factory-hue) 44% 25%);
   }
 
   .factory-attendance-refresh .attendance-table thead tr,
@@ -307,14 +337,14 @@
   .factory-attendance-refresh .attendance-table thead th {
     height: 42px;
     padding-block: 10px;
-    color: #665a9b;
+    color: hsl(var(--factory-hue) 27% 48%);
     font-weight: 750;
-    letter-spacing: .015em;
+    letter-spacing: 0.015em;
     font-size: 12px;
   }
 
   .dark .factory-attendance-refresh .attendance-table thead th {
-    color: #d3c3ff;
+    color: hsl(var(--factory-hue) 100% 88%);
   }
 
   .factory-attendance-refresh .attendance-table thead th:first-child {
@@ -331,11 +361,11 @@
   }
 
   .factory-attendance-refresh .attendance-table-row:nth-child(even) {
-    background: rgba(103, 88, 180, .035);
+    background: hsl(var(--factory-hue) 38% 53% / 0.035);
   }
 
   .dark .factory-attendance-refresh .attendance-table-row:nth-child(even) {
-    background: rgba(110, 117, 183, .055);
+    background: hsl(var(--factory-hue) 34% 57% / 0.055);
   }
 
   .factory-attendance-refresh .attendance-table-row:hover {
@@ -362,7 +392,7 @@
   .factory-attendance-refresh .attendance-worker-position {
     color: var(--attendance-muted);
     font-size: 11px;
-    letter-spacing: .01em;
+    letter-spacing: 0.01em;
   }
 
   .factory-attendance-refresh .attendance-status-trigger,
@@ -381,19 +411,19 @@
   }
 
   .factory-attendance-refresh .attendance-status-trigger[data-attendance-status="Present"] {
-    border-color: rgba(16, 185, 129, .3);
-    background: rgba(16, 185, 129, .1);
+    border-color: rgba(16, 185, 129, 0.3);
+    background: rgba(16, 185, 129, 0.1);
     color: #05865f;
   }
 
   .dark .factory-attendance-refresh .attendance-status-trigger[data-attendance-status="Present"] {
-    background: rgba(22, 163, 113, .2);
+    background: rgba(22, 163, 113, 0.2);
     color: #72efb5;
   }
 
   .factory-attendance-refresh .attendance-status-trigger[data-attendance-status="Absent"] {
-    border-color: rgba(244, 63, 94, .3);
-    background: rgba(244, 63, 94, .1);
+    border-color: rgba(244, 63, 94, 0.3);
+    background: rgba(244, 63, 94, 0.1);
     color: #c6284a;
   }
 
@@ -403,7 +433,7 @@
 
   .factory-attendance-refresh .attendance-notes-input::placeholder {
     color: var(--attendance-muted);
-    opacity: .75;
+    opacity: 0.75;
   }
 
   /* Keep the existing sticky save action and mobile controls available. */

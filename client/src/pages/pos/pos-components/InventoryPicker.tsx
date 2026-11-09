@@ -1,37 +1,86 @@
-import { useState, useEffect } from "react";
+import { useState, useLayoutEffect, useId, useRef } from "react";
 import { Search, Package } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
 import { InventoryItem } from "./posTypes";
-import { getPosPickerInventory } from "../utils/posCalculations";
+import { getPosPickerInventory, getPosKeyboardHighlightedIndex, stepPosKeyboardHighlight } from "../utils/posCalculations";
 
 export interface InventoryPickerProps {
   inventory: InventoryItem[];
-  selectItem: (item: InventoryItem) => void;
+  selectItem: (item: InventoryItem) => boolean | void;
+  onSearchTermChange?: (term: string) => void;
+  searchInputRef?: React.Ref<HTMLInputElement>;
+  listId?: string;
   itemListRef: React.RefObject<HTMLDivElement | null>;
   highlightedIndex: number;
+  setHighlightedIndex: React.Dispatch<React.SetStateAction<number>>;
   syncTerm?: string;
   mobile?: boolean;
+  canSellNegativeStock?: boolean;
 }
 
 export function InventoryPicker({
   inventory,
   selectItem,
+  onSearchTermChange,
+  searchInputRef,
+  listId,
   itemListRef,
   highlightedIndex,
+  setHighlightedIndex,
   syncTerm,
   mobile = false,
+  canSellNegativeStock = false,
 }: InventoryPickerProps) {
   const [localSearch, setLocalSearch] = useState("");
-
-  useEffect(() => {
-    if (syncTerm !== undefined) setLocalSearch(syncTerm);
-  }, [syncTerm]);
+  const pickerId = useId();
+  // A stationary pointer must not steal the highlight when keyboard navigation
+  // scrolls an option beneath it (Chrome can re-fire mouse enter on scrolling).
+  const lastMousePosition = useRef<{ x: number; y: number } | null>(null);
+  const listboxId = listId ?? `${pickerId}-items`;
+  // When the sale row supplies a term, use it directly rather than syncing a
+  // second state after render. Arrows/Enter must always match the visible list.
+  const effectiveSearch = syncTerm !== undefined ? syncTerm : localSearch;
+  const changeSearch = (term: string) => {
+    if (syncTerm !== undefined) onSearchTermChange?.(term);
+    else setLocalSearch(term);
+    setHighlightedIndex(0);
+  };
+  const clearSearch = () => changeSearch("");
+  const chooseItem = (item: InventoryItem) => {
+    // A zero-stock rejection must not erase the query while the cashier is
+    // still choosing from the results.
+    if (selectItem(item) !== false) clearSearch();
+  };
 
   // Use the exact same filtered/sorted list as keyboard navigation. The
   // highlighted index must point to one canonical item regardless of whether
   // the cashier clicks it or confirms it with Enter/Tab.
-  const filteredInventory = getPosPickerInventory(inventory, localSearch);
+  const filteredInventory = getPosPickerInventory(inventory, effectiveSearch);
+  const selectedIndex = getPosKeyboardHighlightedIndex(filteredInventory, highlightedIndex, canSellNegativeStock);
+
+  // Scroll only the inventory list, before the browser paints the new
+  // highlighted option. This also handles arrows from the sale-row Item input.
+  // The min-h-0 list can shrink inside the flex card and owns its scrollTop.
+  useLayoutEffect(() => {
+    const list = itemListRef.current;
+    if (!list || selectedIndex < 0) return;
+    const option = list.children.item(selectedIndex) as HTMLElement | null;
+    if (!option) return;
+    const listRect = list.getBoundingClientRect();
+    const optionRect = option.getBoundingClientRect();
+    if (optionRect.top < listRect.top) list.scrollTop -= listRect.top - optionRect.top;
+    else if (optionRect.bottom > listRect.bottom) {
+      list.scrollTop += optionRect.bottom - listRect.bottom;
+    }
+  }, [selectedIndex, effectiveSearch, inventory, itemListRef, filteredInventory.length]);
+
+  const selectHighlighted = () => {
+    // An all-out-of-stock search still opens the existing stock warning.
+    const item = filteredInventory[selectedIndex] ?? (selectedIndex === -1 ? filteredInventory[0] : undefined);
+    if (!item) return;
+    chooseItem(item);
+  };
 
   return (
     <Card
@@ -50,23 +99,42 @@ export function InventoryPicker({
         >
           <Search className={`text-muted-foreground shrink-0 ${mobile ? "h-5 w-5" : "h-4 w-4"}`} />
           <input
+            ref={searchInputRef}
             className={`flex-1 bg-transparent outline-hidden placeholder:text-muted-foreground ${mobile ? "text-base" : "text-sm"}`}
             placeholder="Scan barcode or search..."
-            value={localSearch}
-            onChange={(e) => setLocalSearch(e.target.value)}
+            role="combobox"
+            aria-autocomplete="list"
+            aria-expanded={filteredInventory.length > 0}
+            aria-controls={listboxId}
+            aria-activedescendant={selectedIndex >= 0 ? `${listboxId}-item-${selectedIndex}` : undefined}
+            autoComplete="off"
+            value={effectiveSearch}
+            onChange={(e) => changeSearch(e.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "ArrowDown" && filteredInventory.length > 0) {
+                event.preventDefault();
+                setHighlightedIndex((index) => stepPosKeyboardHighlight(filteredInventory, index, 1, canSellNegativeStock));
+              } else if (event.key === "ArrowUp" && filteredInventory.length > 0) {
+                event.preventDefault();
+                setHighlightedIndex((index) => stepPosKeyboardHighlight(filteredInventory, index, -1, canSellNegativeStock));
+              } else if (event.key === "Enter" && filteredInventory.length > 0) {
+                event.preventDefault();
+                selectHighlighted();
+              } else if (event.key === "Escape") {
+                clearSearch();
+              }
+            }}
             data-testid="input-product-search"
           />
           <MobileBarcodeScanner
             onScan={(code) => {
               const match = inventory.find((item) => item.code?.trim().toUpperCase() === code.trim().toUpperCase());
-              if (match) {
-                selectItem(match);
-                setLocalSearch("");
-              } else setLocalSearch(code);
+              if (match) chooseItem(match);
+              else changeSearch(code);
             }}
           />
-          {localSearch && (
-            <button className="text-muted-foreground" onClick={() => setLocalSearch("")} aria-label="Clear search">
+          {effectiveSearch && (
+            <button type="button" className="text-muted-foreground" onClick={clearSearch} aria-label="Clear search">
               ×
             </button>
           )}
@@ -76,7 +144,10 @@ export function InventoryPicker({
       {/* List */}
       <div
         data-pos-product-list="true"
-        className="flex-1 overflow-y-auto"
+        id={listboxId}
+        role="listbox"
+        aria-label="Matching inventory items"
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
         ref={itemListRef as React.RefObject<HTMLDivElement>}
       >
         {filteredInventory.map((item, index) => {
@@ -85,13 +156,27 @@ export function InventoryPicker({
           return (
             <button
               key={item.stockItemId ?? item.code}
-              className={`w-full text-left flex items-center justify-between gap-2 border-b border-muted/40 transition-colors duration-100 ${
+              id={`${listboxId}-item-${index}`}
+              role="option"
+              aria-selected={index === selectedIndex}
+              tabIndex={-1}
+              data-pos-keyboard-selected={index === selectedIndex ? "true" : undefined}
+              className={`w-full text-left flex items-center justify-between gap-2 border-b border-muted/40 border-l-4 transition-colors duration-100 ${
                 mobile ? "px-4 py-3 active:bg-primary/10" : "px-3 py-3"
-              } ${index === highlightedIndex ? "bg-primary/25" : "hover:bg-muted/40"} ${isOut ? "opacity-50" : ""}`}
-              onClick={() => {
-                selectItem(item);
-                setLocalSearch("");
+              } ${
+                index === selectedIndex
+                  ? "border-l-blue-600 bg-blue-100 text-slate-950 ring-1 ring-inset ring-blue-500/60 dark:border-l-blue-400 dark:bg-blue-900/60 dark:text-white dark:ring-blue-400/60"
+                  : "border-l-transparent hover:bg-muted/40"
+              } ${isOut && index !== selectedIndex ? "opacity-50" : ""}`}
+              onMouseMove={(event) => {
+                const { clientX: x, clientY: y } = event;
+                const last = lastMousePosition.current;
+                if (!last || last.x !== x || last.y !== y) {
+                  lastMousePosition.current = { x, y };
+                  setHighlightedIndex(index);
+                }
               }}
+              onClick={() => chooseItem(item)}
               data-testid={`button-select-item-${item.stockItemId ?? item.code}`}
             >
               <div className="flex min-w-0 items-center gap-3">

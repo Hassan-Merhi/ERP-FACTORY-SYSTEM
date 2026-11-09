@@ -22,6 +22,7 @@ import {
 import { useLabelDesignColors } from "@/hooks/useLabelDesignColors";
 import { type WeightEditBale } from "@/components/BaleWeightEditDialog";
 import { useBalesHistoryDateKeyboard } from "./pagePolicies";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 
 interface BaleRecord {
   id: number;
@@ -132,9 +133,14 @@ export function useBalesHistoryModel() {
     }
   };
 
-  const { data: myAccess } = useQuery<{ fullAccess: boolean; pageKeys: string[]; hiddenCostFields: string[] }>({
+  const { data: factoryAccess } = useQuery<{ fullAccess: boolean; pageKeys: string[]; hiddenCostFields: string[] }>({
     queryKey: ["/api/factory/my-access"],
   });
+  // View Only / Create Only company roles never change existing bales: the page
+  // hides repack and delete (fullAccess-gated) and ignores rename, weight edit
+  // and bulk-selection gestures. The server refuses the same writes.
+  const recordChanges = useExistingRecordChangeAccess();
+  const myAccess = factoryAccess && !recordChanges.allowed ? { ...factoryAccess, fullAccess: false } : factoryAccess;
 
   const { data: balesResponse, isLoading } = useQuery<BalesPage>({
     queryKey: [
@@ -406,6 +412,7 @@ export function useBalesHistoryModel() {
   });
 
   const startEditName = (baleId: number, currentName: string) => {
+    if (!recordChanges.allowed) return;
     setEditingNameId(baleId);
     setEditingNameValue(currentName);
     setTimeout(() => nameInputRef.current?.focus(), 50);
@@ -423,6 +430,7 @@ export function useBalesHistoryModel() {
   };
 
   const toggleSelect = (id: number) => {
+    if (!recordChanges.allowed) return;
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -432,6 +440,7 @@ export function useBalesHistoryModel() {
   };
 
   const toggleSelectAll = (filteredItems: BaleRow[]) => {
+    if (!recordChanges.allowed) return;
     const filteredIds = filteredItems.map((r) => r.bale.id);
     const allSelected = filteredIds.every((id: number) => selectedIds.has(id));
     if (allSelected) {
@@ -721,8 +730,11 @@ export function useBalesHistoryModel() {
     reimporting,
     setReimporting,
     weightEditBale,
-    setWeightEditBale,
+    setWeightEditBale: (bale: WeightEditBale | null) => {
+      if (bale === null || recordChanges.allowed) setWeightEditBale(bale);
+    },
     handleExport,
+    recordChangeReason: recordChanges.reason,
     myAccess,
     isLoading,
     balesData,

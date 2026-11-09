@@ -182,6 +182,13 @@ async function recoverFromStaleAssets() {
   window.location.replace(currentUrl.toString());
 }
 
+// React.lazy errors are caught by ErrorBoundary, not unhandledrejection.
+// Recover once by refreshing stale service-worker assets and getting current HTML.
+window.addEventListener("erp:asset-load-failed", () => {
+  if (import.meta.env.DEV || !navigator.onLine) return;
+  void recoverFromStaleAssets();
+});
+
 // Unlike an unhandled promise rejection, a failed screen-feed import is
 // caught by the capture scheduler. Recover that particular stale chunk once,
 // and keep a cooldown through reload so a missing asset cannot loop forever.

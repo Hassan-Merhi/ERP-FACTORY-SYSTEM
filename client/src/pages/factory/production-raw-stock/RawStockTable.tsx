@@ -3,6 +3,7 @@ import { formatNumber } from "@/lib/formatNumber";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { ChevronRight, ChevronDown, Eye, EyeOff, FlaskRound, Plus, MinusCircle, Layers } from "lucide-react";
 import { SupplierMixBatchHistoryDialog } from "./SupplierMixBatchHistoryDialog";
 
@@ -34,6 +35,8 @@ interface RawStockTableProps {
 }
 
 export function RawStockTable({ rawStock, onAdjust, onDeduct, onAddToBatch }: RawStockTableProps) {
+  // View Only / Create Only roles see raw stock without adjust, deduct or batch actions.
+  const recordChanges = useExistingRecordChangeAccess();
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({ Uncategorized: true });
   const [historyDialog, setHistoryDialog] = useState<{ supplierId: number; supplierName: string } | null>(null);
   const [showZeroBalance, setShowZeroBalance] = useState(false);
@@ -105,7 +108,10 @@ export function RawStockTable({ rawStock, onAdjust, onDeduct, onAddToBatch }: Ra
               const catValue = rows.reduce((sum, row) => sum + parseFloat(row.valueRemainingUsd), 0);
 
               return (
-                <div key={`mobile-cat-${cat}`} className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm">
+                <div
+                  key={`mobile-cat-${cat}`}
+                  className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm"
+                >
                   <button
                     type="button"
                     className="flex min-h-11 w-full items-center justify-between gap-3 bg-linear-to-r from-slate-50 to-card px-3 py-3 text-left dark:from-slate-800/65 dark:to-card"
@@ -194,41 +200,43 @@ export function RawStockTable({ rawStock, onAdjust, onDeduct, onAddToBatch }: Ra
                             </div>
                           </div>
 
-                          <div className="grid grid-cols-3 gap-2">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="min-w-0 gap-1 px-2 text-xs text-primary"
-                              onClick={() => onAdjust(row)}
-                              data-testid={`button-adjust-mobile-${row.supplierId}`}
-                            >
-                              <Plus className="h-3.5 w-3.5 shrink-0" />
-                              <span className="truncate">Adjust</span>
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="min-w-0 gap-1 px-2 text-xs text-destructive"
-                              onClick={() => onDeduct(row)}
-                              data-testid={`button-deduct-mobile-${row.supplierId}`}
-                            >
-                              <MinusCircle className="h-3.5 w-3.5 shrink-0" />
-                              <span className="truncate">Deduct</span>
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="min-w-0 gap-1 px-2 text-xs text-emerald-600"
-                              onClick={() => onAddToBatch(row)}
-                              data-testid={`button-batch-mobile-${row.supplierId}`}
-                            >
-                              <Layers className="h-3.5 w-3.5 shrink-0" />
-                              <span className="truncate">Batch</span>
-                            </Button>
-                          </div>
+                          {recordChanges.allowed && (
+                            <div className="grid grid-cols-3 gap-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="min-w-0 gap-1 px-2 text-xs text-primary"
+                                onClick={() => onAdjust(row)}
+                                data-testid={`button-adjust-mobile-${row.supplierId}`}
+                              >
+                                <Plus className="h-3.5 w-3.5 shrink-0" />
+                                <span className="truncate">Adjust</span>
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="min-w-0 gap-1 px-2 text-xs text-destructive"
+                                onClick={() => onDeduct(row)}
+                                data-testid={`button-deduct-mobile-${row.supplierId}`}
+                              >
+                                <MinusCircle className="h-3.5 w-3.5 shrink-0" />
+                                <span className="truncate">Deduct</span>
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="min-w-0 gap-1 px-2 text-xs text-emerald-600"
+                                onClick={() => onAddToBatch(row)}
+                                data-testid={`button-batch-mobile-${row.supplierId}`}
+                              >
+                                <Layers className="h-3.5 w-3.5 shrink-0" />
+                                <span className="truncate">Batch</span>
+                              </Button>
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -243,11 +251,21 @@ export function RawStockTable({ rawStock, onAdjust, onDeduct, onAddToBatch }: Ra
           <Table stickyFirstColumn>
             <TableHeader className="bg-linear-to-r from-slate-100 via-slate-50 to-slate-100 dark:from-slate-800 dark:via-slate-800/80 dark:to-slate-800">
               <TableRow className="hover:bg-transparent">
-                <TableHead className="w-[300px] py-3 text-[11px] font-bold uppercase tracking-wide">Source / Supplier</TableHead>
-                <TableHead className="py-3 text-right text-[11px] font-bold uppercase tracking-wide">Total Received</TableHead>
-                <TableHead className="py-3 text-right text-[11px] font-bold uppercase tracking-wide">Total Used</TableHead>
-                <TableHead className="py-3 text-right text-[11px] font-bold uppercase tracking-wide text-foreground">Available (Free)</TableHead>
-                <TableHead className="py-3 text-right text-[11px] font-bold uppercase tracking-wide">Value (USD)</TableHead>
+                <TableHead className="w-[300px] py-3 text-[11px] font-bold uppercase tracking-wide">
+                  Source / Supplier
+                </TableHead>
+                <TableHead className="py-3 text-right text-[11px] font-bold uppercase tracking-wide">
+                  Total Received
+                </TableHead>
+                <TableHead className="py-3 text-right text-[11px] font-bold uppercase tracking-wide">
+                  Total Used
+                </TableHead>
+                <TableHead className="py-3 text-right text-[11px] font-bold uppercase tracking-wide text-foreground">
+                  Available (Free)
+                </TableHead>
+                <TableHead className="py-3 text-right text-[11px] font-bold uppercase tracking-wide">
+                  Value (USD)
+                </TableHead>
                 <TableHead className="w-[120px] py-3"></TableHead>
               </TableRow>
             </TableHeader>
@@ -361,38 +379,40 @@ export function RawStockTable({ rawStock, onAdjust, onDeduct, onAddToBatch }: Ra
                               </div>
                             </TableCell>
                             <TableCell className="py-3 text-right pr-4">
-                              <div className="flex items-center justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 touch:opacity-100">
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="h-8 w-8 text-primary hover:bg-primary/10"
-                                  onClick={() => onAdjust(row)}
-                                  title="Adjust stock cost/qty"
-                                  data-testid={`button-adjust-${row.supplierId}`}
-                                >
-                                  <Plus className="h-3.5 w-3.5" />
-                                </Button>
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="h-8 w-8 text-destructive hover:bg-destructive/10"
-                                  onClick={() => onDeduct(row)}
-                                  title="Deduct damaged/wasted stock"
-                                  data-testid={`button-deduct-${row.supplierId}`}
-                                >
-                                  <MinusCircle className="h-3.5 w-3.5" />
-                                </Button>
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="h-8 w-8 text-emerald-600 hover:bg-emerald-50"
-                                  onClick={() => onAddToBatch(row)}
-                                  title="Add to mix batch"
-                                  data-testid={`button-batch-${row.supplierId}`}
-                                >
-                                  <Layers className="h-3.5 w-3.5" />
-                                </Button>
-                              </div>
+                              {recordChanges.allowed && (
+                                <div className="flex items-center justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 touch:opacity-100">
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-8 w-8 text-primary hover:bg-primary/10"
+                                    onClick={() => onAdjust(row)}
+                                    title="Adjust stock cost/qty"
+                                    data-testid={`button-adjust-${row.supplierId}`}
+                                  >
+                                    <Plus className="h-3.5 w-3.5" />
+                                  </Button>
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                                    onClick={() => onDeduct(row)}
+                                    title="Deduct damaged/wasted stock"
+                                    data-testid={`button-deduct-${row.supplierId}`}
+                                  >
+                                    <MinusCircle className="h-3.5 w-3.5" />
+                                  </Button>
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-8 w-8 text-emerald-600 hover:bg-emerald-50"
+                                    onClick={() => onAddToBatch(row)}
+                                    title="Add to mix batch"
+                                    data-testid={`button-batch-${row.supplierId}`}
+                                  >
+                                    <Layers className="h-3.5 w-3.5" />
+                                  </Button>
+                                </div>
+                              )}
                             </TableCell>
                           </TableRow>
                         ))}

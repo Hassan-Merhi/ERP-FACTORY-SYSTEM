@@ -97,7 +97,7 @@ export function usePosRowCalculations({
     resolvePosItemRate(item, lastSoldPrices, activeCurrency, exchangeRate);
 
   const selectItem = (item: InventoryItem, targetRowOverride?: number, overrides?: PosItemSelectionOverrides) => {
-    if (!ensureItemSellable(item)) return;
+    if (!ensureItemSellable(item)) return false;
     // Prefer the active row, then the first draft row (typed text but no item
     // selected yet), then the first truly empty row.  Using only !r.itemName
     // would skip a draft row whose itemName is already "eg", causing the item
@@ -154,6 +154,7 @@ export function usePosRowCalculations({
     setRows(newRows);
     setSearchTerm("");
     setTimeout(() => focusCell(targetRow, 1), 0);
+    return true;
   };
 
   const updateRow = (index: number, field: keyof SaleRow, value: string | number) => {

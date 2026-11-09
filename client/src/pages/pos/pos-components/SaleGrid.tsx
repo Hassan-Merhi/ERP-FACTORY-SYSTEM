@@ -8,6 +8,9 @@ export interface SaleGridProps {
   rows: SaleRow[];
   columns: POSColumn[];
   selectedCell: { row: number; col: number };
+  highlightedIndex: number;
+  matchingItemCount: number;
+  pickerListId: string;
   setSelectedCell: (cell: { row: number; col: number }) => void;
   updateRow: (index: number, field: keyof SaleRow, value: string | number) => void;
   handleDeleteRow: (index: number) => void;
@@ -31,6 +34,9 @@ export interface SaleGridProps {
 export function SaleGrid({
   rows,
   columns,
+  highlightedIndex,
+  matchingItemCount,
+  pickerListId,
   setSelectedCell,
   updateRow,
   handleDeleteRow,
@@ -139,6 +145,13 @@ export function SaleGrid({
                           ref={(el) => {
                             if (el) inputRefs.current[`${rowIndex}-${colIndex}`] = el;
                           }}
+                          role={col.key === "itemName" ? "combobox" : undefined}
+                          aria-autocomplete={col.key === "itemName" ? "list" : undefined}
+                          aria-expanded={col.key === "itemName" ? matchingItemCount > 0 : undefined}
+                          aria-controls={col.key === "itemName" ? pickerListId : undefined}
+                          aria-activedescendant={col.key === "itemName" && matchingItemCount > 0 && highlightedIndex >= 0
+                            ? `${pickerListId}-item-${Math.min(highlightedIndex, matchingItemCount - 1)}`
+                            : undefined}
                           type={col.key === "quantity" || col.key === "rate" ? "number" : "text"}
                           inputMode={col.key === "quantity" || col.key === "rate" ? "decimal" : undefined}
                           value={
@@ -161,6 +174,7 @@ export function SaleGrid({
                           }}
                           onKeyDown={(e) => handleKeyDown(e, rowIndex, colIndex)}
                           onFocus={() => {
+                            if (clearActiveRowTimerRef.current) clearTimeout(clearActiveRowTimerRef.current);
                             setSelectedCell({ row: rowIndex, col: colIndex });
                             if (col.key === "itemName") {
                               setActiveRow(rowIndex);

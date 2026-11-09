@@ -28,6 +28,8 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [permissions-control-center-phase5.md](permissions-control-center-phase5.md) | Phase 5 company-scoped user overrides and shadow access preview |
 | [permissions-control-center-phase4.md](permissions-control-center-phase4.md) | Phase 4 shadow role permissions matrix and release gates |
 | [permissions-control-center-phase3.md](permissions-control-center-phase3.md) | Permissions Phase 3: fail-closed Create Only writes, reviewed supplier creation and remaining route audits |
+| [permissions-control-center-phase3-route-review.md](permissions-control-center-phase3-route-review.md) | Create Only enforcement layers, verified creates and routes kept denied |
+| [permissions-control-center-activation.md](permissions-control-center-activation.md) | Create Only activation: evidence, staging procedure, rollout, rollback and monitoring |
 | [what-is-this.md](what-is-this.md) | What the system is, in one page |
 | [onboarding.md](onboarding.md) | First login through first transaction |
 | [architecture.md](architecture.md) | How the codebase fits together |
@@ -40,10 +42,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 |---|---|
 | [accounting-flow.md](accounting-flow.md) | Voucher types, posting, the ledger |
 | [accounting-audit-2026-10.md](accounting-audit-2026-10.md) | Accounting audit findings, production evidence and remediation waves |
-| [accounting/factory-worker-advance-ledger-audit-2026-11-03.md](accounting/factory-worker-advance-ledger-audit-2026-11-03.md) | Factory worker advance ledger investigation, reconciliation and safeguards |
-| [accounting/october-2026-salary-reconciliation-20261103.md](accounting/october-2026-salary-reconciliation-20261103.md) | October payroll reconciliation, outstanding verification and audit rules |
-| [accounting/october-2026-paid-payroll-overlap-reclassification-20261103.md](accounting/october-2026-paid-payroll-overlap-reclassification-20261103.md) | Audited October 2026 payroll overlap correction, voucher evidence and remaining safeguards |
-| [accounting/company12-october-payroll-overpayment-reporting-exclusion-20261103.md](accounting/company12-october-payroll-overpayment-reporting-exclusion-20261103.md) | Audited management Net Position reporting exclusion; no GL write-off |
+| [accounting/factory-rent-open-exception.md](accounting/factory-rent-open-exception.md) | Factory Mode unresolved Warehouse 5001 November rent, preserved prepaid balance and safe-reconciliation rules |
 | [accounting/factory-worker-advance-ledger-audit-2026-11-03.md](accounting/factory-worker-advance-ledger-audit-2026-11-03.md) | Factory Worker Advances production reconciliation, verified accrual repair, and residual historical exceptions |
 | [unified-accounting-phase1.md](unified-accounting-phase1.md) | Unified accounting (ERP, Factory, Rentals): Phase 1: Foundation |
 | [unified-accounting-phase2.md](unified-accounting-phase2.md) | Unified accounting (ERP, Factory, Rentals): Phase 2: Posting and Voucher Lifecycle |
@@ -145,6 +144,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 |---|---|
 | [permissions-security.md](permissions-security.md) | Roles and permission model |
 | [security-privacy.md](security-privacy.md) | Authentication, sessions, data handling |
+| [security-posture.md](security-posture.md) | Current security controls, remaining risks and verification scorecard |
 | [security-company-isolation-wave3.md](security-company-isolation-wave3.md) | Company isolation, RLS, and privileged maintenance boundaries |
 | [program-8b-approval-exception-workflows.md](program-8b-approval-exception-workflows.md) | Control model for high-risk actions |
 | [audit-framework.md](audit-framework.md) | Server-side audit foundation |

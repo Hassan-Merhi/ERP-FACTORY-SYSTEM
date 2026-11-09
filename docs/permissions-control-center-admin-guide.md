@@ -22,7 +22,16 @@
 | HTTP 409 stale revision | Another administrator saved first | Refresh the matrix, compare new rules, and enter a new review |
 | Role or user missing | The user is not assigned to the active company | Use the existing approved Company Roles workflow |
 | Preview says `Allow` | Hypothetical action-level decision only | Check actual legacy role, location, accounting periods and backend status before taking action |
-| Create Only absent from role picker | Activation intentionally disabled | Keep disabled until handler verification and Phase 7 certification |
+| Create Only absent from role picker | `PERMISSIONS_V2_CREATE_ONLY_ASSIGNMENT` is not `enabled` on the server | Keep it off until every release gate is verified; see the activation runbook |
+| 409 `CREATE_ONLY_ASSIGNMENT_NOT_ACTIVATED` | Someone tried to assign Create Only while the switch is off | Expected; do not work around it |
+| Create Only user sees "not available to Create Only users" | They tried to change, delete, approve or import an existing record | Expected; a person with an editing role must make the change |
+| 403 `BUSINESS_ACTION_DENIED` on a new record | The form carried a field Create Only may not set (opening balance, opening stock, backdated contract, another company) | Create the record without it; an editing role adds balances later |
+
+## The Create Only role
+
+Create Only users can browse company data like View Only and add these new records: suppliers, customers, stock items, Factory bale batches and customer order drafts, rental units and contracts, retail products and SP sales. They cannot edit, delete, approve, void, reverse, finalize, import or bulk-change any existing record, including records they created themselves, and they can only date records today. Money and cost fields stay hidden unless you enable them for the role. Switching a page off for the role in Role Permissions also stops creating on it.
+
+Assigning the role is switched off until the release is approved. Follow [the activation runbook](permissions-control-center-activation.md) for the pilot rollout, monitoring and rollback.
 
 ## Operational security
 

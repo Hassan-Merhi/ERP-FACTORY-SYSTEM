@@ -1,5 +1,6 @@
+import { ErpListTable } from "@/erp-core";
 import { Fragment, useState, useMemo } from "react";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, FolderClosed, GripVertical, Pencil, Wallet } from "lucide-react";
 import type { Account } from "./accountTypes";
@@ -206,7 +207,7 @@ export function AccountTable({
 
       <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-card shadow-sm dark:border-[#2c4267] dark:bg-[#0b1425]">
         {/* Fixed layout on phones so long account names truncate instead of pushing balances off-screen. */}
-        <Table className="max-sm:table-fixed">
+        <ErpListTable pageKey="account-list" className="max-sm:table-fixed" scrollLabel="ERP accounts">
           <TableHeader>
             <TableRow className="border-b border-slate-200/80 bg-slate-100/80 hover:bg-slate-100/80 dark:border-blue-800/60 dark:bg-[#1d3354] dark:hover:bg-[#1d3354]">
               <TableHead className="h-10 pl-5 text-xs font-semibold text-slate-700 dark:text-slate-100">Account Name / Code</TableHead>
@@ -408,7 +409,7 @@ export function AccountTable({
               </TableRow>
             )}
           </TableBody>
-        </Table>
+        </ErpListTable>
       </div>
     </div>
   );

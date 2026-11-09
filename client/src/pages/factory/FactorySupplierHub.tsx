@@ -6,6 +6,8 @@ import FactorySupplierStatement from "@/pages/factory/FactorySupplierStatement";
 import FactorySupplierScoreboard from "@/pages/factory/FactorySupplierScoreboard";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import type { FactoryMyAccess } from "@shared/apiTypes";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 
 type Section = "report" | "statement" | "scores";
 const SECTIONS = ["report", "statement", "scores"] as const;
@@ -16,8 +18,11 @@ const HIDDEN_KEYS: Record<Section, string> = {
 };
 
 export default function FactorySupplierHub() {
-  const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: ["/api/factory/my-access"], staleTime: 5 * 60000 });
-  const hidden = myAccess?.hiddenCostFields ?? [];
+  const { selectedCompany } = useCompany();
+  const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id), enabled: Boolean(selectedCompany?.id), staleTime: 5 * 60000 });
+  const hidden = myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
+    ? myAccess.hiddenCostFields
+    : Object.values(HIDDEN_KEYS);
   const sections: Section[] = SECTIONS.filter((section) => !hidden.includes(HIDDEN_KEYS[section]));
   const defaultSection: Section = sections[0] ?? "report";
   const allowedSections: readonly Section[] = sections;

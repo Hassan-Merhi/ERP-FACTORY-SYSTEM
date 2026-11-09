@@ -1,5 +1,5 @@
 import { AlertTriangle, Building2, CalendarDays, CheckCircle2, Coins, Copy, Ellipsis, ReceiptText, Search, Trash2, UsersRound, Wallet } from "lucide-react";
-import { format } from "date-fns";
+import { rentalPaymentDateLabel, mayOfferRentalPaymentDelete } from "@/properties/config/rentalPaymentPresentation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -222,10 +222,10 @@ export function PropertiesPaymentsPremium({
               </thead>
               <tbody>
                 {payments.map((p) => {
-                  const readOnly = Boolean(p.readOnly || p.sourceModule !== "PROPERTIES");
+                  const readOnly = !mayOfferRentalPaymentDelete(p.sourceModule, p.readOnly, "PROPERTIES");
                   return (
                     <tr key={p.id} data-testid={`row-payment-${p.id}`}>
-                      <td data-label="Date"><span className="properties-payments-date"><CalendarDays className="h-4 w-4" aria-hidden="true" />{format(new Date(p.paymentDate), "dd MMM yyyy")}</span></td>
+                      <td data-label="Date"><span className="properties-payments-date"><CalendarDays className="h-4 w-4" aria-hidden="true" />{rentalPaymentDateLabel(p.paymentDate)}</span></td>
                       <td data-label="Client / Tenant" className="properties-payments-tenant">{p.tenantName ?? "—"}</td>
                       <td data-label="Unit">
                         <span className="properties-payments-unit">{p.unitNumber ?? "—"}</span>
@@ -233,7 +233,7 @@ export function PropertiesPaymentsPremium({
                       </td>
                       <td data-label="Cash Received" className="properties-payments-right">
                         {cashCents(p) !== 0 ? (
-                          <span className="properties-payments-cash"><MoneyAmount amount={cashCents(p) / 100} currency={p.currency ?? "USD"} /></span>
+                          <span className="properties-payments-cash">{p.currency?.trim() ? <MoneyAmount amount={cashCents(p) / 100} currency={p.currency} /> : <span title="Recorded currency not verified">{(cashCents(p) / 100).toFixed(2)} (currency unverified)</span>}</span>
                         ) : <span className="properties-payments-empty">—</span>}
                       </td>
                       <td data-label="For Month"><span className="properties-payments-month">{MONTH_NAMES[p.forMonth]} {p.forYear}</span></td>

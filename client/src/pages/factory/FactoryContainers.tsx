@@ -20,6 +20,8 @@ import { useLocation } from "wouter";
 import { factoryApiRequest } from "@/lib/factoryApi";
 import type { FactorySupplier } from "@shared/schema";
 import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { usePaginatedFilterState } from "@/hooks/use-paginated-filter-state";
 
 import {
@@ -62,6 +64,7 @@ interface ContainerImportRow {
 
 export default function FactoryContainers() {
   const { selectedCompany } = useCompany();
+  const recordChanges = useExistingRecordChangeAccess();
   const [viewMode, setViewMode] = useState<"list" | "summary">("summary");
   const [openOtwGroups, setOpenOtwGroups] = useState<Set<string>>(new Set());
   const [createOpen, setCreateOpen] = useState(false);
@@ -90,10 +93,10 @@ export default function FactoryContainers() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
 
-  const { data: containers, isLoading } = useQuery<ContainerWithSupplier[]>({ queryKey: ["/api/factory/containers"] });
-  const { data: suppliers } = useQuery<FactorySupplier[]>({ queryKey: ["/api/factory/suppliers"] });
+  const { data: containers, isLoading } = useQuery<ContainerWithSupplier[]>({ queryKey: companyQueryKey("/api/factory/containers", selectedCompany?.id) });
+  const { data: suppliers } = useQuery<FactorySupplier[]>({ queryKey: companyQueryKey("/api/factory/suppliers", selectedCompany?.id) });
   const { data: ledgerAccounts = [] } = useQuery<ApiListRow[]>({
-    queryKey: ["/api/factory/containers/account-options"],
+    queryKey: companyQueryKey("/api/factory/containers/account-options", selectedCompany?.id),
     staleTime: 60_000,
     refetchOnWindowFocus: false,
   });
@@ -164,8 +167,8 @@ export default function FactoryContainers() {
       return res.json();
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/containers"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/suppliers"] });
+      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/containers", selectedCompany?.id) });
+      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/suppliers", selectedCompany?.id) });
       setImportResult(data);
       toast({
         title: "Import Complete",
@@ -253,7 +256,10 @@ export default function FactoryContainers() {
   return (
     <div className="space-y-5 pb-5 sm:space-y-6" data-testid="factory-containers-screen">
       <section className="relative overflow-hidden rounded-2xl border border-border/70 bg-gradient-to-br from-background via-background to-blue-500/5 p-4 shadow-sm dark:from-slate-950 dark:via-slate-950 dark:to-indigo-950/60 sm:p-6">
-        <div aria-hidden="true" className="pointer-events-none absolute -right-20 -top-24 size-72 rounded-full bg-blue-500/10 blur-3xl dark:bg-indigo-500/15" />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -right-20 -top-24 size-72 rounded-full bg-blue-500/10 blur-3xl dark:bg-indigo-500/15"
+        />
         <div className="relative">
           <PageHeader
             title="Factory Containers"
@@ -266,8 +272,12 @@ export default function FactoryContainers() {
             }
           >
             <div className="flex flex-wrap items-center gap-2">
-              {selectedIds.size > 0 && (
-                <Button variant="destructive" onClick={() => setBulkDeleteOpen(true)} data-testid="button-delete-selected">
+              {selectedIds.size > 0 && recordChanges.allowed && (
+                <Button
+                  variant="destructive"
+                  onClick={() => setBulkDeleteOpen(true)}
+                  data-testid="button-delete-selected"
+                >
                   <Trash2 className="mr-2 h-4 w-4" />
                   Delete Selected ({selectedIds.size})
                 </Button>
@@ -296,13 +306,15 @@ export default function FactoryContainers() {
                   <ArrowLeft className="h-4 w-4" /> Factory Containers
                 </Button>
               )}
-              <Button
-                onClick={() => navigate("/factory/containers/new")}
-                data-testid="button-add-factory-container"
-                className="gap-2 rounded-lg bg-blue-600 text-white shadow-sm shadow-blue-700/20 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500"
-              >
-                <Plus className="h-4 w-4" /> Add Container
-              </Button>
+              {!recordChanges.isCreateOnly && (
+                <Button
+                  onClick={() => navigate("/factory/containers/new")}
+                  data-testid="button-add-factory-container"
+                  className="gap-2 rounded-lg bg-blue-600 text-white shadow-sm shadow-blue-700/20 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500"
+                >
+                  <Plus className="h-4 w-4" /> Add Container
+                </Button>
+              )}
             </div>
           </PageHeader>
         </div>

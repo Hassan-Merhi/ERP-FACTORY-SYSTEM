@@ -20,6 +20,7 @@ import { factoryApiRequest } from "@/lib/factoryApi";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { PeriodFilterValue, getDefaultPeriodValue } from "@/components/ui/period-filter";
 import { useDateJump } from "@/hooks/use-date-jump";
+import { useDebounce } from "@/hooks/use-debounce";
 import { hasAnyOpenDialog } from "@/hooks/use-escape-back";
 import type { DaybookEntry, DisplayEntry, FactoryDaybookUIState } from "./types";
 import {
@@ -31,6 +32,7 @@ import {
 } from "./daybookUtils";
 import { FACTORY_DAYBOOK_STATE_KEY, loadFactoryDaybookState, saveFactoryDaybookState } from "./daybookUiState";
 import { exportFactoryDaybookDetailed, exportFactoryDaybookSummary } from "./factoryDaybookExports";
+import { isExistingRecordReadOnlyRole } from "@shared/createOnlyRolePolicy";
 
 export interface CondensedRow {
   date: string;
@@ -88,11 +90,7 @@ export function useFactoryDaybookModel() {
   const [sortOrder] = useState<"asc" | "desc">(() => initialDaybookStateRef.current?.sortOrder || "desc");
   // searchQuery filters client-side only (not part of the query key below), but debounce
   // it anyway so rapid typing doesn't thrash the derived filteredEntries memo on large lists.
-  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState(searchQuery);
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearchQuery(searchQuery), 250);
-    return () => clearTimeout(t);
-  }, [searchQuery]);
+  const debouncedSearchQuery = useDebounce(searchQuery, 250);
 
   // ── View/UX state ─────────────────────────────────────────────────────────
   const [expandedRowKey, setExpandedRowKey] = useState<string | null>(null);
@@ -191,7 +189,11 @@ export function useFactoryDaybookModel() {
   // Keep the type dropdown in sync with transactions that actually exist for
   // the selected company and date range. Unlike the full daybook query, this
   // metadata query remains small even with a large history or a type filter.
-  const { data: availableTypeData, isSuccess: typeOptionsReady, isFetching: isFetchingTypeOptions } = useQuery<{
+  const {
+    data: availableTypeData,
+    isSuccess: typeOptionsReady,
+    isFetching: isFetchingTypeOptions,
+  } = useQuery<{
     types: string[];
   }>({
     queryKey: ["/api/factory/daybook", "filter-options", startDate, endDate, currencyFilter],
@@ -215,16 +217,25 @@ export function useFactoryDaybookModel() {
 
   const availableTxTypes = useMemo(
     () =>
-      [...new Set((availableTypeData?.types ?? entries.map((entry) => entry.txType)).filter(
-        (type) => type && type !== "WORKER_EDITED"
-      ))].sort((a, b) => formatTxType(a).localeCompare(formatTxType(b))),
+      [
+        ...new Set(
+          (availableTypeData?.types ?? entries.map((entry) => entry.txType)).filter(
+            (type) => type && type !== "WORKER_EDITED"
+          )
+        ),
+      ].sort((a, b) => formatTxType(a).localeCompare(formatTxType(b))),
     [availableTypeData, entries]
   );
 
   // A type can disappear after moving to another date or after deleting the
   // last matching entry. Reset it so the user isn't stuck on an empty filter.
   useEffect(() => {
-    if (typeOptionsReady && !isFetchingTypeOptions && txTypeFilter !== "ALL" && !availableTxTypes.includes(txTypeFilter)) {
+    if (
+      typeOptionsReady &&
+      !isFetchingTypeOptions &&
+      txTypeFilter !== "ALL" &&
+      !availableTxTypes.includes(txTypeFilter)
+    ) {
       setTxTypeFilter("ALL");
     }
   }, [typeOptionsReady, isFetchingTypeOptions, txTypeFilter, availableTxTypes]);
@@ -263,7 +274,7 @@ export function useFactoryDaybookModel() {
     result = result.filter((e) => e.txType !== "WORKER_EDITED");
     // Non-admins only see their own entries (View Only users are observers — they see everything)
     const ownEntriesUserId = currentUser?.id;
-    if (!isAdminOrOwner && currentUser?.role !== "View Only" && ownEntriesUserId) {
+    if (!isAdminOrOwner && !isExistingRecordReadOnlyRole(currentUser?.role) && ownEntriesUserId) {
       result = result.filter((e) => e.createdBy === ownEntriesUserId);
     }
     if (statusFilter === "exclude") result = result.filter((e) => !e.optional);
@@ -502,9 +513,11 @@ export function useFactoryDaybookModel() {
         queryClient.invalidateQueries({ queryKey: ["/api/accounts/voucher-sidebar"] });
       }
       setVoidEntry(null);
-      toast(result.fxPaymentCancelled
-        ? { title: "FX payment deleted", description: "EUR restored; USD posting and FX gain/loss reversed." }
-        : { title: "Voucher voided", description: "All accounting entries have been reversed." });
+      toast(
+        result.fxPaymentCancelled
+          ? { title: "FX payment deleted", description: "EUR restored; USD posting and FX gain/loss reversed." }
+          : { title: "Voucher voided", description: "All accounting entries have been reversed." }
+      );
     },
     onError: (e: ClientErrorLike) => {
       if (e?._handledGlobally) return;
@@ -519,16 +532,21 @@ export function useFactoryDaybookModel() {
       if (!res.ok) throw new Error(result.message || "Daybook deletion / reversal failed");
       return result;
     },
-    onSuccess: (result: {reversed?:boolean;replayed?:boolean}) => {
+    onSuccess: (result: { reversed?: boolean; replayed?: boolean }) => {
       void queryClient.invalidateQueries({ queryKey: ["/api/factory/daybook"] });
       if (result.reversed) {
         void queryClient.invalidateQueries({ queryKey: ["/api/factory/staff-tracking/production-bonuses/payments"] });
         void queryClient.invalidateQueries({ queryKey: ["/api/factory/production-target-bonuses/weekly-payments"] });
-        void queryClient.invalidateQueries({ queryKey: ["/api/factory/production-target-bonuses/weekly-reconciliation"] });
+        void queryClient.invalidateQueries({
+          queryKey: ["/api/factory/production-target-bonuses/weekly-reconciliation"],
+        });
         void queryClient.invalidateQueries({ queryKey: ["/api/factory/vouchers"] });
         void queryClient.invalidateQueries({ queryKey: ["/api/ledger-accounts"] });
-        toast({ title: result.replayed ? "Bonus already reversed" : "Bonus payment removed and reversed",
-          description: "Cash / Bank and Deposit Expense were offset. Original and reversal vouchers remain in audit history; this bonus cannot be paid again." });
+        toast({
+          title: result.replayed ? "Bonus already reversed" : "Bonus payment removed and reversed",
+          description:
+            "Cash / Bank and Deposit Expense were offset. Original and reversal vouchers remain in audit history; this bonus cannot be paid again.",
+        });
       } else {
         toast({ title: "Entry deleted", description: "The daybook entry has been permanently removed." });
       }

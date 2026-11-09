@@ -7,12 +7,12 @@ import {
   Loader2,
   LockKeyhole,
   MessageCircle,
-  Search,
   SlidersHorizontal,
   Target,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
@@ -23,6 +23,7 @@ import {
   type FactoryStaffTrackingTranslationKey,
 } from "@/i18n/factoryStaffTrackingTranslations";
 import { factoryApiRequest } from "@/lib/factoryApi";
+import { factoryActionCapabilities } from "@shared/factoryActionCapabilities";
 import { queryClient } from "@/lib/queryClient";
 import {
   addIsoDays,
@@ -51,7 +52,9 @@ import {
 import { ChevronDown } from "lucide-react";
 import "./productiontargets/productionTargetsPremium.css";
 import { useLocation } from "wouter";
-import type { AuthMe } from "@shared/apiTypes";
+import type { AuthMe, FactoryMyAccess } from "@shared/apiTypes";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 
 import { exportWeeklyProductionExcel, ProductionDateRangeError } from "./productiontargets/productionWeeklyExcel";
 import { ProductionTargetKpiGrid } from "./productiontargets/ProductionTargetKpiGrid";
@@ -61,9 +64,17 @@ import { ProductionTargetNotices } from "./productiontargets/ProductionTargetNot
 export default function FactoryProductionTargets() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
+  const { selectedCompany } = useCompany();
+  const { data: access } = useQuery<FactoryMyAccess>({
+    queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
+  });
   const { data: session } = useQuery<AuthMe>({ queryKey: ["/api/auth/me"], staleTime: 60000 });
   const bonusRole = session?.currentRole ?? session?.role;
-  const canManageBonuses = bonusRole === "Admin" || bonusRole === "Owner";
+  const canManageBonuses = factoryActionCapabilities({
+    role: bonusRole,
+    hasFactoryAccess: access?.companyId === selectedCompany?.id && access?.hasFactoryAccess === true,
+  })["production.manage-bonuses"];
   const { language } = useApplicationLanguage();
   const tr = (key: FactoryStaffTrackingTranslationKey) => translateFactoryStaffTrackingText(key, language);
   const [periodType, setPeriodType] = useState<PeriodType>("daily");
@@ -88,7 +99,8 @@ export default function FactoryProductionTargets() {
   );
 
   const { data, isLoading } = useQuery<ProductionResponse>({
-    queryKey: ["/api/factory/staff-tracking", "production", periodType, period.start, period.end],
+    queryKey: companyQueryKey("/api/factory/staff-tracking", selectedCompany?.id, "production", periodType, period.start, period.end),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: () => fetchProduction(periodType, period.start, period.end),
   });
 
@@ -96,7 +108,7 @@ export default function FactoryProductionTargets() {
     setRows([]);
     setEditorOpen(false);
     setDefaultsEditorOpen(false);
-  }, [periodType, period.start, period.end]);
+  }, [selectedCompany?.id, periodType, period.start, period.end]);
 
   useEffect(() => {
     if (data) setRows(data.rows);
@@ -457,13 +469,13 @@ export default function FactoryProductionTargets() {
 
       <div className="pt-filters">
         <div className="pt-filter-search relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
+          <SearchField
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
+            onValueChange={setSearch}
             placeholder={tr("searchPlaceholder")}
-            className="pl-9"
             aria-label={tr("searchPlaceholder")}
+            showClear={false}
+            clearOnEscape={false}
           />
         </div>
         <div className="flex flex-wrap gap-2">

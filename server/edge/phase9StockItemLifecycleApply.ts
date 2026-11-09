@@ -49,7 +49,7 @@ interface Result {
   businessDate: string;
 }
 
-const NOT_PERMITTED_ROLES = new Set(["View Only", "ERP Tester", "POS"]);
+const NOT_PERMITTED_ROLES = new Set(["View Only", "Create Only", "ERP Tester", "POS"]);
 
 /** The live routes are requireNonPOS; re-checked against CURRENT cloud access. */
 async function authorize(client: Queryable, event: { actorUserId: string; companyId: number }): Promise<void> {

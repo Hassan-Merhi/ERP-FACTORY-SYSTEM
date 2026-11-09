@@ -52,6 +52,7 @@ interface PosHandlersParams {
   lastSavedFingerprintRef: React.MutableRefObject<string>;
   // Refs
   inputRefs: React.MutableRefObject<{ [key: string]: HTMLInputElement }>;
+  focusInventoryPicker?: () => void;
   printRef: React.MutableRefObject<HTMLDivElement | null>;
   savedSale: InvoiceSale | null | undefined;
   stockPrintRef: React.RefObject<HTMLDivElement | null>;
@@ -168,11 +169,13 @@ export function usePosHandlers(params: PosHandlersParams) {
     activeRow: params.activeRow,
     highlightedIndex: params.highlightedIndex,
     inventory: params.inventory,
+    canSellNegativeStock: params.authUser?.canSellNegativeStock ?? params.posUser?.canSellNegativeStock ?? false,
     setSelectedCell: params.setSelectedCell,
     setHighlightedIndex: params.setHighlightedIndex,
     setRows: params.setRows,
     toast: params.toast,
     focusCell,
+    focusInventoryPicker: params.focusInventoryPicker,
     selectItem,
   });
 

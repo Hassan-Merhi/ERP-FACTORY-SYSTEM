@@ -4,25 +4,19 @@
  * Extracted from PropertyRentalPage.tsx during the Phase 4 god-file split.
  */
 
+import { formatMoneyDisplay, formatMoneyNumber } from "@/lib/moneyDisplay";
+import { getCurrencyDisplayMetadata } from "@shared/currencyCatalog";
+
 export const MONTH_NAMES = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 export const CURRENCIES = ["USD", "EUR", "CFA"] as const;
 
 export function currencySymbol(currency: string): string {
-  if (currency === "EUR") return "€";
-  if (currency === "CFA" || currency === "XAF" || currency === "XOF") return "FC ";
-  return "$";
+  return getCurrencyDisplayMetadata(currency).prefix;
 }
 
 export function fmtMoneyCurrency(v: string | number | null | undefined, currency = "USD"): string {
-  if (v === null || v === undefined || v === "") return "—";
-  const n = Number(v);
-  const isCFA = currency === "CFA" || currency === "XAF" || currency === "XOF";
-  const formatted = n.toLocaleString("en-US", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: isCFA ? 0 : 2,
-  });
-  return `${currencySymbol(currency)}${formatted}`;
+  return formatMoneyDisplay(v, { currency });
 }
 
 export function ordinal(n: number): string {
@@ -42,11 +36,7 @@ export function billingDayLabel(dateStr: string | null | undefined): string | nu
   }
 }
 
-export const fmtMoney = (v: string | number | null | undefined) => {
-  if (v === null || v === undefined || v === "") return "—";
-  const n = Number(v);
-  return n.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
-};
+export const fmtMoney = (v: string | number | null | undefined) => formatMoneyNumber(v);
 
 function clampPaymentAllocationPeriod(
   year: number,

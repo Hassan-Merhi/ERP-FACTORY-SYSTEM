@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input";
 import { createCameraDecoder, hasCameraAccess, type CameraBarcodeDecoder, type CameraDecoderEngine } from "./pressing-scanner/cameraDecoder";
 import { ContinuousScanGate } from "./pressing-scanner/continuousScanGate";
 import { PRESSING_TIME_ZONE } from "@shared/pressingTimeZone";
+import { factoryLocalDateFromInstant } from "@shared/factoryLocalDate";
+import { factoryCameraErrorMessage } from "@/factory/scanner/cameraUiErrors";
 import { pauseSeasonalEffectsForCamera } from "@/lib/seasonalCameraActivity";
 
 export type PressingScanCapture = {
@@ -56,27 +58,7 @@ function capturedTime(iso: string): string {
   });
 }
 function capturedDate(iso: string): string {
-  const date = new Date(iso);
-  if (!Number.isFinite(date.getTime())) return "—";
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    year: "numeric", month: "2-digit", day: "2-digit",
-    timeZone: PRESSING_TIME_ZONE,
-  }).formatToParts(date);
-  const value = (type: string) => parts.find(part => part.type === type)?.value ?? "";
-  return [value("year"), value("month"), value("day")].join("-");
-}
-function cameraErrorMessage(error: unknown): string {
-  const name = error instanceof DOMException ? error.name : "";
-  if (name === "NotAllowedError" || name === "PermissionDeniedError") {
-    return "Camera permission denied. Allow camera access in browser settings, then retry.";
-  }
-  if (name === "NotFoundError" || name === "OverconstrainedError") {
-    return "No compatible rear camera was found. You can enter a barcode manually.";
-  }
-  if (name === "NotReadableError" || name === "AbortError") {
-    return "Camera is already in use by another app. Close it and retry.";
-  }
-  return error instanceof Error ? error.message : "Camera unavailable. Try manual entry.";
+  return factoryLocalDateFromInstant(iso) ?? "—";
 }
 
 export function ContinuousPressingScanner({
@@ -372,7 +354,7 @@ export function ContinuousPressingScanner({
         resumeSeasonalEffects = null;
         if (!canceled) {
           setStatus("error");
-          setError(cameraErrorMessage(cause));
+          setError(factoryCameraErrorMessage(cause));
         }
       }
     };

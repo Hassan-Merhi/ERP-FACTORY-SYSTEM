@@ -1,14 +1,14 @@
 /* Factory Shop Rentals only. All data, accounting and table actions stay in PropertyRentalPage. */
 .factory-rentals-table-shell {
   overflow: hidden;
-  border: 1px solid #d6dcec;
+  border: 1px solid hsl(var(--factory-hue) 37% 88%);
   border-radius: 18px;
-  background: linear-gradient(140deg, #fbfcff, #f5f7ff);
-  box-shadow: 0 12px 30px rgba(20, 37, 74, 0.06);
+  background: linear-gradient(140deg, hsl(var(--factory-hue) 100% 99%), hsl(var(--factory-hue) 100% 98%));
+  box-shadow: 0 12px 30px hsl(var(--factory-hue) 57% 18% / 0.06);
 }
 .dark .factory-rentals-table-shell {
-  border-color: #37446d;
-  background: linear-gradient(140deg, #182238, #101827);
+  border-color: hsl(var(--factory-hue) 33% 32%);
+  background: linear-gradient(140deg, hsl(var(--factory-hue) 40% 16%), hsl(var(--factory-hue) 42% 11%));
   box-shadow: 0 16px 36px rgba(0, 0, 0, 0.24);
 }
 .factory-rentals-table {
@@ -18,29 +18,31 @@
 }
 .factory-rentals-table thead th {
   padding: 13px 12px;
-  background: linear-gradient(180deg, #eeecff, #e5e9f8);
-  border-top: 1px solid #d9ddf2;
-  border-bottom: 1px solid #d9ddf2;
-  color: #323a59;
+  background: linear-gradient(180deg, hsl(var(--factory-hue) 100% 96%), hsl(var(--factory-hue) 58% 94%));
+  border-top: 1px solid hsl(var(--factory-hue) 49% 90%);
+  border-bottom: 1px solid hsl(var(--factory-hue) 49% 90%);
+  color: hsl(var(--factory-hue) 28% 27%);
   font-size: 12px;
-  letter-spacing: .01em;
+  letter-spacing: 0.01em;
   white-space: nowrap;
 }
 .dark .factory-rentals-table thead th {
-  background: linear-gradient(180deg, #30365d, #242b4b);
-  color: #f3f5ff;
-  border-color: #404977;
+  background: linear-gradient(180deg, hsl(var(--factory-hue) 32% 28%), hsl(var(--factory-hue) 35% 22%));
+  color: hsl(var(--factory-hue) 100% 98%);
+  border-color: hsl(var(--factory-hue) 30% 36%);
 }
 .factory-rentals-table thead th:first-child {
   border-radius: 10px 0 0 10px;
-  border-left: 1px solid #d9ddf2;
+  border-left: 1px solid hsl(var(--factory-hue) 49% 90%);
 }
 .factory-rentals-table thead th:last-child {
   border-radius: 0 10px 10px 0;
-  border-right: 1px solid #d9ddf2;
+  border-right: 1px solid hsl(var(--factory-hue) 49% 90%);
 }
 .dark .factory-rentals-table thead th:first-child,
-.dark .factory-rentals-table thead th:last-child { border-color: #404977; }
+.dark .factory-rentals-table thead th:last-child {
+  border-color: hsl(var(--factory-hue) 30% 36%);
+}
 .factory-rentals-table .factory-rentals-location-cell {
   border: 0;
   padding: 7px 0 2px;
@@ -51,52 +53,54 @@
   gap: 10px;
   min-height: 37px;
   padding: 8px 14px;
-  border: 1px solid rgba(255,255,255,.15);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 10px;
   color: #fff;
   font-size: 12px;
   font-weight: 800;
-  letter-spacing: .065em;
+  letter-spacing: 0.065em;
   text-transform: uppercase;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 .factory-rentals-location-count {
   margin-left: auto;
-  opacity: .85;
+  opacity: 0.85;
   font-size: 10px;
-  letter-spacing: .01em;
+  letter-spacing: 0.01em;
   font-weight: 600;
   text-transform: none;
 }
 .factory-rentals-table .factory-rentals-unit-row > td {
   padding: 12px;
-  background: rgba(var(--factory-rentals-rgb), .035);
-  border-top: 1px solid rgba(70,88,125,.12);
-  border-bottom: 1px solid rgba(70,88,125,.12);
-  transition: background-color 150ms ease, border-color 150ms ease;
+  background: rgba(var(--factory-rentals-rgb), 0.035);
+  border-top: 1px solid hsl(var(--factory-hue) 28% 38% / 0.12);
+  border-bottom: 1px solid hsl(var(--factory-hue) 28% 38% / 0.12);
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease;
 }
 .dark .factory-rentals-table .factory-rentals-unit-row > td {
-  background: rgba(var(--factory-rentals-rgb), .095);
-  border-color: rgba(132,151,195,.14);
+  background: rgba(var(--factory-rentals-rgb), 0.095);
+  border-color: hsl(var(--factory-hue) 34% 64% / 0.14);
 }
 .factory-rentals-table .factory-rentals-unit-row:hover > td {
-  background: rgba(var(--factory-rentals-rgb), .12);
-  border-color: rgba(var(--factory-rentals-rgb), .28);
+  background: rgba(var(--factory-rentals-rgb), 0.12);
+  border-color: rgba(var(--factory-rentals-rgb), 0.28);
 }
 .dark .factory-rentals-table .factory-rentals-unit-row:hover > td {
-  background: rgba(var(--factory-rentals-rgb), .23);
+  background: rgba(var(--factory-rentals-rgb), 0.23);
 }
 .factory-rentals-table .factory-rentals-unit-row-selected > td,
 .dark .factory-rentals-table .factory-rentals-unit-row-selected > td {
-  background: rgba(var(--factory-rentals-rgb), .19);
-  border-color: rgba(var(--factory-rentals-rgb), .4);
+  background: rgba(var(--factory-rentals-rgb), 0.19);
+  border-color: rgba(var(--factory-rentals-rgb), 0.4);
 }
 .factory-rentals-table .factory-rentals-unit-row > td:first-child {
-  border-left: 1px solid rgba(70,88,125,.15);
+  border-left: 1px solid hsl(var(--factory-hue) 28% 38% / 0.15);
   border-radius: 9px 0 0 9px;
 }
 .factory-rentals-table .factory-rentals-unit-row > td:last-child {
-  border-right: 1px solid rgba(70,88,125,.15);
+  border-right: 1px solid hsl(var(--factory-hue) 28% 38% / 0.15);
   border-radius: 0 9px 9px 0;
 }
 .factory-rentals-unit-pill {
@@ -110,26 +114,36 @@
   font-size: 11px;
   font-weight: 800;
   line-height: 1.35;
-  letter-spacing: .015em;
+  letter-spacing: 0.015em;
   overflow-wrap: anywhere;
 }
-.dark .factory-rentals-unit-pill { filter: brightness(1.4); }
+.dark .factory-rentals-unit-pill {
+  filter: brightness(1.4);
+}
 .factory-rentals-table .factory-rentals-date {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   white-space: nowrap;
 }
-.factory-rentals-table td.text-green-600 { font-weight: 700; }
-.factory-rentals-table td.text-red-600 { font-weight: 700; }
-.factory-rentals-table button:hover { background: rgba(239,68,68,.12); }
+.factory-rentals-table td.text-green-600 {
+  font-weight: 700;
+}
+.factory-rentals-table td.text-red-600 {
+  font-weight: 700;
+}
+.factory-rentals-table button:hover {
+  background: rgba(239, 68, 68, 0.12);
+}
 .factory-rentals-table button:focus-visible,
 .factory-rentals-table [role="checkbox"]:focus-visible {
-  outline: 2px solid #6366f1;
+  outline: 2px solid hsl(var(--factory-hue) 84% 67%);
   outline-offset: 3px;
 }
 @media (prefers-reduced-motion: reduce) {
-  .factory-rentals-table .factory-rentals-unit-row > td { transition: none; }
+  .factory-rentals-table .factory-rentals-unit-row > td {
+    transition: none;
+  }
 }
 
 .factory-rentals-table .factory-rentals-money-pill {
@@ -139,12 +153,22 @@
   min-width: 48px;
   padding: 6px 10px;
   border-radius: 999px;
-  background: rgba(95,109,137,.10);
+  background: rgba(95, 109, 137, 0.1);
   font-weight: 700;
   white-space: nowrap;
 }
-.dark .factory-rentals-table .factory-rentals-money-pill { background: rgba(119,139,181,.14); }
-.factory-rentals-table td.text-green-600 .factory-rentals-money-pill { background: rgba(16,185,129,.12); }
-.factory-rentals-table td.text-red-600 .factory-rentals-money-pill { background: rgba(239,68,68,.10); }
-.dark .factory-rentals-table td.dark\:text-green-400 .factory-rentals-money-pill { background: rgba(16,185,129,.16); }
-.dark .factory-rentals-table td.dark\:text-red-400 .factory-rentals-money-pill { background: rgba(239,68,68,.15); }
+.dark .factory-rentals-table .factory-rentals-money-pill {
+  background: hsl(var(--factory-hue) 30% 59% / 0.14);
+}
+.factory-rentals-table td.text-green-600 .factory-rentals-money-pill {
+  background: rgba(16, 185, 129, 0.12);
+}
+.factory-rentals-table td.text-red-600 .factory-rentals-money-pill {
+  background: rgba(239, 68, 68, 0.1);
+}
+.dark .factory-rentals-table td.dark\:text-green-400 .factory-rentals-money-pill {
+  background: rgba(16, 185, 129, 0.16);
+}
+.dark .factory-rentals-table td.dark\:text-red-400 .factory-rentals-money-pill {
+  background: rgba(239, 68, 68, 0.15);
+}

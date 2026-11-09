@@ -45,6 +45,7 @@ describe("Factory route registry", () => {
     expect(redirectPaths.has("/factory/pos")).toBe(false);
     expect(canonicalTopLevelRoutes().includes("/factory/pos")).toBe(true);
     expect(resolveFactoryPage("/factory/pos")?.key).toBe("factory/pos");
+    expect(resolveFactoryPage("/factory/others?tab=comparison")?.key).toBe("factory/production-report");
   });
 
   it("routes every sidebar/access-registry destination to a real page", () => {

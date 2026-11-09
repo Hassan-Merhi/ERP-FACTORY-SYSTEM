@@ -2,6 +2,8 @@ import type { ClientErrorLike } from "@/lib/clientError";
 import { useState, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -143,6 +145,7 @@ function SummaryCard({
 
 export default function FactoryEmployeeAttendanceTab() {
   const { toast } = useToast();
+  const { selectedCompany } = useCompany();
   const [mode, setMode] = useState<ViewMode>("daily");
 
   const [selectedDate, setSelectedDate] = useState(attendanceToday);
@@ -154,13 +157,21 @@ export default function FactoryEmployeeAttendanceTab() {
   const [notesMap, setNotesMap] = useState<Record<number, string>>({});
 
   const { data, isLoading } = useQuery<{ employees: EmpRow[]; attendance: AttRecord[] }>({
-    queryKey: ["/api/factory/employee-attendance", selectedDate],
+    queryKey: companyQueryKey("/api/factory/employee-attendance", selectedCompany?.id, selectedDate),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const res = await fetch(`/api/factory/employee-attendance?date=${selectedDate}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch");
       return res.json();
     },
   });
+
+  useEffect(() => {
+    setAttendanceMap({});
+    setNotesMap({});
+    setApprovalOpen(false);
+    setPendingApprovalRecords(null);
+  }, [selectedCompany?.id]);
 
   useEffect(() => {
     if (!data) return;
@@ -183,7 +194,7 @@ export default function FactoryEmployeeAttendanceTab() {
     onSuccess: () => {
       setApprovalOpen(false);
       setPendingApprovalRecords(null);
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/employee-attendance", selectedDate] });
+      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employee-attendance", selectedCompany?.id, selectedDate) });
       toast({ title: "Attendance saved", description: `Saved for ${selectedDate}` });
     },
     onError: (err: ClientErrorLike) => {
@@ -193,7 +204,7 @@ export default function FactoryEmployeeAttendanceTab() {
   });
 
   const handleSave = useCallback(() => {
-    if (!data?.employees?.length) return;
+    if (!selectedCompany?.id || !data?.employees?.length) return;
     const records = data.employees.map((e) => ({
       employeeId: e.id,
       attendanceDate: selectedDate,
@@ -208,10 +219,10 @@ export default function FactoryEmployeeAttendanceTab() {
     } else {
       saveMutation.mutate({ records });
     }
-  }, [data, selectedDate, attendanceMap, notesMap, saveMutation]);
+  }, [data, selectedDate, attendanceMap, notesMap, saveMutation, selectedCompany?.id]);
 
   const approveAttendanceSave = (credentials: AttendanceAdminCredentials) => {
-    if (pendingApprovalRecords) saveMutation.mutate({ records: pendingApprovalRecords, credentials });
+    if (selectedCompany?.id && pendingApprovalRecords) saveMutation.mutate({ records: pendingApprovalRecords, credentials });
   };
 
   const markAll = (status: AttendanceStatus) => {
@@ -264,7 +275,7 @@ export default function FactoryEmployeeAttendanceTab() {
       </div>
 
       {mode === "perEmployee" ? (
-        <PerEmployeeView />
+        <PerEmployeeView key={selectedCompany?.id ?? "no-company"} />
       ) : (
         <>
           <Card className="rounded-2xl border-slate-200/90 bg-white/90 shadow-sm dark:border-blue-400/25 dark:bg-[#13223d]/80">
@@ -512,6 +523,7 @@ export default function FactoryEmployeeAttendanceTab() {
 
 function PerEmployeeView() {
   const { toast } = useToast();
+  const { selectedCompany } = useCompany();
   const [selectedEmpId, setSelectedEmpId] = useState<string>("");
   const [empComboOpen, setEmpComboOpen] = useState(false);
   const [startDate, setStartDate] = useState(attendanceToday);
@@ -522,7 +534,8 @@ function PerEmployeeView() {
   const [pendingApprovalRecords, setPendingApprovalRecords] = useState<EmployeeAttendanceBulkRecord[] | null>(null);
 
   const { data: empList } = useQuery<EmpRow[]>({
-    queryKey: ["/api/factory/employees"],
+    queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const res = await fetch("/api/factory/employees", { credentials: "include" });
       if (!res.ok) throw new Error("Failed");
@@ -533,7 +546,7 @@ function PerEmployeeView() {
   const empIdNum = selectedEmpId ? parseInt(selectedEmpId) : null;
 
   const { data: attendanceRecords } = useQuery<AttRecord[]>({
-    queryKey: ["/api/factory/employee-attendance/employee", empIdNum, startDate, endDate],
+    queryKey: companyQueryKey("/api/factory/employee-attendance/employee", selectedCompany?.id, empIdNum, startDate, endDate),
     queryFn: async () => {
       if (!empIdNum) return [];
       const res = await fetch(
@@ -543,7 +556,7 @@ function PerEmployeeView() {
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
-    enabled: !!empIdNum && !!startDate && !!endDate,
+    enabled: Boolean(selectedCompany?.id) && !!empIdNum && !!startDate && !!endDate,
   });
 
   useEffect(() => {
@@ -569,7 +582,7 @@ function PerEmployeeView() {
       setApprovalOpen(false);
       setPendingApprovalRecords(null);
       queryClient.invalidateQueries({
-        queryKey: ["/api/factory/employee-attendance/employee", empIdNum, startDate, endDate],
+        queryKey: companyQueryKey("/api/factory/employee-attendance/employee", selectedCompany?.id, empIdNum, startDate, endDate),
       });
       toast({ title: "Attendance saved", description: `${dates.length} days saved.` });
     },
@@ -580,7 +593,7 @@ function PerEmployeeView() {
   });
 
   const handleSave = () => {
-    if (!empIdNum) return;
+    if (!selectedCompany?.id || !empIdNum) return;
     const existingStatusMap: Record<string, string> = {};
     if (attendanceRecords) for (const r of attendanceRecords) existingStatusMap[r.attendanceDate] = r.status;
     const records = dates.map((d) => {
@@ -602,7 +615,7 @@ function PerEmployeeView() {
   };
 
   const approveAttendanceSave = (credentials: AttendanceAdminCredentials) => {
-    if (pendingApprovalRecords) saveMutation.mutate({ records: pendingApprovalRecords, credentials });
+    if (selectedCompany?.id && pendingApprovalRecords) saveMutation.mutate({ records: pendingApprovalRecords, credentials });
   };
 
   const selectedEmp = (empList ?? []).find((e) => e.id === empIdNum);

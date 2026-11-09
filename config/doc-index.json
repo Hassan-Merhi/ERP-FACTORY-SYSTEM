@@ -159,6 +159,7 @@
     "docs/accounting-audit-2026-10.md": "reference",
     "docs/accounting-flow.md": "reference",
     "docs/accounting/company12-october-payroll-overpayment-reporting-exclusion-20261103.md": "reference",
+    "docs/accounting/factory-rent-open-exception.md": "reference",
     "docs/accounting/factory-worker-advance-ledger-audit-2026-11-03.md": "reference",
     "docs/accounting/october-2026-paid-payroll-overlap-reclassification-20261103.md": "reference",
     "docs/accounting/october-2026-salary-reconciliation-20261103.md": "reference",
@@ -491,6 +492,7 @@
     "docs/retail-supplier-stock-import-phases.md": "reference",
     "docs/security-company-isolation-wave3.md": "reference",
     "docs/security-privacy.md": "reference",
+    "docs/security-posture.md": "reference",
     "docs/security/phase4-main-ruleset-hardening.md": "reference",
     "docs/security/scorecard-review-and-exceptions.md": "reference",
     "docs/shared-ui-continuation-roadmap.md": "reference",
@@ -559,6 +561,8 @@
     "docs/permissions-control-center-phase6.md": "reference",
     "docs/permissions-control-center-phase7.md": "reference",
     "docs/permissions-control-center-admin-guide.md": "reference",
-    "docs/permissions-control-center-phase8.md": "reference"
+    "docs/permissions-control-center-phase8.md": "reference",
+    "docs/permissions-control-center-phase3-route-review.md": "reference",
+    "docs/permissions-control-center-activation.md": "reference"
   }
 }

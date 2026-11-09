@@ -41,7 +41,7 @@ export interface Phase9StockItemEditApplyResult {
   businessDate: string;
 }
 
-const NOT_PERMITTED_ROLES = new Set(["View Only", "ERP Tester", "POS"]);
+const NOT_PERMITTED_ROLES = new Set(["View Only", "Create Only", "ERP Tester", "POS"]);
 
 /** Column of each whitelisted item field (identifiers from this fixed map only). */
 const ITEM_COLUMNS: Record<string, string> = {

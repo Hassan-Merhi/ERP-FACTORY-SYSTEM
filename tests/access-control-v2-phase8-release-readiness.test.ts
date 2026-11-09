@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { refuseInactiveCreateOnlyAssignment } from "../server/services/security/createOnlyActivation";
 const root = process.cwd();
 
 interface ReleaseGate {
@@ -85,12 +86,12 @@ describe("Phase 8 signed release readiness prerequisites", () => {
       })
     ).toBe(false);
   });
-  it("does not activate the V2 role in user assignment or change the DB policy mode", () => {
-    const roleEditor = fs.readFileSync(path.join(root, "client/src/pages/settings/users/InlineRoleEditor.tsx"), "utf8");
-    const store = fs.readFileSync(path.join(root, "server/services/security/accessControlV2Store.ts"), "utf8");
-    expect(roleEditor).not.toMatch(/ROLE_OPTIONS\s*=\s*\[[^\]]*"Create Only"/);
-    expect(store).toContain('version.mode !== "shadow"');
-    expect(store).toContain('mode: "shadow"');
-    expect(store).not.toContain("SET mode='active'");
+  it("does not activate the V2 role in user assignment", () => {
+    // New Create Only assignments are refused unless the operator switch is set;
+    // the store-side "shadow mode only" contract is asserted behaviourally in
+    // tests/access-control-v2-phase2-store.test.ts.
+    expect(refuseInactiveCreateOnlyAssignment({ requestedRole: "Create Only" }, {})?.status).toBe(409);
+    expect(ready.rolloutMode).toBe("shadow");
+    expect(ready.releaseAuthorized).toBe(false);
   });
 });

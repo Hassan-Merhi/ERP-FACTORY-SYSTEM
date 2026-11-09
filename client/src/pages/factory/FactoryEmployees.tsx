@@ -36,6 +36,8 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import { factoryApiRequest } from "@/lib/factoryApi";
 
 interface Employee {
@@ -98,6 +100,7 @@ function fmt(val: string | number | null | undefined) {
 export default function FactoryEmployees() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const { selectedCompany } = useCompany();
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("Active");
@@ -113,7 +116,8 @@ export default function FactoryEmployees() {
   } | null>(null);
 
   const { data: employees = [], isLoading } = useQuery<Employee[]>({
-    queryKey: ["/api/factory/employees"],
+    queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const res = await factoryApiRequest("GET", "/api/factory/employees");
       if (!res.ok) throw new Error("Failed to fetch employees");
@@ -131,7 +135,7 @@ export default function FactoryEmployees() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/employees"] });
+      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id) });
       toast({ title: "Employee created" });
       setCreateOpen(false);
       setFormData({ ...emptyForm });
@@ -152,8 +156,8 @@ export default function FactoryEmployees() {
       return res.json();
     },
     onSuccess: (emp: Employee) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/employees"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/employees", emp.id] });
+      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id) });
+      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id, emp.id) });
       toast({ title: "Employee updated" });
       setEditingEmployee(null);
     },
@@ -173,7 +177,7 @@ export default function FactoryEmployees() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/employees"] });
+      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id) });
       toast({ title: "Contract ended", description: "Employee has been deactivated" });
       setEndingContractEmployee(null);
     },
@@ -193,7 +197,7 @@ export default function FactoryEmployees() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/employees"] });
+      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id) });
       toast({ title: "Employee reactivated" });
     },
     onError: (e: ClientErrorLike) => {
@@ -212,7 +216,7 @@ export default function FactoryEmployees() {
       return res.json();
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/employees"] });
+      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id) });
       setRecalcConfirmOpen(false);
       setRecalcResult(data);
       setRecalcResultOpen(true);

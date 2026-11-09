@@ -61,7 +61,7 @@ export function StatCard({
   return (
     <Card
       className={cn(
-        "relative isolate min-w-0 overflow-hidden rounded-2xl border bg-card shadow-sm transition-[border-color,box-shadow] hover:shadow-md dark:bg-[#111b29]",
+        "relative isolate min-w-0 overflow-hidden rounded-2xl border bg-card shadow-sm transition-[border-color,box-shadow] hover:shadow-md dark:bg-card",
         palette.border,
         accent === "red" && "border-red-500/40",
         accent === "green" && "border-emerald-500/40"

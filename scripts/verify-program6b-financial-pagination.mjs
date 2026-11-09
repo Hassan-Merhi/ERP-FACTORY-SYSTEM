@@ -18,7 +18,7 @@ const assert = (condition, message) => {
 };
 
 const daybookRoute = read("server/routes/factory/factoryDaybookPaginationRoutes.ts");
-const accountsWrapper = read("client/src/pages/Accounts.tsx");
+const accountsWrapper = read("client/src/pages/accountslegacy/useAccountsLegacyModel.ts");
 // AccountsLegacy.tsx keeps its view; data wiring moved to its model hook.
 const accountsPage = [
   read("client/src/pages/AccountsLegacy.tsx"),

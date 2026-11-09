@@ -2,6 +2,8 @@ import type { ClientErrorLike } from "@/lib/clientError";
 import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import { Plus, Trash2, RotateCcw, Banknote, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -69,6 +71,7 @@ const today = () => new Date().toLocaleDateString("en-CA");
 
 export default function FactoryEmployeeAdvancesTab() {
   const { toast } = useToast();
+  const { selectedCompany } = useCompany();
   const [statusFilter, setStatusFilter] = useState<"all" | "open" | "paid">("open");
   const [empFilter, setEmpFilter] = useState<string>("all");
   const [addOpen, setAddOpen] = useState(false);
@@ -85,7 +88,8 @@ export default function FactoryEmployeeAdvancesTab() {
   const [repayForm, setRepayForm] = useState({ repaymentDate: today(), amount: "", cashAccountId: "", notes: "" });
 
   const { data: employees = [] } = useQuery<Employee[]>({
-    queryKey: ["/api/factory/employees"],
+    queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const res = await fetch("/api/factory/employees", { credentials: "include" });
       if (!res.ok) throw new Error("Failed");
@@ -94,7 +98,8 @@ export default function FactoryEmployeeAdvancesTab() {
   });
 
   const { data: cashAccounts = [] } = useQuery<CashAccount[]>({
-    queryKey: ["/api/factory/cash-accounts"],
+    queryKey: companyQueryKey("/api/factory/cash-accounts", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const res = await fetch("/api/factory/cash-accounts", { credentials: "include" });
       if (!res.ok) return [];
@@ -104,10 +109,11 @@ export default function FactoryEmployeeAdvancesTab() {
     refetchOnWindowFocus: false,
   });
 
-  const qKey = useMemo(() => ["/api/factory/employee-advances", statusFilter, empFilter], [statusFilter, empFilter]);
+  const qKey = useMemo(() => companyQueryKey("/api/factory/employee-advances", selectedCompany?.id, statusFilter, empFilter), [selectedCompany?.id, statusFilter, empFilter]);
 
   const { data: advances = [], isLoading } = useQuery<AdvanceRecord[]>({
     queryKey: qKey,
+    enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const params = new URLSearchParams();
       if (statusFilter !== "all") params.set("status", statusFilter);
@@ -119,7 +125,8 @@ export default function FactoryEmployeeAdvancesTab() {
   });
 
   useQuery<RepaymentRecord[]>({
-    queryKey: ["/api/factory/employee-advance-repayments"],
+    queryKey: companyQueryKey("/api/factory/employee-advance-repayments", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const res = await fetch("/api/factory/employee-advance-repayments", { credentials: "include" });
       if (!res.ok) return [];
@@ -151,7 +158,7 @@ export default function FactoryEmployeeAdvancesTab() {
       toast({ title: "Advance recorded" });
       setAddOpen(false);
       setAddForm({ employeeId: "", advanceDate: today(), amount: "", cashAccountId: "", notes: "" });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/employee-advances"] });
+      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employee-advances", selectedCompany?.id) });
     },
     onError: (e: ClientErrorLike) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
@@ -180,8 +187,8 @@ export default function FactoryEmployeeAdvancesTab() {
       toast({ title: "Repayment recorded" });
       setRepayOpen(null);
       setRepayForm({ repaymentDate: today(), amount: "", cashAccountId: "", notes: "" });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/employee-advances"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/employee-advance-repayments"] });
+      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employee-advances", selectedCompany?.id) });
+      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employee-advance-repayments", selectedCompany?.id) });
     },
     onError: (e: ClientErrorLike) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
@@ -197,7 +204,7 @@ export default function FactoryEmployeeAdvancesTab() {
     onSuccess: () => {
       toast({ title: "Advance deleted" });
       setDeleteConfirm(null);
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/employee-advances"] });
+      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employee-advances", selectedCompany?.id) });
     },
     onError: (e: ClientErrorLike) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });

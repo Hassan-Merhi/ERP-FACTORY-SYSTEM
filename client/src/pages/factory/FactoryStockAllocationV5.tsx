@@ -1,5 +1,6 @@
 import { Fragment } from "react";
 import { useFactoryMhdView } from "@/hooks/use-factory-mhd-view";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useLocation } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -41,6 +42,7 @@ import { FactoryStockAllocationV5Dialog8 } from "./factorystockallocationv5/comp
 export default function FactoryStockAllocationV5() {
   const model = useFactoryStockAllocationV5Model();
   const mhd = useFactoryMhdView();
+  const recordChanges = useExistingRecordChangeAccess();
   const [, setLocation] = useLocation();
   const {
     focusProformaId,
@@ -130,25 +132,29 @@ export default function FactoryStockAllocationV5() {
               <FileDown className="h-4 w-4" />
               Export
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-9 gap-1.5 rounded-lg"
-              onClick={() => setRestoreDialogOpen(true)}
-              data-testid="button-v5-restore-cancelled"
-            >
-              <RotateCcw className="h-4 w-4" />
-              Restore Cancelled
-            </Button>
-            <Button
-              size="sm"
-              className="h-9 gap-1.5 rounded-lg bg-violet-600 text-white shadow-md shadow-violet-500/20 hover:bg-violet-700"
-              onClick={() => setLocation("/factory/stock-allocation-v5/proformas/new")}
-              data-testid="button-v5-open-create-proforma"
-            >
-              <Plus className="h-4 w-4" />
-              Create Proforma
-            </Button>
+            {recordChanges.allowed && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 gap-1.5 rounded-lg"
+                onClick={() => setRestoreDialogOpen(true)}
+                data-testid="button-v5-restore-cancelled"
+              >
+                <RotateCcw className="h-4 w-4" />
+                Restore Cancelled
+              </Button>
+            )}
+            {!recordChanges.isCreateOnly && (
+              <Button
+                size="sm"
+                className="h-9 gap-1.5 rounded-lg bg-violet-600 text-white shadow-md shadow-violet-500/20 hover:bg-violet-700"
+                onClick={() => setLocation("/factory/stock-allocation-v5/proformas/new")}
+                data-testid="button-v5-open-create-proforma"
+              >
+                <Plus className="h-4 w-4" />
+                Create Proforma
+              </Button>
+            )}
           </div>
         </div>
         <div className="mt-5 grid grid-cols-2 gap-2.5 lg:grid-cols-3 xl:grid-cols-5">
@@ -596,64 +602,70 @@ export default function FactoryStockAllocationV5() {
                                         {proforma.totalExpected} expected
                                       </span>
                                     </span>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="h-5 px-2 text-[11px]"
-                                      data-testid={`button-v5-add-containers-${proforma.proformaId}`}
-                                      onClick={() =>
-                                        openAddContainers(
-                                          proforma.proformaId,
-                                          proforma.proformaName,
-                                          proforma.containerCount
-                                        )
-                                      }
-                                    >
-                                      <Plus className="h-2.5 w-2.5 mr-1" />
-                                      Add Containers
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="h-5 px-2 text-[11px]"
-                                      data-testid={`button-v5-link-container-${proforma.proformaId}`}
-                                      onClick={() => {
-                                        setLinkSelected(new Set());
-                                        setLinkDialog({
-                                          proformaId: proforma.proformaId,
-                                          proformaName: proforma.proformaName,
-                                          proformaCustomerId: proforma.customerId ?? null,
-                                        });
-                                      }}
-                                    >
-                                      <Link2 className="h-2.5 w-2.5 mr-1" />
-                                      Link Existing
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="h-5 px-2 text-[11px]"
-                                      data-testid={`button-v5-edit-proforma-${proforma.proformaId}`}
-                                      onClick={() =>
-                                        setLocation(
-                                          `/factory/stock-allocation-v5/proformas/${proforma.proformaId}/edit`
-                                        )
-                                      }
-                                    >
-                                      <Pencil className="h-2.5 w-2.5 mr-1" />
-                                      Edit Proforma
-                                    </Button>
-                                    {activeContainers.some((c) => c.status === "DRAFT" && c.loadedQty === 0) && (
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="h-5 px-2 text-[11px]"
-                                        data-testid={`button-v5-edit-draft-${proforma.proformaId}`}
-                                        onClick={() => openEditDraft(proforma.proformaId, proforma.proformaName, rows)}
-                                      >
-                                        <Pencil className="h-2.5 w-2.5 mr-1" />
-                                        Edit Draft Qty
-                                      </Button>
+                                    {recordChanges.allowed && (
+                                      <>
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          className="h-5 px-2 text-[11px]"
+                                          data-testid={`button-v5-add-containers-${proforma.proformaId}`}
+                                          onClick={() =>
+                                            openAddContainers(
+                                              proforma.proformaId,
+                                              proforma.proformaName,
+                                              proforma.containerCount
+                                            )
+                                          }
+                                        >
+                                          <Plus className="h-2.5 w-2.5 mr-1" />
+                                          Add Containers
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          className="h-5 px-2 text-[11px]"
+                                          data-testid={`button-v5-link-container-${proforma.proformaId}`}
+                                          onClick={() => {
+                                            setLinkSelected(new Set());
+                                            setLinkDialog({
+                                              proformaId: proforma.proformaId,
+                                              proformaName: proforma.proformaName,
+                                              proformaCustomerId: proforma.customerId ?? null,
+                                            });
+                                          }}
+                                        >
+                                          <Link2 className="h-2.5 w-2.5 mr-1" />
+                                          Link Existing
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          className="h-5 px-2 text-[11px]"
+                                          data-testid={`button-v5-edit-proforma-${proforma.proformaId}`}
+                                          onClick={() =>
+                                            setLocation(
+                                              `/factory/stock-allocation-v5/proformas/${proforma.proformaId}/edit`
+                                            )
+                                          }
+                                        >
+                                          <Pencil className="h-2.5 w-2.5 mr-1" />
+                                          Edit Proforma
+                                        </Button>
+                                        {activeContainers.some((c) => c.status === "DRAFT" && c.loadedQty === 0) && (
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="h-5 px-2 text-[11px]"
+                                            data-testid={`button-v5-edit-draft-${proforma.proformaId}`}
+                                            onClick={() =>
+                                              openEditDraft(proforma.proformaId, proforma.proformaName, rows)
+                                            }
+                                          >
+                                            <Pencil className="h-2.5 w-2.5 mr-1" />
+                                            Edit Draft Qty
+                                          </Button>
+                                        )}
+                                      </>
                                     )}
                                   </div>
 
@@ -679,25 +691,26 @@ export default function FactoryStockAllocationV5() {
                                               <span className="text-green-500 ml-1">✓</span>
                                             )}
                                           </span>
-                                          {(c.status === "DRAFT" || c.status === "LOADING") && (
-                                            <button
-                                              type="button"
-                                              title={`Cancel ${c.containerName}`}
-                                              data-testid={`button-v5-cancel-container-${c.orderId}`}
-                                              onClick={() => {
-                                                setCancelSuperUser("");
-                                                setCancelSuperPass("");
-                                                setCancelDialog({
-                                                  orderId: c.orderId,
-                                                  containerName: c.containerName,
-                                                  status: c.status as "DRAFT" | "LOADING",
-                                                });
-                                              }}
-                                              className="ml-0.5 text-muted-foreground hover:text-destructive transition-colors"
-                                            >
-                                              <X className="h-3 w-3" />
-                                            </button>
-                                          )}
+                                          {recordChanges.allowed &&
+                                            (c.status === "DRAFT" || c.status === "LOADING") && (
+                                              <button
+                                                type="button"
+                                                title={`Cancel ${c.containerName}`}
+                                                data-testid={`button-v5-cancel-container-${c.orderId}`}
+                                                onClick={() => {
+                                                  setCancelSuperUser("");
+                                                  setCancelSuperPass("");
+                                                  setCancelDialog({
+                                                    orderId: c.orderId,
+                                                    containerName: c.containerName,
+                                                    status: c.status as "DRAFT" | "LOADING",
+                                                  });
+                                                }}
+                                                className="ml-0.5 text-muted-foreground hover:text-destructive transition-colors"
+                                              >
+                                                <X className="h-3 w-3" />
+                                              </button>
+                                            )}
                                         </div>
                                       ))}
                                     </div>

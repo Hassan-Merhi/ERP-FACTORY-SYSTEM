@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Package } from "lucide-react";
+import { ErpListTable } from "@/erp-core";
 import { Input } from "@/components/ui/input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ProfitCell } from "./components/ProfitCell";
 import { StatusBadge } from "./components/StatusBadge";
 import { fmt } from "./utils";
@@ -35,7 +36,7 @@ export function SupplierProfitCheckTable({ model }: { model: ProfitModel }) {
   }
   return (
     <div className="rounded-xl border overflow-hidden">
-      <Table>
+      <ErpListTable pageKey="supplier-profit-check" scrollLabel="Supplier profit check">
         <TableHeader className="sticky top-0 z-30">
           <TableRow className="bg-muted/60 border-b-2 hover:bg-muted/60">
             {visibility.code && <Header className="min-w-[90px]">Code</Header>}
@@ -91,7 +92,7 @@ export function SupplierProfitCheckTable({ model }: { model: ProfitModel }) {
             ))
           )}
         </TableBody>
-      </Table>
+      </ErpListTable>
     </div>
   );
 }

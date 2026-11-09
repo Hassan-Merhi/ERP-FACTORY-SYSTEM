@@ -18,6 +18,12 @@ import { describe, expect, it } from "vitest";
 import { Router } from "wouter";
 import { memoryLocation } from "wouter/memory-location";
 
+// The route table is normally inside CompanyProvider; this isolated
+// role-gate test supplies the same selected-company identity.
+vi.mock("@/contexts/CompanyContext", () => ({
+  useCompany: () => ({ selectedCompany: { id: 7, companyType: "erp" } }),
+}));
+
 import { ErpRoutes } from "./ErpRoutes";
 
 function renderAt(path: string, role: string) {

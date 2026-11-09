@@ -29,7 +29,7 @@ describe("Pressing dashboard redesign", () => {
     expect(hourly).toContain('if (!started) return "upcoming"');
     expect(hourly).toContain('if (!bales) return "none"');
     expect(hourly).toContain("localHour(hour) >= 7 && localHour(hour) < 17");
-    expect(hourly).toContain("const target = hourTarget ?? worker.targetKgPerHour");
+    expect(hourly).toContain("const target = scheduled ? hourTarget ?? worker.targetKgPerHour : 0");
     expect(hourly).toContain("Asia/Beirut");
   });
   it("preserves scanning, user permissions, worker KPI counts and navigation", () => {
