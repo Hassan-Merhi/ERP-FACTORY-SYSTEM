@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
 import { ERP_NAV_SECTIONS } from "@/components/AppSidebar";
-import { FACTORY_NAV_SECTIONS } from "@/components/FactorySidebar";
+import { FACTORY_NAV_SECTIONS, collapseFactorySalesDispatchNav } from "@/components/FactorySidebar";
 
 function groupFor(
   sections: ReadonlyArray<{ label: string; items: ReadonlyArray<{ url: string }> }>,
@@ -50,5 +50,8 @@ describe("sidebar navigation grouping", () => {
     expect(section?.items.filter((item) => item.title === "POS & Dispatch")).toHaveLength(2);
     expect(groupFor(FACTORY_NAV_SECTIONS, "/factory/waste-dispatch")).toBe("Sales & Loading");
     expect(groupFor(FACTORY_NAV_SECTIONS, "/factory/pos")).toBe("Sales & Loading");
+    const both = section?.items.filter((item) => item.title === "POS & Dispatch") ?? [];
+    expect(collapseFactorySalesDispatchNav(both, "/factory/pos").map((item) => item.url)).toEqual(["/factory/pos"]);
+    expect(collapseFactorySalesDispatchNav(both, "/factory/waste-dispatch").map((item) => item.url)).toEqual(["/factory/waste-dispatch"]);
   });
 });
