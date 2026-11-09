@@ -63,7 +63,7 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
         const prior = await db.select().from(factoryMixBatchSources).where(eq(factoryMixBatchSources.mixBatchId, id));
         identicalSources = sameMixEditSources(prior, parsedSources);
         if (req.body.sourceEditPreview === true) {
-          const preview = await prepareMixSourceEditReview(db, companyId, existing, prior, parsedSources, reason);
+          const preview = await prepareMixSourceEditReview(db, companyId, existing, prior, parsedSources, reason, { proposedBatchDate: batchDate });
           res.set("Cache-Control", "private, no-store");
           return res.json({ ...preview, previewOnly: true, batchCode: existing.batchCode });
         }
@@ -147,7 +147,7 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
           throw new MixEditRequestError("No material changes remain to review.", "MIX_EDIT_ALREADY_UNCHANGED", 409);
         }
         const batchBefore = batch;
-        const review = await prepareMixSourceEditReview(tx, companyId, batch, oldSources, sourceInputs, reason, { forUpdate: true });
+        const review = await prepareMixSourceEditReview(tx, companyId, batch, oldSources, sourceInputs, reason, { forUpdate: true, proposedBatchDate: batchDate });
         if (!review.allowed) {
           throw new MixEditRequestError(review.warnings.join(" "), "MIX_EDIT_REVIEW_BLOCKED", 409);
         }
