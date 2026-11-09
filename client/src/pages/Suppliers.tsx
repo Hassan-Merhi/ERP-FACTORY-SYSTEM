@@ -12,6 +12,8 @@ import {
   ErpRecordAction,
   erpCompanyDataKey,
   invalidateErpDataFamilies,
+  erpReportFileName,
+  exportErpReportRowsExcel,
 } from "@/erp-core";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -23,8 +25,6 @@ import { useErpCan as useCan, erpCanDenialMessage as canDenialMessage } from "@/
 import { useErpRecordChangeAccess as useExistingRecordChangeAccess } from "@/erp-core";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { suppliersApi } from "@/api/suppliersApi";
-import { format } from "date-fns";
-import { utils, writeFile } from "@/lib/excelHelper";
 import { useEscapeBack } from "@/hooks/use-escape-back";
 import { useSuppliersFilters } from "./suppliers/useSuppliersFilters";
 import type { Company } from "@/contexts/CompanyContext";
@@ -177,11 +177,11 @@ export default function Suppliers() {
       });
       return;
     }
-    const worksheet = utils.json_to_sheet(supplierLedgerToExportRows(unifiedLedger));
-    const workbook = utils.book_new();
-    utils.book_append_sheet(workbook, worksheet, "Supplier Ledger");
-    const fileName = `${selectedSupplier.legalName}_Ledger_${format(new Date(), "yyyy-MM-dd")}.xlsx`;
-    await writeFile(workbook, fileName);
+    await exportErpReportRowsExcel({
+      rows: supplierLedgerToExportRows(unifiedLedger),
+      sheetName: "Supplier Ledger",
+      fileName: erpReportFileName(`${selectedSupplier.legalName}_Ledger`, "xlsx"),
+    });
   };
 
   return (
