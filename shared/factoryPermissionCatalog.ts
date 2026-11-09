@@ -71,8 +71,8 @@ export const FACTORY_TAB_REGISTRY: readonly FactoryTabDefinition[] = [
   { key: "hide_tab_overview_production", label: "Production", group: "Overview" },
   { key: "hide_tab_overview_monthly_production", label: "Monthly Production", group: "Overview" },
   { key: "hide_tab_overview_sheets_sacks", label: "Sheets & Sacks", group: "Overview" },
-  { key: "hide_tab_overview_comparison", label: "Comparison", group: "Overview" },
-  { key: "hide_tab_overview_product_comparison", label: "Product Comparison", group: "Overview" },
+  { key: "hide_tab_overview_comparison", label: "Comparison", group: "Others" },
+  { key: "hide_tab_overview_product_comparison", label: "Product Comparison", group: "Others" },
   { key: "hide_tab_overview_shipping", label: "Shipping", group: "Overview" },
   { key: "hide_tab_overview_sheets", label: "Sheets", group: "Overview" },
 
