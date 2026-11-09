@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { BarChart3, Building2, ChevronDown, ChevronRight, Download, RefreshCw, Search } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
-import { ErpListTable } from "@/erp-core";
+import { ErpListTable, ErpPendingButton } from "@/erp-core";
 import { useToast } from "@/hooks/use-toast";
 import { getTopProfitCompanyByItem, groupMarketRows } from "./itemMarketAnalysisGrouping";
 import { fetchSalePriceExportRows } from "./itemMarketAnalysisSalePrices";
@@ -303,16 +303,18 @@ export default function ItemMarketAnalysis() {
           </span>
         }
       >
-        <Button
+        <ErpPendingButton
           variant="outline"
           size="sm"
           onClick={handleExportExcel}
-          disabled={isLoading || isFetching || isExporting || !data || !!isError || search.trim() !== debouncedSearch}
+          disabled={isLoading || isFetching || !data || !!isError || search.trim() !== debouncedSearch}
+          pending={isExporting}
+          pendingLabel="Exporting..."
           data-testid="button-item-market-export-excel"
         >
-          <Download className="mr-2 h-4 w-4" />
-          {isExporting ? "Exporting..." : "Export Excel"}
-        </Button>
+          {!isExporting && <Download className="mr-2 h-4 w-4" />}
+          Export Excel
+        </ErpPendingButton>
         <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
           <RefreshCw className={`mr-2 h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
           Refresh
@@ -522,17 +524,19 @@ export default function ItemMarketAnalysis() {
               ? "Items are matched by code · expand Companies to compare each company"
               : "Historical item performance for this company"}
           </div>
-          <Button
+          <ErpPendingButton
             variant="outline"
             size="sm"
             className="ml-auto shrink-0 lg:ml-0"
             onClick={handleExportExcel}
-            disabled={isLoading || isFetching || isExporting || !data || !!isError || search.trim() !== debouncedSearch}
+            disabled={isLoading || isFetching || !data || !!isError || search.trim() !== debouncedSearch}
+            pending={isExporting}
+            pendingLabel="Exporting..."
             data-testid="button-item-market-export-excel-table"
           >
-            <Download className="mr-2 h-4 w-4" />
-            {isExporting ? "Exporting..." : "Export Excel"}
-          </Button>
+            {!isExporting && <Download className="mr-2 h-4 w-4" />}
+            Export Excel
+          </ErpPendingButton>
         </div>
         <div className="overflow-x-auto">
           <ErpListTable pageKey="market-analysis" companyId={selectedCompany?.id} scrollLabel="Market price analysis">
