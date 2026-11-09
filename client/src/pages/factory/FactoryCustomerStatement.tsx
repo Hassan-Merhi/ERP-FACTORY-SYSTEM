@@ -121,7 +121,7 @@ export default function FactoryCustomerStatement() {
     enabled: Boolean(selectedCompany?.id),
     staleTime: 5 * 60000,
   });
-  const hiddenTabs = myAccess?.companyId === selectedCompany?.id && myAccess.hasFactoryAccess
+  const hiddenTabs = myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
     ? myAccess.hiddenCostFields
     : ["hide_tab_customer_statement", "hide_tab_customer_pricelist"];
   const showStatementTab = !hiddenTabs.includes("hide_tab_customer_statement");
