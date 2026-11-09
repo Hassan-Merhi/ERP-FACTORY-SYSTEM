@@ -364,12 +364,6 @@ const FACTORY_HUB_TABS: PageEntry[] = [
 
 const PROPERTIES_EXTRAS: PageEntry[] = [
   { label: "Properties Daybook", description: "Daily transaction log", path: "/properties/daybook", icon: Calendar },
-  {
-    label: "Properties Dashboard",
-    description: "Properties overview",
-    path: "/properties/dashboard",
-    icon: LayoutDashboard,
-  },
   { label: "Properties Analytics", description: "Properties analytics", path: "/properties/analytics", icon: PieChart },
   { label: "Rental Shops", description: "Shops rented out", path: "/properties/rentals?tab=shops", icon: Users },
   {
