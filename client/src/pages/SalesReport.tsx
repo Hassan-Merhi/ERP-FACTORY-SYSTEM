@@ -32,7 +32,7 @@ export default function SalesReport() {
             className="inline-flex min-h-10 items-center rounded-lg border bg-card px-3 text-sm font-medium hover:bg-muted"
             data-testid="link-sales-report-stock-in-sales"
           >
-            Stock In &amp; Sales
+            Stock &amp; Sales Report
           </Link>
           {selectedCompany?.companyType === "erp" && (
             <Link
@@ -40,7 +40,7 @@ export default function SalesReport() {
               className="inline-flex min-h-10 items-center rounded-lg border bg-card px-3 text-sm font-medium hover:bg-muted"
               data-testid="link-sales-report-market-analysis"
             >
-              Item Market Analysis
+              Market Price Analysis
             </Link>
           )}
         </nav>
