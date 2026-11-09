@@ -1,5 +1,5 @@
 import { AlertTriangle, Building2, CalendarDays, CheckCircle2, Coins, Copy, Ellipsis, ReceiptText, Search, Trash2, UsersRound, Wallet } from "lucide-react";
-import { format } from "date-fns";
+import { rentalPaymentDateLabel, mayOfferRentalPaymentDelete } from "@/properties/config/rentalPaymentPresentation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -222,10 +222,10 @@ export function PropertiesPaymentsPremium({
               </thead>
               <tbody>
                 {payments.map((p) => {
-                  const readOnly = Boolean(p.readOnly || p.sourceModule !== "PROPERTIES");
+                  const readOnly = !mayOfferRentalPaymentDelete(p.sourceModule, p.readOnly, "PROPERTIES");
                   return (
                     <tr key={p.id} data-testid={`row-payment-${p.id}`}>
-                      <td data-label="Date"><span className="properties-payments-date"><CalendarDays className="h-4 w-4" aria-hidden="true" />{format(new Date(p.paymentDate), "dd MMM yyyy")}</span></td>
+                      <td data-label="Date"><span className="properties-payments-date"><CalendarDays className="h-4 w-4" aria-hidden="true" />{rentalPaymentDateLabel(p.paymentDate)}</span></td>
                       <td data-label="Client / Tenant" className="properties-payments-tenant">{p.tenantName ?? "—"}</td>
                       <td data-label="Unit">
                         <span className="properties-payments-unit">{p.unitNumber ?? "—"}</span>
