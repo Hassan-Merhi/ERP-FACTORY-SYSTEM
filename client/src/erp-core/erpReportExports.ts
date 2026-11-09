@@ -1,0 +1,71 @@
+import { format } from "date-fns";
+
+import { downloadBlob } from "@/lib/downloadBlob";
+import { utils, writeFile } from "@/lib/excelHelper";
+
+export type ErpReportFileExtension = "xlsx" | "csv";
+
+/**
+ * Filename-only normalization. Never change the display title, worksheet
+ * values or any accounting number to generate a download filename.
+ */
+export function erpReportFileName(
+  label: string,
+  extension: ErpReportFileExtension,
+  date: Date = new Date(),
+): string {
+  const prefix = label
+    .replace(/[\\/<>:"|?*\x00-\x1f]+/g, "_")
+    .replace(/[.\s]+$/g, "")
+    .trim() || "ERP_Report";
+  return `${prefix}_${format(date, "yyyy-MM-dd")}.${extension}`;
+}
+
+/** Existing ExcelJS worksheet compatibility (headers and values unchanged). */
+export async function exportErpReportRowsExcel<Row extends Record<string, unknown>>({
+  rows,
+  sheetName,
+  fileName,
+}: {
+  rows: readonly Row[];
+  sheetName: string;
+  fileName: string;
+}): Promise<void> {
+  const wb = utils.book_new();
+  utils.book_append_sheet(wb, utils.json_to_sheet([...rows]), sheetName);
+  await writeFile(wb, fileName);
+}
+
+/**
+ * Shared standards-compliant CSV serialization; numerics remain numeric
+ * in the source data. Escape formula-leading *text* to prevent opening a
+ * user-provided name or note as a spreadsheet formula.
+ */
+export function buildErpReportCsv(
+  headers: readonly string[],
+  rows: readonly (readonly unknown[])[],
+): string {
+  const safeCell = (value: unknown): string => {
+    const raw = value == null ? "" : String(value);
+    const guarded =
+      typeof value === "string" && /^[\s\uFEFF]*[=+@\-\t\r]/u.test(raw)
+        ? `'${raw}`
+        : raw;
+    return `"${guarded.replace(/"/g, '""')}"`;
+  };
+  return [headers, ...rows].map((row) => row.map(safeCell).join(",")).join("\r\n");
+}
+
+/** Does not download partial UI slices; caller supplies the full filtered rows. */
+export function exportErpReportCsv({
+  headers,
+  rows,
+  fileName,
+}: {
+  headers: readonly string[];
+  rows: readonly (readonly unknown[])[];
+  fileName: string;
+}): void {
+  const csv = buildErpReportCsv(headers, rows);
+  downloadBlob(new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }), fileName);
+}
