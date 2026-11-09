@@ -8,15 +8,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Package, Search } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { useCompany } from "@/contexts/CompanyContext";
-import {
-  ErpListFilters,
-  ErpListTable,
-  ErpListPagination,
-  erpRequestUrl,
-  erpCompanyDataKey,
-  formatErpNumber,
-  useErpServerPagination,
-} from "@/erp-core";
+import { ErpListFilters, ErpListTable, ErpListPagination, formatErpNumber, useErpServerPagination } from "@/erp-core";
+import { erpRequestUrl, erpCompanyDataKey } from "@/erp-core/erpData";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 interface StockItem {
