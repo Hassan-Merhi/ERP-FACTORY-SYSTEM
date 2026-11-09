@@ -23,6 +23,7 @@ import { buildAllocationsForPayment, findEarliestOutstandingMonth } from "./rent
 import { recordedRentalPaymentRate } from "./rentalPaymentRate";
 import { rentalPaymentGroupIdentity, rentalPaymentVoucherSuffix } from "./rentalPostingIdentity";
 import { shouldRunRentalAutoTransfer } from "./rentalCashboxPolicy";
+import { appendRentalTenantName } from "./rentalVoucherTenantDescription";
 
 export { buildAllocationsForPayment, findEarliestOutstandingMonth } from "./rentalPaymentAllocationService";
 
@@ -31,6 +32,7 @@ export type RentalContractRef = {
   id: number;
   companyId: number;
   unitId: number;
+  tenantName?: string | null;
   rentalAmount: string;
   startDate: string;
 };
@@ -671,7 +673,10 @@ export async function postScheduledGroup(
       allocs.length > 1
         ? `${String(allocs[0].forMonth).padStart(2, "0")}/${allocs[0].forYear}–${String(allocs[allocs.length - 1].forMonth).padStart(2, "0")}/${allocs[allocs.length - 1].forYear}`
         : `${String(allocs[0].forMonth).padStart(2, "0")}/${allocs[0].forYear}`;
-    const narration = `Rent paid - ${unitLabel} - ${monthSpan}`;
+    const baseNarration = `Rent paid - ${unitLabel} - ${monthSpan}`;
+    const narration = module === "PROPERTIES"
+      ? (appendRentalTenantName(baseNarration, contract.tenantName) ?? baseNarration)
+      : baseNarration;
 
     // Phase 19 (B), PE2: the caller resolved the recorded dated rate.
     const groupExchangeRate = exchangeRate;
