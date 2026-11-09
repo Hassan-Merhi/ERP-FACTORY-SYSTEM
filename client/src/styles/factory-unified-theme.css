@@ -176,3 +176,108 @@
 :root[data-app-shell="factory"] [data-factory-workspace="true"] {
   background-color: hsl(var(--background));
 }
+
+/* Factory bespoke blue surfaces: all link back to --factory-hue. */
+:root[data-app-shell="factory"] {
+  --factory-brand: var(--factory-hue) 80% 52%;
+  --factory-brand-strong: var(--factory-hue) 74% 43%;
+  --factory-brand-soft: var(--factory-hue) 95% 95%;
+  --factory-brand-ink: var(--factory-hue) 74% 37%;
+  --factory-brand-border: var(--factory-hue) 70% 85%;
+  --secondary: var(--factory-hue) 30% 94%;
+  --input: var(--factory-hue) 20% 82%;
+  --pnav-violet: var(--factory-color-600);
+  --pnav-violet-text: hsl(var(--factory-brand-ink));
+  --pnav-surface: hsl(var(--sidebar));
+  --pnav-raised: hsl(var(--card));
+  --pnav-border: hsl(var(--factory-brand) / .18);
+  --pnav-hover: hsl(var(--factory-brand) / .075);
+  --pnav-active: linear-gradient(100deg, var(--factory-color-100), hsl(var(--background)));
+  --pnav-brand: linear-gradient(120deg, var(--factory-color-100), hsl(var(--card)));
+  --pnav-top: linear-gradient(105deg, hsl(var(--card)), var(--factory-color-100));
+}
+:root.dark[data-app-shell="factory"] {
+  --factory-brand: var(--factory-hue) 80% 49%;
+  --factory-brand-strong: var(--factory-hue) 70% 39%;
+  --factory-brand-soft: var(--factory-hue) 32% 19%;
+  --factory-brand-ink: var(--factory-hue) 90% 82%;
+  --factory-brand-border: var(--factory-hue) 35% 36%;
+  --secondary: var(--factory-hue) 18% 20%;
+  --input: var(--factory-hue) 18% 29%;
+  --pnav-violet: var(--factory-color-400);
+  --pnav-violet-text: hsl(var(--factory-brand-ink));
+  --pnav-surface: hsl(var(--sidebar));
+  --pnav-raised: hsl(var(--card));
+  --pnav-border: hsl(var(--factory-brand) / .22);
+  --pnav-hover: hsl(var(--factory-brand) / .14);
+  --pnav-active: linear-gradient(105deg, hsl(var(--factory-brand-strong) / .7), hsl(var(--factory-brand-soft)));
+  --pnav-brand: linear-gradient(120deg, hsl(var(--factory-brand-soft)), hsl(var(--sidebar)));
+  --pnav-top: linear-gradient(105deg, hsl(var(--sidebar)), hsl(var(--factory-brand-soft)));
+}
+:root[data-app-shell="factory"] .factory-brand-gradient {
+  background: linear-gradient(115deg, hsl(var(--factory-brand-strong)), hsl(var(--factory-brand)));
+  color: white;
+}
+:root[data-app-shell="factory"] .factory-brand-soft {
+  background: hsl(var(--factory-brand-soft));
+  border-color: hsl(var(--factory-brand-border));
+  color: hsl(var(--factory-brand-ink));
+}
+:root[data-app-shell="factory"] .factory-brand-text { color: hsl(var(--factory-brand-ink)); }
+:root[data-app-shell="factory"] .factory-brand-surface {
+  background: hsl(var(--card));
+  border-color: hsl(var(--border));
+}
+
+/* Production Targets preserves categorical/status KPI colors; large surfaces
+ * and buttons follow the single blue brand instead of mixed blue and purple. */
+:root[data-app-shell="factory"] .production-targets-modern {
+  background: radial-gradient(ellipse at 55% 0%, hsl(var(--factory-brand) / .15), transparent 45%), #101a2e;
+  border-color: hsl(var(--factory-brand) / .22);
+}
+:root[data-app-shell="factory"] .production-targets-modern .pt-hero {
+  background: linear-gradient(112deg, #1b3c70, #14233e 65%, #1c3152);
+  border-color: hsl(var(--factory-brand) / .48);
+}
+:root[data-app-shell="factory"] .production-targets-modern .pt-hero-icon {
+  background: linear-gradient(145deg, #2056ac, #153971);
+}
+:root[data-app-shell="factory"] .production-targets-modern .pt-btn-primary,
+:root[data-app-shell="factory"] .production-targets-modern .pt-btn-violet {
+  background: #205ec5;
+  border-color: #6199ed;
+  color: white;
+  box-shadow: 0 5px 15px rgba(25, 85, 184, .26);
+}
+:root[data-app-shell="factory"] .production-targets-modern .pt-btn-primary:hover:not(:disabled),
+:root[data-app-shell="factory"] .production-targets-modern .pt-btn-violet:hover:not(:disabled) {
+  background: #2f70d5;
+}
+:root[data-app-shell="factory"] .production-targets-modern .pt-hero-controls,
+:root[data-app-shell="factory"] .production-targets-modern .pt-filters input,
+:root[data-app-shell="factory"] .production-targets-modern .pt-filters [role="combobox"],
+:root[data-app-shell="factory"] .production-targets-modern .pt-hero-controls input,
+:root[data-app-shell="factory"] .production-targets-modern .pt-hero-controls [role="combobox"],
+:root[data-app-shell="factory"] .production-targets-modern .pt-hero-controls button:not(.pt-btn-primary):not(.pt-btn-gold):not(.pt-btn-wa) {
+  background: #182a48;
+  border-color: rgba(116, 160, 230, .30);
+}
+:root[data-app-shell="factory"] .production-targets-modern .pt-kpi {
+  background: linear-gradient(120deg, var(--pt-tint), #18263d 82%);
+}
+:root[data-app-shell="factory"] .production-targets-modern .pt-bonus-banner {
+  background: linear-gradient(110deg, #182c51, #18263f);
+}
+:root[data-app-shell="factory"] .production-targets-modern .pt-staff-table {
+  background: #142239;
+  border-color: rgba(116, 160, 230, .32);
+}
+:root[data-app-shell="factory"] .production-targets-modern .pt-staff-table thead tr {
+  background: #203858;
+}
+:root[data-app-shell="factory"] .production-targets-modern .pt-staff-table .pt-worker-row {
+  background: #172942;
+}
+:root[data-app-shell="factory"] .production-targets-modern .pt-staff-table .pt-worker-row:hover {
+  background: #223956;
+}
