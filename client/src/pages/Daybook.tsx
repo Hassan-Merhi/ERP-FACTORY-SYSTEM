@@ -20,6 +20,7 @@ import {
   invalidateCompanyApiFamily,
 } from "@/lib/frontendDataArchitecture";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,7 +37,19 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { EyeOff, Plus, ChevronDown, FileDown, LayoutList, Layers, BookOpen, ReceiptText, CheckCircle2, Clock3, Wallet } from "lucide-react";
+import {
+  EyeOff,
+  Plus,
+  ChevronDown,
+  FileDown,
+  LayoutList,
+  Layers,
+  BookOpen,
+  ReceiptText,
+  CheckCircle2,
+  Clock3,
+  Wallet,
+} from "lucide-react";
 import { format, addDays } from "date-fns";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { cn } from "@/lib/utils";
@@ -77,6 +90,7 @@ import { entryBalanceUrl, selectBalanceDisplayEntries, selectCashAccountId } fro
 export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
   const { toast } = useToast();
   const { selectedCompany } = useCompany();
+  const recordChanges = useExistingRecordChangeAccess();
   const routineAccountingViewFiltered = selectedCompany?.id === 8 && (user?.currentRole ?? user?.role) !== "Developer";
   const vouchersBase = selectedCompany?.companyType === "properties" ? "/properties/vouchers" : "/vouchers";
   const { formatDisplayDate, formatDisplayTime } = useDateFormat();
@@ -558,11 +572,13 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
   const displayedRows = useMemo(() => visibleRows.slice(0, daybookRowLimit), [visibleRows, daybookRowLimit]);
 
   const canEdit = (v: Voucher) =>
+    recordChanges.allowed &&
     v.voucherType !== "Purchase" &&
     user?.role !== "POS" &&
     !isGoldenCoastProgrammeVoucher(v) &&
     !isVoucherMutationBlocked(v);
-  const canDelete = () => !!(user?.role === "Developer" || user?.role === "Admin" || user?.canDeleteRecords);
+  const canDelete = () =>
+    recordChanges.allowed && !!(user?.role === "Developer" || user?.role === "Admin" || user?.canDeleteRecords);
   const handleView = (v: Voucher) => {
     setSelectedVoucher(v);
     setViewProfitFilter("all");
@@ -587,7 +603,10 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
   };
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: number) => apiRequest("DELETE", `/api/vouchers/${id}`),
+    mutationFn: async (id: number) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
+      return apiRequest("DELETE", `/api/vouchers/${id}`);
+    },
     onSuccess: () => {
       void invalidateCompanyApiFamily(queryClient, "/api/vouchers", selectedCompany?.id);
       refreshBalances();
@@ -597,8 +616,10 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
   });
 
   const editMutation = useMutation({
-    mutationFn: async ({ id, updates }: { id: number; updates: EditVoucherForm }) =>
-      apiRequest("PATCH", `/api/vouchers/${id}`, updates),
+    mutationFn: async ({ id, updates }: { id: number; updates: EditVoucherForm }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
+      return apiRequest("PATCH", `/api/vouchers/${id}`, updates);
+    },
     onSuccess: () => {
       void invalidateCompanyApiFamily(queryClient, "/api/vouchers", selectedCompany?.id);
       refreshBalances();
@@ -620,7 +641,10 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
     const ws = utils.json_to_sheet(data);
     const wb = utils.book_new();
     utils.book_append_sheet(wb, ws, routineAccountingViewFiltered ? "Operational Filtered" : "Daybook");
-    await writeFile(wb, `${routineAccountingViewFiltered ? "Operational_Filtered_Daybook" : "Daybook"}_${format(new Date(), "yyyy-MM-dd")}.xlsx`);
+    await writeFile(
+      wb,
+      `${routineAccountingViewFiltered ? "Operational_Filtered_Daybook" : "Daybook"}_${format(new Date(), "yyyy-MM-dd")}.xlsx`
+    );
   };
   const handleExportDetailedToExcel = async () => {
     const exportVouchers = await loadAllVouchers();
@@ -631,32 +655,46 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
     const ws = utils.json_to_sheet(detailRows);
     const wb = utils.book_new();
     utils.book_append_sheet(wb, ws, routineAccountingViewFiltered ? "Operational Detail Filtered" : "Daybook Detail");
-    await writeFile(wb, `${routineAccountingViewFiltered ? "Operational_Filtered_Detail" : "Daybook_Detail"}_${format(new Date(), "yyyy-MM-dd")}.xlsx`);
+    await writeFile(
+      wb,
+      `${routineAccountingViewFiltered ? "Operational_Filtered_Detail" : "Daybook_Detail"}_${format(new Date(), "yyyy-MM-dd")}.xlsx`
+    );
     toast({ title: "Export complete", description: `${detailRows.length} detail rows exported.` });
   };
 
   return (
     <div className="daybook-premium flex min-w-0 flex-col gap-4 p-3 md:gap-5 md:p-6">
       <section className="daybook-hero" aria-label="Daybook heading">
-      <PageHeader title="Daybook" subtitle={routineAccountingViewFiltered ? "Operational activity view" : "View all accounting transactions chronologically"} icon={<BookOpen className="h-6 w-6" />} showBackButton>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="daybook-export gap-2">
-              <FileDown className="w-4 h-4" />
-              Export
-              <ChevronDown className="w-4 h-4" />
+        <PageHeader
+          title="Daybook"
+          subtitle={
+            routineAccountingViewFiltered
+              ? "Operational activity view"
+              : "View all accounting transactions chronologically"
+          }
+          icon={<BookOpen className="h-6 w-6" />}
+          showBackButton
+        >
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="daybook-export gap-2">
+                <FileDown className="w-4 h-4" />
+                Export
+                <ChevronDown className="w-4 h-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem onClick={handleExportToExcel}>Summary</DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportDetailedToExcel}>Detailed</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          {recordChanges.canCreate("POST", "/api/vouchers") && (
+            <Button onClick={() => navigate(vouchersBase)} className="daybook-new-voucher gap-2">
+              <Plus className="w-4 h-4" />
+              New Voucher
             </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent>
-            <DropdownMenuItem onClick={handleExportToExcel}>Summary</DropdownMenuItem>
-            <DropdownMenuItem onClick={handleExportDetailedToExcel}>Detailed</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <Button onClick={() => navigate(vouchersBase)} className="daybook-new-voucher gap-2">
-          <Plus className="w-4 h-4" />
-          New Voucher
-        </Button>
-      </PageHeader>
+          )}
+        </PageHeader>
       </section>
 
       <section
@@ -665,36 +703,52 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
         data-testid="daybook-overview"
       >
         <div className="daybook-kpi daybook-kpi--count">
-          <span className="daybook-kpi__icon"><ReceiptText className="h-5 w-5" aria-hidden="true" /></span>
+          <span className="daybook-kpi__icon">
+            <ReceiptText className="h-5 w-5" aria-hidden="true" />
+          </span>
           <div className="min-w-0">
             <div className="daybook-kpi__label">Matching vouchers</div>
-            <div className="daybook-kpi__value" data-testid="daybook-kpi-count">{overviewStats.vouchers.toLocaleString()}</div>
+            <div className="daybook-kpi__value" data-testid="daybook-kpi-count">
+              {overviewStats.vouchers.toLocaleString()}
+            </div>
             <div className="daybook-kpi__caption">Selected period</div>
           </div>
         </div>
         {!hideAmounts && (
           <div className="daybook-kpi daybook-kpi--value">
-            <span className="daybook-kpi__icon"><Wallet className="h-5 w-5" aria-hidden="true" /></span>
+            <span className="daybook-kpi__icon">
+              <Wallet className="h-5 w-5" aria-hidden="true" />
+            </span>
             <div className="min-w-0">
               <div className="daybook-kpi__label">Voucher value</div>
-              <div className="daybook-kpi__value" data-testid="daybook-kpi-value">{formatAmount(overviewStats.value)}</div>
+              <div className="daybook-kpi__value" data-testid="daybook-kpi-value">
+                {formatAmount(overviewStats.value)}
+              </div>
               <div className="daybook-kpi__caption">{overviewStats.scope} · not account balance</div>
             </div>
           </div>
         )}
         <div className="daybook-kpi daybook-kpi--active">
-          <span className="daybook-kpi__icon"><CheckCircle2 className="h-5 w-5" aria-hidden="true" /></span>
+          <span className="daybook-kpi__icon">
+            <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
+          </span>
           <div className="min-w-0">
             <div className="daybook-kpi__label">Active vouchers</div>
-            <div className="daybook-kpi__value" data-testid="daybook-kpi-active">{overviewStats.active.toLocaleString()}</div>
+            <div className="daybook-kpi__value" data-testid="daybook-kpi-active">
+              {overviewStats.active.toLocaleString()}
+            </div>
             <div className="daybook-kpi__caption">{overviewStats.scope}</div>
           </div>
         </div>
         <div className="daybook-kpi daybook-kpi--optional">
-          <span className="daybook-kpi__icon"><Clock3 className="h-5 w-5" aria-hidden="true" /></span>
+          <span className="daybook-kpi__icon">
+            <Clock3 className="h-5 w-5" aria-hidden="true" />
+          </span>
           <div className="min-w-0">
             <div className="daybook-kpi__label">Optional vouchers</div>
-            <div className="daybook-kpi__value" data-testid="daybook-kpi-optional">{overviewStats.optional.toLocaleString()}</div>
+            <div className="daybook-kpi__value" data-testid="daybook-kpi-optional">
+              {overviewStats.optional.toLocaleString()}
+            </div>
             <div className="daybook-kpi__caption">{overviewStats.scope}</div>
           </div>
         </div>
@@ -714,16 +768,16 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
 
         <TabsContent value="transactions" className="space-y-4 mt-0">
           <div className="daybook-filter-panel">
-          <DaybookFilters
-            periodFilter={periodFilter}
-            setPeriodFilter={setPeriodFilter}
-            filters={filters}
-            setFilters={setFilters}
-            hasActiveFilters={hasActiveDaybookFilters}
-            onResetFilters={resetDaybookFilters}
-            onPrevDay={() => shiftDay(-1)}
-            onNextDay={() => shiftDay(1)}
-          />
+            <DaybookFilters
+              periodFilter={periodFilter}
+              setPeriodFilter={setPeriodFilter}
+              filters={filters}
+              setFilters={setFilters}
+              hasActiveFilters={hasActiveDaybookFilters}
+              onResetFilters={resetDaybookFilters}
+              onPrevDay={() => shiftDay(-1)}
+              onNextDay={() => shiftDay(1)}
+            />
           </div>
 
           <div>
@@ -779,44 +833,44 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
               </div>
             </div>
             <div className="daybook-table-shell">
-            <DaybookTable
-              displayedRows={displayedRows}
-              visibleRows={visibleRows}
-              offloadAlphabetical={filters.voucherType === "Offload"}
-              viewMode={viewMode}
-              selectedRowId={selectedRowId}
-              setSelectedRowId={setSelectedRowId}
-              hiddenRowIds={hiddenRowIds}
-              setHiddenRowIds={setHiddenRowIds}
-              showHidden={showHidden}
-              expandedVoucherId={expandedVoucherId}
-              setExpandedVoucherId={setExpandedVoucherId}
-              expandedCondensedGroups={expandedCondensedGroups}
-              setExpandedCondensedGroups={setExpandedCondensedGroups}
-              hideAmounts={hideAmounts}
-              accountNameCache={accountNameCache}
-              expandedLoading={expandedLoading}
-              expandedEntries={expandedEntries}
-              formatAmount={formatAmount}
-              formatTransactionAmount={formatTransactionAmount}
-              formatDisplayDate={formatDisplayDate}
-              formatDisplayTime={formatDisplayTime}
-              handleView={handleView}
-              handleEdit={handleEdit}
-              handleDelete={(v) => {
-                setVoucherToDelete(v);
-                setDeleteDialogOpen(true);
-              }}
-              canEdit={canEdit}
-              canDelete={canDelete}
-              daybookRowLimit={daybookRowLimit}
-              setDaybookRowLimit={setDaybookRowLimit}
-              DAYBOOK_PAGE_SIZE={DAYBOOK_PAGE_SIZE}
-              navigate={navigate}
-              isLoading={isLoading}
-              errorMessage={daybookErrorMessage}
-              onRetry={() => void refetchVouchers()}
-            />
+              <DaybookTable
+                displayedRows={displayedRows}
+                visibleRows={visibleRows}
+                offloadAlphabetical={filters.voucherType === "Offload"}
+                viewMode={viewMode}
+                selectedRowId={selectedRowId}
+                setSelectedRowId={setSelectedRowId}
+                hiddenRowIds={hiddenRowIds}
+                setHiddenRowIds={setHiddenRowIds}
+                showHidden={showHidden}
+                expandedVoucherId={expandedVoucherId}
+                setExpandedVoucherId={setExpandedVoucherId}
+                expandedCondensedGroups={expandedCondensedGroups}
+                setExpandedCondensedGroups={setExpandedCondensedGroups}
+                hideAmounts={hideAmounts}
+                accountNameCache={accountNameCache}
+                expandedLoading={expandedLoading}
+                expandedEntries={expandedEntries}
+                formatAmount={formatAmount}
+                formatTransactionAmount={formatTransactionAmount}
+                formatDisplayDate={formatDisplayDate}
+                formatDisplayTime={formatDisplayTime}
+                handleView={handleView}
+                handleEdit={handleEdit}
+                handleDelete={(v) => {
+                  setVoucherToDelete(v);
+                  setDeleteDialogOpen(true);
+                }}
+                canEdit={canEdit}
+                canDelete={canDelete}
+                daybookRowLimit={daybookRowLimit}
+                setDaybookRowLimit={setDaybookRowLimit}
+                DAYBOOK_PAGE_SIZE={DAYBOOK_PAGE_SIZE}
+                navigate={navigate}
+                isLoading={isLoading}
+                errorMessage={daybookErrorMessage}
+                onRetry={() => void refetchVouchers()}
+              />
             </div>
             <PaginationBar
               page={voucherPageResponse?.page ?? voucherPage}

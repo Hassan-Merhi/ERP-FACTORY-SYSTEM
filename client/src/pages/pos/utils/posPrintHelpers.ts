@@ -1,14 +1,24 @@
 import { getErrorDetails } from "@shared/errorUtils";
 import { apiRequest } from "@/lib/queryClient";
+import type { ExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
+
+type SendOptions = {
+  maxAttempts?: number;
+  delayMs?: number;
+  onAttempt?: (n: number) => void;
+  /** Caller's useExistingRecordChangeAccess(): View Only and Create Only never send. */
+  access?: Pick<ExistingRecordChangeAccess, "allowed" | "reason">;
+};
 
 // Server-side invoice PDF send with retry
 export async function sendInvoicePdfWithRetry(
   voucherId: number,
   locationId: number,
-  opts: { maxAttempts?: number; delayMs?: number; onAttempt?: (n: number) => void } = {}
+  opts: SendOptions = {}
 ): Promise<{ ok: true } | { ok: false; message: string }> {
   const maxAttempts = opts.maxAttempts ?? 3;
   const delayMs = opts.delayMs ?? 2000;
+  if (opts.access && !opts.access.allowed) return { ok: false, message: opts.access.reason ?? "" };
   let lastMessage = "WhatsApp send failed";
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     opts.onAttempt?.(attempt);
@@ -31,10 +41,11 @@ export async function sendInvoicePdfWithRetry(
 // Server-side stock PDF send with retry
 export async function sendStockPdfWithRetry(
   locationId: number,
-  opts: { maxAttempts?: number; delayMs?: number; onAttempt?: (n: number) => void } = {}
+  opts: SendOptions = {}
 ): Promise<{ ok: true } | { ok: false; message: string }> {
   const maxAttempts = opts.maxAttempts ?? 3;
   const delayMs = opts.delayMs ?? 2000;
+  if (opts.access && !opts.access.allowed) return { ok: false, message: opts.access.reason ?? "" };
   let lastMessage = "WhatsApp send failed";
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     opts.onAttempt?.(attempt);

@@ -39,6 +39,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { usePaginatedFilterState } from "@/hooks/use-paginated-filter-state";
 import { formatNumber } from "@/lib/formatNumber";
 import { sendInvoicePdfWithRetry } from "./utils/posPrintHelpers";
@@ -60,6 +61,7 @@ export default function POSDaybook() {
   const { formatCashAmount } = useCurrencyContext();
   const { selectedCompany } = useCompany();
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
   const [, navigate] = useLocation();
 
   const [selectedVoucher, setSelectedVoucher] = useState<Voucher | null>(null);
@@ -155,8 +157,11 @@ export default function POSDaybook() {
     const term = transactionSearch.trim().toLocaleLowerCase();
     const matchesSearch =
       !term ||
-      [voucher.voucherNumber, voucher.voucherType, voucher.locationName, voucher.description]
-        .some((value) => String(value ?? "").toLocaleLowerCase().includes(term));
+      [voucher.voucherNumber, voucher.voucherType, voucher.locationName, voucher.description].some((value) =>
+        String(value ?? "")
+          .toLocaleLowerCase()
+          .includes(term)
+      );
     return matchesKind && matchesSearch;
   });
 
@@ -223,6 +228,7 @@ export default function POSDaybook() {
 
   const whatsappMutation = useMutation({
     mutationFn: async (voucher: Voucher) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const result = await sendInvoicePdfWithRetry(voucher.id, voucher.locationId, {
         maxAttempts: 3,
       });
@@ -246,6 +252,7 @@ export default function POSDaybook() {
 
   const optionalMutation = useMutation({
     mutationFn: async (voucher: Voucher) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const response = await apiRequest("PATCH", `/api/vouchers/${voucher.id}/optional`, { optional: true });
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
@@ -298,14 +305,21 @@ export default function POSDaybook() {
 
   return (
     <div className="pos-daybook mx-auto w-full min-w-0 max-w-[1560px] space-y-5 pb-8" data-pos-daybook="modern">
-      <section className="pos-daybook-hero flex flex-col justify-between gap-4 sm:flex-row sm:items-center" aria-label="Daybook heading">
+      <section
+        className="pos-daybook-hero flex flex-col justify-between gap-4 sm:flex-row sm:items-center"
+        aria-label="Daybook heading"
+      >
         <div className="flex min-w-0 items-center gap-3">
           <span className="pos-daybook-title-icon flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl">
             <BookOpen className="h-6 w-6" aria-hidden="true" />
           </span>
           <div className="min-w-0">
-            <h1 className="text-xl font-bold tracking-tight sm:text-2xl" data-testid="text-page-title">POS Daybook</h1>
-            <p className="mt-0.5 text-sm text-muted-foreground" data-testid="text-page-subtitle">{subtitle}</p>
+            <h1 className="text-xl font-bold tracking-tight sm:text-2xl" data-testid="text-page-title">
+              POS Daybook
+            </h1>
+            <p className="mt-0.5 text-sm text-muted-foreground" data-testid="text-page-subtitle">
+              {subtitle}
+            </p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
@@ -315,7 +329,13 @@ export default function POSDaybook() {
               Christmas {christmasSetting.data.enabled ? "On" : "Off"}
             </span>
           )}
-          <Button variant="ghost" size="icon" className="rounded-xl" onClick={() => shiftDay(-1)} aria-label="Previous day">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="rounded-xl"
+            onClick={() => shiftDay(-1)}
+            aria-label="Previous day"
+          >
             <ChevronLeft className="h-4 w-4" />
           </Button>
           <PeriodFilter
@@ -346,10 +366,34 @@ export default function POSDaybook() {
       </section>
 
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Sales summary">
-        <Stat label="Sales" value={String(salesOnly.length)} icon={<Package className="h-5 w-5" />} tone="blue" loading={isLoading} />
-        <Stat label="Total Revenue" value={formatCashAmount(totalSales)} icon={<DollarSign className="h-5 w-5" />} tone="violet" loading={isLoading} />
-        <Stat label="Avg per Sale" value={formatCashAmount(salesOnly.length ? totalSales / salesOnly.length : 0)} icon={<ReceiptText className="h-5 w-5" />} tone="cyan" loading={isLoading} />
-        <Stat label="Transfers" value={String(transfersOnly.length)} icon={<ArrowRight className="h-5 w-5" />} tone="slate" loading={isLoading} />
+        <Stat
+          label="Sales"
+          value={String(salesOnly.length)}
+          icon={<Package className="h-5 w-5" />}
+          tone="blue"
+          loading={isLoading}
+        />
+        <Stat
+          label="Total Revenue"
+          value={formatCashAmount(totalSales)}
+          icon={<DollarSign className="h-5 w-5" />}
+          tone="violet"
+          loading={isLoading}
+        />
+        <Stat
+          label="Avg per Sale"
+          value={formatCashAmount(salesOnly.length ? totalSales / salesOnly.length : 0)}
+          icon={<ReceiptText className="h-5 w-5" />}
+          tone="cyan"
+          loading={isLoading}
+        />
+        <Stat
+          label="Transfers"
+          value={String(transfersOnly.length)}
+          icon={<ArrowRight className="h-5 w-5" />}
+          tone="slate"
+          loading={isLoading}
+        />
       </section>
 
       <section className="pos-daybook-transactions" aria-label="Transactions">
@@ -361,7 +405,7 @@ export default function POSDaybook() {
             </span>
           </div>
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <label className="pos-daybook-search flex min-h-10 min-w-[170px] flex-1 items-center gap-2 rounded-xl px-3 sm:flex-none" >
+            <label className="pos-daybook-search flex min-h-10 min-w-[170px] flex-1 items-center gap-2 rounded-xl px-3 sm:flex-none">
               <Search className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
               <input
                 type="search"
@@ -373,7 +417,11 @@ export default function POSDaybook() {
                 data-testid="pos-daybook-search"
               />
             </label>
-            <div className="pos-daybook-type-tabs flex shrink-0 items-center gap-0.5 rounded-xl p-1" role="group" aria-label="Transaction type">
+            <div
+              className="pos-daybook-type-tabs flex shrink-0 items-center gap-0.5 rounded-xl p-1"
+              role="group"
+              aria-label="Transaction type"
+            >
               {(["all", "sales", "transfers"] as const).map((kind) => (
                 <button
                   key={kind}
@@ -401,7 +449,9 @@ export default function POSDaybook() {
 
         {isLoadingUser || isLoading ? (
           <div className="space-y-2 p-4" role="status" aria-label="Loading transactions">
-            {[0, 1, 2].map((key) => <Skeleton key={key} className="h-14 w-full rounded-xl" />)}
+            {[0, 1, 2].map((key) => (
+              <Skeleton key={key} className="h-14 w-full rounded-xl" />
+            ))}
           </div>
         ) : searchedVouchers.length === 0 ? (
           <div className="pos-daybook-empty flex min-h-[300px] flex-col items-center justify-center px-5 py-12 text-center">
@@ -455,7 +505,11 @@ export default function POSDaybook() {
                         {voucher.voucherNumber}
                       </TableCell>
                       <TableCell>
-                        <Badge className={voucher.voucherType === "Sales" ? "pos-daybook-sale-badge" : "pos-daybook-transfer-badge"}>
+                        <Badge
+                          className={
+                            voucher.voucherType === "Sales" ? "pos-daybook-sale-badge" : "pos-daybook-transfer-badge"
+                          }
+                        >
                           {voucher.voucherType === "Sales" ? "Sale" : "Transfer"}
                         </Badge>
                       </TableCell>
@@ -465,7 +519,10 @@ export default function POSDaybook() {
                       <TableCell className="whitespace-nowrap text-right font-semibold tabular-nums">
                         {formatCashAmount(Number(voucher.totalAmount || 0))}
                       </TableCell>
-                      <TableCell className="hidden max-w-[220px] truncate text-muted-foreground md:table-cell" title={voucher.description || ""}>
+                      <TableCell
+                        className="hidden max-w-[220px] truncate text-muted-foreground md:table-cell"
+                        title={voucher.description || ""}
+                      >
                         {voucher.description || "—"}
                       </TableCell>
                       <TableCell>
@@ -473,7 +530,9 @@ export default function POSDaybook() {
                           {voucher.voucherType === "Sales" && (
                             <>
                               <Button
-                                variant="ghost" size="icon" className="h-9 w-9 rounded-lg"
+                                variant="ghost"
+                                size="icon"
+                                className="h-9 w-9 rounded-lg"
                                 disabled={!canAct || isPrinting}
                                 onClick={() => setPrintVoucherId(voucher.id)}
                                 title={canAct ? "Print receipt" : "You can only print your own sales"}
@@ -481,19 +540,25 @@ export default function POSDaybook() {
                               >
                                 <Printer className={`h-4 w-4 ${isPrinting ? "animate-pulse" : ""}`} />
                               </Button>
-                              <Button
-                                variant="ghost" size="icon" className="h-9 w-9 rounded-lg"
-                                disabled={!canAct || isSending}
-                                onClick={() => whatsappMutation.mutate(voucher)}
-                                title={canAct ? "Resend receipt on WhatsApp" : "You can only resend your own sales"}
-                                aria-label={`Resend ${voucher.voucherNumber} on WhatsApp`}
-                              >
-                                <MessageCircle className={`h-4 w-4 ${isSending ? "animate-pulse" : ""}`} />
-                              </Button>
+                              {recordChanges.allowed && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-9 w-9 rounded-lg"
+                                  disabled={!canAct || isSending}
+                                  onClick={() => whatsappMutation.mutate(voucher)}
+                                  title={canAct ? "Resend receipt on WhatsApp" : "You can only resend your own sales"}
+                                  aria-label={`Resend ${voucher.voucherNumber} on WhatsApp`}
+                                >
+                                  <MessageCircle className={`h-4 w-4 ${isSending ? "animate-pulse" : ""}`} />
+                                </Button>
+                              )}
                             </>
                           )}
                           <Button
-                            variant="ghost" size="icon" className="h-9 w-9 rounded-lg"
+                            variant="ghost"
+                            size="icon"
+                            className="h-9 w-9 rounded-lg"
                             disabled={!canAct}
                             onClick={() => canAct && setSelectedVoucher(voucher)}
                             title={canAct ? "View full sale details" : "You can only view your own sales"}
@@ -502,7 +567,9 @@ export default function POSDaybook() {
                             <Eye className="h-4 w-4" />
                           </Button>
                           <Button
-                            variant="ghost" size="icon" className="h-9 w-9 rounded-lg"
+                            variant="ghost"
+                            size="icon"
+                            className="h-9 w-9 rounded-lg"
                             onClick={() =>
                               setHiddenRowIds((previous) => {
                                 const next = new Set(previous);
@@ -676,41 +743,48 @@ export default function POSDaybook() {
               <Printer className="mr-2 h-4 w-4" />
               Print
             </Button>
-            <Button
-              variant="outline"
-              disabled={!voucherDetails || whatsappMutation.isPending}
-              onClick={() => voucherDetails && whatsappMutation.mutate(voucherDetails)}
-            >
-              <MessageCircle className="mr-2 h-4 w-4" />
-              Resend WhatsApp
-            </Button>
-            {isAdminOrOwner && selectedVoucher?.voucherType === "Sales" && !selectedVoucher.optional && (
+            {recordChanges.allowed && (
               <Button
                 variant="outline"
-                disabled={optionalMutation.isPending}
-                onClick={() => setOptionalVoucher(selectedVoucher)}
-                data-testid="pos-daybook-make-optional"
+                disabled={!voucherDetails || whatsappMutation.isPending}
+                onClick={() => voucherDetails && whatsappMutation.mutate(voucherDetails)}
               >
-                <Undo2 className="mr-2 h-4 w-4" />
-                Make Optional
+                <MessageCircle className="mr-2 h-4 w-4" />
+                Resend WhatsApp
               </Button>
             )}
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span>
-                    <Button
-                      disabled={!canEditDaybook || !selectedVoucher}
-                      onClick={() => selectedVoucher && navigate(`/pos/edit/${selectedVoucher.id}`)}
-                    >
-                      {canEditDaybook ? <Pencil className="mr-2 h-4 w-4" /> : <Lock className="mr-2 h-4 w-4" />}
-                      Edit Transaction
-                    </Button>
-                  </span>
-                </TooltipTrigger>
-                {!canEditDaybook && <TooltipContent>Editing is disabled in Settings for this user.</TooltipContent>}
-              </Tooltip>
-            </TooltipProvider>
+            {recordChanges.allowed &&
+              isAdminOrOwner &&
+              selectedVoucher?.voucherType === "Sales" &&
+              !selectedVoucher.optional && (
+                <Button
+                  variant="outline"
+                  disabled={optionalMutation.isPending}
+                  onClick={() => setOptionalVoucher(selectedVoucher)}
+                  data-testid="pos-daybook-make-optional"
+                >
+                  <Undo2 className="mr-2 h-4 w-4" />
+                  Make Optional
+                </Button>
+              )}
+            {recordChanges.allowed && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span>
+                      <Button
+                        disabled={!canEditDaybook || !selectedVoucher}
+                        onClick={() => selectedVoucher && navigate(`/pos/edit/${selectedVoucher.id}`)}
+                      >
+                        {canEditDaybook ? <Pencil className="mr-2 h-4 w-4" /> : <Lock className="mr-2 h-4 w-4" />}
+                        Edit Transaction
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  {!canEditDaybook && <TooltipContent>Editing is disabled in Settings for this user.</TooltipContent>}
+                </Tooltip>
+              </TooltipProvider>
+            )}
           </div>
         </DialogContent>
       </Dialog>
@@ -747,10 +821,15 @@ function Stat({
   tone: "blue" | "violet" | "cyan" | "slate";
 }) {
   return (
-    <div className={`pos-daybook-stat pos-daybook-stat--${tone} relative min-w-0 overflow-hidden rounded-2xl p-4 sm:p-5`}>
+    <div
+      className={`pos-daybook-stat pos-daybook-stat--${tone} relative min-w-0 overflow-hidden rounded-2xl p-4 sm:p-5`}
+    >
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-semibold text-muted-foreground sm:text-sm">{label}</span>
-        <span className="pos-daybook-stat-icon flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" aria-hidden="true">
+        <span
+          className="pos-daybook-stat-icon flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
+          aria-hidden="true"
+        >
           {icon}
         </span>
       </div>

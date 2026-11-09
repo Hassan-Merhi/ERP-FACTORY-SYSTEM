@@ -4,6 +4,7 @@ import { ArrowDown, ArrowUp, Folder, GripVertical, Plus, RefreshCw, Save, Trash2
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,6 +44,8 @@ export default function DisplayAccountGroups() {
   const { selectedCompany } = useCompany();
   const layoutUrl = useAppMode() === "factory" ? "/api/factory/account-display-layout" : "/api/accounts/display-layout";
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
+  const canEditLayout = recordChanges.allowed;
   const [nodes, setNodes] = useState<AccountDisplayNode[]>([]);
   const [newName, setNewName] = useState("");
   const [search, setSearch] = useState("");
@@ -115,11 +118,15 @@ export default function DisplayAccountGroups() {
   const groupItems = (key: string) => nodes.filter((n) => n.parentKey === key).sort(byOrder);
 
   const mutate = (next: AccountDisplayNode[]) => {
+    if (!canEditLayout) return;
     setNodes(next);
     setDirty(true);
   };
   const save = useMutation({
-    mutationFn: () => apiRequest("PUT", layoutUrl, { nodes }),
+    mutationFn: () => {
+      if (!canEditLayout) throw new Error(recordChanges.reason ?? "");
+      return apiRequest("PUT", layoutUrl, { nodes });
+    },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: [layoutUrl] });
       toast({ title: "Account order saved for all users" });
@@ -192,7 +199,7 @@ export default function DisplayAccountGroups() {
     return (
       <div
         key={item.key}
-        draggable
+        draggable={canEditLayout}
         onDragStart={(e) => {
           setDraggedKey(item.key);
           e.dataTransfer.setData("text/plain", item.key);
@@ -214,21 +221,26 @@ export default function DisplayAccountGroups() {
         {isGroup ? (
           <>
             <span className="text-xs text-muted-foreground">{groupItems(item.key).length} accounts</span>
-            <Button size="sm" variant="outline" onClick={() => renameGroup(item.key)}>
-              Rename
-            </Button>
-            <Button
-              size="icon"
-              variant="ghost"
-              aria-label={`Remove ${displayName} group`}
-              onClick={() => deleteGroup(item.key)}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
+            {canEditLayout && (
+              <Button size="sm" variant="outline" onClick={() => renameGroup(item.key)}>
+                Rename
+              </Button>
+            )}
+            {canEditLayout && (
+              <Button
+                size="icon"
+                variant="ghost"
+                aria-label={`Remove ${displayName} group`}
+                onClick={() => deleteGroup(item.key)}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
           </>
         ) : (
           <Select
             value={item.parentKey || "ungrouped"}
+            disabled={!canEditLayout}
             onValueChange={(v) => mutate(moveNode(nodes, item.key, v === "ungrouped" ? null : v))}
           >
             <SelectTrigger className="w-40 h-8 text-xs" aria-label={`Group for ${displayName}`}>
@@ -244,22 +256,26 @@ export default function DisplayAccountGroups() {
             </SelectContent>
           </Select>
         )}
-        <Button
-          size="icon"
-          variant="ghost"
-          aria-label={`Move ${displayName} up`}
-          onClick={() => reorderOne(item.key, -1)}
-        >
-          <ArrowUp className="h-4 w-4" />
-        </Button>
-        <Button
-          size="icon"
-          variant="ghost"
-          aria-label={`Move ${displayName} down`}
-          onClick={() => reorderOne(item.key, 1)}
-        >
-          <ArrowDown className="h-4 w-4" />
-        </Button>
+        {canEditLayout && (
+          <>
+            <Button
+              size="icon"
+              variant="ghost"
+              aria-label={`Move ${displayName} up`}
+              onClick={() => reorderOne(item.key, -1)}
+            >
+              <ArrowUp className="h-4 w-4" />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              aria-label={`Move ${displayName} down`}
+              onClick={() => reorderOne(item.key, 1)}
+            >
+              <ArrowDown className="h-4 w-4" />
+            </Button>
+          </>
+        )}
       </div>
     );
   };
@@ -282,13 +298,15 @@ export default function DisplayAccountGroups() {
       ) : (
         <>
           <div className="flex flex-wrap gap-2">
-            <Input
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && createGroup()}
-              placeholder="Group name (e.g. KAZEMBE)"
-              className="max-w-sm"
-            />
+            {canEditLayout && (
+              <Input
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && createGroup()}
+                placeholder="Group name (e.g. KAZEMBE)"
+                className="max-w-sm"
+              />
+            )}
             <Button
               variant="outline"
               size="sm"
@@ -303,17 +321,21 @@ export default function DisplayAccountGroups() {
             >
               <RefreshCw className="h-4 w-4 mr-1" /> Refresh Layout
             </Button>
-            <Button
-              variant="outline"
-              data-testid="button-create-group"
-              onClick={createGroup}
-              disabled={!newName.trim()}
-            >
-              <Plus className="h-4 w-4 mr-1" /> New display group
-            </Button>
-            <Button onClick={() => save.mutate()} disabled={!dirty || save.isPending} className="ml-auto">
-              <Save className="h-4 w-4 mr-1" /> {save.isPending ? "Saving…" : "Save for all users"}
-            </Button>
+            {canEditLayout && (
+              <Button
+                variant="outline"
+                data-testid="button-create-group"
+                onClick={createGroup}
+                disabled={!newName.trim()}
+              >
+                <Plus className="h-4 w-4 mr-1" /> New display group
+              </Button>
+            )}
+            {canEditLayout && (
+              <Button onClick={() => save.mutate()} disabled={!dirty || save.isPending} className="ml-auto">
+                <Save className="h-4 w-4 mr-1" /> {save.isPending ? "Saving…" : "Save for all users"}
+              </Button>
+            )}
           </div>
           <Input
             value={search}

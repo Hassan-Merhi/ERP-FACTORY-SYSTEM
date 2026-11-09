@@ -286,7 +286,8 @@ export function AccountStatementView({
     const url = buildPdfUrl(lang);
     if (url) window.open(url, "_blank");
   };
-  const showWhatsApp = appMode === "factory" || appMode === "erp";
+  // Rule changes and statement sends are business writes; read-only roles do not see them.
+  const showWhatsApp = canChangeExistingRecords && (appMode === "factory" || appMode === "erp");
   // The phone header's one-tap PDF follows the interface language; other languages stay in the menu.
   const phonePdfLanguage: "en" | "fr" | "ar" = language === "ar" || language === "fr" ? language : "en";
 
@@ -519,7 +520,7 @@ export function AccountStatementView({
               )}
             </div>
             <div className="flex items-center gap-1 shrink-0">
-              {(appMode === "factory" || appMode === "erp") && (
+              {showWhatsApp && (
                 <>
                   <Button
                     size="icon"
