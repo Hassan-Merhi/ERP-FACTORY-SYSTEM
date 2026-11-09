@@ -10,6 +10,8 @@ import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import type { FactoryMyAccess } from "@shared/apiTypes";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 
 interface DailyProduction {
   date: string;
@@ -49,6 +51,7 @@ function getWasteColor(percent: number): string {
 }
 
 export default function FactoryKpis() {
+  const { selectedCompany } = useCompany();
   const { formatDisplayDate } = useDateFormat();
   const defaults = getDefaultDateRange();
   const [from, setFrom] = useState(defaults.from);
@@ -56,7 +59,7 @@ export default function FactoryKpis() {
   const [requestedTab, setRequestedTab] = useState<"daily" | "workers" | "mixes">("daily");
 
   const { data: settings } = useQuery({
-    queryKey: ["/api/factory/settings"],
+    queryKey: companyQueryKey("/api/factory/settings", selectedCompany?.id), enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const r = await fetch("/api/factory/settings");
       return r.ok ? r.json() : {};
@@ -64,8 +67,10 @@ export default function FactoryKpis() {
     staleTime: 60000,
   });
 
-  const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: ["/api/factory/my-access"], staleTime: 5 * 60000 });
-  const hiddenTabs = myAccess?.hiddenCostFields ?? [];
+  const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id), enabled: Boolean(selectedCompany?.id), staleTime: 5 * 60000 });
+  const hiddenTabs = myAccess?.companyId === selectedCompany?.id && myAccess.hasFactoryAccess
+    ? myAccess.hiddenCostFields
+    : ["hide_tab_kpis_daily", "hide_tab_kpis_worker_performance", "hide_tab_kpis_mix_efficiency"];
 
   const showDaily = !hiddenTabs.includes("hide_tab_kpis_daily");
   const showWorkers =
