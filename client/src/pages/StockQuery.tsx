@@ -54,7 +54,7 @@ export default function StockQuery() {
   }, [searchTerm]);
 
   const { data: pagedStockItems, isLoading: erpLoading } = useQuery<PagedStockItems>({
-    queryKey: ["/api/stock-items", { search: debouncedSearch, page: currentPage, pageSize }],
+    queryKey: ["/api/stock-items", { companyId: selectedCompany?.id, search: debouncedSearch, page: currentPage, pageSize }],
     queryFn: async () => {
       const params = new URLSearchParams({ page: String(currentPage), pageSize: String(pageSize) });
       if (debouncedSearch.trim()) params.set("search", debouncedSearch.trim());
@@ -71,6 +71,18 @@ export default function StockQuery() {
   });
 
   const isLoading = isFactory ? factoryLoading : erpLoading;
+
+  // A company switch must never keep a page number from the previous inventory.
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedCompany?.id, isFactory]);
+
+  // If a filtered result set shrinks, recover the last valid page rather
+  // than leaving the user on an empty page with no pagination controls.
+  useEffect(() => {
+    if (isFactory || !pagedStockItems || currentPage <= Math.max(1, pagedStockItems.totalPages)) return;
+    setCurrentPage(Math.max(1, pagedStockItems.totalPages));
+  }, [currentPage, isFactory, pagedStockItems]);
 
   const items = isFactory
     ? factoryProducts
