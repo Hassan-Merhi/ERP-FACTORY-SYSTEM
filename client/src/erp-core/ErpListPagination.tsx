@@ -1,6 +1,7 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { PaginationBar } from "@/components/PaginationBar";
 
 export interface ErpListPaginationProps {
   page: number;
@@ -27,6 +28,22 @@ export function ErpListPagination({
   const safePages = Math.max(1, totalPages);
   const current = Math.min(Math.max(page, 1), safePages);
   if (!alwaysShow && safePages <= 1) return null;
+
+  // For real server metadata delegate to the existing shared PaginationBar;
+  // retain the lightweight fallback for callers that do not know totalItems.
+  if (totalItems != null && pageSize != null && totalItems > 0) {
+    return (
+      <PaginationBar
+        page={current}
+        totalPages={safePages}
+        total={totalItems}
+        pageSize={pageSize}
+        onPageChange={onPageChange}
+        noun="items"
+        ariaLabel="Table pagination"
+      />
+    );
+  }
 
   const range =
     totalItems != null && pageSize != null
