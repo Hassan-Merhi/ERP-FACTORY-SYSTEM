@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ErpMobileFilters } from "@/components/ui/erp-mobile-filters";
 import { SearchField } from "@/components/ui/search-field";
-import { ErpListTable } from "@/erp-core";
+import { ErpListTable, ErpRecordAction } from "@/erp-core";
 import { TableHeader, TableBody, TableFooter, TableHead, TableCell, TableRow } from "@/components/ui/table";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -538,19 +538,19 @@ export function StockItemsView({ stockItems }: { stockItems: StockItemsModel }) 
                           </Badge>
                         </TableCell>
                         <TableCell className="px-3 py-3 text-right" onClick={(event) => event.stopPropagation()}>
-                          <Button
+                          <ErpRecordAction
                             size="sm"
                             variant="ghost"
                             onClick={(event) => handleEditClick(item.id, event)}
-                            disabled={!recordChanges.allowed}
-                            title={recordChangeReason}
+                            permitted={recordChanges.allowed}
+                            deniedReason={recordChangeReason}
                             aria-label={recordChanges.reason ?? "Edit stock item"}
                             data-testid={`button-edit-${item.id}`}
                             className="stock-items-edit-button gap-1.5"
                           >
                             <Edit className="h-3.5 w-3.5" />
                             Edit
-                          </Button>
+                          </ErpRecordAction>
                         </TableCell>
                       </TableRow>
                     ))
