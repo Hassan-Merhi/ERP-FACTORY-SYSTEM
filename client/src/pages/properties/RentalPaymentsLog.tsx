@@ -82,7 +82,6 @@ export default function RentalPaymentsLog({
   // Phones restack the payments table as cards in every mode.
   const { tableProps: cardTableProps } = useMobileCardTable();
   const [deleteTarget, setDeleteTarget] = useState<PaymentRow | null>(null);
-  const [reconciliationView, setReconciliationView] = useState<ReconciliationView>("HISTORICAL_RENT");
   const [reconciliation, setReconciliation] = useState<ReconciliationSnapshot | null>(null);
 
   // Both pages use the same voucher-backed dated rent snapshot. No payment is created.
