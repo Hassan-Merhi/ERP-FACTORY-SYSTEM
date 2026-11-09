@@ -13,7 +13,7 @@
 | --- | --- | --- | --- | --- |
 | 1 | Fix rental navigation mismatch | **Code complete** | Static source review complete; browser/runtime checks pending | `e3ac129f5cd36b0b714dce3238bf70b211e0fb3c` |
 | 2 | Typed rental module policy | **Code complete** | Static source parity review passed; runtime/typecheck pending | `60084a305133835447212051b863c9af0745e8ed` through `57771a74a7603ae246908967a0a2f2a1648fc0e6` |
-| 3 | Reporting identity and currency | Not started | Not started | — |
+| 3 | Reporting identity and currency | **Code committed; rollout blocked on verified company ID** | Seven static checks passed; runtime/ID verification outstanding | `62befb3e55efd0439b200496475fe3c370c3189e` through `78e61c82e553ea25c30df07492c9d0fc35fc2414` |
 | 4 | Payments and rental view models | Not started | Not started | — |
 | 5 | Permissions and navigation registry | Not started | Not started | — |
 | 6 | Final parity and legacy cleanup | Not started | Not started | — |
@@ -69,6 +69,37 @@
 - [ ] TypeScript compile/typecheck.
 
 **Disposition:** Phase 2 code complete; runtime and compilation validation remain outstanding.
+
+## Phase 3 — Reporting identity and currency
+
+**Changes committed (2026-11-09)**
+- Added `client/src/properties/config/historicalRentReportingPolicy.ts`: explicit company-scoped, read-only historical presentation opt-in selected by the company's immutable numeric ID, not its mutable name.
+- Both `PropertyRentalPage.tsx` and `RentalPaymentsLog.tsx` use the same company-scoped predicate; the original `2026-10-26` voucher-backed snapshot cutoff and selection math were not changed.
+- Centralized rental unit currency symbols and amount rendering through existing `formatMoneyDisplay` and `getCurrencyDisplayMetadata`, fixing the old `FC ` vs `CFA ` discrepancy for the legacy CFA currency label. XAF and XOF remain distinct accounting codes; no conversions performed.
+- Switched rental summary cards, historical account-balance explanation and guarantee overlap to an explicitly USD-denominated presenter, retaining the existing legacy USD summary basis and underlying numerical values. Unchanged numeric-only exports do not acquire invented exchange-rate conversions.
+- No server posting, accounts, vouchers, SQL, currency storage or financial calculations changed.
+
+**Identifier configuration — mandatory rollout blocker**
+- The inspected source and audit do **not** establish Hassan Properties' numeric `company.id`; it is not safe to guess one.
+- Supply the verified immutable numeric ID as the build-time environment value `VITE_HASSAN_PROPERTIES_REPORTING_COMPANY_ID`. This value must correspond to the actual Hassan Properties company and `companyType === "properties"`.
+- Without a valid configured ID, the special Hassan Properties historical reconciliation/reporting view is intentionally **disabled** rather than silently assigned to a potentially incorrect company. **This is a visible behavior change until configured.** Do not merge or deploy this phase without confirming the ID and the resulting historical UI parity.
+- Environment variables in this Vite client are public build-time configuration, not secret authorization. Server endpoints remain responsible for access checks; this is a read-only UI gate only.
+
+**Static verification**
+- Re-fetched the relevant source files from the branch; checked seven specific conditions: snapshot cutoff unchanged, no mutable-name gate, numeric ID match, shared policy used by both views, shared money display adopted, summary dollar concatenation removed and no server changes. All seven passed.
+- TypeScript compilation, UI runtime, currency QA and historical reconciliation tests have **not** run; CI intentionally omitted.
+
+**Acceptance checklist**
+- [x] Introduce company ID-based reporting policy and remove mutable-name comparisons.
+- [x] Preserve historical cutoff, voucher selection and numeric calculation.
+- [x] Use shared currency presentation for rental monetary display without FX conversions.
+- [x] Commit source changes on the existing working branch.
+- [ ] Confirm Hassan Properties' actual immutable company ID from authoritative company data.
+- [ ] Configure `VITE_HASSAN_PROPERTIES_REPORTING_COMPANY_ID` and confirm the expected historical view is visible **only** for that company.
+- [ ] Verify currency labels, summary basis and historical totals in a running app.
+- [ ] TypeScript compile/typecheck and runtime parity verification (not run per no-CI instruction).
+
+**Disposition:** Source refactor committed. **Not fully completed for rollout** until the true company ID is configured and historical UI parity verified. The tracker does not claim an unverified production identity.
 
 ## Mandatory boundaries for phases 2–6
 
