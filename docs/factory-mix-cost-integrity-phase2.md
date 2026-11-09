@@ -25,7 +25,7 @@
 
 ### 3. Safety during source adjustments
 
-- Apply only to **active/open/carry-forward** batches with **zero already-used kilograms and no downstream bale, pressing or daily-usage links**.
+- Apply only to **active/open/carry-forward** batches with **zero already-used kilograms and no downstream bale, pressing, daily-usage or dependent mix links**.
 - Completed, closed, consumed and dependent batches remain review-only because their valuation can feed produced/sold bales, GL and historical inventory. Editing those safely belongs with Phases 3–5's controlled reconciliation.
 - Reject invalid/duplicate IDs, empty or nonpositive sources, over-precision and nonpositive weight, insufficient inventory, missing supplier USD rates, unavailable upstream batches, self-source references, and legacy sources whose exact original container attribution cannot be proven.
 - Revert raw consumption **only on the exact originally recorded container** and only if its current recorded usage is sufficient; no clamp-to-zero and no guessed legacy FIFO credits.
