@@ -117,9 +117,9 @@ export default function RentalPaymentsLog({
     !isLoading &&
     !paymentsError &&
     reconciliation?.companyId === selectedCompany?.id &&
-    !reconciliation.loading &&
-    reconciliation.accountSum !== null &&
-    reconciliation.aliCashLedgerId !== null;
+    reconciliation?.loading === false &&
+    reconciliation?.accountSum != null &&
+    reconciliation?.aliCashLedgerId != null;
   const total = isPropertiesPayments
     ? paymentTotals.cash / 100
     : filtered.reduce((sum, payment) => sum + Number(payment.amount), 0);
