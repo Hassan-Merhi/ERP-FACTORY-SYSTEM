@@ -252,7 +252,7 @@ export default function FactoryCustomerStatement() {
       await apiRequest("PATCH", `/api/factory/customers/${customerId}/statement-note`, { statementNote: note });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/customers", customerId, "statement"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/customers"] });
       toast({ title: "Note saved" });
     },
     onError: () => {
@@ -269,7 +269,7 @@ export default function FactoryCustomerStatement() {
       return (await res.json()) as { saved?: number };
     },
     onSuccess: (data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-price-lists", customerId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-price-lists"] });
       if (priceDestination === variables.destination) {
         setPriceEdits({});
         setNewCode("");
@@ -290,7 +290,7 @@ export default function FactoryCustomerStatement() {
       return factoryApiRequest("DELETE", priceListUrl(customerId, payload.destination, payload.articleCode), {});
     },
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-price-lists", customerId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-price-lists"] });
       if (priceDestination === variables.destination) {
         setPriceEdits((prev) => {
           const next = { ...prev };
@@ -313,7 +313,7 @@ export default function FactoryCustomerStatement() {
     setSavingRowNote(entryId);
     try {
       await apiRequest("PATCH", `/api/factory/customers/${customerId}/balance/${entryId}/note`, { rowNote: note });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/customers", customerId, "statement"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/customers"] });
     } catch {
       toast({ title: "Failed to save row note", variant: "destructive" });
     } finally {
