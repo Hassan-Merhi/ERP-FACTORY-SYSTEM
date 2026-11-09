@@ -26,6 +26,7 @@ import { useDateFormat } from "@/contexts/DateFormatContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import FactoryLoadingDispatchScanner from "./FactoryLoadingDispatchScanner";
+import FactoryLoadingDispatchAllocation from "./FactoryLoadingDispatchAllocation";
 
 interface OrderBale {
   id: number;
@@ -502,7 +503,7 @@ export default function FactoryLoadingDispatch() {
                   <Card className="border-blue-100 dark:border-blue-500/20 dark:bg-[#101c34]">
                     <CardContent className="space-y-3 p-4">
                       <div className="flex items-center gap-2"><FileSearch className="h-4 w-4 text-blue-500" /><h3 className="text-sm font-semibold">Trip comparison</h3></div>
-                      <p className="text-xs text-muted-foreground">Compare expected versus scanned items, missing references, wrong-trip allocations and KG differences.</p>
+                      <p className="text-xs text-muted-foreground">Compare the expected truck load configured below against physically scanned barcodes, missing references and KG differences.</p>
                       <Button type="button" size="sm" variant="outline" className="w-full justify-between"
                         onClick={() => navigate("/factory/sales/loading/dispatch/" + orderId + "/" + dispatchId + "/compare")}
                         data-testid="button-compare-dispatch">
@@ -514,6 +515,19 @@ export default function FactoryLoadingDispatch() {
                     <Info className="mt-0.5 h-4 w-4 shrink-0" />
                     Trip closing, discrepancy approvals and reopening will be introduced in Phase 6.
                   </div>
+                </div>
+                <div className="xl:col-span-2">
+                  <FactoryLoadingDispatchAllocation
+                    orderId={orderId}
+                    dispatchId={dispatchId}
+                    companyId={companyId}
+                    status={selectedTrip.status}
+                    role={user?.currentRole ?? user?.role ?? ""}
+                    onChanged={() => {
+                      void queryClient.invalidateQueries({ queryKey: companyQueryKey(listUrl, companyId) });
+                      if (selectedUrl) void queryClient.invalidateQueries({ queryKey: companyQueryKey(selectedUrl, companyId) });
+                    }}
+                  />
                 </div>
                 <div className="xl:col-span-2">
                   <FactoryLoadingDispatchScanner
