@@ -43,3 +43,5 @@ export {
   TableHead as ErpTableHead,
   TableCell as ErpTableCell,
 } from "@/components/ui/table";
+export { ErpListPagination } from "./ErpListPagination";
+export type { ErpListPaginationProps } from "./ErpListPagination";
