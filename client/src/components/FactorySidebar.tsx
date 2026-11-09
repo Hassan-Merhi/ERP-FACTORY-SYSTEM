@@ -181,19 +181,19 @@ export const FACTORY_NAV_SECTIONS: FactoryNavSection[] = FACTORY_SIDEBAR_GROUP_O
           ]
         : []),
       ...orderedPages.map((page) => ({
-      title:
-        page.key === "factory/invoicing"
-          ? "Invoices & Loading"
-          : page.key === "factory/pos" || page.key === "factory/waste-dispatch"
-            ? "POS & Dispatch"
-            : page.label,
-      url: page.route,
-      icon: FACTORY_NAV_ICONS[page.key] ?? FileText,
-      accessKey: page.key,
-      adminOnly: page.accessLevel === "admin",
-      developerOnly: page.accessLevel === "developer",
-      featureFlag: page.featureFlag,
-      featureFlagDefaultOn: page.featureFlagDefaultOn,
+        title:
+          page.key === "factory/invoicing"
+            ? "Invoices & Loading"
+            : page.key === "factory/pos" || page.key === "factory/waste-dispatch"
+              ? "POS & Dispatch"
+              : page.label,
+        url: page.route,
+        icon: FACTORY_NAV_ICONS[page.key] ?? FileText,
+        accessKey: page.key,
+        adminOnly: page.accessLevel === "admin",
+        developerOnly: page.accessLevel === "developer",
+        featureFlag: page.featureFlag,
+        featureFlagDefaultOn: page.featureFlagDefaultOn,
       })),
     ],
   };
