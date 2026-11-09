@@ -73,7 +73,9 @@ export default function FactoryWorkersHub() {
   });
 
   const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id), enabled: Boolean(selectedCompany?.id), staleTime: 5 * 60000 });
-  const hiddenTabs = myAccess?.companyId === selectedCompany?.id ? myAccess.hiddenCostFields : Object.values(FACTORY_WORKERS_HUB_TABS);
+  const hiddenTabs = myAccess?.companyId === selectedCompany?.id && myAccess.hasFactoryAccess
+    ? myAccess.hiddenCostFields
+    : Object.values(FACTORY_WORKERS_HUB_TABS);
 
   const visibleOptions = ALL_TAB_OPTIONS.filter(({ settingKey, hiddenKey }) => {
     if (hiddenKey && hiddenTabs.includes(hiddenKey)) return false;
