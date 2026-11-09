@@ -505,24 +505,19 @@ export function installRequestStormGuard(): void {
     const requestPromise = (async () => {
       if (shouldDeferUntilVisible(url.pathname, ttlMs)) await waitUntilVisible(lifetime.controller.signal);
       const release = await acquireGetSlot(lifetime.controller.signal);
-      let timedOut = false;
-      const requestTimeout = window.setTimeout(() => {
-        timedOut = true;
-        lifetime.controller.abort();
-      }, API_GET_TIMEOUT_MS);
+      let requestTimeout: number | undefined;
       try {
-        let response: Response;
-        try {
-          response = await originalFetch(
-            input,
-            forwardRequestInit(input, init, lifetime.controller.signal, revalidationEntry?.etag)
-          );
-        } catch (error) {
-          // A timeout is a real network failure, not a caller cancellation.
-          // Do not silently retry an unshared request and occupy another slot.
-          if (timedOut) throw new Error(`Request timed out: ${url.pathname}`);
-          throw error;
-        }
+        // Race the request itself: some browser/proxy fetch wrappers do not
+        // settle immediately on abort. The queue slot must still be released.
+        const response = await Promise.race([
+          originalFetch(input, forwardRequestInit(input, init, lifetime.controller.signal, revalidationEntry?.etag)),
+          new Promise<never>((_resolve, reject) => {
+            requestTimeout = window.setTimeout(() => {
+              lifetime.controller.abort();
+              reject(new Error(`Request timed out: ${url.pathname}`));
+            }, API_GET_TIMEOUT_MS);
+          }),
+        ]);
         // The response exists; its body is still unread. Any later abort would
         // tear that stream down under the caller, so disarm before handing over.
         lifetime.disarm();
@@ -538,7 +533,7 @@ export function installRequestStormGuard(): void {
 
         return response;
       } finally {
-        window.clearTimeout(requestTimeout);
+        if (requestTimeout !== undefined) window.clearTimeout(requestTimeout);
         release();
       }
     })().finally(() => {
