@@ -392,7 +392,7 @@ export async function runScheduledFactoryMixIntegrityMonitoring(): Promise<{
   newAlerts: number; resolved: number;
 }> {
   const ids = (await pool.query<{ company_id: number }>(
-    "SELECT DISTINCT company_id FROM factory_mix_batches WHERE deleted_at IS NULL ORDER BY company_id",
+    "SELECT DISTINCT company_id FROM factory_mix_batches ORDER BY company_id",
   )).rows.map(row => row.company_id).filter(Number.isSafeInteger);
   const summary = { companies: ids.length, succeeded: 0, failed: 0, initialized: 0, newAlerts: 0, resolved: 0 };
   for (const companyId of ids) {
