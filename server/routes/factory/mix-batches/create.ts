@@ -25,7 +25,7 @@ import {
 import { recordFactoryStockValueEventTx } from "../../../services/factory/factoryStockValueEvents";
 import Decimal from "decimal.js";
 import { MoneyDecimal, parseMoneyInput, toMoney } from "../../../lib/money";
-import { MixRawStockShortageError, requireMixFifoFullyAllocated, requireMixRawStockCapacity } from "../../../services/factory/mixRawStockQuantityGuard";
+import { MixRawStockShortageError, requireMixFifoFullyAllocated, requireMixRawStockCapacity, availableSupplierAddAllowance } from "../../../services/factory/mixRawStockQuantityGuard";
 
 /** A source's rate as stored on its row (0 when it has no USD rate: the mix is then unvalued). */
 const storedRate = (rate: Decimal | null) => (rate ?? new MoneyDecimal(0)).toFixed();
@@ -143,7 +143,7 @@ export function registerFactoryMixBatchCreateRoutes(app: Express) {
 
           // FIFO allocation of usedKg only — this determines WHICH container rows get
           // debited, never the cost rate itself (that's fixed above).
-          const perRsDeductions: Array<{ containerId: number; deduct: Decimal }> = [];
+          const perRsDeductions: Array<{ containerId: number; deduct: Decimal; adjustmentBacked?: boolean }> = [];
           let remaining = weight;
           for (const rs of supplierRawStocks) {
             if (remaining.lessThanOrEqualTo(0.001)) break;
@@ -160,10 +160,20 @@ export function registerFactoryMixBatchCreateRoutes(app: Express) {
             remaining = remaining.minus(deduct);
           }
 
-          // Any outstanding quantity would otherwise create negative raw
-          // stock. Roll the entire mix creation back, including earlier FIFO.
-          if (supplierRawStocks.length > 0) {
-            requireMixFifoFullyAllocated(remaining.toFixed(3), supplierId);
+          // The system's ADD adjustment ledger represents genuine supplier
+          // stock that is not included in container receivedKg. Permit only
+          // the unused adjustment-backed part, never an unsupported shortage.
+          const addAllowance = await availableSupplierAddAllowance(tx, companyId, supplierId, supplierRawStocks);
+          if (supplierRawStocks.length > 0 && remaining.gt(0)) {
+            requireMixFifoFullyAllocated(remaining.toFixed(3), supplierId, addAllowance.toFixed(3));
+            const last = supplierRawStocks[supplierRawStocks.length - 1];
+            await tx.update(factoryRawStock)
+              .set({ usedKg: sql`${factoryRawStock.usedKg} + ${remaining.toFixed(3)}` })
+              .where(and(eq(factoryRawStock.id, last.id), eq(factoryRawStock.companyId, companyId)));
+            perRsDeductions.push({ containerId: last.containerId, deduct: remaining, adjustmentBacked: true });
+          }
+          if (supplierRawStocks.length === 0) {
+            requireMixFifoFullyAllocated(weight.toFixed(3), supplierId, addAllowance.toFixed(3));
           }
 
           if (supplierRawStocks.length === 0) {
@@ -192,6 +202,7 @@ export function registerFactoryMixBatchCreateRoutes(app: Express) {
               sourceRecords.push({
                 supplierId,
                 containerId: d.containerId,
+                adjustmentBacked: d.adjustmentBacked,
                 weightKg: d.deduct.toFixed(),
                 costPerKg: storedRate(rate),
                 totalCost: d.deduct
@@ -322,7 +333,9 @@ export function registerFactoryMixBatchCreateRoutes(app: Express) {
             containerId: sr.containerId || null,
             supplierId: sr.supplierId || null,
             sourceBatchId: sr.sourceBatchId || null,
-            sourceType: sr.sourceBatchId
+            sourceType: sr.adjustmentBacked
+              ? "SUPPLIER_ADJUSTMENT_BACKED"
+              : sr.sourceBatchId
               ? "BATCH"
               : sr.supplierId
                 ? sr.containerId
@@ -334,6 +347,7 @@ export function registerFactoryMixBatchCreateRoutes(app: Express) {
             quantityKg: sr.weightKg,
             costPerKg: sr.costPerKg,
             totalCost: sr.totalCost,
+            notes: sr.adjustmentBacked ? "Receipt-row overdraw covered by an existing supplier ADD adjustment; see supplier adjustment ledger." : null,
             inventorySupplierId: sr.sourceBatchId != null ? null : (sr.supplierId ?? null),
           });
         }
