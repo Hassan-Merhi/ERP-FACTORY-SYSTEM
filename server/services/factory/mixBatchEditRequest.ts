@@ -59,7 +59,7 @@ function parseRows(rows: unknown, idField: "supplierId" | "sourceBatchId"): MixE
       throw new MixEditRequestError("Source weight must be a positive kg amount.");
     }
     const weightText = String(rawWeight).trim();
-    if (!/^\\d{1,12}(?:\\.\\d{1,3})?$/.test(weightText)) {
+    if (!/^\d{1,12}(?:\.\d{1,3})?$/.test(weightText)) {
       throw new MixEditRequestError("Source weights must be positive with at most 3 decimal places.");
     }
     const weight = toMoney(weightText);
