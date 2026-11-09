@@ -45,13 +45,13 @@ const checks = [
   ]],
   ["client/src/pages/factory/FactoryProductionTargets.tsx", [
     'companyQueryKey("/api/factory/staff-tracking", selectedCompany?.id',
-    "access?.companyId === selectedCompany?.id && access.hasFactoryAccess",
+    "access?.companyId === selectedCompany?.id && access?.hasFactoryAccess === true",
     "[selectedCompany?.id, periodType, period.start, period.end]",
   ]],
   ["client/src/pages/factory/factoryworkers/useFactoryWorkersModel.tsx", [
     'companyQueryKey("/api/factory/workers/amount-due", selectedCompany?.id)',
     'companyQueryKey("/api/factory/cash-accounts", selectedCompany?.id)',
-    "myAccess.hasFactoryAccess",
+    "myAccess?.hasFactoryAccess",
   ]],
   ["client/src/pages/factory/factoryproformas/useFactoryProformasModel.ts", [
     'companyQueryKey("/api/factory/customer-price-lists", selectedCompany?.id',
