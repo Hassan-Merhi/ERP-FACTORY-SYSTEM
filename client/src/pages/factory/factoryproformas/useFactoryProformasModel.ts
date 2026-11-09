@@ -8,6 +8,8 @@ import { useAppMode } from "@/contexts/AppModeContext";
 import { getApiRequest } from "@/lib/factoryApi";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
+import type { FactoryMyAccess } from "@shared/apiTypes";
 import { factoryRecordChangeAccess } from "../factoryRecordChangeAccess";
 import { read as readExcel, utils as excelUtils, writeFile as writeExcel } from "@/lib/excelHelper";
 import type { CatalogStockItem, Customer, Proforma, ProformaLine } from "./types";
@@ -71,10 +73,14 @@ export function useFactoryProformasModel() {
 
   const customerId = selectedCustomerId ? parseInt(selectedCustomerId) : null;
 
-  const { data: myAccess } = useQuery<{ fullAccess: boolean; hiddenCostFields: string[] }>({
-    queryKey: ["/api/factory/my-access"],
+  const { data: myAccess } = useQuery<FactoryMyAccess>({
+    queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
   });
-  const hideProformaPrice = myAccess?.hiddenCostFields?.includes("hide_proforma_price") ?? false;
+  // Cost visibility is fail-closed until the chosen-company access response arrives.
+  const accessReady = Boolean(myAccess && myAccess.companyId === selectedCompany?.id && myAccess.hasFactoryAccess);
+  const hideProformaPrice = !accessReady || myAccess?.hideAllCosts === true ||
+    myAccess?.hiddenCostFields?.includes("hide_proforma_price") === true;
 
   const { data: currentUser } = useQuery<{ role: string }>({ queryKey: ["/api/auth/me"] });
   // View Only and Create Only company roles never change existing proformas.
@@ -82,13 +88,13 @@ export function useFactoryProformasModel() {
   const canEdit = recordChanges.allowed && ["Admin", "Owner", "Developer"].includes(currentUser?.role || "");
 
   const { data: customers = [], isLoading: customersLoading } = useQuery<Customer[]>({
-    queryKey: ["/api/factory/customers"],
+    queryKey: companyQueryKey("/api/factory/customers", selectedCompany?.id),
   });
 
   // Phase 3: list cards use a genuinely compact summary contract. Individual
   // line arrays are fetched only for cards the user explicitly expands.
   const { data: proformas = [], isLoading: proformasLoading } = useQuery<Proforma[]>({
-    queryKey: [`/api/factory/customer-proformas?customerId=${customerId}&profile=summary`, customerId],
+    queryKey: companyQueryKey(`/api/factory/customer-proformas?customerId=${customerId}&profile=summary`, selectedCompany?.id, customerId),
     queryFn: async () => {
       if (!customerId) return [];
       const response = await modeApiRequest(
@@ -98,7 +104,7 @@ export function useFactoryProformasModel() {
       if (!response.ok) throw new Error("Failed to load proformas");
       return response.json();
     },
-    enabled: !!customerId,
+    enabled: !!customerId && Boolean(selectedCompany?.id),
     staleTime: 60_000,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
@@ -107,7 +113,7 @@ export function useFactoryProformasModel() {
   const expandedProformaIdList = Array.from(expandedProformaIds).sort((a, b) => a - b);
   const expandedProformaQueries = useQueries({
     queries: expandedProformaIdList.map((proformaId) => ({
-      queryKey: ["/api/factory/customer-proformas", proformaId] as const,
+      queryKey: companyQueryKey("/api/factory/customer-proformas", selectedCompany?.id, proformaId),
       queryFn: async () => {
         const response = await modeApiRequest("GET", `/api/factory/customer-proformas/${proformaId}`);
         if (!response.ok) throw new Error("Failed to load proforma items");
