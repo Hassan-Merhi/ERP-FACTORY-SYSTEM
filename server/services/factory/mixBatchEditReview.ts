@@ -202,6 +202,7 @@ export async function prepareMixSourceEditReview(
         id: row.id, containerId: row.containerId,
         received: toMoney(row.receivedKg).toFixed(3),
         used: toMoney(row.usedKg).toFixed(3),
+        usdRate: row.costPerKgUsd == null ? null : toMoney(row.costPerKgUsd).toFixed(7),
       })),
     });
   }
