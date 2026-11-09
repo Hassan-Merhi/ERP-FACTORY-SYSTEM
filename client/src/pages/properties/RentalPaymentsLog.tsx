@@ -1,4 +1,5 @@
 import { searchAny } from "@shared/searchNormalization";
+import { getRentalModulePolicy, type RentalModule } from "@/properties/config/rentalModulePolicy";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -69,15 +70,17 @@ interface Props {
   pageTitle: string;
   pageIcon?: React.ReactNode;
   testIdPrefix: string;
-  apiBase?: string;
+  rentalModule: RentalModule;
 }
 
 export default function RentalPaymentsLog({
+  rentalModule,
   pageTitle,
   pageIcon,
   testIdPrefix,
-  apiBase = "/api/properties/rental",
 }: Props) {
+  const rentalPolicy = getRentalModulePolicy(rentalModule);
+  const apiBase = rentalPolicy.apiBase;
   const { selectedCompany } = useCompany();
   const { toast } = useToast();
   const appMode = useAppMode();
@@ -94,7 +97,7 @@ export default function RentalPaymentsLog({
   const [reconciliation, setReconciliation] = useState<ReconciliationSnapshot | null>(null);
 
   // Both pages use the same voucher-backed dated rent snapshot. No payment is created.
-  const isPropertiesPayments = apiBase === "/api/properties/rental";
+  const isPropertiesPayments = rentalPolicy.usesPropertiesReconciliation;
   const isHassanProperties = isPropertiesPayments && selectedCompany?.name === HISTORICAL_RENT_COMPANY;
   // In HASSAN PROPERTIES the only visible rental payment history is All Records.
   // Other company/module views retain their existing tabs.
@@ -102,7 +105,7 @@ export default function RentalPaymentsLog({
   // Records, so the "HISTORICAL_RENT" branches below are unreachable for now,
   // and without the widening TypeScript rejects them as impossible comparisons.
   const effectiveView = (
-    isPropertiesPayments ? "ALL" : reconciliationView === "HISTORICAL_RENT" ? "ACTIVE_RENT" : reconciliationView
+    rentalPolicy.paymentsAllRecordsOnly ? "ALL" : reconciliationView === "HISTORICAL_RENT" ? "ACTIVE_RENT" : reconciliationView
   ) as ReconciliationView;
   const queryKey = [
     apiBase + "/payments",
