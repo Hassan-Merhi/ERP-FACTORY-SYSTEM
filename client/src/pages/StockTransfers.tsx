@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useLocation } from "wouter";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -17,7 +17,7 @@ import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { PageHeader } from "@/components/PageHeader";
-import { DataTableToolbar } from "@/components/DataTableToolbar";
+import { ErpListFilters, ErpListTable } from "@/erp-core";
 import { PeriodFilter, PeriodFilterValue, getDefaultPeriodValue } from "@/components/ui/period-filter";
 import { useDateJump } from "@/hooks/use-date-jump";
 import { usePaginatedFilterState } from "@/hooks/use-paginated-filter-state";
@@ -189,7 +189,7 @@ export default function StockTransfers({ hideVoucherNotes = false }: StockTransf
         </div>
       </div>
 
-      <DataTableToolbar
+      <ErpListFilters
         search={search}
         onSearchChange={(value) => setFilter("search", value)}
         searchPlaceholder="Search by voucher, location, notes…"
@@ -225,7 +225,7 @@ export default function StockTransfers({ hideVoucherNotes = false }: StockTransf
           {/* Desktop table */}
           <div className="hidden md:block phone-land:hidden border rounded-xl overflow-hidden">
             <div className="table-responsive">
-              <Table>
+              <ErpListTable pageKey="stock-transfers" companyId={selectedCompany?.id} scrollLabel="Stock transfer history">
                 <TableHeader>
                   <TableRow className="bg-muted/40 hover:bg-muted/40">
                     {!hideVoucherNotes && <TableHead className="text-xs whitespace-nowrap">Voucher</TableHead>}
@@ -327,7 +327,7 @@ export default function StockTransfers({ hideVoucherNotes = false }: StockTransf
                     </TableRow>
                   ))}
                 </TableBody>
-              </Table>
+              </ErpListTable>
             </div>
           </div>
 
