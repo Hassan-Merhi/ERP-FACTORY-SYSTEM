@@ -27,12 +27,12 @@ export default function FactoryContainerLoadingScan() {
 
   return (
     <div
-      className="flex h-full min-w-0 flex-col bg-slate-50/70 p-3 dark:bg-[#080f1c] sm:p-4 lg:p-6"
+      className="flex h-full min-w-0 flex-col bg-background p-3 sm:p-4 lg:p-6"
       data-testid="factory-container-loading-page"
     >
       <ScanOverlays model={model} />
 
-      <div className="relative isolate mb-4 overflow-hidden rounded-[22px] border border-blue-200/70 bg-gradient-to-r from-white via-blue-50/80 to-sky-100/70 px-4 py-4 shadow-[0_16px_40px_-32px_rgba(37,99,235,0.65)] dark:border-blue-500/30 dark:from-[#12213e] dark:via-[#102448] dark:to-[#0a2e62] sm:px-5 sm:py-5">
+      <div className="relative isolate mb-4 overflow-hidden rounded-[22px] border border-blue-200/70 bg-gradient-to-r from-white via-blue-50/80 to-sky-100/70 px-4 py-4 shadow-[0_16px_40px_-32px_rgba(37,99,235,0.65)] dark:border-blue-500/30 dark:from-blue-950 dark:via-blue-900 dark:to-blue-800 sm:px-5 sm:py-5">
         {/* Decorative freight-container artwork; no loading or scan behavior lives here. */}
         <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-0 hidden w-1/3 overflow-hidden lg:block">
           <div className="absolute inset-0 bg-gradient-to-r from-blue-50/0 via-sky-300/5 to-blue-500/10 dark:from-transparent dark:to-blue-500/20" />
@@ -82,14 +82,14 @@ export default function FactoryContainerLoadingScan() {
                   status={model.orderDetail.status}
                 />
               )}
-              <div className="flex items-center gap-2 rounded-xl border border-blue-200/80 bg-white/80 px-3 py-2 shadow-sm backdrop-blur-sm dark:border-blue-400/25 dark:bg-[#071632]/75">
+              <div className="flex items-center gap-2 rounded-xl border border-blue-200/80 bg-white/80 px-3 py-2 shadow-sm backdrop-blur-sm dark:border-blue-400/25 dark:bg-card/75">
                 <Package className="h-5 w-5 text-blue-600 dark:text-sky-400" />
                 <div>
                   <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{model.tr("bales")}</div>
                   <div className="font-mono text-sm font-bold">{model.bales.length}</div>
                 </div>
               </div>
-              <div className="flex items-center gap-2 rounded-xl border border-blue-200/80 bg-white/80 px-3 py-2 shadow-sm backdrop-blur-sm dark:border-blue-400/25 dark:bg-[#071632]/75">
+              <div className="flex items-center gap-2 rounded-xl border border-blue-200/80 bg-white/80 px-3 py-2 shadow-sm backdrop-blur-sm dark:border-blue-400/25 dark:bg-card/75">
                 <Scale className="h-5 w-5 text-blue-600 dark:text-sky-400" />
                 <div>
                   <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{model.tr("weight")}</div>
@@ -109,7 +109,7 @@ export default function FactoryContainerLoadingScan() {
           <ProformaProgressPanel model={model} />
 
           {orderId && (
-            <div className="mobile-action-bar grid grid-cols-1 gap-2 rounded-[22px] border border-blue-100 bg-white/95 p-2 shadow-sm backdrop-blur-sm dark:border-blue-500/20 dark:bg-[#101d34]/95 sm:grid-cols-2 xl:static xl:m-0 xl:grid-cols-1">
+            <div className="mobile-action-bar grid grid-cols-1 gap-2 rounded-[22px] border border-blue-100 bg-white/95 p-2 shadow-sm backdrop-blur-sm dark:border-blue-500/20 dark:bg-card/95 sm:grid-cols-2 xl:static xl:m-0 xl:grid-cols-1">
               <Button
                 variant="outline"
                 className="h-11 w-full"

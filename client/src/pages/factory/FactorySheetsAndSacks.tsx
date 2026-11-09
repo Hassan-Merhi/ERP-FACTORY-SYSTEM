@@ -241,7 +241,7 @@ export default function FactorySheetsAndSacks() {
   return (
     <div className="space-y-5 p-4 sm:p-6">
       {/* Visual refresh: existing stock KPIs, permissions and mutations stay unchanged. */}
-      <div className="relative isolate overflow-hidden rounded-2xl border border-indigo-200/70 bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 px-5 py-6 shadow-sm dark:border-indigo-400/20 dark:from-[#09172e] dark:via-[#10204c] dark:to-[#1b1643] sm:px-7">
+      <div className="relative isolate overflow-hidden rounded-2xl border border-indigo-200/70 bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 px-5 py-6 shadow-sm dark:border-indigo-400/20 dark:from-blue-950 dark:via-blue-900 dark:to-blue-800 sm:px-7">
         <div aria-hidden="true" className="pointer-events-none absolute -right-16 -top-24 h-72 w-72 rounded-full bg-blue-400/20 blur-3xl dark:bg-blue-500/20" />
         <div aria-hidden="true" className="pointer-events-none absolute -bottom-36 right-20 h-64 w-96 rounded-full bg-violet-400/20 blur-3xl" />
         <div className="relative flex flex-wrap items-center justify-between gap-4">
@@ -267,9 +267,9 @@ export default function FactorySheetsAndSacks() {
 
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         {[
-          { label: "Total Sheets", value: stats.sheets.toLocaleString(), detail: `$${fmt(stats.sheetValue)} value`, icon: Layers, colors: "from-blue-50 to-cyan-50 border-blue-200/80 dark:from-[#08284e] dark:to-[#0d3863] dark:border-blue-500/40", iconColors: "bg-blue-600 text-white" },
+          { label: "Total Sheets", value: stats.sheets.toLocaleString(), detail: `$${fmt(stats.sheetValue)} value`, icon: Layers, colors: "from-blue-50 to-cyan-50 border-blue-200/80 dark:from-blue-950 dark:to-blue-900 dark:border-blue-500/40", iconColors: "bg-blue-600 text-white" },
           { label: "Total Sacks", value: stats.sacks.toLocaleString(), detail: `$${fmt(stats.sackValue)} value`, icon: ShoppingBag, colors: "from-emerald-50 to-teal-50 border-emerald-200/80 dark:from-[#053c38] dark:to-[#07564a] dark:border-emerald-500/40", iconColors: "bg-emerald-600 text-white" },
-          { label: "All Items", value: items.length.toLocaleString(), detail: "Active inventory entries", icon: Package, colors: "from-violet-50 to-purple-50 border-violet-200/80 dark:from-[#29164d] dark:to-[#3d226a] dark:border-violet-500/40", iconColors: "bg-violet-600 text-white" },
+          { label: "All Items", value: items.length.toLocaleString(), detail: "Active inventory entries", icon: Package, colors: "from-violet-50 to-purple-50 border-violet-200/80 dark:from-blue-950 dark:to-blue-900 dark:border-violet-500/40", iconColors: "bg-violet-600 text-white" },
           { label: "Total Value", value: `$${fmt(stats.totalValue)}`, detail: "Current inventory value", icon: Wallet, colors: "from-amber-50 to-orange-50 border-amber-200/80 dark:from-[#423016] dark:to-[#563b18] dark:border-amber-500/40", iconColors: "bg-amber-600 text-white" },
         ].map((metric) => (
           <Card key={metric.label} className={`relative overflow-hidden rounded-2xl border bg-gradient-to-br shadow-sm ${metric.colors}`}>
@@ -290,7 +290,7 @@ export default function FactorySheetsAndSacks() {
 
       {/* Tab switcher */}
       {effectiveTab ? (
-        <TabsList aria-label="Sheets and sacks sections" className="w-max max-w-full rounded-2xl border-indigo-200/70 bg-indigo-50/80 p-1.5 dark:border-indigo-400/20 dark:bg-[#111936]">
+        <TabsList aria-label="Sheets and sacks sections" className="w-max max-w-full rounded-2xl border-indigo-200/70 bg-indigo-50/80 p-1.5 dark:border-indigo-400/20 dark:bg-card">
           {showStock && (
             <PillTabButton onClick={() => setActiveTab("stock")} selected={effectiveTab === "stock"} className={effectiveTab === "stock" ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md hover:text-white" : "hover:bg-indigo-100/70 dark:hover:bg-indigo-500/10"}>
               <Layers className="h-4 w-4" />
@@ -313,7 +313,7 @@ export default function FactorySheetsAndSacks() {
       {/* ─── CURRENT STOCK TAB ───────────────────────────────────────────── */}
       {effectiveTab === "stock" && (
         <>
-          <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-700/60 dark:bg-[#0e172b]">
+          <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-700/60 dark:bg-card">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/80 bg-slate-50/80 px-4 py-3 dark:border-slate-700/60 dark:bg-slate-900/40">
               <div className="flex min-w-0 flex-wrap items-center gap-2">
                 <div className="relative">
@@ -380,8 +380,8 @@ export default function FactorySheetsAndSacks() {
               ) : (
                 <div className="overflow-x-auto">
                   <Table mobileLayout="cards" data-testid="factory-sheets-sacks-table" wrapperClassName="rounded-none border-0" className="text-sm">
-                    <TableHeader className="bg-slate-100 dark:bg-[#15223a]">
-                      <TableRow className="border-slate-200 bg-slate-100 hover:bg-slate-100 dark:border-slate-700 dark:bg-[#15223a] dark:hover:bg-[#15223a]">
+                    <TableHeader className="bg-slate-100 dark:bg-muted">
+                      <TableRow className="border-slate-200 bg-slate-100 hover:bg-slate-100 dark:border-slate-700 dark:bg-muted dark:hover:bg-muted">
                         <TableHead className="w-9 px-3"><Checkbox aria-label="Select all visible stock rows" checked={allVisibleSelected ? true : someVisibleSelected ? "indeterminate" : false} onCheckedChange={(checked) => toggleVisibleSelection(checked === true)} /></TableHead>
                         <TableHead className="w-7 px-1" />
                         <TableHead className="min-w-40 text-xs font-bold uppercase tracking-wide">Name</TableHead>
