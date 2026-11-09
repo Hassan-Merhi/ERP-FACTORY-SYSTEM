@@ -73,7 +73,7 @@ export default function FactoryProductionTargets() {
   const bonusRole = session?.currentRole ?? session?.role;
   const canManageBonuses = factoryActionCapabilities({
     role: bonusRole,
-    hasFactoryAccess: access?.companyId === selectedCompany?.id && access.hasFactoryAccess,
+    hasFactoryAccess: access?.companyId === selectedCompany?.id && access?.hasFactoryAccess === true,
   })["production.manage-bonuses"];
   const { language } = useApplicationLanguage();
   const tr = (key: FactoryStaffTrackingTranslationKey) => translateFactoryStaffTrackingText(key, language);
