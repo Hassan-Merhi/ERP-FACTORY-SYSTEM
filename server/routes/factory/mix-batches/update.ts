@@ -14,7 +14,6 @@ import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { writeDaybookEntry } from "../_helpers";
 import {
-  factoryContainers,
   factoryRawStock,
   factoryMixBatches,
   factoryMixBatchSources,
@@ -166,56 +165,48 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
           if (src.containerId) {
             const landed = await containerUsdRate(tx, companyId, src.containerId);
             const rate = toMoney(src.costPerKg);
-            if (landed && rate.gt(0))
+            if (landed && rate.gt(0)) {
               oldPriceDelta = oldPriceDelta.plus(toMoney(src.weightKg).times(rate.minus(landed)));
-          }
-          if (src.containerId) {
+            }
             const [rsRow] = await tx
               .select()
               .from(factoryRawStock)
-              .where(eq(factoryRawStock.containerId, src.containerId));
-            if (rsRow) {
-              const newUsed = MoneyDecimal.max(ZERO, toMoney(rsRow.usedKg).minus(toMoney(src.weightKg)));
-              await tx
-                .update(factoryRawStock)
-                .set({ usedKg: newUsed.toFixed(3) })
-                .where(eq(factoryRawStock.id, rsRow.id));
+              .where(and(
+                eq(factoryRawStock.companyId, companyId),
+                eq(factoryRawStock.containerId, src.containerId),
+                isNull(factoryRawStock.deletedAt),
+              ))
+              .for("update");
+            if (!rsRow || toMoney(rsRow.usedKg).lessThan(toMoney(src.weightKg))) {
+              throw new MixEditRequestError(
+                "Original raw material consumption cannot be reversed safely.",
+                "MIX_EDIT_SOURCE_REVERSE_UNSAFE", 409,
+              );
             }
+            await tx.update(factoryRawStock)
+              .set({ usedKg: toMoney(rsRow.usedKg).minus(src.weightKg).toFixed(3) })
+              .where(and(eq(factoryRawStock.id, rsRow.id), eq(factoryRawStock.companyId, companyId)));
           } else if (src.supplierId && !src.sourceBatchId) {
-            // Legacy supplier-only source: FIFO reverse
-            const supplierRawStocks = await tx
-              .select({
-                id: factoryRawStock.id,
-                usedKg: factoryRawStock.usedKg,
-              })
-              .from(factoryRawStock)
-              .innerJoin(factoryContainers, eq(factoryRawStock.containerId, factoryContainers.id))
-              .where(and(eq(factoryRawStock.companyId, companyId), eq(factoryContainers.supplierId, src.supplierId)))
-              .orderBy(desc(factoryRawStock.offloadedAt), desc(factoryRawStock.id));
-            let toRestore = toMoney(src.weightKg);
-            for (const rs of supplierRawStocks) {
-              if (toRestore.lessThanOrEqualTo(0.001)) break;
-              const usedNow = toMoney(rs.usedKg);
-              if (usedNow.lessThanOrEqualTo(0)) continue;
-              const restore = MoneyDecimal.min(toRestore, usedNow);
-              await tx
-                .update(factoryRawStock)
-                .set({ usedKg: MoneyDecimal.max(ZERO, usedNow.minus(restore)).toFixed(3) })
-                .where(eq(factoryRawStock.id, rs.id));
-              toRestore = toRestore.minus(restore);
-            }
+            // The review only allows a legacy supplier-only source when there
+            // are no raw-stock rows at all. Never reverse arbitrary FIFO stock.
           } else if (src.sourceBatchId) {
             const [srcBatch] = await tx
               .select()
               .from(factoryMixBatches)
-              .where(eq(factoryMixBatches.id, src.sourceBatchId));
-            if (srcBatch) {
-              const newUsed = MoneyDecimal.max(ZERO, toMoney(srcBatch.usedKg).minus(toMoney(src.weightKg)));
-              await tx
-                .update(factoryMixBatches)
-                .set({ usedKg: newUsed.toFixed(3), status: "ACTIVE" })
-                .where(eq(factoryMixBatches.id, src.sourceBatchId));
+              .where(and(eq(factoryMixBatches.id, src.sourceBatchId), eq(factoryMixBatches.companyId, companyId)))
+              .for("update");
+            if (!srcBatch || toMoney(srcBatch.usedKg).lessThan(toMoney(src.weightKg))) {
+              throw new MixEditRequestError(
+                "Original upstream batch consumption cannot be reversed safely.",
+                "MIX_EDIT_SOURCE_REVERSE_UNSAFE", 409,
+              );
             }
+            await tx.update(factoryMixBatches)
+              .set({
+                usedKg: toMoney(srcBatch.usedKg).minus(src.weightKg).toFixed(3),
+                updatedAt: new Date(),
+              })
+              .where(and(eq(factoryMixBatches.id, src.sourceBatchId), eq(factoryMixBatches.companyId, companyId)));
           }
         }
 
@@ -260,14 +251,10 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
             remaining = remaining.minus(deduct);
           }
           if (remaining.greaterThan(0.001) && supplierRawStocks.length > 0) {
-            const lastRs = supplierRawStocks[supplierRawStocks.length - 1];
-            await tx
-              .update(factoryRawStock)
-              .set({ usedKg: sql`${factoryRawStock.usedKg} + ${remaining.toFixed()}` })
-              .where(eq(factoryRawStock.id, lastRs.id));
-            const ex = perRsDeductions.find((d) => d.containerId === lastRs.containerId);
-            if (ex) ex.deduct = ex.deduct.plus(remaining);
-            else perRsDeductions.push({ containerId: lastRs.containerId, deduct: remaining });
+            throw new MixEditRequestError(
+              "Not enough raw stock to apply this edit without negative inventory.",
+              "MIX_EDIT_INSUFFICIENT_RAW_STOCK", 409,
+            );
           }
 
           if (supplierRawStocks.length === 0) {
@@ -307,7 +294,11 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
           const [srcBatch] = await tx
             .select()
             .from(factoryMixBatches)
-            .where(and(eq(factoryMixBatches.id, sourceBatchId), eq(factoryMixBatches.companyId, companyId)))
+            .where(and(
+              eq(factoryMixBatches.id, sourceBatchId),
+              eq(factoryMixBatches.companyId, companyId),
+              isNull(factoryMixBatches.deletedAt),
+            ))
             .for("update");
           if (!srcBatch) throw new Error(`Source batch ${sourceBatchId} not found`);
           const batchRemaining = toMoney(srcBatch.totalWeightKg).minus(toMoney(srcBatch.usedKg));
@@ -332,7 +323,7 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
 
         // ── 5. Update batch totals ──
         const batchUpdates: Partial<typeof factoryMixBatches.$inferInsert> = {
-          totalWeightKg: settled.totalWeight.toDecimalPlaces(6).toFixed(6),
+          totalWeightKg: settled.totalWeight.toDecimalPlaces(3).toFixed(3),
           costPerKg: settled.costPerKg.toFixed(7),
           totalCost: settled.totalCost.toFixed(7),
           updatedAt: new Date(),
