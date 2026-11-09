@@ -1,8 +1,7 @@
-import { searchAny } from "@shared/searchNormalization";
 import { getRentalModulePolicy, type RentalModule } from "@/properties/config/rentalModulePolicy";
 import type { ClientErrorLike } from "@/lib/clientError";
-import { useState, useMemo } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useToast } from "@/hooks/use-toast";
@@ -18,7 +17,7 @@ import { useAppMode } from "@/contexts/AppModeContext";
 import { useMobileCardTable } from "@/components/ui/mobile-card-table";
 import { AlertTriangle, ClipboardList, Copy, Trash2 } from "lucide-react";
 import { format } from "date-fns";
-import { PropertiesPaymentsPremium, type PaymentsPeriod } from "./property-rental/components/PropertiesPaymentsPremium";
+import { PropertiesPaymentsPremium } from "./property-rental/components/PropertiesPaymentsPremium";
 import "./property-rental/propertiesPaymentsPremium.css";
 import {
   PaymentsReconciliation,
@@ -33,18 +32,11 @@ import {
 } from "./property-rental/paymentsReceiptMath";
 import { belongsToHistoricalRentSnapshot } from "./property-rental/historicalRentSnapshot";
 import { hasHassanPropertiesHistoricalReportingPolicy } from "@/properties/config/historicalRentReportingPolicy";
+import { useRentalPayments, rentalPaymentsQueryKey } from "@/properties/hooks/useRentalPayments";
+import { useWarehousePaidTotals } from "@/properties/hooks/useRentalUnits";
+import { useRentalPaymentsFilters, RECONCILIATION_VIEWS } from "@/properties/hooks/useRentalPaymentsFilters";
 
 const MONTH_NAMES = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const RECONCILIATION_VIEWS = [
-  { key: "HISTORICAL_RENT", label: "Rent through 26 Oct" },
-  { key: "ACTIVE_RENT", label: "Active rent" },
-  { key: "GUARANTEE", label: "Guarantee movements" },
-  { key: "ENDED_RENT", label: "Ended leases" },
-  { key: "SCHEDULED", label: "Scheduled" },
-  { key: "OTHER", label: "Other / billing adjustments" },
-  { key: "ALL", label: "All records" },
-] as const;
-type ReconciliationView = (typeof RECONCILIATION_VIEWS)[number]["key"];
 export type PaymentRow = {
   id: number;
   paymentDate: string;
@@ -89,10 +81,6 @@ export default function RentalPaymentsLog({
   const isErp = appMode === "erp" || appMode === "properties";
   // Phones restack the payments table as cards in every mode.
   const { tableProps: cardTableProps } = useMobileCardTable();
-  const [search, setSearch] = useState("");
-  const [period, setPeriod] = useState<PaymentsPeriod>("all");
-  const [selectedUnit, setSelectedUnit] = useState("all");
-  const [selectedTenant, setSelectedTenant] = useState("all");
   const [deleteTarget, setDeleteTarget] = useState<PaymentRow | null>(null);
   const [reconciliationView, setReconciliationView] = useState<ReconciliationView>("HISTORICAL_RENT");
   const [reconciliation, setReconciliation] = useState<ReconciliationSnapshot | null>(null);
@@ -100,47 +88,20 @@ export default function RentalPaymentsLog({
   // Both pages use the same voucher-backed dated rent snapshot. No payment is created.
   const isPropertiesPayments = rentalPolicy.usesPropertiesReconciliation;
   const isHassanProperties = isPropertiesPayments && hasHassanPropertiesHistoricalReportingPolicy(selectedCompany);
-  // In HASSAN PROPERTIES the only visible rental payment history is All Records.
-  // Other company/module views retain their existing tabs.
-  // Widened to the full view union: Properties payments now show only All
-  // Records, so the "HISTORICAL_RENT" branches below are unreachable for now,
-  // and without the widening TypeScript rejects them as impossible comparisons.
-  const effectiveView = (
-    rentalPolicy.paymentsAllRecordsOnly ? "ALL" : reconciliationView === "HISTORICAL_RENT" ? "ACTIVE_RENT" : reconciliationView
-  ) as ReconciliationView;
-  const queryKey = [
-    apiBase + "/payments",
-    { companyId: selectedCompany?.id, view: isPropertiesPayments ? "warehouse-reconciliation" : "default" },
-  ];
+  const queryKey = rentalPaymentsQueryKey(apiBase, selectedCompany?.id, isPropertiesPayments);
   const {
     data: warehouseUnits = [],
     isLoading: warehouseTotalsLoading,
     isError: warehouseTotalsError,
-  } = useQuery<Array<{ totalPaid?: number | null }>>({
-    queryKey: [apiBase + "/units", { unitType: "WAREHOUSE", companyId: selectedCompany?.id }],
-    queryFn: async () => {
-      const res = await fetch(`${apiBase}/units?unitType=WAREHOUSE`, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to load warehouse rent totals");
-      return res.json();
-    },
-    enabled: !!selectedCompany && isPropertiesPayments,
-  });
-
+  } = useWarehousePaidTotals(apiBase, selectedCompany?.id, isPropertiesPayments);
+  const { data: payments = [], isLoading, isError: paymentsError } = useRentalPayments(
+    apiBase, selectedCompany?.id, isPropertiesPayments,
+  );
   const {
-    data: payments = [],
-    isLoading,
-    isError: paymentsError,
-  } = useQuery<PaymentRow[]>({
-    queryKey,
-    queryFn: async () => {
-      const res = await fetch(`${apiBase}/payments${isPropertiesPayments ? "?view=warehouse-reconciliation" : ""}`, {
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error("Failed to load payments");
-      return res.json();
-    },
-    enabled: !!selectedCompany,
-  });
+    search, setSearch, period, setPeriod, selectedUnit, setSelectedUnit,
+    selectedTenant, setSelectedTenant, setReconciliationView,
+    effectiveView, unitOptions, tenantOptions, filtered, noFilters,
+  } = useRentalPaymentsFilters(payments, isPropertiesPayments, rentalPolicy.paymentsAllRecordsOnly);
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `${apiBase}/payments/${id}`),
@@ -156,76 +117,9 @@ export default function RentalPaymentsLog({
     },
   });
 
-  const viewPayments = useMemo(() => {
-    if (!isPropertiesPayments || effectiveView === "ALL") return payments;
-    if (effectiveView === "OTHER") {
-      // Includes recorded unvouchered corrections, which are not cash receipts.
-      return payments.filter(
-        (p) =>
-          p.reconciliationCategory === "OTHER" || (p.voucherId == null && p.reconciliationCategory === "ACTIVE_RENT")
-      );
-    }
-    return payments.filter((p) => p.reconciliationCategory === effectiveView);
-  }, [payments, isPropertiesPayments, effectiveView]);
-
-  const unitOptions = useMemo(() => {
-    const uniqueUnits = new Map<string, string>();
-    payments.forEach((payment) => {
-      if (payment.unitId != null && !uniqueUnits.has(String(payment.unitId))) {
-        uniqueUnits.set(
-          String(payment.unitId),
-          [payment.unitNumber, payment.locationGroup].filter(Boolean).join(" — ") || `Unit ${payment.unitId}`
-        );
-      }
-    });
-    return [...uniqueUnits.entries()]
-      .map(([value, label]) => ({ value, label }))
-      .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
-  }, [payments]);
-
-  const tenantOptions = useMemo(
-    () =>
-      [...new Set(payments.map((p) => p.tenantName).filter((name): name is string => Boolean(name)))]
-        .sort((a, b) => a.localeCompare(b))
-        .map((value) => ({ value, label: value })),
-    [payments]
-  );
-
-  const filtered = useMemo(() => {
-    const now = new Date();
-    const since =
-      period === "month"
-        ? new Date(now.getFullYear(), now.getMonth(), 1)
-        : period === "year"
-          ? new Date(now.getFullYear(), 0, 1)
-          : period === "30days"
-            ? new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29)
-            : null;
-    return viewPayments.filter((p) => {
-      if (
-        search.trim() &&
-        !searchAny(
-          search,
-          p.tenantName,
-          p.unitNumber,
-          p.locationGroup,
-          p.notes,
-          p.sourceModule,
-          String(p.voucherId ?? "")
-        )
-      )
-        return false;
-      if (isPropertiesPayments && selectedUnit !== "all" && String(p.unitId) !== selectedUnit) return false;
-      if (isPropertiesPayments && selectedTenant !== "all" && p.tenantName !== selectedTenant) return false;
-      if (isPropertiesPayments && since && new Date(p.paymentDate).getTime() < since.getTime()) return false;
-      return true;
-    });
-  }, [viewPayments, search, period, selectedUnit, selectedTenant, isPropertiesPayments]);
-
   // Keep recorded billing allocations visible, but do NOT count them as cash.
   // All amounts come from the visible records and are accumulated in cents.
   const paymentTotals = receiptTotals(filtered);
-  const noFilters = !search.trim() && period === "all" && selectedUnit === "all" && selectedTenant === "all";
   const isFullHistory = isHassanProperties && effectiveView === "ALL" && noFilters;
   const reconciliationReady =
     isFullHistory &&
