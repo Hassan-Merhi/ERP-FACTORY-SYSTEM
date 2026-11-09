@@ -41,6 +41,7 @@ import {
 } from "@/components/ui/dialog";
 import { TabsList, PillTabButton } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -715,6 +716,7 @@ export default function FactoryLoadingDispatch() {
                       </Button>
                     </CardContent>
                   </Card>
+                  <ErrorBoundary resetKey={"dispatch-lifecycle-" + dispatchId}>
                   <FactoryLoadingDispatchLifecycle
                     key={dispatchId}
                     orderId={orderId}
@@ -728,6 +730,7 @@ export default function FactoryLoadingDispatch() {
                         void queryClient.invalidateQueries({ queryKey: companyQueryKey(selectedUrl, companyId) });
                     }}
                   />
+                  </ErrorBoundary>
                 </div>
                 <div className="xl:col-span-2">
                   <FactoryLoadingDispatchAllocation
