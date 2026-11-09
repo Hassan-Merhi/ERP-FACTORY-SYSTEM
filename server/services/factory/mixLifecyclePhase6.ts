@@ -144,3 +144,27 @@ export function requireMixFinalizeDecision(batch: MixLifecycleBatch, body: unkno
   }
   return { remainingKg: remaining, wasteReason: reason };
 }
+
+/**
+ * Deleting a used/completed mix would recredit raw source kilograms without
+ * undoing its historical downstream production. This is not a safe ordinary
+ * soft-delete and must be reviewed as a controlled quantity/accounting reversal.
+ */
+export function requireMixDeletionSafe(
+  batch: MixLifecycleBatch & { carryForwardFromId?: number | null },
+  linkedDownstream: boolean,
+): void {
+  if (batch.deletedAt) {
+    throw new MixLifecycleRefusal("This mix is already deleted.");
+  }
+  const used = toMoney(batch.usedKg);
+  if (!used.isFinite() || used.lt(0) ||
+      ["CLOSED", "COMPLETED"].includes(batch.status) || used.gt(0) ||
+      batch.carryForwardFromId != null || linkedDownstream) {
+    throw new MixLifecycleRefusal(
+      "This mix has recorded consumption, completion, carry-forward, or downstream references. " +
+      "Ordinary deletion would recredit raw stock without verified production reversal. " +
+      "Review its lineage and use a controlled historical correction instead.",
+    );
+  }
+}
