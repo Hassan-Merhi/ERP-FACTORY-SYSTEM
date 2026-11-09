@@ -62,6 +62,7 @@ export function PropertiesRoutes({ user }: PropertiesRoutesProps) {
   return (
     <Switch>
       <Route path="/properties/help-training">{() => <PropertiesHelpTraining user={user} />}</Route>
+      {/* Compatibility-only dashboard: real cash/payable management remains reachable by old bookmarks. */}
       <Route path="/properties/dashboard" component={PropertiesDashboard} />
       <Route path="/properties/accounts" component={PropertiesAccounts} />
       {isDeveloper && <Route path="/properties/accounting/toolbox" component={AccountingToolbox} />}
@@ -84,11 +85,11 @@ export function PropertiesRoutes({ user }: PropertiesRoutesProps) {
       <Route path="/properties/daybook" component={PropertiesDaybook} />
 
       <Route path="/properties/rentals" component={PropertiesRentalsHub} />
-      <Route path="/properties/rental/warehouses">{() => <Redirect replace to={PROPERTIES_LEGACY_RENTAL_REDIRECTS["/properties/rental/warehouses"]} />}</Route>
-      <Route path="/properties/rental/shops">{() => <Redirect replace to={PROPERTIES_LEGACY_RENTAL_REDIRECTS["/properties/rental/shops"]} />}</Route>
-      <Route path="/properties/rental/payments">
-        {() => <Redirect replace to={PROPERTIES_LEGACY_RENTAL_REDIRECTS["/properties/rental/payments"]} />}
-      </Route>
+      {Object.entries(PROPERTIES_LEGACY_RENTAL_REDIRECTS).map(([from, to]) => (
+        <Route key={from} path={from}>
+          {() => <Redirect replace to={to} />}
+        </Route>
+      ))}
 
       {isDeveloper && <Route path="/properties/transfer" component={CompanyTransfer} />}
       <Route path="/properties/ledger-monthly/:accountId" component={PropertiesLedgerMonthly} />

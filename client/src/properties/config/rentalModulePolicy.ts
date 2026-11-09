@@ -12,8 +12,6 @@ type RentalModulePolicy = Readonly<{
   apiBase: string;
   /** Properties' dated warehouse reconciliation is a read-only presentation. */
   usesPropertiesReconciliation: boolean;
-  /** Properties currently displays All Records in the payment log. */
-  paymentsAllRecordsOnly: boolean;
 }>;
 
 export const RENTAL_MODULE_POLICIES: Readonly<Record<RentalModule, RentalModulePolicy>> = {
@@ -21,19 +19,16 @@ export const RENTAL_MODULE_POLICIES: Readonly<Record<RentalModule, RentalModuleP
     module: "PROPERTIES",
     apiBase: "/api/properties/rental",
     usesPropertiesReconciliation: true,
-    paymentsAllRecordsOnly: true,
   },
   FACTORY: {
     module: "FACTORY",
     apiBase: "/api/factory/rental",
     usesPropertiesReconciliation: false,
-    paymentsAllRecordsOnly: false,
   },
   ERP: {
     module: "ERP",
     apiBase: "/api/erp/rental",
     usesPropertiesReconciliation: false,
-    paymentsAllRecordsOnly: false,
   },
 };
 

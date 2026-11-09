@@ -52,6 +52,30 @@ export const PROPERTIES_LEGACY_RENTAL_REDIRECTS = {
   "/properties/rental/payments": "/properties/rentals?tab=payments",
 } as const;
 
+/** Resolve a concrete Properties pathname, retaining dynamic ledger/voucher
+ * routes and valid rental tab URLs without accepting unrelated prefixes.
+ * Hidden compatibility routes are still eligible for direct navigation.
+ */
+export function findPropertiesNavigationEntry(pathOrUrl: string): NavEntry | undefined {
+  const [pathname, query = ""] = pathOrUrl.split("?", 2);
+  const decodedPath = pathname.endsWith("/") && pathname.length > 1 ? pathname.slice(0, -1) : pathname;
+  const queryTab = new URLSearchParams(query).get("tab");
+  const candidate = decodedPath === "/properties/rentals" && (queryTab === "shops" || queryTab === "payments")
+    ? `/properties/rentals?tab=${queryTab}`
+    : decodedPath;
+  const exact = PROPERTIES_NAVIGATION.find((entry) => entry.path === candidate);
+  if (exact) return exact;
+  const segments = decodedPath.split("/");
+  return PROPERTIES_NAVIGATION.find((entry) => {
+    if (!entry.path.includes("/:")) return false;
+    const pattern = entry.path.split("/");
+    return pattern.length === segments.length &&
+      pattern.every((part, index) => part.startsWith(":")
+        ? segments[index].length > 0
+        : part === segments[index]);
+  });
+}
+
 export type PropertiesSessionIdentity = {
   role?: string | null;
   currentRole?: string | null;
@@ -88,6 +112,6 @@ export function canNavigateProperties(
   user: PropertiesSessionIdentity | null | undefined,
   company: Pick<Company, "companyType" | "role"> | null | undefined,
 ): boolean {
-  const entry = PROPERTIES_NAVIGATION.find((item) => item.path === path);
+  const entry = findPropertiesNavigationEntry(path);
   return entry ? canUsePropertiesCapability(entry.capability, user, company) : false;
 }
