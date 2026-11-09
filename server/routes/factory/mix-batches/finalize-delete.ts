@@ -11,11 +11,11 @@ import { logger } from "../../../lib/logger";
 import { parseId } from "../../../lib/parseId";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
-import { factoryRawStock, factoryMixBatches, factoryMixBatchSources } from "@shared/schema";
+import { factoryRawStock, factoryMixBatches, factoryMixBatchSources, factoryBales, factoryPressingBatches, factoryDailyUsages } from "@shared/schema";
 import { eq, and, sql, isNull } from "drizzle-orm";
 import { withFactoryValuationEventTx } from "../../../services/factory/factoryStockValueEvents";
 import { toMoney } from "../../../lib/money";
-import { MixLifecycleRefusal, requireMixFinalizeDecision } from "../../../services/factory/mixLifecyclePhase6";
+import { MixLifecycleRefusal, requireMixFinalizeDecision, requireMixDeletionSafe } from "../../../services/factory/mixLifecyclePhase6";
 
 export function registerFactoryMixBatchFinalizeDeleteRoutes(app: Express) {
   // ── Finalize a mix batch (mark as fully consumed/completed) ──
@@ -98,8 +98,34 @@ export function registerFactoryMixBatchFinalizeDeleteRoutes(app: Express) {
       // landed USD cost, the mix's work in progress gone), so the change of the
       // factory valuation is the reverse of the material price variance the
       // create recorded, and is tagged MATERIAL_PRICE as the create was.
-      const result = await db.transaction((tx) =>
-        withFactoryValuationEventTx(
+      const result = await db.transaction(async (tx) => {
+        const [batch] = await tx.select().from(factoryMixBatches).where(and(
+          eq(factoryMixBatches.id, id), eq(factoryMixBatches.companyId, companyId),
+          isNull(factoryMixBatches.deletedAt),
+        )).for("update");
+        if (!batch) return null;
+        const [children, downstreamSources, bales, pressing, usages] = await Promise.all([
+          tx.select({ id: factoryMixBatches.id }).from(factoryMixBatches).where(and(
+            eq(factoryMixBatches.companyId, companyId),
+            eq(factoryMixBatches.carryForwardFromId, id),
+            isNull(factoryMixBatches.deletedAt),
+          )).limit(1),
+          tx.select({ id: factoryMixBatchSources.id }).from(factoryMixBatchSources)
+            .where(eq(factoryMixBatchSources.sourceBatchId, id)).limit(1),
+          tx.select({ id: factoryBales.id }).from(factoryBales).where(and(
+            eq(factoryBales.companyId, companyId),
+            eq(factoryBales.mixBatchId, id),
+            isNull(factoryBales.deletedAt),
+          )).limit(1),
+          tx.select({ id: factoryPressingBatches.id }).from(factoryPressingBatches)
+            .where(and(eq(factoryPressingBatches.companyId, companyId),
+              eq(factoryPressingBatches.mixBatchId, id))).limit(1),
+          tx.select({ id: factoryDailyUsages.id }).from(factoryDailyUsages)
+            .where(and(eq(factoryDailyUsages.companyId, companyId),
+              eq(factoryDailyUsages.mixBatchId, id))).limit(1),
+        ]);
+        requireMixDeletionSafe(batch, [children, downstreamSources, bales, pressing, usages].some(rows => rows.length > 0));
+        return withFactoryValuationEventTx(
           tx,
           companyId,
           "MATERIAL_PRICE",
@@ -170,12 +196,15 @@ export function registerFactoryMixBatchFinalizeDeleteRoutes(app: Express) {
             );
             return updated;
           }
-        )
-      );
+        );
+      });
 
       if (!result) return res.status(404).json({ message: "Mix batch not found" });
       res.json({ id: result.id, message: "Mix batch moved to Deleted Items" });
     } catch (error: unknown) {
+      if (error instanceof MixLifecycleRefusal) {
+        return res.status(error.statusCode).json({ code: error.code, message: error.message });
+      }
       logger.error("Error deleting mix batch:", { error: error });
       res.status(500).json({ message: getErrorMessage(error) });
     }
