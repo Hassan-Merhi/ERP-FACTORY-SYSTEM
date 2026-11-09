@@ -41,7 +41,7 @@ async function respondWithComparison(req: Request, res: Response, tripScoped: bo
     // Every table read occurs within one stable read-only snapshot. This
     // prevents counters and missing-reference lists disagreeing mid-scan.
     const snapshot = await db.transaction(async (tx) => {
-      await tx.execute(sql`SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY`);
+      await tx.execute(sql`SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY`);
       const orderRows = resultRows(await tx.execute(sql`
         SELECT id, status, container_number AS "containerNumber",
                deleted_at AS "deletedAt"
