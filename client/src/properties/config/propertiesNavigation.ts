@@ -83,16 +83,18 @@ export type PropertiesSessionIdentity = {
 };
 
 /**
- * Selected-company assignments take precedence when available, rather than
- * treating a global role as company-wide authorization. UI gates only.
- * The server must still authorize every request in its company session.
+ * Frontend route visibility is scoped to the current selected Properties
+ * company. A missing/unknown assignment must not inherit a privileged role
+ * cached from another company or session. UI gates only: backend authorization
+ * still independently checks current active-company assignments.
  */
 export function propertiesEffectiveRole(
   user: PropertiesSessionIdentity | null | undefined,
   selectedCompany: Pick<Company, "companyType" | "role"> | null | undefined,
 ): string | null {
-  if (selectedCompany && selectedCompany.companyType !== "properties") return null;
-  return selectedCompany?.role ?? user?.currentRole ?? user?.role ?? null;
+  if (!selectedCompany || selectedCompany.companyType !== "properties") return null;
+  const role = selectedCompany.role?.trim();
+  return role || null;
 }
 
 export function canUsePropertiesCapability(
