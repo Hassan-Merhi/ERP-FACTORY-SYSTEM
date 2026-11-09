@@ -128,14 +128,16 @@ export function useFactoryLocationInventory() {
     },
   });
   // Do not apply permission data from a different selected company.
-  const perUserHidden = myAccess?.companyId === selectedCompany?.id ? myAccess.hiddenCostFields : [];
+  const scopedAccess = myAccess?.companyId === selectedCompany?.id ? myAccess : undefined;
+  const perUserHidden = scopedAccess?.hiddenCostFields ?? [];
+  const noCostAccess = !scopedAccess || !scopedAccess.hasFactoryAccess || scopedAccess.hideAllCosts;
   const hideSellingPrice =
-    !!factorySettingsData?.hideSellingPrice ||
+    noCostAccess || !!factorySettingsData?.hideSellingPrice ||
     perUserHidden.includes("inventory_sell_price") ||
     perUserHidden.includes("inventory_sell_value") ||
     perUserHidden.includes("hide_export_selling_price");
   const hideAvgCost =
-    !!factorySettingsData?.hideAvgCost ||
+    noCostAccess || !!factorySettingsData?.hideAvgCost ||
     perUserHidden.includes("inventory_avg_rate") ||
     perUserHidden.includes("inventory_total_value") ||
     perUserHidden.includes("hide_export_cost_price");
@@ -176,7 +178,7 @@ export function useFactoryLocationInventory() {
       active: boolean;
     }>
   >({
-    queryKey: ["/api/factory/bale-products"],
+    queryKey: companyQueryKey("/api/factory/bale-products", selectedCompany?.id),
     queryFn: async () => {
       const res = await fetch("/api/factory/bale-products", { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch bale products catalog");
@@ -186,7 +188,7 @@ export function useFactoryLocationInventory() {
   });
 
   const { data: catalogCategories = [] } = useQuery<Array<{ id: number; name: string }>>({
-    queryKey: ["/api/factory/categories"],
+    queryKey: companyQueryKey("/api/factory/categories", selectedCompany?.id),
     queryFn: async () => {
       const res = await fetch("/api/factory/categories", { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch categories");
@@ -218,7 +220,7 @@ export function useFactoryLocationInventory() {
   );
 
   const { data: customers = [] } = useQuery<Customer[]>({
-    queryKey: ["/api/factory/customers"],
+    queryKey: companyQueryKey("/api/factory/customers", selectedCompany?.id),
     enabled: finalizeOpen,
   });
 
