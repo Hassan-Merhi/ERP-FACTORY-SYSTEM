@@ -443,3 +443,61 @@ export async function getHistoricalMixBatchReconciliation(companyId: number): Pr
     client.release();
   }
 }
+
+
+/** Spreadsheet-safe CSV export. One batch row, or one row per persisted source. */
+export function historicalMixAuditCsv(
+  report: HistoricalMixAuditReport,
+  level: "batches" | "sources" = "batches",
+): string {
+  const cell = (value: unknown): string => {
+    const raw = String(value ?? "");
+    // Prevent Excel/LibreOffice formula execution in names/codes/notes.
+    const isFormula = /^[\s]*[=+@-]/.test(raw) && !/^-?(?:\d+(?:\.\d*)?|\.\d+)$/.test(raw.trim());
+    const safe = isFormula ? "'" + raw : raw;
+    return '"' + safe.replace(/"/g, '""').replace(/\r?\n/g, " ") + '"';
+  };
+  const rows: unknown[][] = [];
+  if (level === "batches") {
+    rows.push([
+      "Batch ID", "Batch Code", "Date", "Status", "Deleted", "Classification",
+      "Recorded Kg", "Used Kg", "Source Kg", "Recorded USD", "Source USD",
+      "Recorded USD/kg", "Source Blended USD/kg", "Current-Rate Estimate USD (informational)",
+      "Current Minus Recorded USD (informational)", "Source Count", "Issue Codes",
+    ]);
+    for (const batch of report.batches) {
+      rows.push([
+        batch.batchId, batch.batchCode, batch.batchDate, batch.status, batch.deleted,
+        batch.classification, batch.recordedWeightKg, batch.recordedUsedKg,
+        batch.sourceWeightKg, batch.recordedTotalUsd, batch.sourceTotalUsd,
+        batch.recordedBlendedUsdPerKg, batch.reconstructedBlendedUsdPerKg,
+        batch.currentRateEstimateUsd, batch.currentRateDifferenceUsd,
+        batch.sourceCount, [...new Set(batch.issues.map((issue) => issue.code))].join(" | "),
+      ]);
+    }
+  } else {
+    rows.push([
+      "Batch ID", "Batch Code", "Date", "Status", "Deleted", "Batch Classification",
+      "Source ID", "Supplier ID", "Supplier Name", "Inventory Supplier ID",
+      "Container ID", "Container Number", "Upstream Batch ID", "Upstream Batch Code",
+      "Historical Source Kg", "Historical USD/kg", "Historical Total USD",
+      "Current Supplier USD/kg (informational)", "Prior Adjustments",
+      "Unclassified Prior Adjustments", "Historical Rate Provenance", "Source Issue Codes",
+    ]);
+    for (const batch of report.batches) {
+      for (const source of batch.sources) {
+        rows.push([
+          batch.batchId, batch.batchCode, batch.batchDate, batch.status,
+          batch.deleted, batch.classification, source.sourceId,
+          source.supplierId, source.supplierName, source.inventorySupplierId,
+          source.containerId, source.containerNumber, source.sourceBatchId,
+          source.sourceBatchCode, source.weightKg, source.recordedRateUsdPerKg,
+          source.recordedTotalUsd, source.currentSupplierRateUsdPerKg,
+          source.priorAdjustmentCount, source.unclassifiedPriorAdjustmentCount,
+          source.rateProvenance, source.issues.map((issue) => issue.code).join(" | "),
+        ]);
+      }
+    }
+  }
+  return "\uFEFF" + rows.map((row) => row.map(cell).join(",")).join("\r\n") + "\r\n";
+}
