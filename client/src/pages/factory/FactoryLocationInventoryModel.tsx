@@ -111,7 +111,8 @@ export function useFactoryLocationInventory() {
   const handlePrint = useReactToPrint({ contentRef: printRef });
 
   const { data: locations = [], isLoading: locationsLoading } = useQuery<Location[]>({
-    queryKey: ["/api/locations"],
+    queryKey: companyQueryKey("/api/locations", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
   });
 
   const { data: myAccess } = useQuery<FactoryMyAccess>({
@@ -151,7 +152,7 @@ export function useFactoryLocationInventory() {
       if (!response.ok) throw new Error("Failed to fetch factory inventory");
       return response.json();
     },
-    enabled: !!selectedLocation,
+    enabled: !!selectedLocation && Boolean(selectedCompany?.id),
   });
 
   const { data: availableInventoryData = [], isLoading: availableLoading } = useQuery<FactoryBaleProduct[]>({
@@ -163,7 +164,7 @@ export function useFactoryLocationInventory() {
       if (!response.ok) throw new Error("Failed to fetch available inventory");
       return response.json();
     },
-    enabled: !!selectedLocation && proformaMode,
+    enabled: !!selectedLocation && proformaMode && Boolean(selectedCompany?.id),
   });
 
   const { data: catalogBaleProducts = [] } = useQuery<
@@ -184,7 +185,7 @@ export function useFactoryLocationInventory() {
       if (!res.ok) throw new Error("Failed to fetch bale products catalog");
       return res.json();
     },
-    enabled: proformaMode || showZeroStock,
+    enabled: Boolean(selectedCompany?.id) && (proformaMode || showZeroStock),
   });
 
   const { data: catalogCategories = [] } = useQuery<Array<{ id: number; name: string }>>({
@@ -221,7 +222,7 @@ export function useFactoryLocationInventory() {
 
   const { data: customers = [] } = useQuery<Customer[]>({
     queryKey: companyQueryKey("/api/factory/customers", selectedCompany?.id),
-    enabled: finalizeOpen,
+    enabled: finalizeOpen && Boolean(selectedCompany?.id),
   });
 
   const createCustomerMutation = useMutation({
