@@ -90,6 +90,31 @@ export function isErpRetailHiddenPath(url: string): boolean {
   return ERP_RETAIL_HIDDEN_ROUTES.has(canonicalErpAccessPath(url));
 }
 
+/** R(...) guarded routes whose role rule is solely feature-dependent or
+ * has one explicit exception below. Add new privileged R routes to an existing
+ * role catalog before registering them; unknown ones must fail closed. */
+export const ERP_FEATURE_GUARDED_ROLE_ROUTES: ReadonlySet<string> = new Set([
+  "/financial-overview",
+  "/transaction-journal",
+  "/my-settings",
+]);
+
+export function isErpDeclaredRoleRoute(url: string): boolean {
+  const path = canonicalErpAccessPath(url);
+  return (
+    isErpDeveloperOnlyRoute(path) ||
+    ERP_DEVELOPER_ADDITIONAL_ROUTES.has(path) ||
+    ERP_ADMIN_ONLY_ROUTES.has(path) ||
+    ERP_ADMIN_OWNER_ONLY_ROUTES.has(path) ||
+    ERP_FEATURE_GUARDED_ROLE_ROUTES.has(path)
+  );
+}
+
+/** Use for all role-gated route registrations, including future routes. */
+export function canEnterErpGuardedRoute(url: string, role: string | null | undefined): boolean {
+  return isErpDeclaredRoleRoute(url) && isErpRouteRoleAllowed(url, role);
+}
+
 export function isErpRouteRoleAllowed(url: string, role: string | null | undefined): boolean {
   const path = canonicalErpAccessPath(url);
   const isDeveloper = role === "Developer";
