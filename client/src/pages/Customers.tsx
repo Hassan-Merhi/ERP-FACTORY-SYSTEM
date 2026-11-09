@@ -21,15 +21,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { insertCustomerSchema, type Customer } from "@shared/schema";
 import { useForm } from "react-hook-form";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+  FormDescription,
+} from "@/components/ui/form";
 import { zodResolver } from "@/lib/form-resolver";
 import {
-  ErpFormProvider as Form,
-  ErpFormControl as FormControl,
-  ErpControlledField as FormField,
-  ErpFormItem as FormItem,
-  ErpFormLabel as FormLabel,
-  ErpFormMessage as FormMessage,
-  ErpFormDescription as FormDescription,
   ErpFormActions,
   ErpPendingButton,
   ErpRecordAction,
