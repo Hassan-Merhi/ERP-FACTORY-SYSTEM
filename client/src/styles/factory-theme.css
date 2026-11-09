@@ -1,0 +1,179 @@
+/*
+ * Factory Mode visual theme – single source of truth.
+ *
+ * Change --factory-brand, --factory-brand-strong and their dark-mode values
+ * here to recolor the entire Factory workspace. ERP/POS/Properties are
+ * intentionally unaffected. Red/green/amber functional status colors remain.
+ *
+ * Factory pages should use semantic bg-background/bg-card/bg-primary,
+ * or the factory-brand-* utilities below, instead of blue/violet literals.
+ */
+.factory-theme {
+  --factory-brand: 264 77% 54%;
+  --factory-brand-strong: 264 78% 45%;
+  --factory-brand-soft: 264 82% 96%;
+  --factory-brand-ink: 264 76% 37%;
+  --factory-brand-border: 264 49% 85%;
+
+  --primary: var(--factory-brand);
+  --ring: var(--factory-brand);
+  --sidebar-primary: var(--factory-brand);
+  --sidebar-ring: var(--factory-brand);
+  --module-factory: var(--factory-brand);
+
+  --background: 260 36% 98%;
+  --card: 0 0% 100%;
+  --popover: 0 0% 100%;
+  --sidebar: 260 45% 97%;
+  --secondary: 261 32% 94%;
+  --muted: 260 25% 94%;
+  --accent: 263 34% 93%;
+  --border: 261 22% 87%;
+  --card-border: 261 22% 87%;
+  --sidebar-border: 262 25% 87%;
+  --sidebar-accent: 263 40% 92%;
+  --input: 262 20% 82%;
+
+  /* Factory navigation section accents inherit one brand, not a rainbow. */
+  --nav-overview: var(--factory-brand);
+  --nav-pinned: var(--factory-brand);
+  --nav-inventory: var(--factory-brand);
+  --nav-sales: var(--factory-brand);
+  --nav-accounting: var(--factory-brand);
+  --nav-analytics: var(--factory-brand);
+  --nav-rentals: var(--factory-brand);
+  --nav-finance: var(--factory-brand);
+  --nav-operations: var(--factory-brand);
+  --nav-bales: var(--factory-brand);
+  --nav-reports: var(--factory-brand);
+  --nav-intelligence: var(--factory-brand);
+  --nav-utility: var(--factory-brand);
+
+  /* Premium shell uses its own tokens: keep them aligned. */
+  --pnav-violet: hsl(var(--factory-brand));
+  --pnav-violet-text: hsl(var(--factory-brand-ink));
+  --pnav-surface: hsl(var(--sidebar));
+  --pnav-raised: hsl(var(--card));
+  --pnav-border: hsl(var(--factory-brand) / .17);
+  --pnav-hover: hsl(var(--factory-brand) / .075);
+  --pnav-active: linear-gradient(100deg, hsl(var(--factory-brand-soft)), hsl(var(--background)));
+  --pnav-brand: linear-gradient(120deg, hsl(var(--factory-brand-soft)), hsl(var(--card)));
+  --pnav-top: linear-gradient(105deg, hsl(var(--card)), hsl(var(--factory-brand-soft)));
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+.dark .factory-theme {
+  --factory-brand: 264 87% 70%;
+  --factory-brand-strong: 264 69% 44%;
+  --factory-brand-soft: 264 33% 19%;
+  --factory-brand-ink: 265 89% 82%;
+  --factory-brand-border: 264 35% 36%;
+
+  --primary: var(--factory-brand);
+  --ring: var(--factory-brand);
+  --sidebar-primary: var(--factory-brand);
+  --sidebar-ring: var(--factory-brand);
+  --module-factory: var(--factory-brand);
+
+  --background: 262 28% 9%;
+  --card: 262 24% 12%;
+  --popover: 263 24% 15%;
+  --sidebar: 263 27% 11%;
+  --secondary: 263 21% 20%;
+  --muted: 262 19% 18%;
+  --accent: 263 30% 22%;
+  --border: 263 18% 24%;
+  --card-border: 263 18% 22%;
+  --sidebar-border: 263 19% 24%;
+  --sidebar-accent: 263 22% 20%;
+  --input: 262 19% 28%;
+
+  --pnav-violet: hsl(var(--factory-brand));
+  --pnav-violet-text: hsl(var(--factory-brand-ink));
+  --pnav-surface: hsl(var(--sidebar));
+  --pnav-raised: hsl(var(--card));
+  --pnav-border: hsl(var(--factory-brand) / .22);
+  --pnav-hover: hsl(var(--factory-brand) / .14);
+  --pnav-active: linear-gradient(105deg, hsl(var(--factory-brand-strong) / .70), hsl(var(--factory-brand-soft)));
+  --pnav-brand: linear-gradient(120deg, hsl(var(--factory-brand-soft)), hsl(var(--sidebar)));
+  --pnav-top: linear-gradient(105deg, hsl(var(--sidebar)), hsl(var(--factory-brand-soft)));
+}
+
+/* The same page canvas remains visible when switching Factory routes. */
+.factory-theme [data-factory-workspace="true"] {
+  background-color: hsl(var(--background));
+}
+
+.factory-theme .factory-brand-gradient {
+  background: linear-gradient(115deg, hsl(var(--factory-brand-strong)), hsl(var(--factory-brand)));
+  color: white;
+}
+.factory-theme .factory-brand-soft {
+  background: hsl(var(--factory-brand-soft));
+  border-color: hsl(var(--factory-brand-border));
+  color: hsl(var(--factory-brand-ink));
+}
+.factory-theme .factory-brand-text {
+  color: hsl(var(--factory-brand-ink));
+}
+.factory-theme .factory-brand-surface {
+  background: hsl(var(--card));
+  border-color: hsl(var(--border));
+}
+
+/*
+ * Legacy Production Targets has a dark, blue-heavy custom skin even in light
+ * mode. Centralize its large surfaces here while preserving intentionally
+ * meaningful KPI/status colors and its existing contrast-safe light text.
+ */
+.factory-theme .production-targets-modern {
+  background: radial-gradient(ellipse at 55% 0%, hsl(var(--factory-brand) / .13), transparent 45%), #161020;
+  border-color: hsl(var(--factory-brand) / .22);
+}
+.factory-theme .production-targets-modern .pt-hero {
+  background: linear-gradient(112deg, #30204c, #21172f 65%, #291c40);
+  border-color: hsl(var(--factory-brand) / .48);
+}
+.factory-theme .production-targets-modern .pt-hero-icon {
+  background: linear-gradient(145deg, #6536ab, #3b235e);
+}
+.factory-theme .production-targets-modern .pt-btn-primary,
+.factory-theme .production-targets-modern .pt-btn-violet {
+  background: #713acc;
+  border-color: #9c73e7;
+  color: white;
+  box-shadow: 0 5px 15px rgba(94, 40, 162, .26);
+}
+.factory-theme .production-targets-modern .pt-btn-primary:hover:not(:disabled),
+.factory-theme .production-targets-modern .pt-btn-violet:hover:not(:disabled) {
+  background: #8651dc;
+}
+.factory-theme .production-targets-modern .pt-hero-controls,
+.factory-theme .production-targets-modern .pt-filters input,
+.factory-theme .production-targets-modern .pt-filters [role="combobox"],
+.factory-theme .production-targets-modern .pt-hero-controls input,
+.factory-theme .production-targets-modern .pt-hero-controls [role="combobox"],
+.factory-theme .production-targets-modern .pt-hero-controls button:not(.pt-btn-primary):not(.pt-btn-gold):not(.pt-btn-wa) {
+  background: #241a36;
+  border-color: rgba(174, 143, 228, .28);
+}
+.factory-theme .production-targets-modern .pt-kpi {
+  background: linear-gradient(120deg, var(--pt-tint), #21182e 82%);
+}
+.factory-theme .production-targets-modern .pt-bonus-banner {
+  background: linear-gradient(110deg, #372047, #241b3c);
+}
+.factory-theme .production-targets-modern .pt-staff-table {
+  background: #1d1629;
+  border-color: rgba(158, 123, 218, .32);
+}
+.factory-theme .production-targets-modern .pt-staff-table thead tr {
+  background: #312344;
+}
+.factory-theme .production-targets-modern .pt-staff-table .pt-worker-row {
+  background: #231a30;
+}
+.factory-theme .production-targets-modern .pt-staff-table .pt-worker-row:hover {
+  background: #332442;
+}
