@@ -13,7 +13,7 @@
 | --- | --- | --- | --- | --- |
 | 1 | Fix rental navigation mismatch | **Code complete** | Static source review complete; browser/runtime checks pending | `e3ac129f5cd36b0b714dce3238bf70b211e0fb3c` |
 | 2 | Typed rental module policy | **Code complete** | Static source parity review passed; runtime/typecheck pending | `60084a305133835447212051b863c9af0745e8ed` through `57771a74a7603ae246908967a0a2f2a1648fc0e6` |
-| 3 | Reporting identity and currency | **Code committed; rollout blocked on verified company ID** | Seven static checks passed; runtime/ID verification outstanding | `62befb3e55efd0439b200496475fe3c370c3189e` through `78e61c82e553ea25c30df07492c9d0fc35fc2414` |
+| 3 | Reporting identity and currency | **Code complete; identity verified** | 11/11 static checks passed; runtime parity pending | `108b08f2a3fc9efc0588b25eb74d724fce1ba42b`, `431943cc27d69d754eb68e438e9d9eb81c63807e` |
 | 4 | Payments and rental view models | **Code complete** | 12 static source checks passed; runtime/typecheck pending | `125c1c66012b2de2619b35796094a30917e76c37` through `652f333a935bcceb84f5565a082fb6dd6dc2e392` |
 | 5 | Permissions and navigation registry | **Code complete** | 13 static consistency checks passed; runtime/role QA pending | `794e2204c31c1fa27cea1ba39d56a5cf89e8ee09` through `ac7bcb0d4056b2dd12182c3ce85761bf3a33874c` |
 | 6 | Final parity and legacy cleanup | Not started | Not started | — |
@@ -79,27 +79,27 @@
 - Switched rental summary cards, historical account-balance explanation and guarantee overlap to an explicitly USD-denominated presenter, retaining the existing legacy USD summary basis and underlying numerical values. Unchanged numeric-only exports do not acquire invented exchange-rate conversions.
 - No server posting, accounts, vouchers, SQL, currency storage or financial calculations changed.
 
-**Identifier configuration — mandatory rollout blocker**
-- The inspected source and audit do **not** establish Hassan Properties' numeric `company.id`; it is not safe to guess one.
-- Supply the verified immutable numeric ID as the build-time environment value `VITE_HASSAN_PROPERTIES_REPORTING_COMPANY_ID`. This value must correspond to the actual Hassan Properties company and `companyType === "properties"`.
-- Without a valid configured ID, the special Hassan Properties historical reconciliation/reporting view is intentionally **disabled** rather than silently assigned to a potentially incorrect company. **This is a visible behavior change until configured.** Do not merge or deploy this phase without confirming the ID and the resulting historical UI parity.
-- Environment variables in this Vite client are public build-time configuration, not secret authorization. Server endpoints remain responsible for access checks; this is a read-only UI gate only.
+**Verified company identity — resolved 2026-11-09**
+- Queried the primary Render production database `database` in the connected `My Workspace` using read-only SQL. The authoritative `public.companies` row is: `id=13`, `code=HP`, `name=HASSAN PROPERTIES`, `company_type=properties`, `active=true`, `base_currency=USD`.
+- Replaced the temporary Vite environment configuration with explicit company ID `13` and code `HP`. The historical reporting predicate requires ID, code, and company type together. It does not compare mutable company names.
+- Removed the obsolete `HISTORICAL_RENT_COMPANY` name constant. The original October 26, 2026 cutoff, voucher-backed selection, and numerical reporting calculations remain unchanged.
+- No production writes, environment variable mutations, SQL migrations, vouchers, backfills, or adjustments were performed.
 
 **Static verification**
-- Re-fetched the relevant source files from the branch; checked seven specific conditions: snapshot cutoff unchanged, no mutable-name gate, numeric ID match, shared policy used by both views, shared money display adopted, summary dollar concatenation removed and no server changes. All seven passed.
-- TypeScript compilation, UI runtime, currency QA and historical reconciliation tests have **not** run; CI intentionally omitted.
+- Eleven source checks passed after re-fetching the working branch files: verified ID, code, company type, both consumers, absence of name comparisons, preserved cutoff and posted-voucher criteria, existing money presenter, CFA label, USD summary basis, and no Vite configuration dependency.
+- The earlier missing-ID gate is now resolved for the verified company. This is static source validation, not proof that historical UI parity or reconciliation amounts are correct in a running app.
+- No CI, TypeScript compilation, runtime/browser tests, or merge were performed.
 
 **Acceptance checklist**
-- [x] Introduce company ID-based reporting policy and remove mutable-name comparisons.
-- [x] Preserve historical cutoff, voucher selection and numeric calculation.
-- [x] Use shared currency presentation for rental monetary display without FX conversions.
-- [x] Commit source changes on the existing working branch.
-- [ ] Confirm Hassan Properties' actual immutable company ID from authoritative company data.
-- [ ] Configure `VITE_HASSAN_PROPERTIES_REPORTING_COMPANY_ID` and confirm the expected historical view is visible **only** for that company.
-- [ ] Verify currency labels, summary basis and historical totals in a running app.
-- [ ] TypeScript compile/typecheck and runtime parity verification (not run per no-CI instruction).
+- [x] Verify Hassan Properties immutable identity from the primary database with read-only queries.
+- [x] Use company ID and code instead of mutable display-name comparison.
+- [x] Remove unresolved Vite environment dependency and obsolete name constant.
+- [x] Preserve 26 October snapshot criteria and existing financial amounts.
+- [x] Complete 11/11 static identity/currency checks.
+- [ ] Browser QA of historical reporting, USD/CFA display and account reconciliation.
+- [ ] Independent TypeScript compilation, integration testing and finance parity review before merge.
 
-**Disposition:** Source refactor committed. **Not fully completed for rollout** until the true company ID is configured and historical UI parity verified. The tracker does not claim an unverified production identity.
+**Disposition:** Phase 3 source implementation complete; verified company identity blocker closed. Runtime and finance parity certification are outstanding for Claude's merge review.
 
 ## Phase 4 — Payments and rental view models
 
@@ -159,7 +159,7 @@
 - [ ] Runtime selected-company switching, Admin/Developer/ERP Tester visibility and backend authorization review.
 - [ ] TypeScript compilation, browser tests and merge integration review (not run).
 
-**Disposition:** Phase 5 frontend source implementation complete. Build, runtime, selected-company session and backend authorization review remain for independent merge certification. Phase 3's company-ID blocker remains open.
+**Disposition:** Phase 5 frontend source implementation complete. Build, runtime, selected-company session and backend authorization review remain for independent merge certification. Phase 3 company-ID blocker resolved; runtime parity QA remains.
 
 ## Mandatory boundaries for phases 2–6
 
