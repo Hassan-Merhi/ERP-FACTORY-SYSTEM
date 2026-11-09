@@ -23,7 +23,7 @@ export function erpReportFileName(
 }
 
 /** Existing ExcelJS worksheet compatibility (headers and values unchanged). */
-export async function exportErpReportRowsExcel<Row extends Record<string, unknown>>({
+export async function exportErpReportRowsExcel<Row extends object>({
   rows,
   sheetName,
   fileName,
