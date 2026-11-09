@@ -439,7 +439,7 @@ export function EditMixBatchDialog({
 
   const handleUpdateSourceWeight = (type: string, sourceId: number, newWeight: string) => {
     const weight = Number(newWeight);
-    if (!/^\\d{1,12}(?:\\.\\d{1,3})?$/.test(newWeight) || !Number.isFinite(weight) || weight <= 0) return;
+    if (!/^\d{1,12}(?:\.\d{1,3})?$/.test(newWeight) || !Number.isFinite(weight) || weight <= 0) return;
     setSourceTouched(true);
     setSourceReview(null);
     setSelectedSources((prev) =>
@@ -914,6 +914,73 @@ export function EditMixBatchDialog({
               completed/used batches stay protected pending the historical reconciliation.
             </p>
 
+            {sourcesChanged && (
+              <div className="space-y-3 rounded-md border border-border p-4" data-testid="mix-source-edit-review">
+                <div>
+                  <p className="text-sm font-semibold">Review Material Source Changes</p>
+                  <p className="text-xs text-muted-foreground">
+                    An explicit review is required before stock allocations can be reversed and reapplied.
+                    This review does not modify inventory or create a voucher.
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="mix-source-edit-reason">Reason for changing recorded materials</Label>
+                  <Textarea
+                    id="mix-source-edit-reason"
+                    value={sourceEditReason}
+                    onChange={(event) => {
+                      setSourceEditReason(event.target.value);
+                      setSourceReview(null);
+                    }}
+                    rows={2}
+                    placeholder="Explain the source or weight correction (at least 10 characters)"
+                    data-testid="input-mix-source-edit-reason"
+                  />
+                </div>
+                {sourceReview && (
+                  <div className="space-y-2 rounded-md border bg-muted/30 p-3" data-testid="mix-source-review-result">
+                    <div className="flex items-center gap-2 text-sm font-semibold">
+                      <Badge variant={sourceReview.allowed ? "secondary" : "destructive"}>
+                        {sourceReview.allowed ? "Safe to apply" : "Correction blocked"}
+                      </Badge>
+                      <span>Server-verified proposal</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Saved kg</p>
+                        <p className="font-mono">{formatNumber(Number(sourceReview.recordedWeightKg), 3)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Proposed kg</p>
+                        <p className="font-mono">{formatNumber(Number(sourceReview.proposedWeightKg), 3)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Saved USD</p>
+                        <p className="font-mono">${formatNumber(Number(sourceReview.recordedTotalCost), 4)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Estimated USD</p>
+                        <p className="font-mono">
+                          {sourceReview.estimatedTotalCost == null
+                            ? "Unavailable"
+                            : "$" + formatNumber(Number(sourceReview.estimatedTotalCost), 4)}
+                        </p>
+                      </div>
+                    </div>
+                    {sourceReview.estimatedDeltaUsd != null && (
+                      <p className="text-xs text-muted-foreground">
+                        Estimated valuation difference: ${formatNumber(Number(sourceReview.estimatedDeltaUsd), 4)} USD.
+                        The server recalculates the cost during the final transaction.
+                      </p>
+                    )}
+                    {sourceReview.warnings.map((warning, i) => (
+                      <p key={i} role="alert" className="text-xs text-destructive">{warning}</p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Notes */}
             <div className="space-y-2">
               <Label>Notes</Label>
@@ -926,16 +993,33 @@ export function EditMixBatchDialog({
               />
             </div>
 
-            <div className="flex justify-end gap-2">
+            <div className="flex flex-wrap justify-end gap-2">
               <Button variant="outline" onClick={() => onOpenChange(false)} data-testid="button-cancel-edit">
                 Cancel
               </Button>
+              {sourcesChanged && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => previewMutation.mutate()}
+                  disabled={previewMutation.isPending || saveMutation.isPending || !currentSources || selectedSources.length === 0}
+                  data-testid="button-preview-source-edit"
+                >
+                  {previewMutation.isPending ? "Reviewing…" : "Review Source Changes"}
+                </Button>
+              )}
               <Button
                 onClick={() => saveMutation.mutate()}
-                disabled={saveMutation.isPending || sourcesError || !currentSources || selectedSources.length === 0}
+                disabled={
+                  saveMutation.isPending || previewMutation.isPending || !!sourcesError ||
+                  !currentSources || selectedSources.length === 0 ||
+                  (sourcesChanged && (!sourceReview?.allowed || !sourceReview.reviewHash))
+                }
                 data-testid="button-save-edit"
               >
-                {saveMutation.isPending ? "Saving…" : "Save Changes"}
+                {saveMutation.isPending
+                  ? "Saving…"
+                  : sourcesChanged ? "Apply Reviewed Changes" : "Save Changes"}
               </Button>
             </div>
           </div>
