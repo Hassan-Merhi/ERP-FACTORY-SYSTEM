@@ -151,6 +151,11 @@ export const FACTORY_NAV_SECTIONS: FactoryNavSection[] = FACTORY_SIDEBAR_GROUP_O
       page.key !== "factory/monthly-production-matrix" &&
       page.key !== "factory/sheets-sacks",
   );
+  const orderedPages = label === "Others"
+    ? [...pages].sort((a, b) =>
+        ["factory/stock-query", "factory/tickets"].indexOf(a.key) -
+        ["factory/stock-query", "factory/tickets"].indexOf(b.key))
+    : pages;
   return {
     label,
     color: FACTORY_SIDEBAR_COLORS[label],
@@ -174,7 +179,7 @@ export const FACTORY_NAV_SECTIONS: FactoryNavSection[] = FACTORY_SIDEBAR_GROUP_O
             },
           ]
         : []),
-      ...pages.map((page) => ({
+      ...orderedPages.map((page) => ({
       title:
         page.key === "factory/invoicing"
           ? "Invoices & Loading"
