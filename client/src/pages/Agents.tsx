@@ -28,7 +28,6 @@ import {
   withPartyDisplayBalance,
   type Account,
 } from "./agents/agentStatementMath";
-import { buildAgentStatementExcelRows, exportAgentStatementExcel } from "./agents/agentStatementExcel";
 import { useAgentLedger } from "./agents/useAgentLedger";
 import { AgentListPanel } from "./agents/AgentListPanel";
 import { AgentStatementPanel } from "./agents/AgentStatementPanel";
@@ -128,6 +127,8 @@ export default function Agents() {
       isMultiCurrency && displayCurrency && exchangeRate
         ? `Displayed in ${selectedCurrency}; 1 ${baseCurrency} = ${exchangeRate.toLocaleString(undefined, { maximumFractionDigits: 6 })} ${displayCurrency}`
         : null;
+    // Load the spreadsheet implementation only when the user exports; it is not needed to open the ledger.
+    const { buildAgentStatementExcelRows, exportAgentStatementExcel } = await import("./agents/agentStatementExcel");
     const rows = buildAgentStatementExcelRows({
       account: selectedAccount,
       vouchersWithBalance,
