@@ -7,6 +7,8 @@ import FactoryPendingLoadings from "@/pages/factory/FactoryPendingLoadings";
 import FactoryPriorityScan from "@/pages/factory/FactoryPriorityScan";
 import { FileText, Truck } from "lucide-react";
 import type { FactoryMyAccess } from "@shared/apiTypes";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import { TabsList, PillTabButton } from "@/components/ui/tabs";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
@@ -17,24 +19,28 @@ type TabDef = { key: InvoicingTab; label: string };
 const ALL_INVOICING_TABS: readonly InvoicingTab[] = ["proformas", "invoices", "loadings", "pending", "priority"];
 
 export default function FactoryInvoicing() {
+  const { selectedCompany } = useCompany();
   const { language } = useApplicationLanguage();
   const priorityScanLabel = translatePriorityScanText("priorityScan", language);
 
-  const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: ["/api/factory/my-access"], staleTime: 5 * 60000 });
-  const hidden: string[] = myAccess?.hiddenCostFields ?? [];
+  const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id), staleTime: 5 * 60000 });
+  const hidden = myAccess?.companyId === selectedCompany?.id && myAccess.hasFactoryAccess
+    ? myAccess.hiddenCostFields
+    : ["hide_invoicing_proformas_tab","hide_invoicing_invoices_tab","hide_invoicing_loadings_tab","hide_tab_loadings_pending"];
 
   const showProformas = !hidden.includes("hide_invoicing_proformas_tab");
   const showInvoices = !hidden.includes("hide_invoicing_invoices_tab");
   const showLoadings = !hidden.includes("hide_invoicing_loadings_tab");
 
   const { data: settings } = useQuery({
-    queryKey: ["/api/factory/settings"],
+    queryKey: companyQueryKey("/api/factory/settings", selectedCompany?.id),
     queryFn: async () => {
       const r = await fetch("/api/factory/settings");
       return r.ok ? r.json() : {};
     },
     staleTime: 60000,
-    enabled: showLoadings,
+    enabled: showLoadings && Boolean(selectedCompany?.id),
   });
   const showPending =
     showLoadings && settings?.loadingsTabPendingEnabled !== false && !hidden.includes("hide_tab_loadings_pending");
