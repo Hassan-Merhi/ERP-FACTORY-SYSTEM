@@ -26,6 +26,8 @@ interface MixLifecycleDbLine {
   carry_forward_from_id: number | null;
   parent_id: number | null;
   parent_company_id: number | null;
+  parent_status: string | null;
+  parent_deleted_at: string | null;
   parent_batch_code: string | null;
   parent_batch_date: string | null;
   parent_cost_per_kg: string | null;
@@ -41,7 +43,7 @@ export type MixLifecycleIssueCode =
   | "OVERUSED" | "NEGATIVE_USED" | "COMPLETED_WITH_REMAINDER"
   | "CLOSED_WITH_REMAINDER" | "ACTIVE_WITH_ZERO_REMAINDER"
   | "CARRY_PARENT_MISSING" | "CARRY_PARENT_CROSS_COMPANY"
-  | "CARRY_PARENT_NOT_CLOSED" | "CARRY_PARENT_SELF"
+  | "CARRY_PARENT_NOT_CLOSED" | "CARRY_PARENT_DELETED" | "CARRY_PARENT_SELF"
   | "CARRY_SOURCE_MISSING" | "CARRY_SOURCE_INCONSISTENT"
   | "CARRY_RATE_DRIFT" | "CARRY_PARENT_DATED_LATER"
   | "DAILY_USAGE_EXCEEDS_RECORDED_TOTAL"
@@ -131,6 +133,10 @@ export function classifyMixLifecycleEvidence(row: MixLifecycleDbLine, companyId:
       issue("CARRY_PARENT_CROSS_COMPANY", "error", "Carry-forward parent belongs to a different company.");
     } else {
       if (row.parent_id === row.id) issue("CARRY_PARENT_SELF", "error", "Self-referential carry-forward.");
+      if (row.parent_deleted_at !== null) issue("CARRY_PARENT_DELETED", "error", "Carry-forward parent was deleted; its source/stock reversal needs review.");
+      if (!["CLOSED", "COMPLETED"].includes(row.parent_status ?? "")) {
+        issue("CARRY_PARENT_NOT_CLOSED", "review", "Parent mix is not closed; verify the transfer did not duplicate available kg.");
+      }
       if (row.parent_batch_date && row.batch_date && row.parent_batch_date.slice(0, 10) > row.batch_date.slice(0, 10)) {
         issue("CARRY_PARENT_DATED_LATER", "review", "Carry-forward predates its source mix.");
       }
@@ -222,6 +228,7 @@ export async function getPhase6MixLifecycleReport(companyId: number): Promise<Ph
       "SELECT m.id,m.batch_code,m.status,m.batch_date::text,m.deleted_at::text," +
       "m.total_weight_kg::text,m.used_kg::text,m.cost_per_kg::text,m.total_cost::text," +
       "m.carry_forward_from_id,p.id AS parent_id,p.company_id AS parent_company_id," +
+      "p.status AS parent_status,p.deleted_at::text AS parent_deleted_at," +
       "CASE WHEN p.company_id=m.company_id THEN p.batch_code ELSE NULL END AS parent_batch_code," +
       "p.batch_date::text AS parent_batch_date,p.cost_per_kg::text AS parent_cost_per_kg," +
       "COALESCE(s.cnt,0)::text AS carry_source_count,COALESCE(s.kg,0)::text AS carry_source_kg," +
@@ -233,7 +240,7 @@ export async function getPhase6MixLifecycleReport(companyId: number): Promise<Ph
       "LEFT JOIN LATERAL (SELECT COUNT(*) cnt,COALESCE(SUM(x.weight_kg),0) kg," +
       "COALESCE(SUM(x.total_cost),0) usd FROM factory_mix_batch_sources x " +
       "WHERE x.mix_batch_id=m.id AND x.source_batch_id=m.carry_forward_from_id) s ON TRUE " +
-      "LEFT JOIN LATERAL (SELECT COUNT(*) cnt,COALESCE(SUM(d. kg_used),0) kg " +
+      "LEFT JOIN LATERAL (SELECT COUNT(*) cnt,COALESCE(SUM(d.kg_used),0) kg " +
       "FROM factory_daily_usages d WHERE d.company_id=m.company_id AND d.mix_batch_id=m.id) d ON TRUE " +
       "LEFT JOIN LATERAL (SELECT COUNT(*) cnt FROM factory_mix_batches child " +
       "WHERE child.company_id=m.company_id AND child.carry_forward_from_id=m.id AND child.deleted_at IS NULL) ch ON TRUE " +
