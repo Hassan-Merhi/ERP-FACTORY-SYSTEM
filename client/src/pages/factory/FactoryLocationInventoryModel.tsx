@@ -28,6 +28,11 @@ import { applySortProducts, isSpecialFactoryCategory } from "./factorylocationin
 import { productMatchesSearch } from "@shared/factoryProductSearch";
 import { useFactoryLocationReprint } from "./factorylocationinventory/useFactoryLocationReprint";
 import { buildActiveInventoryData } from "./factorylocationinventory/activeInventory";
+import {
+  buildEditProformaSelections,
+  groupInventoryByCategory,
+  toProformaSelection,
+} from "./factorylocationinventory/inventoryModelHelpers";
 
 export function useFactoryLocationInventory() {
   const { colors } = useLabelDesignColors();
@@ -397,64 +402,12 @@ export function useFactoryLocationInventory() {
       editModeInitialized
     )
       return;
-    const productByArticleCode = new Map<string, FactoryBaleProduct>();
-    inventoryData.forEach((product) => {
-      productByArticleCode.set((product.articleCode || "").toLowerCase(), product);
-    });
-    const newSelections = new Map<number, ProformaSelection>();
-    editProformaLines.forEach((line, index) => {
-      const prod = productByArticleCode.get((line.articleCode || "").toLowerCase());
-      if (prod) {
-        newSelections.set(prod.productId, {
-          productId: prod.productId,
-          articleCode: prod.articleCode,
-          productName: prod.productName,
-          availableBales: prod.baleCount,
-          totalWeight: prod.totalWeight,
-          selectedQty: line.quantity,
-          pricePerBale: line.pricePerBale,
-        });
-      } else {
-        const syntheticId = -(index + 1);
-        newSelections.set(syntheticId, {
-          productId: syntheticId,
-          articleCode: line.articleCode,
-          productName: line.productName || line.articleCode,
-          availableBales: 0,
-          totalWeight: 0,
-          selectedQty: line.quantity,
-          pricePerBale: line.pricePerBale,
-        });
-      }
-    });
+    const newSelections = buildEditProformaSelections(inventoryData, editProformaLines);
     if (newSelections.size > 0) setSelections(newSelections);
     setEditModeInitialized(true);
   }, [editingProformaId, editProformaLines, selectedLocation, inventoryData, inventoryLoading, editModeInitialized]);
 
-  const categoryGroups: CategoryGroup[] = activeInventoryData.reduce((groups, item) => {
-    const catId = item.categoryId || 0;
-    let group = groups.find((g) => (g.categoryId || 0) === catId);
-    if (!group) {
-      group = {
-        categoryId: item.categoryId,
-        categoryName: item.category || "Uncategorized",
-        baleCount: 0,
-        totalWeight: 0,
-        totalCost: 0,
-        totalSellValue: 0,
-        productCount: 0,
-        products: [],
-      };
-      groups.push(group);
-    }
-    group.baleCount += item.baleCount;
-    group.totalWeight += item.totalWeight;
-    group.totalCost += item.totalCost;
-    group.totalSellValue += (item.baleCount - (item.loadingCount ?? 0)) * parseFloat(item.sellingPrice || "0");
-    group.productCount += 1;
-    group.products.push(item);
-    return groups;
-  }, [] as CategoryGroup[]);
+  const categoryGroups: CategoryGroup[] = groupInventoryByCategory(activeInventoryData);
 
   const sortedLocations = [...locations].sort((a, b) => a.name.localeCompare(b.name));
   const filteredLocations = sortedLocations.filter((l) => l.name.toLowerCase().includes(locationSearch.toLowerCase()));
@@ -522,17 +475,7 @@ export function useFactoryLocationInventory() {
     setSelections((prev) => {
       const next = new Map(prev);
       filteredProducts.forEach((prod) => {
-        if (!next.has(prod.productId)) {
-          next.set(prod.productId, {
-            productId: prod.productId,
-            articleCode: prod.articleCode,
-            productName: prod.productName,
-            availableBales: prod.baleCount,
-            totalWeight: prod.totalWeight,
-            selectedQty: prod.baleCount,
-            pricePerBale: prod.sellingPrice || "0",
-          });
-        }
+        if (!next.has(prod.productId)) next.set(prod.productId, toProformaSelection(prod));
       });
       return next;
     });
@@ -553,15 +496,7 @@ export function useFactoryLocationInventory() {
       if (next.has(prod.productId)) {
         next.delete(prod.productId);
       } else {
-        next.set(prod.productId, {
-          productId: prod.productId,
-          articleCode: prod.articleCode,
-          productName: prod.productName,
-          availableBales: prod.baleCount,
-          totalWeight: prod.totalWeight,
-          selectedQty: prod.baleCount,
-          pricePerBale: prod.sellingPrice || "0",
-        });
+        next.set(prod.productId, toProformaSelection(prod));
       }
       return next;
     });
