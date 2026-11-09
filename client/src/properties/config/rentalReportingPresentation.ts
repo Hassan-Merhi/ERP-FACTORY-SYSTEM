@@ -1,9 +1,10 @@
 import { getAppDate } from "@/lib/queryClient";
+import { hasVerifiedUsdBasis } from "./rentalCurrencyBasis";
 import type { PaymentsPeriod } from "@/pages/properties/property-rental/components/PropertiesPaymentsPremium";
 
 /** Read-only presentation currency. Never silently add unconverted currencies. */
 export function hasSingleUsdBasis(rows: readonly { currency?: string | null }[]): boolean {
-  return rows.every((row) => !row.currency?.trim() || row.currency.trim().toUpperCase() === "USD");
+  return hasVerifiedUsdBasis(rows);
 }
 
 /** A financial figure explicitly identifies the source of its calculation. */
