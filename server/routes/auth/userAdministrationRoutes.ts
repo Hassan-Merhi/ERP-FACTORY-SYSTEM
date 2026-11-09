@@ -9,6 +9,7 @@ import {
 } from "../../services/security/userPasswordChangeService";
 import { storage } from "../../storage";
 import { erpUserPageAccess, insertUserCompanyRoleSchema, insertUserSchema, userCompanyRoles } from "@shared/schema";
+import { refuseInactiveCreateOnlyAssignment } from "../../services/security/createOnlyActivation";
 import { ERP_TESTER_PAGE_KEYS, ERP_TESTER_ROLE } from "@shared/erpTestCompanyAccess";
 import { and, eq, sql } from "drizzle-orm";
 import { hashPassword, logAudit, verifyPassword } from "../_helpers";
@@ -160,6 +161,12 @@ export function registerUserAdministrationRoutes(app: Express) {
   app.post("/api/user-company-roles", requireAuth, requireRole("Admin"), async (req, res) => {
     try {
       const parsed = insertUserCompanyRoleSchema.parse(req.body);
+      const createOnlyRefusal = refuseInactiveCreateOnlyAssignment({ requestedRole: parsed.role });
+      if (createOnlyRefusal) {
+        return res
+          .status(createOnlyRefusal.status)
+          .json({ code: createOnlyRefusal.code, message: createOnlyRefusal.message });
+      }
       if (parsed.role === "POS" && !parsed.assignedLocationId) {
         return res.status(400).json({ message: "POS role requires an assigned location" });
       }
@@ -218,6 +225,15 @@ export function registerUserAdministrationRoutes(app: Express) {
       }
       const [oldRecord] = await db.select().from(userCompanyRoles).where(eq(userCompanyRoles.id, id)).limit(1);
       if (!oldRecord) return res.status(404).json({ message: "Role assignment not found" });
+      const createOnlyRefusal = refuseInactiveCreateOnlyAssignment({
+        requestedRole: parsed.role,
+        previousRole: oldRecord.role,
+      });
+      if (createOnlyRefusal) {
+        return res
+          .status(createOnlyRefusal.status)
+          .json({ code: createOnlyRefusal.code, message: createOnlyRefusal.message });
+      }
       const effectiveRole = parsed.role ?? oldRecord.role;
       // Phase 21 (B): the role change and its audit row commit together; the
       // sessions are invalidated after commit, as before.

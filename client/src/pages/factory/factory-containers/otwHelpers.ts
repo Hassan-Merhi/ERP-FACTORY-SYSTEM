@@ -1,4 +1,5 @@
 import type { FactoryContainer } from "@shared/schema";
+import { FACTORY_CONTAINER_STATUS_LABELS } from "@shared/factoryStatusPresentation";
 
 export interface ContainerWithSupplier extends FactoryContainer {
   supplierName?: string | null;
@@ -28,17 +29,7 @@ export const OTW_STATUS_LABEL: Record<string, string> = {
   ARRIVED: "Arrived",
 };
 
-export const CONTAINER_STATUS_LABELS: Record<string, string> = {
-  PENDING: "Pending",
-  IN_TRANSIT: "In Transit",
-  ARRIVED: "Arrived",
-  OFFLOADED: "Offloaded",
-  PARTIALLY_RECEIVED: "Partially Offloaded",
-  RECEIVED: "Received",
-  AVAILABLE: "Available",
-  CLOSED: "Closed",
-  COMPLETED: "Completed",
-};
+export const CONTAINER_STATUS_LABELS: Readonly<Record<string, string>> = FACTORY_CONTAINER_STATUS_LABELS;
 
 export function getContainerStatusLabel(status: string): string {
   return CONTAINER_STATUS_LABELS[status] ?? status;

@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import { describe, expect, it } from "vitest";
-const read = (path:string) => fs.readFileSync(path,"utf8");
+const read = (path: string) => fs.readFileSync(path, "utf8");
 const backend = read("server/routes/factory/factoryPressingMachineManagementRoutes.ts");
 const access = read("server/middleware/factoryBackendAccessBoundary.ts");
 const routes = read("server/routes/factoryRoutes.ts");
@@ -9,43 +9,46 @@ const hub = read("client/src/pages/factory/BaleStockEntry.tsx");
 const page = read("client/src/pages/factory/PressingMachineManagement.tsx");
 const report = read("server/routes/factory/factoryPressingReportRoutes.ts");
 
-describe("Simple pressing access — page-authorized user controls",()=>{
-  it("uses existing Factory tab access and lazy mount, just like Ground Scan",()=>{
+describe("Simple pressing access — page-authorized user controls", () => {
+  it("uses existing Factory tab access and lazy mount, just like Ground Scan", () => {
     expect(routes).toContain("registerFactoryPressingMachineManagementRoutes(app)");
-    expect(routes.indexOf('app.use("/api/factory", enforceFactoryBackendAccess)'))
-      .toBeLessThan(routes.indexOf("registerFactoryPressingMachineManagementRoutes(app)"));
+    expect(routes.indexOf('app.use("/api/factory", enforceFactoryBackendAccess)')).toBeLessThan(
+      routes.indexOf("registerFactoryPressingMachineManagementRoutes(app)")
+    );
     expect(access).toContain('requirement("factory/stock-entry", ["hide_tab_stockentry_pressing_machines"])');
-    expect(catalog).toContain('hide_tab_stockentry_pressing_machines');
+    expect(catalog).toContain("hide_tab_stockentry_pressing_machines");
     expect(hub).toContain('data-testid="tab-pressing-machines"');
     expect(page).toContain('data-testid="pressing-machine-management"');
   });
-  it("automatically initializes one internal station for the logged-in user",()=>{
+  it("automatically initializes one internal station for the logged-in user", () => {
     expect(backend).toContain('app.post("/api/factory/pressing-machines/activate"');
-    expect(backend).toContain('getActiveCompanyPermissionContext(req)');
-    expect(backend).toContain('eq(factoryPressingAssignments.userId, userId)');
+    expect(backend).toContain("getActiveCompanyPermissionContext(req)");
+    expect(backend).toContain("eq(factoryPressingAssignments.userId, userId)");
     expect(backend).toContain('machineCode: "PRESSING-SCAN"');
     expect(backend).toContain("pg_advisory_xact_lock");
     expect(backend).toContain("onConflictDoNothing()");
     expect(backend).toContain("currentAssignment(ctx.companyId, ctx.userId, tx)");
     expect(backend).toContain("isNull(factoryPressingAssignments.unassignedAt)");
   });
-  it("rejects unauthorized view-only and inactive users server-side",()=>{
-    expect(backend).toContain('ctx.posViewOnly || ["View Only", "ERP Tester"].includes(ctx.role)');
-    expect(backend).toContain('if (!user?.active)');
+  it("rejects unauthorized view-only and inactive users server-side", () => {
+    expect(backend).toContain('ctx.posViewOnly || ["View Only", "Create Only", "ERP Tester"].includes(ctx.role)');
+    expect(backend).toContain("if (!user?.active)");
     expect(backend).toContain('"PRESSING_WRITE_DENIED"');
     expect(backend).toContain("requireAuth");
   });
-  it("keeps View Only in read-only pressing overview without station setup or scanning",()=>{
-    expect(backend).toContain('canScan: !ctx.posViewOnly && !["View Only", "ERP Tester"].includes(ctx.role)');
+  it("keeps View Only in read-only pressing overview without station setup or scanning", () => {
+    expect(backend).toContain(
+      'canScan: !ctx.posViewOnly && !["View Only", "Create Only", "ERP Tester"].includes(ctx.role)'
+    );
     expect(page).toContain("if (active && access.data && validCompany && !assignment && canScan) void activate()");
     expect(page).toContain("{canScan && !assignment && !access.isLoading");
     expect(page).toContain("{canScan && <div");
     expect(page).toContain("fullControls || viewOnly");
     expect(page).toContain('data-testid="pressing-view-only-notice"');
     expect(report).toContain('ctx.role === "View Only"');
-    expect(report).toContain('canCorrect: (ctx.role === "Admin" || ctx.role === "Owner")');
+    expect(report).toContain("canCorrect: canEditPressingTargets(ctx.role, ctx.posViewOnly)");
   });
-  it("has NO shift, downtime, machine target or manual user assignment interfaces",()=>{
+  it("has NO shift, downtime, machine target or manual user assignment interfaces", () => {
     expect(page).not.toContain("PressingShiftAnalytics");
     expect(page).not.toContain("targetBalesPerHour");
     expect(page).not.toContain("MachineManagerCard");
@@ -54,7 +57,7 @@ describe("Simple pressing access — page-authorized user controls",()=>{
     expect(backend).not.toContain('"/api/factory/pressing-machines/assignments"');
     expect(backend).not.toContain("targetBalesPerHour");
   });
-  it("does not touch bale state, stock costing or vouchers",()=>{
+  it("does not touch bale state, stock costing or vouchers", () => {
     expect(backend).not.toMatch(/(?:update|insert|delete)\(factoryBales\)/);
     expect(backend).not.toMatch(/adjustInventory|postStockMovementTx|writeDaybookEntry/);
   });

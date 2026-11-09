@@ -64,6 +64,7 @@ export const FACTORY_TAB_ROUTE_RESTRICTIONS: readonly FactoryTabRouteRestriction
     hiddenKeys: ["hide_tab_loadings_pending"],
     fallback: "/factory/invoicing",
   },
+  { prefix: "/factory/sales/loading/dispatch", hiddenKeys: ["hide_invoicing_loadings_tab"], fallback: "/factory/invoicing" },
   { prefix: "/factory/sales/loading/new", hiddenKeys: ["hide_invoicing_loadings_tab"], fallback: "/factory/invoicing" },
   { prefix: "/factory/sales/loadings", hiddenKeys: ["hide_invoicing_loadings_tab"], fallback: "/factory/invoicing" },
 

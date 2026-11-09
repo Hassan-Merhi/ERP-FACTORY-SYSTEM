@@ -8,12 +8,16 @@
  *   Owner / Manager / POS → allowed by default; enabled=false in DB = restricted
  *   Normal User           → denied by default; enabled=true in DB = explicitly allowed
  *   ERP Tester            → Manager-style operational permissions, with Settings always denied
+ *   Create Only           → View Only-style reads; settings, edit/approve/import/bulk actions
+ *                           always denied; sensitive money fields opt-in (shared/createOnlyRolePolicy)
  *
  * Usage pattern:
  *   const permissions = await storage.getRoleFeaturePermissions(companyId);
  *   const permMap = buildPermissionMap(permissions, req.user.role);
  *   if (!canAccessPage(req.user.role, "page_dashboard", permMap)) { return 403; }
  */
+
+import { isCreateOnlyFeatureAllowed, isCreateOnlyRole } from "@shared/createOnlyRolePolicy";
 
 export type PermissionRow = {
   role: string;
@@ -48,6 +52,8 @@ function isAllowed(role: string, featureKey: string, permMap: Map<string, boolea
   }
 
   const stored = permMap.get(featureKey);
+
+  if (isCreateOnlyRole(role)) return isCreateOnlyFeatureAllowed(featureKey, stored);
 
   if (role === "Normal User") {
     // Deny-by-default: only allow if there is an explicit enabled=true record

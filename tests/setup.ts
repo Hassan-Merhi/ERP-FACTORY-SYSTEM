@@ -99,7 +99,17 @@ function testCompanyType(prefix: string): "erp" | "factory" {
  * write guard and operator routes) where server/index.ts does: after the
  * session, before the routes. Tests that mock the edge configuration use it.
  */
-export async function setupTestApp(options: { edgeBoundary?: boolean } = {}): Promise<express.Express> {
+export interface TestAppOptions {
+  edgeBoundary?: boolean;
+  /**
+   * Mount the global role write guards exactly as server/index.ts does
+   * (View Only, Create Only, ERP Tester), right after the session middleware.
+   * Off by default so existing suites keep their current behaviour.
+   */
+  productionWriteGuards?: boolean;
+}
+
+export async function setupTestApp(options: TestAppOptions = {}): Promise<express.Express> {
   const app = createHttpApp();
   app.use(express.json());
   app.use(express.urlencoded({ extended: false }));
@@ -113,6 +123,14 @@ export async function setupTestApp(options: { edgeBoundary?: boolean } = {}): Pr
       cookie: { secure: false, httpOnly: true, maxAge: 30 * 60 * 1000 },
     })
   );
+
+  if (options.productionWriteGuards) {
+    const { blockViewOnlyWrites, blockUnverifiedCreateOnlyWrites, blockErpTesterSettings } =
+      await import("../server/auth");
+    app.use(blockViewOnlyWrites);
+    app.use(blockUnverifiedCreateOnlyWrites);
+    app.use(blockErpTesterSettings);
+  }
 
   if (options.edgeBoundary) {
     const { registerFactoryEdgeBoundary } = await import("../server/edge/edgeBoundary");
@@ -537,8 +555,8 @@ export async function cleanupTestData(prefix: string): Promise<void> {
   await pool.query("DELETE FROM system_settings WHERE key = 'parentCompanyId'");
 }
 
-export async function seedTestData(prefix: string): Promise<TestContext> {
-  const app = await setupTestApp();
+export async function seedTestData(prefix: string, appOptions: TestAppOptions = {}): Promise<TestContext> {
+  const app = await setupTestApp(appOptions);
 
   await cleanupTestData(prefix);
 

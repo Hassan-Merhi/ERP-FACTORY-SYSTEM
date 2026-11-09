@@ -81,7 +81,7 @@ describe("ErpRoutes access guard", () => {
   it("sends ERP View Only from the home route to Tracking even with old dashboard permission", async () => {
     const { ErpRoutes } = await import("@/routes/ErpRoutes");
     const { memory } = mountAt("/", <ErpRoutes user={{ role: "View Only" }} />, [
-      [["/api/my-erp-pages"], { fullAccess: false, pageKeys: ["dashboard", "accounts"] }],
+      [["/api/my-erp-pages", 7], { fullAccess: false, pageKeys: ["dashboard", "accounts"] }],
     ]);
     expect(await screen.findByTestId("page-TrackingHub")).toBeInTheDocument();
     expect(memory.history.at(-1)).toBe("/tracking");
@@ -91,7 +91,7 @@ describe("ErpRoutes access guard", () => {
   it("rejects a direct dashboard URL for ERP View Only even with stale dashboard access", async () => {
     const { ErpRoutes } = await import("@/routes/ErpRoutes");
     const { memory } = mountAt("/financial-overview", <ErpRoutes user={{ role: "View Only" }} />, [
-      [["/api/my-erp-pages"], { fullAccess: false, pageKeys: ["dashboard", "accounts"] }],
+      [["/api/my-erp-pages", 7], { fullAccess: false, pageKeys: ["dashboard", "accounts"] }],
     ]);
     expect(await screen.findByTestId("page-TrackingHub")).toBeInTheDocument();
     expect(memory.history.at(-1)).toBe("/tracking");
@@ -109,7 +109,7 @@ describe("ErpRoutes access guard", () => {
   it("redirects /pos to /tracking when the user's page keys exclude pos", async () => {
     const { ErpRoutes } = await import("@/routes/ErpRoutes");
     const { memory } = mountAt("/pos", <ErpRoutes user={{ role: "Accountant" }} />, [
-      [["/api/my-erp-pages"], { fullAccess: false, pageKeys: ["stock_items"] }],
+      [["/api/my-erp-pages", 7], { fullAccess: false, pageKeys: ["stock_items"] }],
     ]);
 
     expect(await screen.findByTestId("page-TrackingHub")).toBeInTheDocument();
@@ -120,7 +120,7 @@ describe("ErpRoutes access guard", () => {
   it("admits an Owner to ERP Analytics when Analytics is granted", async () => {
     const { ErpRoutes } = await import("@/routes/ErpRoutes");
     mountAt("/analytics", <ErpRoutes user={{ role: "Owner" }} />, [
-      [["/api/my-erp-pages"], { fullAccess: false, pageKeys: ["analytics"] }],
+      [["/api/my-erp-pages", 7], { fullAccess: false, pageKeys: ["analytics"] }],
     ]);
 
     expect(await screen.findByTestId("page-Analytics")).toBeInTheDocument();
@@ -136,7 +136,7 @@ describe("ErpRoutes access guard", () => {
   it("admits /pos when the page keys include pos", async () => {
     const { ErpRoutes } = await import("@/routes/ErpRoutes");
     mountAt("/pos", <ErpRoutes user={{ role: "Accountant" }} />, [
-      [["/api/my-erp-pages"], { fullAccess: false, pageKeys: ["pos"] }],
+      [["/api/my-erp-pages", 7], { fullAccess: false, pageKeys: ["pos"] }],
     ]);
 
     expect(await screen.findByTestId("page-POSPage")).toBeInTheDocument();
@@ -145,7 +145,7 @@ describe("ErpRoutes access guard", () => {
   it("admits a page-keyed route for full-access users regardless of keys", async () => {
     const { ErpRoutes } = await import("@/routes/ErpRoutes");
     mountAt("/inventory", <ErpRoutes user={{ role: "Accountant" }} />, [
-      [["/api/my-erp-pages"], { fullAccess: true, pageKeys: [] }],
+      [["/api/my-erp-pages", 7], { fullAccess: true, pageKeys: [] }],
     ]);
 
     expect(await screen.findByTestId("page-InventoryHub")).toBeInTheDocument();
@@ -154,7 +154,7 @@ describe("ErpRoutes access guard", () => {
   it("keeps ERP Cost Centers Developer-only even for full-access roles", async () => {
     const { ErpRoutes } = await import("@/routes/ErpRoutes");
     const grant: Array<[unknown[], unknown]> = [
-      [["/api/my-erp-pages"], { fullAccess: true, pageKeys: ["accounts"] }],
+      [["/api/my-erp-pages", 7], { fullAccess: true, pageKeys: ["accounts"] }],
     ];
 
     for (const role of ["Admin", "Owner", "Manager"]) {

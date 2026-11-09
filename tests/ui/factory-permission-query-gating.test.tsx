@@ -84,7 +84,7 @@ beforeEach(() => {
 });
 
 describe("Factory Overview payroll reads", () => {
-  async function mountHook(myAccess: FactoryMyAccess) {
+  async function mountHook(myAccess: FactoryMyAccess, loadProductionData = true) {
     const { useDailyProductionReport } = await import("@/pages/factory/dailyproductionreport/useDailyProductionReport");
     const client = new QueryClient({
       defaultOptions: {
@@ -100,8 +100,17 @@ describe("Factory Overview payroll reads", () => {
     const wrapper = ({ children }: { children: React.ReactNode }) => (
       <QueryClientProvider client={client}>{children}</QueryClientProvider>
     );
-    return renderHook(() => useDailyProductionReport(), { wrapper });
+    return renderHook(() => useDailyProductionReport(loadProductionData), { wrapper });
   }
+
+  it("does not issue unrelated Overview production and payroll requests on other tabs", async () => {
+    recordFetch();
+    await mountHook(access(), false);
+    await settle();
+    expect(wasRequested("/api/factory/production-value-report")).toBe(false);
+    expect(wasRequested("/api/factory/workers/attendance-report")).toBe(false);
+    expect(wasRequested("/api/factory/monthly-salary-summary")).toBe(false);
+  });
 
   it("does not read the attendance report or salary summary when their Payroll tabs are hidden", async () => {
     recordFetch();

@@ -46,20 +46,20 @@ export const OPERATIONAL_PERMISSIONS = {
     operation: "import",
     permissionType: "action",
     permissionKey: "act_import_data",
-    deniedRoles: ["View Only"],
+    deniedRoles: ["View Only", "Create Only"],
     permissionBypassRoles: ["POS"],
   },
   import: {
     operation: "import",
     permissionType: "action",
     permissionKey: "act_import_data",
-    deniedRoles: ["POS", "View Only"],
+    deniedRoles: ["POS", "View Only", "Create Only"],
   },
   bulkMaintenance: {
     operation: "bulk-maintenance",
     permissionType: "action",
     permissionKey: "act_bulk_operations",
-    deniedRoles: ["POS", "View Only"],
+    deniedRoles: ["POS", "View Only", "Create Only"],
   },
   globalExportCenter: {
     operation: "global-export-center",

@@ -16,6 +16,7 @@ import { useRecentNav } from "@/hooks/use-recent-nav";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Clock, LifeBuoy } from "lucide-react";
 import type { ShellUser } from "@/app/shellUser";
+import { canUsePropertiesCapability, canNavigateProperties, PROPERTIES_NAVIGATION } from "@/properties/config/propertiesNavigation";
 import {
   ModuleHeader,
   ModuleFooter,
@@ -72,33 +73,34 @@ export const PROPERTIES_NAV_SECTIONS: NavSection[] = [
 export function getPropertiesVisibleNavSections(isDeveloper: boolean, canTrade = false): NavSection[] {
   return PROPERTIES_NAV_SECTIONS.map((section) => ({
     ...section,
-    items: section.items.filter(
-      (item) =>
-        (isDeveloper || !item.url.startsWith("/properties/accounting/")) &&
-        (canTrade ||
-          ![
-            "/properties/container-trading",
-            "/properties/linked-trades",
-            "/properties/intercompany-payments",
-            "/properties/intercompany-lifecycle",
-          ].includes(item.url))
-    ),
+    items: section.items.filter((item) => canNavigateProperties(item.url, null, { companyType: "properties", role: isDeveloper ? "Developer" : canTrade ? "Owner" : "User" })),
   })).filter((section) => section.items.length > 0);
 }
 
-export const PROPERTIES_PINNED_DEFAULTS: NavItem[] = [
-  { title: "Daybook", url: "/properties/daybook", icon: BookOpen },
-  { title: "Agent Ledger", url: "/properties/agents", icon: UserRound },
-  { title: "Rentals", url: "/properties/rentals", icon: Building2 },
-  { title: "Accounts", url: "/properties/accounts", icon: Landmark },
-  { title: "Vouchers", url: "/properties/vouchers", icon: FileText },
-  { title: "Analytics", url: "/properties/analytics", icon: BarChart2 },
-];
+// Stable route-keyed icons avoid silently changing icons if the manifest order
+// changes. Labels, URLs and visibility still come from the canonical registry.
+const pinnedIconsByPath = {
+  "/properties/daybook": BookOpen,
+  "/properties/agents": UserRound,
+  "/properties/rentals": Building2,
+  "/properties/accounts": Landmark,
+  "/properties/vouchers": FileText,
+  "/properties/analytics": BarChart2,
+} as const;
+export const PROPERTIES_PINNED_DEFAULTS: NavItem[] = PROPERTIES_NAVIGATION
+  .filter((entry) => entry.navigation === "pinned")
+  .map((entry) => ({
+    title: entry.label,
+    url: entry.path,
+    icon: pinnedIconsByPath[entry.path as keyof typeof pinnedIconsByPath] ?? Building2,
+  }));
 
 export function PropertiesSidebar({ user, onLogout }: { user?: ShellUser; onLogout: () => void | Promise<void> }) {
-  const isAdmin = user?.role === "Admin" || user?.role === "Developer";
-  const isDeveloper = user?.role === "Developer";
-  const canTrade = user?.role === "Developer" || user?.role === "Owner";
+  const { selectedCompany } = useCompany();
+  const isAdmin = canUsePropertiesCapability("admin", user, selectedCompany);
+  const isDeveloper = canUsePropertiesCapability("developer", user, selectedCompany);
+  const canTrade = canUsePropertiesCapability("trading", user, selectedCompany);
+  const canOpenPersonalSettings = canUsePropertiesCapability("personal", user, selectedCompany);
   // These pages are pinned at the top and should not also appear in
   // collapsible sections. Keep the registry entries for command search.
   const visibleSections = useMemo(
@@ -122,8 +124,7 @@ export function PropertiesSidebar({ user, onLogout }: { user?: ShellUser; onLogo
     () => [...PROPERTIES_PINNED_DEFAULTS, ...visibleSections.flatMap((s) => s.items)],
     [visibleSections]
   );
-  const { selectedCompany } = useCompany();
-  const recentItems = useRecentNav(allNavItems, selectedCompany?.id);
+  const recentItems = useRecentNav(allNavItems.filter((item) => canNavigateProperties(item.url, user, selectedCompany)), selectedCompany?.id);
 
   const testIdFor = (i: NavItem) => `link-properties-${i.url.split("/").pop()}`;
 
@@ -178,7 +179,7 @@ export function PropertiesSidebar({ user, onLogout }: { user?: ShellUser; onLogo
             label="Help & Training"
             testId="link-properties-help-training"
           />
-          {user?.role !== "ERP Tester" && (
+          {canOpenPersonalSettings && (
             <SidebarFlatLink
               href="/properties/my-settings"
               icon={KeyRound}

@@ -7,6 +7,7 @@ import { ErpMobileRecordCard, ErpMobileRecordGroup, ErpMobileRecordList } from "
 import type { Unit } from "../types";
 import { fmtMoneyCurrency } from "../utils";
 import { NoteCell } from "./NoteCell";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 
 interface RentalUnitCardsProps {
   landlordView?: boolean;
@@ -93,6 +94,8 @@ function RentalUnitCard({
   onOpen: () => void;
   onDelete: () => void;
 }) {
+  // View Only and Create Only cannot delete existing units.
+  const deleteDisabledReason = useExistingRecordChangeAccess().reason;
   const contract = unit.contract;
   const currency = contract?.currency;
   const outstanding = unit.outstanding ?? 0;
@@ -106,15 +109,31 @@ function RentalUnitCard({
       ? null
       : outstanding > 0
         ? {
-            label: unit.isInternalLeaseProjection ? "Source balance (reference)" : landlordView ? "To collect" : "Outstanding",
+            label: unit.isInternalLeaseProjection
+              ? "Source balance (reference)"
+              : landlordView
+                ? "To collect"
+                : "Outstanding",
             text: fmtMoneyCurrency(outstanding, currency),
-            tone: unit.isInternalLeaseProjection ? "text-muted-foreground" : landlordView ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400",
+            tone: unit.isInternalLeaseProjection
+              ? "text-muted-foreground"
+              : landlordView
+                ? "text-green-600 dark:text-green-400"
+                : "text-red-600 dark:text-red-400",
           }
         : credit > 0
           ? {
-              label: unit.isInternalLeaseProjection ? "Source credit (reference)" : landlordView ? "Owed to tenant" : "Credit",
+              label: unit.isInternalLeaseProjection
+                ? "Source credit (reference)"
+                : landlordView
+                  ? "Owed to tenant"
+                  : "Credit",
               text: fmtMoneyCurrency(credit, currency),
-              tone: unit.isInternalLeaseProjection ? "text-muted-foreground" : landlordView ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400",
+              tone: unit.isInternalLeaseProjection
+                ? "text-muted-foreground"
+                : landlordView
+                  ? "text-red-600 dark:text-red-400"
+                  : "text-green-600 dark:text-green-400",
             }
           : { label: "Outstanding", text: fmtMoneyCurrency(0, currency), tone: "text-muted-foreground" };
 
@@ -140,7 +159,9 @@ function RentalUnitCard({
             <Badge className="bg-violet-600 text-xs text-white">
               {unit.sourceModule === "ERP" ? "ERP reference" : "Factory reference"}
             </Badge>
-          ) : unit.isShared ? <Badge className="bg-sky-600 text-xs text-white">Shared</Badge> : null}
+          ) : unit.isShared ? (
+            <Badge className="bg-sky-600 text-xs text-white">Shared</Badge>
+          ) : null}
         </>
       }
       value={
@@ -193,9 +214,11 @@ function RentalUnitCard({
             >
               Note
             </div>
-            {unit.isInternalLeaseProjection
-              ? <p className="text-sm">{contract.notes || "—"}</p>
-              : <NoteCell contractId={contract.id} note={contract.notes} testId={`unit-${unit.id}`} />}
+            {unit.isInternalLeaseProjection ? (
+              <p className="text-sm">{contract.notes || "—"}</p>
+            ) : (
+              <NoteCell contractId={contract.id} note={contract.notes} testId={`unit-${unit.id}`} />
+            )}
           </div>
         ) : undefined
       }
@@ -219,8 +242,12 @@ function RentalUnitCard({
                 size="icon"
                 variant="ghost"
                 className="h-10 w-10 text-muted-foreground hover:text-destructive"
-                onClick={onDelete}
-                aria-label={`Delete unit ${unit.unitNumber}`}
+                onClick={() => {
+                  if (!deleteDisabledReason) onDelete();
+                }}
+                disabled={!!deleteDisabledReason}
+                title={deleteDisabledReason ?? undefined}
+                aria-label={deleteDisabledReason ?? `Delete unit ${unit.unitNumber}`}
                 data-testid={`button-delete-unit-${unit.id}`}
               >
                 <Trash2 className="h-4 w-4" />

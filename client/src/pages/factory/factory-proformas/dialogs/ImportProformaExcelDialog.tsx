@@ -100,7 +100,9 @@ export function ImportProformaExcelDialog({
           </div>
 
           <div>
-            <Label className="text-sm font-medium mb-1 block">Destination <span className="text-destructive">*</span></Label>
+            <Label className="text-sm font-medium mb-1 block">
+              Destination <span className="text-destructive">*</span>
+            </Label>
             <Input
               value={excelImportDestination}
               onChange={(e) => setExcelImportDestination(e.target.value)}
@@ -227,7 +229,13 @@ export function ImportProformaExcelDialog({
           </Button>
           <Button
             onClick={() => {
-              if (!customerId || !excelImportName.trim() || !excelImportDestination.trim() || excelImportLines.length === 0) return;
+              if (
+                !customerId ||
+                !excelImportName.trim() ||
+                !excelImportDestination.trim() ||
+                excelImportLines.length === 0
+              )
+                return;
               bulkImportMutation.mutate({
                 customerId,
                 name: excelImportName.trim(),
@@ -236,7 +244,12 @@ export function ImportProformaExcelDialog({
                 lines: excelImportLines,
               });
             }}
-            disabled={!excelImportName.trim() || !excelImportDestination.trim() || excelImportLines.length === 0 || bulkImportMutation.isPending}
+            disabled={
+              !excelImportName.trim() ||
+              !excelImportDestination.trim() ||
+              excelImportLines.length === 0 ||
+              bulkImportMutation.isPending
+            }
             data-testid="button-confirm-excel-import"
           >
             {bulkImportMutation.isPending ? "Creating…" : `Create Proforma (${excelImportLines.length} lines)`}

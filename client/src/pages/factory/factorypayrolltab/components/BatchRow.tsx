@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { queryClient } from "@/lib/queryClient";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { ProductionBonusDecisionPanel } from "../../factorypayroll/ProductionBonusDecisionPanel";
 import type { BatchRowProps, PayrollRecord } from "../types";
 import { STATUS_CONFIG, fmt, fmtDate } from "../utils";
@@ -38,12 +39,14 @@ export function BatchRow({
   isDeveloper,
 }: BatchRowProps) {
   const [bonusPayrollId, setBonusPayrollId] = useState<number | null>(null);
+  // View Only / Create Only roles see payroll history without pay, undo or delete.
+  const recordChanges = useExistingRecordChangeAccess();
   const isExpanded = expanded.has(group.key);
   const total = group.records.reduce((sum, payroll) => sum + parseFloat(payroll.netSalary || "0"), 0);
   const paidCount = group.records.filter((payroll) => payroll.status === "PAID").length;
   const unpaidCount = group.records.length - paidCount;
   const groupPayable = group.records.filter(
-    (payroll) => payroll.status !== "PAID" && pendingProductionBonus(payroll) <= 0
+    (payroll) => recordChanges.allowed && payroll.status !== "PAID" && pendingProductionBonus(payroll) <= 0
   );
   const allGroupSelected = groupPayable.length > 0 && groupPayable.every((payroll) => selectedIds.has(payroll.id));
   const bonusPayroll = group.records.find((payroll) => payroll.id === bonusPayrollId) ?? null;
@@ -57,14 +60,12 @@ export function BatchRow({
       >
         <div className="flex min-w-0 flex-1 items-center gap-3">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted/70 text-muted-foreground transition-colors group-hover:bg-blue-500/10 group-hover:text-blue-600 dark:group-hover:text-blue-400">
-            {isExpanded ? (
-              <ChevronDown className="h-4 w-4" />
-            ) : (
-              <ChevronRight className="h-4 w-4" />
-            )}
+            {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
           </span>
           <div className="min-w-0">
-            <p className={`flex flex-wrap items-center gap-2 font-semibold tracking-tight ${condensed ? "text-xs" : "text-sm"}`}>
+            <p
+              className={`flex flex-wrap items-center gap-2 font-semibold tracking-tight ${condensed ? "text-xs" : "text-sm"}`}
+            >
               <CalendarDays className="h-4 w-4 shrink-0 text-muted-foreground" />
               {fmtDate(group.periodStart, formatDisplayDate)} – {fmtDate(group.periodEnd, formatDisplayDate)}
             </p>
@@ -76,11 +77,17 @@ export function BatchRow({
         </div>
         <div className="flex shrink-0 items-center gap-2 sm:gap-3">
           <div className="text-right">
-            <p className={`font-mono font-bold tabular-nums ${condensed ? "text-xs" : "text-sm"}`}>${total.toFixed(2)}</p>
+            <p className={`font-mono font-bold tabular-nums ${condensed ? "text-xs" : "text-sm"}`}>
+              ${total.toFixed(2)}
+            </p>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              {paidCount > 0 && <span className="font-medium text-emerald-600 dark:text-emerald-400">{paidCount} paid</span>}
+              {paidCount > 0 && (
+                <span className="font-medium text-emerald-600 dark:text-emerald-400">{paidCount} paid</span>
+              )}
               {paidCount > 0 && unpaidCount > 0 && " · "}
-              {unpaidCount > 0 && <span className="font-medium text-amber-600 dark:text-amber-400">{unpaidCount} pending</span>}
+              {unpaidCount > 0 && (
+                <span className="font-medium text-amber-600 dark:text-amber-400">{unpaidCount} pending</span>
+              )}
             </p>
           </div>
           {groupPayable.length > 0 && (
@@ -98,19 +105,21 @@ export function BatchRow({
               aria-label="Select all payable workers in batch"
             />
           )}
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-9 w-9 rounded-lg text-muted-foreground hover:text-destructive"
-            onClick={(event) => {
-              event.stopPropagation();
-              setDeleteBatchGroup(group);
-            }}
-            data-testid={`button-delete-batch-${group.key}`}
-            title="Delete batch — reverses all payments and accounting entries"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          {recordChanges.allowed && (
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-9 w-9 rounded-lg text-muted-foreground hover:text-destructive"
+              onClick={(event) => {
+                event.stopPropagation();
+                setDeleteBatchGroup(group);
+              }}
+              data-testid={`button-delete-batch-${group.key}`}
+              title="Delete batch — reverses all payments and accounting entries"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       </div>
 
@@ -137,14 +146,18 @@ export function BatchRow({
               {group.records.map((payroll) => {
                 const cfg = STATUS_CONFIG[payroll.status] || STATUS_CONFIG.DRAFT;
                 const pendingBonus = pendingProductionBonus(payroll);
-                const canPay = payroll.status !== "PAID" && pendingBonus <= 0;
+                const canPay = recordChanges.allowed && payroll.status !== "PAID" && pendingBonus <= 0;
                 const hasProductionBonusActivity =
                   Number(payroll.suggestedProductionBonus || 0) > 0 ||
                   Number(payroll.productionBonus || 0) > 0 ||
                   pendingBonus > 0 ||
                   Number(payroll.rejectedProductionBonus || 0) > 0;
                 return (
-                  <TableRow key={payroll.id} className="transition-colors hover:bg-muted/30" data-testid={`row-payroll-${payroll.id}`}>
+                  <TableRow
+                    key={payroll.id}
+                    className="transition-colors hover:bg-muted/30"
+                    data-testid={`row-payroll-${payroll.id}`}
+                  >
                     <TableCell className="pl-8">
                       {canPay && (
                         <Checkbox
@@ -254,6 +267,7 @@ export function BatchRow({
                           </Button>
                         )}
                         {isDeveloper &&
+                          recordChanges.allowed &&
                           (payroll.status === "PAID" || payroll.status === "APPROVED") &&
                           !payroll.cashAccountId && (
                             <Button
@@ -270,25 +284,29 @@ export function BatchRow({
                               <Wrench className="h-4 w-4 text-amber-500" />
                             </Button>
                           )}
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => setUndoTargetId(payroll.id)}
-                          data-testid={`button-undo-payroll-${payroll.id}`}
-                          title="Undo — reverses all accounting entries"
-                        >
-                          <RotateCcw className="h-4 w-4 text-muted-foreground" />
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => setDeleteTargetId(payroll.id)}
-                          data-testid={`button-delete-payroll-${payroll.id}`}
-                          title="Delete payroll — reverse payment and journal entries, then remove the record"
-                          aria-label="Delete payroll and reverse accounting"
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
+                        {recordChanges.allowed && (
+                          <>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => setUndoTargetId(payroll.id)}
+                              data-testid={`button-undo-payroll-${payroll.id}`}
+                              title="Undo — reverses all accounting entries"
+                            >
+                              <RotateCcw className="h-4 w-4 text-muted-foreground" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => setDeleteTargetId(payroll.id)}
+                              data-testid={`button-delete-payroll-${payroll.id}`}
+                              title="Delete payroll — reverse payment and journal entries, then remove the record"
+                              aria-label="Delete payroll and reverse accounting"
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>

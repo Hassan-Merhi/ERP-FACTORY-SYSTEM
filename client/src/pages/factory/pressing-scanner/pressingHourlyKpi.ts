@@ -9,6 +9,12 @@ export type PressingHourlySnapshot = {
   workers: Array<{ userId: string; slot: string; name: string; targetKgPerHour: number }>;
   hours: Array<{ hourStart: string; userId: string; kg: string; bales: number }>;
   hourlyTargetsKg: Record<string, number>;
+  dailyScheduleKg?: Record<string, number>;
+  dailyScheduleEffectiveDay?: string | null;
+  /** Weekly recurring targets keyed by ISO weekday: 1=Mon, ..., 6=Sat. */
+  editableWeeklySchedulesKg?: Record<string, Record<string, number>>;
+  editableWeeklyScheduleEffectiveDays?: Record<string, string | null>;
+  scheduledWorkday?: boolean;
 };
 
 const hourFormatter = new Intl.DateTimeFormat("en-GB", {

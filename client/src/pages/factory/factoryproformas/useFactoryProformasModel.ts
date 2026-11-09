@@ -8,6 +8,9 @@ import { useAppMode } from "@/contexts/AppModeContext";
 import { getApiRequest } from "@/lib/factoryApi";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
+import type { FactoryMyAccess } from "@shared/apiTypes";
+import { factoryRecordChangeAccess } from "../factoryRecordChangeAccess";
 import { read as readExcel, utils as excelUtils, writeFile as writeExcel } from "@/lib/excelHelper";
 import type { CatalogStockItem, Customer, Proforma, ProformaLine } from "./types";
 
@@ -70,22 +73,28 @@ export function useFactoryProformasModel() {
 
   const customerId = selectedCustomerId ? parseInt(selectedCustomerId) : null;
 
-  const { data: myAccess } = useQuery<{ fullAccess: boolean; hiddenCostFields: string[] }>({
-    queryKey: ["/api/factory/my-access"],
+  const { data: myAccess } = useQuery<FactoryMyAccess>({
+    queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
   });
-  const hideProformaPrice = myAccess?.hiddenCostFields?.includes("hide_proforma_price") ?? false;
+  // Cost visibility is fail-closed until the chosen-company access response arrives.
+  const accessReady = Boolean(myAccess && myAccess.companyId === selectedCompany?.id && myAccess.hasFactoryAccess);
+  const hideProformaPrice = !accessReady || myAccess?.hideAllCosts === true ||
+    myAccess?.hiddenCostFields?.includes("hide_proforma_price") === true;
 
   const { data: currentUser } = useQuery<{ role: string }>({ queryKey: ["/api/auth/me"] });
-  const canEdit = ["Admin", "Owner", "Developer"].includes(currentUser?.role || "");
+  // View Only and Create Only company roles never change existing proformas.
+  const recordChanges = factoryRecordChangeAccess(selectedCompany?.role);
+  const canEdit = recordChanges.allowed && ["Admin", "Owner", "Developer"].includes(currentUser?.role || "");
 
   const { data: customers = [], isLoading: customersLoading } = useQuery<Customer[]>({
-    queryKey: ["/api/factory/customers"],
+    queryKey: companyQueryKey("/api/factory/customers", selectedCompany?.id),
   });
 
   // Phase 3: list cards use a genuinely compact summary contract. Individual
   // line arrays are fetched only for cards the user explicitly expands.
   const { data: proformas = [], isLoading: proformasLoading } = useQuery<Proforma[]>({
-    queryKey: [`/api/factory/customer-proformas?customerId=${customerId}&profile=summary`, customerId],
+    queryKey: companyQueryKey(`/api/factory/customer-proformas?customerId=${customerId}&profile=summary`, selectedCompany?.id, customerId),
     queryFn: async () => {
       if (!customerId) return [];
       const response = await modeApiRequest(
@@ -95,7 +104,7 @@ export function useFactoryProformasModel() {
       if (!response.ok) throw new Error("Failed to load proformas");
       return response.json();
     },
-    enabled: !!customerId,
+    enabled: !!customerId && Boolean(selectedCompany?.id),
     staleTime: 60_000,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
@@ -104,12 +113,13 @@ export function useFactoryProformasModel() {
   const expandedProformaIdList = Array.from(expandedProformaIds).sort((a, b) => a - b);
   const expandedProformaQueries = useQueries({
     queries: expandedProformaIdList.map((proformaId) => ({
-      queryKey: ["/api/factory/customer-proformas", proformaId] as const,
+      queryKey: companyQueryKey("/api/factory/customer-proformas", selectedCompany?.id, proformaId),
       queryFn: async () => {
         const response = await modeApiRequest("GET", `/api/factory/customer-proformas/${proformaId}`);
         if (!response.ok) throw new Error("Failed to load proforma items");
         return response.json() as Promise<Proforma>;
       },
+      enabled: Boolean(selectedCompany?.id),
       staleTime: 5 * 60_000,
       gcTime: 15 * 60_000,
       refetchOnWindowFocus: false,
@@ -150,22 +160,23 @@ export function useFactoryProformasModel() {
   // The customer may have different agreed prices at each destination.
   const addLineDestination = proformas.find((p) => p.id === addLineProformaId)?.destination;
   const { data: customerPriceList = [] } = useQuery<{ article_code: string; price_per_bale: string }[]>({
-    queryKey: ["/api/factory/customer-price-lists", customerId, addLineDestination],
+    queryKey: companyQueryKey("/api/factory/customer-price-lists", selectedCompany?.id, customerId, addLineDestination),
     queryFn: async () => {
-      const response = await modeApiRequest("GET",
+      const response = await modeApiRequest(
+        "GET",
         `/api/factory/customer-price-lists/${customerId}?destination=${encodeURIComponent(addLineDestination || "")}`
       );
       if (!response.ok) throw new Error("Failed to load destination prices");
       return response.json();
     },
-    enabled: !!customerId && isAddLineOpen && !!addLineDestination,
+    enabled: !!customerId && isAddLineOpen && !!addLineDestination && Boolean(selectedCompany?.id),
   });
 
   const priceListMap = Object.fromEntries(customerPriceList.map((p) => [p.article_code, p.price_per_bale]));
 
   const { data: locations = [] } = useQuery<{ id: number; name: string; code: string }[]>({
-    queryKey: ["/api/locations"],
-    enabled: !!createLoadingProforma,
+    queryKey: companyQueryKey("/api/locations", selectedCompany?.id),
+    enabled: !!createLoadingProforma && Boolean(selectedCompany?.id),
   });
 
   const createLoadingMutation = useMutation({
@@ -261,7 +272,10 @@ export function useFactoryProformasModel() {
     },
     onSuccess: () => {
       invalidateCustomerProformas();
-      toast({ title: "Destination linked", description: "Only the proforma destination was updated. Item prices are unchanged." });
+      toast({
+        title: "Destination linked",
+        description: "Only the proforma destination was updated. Item prices are unchanged.",
+      });
       setDestinationProforma(null);
       setDestinationValue("");
     },
@@ -417,7 +431,13 @@ export function useFactoryProformasModel() {
   };
 
   const bulkImportMutation = useMutation({
-    mutationFn: async (data: { customerId: number; name: string; destination: string; isActive: boolean; lines: unknown[] }) => {
+    mutationFn: async (data: {
+      customerId: number;
+      name: string;
+      destination: string;
+      isActive: boolean;
+      lines: unknown[];
+    }) => {
       const res = await modeApiRequest("POST", "/api/factory/customer-proformas/bulk", data);
       if (!res.ok) {
         const e = await res.json();
@@ -717,6 +737,7 @@ export function useFactoryProformasModel() {
     customerId,
     hideProformaPrice,
     canEdit,
+    recordChanges,
     customers,
     customersLoading,
     proformas,

@@ -81,6 +81,48 @@ const avatarStyles = [
 const legacyWeeklyHint = (issue: string | null) =>
   issue !== null && /this week uses the weekly flat bonus|pay through weekly bonus payroll|already covered by a weekly bonus review/i.test(issue);
 
+/**
+ * Only combine workers who were linked on THIS date and have the same category.
+ * Checkout offers use each worker's own Stock Entry credits, so summing them
+ * once here gives the actual shared output without changing payment eligibility.
+ */
+export function linkedDailyProgress(
+  worker: BonusSheetWorker, workers: BonusSheetWorker[], date: string,
+): (BonusSheetDay & { linkedMemberIds: number[] }) | null {
+  const day = worker.days.find(entry => entry.date === date);
+  if (!day) return null;
+  const individual = { ...day, linkedMemberIds: [worker.workerId] };
+  const category = day.category.trim().replace(/\s+/g, " ").toLocaleLowerCase();
+  if (day.linkGroupId == null || !category) return individual;
+
+  const matching = workers.map(member => ({
+    workerId: member.workerId,
+    day: member.days.find(entry =>
+      entry.date === date &&
+      entry.linkGroupId === day.linkGroupId &&
+      entry.category.trim().replace(/\s+/g, " ").toLocaleLowerCase() === category),
+  })).filter((entry): entry is { workerId: number; day: BonusSheetDay } => entry.day != null);
+  if (matching.length < 2) return individual;
+
+  return {
+    ...day,
+    produced: matching.reduce((sum, member) => sum + member.day.produced, 0),
+    target: matching.reduce((sum, member) => sum + member.day.target, 0),
+    linkedMemberIds: matching.map(member => member.workerId),
+  };
+}
+
+/** Display totals from each worker's credited daily output once, even in a linked team. */
+export function productionTeamPeriodTotals(members: BonusSheetWorker[]) {
+  const produced = members.reduce((sum, member) =>
+    sum + member.days.reduce((daily, day) => daily + day.produced, 0), 0);
+  const target = members.reduce((sum, member) =>
+    sum + member.days.reduce((daily, day) => daily + day.target, 0), 0);
+  const extra = members.reduce((sum, member) => sum + member.extra, 0);
+  const percent = target > 0 ? Math.min(100, Math.max(0, Math.round(produced / target * 100))) : 0;
+  return { produced, target, extra, percent };
+}
+
 export function ProductionBonusWeeklySheet({
   from, to, workers, selected, onToggle, manualMode = false, manualAmounts = {},
   onAmountChange, manuallyPaidIds = [], renderDayActions, loading,
@@ -147,7 +189,7 @@ export function ProductionBonusWeeklySheet({
           <div>
             <h3 className="text-lg font-semibold tracking-tight">{t("sheetView")}</h3>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              Daily output and individual targets. Weekly flat bonuses are reviewed and paid separately below.
+              Daily output and targets; same-category linked workers share each daily target. Bonuses remain payable individually.
             </p>
           </div>
         </div>
@@ -168,13 +210,14 @@ export function ProductionBonusWeeklySheet({
       <div className="space-y-3 p-3 md:hidden phone-land:block" data-testid="production-bonus-mobile-workers">
         {loading ? <p className="rounded-xl border p-6 text-center text-sm text-muted-foreground">{t("loading")}</p> : null}
         {!loading && !arrangedWorkers.length ? <p className="rounded-xl border p-6 text-center text-sm text-muted-foreground">{t("noRows")}</p> : null}
-        {!loading && arrangedWorkers.map(({ worker, members }, index) => {
+        {!loading && arrangedWorkers.map(({ worker, members, first }, index) => {
           const paidManually = manualMode && manuallyPaidIds.includes(worker.workerId);
           const eligible = !paidManually && (manualMode || worker.readyDays > 0);
           const made = worker.days.reduce((total, day) => total + day.produced, 0);
           const target = worker.days.reduce((total, day) => total + day.target, 0);
           const achieved = target > 0 && made >= target;
           const teamLead = members[0];
+          const teamPeriod = productionTeamPeriodTotals(members);
           return (
             <article key={worker.workerId}
               className={"min-w-0 rounded-xl border bg-card p-3 shadow-sm " +
@@ -187,6 +230,25 @@ export function ProductionBonusWeeklySheet({
                   {worker.workerId === teamLead.workerId
                     ? `${dt("linkedTeam")} · ${members.length} ${t("worker")}`
                     : `${dt("linkedTo")} ${teamLead.workerName}`}
+                </div>
+              )}
+              {first && members.length > 1 && (
+                <div className="mb-3 rounded-lg border border-violet-500/30 bg-violet-500/[0.07] p-3"
+                  data-testid={`linked-mobile-period-total-${worker.workerId}`}>
+                  <div className="flex items-center justify-between gap-2 text-xs font-semibold text-violet-700 dark:text-violet-300">
+                    <span>Linked team period total</span>
+                    <span>{members.length} workers</span>
+                  </div>
+                  <div className="mt-1 flex items-baseline justify-between gap-2 tabular-nums">
+                    <strong className="text-xl">{teamPeriod.produced}</strong>
+                    <span className="text-xs text-muted-foreground">Target: {teamPeriod.target} · +{teamPeriod.extra} extra</span>
+                  </div>
+                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-violet-500/15" role="progressbar"
+                    aria-label="Linked team period target progress" aria-valuemin={0} aria-valuemax={100}
+                    aria-valuenow={teamPeriod.percent}>
+                    <div className="h-full rounded-full bg-violet-500 transition-all"
+                      style={{ width: `${teamPeriod.percent}%` }} />
+                  </div>
                 </div>
               )}
               <div className="flex min-w-0 items-start gap-3">
@@ -242,7 +304,7 @@ export function ProductionBonusWeeklySheet({
                 </summary>
                 <div className="space-y-2 border-t p-2">
                   {dates.map((date) => {
-                    const day = worker.days.find((entry) => entry.date === date);
+                    const day = linkedDailyProgress(worker, visibleWorkers, date);
                     const met = Boolean(day && day.target > 0 && day.produced >= day.target);
                     return (
                       <div key={date} className="rounded-lg border bg-background p-2 text-xs">
@@ -253,7 +315,12 @@ export function ProductionBonusWeeklySheet({
                             {met ? " ✓" : ""}
                           </strong>
                         </div>
-                        {day?.category ? <p className="mt-1 break-words text-muted-foreground">{day.category}</p> : null}
+{day?.category ? <p className="mt-1 break-words text-muted-foreground">{day.category}</p> : null}
+                        {day && day.linkedMemberIds.length > 1 && (
+                          <p className="mt-1 text-[11px] font-semibold text-violet-600 dark:text-violet-300">
+                            Shared daily target · {day.linkedMemberIds.length} workers
+                          </p>
+                        )}
                         {day?.issue && !legacyWeeklyHint(day.issue) && day.status !== "weekly" ? (
                           <p className="mt-1 break-words text-amber-600 dark:text-amber-400">{day.issue}</p>
                         ) : null}
@@ -299,10 +366,10 @@ export function ProductionBonusWeeklySheet({
             {!loading && !visibleWorkers.length && <tr><td colSpan={dates.length + 3} className="px-4 py-12 text-center text-muted-foreground">{t("noRows")}</td></tr>}
             {!loading && arrangedWorkers.map(({ worker, members, first }, index) => {
               const ready = worker.readyDays > 0;
-              const byDate = new Map(worker.days.map(day => [day.date, day]));
               const made = worker.days.reduce((sum, day) => sum + day.produced, 0);
               const target = worker.days.reduce((sum, day) => sum + day.target, 0);
               const achievedWeek = target > 0 && made >= target;
+              const teamPeriod = productionTeamPeriodTotals(members);
               return <tr key={worker.workerId} className="group hover:bg-muted/20">
                 {first && <th scope="row" rowSpan={members.length}
                   className="sticky left-0 z-10 border-b border-r border-border/50 bg-card px-2 py-2 text-left align-top group-hover:bg-muted sm:px-3">
@@ -369,17 +436,41 @@ export function ProductionBonusWeeklySheet({
                   </div>
                 </th>}
                 {dates.map(date => {
-                  const day = byDate.get(date);
+                  const day = linkedDailyProgress(worker, visibleWorkers, date);
+                  const memberIndices = day?.linkedMemberIds.map(workerId =>
+                    arrangedWorkers.findIndex(entry => entry.worker.workerId === workerId)) ?? [];
+                  const orderedIndices = [...memberIndices].sort((left, right) => left - right);
+                  // A spanning cell must not cover unrelated category rows.
+                  // When members are not adjacent, show the same shared result in
+                  // their own cells rather than swallowing another worker's cell.
+                  const canSpan = orderedIndices.length > 1 &&
+                    orderedIndices.every((position, offset) =>
+                      position >= 0 && position === orderedIndices[0] + offset);
+                  if (canSpan && index !== orderedIndices[0]) return null;
+                  const span = canSpan ? orderedIndices.length : 1;
                   const achieved = Boolean(day && day.target > 0 && day.produced >= day.target);
                   const percent = day && day.target > 0
                     ? Math.min(100, Math.max(0, Math.round(day.produced / day.target * 100)))
                     : 0;
-                  const showIssue = Boolean(day?.issue && !legacyWeeklyHint(day.issue) && day.status !== "weekly");
-                  return <td key={date} className="border-b border-r border-border/40 p-1.5 align-middle">
-                    {day ? <div className={"relative min-h-[76px] rounded-xl border px-3 py-3 transition-colors " +
+                  const memberIds = canSpan && day ? day.linkedMemberIds : [worker.workerId];
+                  const issues = [...new Set(memberIds.flatMap(workerId => {
+                    const member = visibleWorkers.find(entry => entry.workerId === workerId);
+                    const entry = member?.days.find(value => value.date === date);
+                    return entry?.issue && !legacyWeeklyHint(entry.issue) && entry.status !== "weekly"
+                      ? [entry.issue] : [];
+                  }))];
+                  const issue = issues.join(" · ");
+                  return <td key={date} rowSpan={span}
+                    data-testid={day && day.linkedMemberIds.length > 1 ? `linked-daily-cell-${date}-${worker.workerId}` : undefined}
+                    data-linked-daily-target={day && day.linkedMemberIds.length > 1 ? "true" : undefined}
+                    className="border-b border-r border-border/40 p-1.5 align-middle">
+                    {day ? <div className={"relative flex min-h-[76px] flex-col justify-center rounded-xl border px-3 py-3 transition-colors " +
                       (achieved
                         ? "border-emerald-500/30 bg-emerald-500/15 dark:bg-emerald-800/35"
-                        : "border-border/60 bg-muted/30 hover:bg-muted/60")}>
+                        : day.linkedMemberIds.length > 1
+                          ? "border-violet-500/30 bg-violet-500/[0.07] dark:bg-violet-500/[0.12]"
+                          : "border-border/60 bg-muted/30 hover:bg-muted/60")}
+                      style={span > 1 ? { minHeight: span * 80 - 4 } : undefined}>
                       <div className="flex items-center justify-between gap-2">
                         <div className="whitespace-nowrap font-bold tabular-nums">
                           <span className="text-lg">{day.produced}</span>
@@ -397,28 +488,63 @@ export function ProductionBonusWeeklySheet({
                       </div>
                       <div className="mt-1 max-w-[132px] truncate text-[11px] font-medium text-muted-foreground"
                         title={day.category}>{day.category || "—"}</div>
-                      {showIssue && <div className="mt-1 max-w-[132px] truncate text-[10px] text-amber-600 dark:text-amber-400" title={day.issue ?? ""}>
-                        {day.issue}
+                      {day.linkedMemberIds.length > 1 && (
+                        <div className="mt-1 text-[10px] font-semibold text-violet-600 dark:text-violet-300">
+                          Shared daily target · {day.linkedMemberIds.length} workers
+                        </div>
+                      )}
+                      {issue && <div className="mt-1 max-w-[132px] truncate text-[10px] text-amber-600 dark:text-amber-400" title={issue}>
+                        {issue}
                       </div>}
-                      {renderDayActions?.(worker.workerId, date)}
+                      {memberIds.map(workerId => {
+                        const action = renderDayActions?.(workerId, date);
+                        if (!action) return null;
+                        const memberName = visibleWorkers.find(entry => entry.workerId === workerId)?.workerName;
+                        return <div key={workerId}>
+                          {span > 1 && <div className="mt-1 text-[10px] text-muted-foreground" dir="auto">{memberName}</div>}
+                          {action}
+                        </div>;
+                      })}
                     </div> : <div className="flex min-h-[76px] items-center justify-center rounded-xl border border-dashed border-border/40 text-muted-foreground/50">—</div>}
                   </td>;
                 })}
-                <td className="border-b border-r border-border/40 p-1.5">
-                  <div className={"flex min-h-[76px] items-center gap-3 rounded-xl border px-3 py-2.5 " +
-                    (achievedWeek ? "border-emerald-500/30 bg-emerald-500/10" : "border-border/60 bg-muted/35")}>
-                    <span className={"flex h-10 w-10 shrink-0 items-center justify-center rounded-lg " +
-                      (achievedWeek ? "bg-emerald-500/15 text-emerald-500" : "bg-muted text-muted-foreground")}>
-                      <BarChart3 className="h-5 w-5" aria-hidden="true" />
-                    </span>
-                    <div className="text-right">
-                      <strong className="block text-xl font-bold tabular-nums">{made}</strong>
-                      <span className="whitespace-nowrap text-[11px] text-muted-foreground">
-                        {t("target")}: {target} · +{worker.extra} {t("extra")}
+                {first && <td rowSpan={members.length}
+                  data-testid={members.length > 1 ? `linked-period-total-${worker.workerId}` : undefined}
+                  className="border-b border-r border-border/40 p-1.5 align-middle">
+                  {members.length > 1 ? (
+                    <div className="flex h-full min-h-[76px] flex-col justify-center rounded-xl border border-violet-500/30 bg-violet-500/[0.08] px-3 py-3"
+                      style={{ minHeight: members.length * 80 - 4 }}>
+                      <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-violet-700 dark:text-violet-300">
+                        <UsersRound className="h-4 w-4" aria-hidden="true" />
+                        Linked team total · {members.length} workers
+                      </div>
+                      <strong className="block text-right text-2xl font-bold tabular-nums">{teamPeriod.produced}</strong>
+                      <span className="block text-right text-[11px] text-muted-foreground">
+                        {t("target")}: {teamPeriod.target} · +{teamPeriod.extra} {t("extra")}
                       </span>
+                      <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-violet-500/15" role="progressbar"
+                        aria-label="Linked team period target progress" aria-valuemin={0} aria-valuemax={100}
+                        aria-valuenow={teamPeriod.percent}>
+                        <div className="h-full rounded-full bg-violet-500 transition-all"
+                          style={{ width: `${teamPeriod.percent}%` }} />
+                      </div>
                     </div>
-                  </div>
-                </td>
+                  ) : (
+                    <div className={"flex min-h-[76px] items-center gap-3 rounded-xl border px-3 py-2.5 " +
+                      (achievedWeek ? "border-emerald-500/30 bg-emerald-500/10" : "border-border/60 bg-muted/35")}>
+                      <span className={"flex h-10 w-10 shrink-0 items-center justify-center rounded-lg " +
+                        (achievedWeek ? "bg-emerald-500/15 text-emerald-500" : "bg-muted text-muted-foreground")}>
+                        <BarChart3 className="h-5 w-5" aria-hidden="true" />
+                      </span>
+                      <div className="text-right">
+                        <strong className="block text-xl font-bold tabular-nums">{made}</strong>
+                        <span className="whitespace-nowrap text-[11px] text-muted-foreground">
+                          {t("target")}: {target} · +{worker.extra} {t("extra")}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </td>}
                 <td className="border-b border-border/40 p-2 text-right align-middle tabular-nums">
                   <strong className={"block whitespace-nowrap text-base font-bold " +
                     (ready ? "text-emerald-600 dark:text-emerald-400" : "")}>

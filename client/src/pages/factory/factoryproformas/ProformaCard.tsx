@@ -35,6 +35,7 @@ import { effectivePricePerBale } from "./utils";
 import { invoicingProformaEditPath } from "@/lib/factoryProformaEditRoutes";
 import type { Proforma, ProformaLine } from "./types";
 import { ProformaLinesTable } from "./ProformaLinesTable";
+import type { FactoryRecordChangeAccess } from "../factoryRecordChangeAccess";
 
 interface ProformaMutationLike<TArgs> {
   isPending: boolean;
@@ -42,6 +43,8 @@ interface ProformaMutationLike<TArgs> {
 }
 
 interface ProformaCardProps {
+  /** View Only / Create Only access: hides or disables proforma changes. */
+  recordChanges: FactoryRecordChangeAccess;
   proforma: Proforma;
   isExpanded: boolean;
   onToggleExpand: () => void;
@@ -113,8 +116,10 @@ export function ProformaCard(props: ProformaCardProps) {
     commitInlineQty,
     onEditLine,
     deleteLineMutation,
+    recordChanges,
   } = props;
 
+  const recordChangeReason = recordChanges.reason ?? undefined;
   const displayLines = detailProforma?.lines ?? [];
   const totalQty = detailProforma ? displayLines.reduce((s, l) => s + l.quantity, 0) : Number(proforma.totalQty || 0);
   const totalWeight = detailProforma
@@ -145,7 +150,11 @@ export function ProformaCard(props: ProformaCardProps) {
             <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
           )}
           <span className="truncate text-base font-bold tracking-tight sm:text-lg">{proforma.name}</span>
-          <Badge variant="outline" className="shrink-0 text-xs" data-testid={`badge-proforma-destination-${proforma.id}`}>
+          <Badge
+            variant="outline"
+            className="shrink-0 text-xs"
+            data-testid={`badge-proforma-destination-${proforma.id}`}
+          >
             {proforma.destination ? `Destination: ${proforma.destination}` : "Destination not linked"}
           </Badge>
           {proforma.isActive && (
@@ -197,9 +206,9 @@ export function ProformaCard(props: ProformaCardProps) {
             size="icon"
             className="h-8 w-8 rounded-lg hover:bg-amber-500/10"
             onClick={() => toggleActiveMutation.mutate({ id: proforma.id, isActive: !proforma.isActive })}
-            disabled={toggleActiveMutation.isPending}
+            disabled={toggleActiveMutation.isPending || !recordChanges.allowed}
             data-testid={`button-toggle-active-proforma-${proforma.id}`}
-            title={proforma.isActive ? "Deactivate" : "Set active"}
+            title={recordChanges.reason ?? (proforma.isActive ? "Deactivate" : "Set active")}
           >
             <Star
               className={
@@ -207,22 +216,29 @@ export function ProformaCard(props: ProformaCardProps) {
               }
             />
           </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 rounded-lg hover:bg-violet-500/10"
-            onClick={() =>
-              navigate(`/factory/dispatch-batches?customerId=${customerId}&proformaId=${proforma.id}&openCreate=1`)
-            }
-            data-testid={`button-create-dispatch-batch-${proforma.id}`}
-            title="Create dispatch batch"
-          >
-            <Truck className="h-4 w-4 text-muted-foreground" />
-          </Button>
+          {!recordChanges.isCreateOnly && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 rounded-lg hover:bg-violet-500/10"
+              onClick={() =>
+                navigate(`/factory/dispatch-batches?customerId=${customerId}&proformaId=${proforma.id}&openCreate=1`)
+              }
+              data-testid={`button-create-dispatch-batch-${proforma.id}`}
+              title="Create dispatch batch"
+            >
+              <Truck className="h-4 w-4 text-muted-foreground" />
+            </Button>
+          )}
           {canEdit && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-violet-500/10" data-testid={`button-proforma-menu-${proforma.id}`}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded-lg hover:bg-violet-500/10"
+                  data-testid={`button-proforma-menu-${proforma.id}`}
+                >
                   <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
                 </Button>
               </DropdownMenuTrigger>
@@ -273,7 +289,12 @@ export function ProformaCard(props: ProformaCardProps) {
               </Button>
             )}
             {canEdit && (
-              <Button size="sm" className="h-9 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-4 font-semibold text-white shadow-sm shadow-violet-500/20 hover:from-violet-500 hover:to-indigo-500" onClick={onAddLine} data-testid={`button-add-line-${proforma.id}`}>
+              <Button
+                size="sm"
+                className="h-9 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-4 font-semibold text-white shadow-sm shadow-violet-500/20 hover:from-violet-500 hover:to-indigo-500"
+                onClick={onAddLine}
+                data-testid={`button-add-line-${proforma.id}`}
+              >
                 <Plus className="mr-1.5 h-3.5 w-3.5" />
                 Add Item
               </Button>
@@ -294,10 +315,15 @@ export function ProformaCard(props: ProformaCardProps) {
               size="sm"
               variant="outline"
               onClick={() => saveAgreedPricesMutation.mutate(proforma.id)}
-              disabled={saveAgreedPricesMutation.isPending || !proforma.destination}
+              disabled={saveAgreedPricesMutation.isPending || !proforma.destination || !recordChanges.allowed}
               className="h-9 rounded-xl border-border/70 bg-background/70 px-3 shadow-sm"
               data-testid={`button-save-agreed-prices-${proforma.id}`}
-              title={proforma.destination ? `Save these as agreed prices for ${proforma.destination}` : "Assign a destination first"}
+              title={
+                recordChangeReason ??
+                (proforma.destination
+                  ? `Save these as agreed prices for ${proforma.destination}`
+                  : "Assign a destination first")
+              }
             >
               <BookmarkCheck className="mr-1.5 h-3.5 w-3.5" />
               Save as Agreed Prices
@@ -306,10 +332,10 @@ export function ProformaCard(props: ProformaCardProps) {
               size="sm"
               variant="outline"
               onClick={() => applyProductionPricesMutation.mutate(proforma.id)}
-              disabled={applyProductionPricesMutation.isPending}
+              disabled={applyProductionPricesMutation.isPending || !recordChanges.allowed}
               className="h-9 rounded-xl border-border/70 bg-background/70 px-3 shadow-sm"
               data-testid={`button-apply-production-prices-${proforma.id}`}
-              title="Set all line prices to the production (cost) price from the catalogue"
+              title={recordChangeReason ?? "Set all line prices to the production (cost) price from the catalogue"}
             >
               Apply Production Price
             </Button>
@@ -317,10 +343,10 @@ export function ProformaCard(props: ProformaCardProps) {
               size="sm"
               variant="outline"
               onClick={() => applyCatalogPricesMutation.mutate(proforma.id)}
-              disabled={applyCatalogPricesMutation.isPending}
+              disabled={applyCatalogPricesMutation.isPending || !recordChanges.allowed}
               className="h-9 rounded-xl border-border/70 bg-background/70 px-3 shadow-sm"
               data-testid={`button-apply-selling-prices-${proforma.id}`}
-              title="Set all line prices to the selling price from the catalogue"
+              title={recordChangeReason ?? "Set all line prices to the selling price from the catalogue"}
             >
               Apply Selling Price
             </Button>

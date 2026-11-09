@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { PageHeader } from "@/components/PageHeader";
+import { ErpListTable } from "@/erp-core";
 
 const formatCurrency = (num: number) => {
   return num.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -12,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
@@ -865,7 +866,7 @@ function ErpPOImport() {
                   </div>
                 </div>
                 <div className="rounded-md border">
-                  <Table>
+                  <ErpListTable pageKey="po-import-preview" companyId={selectedCompany?.id} showDensityControl={false} scrollLabel="PO import preview">
                     <TableHeader className="sticky top-0 z-30 bg-background">
                       <TableRow>
                         <TableHead>PO Number</TableHead>
@@ -892,7 +893,7 @@ function ErpPOImport() {
                         </TableRow>
                       ))}
                     </TableBody>
-                  </Table>
+                  </ErpListTable>
                 </div>
 
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-4 bg-muted rounded-md">

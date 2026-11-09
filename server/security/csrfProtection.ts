@@ -7,7 +7,9 @@
  * attaches the token to every state-changing /api/* request — covering both
  * apiRequest() callers and the ~350 raw fetch sites in legacy pages. Set
  * CSRF_ENFORCE=0 to fall back to warn-only mode if a regression surfaces.
- * Extracted from server/index.ts; behaviour is unchanged.
+ *
+ * Phase 0: production refuses CSRF_ENFORCE=0 unless
+ * CSRF_ALLOW_WARN_ONLY_IN_PRODUCTION=1 is also set (emergency escape hatch only).
  */
 import type { Express } from "express";
 import { randomBytes } from "crypto";
@@ -16,6 +18,20 @@ import { ORIGIN_GUARD_EXEMPT_PATHS } from "./originGuard";
 
 export function registerCsrfProtection(app: Express): void {
   const CSRF_ENFORCE = process.env.CSRF_ENFORCE !== "0";
+
+  // Phase 0: production must not silently degrade to warn-only CSRF.
+  // Emergency escape hatch only — prefer fixing client token attachment.
+  if (
+    process.env.NODE_ENV === "production" &&
+    !CSRF_ENFORCE &&
+    process.env.CSRF_ALLOW_WARN_ONLY_IN_PRODUCTION !== "1"
+  ) {
+    throw new Error(
+      "CSRF_ENFORCE=0 is not allowed in production unless CSRF_ALLOW_WARN_ONLY_IN_PRODUCTION=1 is set. " +
+        "Warn-only CSRF is an emergency escape hatch, not a steady-state production configuration."
+    );
+  }
+
   app.get("/api/csrf-token", (req, res) => {
     const sess = req.session;
     if (!sess.csrfToken) {

@@ -8,6 +8,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { useErpVisibleSections } from "@/components/AppSidebar";
 import { useFactoryVisibleSections } from "@/components/FactorySidebar";
 import { PROPERTIES_PINNED_DEFAULTS, getPropertiesVisibleNavSections } from "@/components/PropertiesSidebar";
+import { canUsePropertiesCapability } from "@/properties/config/propertiesNavigation";
 import { SUPPLIER_PARTNER_SECTIONS } from "@/lib/supplier-partner-navigation";
 import { FACTORY_PINNED_PAGES } from "@shared/factoryAccessRegistry";
 import type { PosNavItem } from "@/app/usePosNavigationItems";
@@ -50,7 +51,8 @@ export function useFactoryHelpTopics(user: HelpUser | undefined): TrainingTopic[
 }
 
 export function usePropertiesHelpTopics(user: HelpUser | undefined): TrainingTopic[] {
-  const isDeveloper = (user?.currentRole ?? user?.role) === "Developer";
+  const { selectedCompany } = useCompany();
+  const isDeveloper = canUsePropertiesCapability("developer", user, selectedCompany);
   return useMemo(
     () =>
       buildHelpTopics("properties", [

@@ -20,12 +20,7 @@ import {
   invalidateCompanyApiFamily,
 } from "@/lib/frontendDataArchitecture";
 import { useToast } from "@/hooks/use-toast";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { ErpReportExportMenu, erpReportFileName, exportErpReportRowsExcel } from "@/erp-core";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -36,13 +31,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { EyeOff, Plus, ChevronDown, FileDown, LayoutList, Layers, BookOpen, ReceiptText, CheckCircle2, Clock3, Wallet } from "lucide-react";
+import { EyeOff, Plus, LayoutList, Layers, BookOpen, ReceiptText, CheckCircle2, Clock3, Wallet } from "lucide-react";
 import { format, addDays } from "date-fns";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { cn } from "@/lib/utils";
 import { isGoldenCoastProgrammeVoucher, isVoucherMutationBlocked } from "@/lib/migratedVoucherGuard";
 import { isBlockingQueryError } from "@/lib/abortError";
-import { utils, writeFile } from "@/lib/excelHelper";
 import { useDateJump } from "@/hooks/use-date-jump";
 import { buildDetailedDaybookRows } from "@/lib/daybook-export";
 import { createVoucherSchema } from "./daybook/types";
@@ -86,6 +80,7 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
   const hiddenErpCosts = myErpPages?.hiddenErpCostFields ?? [];
   const hideAmounts = hiddenErpCosts.includes("daybook_amounts");
   const [activeDaybookTab, setActiveDaybookTab] = useState<"transactions" | "activity">("transactions");
+  const [isExportingReport, setIsExportingReport] = useState(false);
   const {
     periodFilter,
     filters,
@@ -617,10 +612,11 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
       "Total Amount": formatAmount(v.totalAmount),
       Optional: v.optional ? "Yes" : "No",
     }));
-    const ws = utils.json_to_sheet(data);
-    const wb = utils.book_new();
-    utils.book_append_sheet(wb, ws, routineAccountingViewFiltered ? "Operational Filtered" : "Daybook");
-    await writeFile(wb, `${routineAccountingViewFiltered ? "Operational_Filtered_Daybook" : "Daybook"}_${format(new Date(), "yyyy-MM-dd")}.xlsx`);
+    await exportErpReportRowsExcel({
+      rows: data,
+      sheetName: routineAccountingViewFiltered ? "Operational Filtered" : "Daybook",
+      fileName: erpReportFileName(routineAccountingViewFiltered ? "Operational_Filtered_Daybook" : "Daybook", "xlsx"),
+    });
   };
   const handleExportDetailedToExcel = async () => {
     const exportVouchers = await loadAllVouchers();
@@ -628,30 +624,45 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
       exportVouchers as unknown as Array<Record<string, unknown>>,
       formatDisplayDate
     );
-    const ws = utils.json_to_sheet(detailRows);
-    const wb = utils.book_new();
-    utils.book_append_sheet(wb, ws, routineAccountingViewFiltered ? "Operational Detail Filtered" : "Daybook Detail");
-    await writeFile(wb, `${routineAccountingViewFiltered ? "Operational_Filtered_Detail" : "Daybook_Detail"}_${format(new Date(), "yyyy-MM-dd")}.xlsx`);
+    await exportErpReportRowsExcel({
+      rows: detailRows,
+      sheetName: routineAccountingViewFiltered ? "Operational Detail Filtered" : "Daybook Detail",
+      fileName: erpReportFileName(
+        routineAccountingViewFiltered ? "Operational_Filtered_Detail" : "Daybook_Detail",
+        "xlsx",
+      ),
+    });
     toast({ title: "Export complete", description: `${detailRows.length} detail rows exported.` });
+  };
+
+  const runDaybookExport = async (exportAction: () => Promise<void>) => {
+    if (isExportingReport) return;
+    setIsExportingReport(true);
+    try {
+      await exportAction();
+    } catch (error) {
+      toast({
+        title: "Export failed",
+        description: error instanceof Error ? error.message : "Unable to export the Daybook.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsExportingReport(false);
+    }
   };
 
   return (
     <div className="daybook-premium flex min-w-0 flex-col gap-4 p-3 md:gap-5 md:p-6">
       <section className="daybook-hero" aria-label="Daybook heading">
       <PageHeader title="Daybook" subtitle={routineAccountingViewFiltered ? "Operational activity view" : "View all accounting transactions chronologically"} icon={<BookOpen className="h-6 w-6" />} showBackButton>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="daybook-export gap-2">
-              <FileDown className="w-4 h-4" />
-              Export
-              <ChevronDown className="w-4 h-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent>
-            <DropdownMenuItem onClick={handleExportToExcel}>Summary</DropdownMenuItem>
-            <DropdownMenuItem onClick={handleExportDetailedToExcel}>Detailed</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <ErpReportExportMenu
+          className="daybook-export gap-2"
+          busy={isExportingReport}
+          options={[
+            { id: "daybook-summary", label: "Summary", kind: "excel", onSelect: () => runDaybookExport(handleExportToExcel) },
+            { id: "daybook-detail", label: "Detailed", kind: "excel", onSelect: () => runDaybookExport(handleExportDetailedToExcel) },
+          ]}
+        />
         <Button onClick={() => navigate(vouchersBase)} className="daybook-new-voucher gap-2">
           <Plus className="w-4 h-4" />
           New Voucher

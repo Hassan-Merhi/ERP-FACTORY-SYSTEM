@@ -18,6 +18,7 @@ import { AssignProformaDestinationDialog } from "./factory-proformas/dialogs/Ass
 import type { Proforma } from "./factoryproformas/types";
 export default function FactoryProformas() {
   const model = useFactoryProformasModel();
+  const { recordChanges } = model;
   const {
     navigate,
     expandedProformaIds,
@@ -67,6 +68,7 @@ export default function FactoryProformas() {
   return (
     <div className="flex h-full flex-col bg-gradient-to-b from-violet-500/[0.035] via-background to-background dark:from-violet-600/[0.08]">
       <FactoryProformasHeader
+        canCreate={!recordChanges.isCreateOnly}
         customerId={customerId}
         proformas={proformas}
         proformasLoading={proformasLoading}
@@ -119,10 +121,12 @@ export default function FactoryProformas() {
             </div>
             <p className="font-medium text-muted-foreground">No proformas yet</p>
             <p className="text-sm text-muted-foreground mt-1">Create a proforma to define this customer's pricing</p>
-            <Button size="sm" className="mt-4" onClick={() => model.setIsCreateOpen(true)}>
-              <Plus className="mr-1.5 h-3.5 w-3.5" />
-              New Proforma
-            </Button>
+            {!recordChanges.isCreateOnly && (
+              <Button size="sm" className="mt-4" onClick={() => model.setIsCreateOpen(true)}>
+                <Plus className="mr-1.5 h-3.5 w-3.5" />
+                New Proforma
+              </Button>
+            )}
           </div>
         )}
 
@@ -183,9 +187,7 @@ export default function FactoryProformas() {
 
             {proformas
               .filter((p) => p.isActive || showInactive)
-              .filter(
-                (p) => searchAny(proformaSearch, p.name)
-              )
+              .filter((p) => searchAny(proformaSearch, p.name))
               .sort((a, b) => a.name.localeCompare(b.name))
               .map((proforma) => {
                 const isExpanded = expandedProformaIds.has(proforma.id);
@@ -214,6 +216,7 @@ export default function FactoryProformas() {
                     customerId={customerId}
                     hideProformaPrice={model.hideProformaPrice}
                     canEdit={model.canEdit}
+                    recordChanges={recordChanges}
                     formatAmount={model.formatAmount}
                     formatProformaDate={model.formatProformaDate}
                     navigate={navigate}

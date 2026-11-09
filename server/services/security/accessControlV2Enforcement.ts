@@ -16,6 +16,7 @@ import {
   getActiveCompanyPermissionContext,
   ActiveCompanyPermissionContextError,
 } from "./activeCompanyPermissionContext";
+import { getCompanyRequestRuntimeContext } from "./companyRequestRuntimeContext";
 
 export interface VerifiedBusinessAction {
   resource: AccessControlResource;
@@ -37,6 +38,14 @@ export interface VerifiedBusinessAction {
 export function requireVerifiedBusinessAction(spec: VerifiedBusinessAction) {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
+      // Fast path for legacy roles: when neither the session role nor the
+      // canonical role the tenant boundary resolved for this request is
+      // Create Only, nothing here applies, so skip the extra membership lookup.
+      const canonicalRole = getCompanyRequestRuntimeContext()?.role;
+      if (req.session?.currentRole !== CREATE_ONLY_ROLE && canonicalRole !== CREATE_ONLY_ROLE) {
+        next();
+        return;
+      }
       const context = await getActiveCompanyPermissionContext(req);
       if (context.role !== CREATE_ONLY_ROLE) {
         next();

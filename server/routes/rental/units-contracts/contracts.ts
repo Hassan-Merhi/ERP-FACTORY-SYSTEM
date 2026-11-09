@@ -16,76 +16,82 @@ import { eq, and, sql } from "drizzle-orm";
 import { propertyUnits, propertyContracts, insertPropertyContractSchema } from "@shared/schema";
 import { parseId } from "../../../lib/parseId";
 import { logAudit } from "../../_helpers";
+import { requireCreateOnlyVerifiedCreate } from "../../../services/security/createOnlyVerifiedCreates";
 
 export function registerRentalContractRoutes(app: Express, ctx: RentalRoutesContext) {
   const { module, urlPrefix, tag } = ctx;
   // ── START CONTRACT ──
-  app.post(`${urlPrefix}/contracts`, requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = getCompanyId(req);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const data = insertPropertyContractSchema.parse({ ...req.body, companyId });
+  app.post(
+    `${urlPrefix}/contracts`,
+    requireAuth,
+    requireCreateOnlyVerifiedCreate("rentalContracts"),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = getCompanyId(req);
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const data = insertPropertyContractSchema.parse({ ...req.body, companyId });
 
-      const [unit] = await db
-        .select()
-        .from(propertyUnits)
-        .where(
-          and(
-            eq(propertyUnits.id, data.unitId),
-            eq(propertyUnits.companyId, companyId),
-            eq(propertyUnits.module, module)
-          )
-        );
-      if (!unit) return res.status(404).json({ message: "Unit not found" });
+        const [unit] = await db
+          .select()
+          .from(propertyUnits)
+          .where(
+            and(
+              eq(propertyUnits.id, data.unitId),
+              eq(propertyUnits.companyId, companyId),
+              eq(propertyUnits.module, module)
+            )
+          );
+        if (!unit) return res.status(404).json({ message: "Unit not found" });
 
-      const [existing] = await db
-        .select()
-        .from(propertyContracts)
-        .where(
-          and(
-            eq(propertyContracts.companyId, companyId),
-            eq(propertyContracts.module, module),
-            eq(propertyContracts.unitId, data.unitId),
-            eq(propertyContracts.status, "ACTIVE")
-          )
-        );
-      if (existing) return res.status(400).json({ message: "Unit already has an active contract" });
+        const [existing] = await db
+          .select()
+          .from(propertyContracts)
+          .where(
+            and(
+              eq(propertyContracts.companyId, companyId),
+              eq(propertyContracts.module, module),
+              eq(propertyContracts.unitId, data.unitId),
+              eq(propertyContracts.status, "ACTIVE")
+            )
+          );
+        if (existing) return res.status(400).json({ message: "Unit already has an active contract" });
 
-      // Phase 21 (B): the contract and its create audit commit together; the
-      // monthly ledger rows are still written after commit, as before.
-      const created = await db.transaction(async (tx) => {
-        const [contractRow] = await tx
-          .insert(propertyContracts)
-          .values({ ...data, module })
-          .returning();
-        await logAudit(
-          {
-            userId: req.session.userId!,
-            username: req.session.username || "unknown",
-            companyId,
-            action: "create",
-            tableName: "property_contracts",
-            recordId: contractRow.id,
-            recordIdentifier: `Contract#${contractRow.id} Unit#${contractRow.unitId}`,
-            changes: {
-              unitId: { old: null, new: contractRow.unitId },
-              rentalAmount: { old: null, new: contractRow.rentalAmount },
-              startDate: { old: null, new: contractRow.startDate },
+        // Phase 21 (B): the contract and its create audit commit together; the
+        // monthly ledger rows are still written after commit, as before.
+        const created = await db.transaction(async (tx) => {
+          const [contractRow] = await tx
+            .insert(propertyContracts)
+            .values({ ...data, module })
+            .returning();
+          await logAudit(
+            {
+              userId: req.session.userId!,
+              username: req.session.username || "unknown",
+              companyId,
+              action: "create",
+              tableName: "property_contracts",
+              recordId: contractRow.id,
+              recordIdentifier: `Contract#${contractRow.id} Unit#${contractRow.unitId}`,
+              changes: {
+                unitId: { old: null, new: contractRow.unitId },
+                rentalAmount: { old: null, new: contractRow.rentalAmount },
+                startDate: { old: null, new: contractRow.startDate },
+              },
             },
-          },
-          tx
-        );
-        return contractRow;
-      });
-      await ensureMonthlyLedgerRows(created.id);
-      res.json(created);
-    } catch (e: unknown) {
-      if (e instanceof z.ZodError)
-        return res.status(400).json({ message: e.issues.map((err) => err.message).join(", ") });
-      logger.error(`${tag} contracts:`, { error: e });
-      res.status(500).json({ message: getErrorMessage(e) });
+            tx
+          );
+          return contractRow;
+        });
+        await ensureMonthlyLedgerRows(created.id);
+        res.json(created);
+      } catch (e: unknown) {
+        if (e instanceof z.ZodError)
+          return res.status(400).json({ message: e.issues.map((err) => err.message).join(", ") });
+        logger.error(`${tag} contracts:`, { error: e });
+        res.status(500).json({ message: getErrorMessage(e) });
+      }
     }
-  });
+  );
 
   // ── MODIFY RENT ──
   app.patch(`${urlPrefix}/contracts/:id/rent`, requireAuth, async (req: Request, res: Response) => {

@@ -189,28 +189,34 @@ export function registerOrderLoadingRoutes(app: Express) {
 
         // Freeze the CURRENT master at finalization for an ordinary loading.
         // A continuation retains its own persisted remaining-only quantities.
-        const planKind = order.proformaIdUsed
-          ? await getLoadingPlanKind(tx, companyId, orderId)
-          : "snapshot";
+        const planKind = order.proformaIdUsed ? await getLoadingPlanKind(tx, companyId, orderId) : "snapshot";
         const usesLiveMaster = usesLiveMasterProforma(order.status, planKind);
         if (usesLiveMaster && order.proformaIdUsed) {
-          const currentMaster = await tx.select().from(customerProformaLines)
+          const currentMaster = await tx
+            .select()
+            .from(customerProformaLines)
             .where(eq(customerProformaLines.proformaId, order.proformaIdUsed));
-          await tx.delete(customerOrderExpectedLines).where(and(
-            eq(customerOrderExpectedLines.companyId, companyId),
-            eq(customerOrderExpectedLines.orderId, orderId),
-            eq(customerOrderExpectedLines.proformaId, order.proformaIdUsed)
-          ));
+          await tx
+            .delete(customerOrderExpectedLines)
+            .where(
+              and(
+                eq(customerOrderExpectedLines.companyId, companyId),
+                eq(customerOrderExpectedLines.orderId, orderId),
+                eq(customerOrderExpectedLines.proformaId, order.proformaIdUsed)
+              )
+            );
           if (currentMaster.length > 0) {
-            await tx.insert(customerOrderExpectedLines).values(currentMaster.map((line) => ({
-              companyId,
-              orderId,
-              proformaId: order.proformaIdUsed,
-              proformaLineId: line.id,
-              articleCode: line.articleCode,
-              productName: line.productName,
-              expectedQty: line.quantity,
-            })));
+            await tx.insert(customerOrderExpectedLines).values(
+              currentMaster.map((line) => ({
+                companyId,
+                orderId,
+                proformaId: order.proformaIdUsed,
+                proformaLineId: line.id,
+                articleCode: line.articleCode,
+                productName: line.productName,
+                expectedQty: line.quantity,
+              }))
+            );
           }
         }
 

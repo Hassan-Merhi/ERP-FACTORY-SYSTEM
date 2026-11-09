@@ -10,7 +10,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ErpMobileFilters } from "@/components/ui/erp-mobile-filters";
-import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
+import { ErpListTable, ErpRecordAction } from "@/erp-core";
+import { TableHeader, TableBody, TableFooter, TableHead, TableCell, TableRow } from "@/components/ui/table";
+import { useCompany } from "@/contexts/CompanyContext";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState } from "@/components/ui/page-state";
@@ -27,7 +30,6 @@ import {
   List,
   Package,
   Plus,
-  Search,
   Settings,
   Tag,
   Trash2,
@@ -38,11 +40,16 @@ import { PAGE_SIZE } from "./utils";
 import "./StockItemsModern.css";
 import { StockItemsDialogs } from "./StockItemsDialogs";
 import type { useStockItems } from "./useStockItems";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 
 type StockItemsModel = ReturnType<typeof useStockItems>;
 
 export function StockItemsView({ stockItems }: { stockItems: StockItemsModel }) {
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
+  const { selectedCompany } = useCompany();
+  // View Only and Create Only roles cannot change existing stock items.
+  const recordChanges = useExistingRecordChangeAccess();
+  const recordChangeReason = recordChanges.reason ?? undefined;
   const {
     hideStockRates,
     searchTerm,
@@ -97,16 +104,14 @@ export function StockItemsView({ stockItems }: { stockItems: StockItemsModel }) 
   } = stockItems;
 
   const searchControl = (
-    <div className="stock-items-search relative min-w-0 flex-1 sm:min-w-48">
-      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-      <Input
-        placeholder="Search by name or code..."
-        value={searchTerm}
-        onChange={(event) => setSearchTerm(event.target.value)}
-        className="stock-items-search-input pl-9"
-        data-testid="input-search"
-      />
-    </div>
+    <SearchField
+      placeholder="Search by name or code..."
+      value={searchTerm}
+      onValueChange={setSearchTerm}
+      wrapperClassName="stock-items-search min-w-0 flex-1 sm:min-w-48"
+      className="stock-items-search-input"
+      data-testid="input-search"
+    />
   );
   const selectFilters = (
     <>
@@ -174,116 +179,172 @@ export function StockItemsView({ stockItems }: { stockItems: StockItemsModel }) 
   return (
     <div className="stock-items-page flex flex-col gap-5 px-2 pb-5 sm:px-4 sm:py-4 md:px-6">
       <div className="stock-items-hero">
-        <div className="stock-items-hero-art" aria-hidden="true"><Package className="h-24 w-24" strokeWidth={1} /></div>
-      <PageHeader title="Stock Items" subtitle="Manage all stock items in your company" icon={<Package className="h-5 w-5" aria-hidden="true" />}>
-        {selectedIds.length > 0 && (
-          <>
-            <Button
-              variant="outline"
-              className="gap-2"
-              onClick={() => {
-                setPendingCategoryId("");
-                setAssignCategoryDialogOpen(true);
-              }}
-              data-testid="button-assign-category"
-            >
-              <Package className="h-4 w-4" />
-              <span className="hidden sm:inline">Assign Category</span>
-              <span className="sm:hidden">Category</span>
-              <Badge variant="secondary" className="ml-1">
-                {selectedIds.length}
-              </Badge>
-            </Button>
-            <Button
-              variant="destructive"
-              className="gap-2"
-              onClick={() => setDeleteDialogOpen(true)}
-              data-testid="button-delete-selected"
-            >
-              <Trash2 className="h-4 w-4" />
-              Delete {selectedIds.length}
-            </Button>
-          </>
-        )}
-        <Button className="stock-items-add-button gap-2" onClick={() => setCreateDialogOpen(true)} data-testid="button-add-item">
-          <Plus className="h-4 w-4" />
-          Add Item
-        </Button>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="stock-items-manage-button gap-2" data-testid="button-manage-dropdown">
-              <Settings className="h-4 w-4" />
-              Manage
-              <ChevronDown className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => setImportDialogOpen(true)} data-testid="menu-import">
-              <FileSpreadsheet className="h-4 w-4 mr-2" />
-              Import
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => {
-                void refetchAllItems();
-                setAdjustDialogOpen(true);
-              }}
-              data-testid="menu-adjust-stock"
-            >
-              <Edit className="h-4 w-4 mr-2" />
-              Adjust Stock
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={exportToExcel} data-testid="menu-export">
-              <Download className="h-4 w-4 mr-2" />
-              Export Stock Items
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={exportSalesHistory} data-testid="menu-export-sales-history">
-              <Download className="h-4 w-4 mr-2" />
-              Export Sales History
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={() => {
-                setNewGradeName("");
-                setEditingGradeId(null);
-                setManageGradesOpen(true);
-              }}
-              data-testid="menu-manage-grades"
-            >
-              <Tag className="h-4 w-4 mr-2" />
-              Manage Grades
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => {
-                setNewCategoryName("");
-                setEditingCategoryId(null);
-                setManageCategoriesOpen(true);
-              }}
-              data-testid="menu-manage-categories"
-            >
-              <Layers className="h-4 w-4 mr-2" />
-              Manage Categories
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </PageHeader>
+        <div className="stock-items-hero-art" aria-hidden="true">
+          <Package className="h-24 w-24" strokeWidth={1} />
+        </div>
+        <PageHeader
+          title="Stock Items"
+          subtitle="Manage all stock items in your company"
+          icon={<Package className="h-5 w-5" aria-hidden="true" />}
+        >
+          {selectedIds.length > 0 && (
+            <>
+              <Button
+                variant="outline"
+                className="gap-2"
+                onClick={() => {
+                  setPendingCategoryId("");
+                  setAssignCategoryDialogOpen(true);
+                }}
+                disabled={!recordChanges.allowed}
+                title={recordChangeReason}
+                aria-label={recordChanges.reason ?? "Assign category"}
+                data-testid="button-assign-category"
+              >
+                <Package className="h-4 w-4" />
+                <span className="hidden sm:inline">Assign Category</span>
+                <span className="sm:hidden">Category</span>
+                <Badge variant="secondary" className="ml-1">
+                  {selectedIds.length}
+                </Badge>
+              </Button>
+              <Button
+                variant="destructive"
+                className="gap-2"
+                onClick={() => setDeleteDialogOpen(true)}
+                disabled={!recordChanges.allowed}
+                title={recordChangeReason}
+                aria-label={recordChanges.reason ?? `Delete ${selectedIds.length}`}
+                data-testid="button-delete-selected"
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete {selectedIds.length}
+              </Button>
+            </>
+          )}
+          <Button
+            className="stock-items-add-button gap-2"
+            onClick={() => setCreateDialogOpen(true)}
+            data-testid="button-add-item"
+          >
+            <Plus className="h-4 w-4" />
+            Add Item
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                className="stock-items-manage-button gap-2"
+                data-testid="button-manage-dropdown"
+              >
+                <Settings className="h-4 w-4" />
+                Manage
+                <ChevronDown className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {/* Create Only cannot import; View Only sees it disabled. */}
+              {!recordChanges.isCreateOnly && (
+                <DropdownMenuItem
+                  onClick={() => setImportDialogOpen(true)}
+                  disabled={!recordChanges.allowed}
+                  title={recordChangeReason}
+                  data-testid="menu-import"
+                >
+                  <FileSpreadsheet className="h-4 w-4 mr-2" />
+                  Import
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem
+                onClick={() => {
+                  void refetchAllItems();
+                  setAdjustDialogOpen(true);
+                }}
+                disabled={!recordChanges.allowed}
+                title={recordChangeReason}
+                data-testid="menu-adjust-stock"
+              >
+                <Edit className="h-4 w-4 mr-2" />
+                Adjust Stock
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={exportToExcel} data-testid="menu-export">
+                <Download className="h-4 w-4 mr-2" />
+                Export Stock Items
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={exportSalesHistory} data-testid="menu-export-sales-history">
+                <Download className="h-4 w-4 mr-2" />
+                Export Sales History
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => {
+                  setNewGradeName("");
+                  setEditingGradeId(null);
+                  setManageGradesOpen(true);
+                }}
+                disabled={!recordChanges.allowed}
+                title={recordChangeReason}
+                data-testid="menu-manage-grades"
+              >
+                <Tag className="h-4 w-4 mr-2" />
+                Manage Grades
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => {
+                  setNewCategoryName("");
+                  setEditingCategoryId(null);
+                  setManageCategoriesOpen(true);
+                }}
+                disabled={!recordChanges.allowed}
+                title={recordChangeReason}
+                data-testid="menu-manage-categories"
+              >
+                <Layers className="h-4 w-4 mr-2" />
+                Manage Categories
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </PageHeader>
       </div>
 
       <div className="stock-items-metrics" aria-label="Stock items overview">
         <div className="stock-items-metric stock-items-metric-purple">
-          <span className="stock-items-metric-icon"><Package className="h-6 w-6" aria-hidden="true" /></span>
+          <span className="stock-items-metric-icon">
+            <Package className="h-6 w-6" aria-hidden="true" />
+          </span>
           <div className="stock-items-metric-info">
             <span className="stock-items-metric-label">Total Items</span>
-            <strong className="stock-items-metric-value" data-testid="stock-total-items">{totalItems.toLocaleString()}</strong>
+            <strong className="stock-items-metric-value" data-testid="stock-total-items">
+              {totalItems.toLocaleString()}
+            </strong>
           </div>
-          <svg className="stock-items-sparkline" viewBox="0 0 160 52" fill="none" aria-hidden="true"><path d="M2 44 C24 42 27 12 51 21 S81 46 101 28 S133 7 158 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+          <svg className="stock-items-sparkline" viewBox="0 0 160 52" fill="none" aria-hidden="true">
+            <path
+              d="M2 44 C24 42 27 12 51 21 S81 46 101 28 S133 7 158 4"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
+          </svg>
         </div>
         <div className="stock-items-metric stock-items-metric-blue">
-          <span className="stock-items-metric-icon"><Layers className="h-6 w-6" aria-hidden="true" /></span>
+          <span className="stock-items-metric-icon">
+            <Layers className="h-6 w-6" aria-hidden="true" />
+          </span>
           <div className="stock-items-metric-info">
             <span className="stock-items-metric-label">Categories</span>
-            <strong className="stock-items-metric-value" data-testid="stock-category-count">{stockCategories.length}</strong>
+            <strong className="stock-items-metric-value" data-testid="stock-category-count">
+              {stockCategories.length}
+            </strong>
           </div>
-          <svg className="stock-items-sparkline" viewBox="0 0 160 52" fill="none" aria-hidden="true"><path d="M2 44 C20 37 29 12 53 18 S85 39 110 24 S135 7 158 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+          <svg className="stock-items-sparkline" viewBox="0 0 160 52" fill="none" aria-hidden="true">
+            <path
+              d="M2 44 C20 37 29 12 53 18 S85 39 110 24 S135 7 158 14"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
+          </svg>
         </div>
       </div>
 
@@ -309,12 +370,28 @@ export function StockItemsView({ stockItems }: { stockItems: StockItemsModel }) 
                 </Button>
               )}
               <div className="stock-items-layout-switch" role="group" aria-label="Stock items layout">
-                <Button type="button" size="icon" variant="ghost" aria-label="List view" aria-pressed={viewMode === "list"}
-                  onClick={() => setViewMode("list")} data-testid="button-stock-list-view" className={viewMode === "list" ? "stock-items-layout-active" : ""}>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  aria-label="List view"
+                  aria-pressed={viewMode === "list"}
+                  onClick={() => setViewMode("list")}
+                  data-testid="button-stock-list-view"
+                  className={viewMode === "list" ? "stock-items-layout-active" : ""}
+                >
                   <List className="h-4 w-4" />
                 </Button>
-                <Button type="button" size="icon" variant="ghost" aria-label="Grid view" aria-pressed={viewMode === "grid"}
-                  onClick={() => setViewMode("grid")} data-testid="button-stock-grid-view" className={viewMode === "grid" ? "stock-items-layout-active" : ""}>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  aria-label="Grid view"
+                  aria-pressed={viewMode === "grid"}
+                  onClick={() => setViewMode("grid")}
+                  data-testid="button-stock-grid-view"
+                  className={viewMode === "grid" ? "stock-items-layout-active" : ""}
+                >
                   <Grid2X2 className="h-4 w-4" />
                 </Button>
               </div>
@@ -342,165 +419,184 @@ export function StockItemsView({ stockItems }: { stockItems: StockItemsModel }) 
       ) : (
         <>
           {viewMode === "list" ? (
-          <div
-            data-horizontal-scroll="true"
-            className="stock-items-table-shell hidden md:block phone-land:hidden border rounded-xl overflow-x-auto"
-          >
-            <table className="w-full min-w-[800px] text-sm">
-              <thead className="sticky top-0 z-30 bg-muted">
-                <tr className="h-11 bg-muted/40 border-b">
-                  <th className="w-10 px-3">
-                    <Checkbox
-                      checked={allPageSelected}
-                      onCheckedChange={(checked) => handleSelectAll(checked === true)}
-                      data-testid="checkbox-select-all"
-                    />
-                  </th>
-                  <th className="text-left px-3 font-medium">Name</th>
-                  <th className="text-left px-3 font-medium">Group</th>
-                  {stockGrades.length > 0 && <th className="text-left px-3 font-medium">Grade</th>}
-                  {stockCategories.length > 0 && <th className="text-left px-3 font-medium">Category</th>}
-                  <th className="text-left px-3 font-medium">Aliases</th>
-                  <th className="text-left px-3 font-medium">Status</th>
-                  <th className="w-20 px-3 text-right font-medium">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {displayItems.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={6 + (stockGrades.length > 0 ? 1 : 0) + (stockCategories.length > 0 ? 1 : 0)}
-                      className="text-center py-12 text-muted-foreground"
-                    >
-                      {debouncedSearch ? "No items match your search" : "No stock items found"}
-                    </td>
-                  </tr>
-                ) : (
-                  displayItems.map((item) => (
-                    <tr
-                      key={item.id}
-                      className="stock-items-table-row border-t hover:bg-muted/30 transition-colors cursor-pointer"
-                      onClick={() => handleStockItemClick(item.id, item.name)}
-                      data-testid={`row-stock-item-${item.id}`}
-                    >
-                      <td className="px-3 py-3" onClick={(event) => event.stopPropagation()}>
-                        <Checkbox
-                          checked={selectedIds.includes(item.id)}
-                          onCheckedChange={(checked) => handleSelectItem(item.id, checked as boolean)}
-                          data-testid={`checkbox-${item.id}`}
-                        />
-                      </td>
-                      <td className="px-3 py-3" data-testid={`name-${item.id}`}>
-                        <div className="stock-items-name-cell">
-                          <span className="stock-items-row-icon"><Package className="h-4 w-4" aria-hidden="true" /></span>
-                          <div className="min-w-0">
-                            <div className="font-semibold leading-tight">{item.name}</div>
-                            <div className="text-xs text-muted-foreground mt-1">{item.code} · {item.uom}</div>
+            <ErpListTable
+              pageKey="stock-items"
+              companyId={selectedCompany?.id}
+              scrollLabel="Stock items"
+              wrapperClassName="stock-items-table-shell hidden md:block phone-land:hidden rounded-xl"
+              minimumWidth="800px"
+            >
+                <TableHeader className="sticky top-0 z-30 bg-muted">
+                  <TableRow className="h-11 bg-muted/40 border-b">
+                    <TableHead className="w-10 px-3">
+                      <Checkbox
+                        checked={allPageSelected}
+                        onCheckedChange={(checked) => handleSelectAll(checked === true)}
+                        data-testid="checkbox-select-all"
+                      />
+                    </TableHead>
+                    <TableHead className="text-left px-3 font-medium">Name</TableHead>
+                    <TableHead className="text-left px-3 font-medium">Group</TableHead>
+                    {stockGrades.length > 0 && <TableHead className="text-left px-3 font-medium">Grade</TableHead>}
+                    {stockCategories.length > 0 && <TableHead className="text-left px-3 font-medium">Category</TableHead>}
+                    <TableHead className="text-left px-3 font-medium">Aliases</TableHead>
+                    <TableHead className="text-left px-3 font-medium">Status</TableHead>
+                    <TableHead className="w-20 px-3 text-right font-medium">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {displayItems.length === 0 ? (
+                    <TableRow>
+                      <TableCell
+                        colSpan={6 + (stockGrades.length > 0 ? 1 : 0) + (stockCategories.length > 0 ? 1 : 0)}
+                        className="text-center py-12 text-muted-foreground"
+                      >
+                        {debouncedSearch ? "No items match your search" : "No stock items found"}
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    displayItems.map((item) => (
+                      <TableRow
+                        key={item.id}
+                        className="stock-items-table-row border-t hover:bg-muted/30 transition-colors cursor-pointer"
+                        onClick={() => handleStockItemClick(item.id, item.name)}
+                        data-testid={`row-stock-item-${item.id}`}
+                      >
+                        <TableCell className="px-3 py-3" onClick={(event) => event.stopPropagation()}>
+                          <Checkbox
+                            checked={selectedIds.includes(item.id)}
+                            onCheckedChange={(checked) => handleSelectItem(item.id, checked as boolean)}
+                            data-testid={`checkbox-${item.id}`}
+                          />
+                        </TableCell>
+                        <TableCell className="px-3 py-3" data-testid={`name-${item.id}`}>
+                          <div className="stock-items-name-cell">
+                            <span className="stock-items-row-icon">
+                              <Package className="h-4 w-4" aria-hidden="true" />
+                            </span>
+                            <div className="min-w-0">
+                              <div className="font-semibold leading-tight">{item.name}</div>
+                              <div className="text-xs text-muted-foreground mt-1">
+                                {item.code} · {item.uom}
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                      <td className="px-3 py-3 text-sm text-muted-foreground" data-testid={`group-${item.id}`}>
-                        {getStockGroupName(item.stockGroupId) ? <span className="stock-items-group-pill">{getStockGroupName(item.stockGroupId)}</span> : <span className="text-xs">—</span>}
-                      </td>
-                      {stockGrades.length > 0 && (
-                        <td className="px-3 py-3" data-testid={`grade-${item.id}`}>
-                          {getGradeName(item.gradeId) ? (
-                            <Badge variant="outline" className="text-xs font-normal">
-                              {getGradeName(item.gradeId)}
-                            </Badge>
+                        </TableCell>
+                        <TableCell className="px-3 py-3 text-sm text-muted-foreground" data-testid={`group-${item.id}`}>
+                          {getStockGroupName(item.stockGroupId) ? (
+                            <span className="stock-items-group-pill">{getStockGroupName(item.stockGroupId)}</span>
                           ) : (
-                            <span className="text-xs text-muted-foreground">—</span>
+                            <span className="text-xs">—</span>
                           )}
-                        </td>
-                      )}
-                      {stockCategories.length > 0 && (
-                        <td className="px-3 py-3" data-testid={`category-${item.id}`}>
-                          {getCategoryName(item.categoryId) ? (
-                            <Badge variant="secondary" className="stock-items-category-pill text-xs">
-                              {getCategoryName(item.categoryId)}
-                            </Badge>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">—</span>
-                          )}
-                        </td>
-                      )}
-                      <td className="px-3 py-3 max-w-[180px]" data-testid={`aliases-${item.id}`}>
-                        {(aliasMap.get(item.id) ?? []).length > 0 ? (
-                          <div className="flex flex-wrap gap-1">
-                            {(aliasMap.get(item.id) ?? []).map((code) => (
-                              <Badge key={code} variant="outline" className="text-xs font-mono font-normal">
-                                {code}
+                        </TableCell>
+                        {stockGrades.length > 0 && (
+                          <TableCell className="px-3 py-3" data-testid={`grade-${item.id}`}>
+                            {getGradeName(item.gradeId) ? (
+                              <Badge variant="outline" className="text-xs font-normal">
+                                {getGradeName(item.gradeId)}
                               </Badge>
-                            ))}
-                          </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
                         )}
-                      </td>
-                      <td className="px-3 py-3" data-testid={`status-${item.id}`}>
-                        <Badge variant="outline" className={item.active ? "stock-items-status stock-items-status-active" : "stock-items-status stock-items-status-inactive"}>
-                          <span className="stock-items-status-dot" aria-hidden="true" />
-                          {item.active ? "Active" : "Inactive"}
-                        </Badge>
-                      </td>
-                      <td className="px-3 py-3 text-right" onClick={(event) => event.stopPropagation()}>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={(event) => handleEditClick(item.id, event)}
-                          data-testid={`button-edit-${item.id}`}
-                          className="stock-items-edit-button gap-1.5"
-                        >
-                          <Edit className="h-3.5 w-3.5" />
-                          Edit
-                        </Button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-              {totalItems > 0 && (
-                <tfoot>
-                  <tr className="border-t bg-muted/40">
-                    <td
-                      colSpan={6 + (stockGrades.length > 0 ? 1 : 0) + (stockCategories.length > 0 ? 1 : 0)}
-                      className="px-3 py-2"
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
-                        <span>
-                          Showing {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, totalItems)} of{" "}
-                          {totalItems.toLocaleString()} items
-                        </span>
-                        <div className="flex items-center gap-1">
-                          <Button
-                            size="icon"
+                        {stockCategories.length > 0 && (
+                          <TableCell className="px-3 py-3" data-testid={`category-${item.id}`}>
+                            {getCategoryName(item.categoryId) ? (
+                              <Badge variant="secondary" className="stock-items-category-pill text-xs">
+                                {getCategoryName(item.categoryId)}
+                              </Badge>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                        )}
+                        <TableCell className="px-3 py-3 max-w-[180px]" data-testid={`aliases-${item.id}`}>
+                          {(aliasMap.get(item.id) ?? []).length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {(aliasMap.get(item.id) ?? []).map((code) => (
+                                <Badge key={code} variant="outline" className="text-xs font-mono font-normal">
+                                  {code}
+                                </Badge>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="px-3 py-3" data-testid={`status-${item.id}`}>
+                          <Badge
                             variant="outline"
-                            onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
-                            disabled={currentPage <= 1}
-                            data-testid="button-prev-page"
+                            className={
+                              item.active
+                                ? "stock-items-status stock-items-status-active"
+                                : "stock-items-status stock-items-status-inactive"
+                            }
                           >
-                            <ChevronLeft className="h-4 w-4" />
-                          </Button>
-                          <span className="px-2 text-sm">
-                            Page {currentPage} of {totalPages}
+                            <span className="stock-items-status-dot" aria-hidden="true" />
+                            {item.active ? "Active" : "Inactive"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="px-3 py-3 text-right" onClick={(event) => event.stopPropagation()}>
+                          <ErpRecordAction
+                            size="sm"
+                            variant="ghost"
+                            onClick={(event) => handleEditClick(item.id, event)}
+                            permitted={recordChanges.allowed}
+                            deniedReason={recordChangeReason}
+                            aria-label={recordChanges.reason ?? "Edit stock item"}
+                            data-testid={`button-edit-${item.id}`}
+                            className="stock-items-edit-button gap-1.5"
+                          >
+                            <Edit className="h-3.5 w-3.5" />
+                            Edit
+                          </ErpRecordAction>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+                {totalItems > 0 && (
+                  <TableFooter>
+                    <TableRow className="border-t bg-muted/40">
+                      <TableCell
+                        colSpan={6 + (stockGrades.length > 0 ? 1 : 0) + (stockCategories.length > 0 ? 1 : 0)}
+                        className="px-3 py-2"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
+                          <span>
+                            Showing {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, totalItems)}{" "}
+                            of {totalItems.toLocaleString()} items
                           </span>
-                          <Button
-                            size="icon"
-                            variant="outline"
-                            onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
-                            disabled={currentPage >= totalPages}
-                            data-testid="button-next-page"
-                          >
-                            <ChevronRight className="h-4 w-4" />
-                          </Button>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              size="icon"
+                              variant="outline"
+                              onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                              disabled={currentPage <= 1}
+                              data-testid="button-prev-page"
+                            >
+                              <ChevronLeft className="h-4 w-4" />
+                            </Button>
+                            <span className="px-2 text-sm">
+                              Page {currentPage} of {totalPages}
+                            </span>
+                            <Button
+                              size="icon"
+                              variant="outline"
+                              onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                              disabled={currentPage >= totalPages}
+                              data-testid="button-next-page"
+                            >
+                              <ChevronRight className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </div>
-                      </div>
-                    </td>
-                  </tr>
-                </tfoot>
-              )}
-            </table>
-          </div>
+                      </TableCell>
+                    </TableRow>
+                  </TableFooter>
+                )}
+            </ErpListTable>
           ) : (
             <div className="hidden md:block phone-land:hidden">
               {displayItems.length === 0 ? (
@@ -513,30 +609,67 @@ export function StockItemsView({ stockItems }: { stockItems: StockItemsModel }) 
                     <article key={item.id} className="stock-items-grid-card" data-testid={"grid-stock-item-" + item.id}>
                       <div className="flex items-start gap-3">
                         <div className="pt-1" onClick={(event) => event.stopPropagation()}>
-                          <Checkbox checked={selectedIds.includes(item.id)}
+                          <Checkbox
+                            checked={selectedIds.includes(item.id)}
                             onCheckedChange={(checked) => handleSelectItem(item.id, checked === true)}
-                            aria-label={"Select " + item.name} />
+                            aria-label={"Select " + item.name}
+                          />
                         </div>
-                        <span className="stock-items-row-icon"><Package className="h-5 w-5" aria-hidden="true" /></span>
+                        <span className="stock-items-row-icon">
+                          <Package className="h-5 w-5" aria-hidden="true" />
+                        </span>
                         <div className="min-w-0 flex-1">
-                          <button type="button" className="stock-items-grid-name text-left font-semibold hover:underline"
-                            onClick={() => handleStockItemClick(item.id, item.name)}>{item.name}</button>
-                          <p className="mt-1 text-xs text-muted-foreground">{item.code} · {item.uom}</p>
+                          <button
+                            type="button"
+                            className="stock-items-grid-name text-left font-semibold hover:underline"
+                            onClick={() => handleStockItemClick(item.id, item.name)}
+                          >
+                            {item.name}
+                          </button>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {item.code} · {item.uom}
+                          </p>
                         </div>
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        {getStockGroupName(item.stockGroupId) && <span className="stock-items-group-pill">{getStockGroupName(item.stockGroupId)}</span>}
+                        {getStockGroupName(item.stockGroupId) && (
+                          <span className="stock-items-group-pill">{getStockGroupName(item.stockGroupId)}</span>
+                        )}
                         {getGradeName(item.gradeId) && <Badge variant="outline">{getGradeName(item.gradeId)}</Badge>}
-                        {getCategoryName(item.categoryId) && <Badge variant="secondary" className="stock-items-category-pill">{getCategoryName(item.categoryId)}</Badge>}
-                        {(aliasMap.get(item.id) ?? []).map((code) => <Badge key={code} variant="outline" className="font-mono">{code}</Badge>)}
+                        {getCategoryName(item.categoryId) && (
+                          <Badge variant="secondary" className="stock-items-category-pill">
+                            {getCategoryName(item.categoryId)}
+                          </Badge>
+                        )}
+                        {(aliasMap.get(item.id) ?? []).map((code) => (
+                          <Badge key={code} variant="outline" className="font-mono">
+                            {code}
+                          </Badge>
+                        ))}
                       </div>
                       <div className="stock-items-grid-card-footer">
-                        <Badge variant="outline" className={item.active ? "stock-items-status stock-items-status-active" : "stock-items-status stock-items-status-inactive"}>
-                          <span className="stock-items-status-dot" aria-hidden="true" />{item.active ? "Active" : "Inactive"}
+                        <Badge
+                          variant="outline"
+                          className={
+                            item.active
+                              ? "stock-items-status stock-items-status-active"
+                              : "stock-items-status stock-items-status-inactive"
+                          }
+                        >
+                          <span className="stock-items-status-dot" aria-hidden="true" />
+                          {item.active ? "Active" : "Inactive"}
                         </Badge>
-                        <Button size="sm" variant="outline" className="stock-items-edit-button gap-1.5"
-                          onClick={(event) => handleEditClick(item.id, event)}>
-                          <Edit className="h-3.5 w-3.5" />Edit
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="stock-items-edit-button gap-1.5"
+                          onClick={(event) => handleEditClick(item.id, event)}
+                          disabled={!recordChanges.allowed}
+                          title={recordChangeReason}
+                          aria-label={recordChanges.reason ?? "Edit stock item"}
+                        >
+                          <Edit className="h-3.5 w-3.5" />
+                          Edit
                         </Button>
                       </div>
                     </article>
@@ -545,13 +678,32 @@ export function StockItemsView({ stockItems }: { stockItems: StockItemsModel }) 
               )}
               {totalItems > 0 && (
                 <div className="stock-items-grid-pagination mt-4 flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
-                  <span>Showing {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, totalItems)} of {totalItems.toLocaleString()} items</span>
+                  <span>
+                    Showing {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, totalItems)} of{" "}
+                    {totalItems.toLocaleString()} items
+                  </span>
                   <div className="flex items-center gap-2">
-                    <Button size="icon" variant="outline" onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
-                      disabled={currentPage <= 1} aria-label="Previous page"><ChevronLeft className="h-4 w-4" /></Button>
-                    <span>Page {currentPage} of {totalPages}</span>
-                    <Button size="icon" variant="outline" onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
-                      disabled={currentPage >= totalPages} aria-label="Next page"><ChevronRight className="h-4 w-4" /></Button>
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                      disabled={currentPage <= 1}
+                      aria-label="Previous page"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <span>
+                      Page {currentPage} of {totalPages}
+                    </span>
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                      disabled={currentPage >= totalPages}
+                      aria-label="Next page"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
                   </div>
                 </div>
               )}
@@ -573,7 +725,11 @@ export function StockItemsView({ stockItems }: { stockItems: StockItemsModel }) 
               </div>
             ) : (
               displayItems.map((item) => (
-                <div key={item.id} className="stock-items-mobile-card border rounded-xl p-3" data-testid={`card-stock-item-${item.id}`}>
+                <div
+                  key={item.id}
+                  className="stock-items-mobile-card border rounded-xl p-3"
+                  data-testid={`card-stock-item-${item.id}`}
+                >
                   <div className="flex items-start gap-3">
                     <div className="pt-0.5" onClick={(event) => event.stopPropagation()}>
                       <Checkbox
@@ -633,6 +789,9 @@ export function StockItemsView({ stockItems }: { stockItems: StockItemsModel }) 
                       size="sm"
                       variant="ghost"
                       onClick={(event) => handleEditClick(item.id, event)}
+                      disabled={!recordChanges.allowed}
+                      title={recordChangeReason}
+                      aria-label={recordChanges.reason ?? "Edit stock item"}
                       data-testid={`button-edit-mobile-${item.id}`}
                       className="gap-1 shrink-0"
                     >

@@ -58,7 +58,7 @@ interface Result {
   businessDate: string;
 }
 
-const NOT_PERMITTED_ROLES = new Set(["View Only", "ERP Tester", "POS"]);
+const NOT_PERMITTED_ROLES = new Set(["View Only", "Create Only", "ERP Tester", "POS"]);
 
 function txOf(client: Queryable): DbTransaction {
   return drizzle(client as PoolClient, { schema }) as unknown as DbTransaction;

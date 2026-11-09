@@ -44,7 +44,7 @@ export interface Phase9PressingApplyResult {
   businessDate: string;
 }
 
-const READ_ONLY_ROLES = new Set(["View Only", "ERP Tester"]);
+const READ_ONLY_ROLES = new Set(["View Only", "Create Only", "ERP Tester"]);
 
 /** Same rule as the live route, evaluated against CURRENT cloud membership. */
 async function authorize(client: Queryable, event: Phase9PressingEvent): Promise<void> {

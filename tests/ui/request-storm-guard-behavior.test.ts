@@ -160,6 +160,31 @@ describe("request storm guard — snapshot cache", () => {
   });
 });
 
+describe("request storm guard — stalled upstream requests", () => {
+  it("releases occupied GET slots even if the underlying fetch ignores abort", async () => {
+    vi.useFakeTimers();
+    try {
+      const underlying: Underlying = vi.fn(async (input) => {
+        if (String(input).includes("/api/hung-")) return new Promise<Response>(() => {});
+        return json({ ok: true });
+      });
+      const guarded = await installGuard(underlying);
+      const requests = Array.from({ length: 6 }, (_, index) =>
+        guarded(`/api/hung-${index}`).catch((error: Error) => error)
+      );
+      // The seventh request must wait in the shared six-slot queue.
+      const next = guarded("/api/healthy");
+      await vi.advanceTimersByTimeAsync(45_001);
+      const results = await Promise.all(requests);
+      expect(results.every((result) => result instanceof Error && result.message.includes("timed out"))).toBe(true);
+      await expect(next).resolves.toMatchObject({ status: 200 });
+      expect(underlying).toHaveBeenCalledTimes(7);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe("request storm guard — invalidation", () => {
   it("drops live snapshots on an ordinary write but keeps reference snapshots", async () => {
     const underlying: Underlying = vi.fn(async () => json([]));

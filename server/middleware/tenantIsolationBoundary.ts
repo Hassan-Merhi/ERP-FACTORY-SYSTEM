@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
+import { isCreateOnlyWriteBlocked } from "../services/security/createOnlyWritePolicy";
 import { and, eq, or } from "drizzle-orm";
 import { companies, userCompanyRoles } from "@shared/schema";
 
@@ -280,6 +281,17 @@ export async function tenantIsolationBoundary(req: Request, res: Response, next:
   let context: ActiveCompanyPermissionContext | null = null;
   try {
     context = await resolveCanonicalContext(req);
+
+    // Second, canonical Create Only write check. The global guard reads the
+    // session role; this one reads the current company membership, so a role
+    // changed to Create Only after login cannot carry an older session's writes.
+    if (isCreateOnlyWriteBlocked(context.role, req.method, req.path)) {
+      logIsolationDenial(req, context, "CREATE_ONLY_WRITE_NOT_VERIFIED");
+      return res.status(403).json({
+        code: "BUSINESS_ACTION_NOT_VERIFIED",
+        message: "This action is not available to Create Only users.",
+      });
+    }
 
     const decision = decideExplicitCompanyScope({
       queryCompanyId: req.query?.companyId,

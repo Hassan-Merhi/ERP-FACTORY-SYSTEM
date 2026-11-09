@@ -43,6 +43,7 @@ import {
   type ShippingQuickSelection,
 } from "./factoryshippingcontainers/components/ShippingStatusChips";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { isExistingRecordReadOnlyRole } from "@shared/createOnlyRolePolicy";
 
 export default function FactoryShippingContainers() {
   const { toast } = useToast();
@@ -341,7 +342,7 @@ export default function FactoryShippingContainers() {
           onDateFrom={setDateFrom}
           onDateTo={setDateTo}
           onOpenInvoicing={() => navigate("/factory/sales/new")}
-          allowNewOrder={Boolean(me?.role && me.role !== "View Only")}
+          allowNewOrder={Boolean(me?.role && !isExistingRecordReadOnlyRole(me.role))}
           showOrderValue={colVis.containerCost}
         />
         {/* ── Compact search + controls ── */}
@@ -397,7 +398,7 @@ export default function FactoryShippingContainers() {
         </p>
 
         {/* ── Main Table ── */}
-        <div className="overflow-hidden rounded-xl border border-border/70 bg-card shadow-sm dark:bg-[#0e1b2e]">
+        <div className="overflow-hidden rounded-xl border border-border/70 bg-card shadow-sm dark:bg-card">
           <Table
             mobileLayout="cards"
             className="text-xs [&_td]:px-2.5 [&_td]:py-1.5 [&_th]:h-9 [&_th]:px-2.5 [&_th]:py-1.5"
@@ -405,7 +406,7 @@ export default function FactoryShippingContainers() {
             style={{ minWidth: "1100px" }}
           >
             <TableHeader className="sticky top-0 z-20">
-              <TableRow className="bg-slate-100/90 hover:bg-slate-100/90 dark:bg-[#182a43] dark:hover:bg-[#182a43]">
+              <TableRow className="bg-slate-100/90 hover:bg-slate-100/90 dark:bg-muted dark:hover:bg-muted">
                 {colVis.orderDate && <TableHead className="text-xs w-20 min-w-[80px]">Order Date</TableHead>}
                 {colVis.invoiceNumber && (
                   <TableHead

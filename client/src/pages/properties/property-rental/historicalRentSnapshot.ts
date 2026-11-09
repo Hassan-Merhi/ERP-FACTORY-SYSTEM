@@ -10,7 +10,6 @@
  */
 export const HISTORICAL_RENT_CUTOFF = "2026-10-26";
 export const HISTORICAL_RENT_CUTOFF_LABEL = "26 Oct 2026";
-export const HISTORICAL_RENT_COMPANY = "HASSAN PROPERTIES";
 
 export interface HistoricalRentPayment {
   amount: string | number;

@@ -1,4 +1,5 @@
 import { offlineError } from "./offline/offlineError";
+import { CreateOnlyActionNotAvailableError, isCreateOnlyClientWriteBlocked } from "./createOnlyRequestGuard";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { getErrorDetails } from "@shared/errorUtils";
 import { QueryClient, QueryFunction, MutationCache, QueryCache } from "@tanstack/react-query";
@@ -549,6 +550,18 @@ async function isCsrfTokenMismatch(res: Response): Promise<boolean> {
   }
 }
 
+/** Active company role from the cached session, for the Create Only request guard. */
+function cachedActiveRole(): string | null {
+  const me = queryClient.getQueryData<{ role?: string | null; currentRole?: string | null }>(["/api/auth/me"]);
+  return me?.currentRole ?? me?.role ?? null;
+}
+
+function assertCreateOnlyRequestAllowed(method: string, url: string): void {
+  if (isCreateOnlyClientWriteBlocked(cachedActiveRole(), method, url)) {
+    throw new CreateOnlyActionNotAvailableError();
+  }
+}
+
 export async function apiRequest(
   method: string,
   url: string,
@@ -556,6 +569,7 @@ export async function apiRequest(
   _isRetry = false,
   timeoutMs = 300000
 ): Promise<Response> {
+  assertCreateOnlyRequestAllowed(method, url);
   if (OFFLINE_MODE_ENABLED && method.toUpperCase() === "POST" && url === "/api/vouchers/with-entries") {
     // The existing authenticated query cache holds the user identity. The
     // selected company is only a proposed scope: the sync transport always
@@ -615,6 +629,7 @@ export async function apiRequestPrivileged(
   timeoutMs = 60000,
   _isRetry = false
 ): Promise<Response> {
+  assertCreateOnlyRequestAllowed(method, url);
   const prepared = await prepareApiRequest(method, url, data, timeoutMs);
 
   try {

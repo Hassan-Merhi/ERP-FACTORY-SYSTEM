@@ -112,7 +112,7 @@
 }
 .account-ledger-modern .account-ledger-metrics {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 14px;
   margin: 12px 0 18px;
 }
@@ -129,14 +129,18 @@
   box-shadow: inset 0 1px rgba(255,255,255,.06), 0 9px 21px rgba(0,0,0,.12);
 }
 .account-ledger-modern .account-ledger-stat:nth-child(2) {
+  border-color: rgba(196, 151, 90, .37);
+  background: linear-gradient(120deg, rgba(89, 65, 54, .7), rgba(39, 34, 60, .9));
+}
+.account-ledger-modern .account-ledger-stat:nth-child(3) {
   border-color: rgba(133, 105, 204, .35);
   background: linear-gradient(120deg, rgba(60, 42, 107, .67), rgba(31, 30, 65, .92));
 }
-.account-ledger-modern .account-ledger-stat:nth-child(3) {
+.account-ledger-modern .account-ledger-stat:nth-child(4) {
   border-color: rgba(77, 156, 161, .34);
   background: linear-gradient(120deg, rgba(22, 65, 72, .64), rgba(28, 40, 59, .9));
 }
-.account-ledger-modern .account-ledger-stat:nth-child(4) {
+.account-ledger-modern .account-ledger-stat:nth-child(5) {
   border-color: rgba(153, 94, 232, .65);
   background: linear-gradient(120deg, rgba(70, 38, 116, .74), rgba(37, 30, 75, .93));
   box-shadow: inset 0 1px rgba(255,255,255,.08), 0 0 24px rgba(121, 68, 202, .13);
@@ -151,12 +155,15 @@
   background: rgba(88, 111, 223, .25);
 }
 .account-ledger-modern .account-ledger-stat:nth-child(2) > svg {
-  color: #bdabff; background: rgba(124, 86, 224, .25);
+  color: #f2cb88; background: rgba(183, 121, 60, .23);
 }
 .account-ledger-modern .account-ledger-stat:nth-child(3) > svg {
-  color: #72dfda; background: rgba(37, 166, 165, .19);
+  color: #bdabff; background: rgba(124, 86, 224, .25);
 }
 .account-ledger-modern .account-ledger-stat:nth-child(4) > svg {
+  color: #72dfda; background: rgba(37, 166, 165, .19);
+}
+.account-ledger-modern .account-ledger-stat:nth-child(5) > svg {
   color: #d6b5ff; background: rgba(143, 90, 240, .24);
 }
 .account-ledger-modern .account-ledger-stat p:first-child {
@@ -218,8 +225,9 @@
 .account-ledger-modern [data-testid="account-statement-scroll-region"] tbody td.font-mono {
   font-variant-numeric: tabular-nums;
 }
-.account-ledger-modern [data-testid="row-opening-balance"] {
-  display: none;
+.account-ledger-modern [data-testid="account-statement-scroll-region"] tbody tr[data-testid="row-opening-balance"] {
+  background: linear-gradient(95deg, #292544, #232d49);
+  border-bottom: 1px solid rgba(158, 132, 224, .46);
 }
 .account-ledger-modern [data-testid="account-statement-scroll-region"] tbody tr:not([data-testid]) {
   background: #1b2036;
@@ -240,6 +248,9 @@
 .account-ledger-modern [data-testid="account-statement-scroll-region"] [role="checkbox"]:focus-visible {
   outline: 2px solid #a894ff;
   outline-offset: 3px;
+}
+@media (max-width: 1500px) {
+  .account-ledger-modern .account-ledger-metrics { grid-template-columns: repeat(3, minmax(0,1fr)); }
 }
 @media (max-width: 1180px) {
   .account-ledger-modern .account-ledger-metrics { grid-template-columns: repeat(2, minmax(0,1fr)); }
@@ -326,14 +337,18 @@ html:not(.dark) .account-ledger-modern .account-ledger-stat {
   box-shadow: inset 0 1px rgba(255, 255, 255, .92), 0 7px 18px rgba(42, 67, 118, .045);
 }
 html:not(.dark) .account-ledger-modern .account-ledger-stat:nth-child(2) {
+  border-color: #ebdac1;
+  background: linear-gradient(120deg, #fff5e8, #fffaf2);
+}
+html:not(.dark) .account-ledger-modern .account-ledger-stat:nth-child(3) {
   border-color: #e0d6f8;
   background: linear-gradient(120deg, #f1ebfd, #f8f5fe);
 }
-html:not(.dark) .account-ledger-modern .account-ledger-stat:nth-child(3) {
+html:not(.dark) .account-ledger-modern .account-ledger-stat:nth-child(4) {
   border-color: #cce8e4;
   background: linear-gradient(120deg, #e8f7f5, #f5fcfb);
 }
-html:not(.dark) .account-ledger-modern .account-ledger-stat:nth-child(4) {
+html:not(.dark) .account-ledger-modern .account-ledger-stat:nth-child(5) {
   border-color: #d5bff5;
   background: linear-gradient(120deg, #eee5fc, #f7f0ff);
   box-shadow: inset 0 1px rgba(255, 255, 255, .9), 0 8px 20px rgba(99, 71, 161, .08);
@@ -343,14 +358,18 @@ html:not(.dark) .account-ledger-modern .account-ledger-stat > svg {
   background: #dbe7ff;
 }
 html:not(.dark) .account-ledger-modern .account-ledger-stat:nth-child(2) > svg {
+  color: #9c641f;
+  background: #fbe8c7;
+}
+html:not(.dark) .account-ledger-modern .account-ledger-stat:nth-child(3) > svg {
   color: #7850c4;
   background: #e5d9fb;
 }
-html:not(.dark) .account-ledger-modern .account-ledger-stat:nth-child(3) > svg {
+html:not(.dark) .account-ledger-modern .account-ledger-stat:nth-child(4) > svg {
   color: #167e82;
   background: #d5f0ed;
 }
-html:not(.dark) .account-ledger-modern .account-ledger-stat:nth-child(4) > svg {
+html:not(.dark) .account-ledger-modern .account-ledger-stat:nth-child(5) > svg {
   color: #844ac0;
   background: #e6d7f7;
 }
@@ -387,6 +406,10 @@ html:not(.dark) .account-ledger-modern [data-testid="account-statement-scroll-re
 }
 html:not(.dark) .account-ledger-modern [data-testid="account-statement-scroll-region"] tbody td {
   border-color: #e6eaf3;
+}
+html:not(.dark) .account-ledger-modern [data-testid="account-statement-scroll-region"] tbody tr[data-testid="row-opening-balance"] {
+  background: linear-gradient(95deg, #f5f0ff, #f0f5ff);
+  border-bottom-color: #d7c9f5;
 }
 html:not(.dark) .account-ledger-modern [data-testid="account-statement-scroll-region"] tbody td .text-foreground,
 html:not(.dark) .account-ledger-modern [data-testid="account-statement-scroll-region"] tbody td.font-semibold {

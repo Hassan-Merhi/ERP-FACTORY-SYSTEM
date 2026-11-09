@@ -19,7 +19,6 @@ import { SaleGrid } from "./pos-components/SaleGrid";
 import { InventoryPicker } from "./pos-components/InventoryPicker";
 import type { AuthMe } from "@shared/apiTypes";
 import { InvoiceTemplate, type InvoiceSale } from "./pos-components/InvoiceTemplate";
-import type { PosEditSalesItem } from "./pos-components/posTypes";
 import { POSDialogs } from "./pos-components/POSDialogs";
 import { POSHeader } from "./pos-components/POSHeader";
 import { PosCheckoutStrip } from "./pos-components/PosCheckoutStrip";
@@ -32,10 +31,18 @@ import { usePosWhatsApp } from "./hooks/usePosWhatsApp";
 import { usePosMutations } from "./hooks/usePosMutations";
 import { usePosAutosave } from "./hooks/usePosAutosave";
 import { usePosHandlers } from "./hooks/usePosHandlers";
+import { usePosEditVoucherHydration } from "./usePosEditVoucherHydration";
 
-import { POS_COLUMNS, formatDisplayAmount } from "./utils/posCalculations";
+import {
+  POS_COLUMNS,
+  formatDisplayAmount,
+  getPosPickerInventory,
+  getPosKeyboardHighlightedIndex,
+} from "./utils/posCalculations";
 import { ErrorState } from "@/components/ui/page-state";
 import { GoldenCoastPosReadinessAlert } from "./pos-components/GoldenCoastPosReadinessAlert";
+
+const POS_PICKER_LIST_ID = "pos-desktop-item-options";
 
 export default function POS({ posUser, editVoucherId }: { posUser?: AuthMe; editVoucherId?: string } = {}) {
   const { selectedLocation, setSelectedLocation } = useLocationContext();
@@ -116,6 +123,7 @@ export default function POS({ posUser, editVoucherId }: { posUser?: AuthMe; edit
     mobileSearchInputRef,
     autoSaveStateRef,
   } = usePosState();
+  const inventoryPickerSearchRef = useRef<HTMLInputElement>(null);
 
   const activeLocation = posUser ? posSelectedLocation : selectedLocation;
   // Zambia posting uses the approved rate of the sale date, never the
@@ -279,130 +287,23 @@ export default function POS({ posUser, editVoucherId }: { posUser?: AuthMe; edit
     if (todayDraft) setCurrentDraftId(todayDraft.id);
   }, [currentDraftId, drafts, setCurrentDraftId]);
 
-  // Set location from edit voucher
-  useEffect(() => {
-    if (editVoucher && editVoucher.locationId && !selectedLocation && allLocations.length > 0) {
-      const voucherLocation = allLocations.find((loc) => loc.id === editVoucher.locationId);
-      if (voucherLocation) setSelectedLocation(voucherLocation);
-    }
-  }, [editVoucher, allLocations, selectedLocation, setSelectedLocation]);
-
-  // Guard: rows + notes + date are only populated ONCE per edit session.
-  // Without this, any dependency change (e.g. allLedgerAccounts re-fetching on
-  // window focus) would call setRows() again and wipe the user's in-progress edits.
-  const editRowsInitRef = useRef(false);
-
-  // Effect 1: Populate rows / notes / date from the voucher — runs once.
-  useEffect(() => {
-    if (!editVoucherId) {
-      editRowsInitRef.current = false;
-      return;
-    }
-    if (editRowsInitRef.current) return; // already populated; never reset user edits
-
-    // Primary source: salesItems attached to the voucher object.
-    // Fallback: view-entries endpoint (populated when salesItems is missing from the voucher).
-    const resolvedItems =
-      Array.isArray(editVoucher?.salesItems) && editVoucher.salesItems.length > 0
-        ? editVoucher.salesItems
-        : (editVoucherViewEntries ?? [])
-            .filter((e) => e.isStockItem || e.stockItemId)
-            .map((e) => ({
-              id: e.id,
-              stockItemId: e.stockItemId,
-              stockItemName: e.stockItemName || e.accountName || "",
-              stockItemCode: e.stockItemCode || e.accountCode || "",
-              quantity: e.quantity,
-              sellingPrice: e.rate ?? e.sellingPrice ?? "0",
-              totalSales: e.totalAmount ?? e.totalSales ?? e.creditAmount ?? "0",
-              costPrice: e.costPrice,
-              configuredPrice: e.configuredPrice,
-            }));
-
-    if (!editVoucher || resolvedItems.length === 0) return;
-
-    const newRows = resolvedItems.map((item: PosEditSalesItem, index: number) => ({
-      id: String(index + 1),
-      itemName: item.stockItemName || "",
-      stockItemCode: item.stockItemCode || "",
-      // Ensure stockItemId is always a number (guard against 0/null from old data)
-      stockItemId: item.stockItemId ? Number(item.stockItemId) : undefined,
-      salesItemId: item.id,
-      quantity: parseFloat(String(item.quantity)),
-      rate:
-        editVoucher?.currency === "ZMW" && editVoucher.exchangeRate
-          ? Number((Number(item.sellingPrice) * Number(editVoucher.exchangeRate)).toFixed(2))
-          : parseFloat(String(item.sellingPrice)),
-      rateUSD: parseFloat(String(item.sellingPrice)),
-      amount: parseFloat(String(item.totalSales)),
-      configuredPrice: parseFloat(String(item.configuredPrice || "0")) || undefined,
-    }));
-    newRows.push({
-      id: String(newRows.length + 1),
-      itemName: "",
-      stockItemCode: "",
-      stockItemId: undefined,
-      salesItemId: undefined,
-      quantity: 0,
-      rate: 0,
-      rateUSD: 0,
-      amount: 0,
-      configuredPrice: undefined,
-    });
-    setRows(newRows);
-    editRowsInitRef.current = true;
-
-    if (editVoucher.description) setNotes(editVoucher.description);
-    if (editVoucher.voucherDate) setSaleDate(editVoucher.voucherDate);
-  }, [editVoucherId, editVoucher, editVoucherViewEntries, setRows, setNotes, setSaleDate]);
-
-  // Effect 2: Detect payment account type once ledger accounts are available.
-  // This is separate from Effect 1 so that ledger-account re-fetches never
-  // reset the rows the user is actively editing.
-  useEffect(() => {
-    if (!editVoucher || !editVoucher.entries || editVoucher.entries.length === 0) return;
-
-    const debitEntry = editVoucher.entries.find((e) => parseFloat(String(e.debitAmount || "0")) > 0);
-    if (!debitEntry) return;
-
-    if (debitEntry.bankAccountId) {
-      setPaymentAccountType("bank");
-      setPaymentAccountId(String(debitEntry.bankAccountId));
-      setIsCreditSale(false);
-    } else if (debitEntry.ledgerAccountId) {
-      const ledgerAccount = allLedgerAccounts.find((acc) => acc.id === debitEntry.ledgerAccountId);
-      if (ledgerAccount) {
-        if (ledgerAccount.accountType === "Cash") {
-          setPaymentAccountType("cash");
-          setPaymentAccountId(String(debitEntry.ledgerAccountId));
-          setIsCreditSale(false);
-        } else {
-          setPaymentAccountType("credit");
-          setPaymentAccountId(String(debitEntry.ledgerAccountId));
-          setIsCreditSale(true);
-          setSelectedCustomerId(String(debitEntry.ledgerAccountId));
-        }
-      } else {
-        const isCreditSaleEntry = debitEntry.narration?.includes("Credit Sale");
-        if (isCreditSaleEntry) {
-          setPaymentAccountType("credit");
-          setIsCreditSale(true);
-          setSelectedCustomerId(String(debitEntry.ledgerAccountId));
-        } else {
-          setPaymentAccountType("cash");
-          setIsCreditSale(false);
-        }
-        setPaymentAccountId(String(debitEntry.ledgerAccountId));
-      }
-    }
-  }, [
+  // Edit mode: select the voucher's location, populate rows once, infer payment type.
+  usePosEditVoucherHydration({
+    editVoucherId,
     editVoucher,
+    editVoucherViewEntries,
+    allLocations,
     allLedgerAccounts,
+    selectedLocation,
+    setSelectedLocation,
+    setRows,
+    setNotes,
+    setSaleDate,
     setPaymentAccountType,
     setPaymentAccountId,
     setIsCreditSale,
     setSelectedCustomerId,
-  ]);
+  });
 
   // ── WhatsApp / mutations / autosave ───────────────────────────────────────
   const { handleSendInvoiceWhatsApp, handleSendWhatsAppReport } = usePosWhatsApp({
@@ -514,6 +415,7 @@ export default function POS({ posUser, editVoucherId }: { posUser?: AuthMe; edit
     setHighlightedIndex,
     lastSavedFingerprintRef,
     inputRefs,
+    focusInventoryPicker: () => inventoryPickerSearchRef.current?.focus(),
     printRef,
     stockPrintRef,
     clientSaleIdRef,
@@ -539,6 +441,10 @@ export default function POS({ posUser, editVoucherId }: { posUser?: AuthMe; edit
   });
 
   const handleKeyDown = makeHandleKeyDown(searchTerm);
+  const matchingItems = useMemo(() => getPosPickerInventory(inventory, searchTerm), [inventory, searchTerm]);
+  const matchingItemCount = matchingItems.length;
+  const canSellNegativeStock = authUser?.canSellNegativeStock ?? posUser?.canSellNegativeStock ?? false;
+  const selectedItemIndex = getPosKeyboardHighlightedIndex(matchingItems, highlightedIndex, canSellNegativeStock);
   const fmtAmount = (v: number) => formatDisplayAmount(activeCurrency, v);
   const goldenCoastPosBlocked = isSpCompany && goldenCoastPhase6 && goldenCoastReadiness?.canPost === false;
   const goldenCoastPosSaveDisabled = isSpCompany && (goldenCoastReadinessLoading || goldenCoastPosBlocked);
@@ -756,6 +662,9 @@ export default function POS({ posUser, editVoucherId }: { posUser?: AuthMe; edit
                 rows={rows}
                 columns={POS_COLUMNS}
                 selectedCell={selectedCell}
+                highlightedIndex={selectedItemIndex}
+                matchingItemCount={matchingItemCount}
+                pickerListId={POS_PICKER_LIST_ID}
                 setSelectedCell={setSelectedCell}
                 updateRow={updateRow}
                 handleDeleteRow={(i) => setRows(rows.filter((_, idx) => idx !== i))}
@@ -808,8 +717,13 @@ export default function POS({ posUser, editVoucherId }: { posUser?: AuthMe; edit
           // blurs when the sidebar is clicked, so activeRow can clear before
           // the click completes; selectedCell is the stable row fallback.
           selectItem={(item) => selectItem(item, activeRow ?? selectedCell.row)}
+          onSearchTermChange={setSearchTerm}
+          searchInputRef={inventoryPickerSearchRef}
+          listId={POS_PICKER_LIST_ID}
           itemListRef={itemListRef}
           highlightedIndex={highlightedIndex}
+          setHighlightedIndex={setHighlightedIndex}
+          canSellNegativeStock={canSellNegativeStock}
           syncTerm={searchTerm}
         />
       </PosWorkspaceColumns>

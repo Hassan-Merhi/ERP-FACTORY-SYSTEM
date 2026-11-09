@@ -26,6 +26,7 @@ import {
 import { trackRetailStockValueTx } from "../services/retail/retailInventoryJournal";
 import { requireRetailCompany } from "./retailCompanyGuard";
 import { registerRetailSupplierImportRoutes } from "./retailSupplierImportRoutes";
+import { requireCreateOnlyVerifiedCreate } from "../services/security/createOnlyVerifiedCreates";
 
 const normalize = (value: string) => value.trim().toLowerCase().replace(/\s+/g, " ");
 const asNumber = (value: unknown) => Number(value ?? 0);
@@ -365,88 +366,94 @@ export function registerRetailRoutes(app: Express) {
     }
   });
 
-  app.post("/api/retail/products", requireAuth, requireNonPOS, async (req, res) => {
-    try {
-      const companyId = await requireRetailCompany(req, res);
-      if (!companyId) return;
+  app.post(
+    "/api/retail/products",
+    requireAuth,
+    requireNonPOS,
+    requireCreateOnlyVerifiedCreate("retailProducts"),
+    async (req, res) => {
+      try {
+        const companyId = await requireRetailCompany(req, res);
+        if (!companyId) return;
 
-      const input = retailProductWriteSchema.parse(req.body);
-      validateRetailVariantPayload(input);
+        const input = retailProductWriteSchema.parse(req.body);
+        validateRetailVariantPayload(input);
 
-      const productId = await db.transaction(async (tx) => {
-        await validateLocations(tx, companyId, input);
-        await assertUniqueBarcodes(tx, companyId, input.variants);
+        const productId = await db.transaction(async (tx) => {
+          await validateLocations(tx, companyId, input);
+          await assertUniqueBarcodes(tx, companyId, input.variants);
 
-        const [duplicateCode] = await tx
-          .select({ id: retailProducts.id })
-          .from(retailProducts)
-          .where(and(eq(retailProducts.companyId, companyId), eq(retailProducts.code, input.code)))
-          .limit(1);
-        if (duplicateCode) throw new Error(`Product code already exists: ${input.code}`);
+          const [duplicateCode] = await tx
+            .select({ id: retailProducts.id })
+            .from(retailProducts)
+            .where(and(eq(retailProducts.companyId, companyId), eq(retailProducts.code, input.code)))
+            .limit(1);
+          if (duplicateCode) throw new Error(`Product code already exists: ${input.code}`);
 
-        const brand = await resolveBrand(tx, companyId, input);
-        const [product] = await tx
-          .insert(retailProducts)
-          .values({
-            companyId,
-            code: input.code,
-            name: input.name,
-            brandId: brand.id,
-            category: input.category || null,
-            description: input.description || null,
-            imageUrls: input.imageUrls,
-            active: input.active,
-          })
-          .returning({ id: retailProducts.id });
-
-        const generatedBarcodes = await allocateRetailBarcodes(
-          tx,
-          companyId,
-          input.variants.filter((variant) => !variant.barcode).length
-        );
-        for (const variantInput of input.variants) {
-          const barcode = variantInput.barcode || generatedBarcodes.shift()!;
-          const [variant] = await tx
-            .insert(retailProductVariants)
+          const brand = await resolveBrand(tx, companyId, input);
+          const [product] = await tx
+            .insert(retailProducts)
             .values({
               companyId,
-              productId: product.id,
-              color: variantInput.color,
-              size: variantInput.size,
-              barcode,
-              barcodeSource: variantInput.barcode ? "manual" : "generated",
-              imageUrls: variantInput.imageUrls,
-              sku: variantInput.sku || null,
-              cost: String(variantInput.cost),
-              sellingPrice: String(variantInput.sellingPrice),
-              lowStockThreshold: String(variantInput.lowStockThreshold),
-              active: variantInput.active,
+              code: input.code,
+              name: input.name,
+              brandId: brand.id,
+              category: input.category || null,
+              description: input.description || null,
+              imageUrls: input.imageUrls,
+              active: input.active,
             })
-            .returning({ id: retailProductVariants.id });
+            .returning({ id: retailProducts.id });
 
-          if (variantInput.stocks.length) {
-            await writeVariantInventoryWithMovement(tx, {
-              companyId,
-              variantId: variant.id,
-              cost: variantInput.cost,
-              stocks: variantInput.stocks,
-              createdBy: req.user!.id,
-              referenceType: "retail_product_create",
-              referenceId: String(product.id),
-              eventPrefix: `product-create:${product.id}`,
-            });
+          const generatedBarcodes = await allocateRetailBarcodes(
+            tx,
+            companyId,
+            input.variants.filter((variant) => !variant.barcode).length
+          );
+          for (const variantInput of input.variants) {
+            const barcode = variantInput.barcode || generatedBarcodes.shift()!;
+            const [variant] = await tx
+              .insert(retailProductVariants)
+              .values({
+                companyId,
+                productId: product.id,
+                color: variantInput.color,
+                size: variantInput.size,
+                barcode,
+                barcodeSource: variantInput.barcode ? "manual" : "generated",
+                imageUrls: variantInput.imageUrls,
+                sku: variantInput.sku || null,
+                cost: String(variantInput.cost),
+                sellingPrice: String(variantInput.sellingPrice),
+                lowStockThreshold: String(variantInput.lowStockThreshold),
+                active: variantInput.active,
+              })
+              .returning({ id: retailProductVariants.id });
+
+            if (variantInput.stocks.length) {
+              await writeVariantInventoryWithMovement(tx, {
+                companyId,
+                variantId: variant.id,
+                cost: variantInput.cost,
+                stocks: variantInput.stocks,
+                createdBy: req.user!.id,
+                referenceType: "retail_product_create",
+                referenceId: String(product.id),
+                eventPrefix: `product-create:${product.id}`,
+              });
+            }
           }
-        }
 
-        return product.id;
-      });
+          return product.id;
+        });
 
-      const [product] = await loadProducts(companyId, productId);
-      res.status(201).json(product);
-    } catch (error) {
-      res.status(400).json({ message: getErrorMessage(error) });
+        const [product] = await loadProducts(companyId, productId);
+        res.status(201).json(product);
+      } catch (error) {
+        res.status(400).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
   app.patch("/api/retail/products/:id", requireAuth, requireNonPOS, async (req, res) => {
     try {

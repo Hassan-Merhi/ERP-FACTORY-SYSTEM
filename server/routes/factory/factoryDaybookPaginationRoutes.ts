@@ -142,7 +142,7 @@ export function registerFactoryDaybookPaginationRoutes(app: Express): void {
 
       const currentUserId = session.userId != null ? String(session.userId) : undefined;
       const role = String(session.currentRole || session.role || "");
-      const elevatedRole = ["Admin", "Owner", "Developer", "View Only"].includes(role);
+      const elevatedRole = ["Admin", "Owner", "Developer", "View Only", "Create Only"].includes(role);
 
       let ownOnly = false;
       if (currentUserId) {
@@ -407,9 +407,10 @@ export function registerFactoryDaybookPaginationRoutes(app: Express): void {
             ORDER BY sort_date ${sortDirection}, ABS(id) ${sortDirection}, id ${sortDirection}
             LIMIT ${limitParam} OFFSET ${offsetParam}
           )
-          ${filterOptionsOnly
-            ? `SELECT DISTINCT "txType" FROM filtered WHERE "txType" <> 'WORKER_EDITED' ORDER BY "txType"`
-            : `SELECT
+          ${
+            filterOptionsOnly
+              ? `SELECT DISTINCT "txType" FROM filtered WHERE "txType" <> 'WORKER_EDITED' ORDER BY "txType"`
+              : `SELECT
             (SELECT COUNT(*)::int FROM filtered) AS total,
             COALESCE(
               (
@@ -417,7 +418,8 @@ export function registerFactoryDaybookPaginationRoutes(app: Express): void {
                 FROM page_rows
               ),
               '[]'::jsonb
-            ) AS items`}
+            ) AS items`
+          }
         `;
 
       const result = await pool.query(query, values);

@@ -327,7 +327,7 @@ export function registerTicketRoutes(app: Express) {
     if (!parsed.success) return res.status(400).json({ message: "Invalid ticket", errors: parsed.error.flatten() });
     try {
       const ctx = await getActiveCompanyPermissionContext(req);
-      if (["View Only", "POS"].includes(ctx.role))
+      if (["View Only", "Create Only", "POS"].includes(ctx.role))
         return res.status(403).json({ message: "Ticket creation disabled for role" });
       if (
         parsed.data.voucherId &&

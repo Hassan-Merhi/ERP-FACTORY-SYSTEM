@@ -4,6 +4,7 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { STATUS_LABELS } from "../utils";
 import type { useFactoryStockAllocationV5Model } from "../useFactoryStockAllocationV5Model";
 
@@ -18,6 +19,8 @@ type Model = ReturnType<typeof useFactoryStockAllocationV5Model>;
  */
 export function FactoryStockAllocationV5MobileList({ model }: { model: Model }) {
   const [, navigate] = useLocation();
+  // View Only / Create Only roles see allocations without proforma or container actions.
+  const recordChanges = useExistingRecordChangeAccess();
   const {
     rows,
     totals,
@@ -168,57 +171,61 @@ export function FactoryStockAllocationV5MobileList({ model }: { model: Model }) 
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            data-testid={`button-v5-mobile-add-containers-${proforma.proformaId}`}
-                            onClick={() =>
-                              openAddContainers(proforma.proformaId, proforma.proformaName, proforma.containerCount)
-                            }
-                          >
-                            <Plus className="h-3.5 w-3.5 mr-1" />
-                            Add Containers
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            data-testid={`button-v5-mobile-link-container-${proforma.proformaId}`}
-                            onClick={() => {
-                              setLinkSelected(new Set());
-                              setLinkDialog({
-                                proformaId: proforma.proformaId,
-                                proformaName: proforma.proformaName,
-                                proformaCustomerId: proforma.customerId ?? null,
-                              });
-                            }}
-                          >
-                            <Link2 className="h-3.5 w-3.5 mr-1" />
-                            Link Existing
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            data-testid={`button-v5-mobile-edit-proforma-${proforma.proformaId}`}
-                            onClick={() => navigate(`/factory/stock-allocation-v5/proformas/${proforma.proformaId}/edit`)}
-                          >
-                            <Pencil className="h-3.5 w-3.5 mr-1" />
-                            Edit Proforma
-                          </Button>
-                          {activeContainers.some(
-                            (container) => container.status === "DRAFT" && container.loadedQty === 0
-                          ) && (
+                        {recordChanges.allowed && (
+                          <div className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2">
                             <Button
                               size="sm"
                               variant="outline"
-                              data-testid={`button-v5-mobile-edit-draft-${proforma.proformaId}`}
-                              onClick={() => openEditDraft(proforma.proformaId, proforma.proformaName, rows)}
+                              data-testid={`button-v5-mobile-add-containers-${proforma.proformaId}`}
+                              onClick={() =>
+                                openAddContainers(proforma.proformaId, proforma.proformaName, proforma.containerCount)
+                              }
+                            >
+                              <Plus className="h-3.5 w-3.5 mr-1" />
+                              Add Containers
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              data-testid={`button-v5-mobile-link-container-${proforma.proformaId}`}
+                              onClick={() => {
+                                setLinkSelected(new Set());
+                                setLinkDialog({
+                                  proformaId: proforma.proformaId,
+                                  proformaName: proforma.proformaName,
+                                  proformaCustomerId: proforma.customerId ?? null,
+                                });
+                              }}
+                            >
+                              <Link2 className="h-3.5 w-3.5 mr-1" />
+                              Link Existing
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              data-testid={`button-v5-mobile-edit-proforma-${proforma.proformaId}`}
+                              onClick={() =>
+                                navigate(`/factory/stock-allocation-v5/proformas/${proforma.proformaId}/edit`)
+                              }
                             >
                               <Pencil className="h-3.5 w-3.5 mr-1" />
-                              Edit Draft Qty
+                              Edit Proforma
                             </Button>
-                          )}
-                        </div>
+                            {activeContainers.some(
+                              (container) => container.status === "DRAFT" && container.loadedQty === 0
+                            ) && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                data-testid={`button-v5-mobile-edit-draft-${proforma.proformaId}`}
+                                onClick={() => openEditDraft(proforma.proformaId, proforma.proformaName, rows)}
+                              >
+                                <Pencil className="h-3.5 w-3.5 mr-1" />
+                                Edit Draft Qty
+                              </Button>
+                            )}
+                          </div>
+                        )}
 
                         {activeContainers.length > 0 ? (
                           <div className="space-y-2">
@@ -246,28 +253,29 @@ export function FactoryStockAllocationV5MobileList({ model }: { model: Model }) 
                                     </span>
                                   </div>
                                 </div>
-                                {(container.status === "DRAFT" || container.status === "LOADING") && (
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    className="shrink-0 text-muted-foreground hover:text-destructive"
-                                    title={`Cancel ${container.containerName}`}
-                                    aria-label={`Cancel ${container.containerName}`}
-                                    data-testid={`button-v5-mobile-cancel-container-${container.orderId}`}
-                                    onClick={() => {
-                                      setCancelSuperUser("");
-                                      setCancelSuperPass("");
-                                      setCancelDialog({
-                                        orderId: container.orderId,
-                                        containerName: container.containerName,
-                                        status: container.status as "DRAFT" | "LOADING",
-                                      });
-                                    }}
-                                  >
-                                    <X className="h-3.5 w-3.5" />
-                                  </Button>
-                                )}
+                                {recordChanges.allowed &&
+                                  (container.status === "DRAFT" || container.status === "LOADING") && (
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      className="shrink-0 text-muted-foreground hover:text-destructive"
+                                      title={`Cancel ${container.containerName}`}
+                                      aria-label={`Cancel ${container.containerName}`}
+                                      data-testid={`button-v5-mobile-cancel-container-${container.orderId}`}
+                                      onClick={() => {
+                                        setCancelSuperUser("");
+                                        setCancelSuperPass("");
+                                        setCancelDialog({
+                                          orderId: container.orderId,
+                                          containerName: container.containerName,
+                                          status: container.status as "DRAFT" | "LOADING",
+                                        });
+                                      }}
+                                    >
+                                      <X className="h-3.5 w-3.5" />
+                                    </Button>
+                                  )}
                               </div>
                             ))}
                           </div>

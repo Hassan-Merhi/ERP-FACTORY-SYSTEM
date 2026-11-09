@@ -14,7 +14,7 @@ const assert = (condition, message) => {
 
 const bulkRename = read("client/src/pages/settings/BulkRenameTab.tsx");
 const ledgerRoutes = read("server/routes/ledgerRoutes.ts");
-const accounts = read("client/src/pages/Accounts.tsx");
+const accounts = read("client/src/pages/accountslegacy/useAccountsLegacyModel.ts");
 const proforma = read("client/src/pages/factory/ProformaAddLine.tsx");
 const locationQueries = read("client/src/pages/location-inventory/useLocationInventoryQueries.ts");
 const locationRoutes = read("server/routes/location/locationInventoryRoutes.ts");

@@ -65,3 +65,36 @@ export function getPosPickerInventory(inventory: InventoryItem[], searchTerm: st
 
   return [...filtered].sort(comparePosItemsByCode);
 }
+
+/**
+ * Keyboard selection must not silently target a sold-out result. Keep those
+ * items visible in the picker so users can see stock status, but select the
+ * first sellable result unless the current user can sell negative stock.
+ */
+export function isPosKeyboardSellable(item: InventoryItem, canSellNegativeStock = false): boolean {
+  const stock = Number(item.stock);
+  return canSellNegativeStock || !Number.isFinite(stock) || stock > 0;
+}
+
+export function getPosKeyboardHighlightedIndex(
+  items: InventoryItem[],
+  index: number,
+  canSellNegativeStock = false
+): number {
+  if (items[index] && isPosKeyboardSellable(items[index], canSellNegativeStock)) return index;
+  return items.findIndex((item) => isPosKeyboardSellable(item, canSellNegativeStock));
+}
+
+export function stepPosKeyboardHighlight(
+  items: InventoryItem[],
+  index: number,
+  direction: -1 | 1,
+  canSellNegativeStock = false
+): number {
+  const current = getPosKeyboardHighlightedIndex(items, index, canSellNegativeStock);
+  if (current === -1) return -1;
+  for (let i = current + direction; i >= 0 && i < items.length; i += direction) {
+    if (isPosKeyboardSellable(items[i], canSellNegativeStock)) return i;
+  }
+  return current;
+}

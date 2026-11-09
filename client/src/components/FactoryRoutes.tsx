@@ -120,6 +120,7 @@ import {
   WipersReEntry,
 } from "@/lazyPages";
 
+const FactoryOthers = lazy(() => import("@/pages/factory/FactoryOthers"));
 const FactoryStockQueryWorkspace = lazy(() => import("@/pages/factory/FactoryStockQueryWorkspace"));
 const FactoryMonthlyProductionMatrix = lazy(() => import("@/pages/factory/FactoryMonthlyProductionMatrix"));
 const FactoryMonthlyProductionWorkers = lazy(() =>
@@ -139,6 +140,9 @@ const AccountGroups = lazy(() => import("@/pages/AccountGroups"));
 const FactoryInvoiceDetailBilingual = lazy(() => import("@/pages/factory/FactoryInvoiceDetailBilingual"));
 const FactoryProductionBonuses = lazy(() => import("@/pages/factory/FactoryProductionBonuses"));
 const WasteDispatchPage = lazy(() => import("@/pages/factory/WasteDispatchOptimized"));
+const FactoryLoadingDispatch = lazy(() => import("@/pages/factory/FactoryLoadingDispatch"));
+const FactoryLoadingDispatchCompare = lazy(() => import("@/pages/factory/FactoryLoadingDispatchCompare"));
+const FactoryLoadingDispatchReport = lazy(() => import("@/pages/factory/FactoryLoadingDispatchReport"));
 const FactoryStockAllocationV5CreateProforma = lazy(
   () => import("@/pages/factory/FactoryStockAllocationV5CreateProforma")
 );
@@ -256,6 +260,12 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
       <Route path="/factory/sales/loading/pending">
         <Redirect replace to="/factory/sales/loadings?tab=pending" />
       </Route>
+      <Route path="/factory/sales/loading/dispatch/:orderId/:dispatchId/report" component={FactoryLoadingDispatchReport} />
+      <Route path="/factory/sales/loading/dispatch/:orderId/report" component={FactoryLoadingDispatchReport} />
+      <Route path="/factory/sales/loading/dispatch/:orderId/:dispatchId/compare" component={FactoryLoadingDispatchCompare} />
+      <Route path="/factory/sales/loading/dispatch/:orderId/compare" component={FactoryLoadingDispatchCompare} />
+      <Route path="/factory/sales/loading/dispatch/:orderId/:dispatchId" component={FactoryLoadingDispatch} />
+      <Route path="/factory/sales/loading/dispatch/:orderId" component={FactoryLoadingDispatch} />
       <Route path="/factory/sales/loading/new" component={FactoryContainerLoadingScan} />
       <Route path="/factory/sales/loadings" component={FactoryLoadingsHub} />
       <Route path="/factory/sales/pending-invoices/:id/verify" component={FactoryPendingInvoiceVerify} />
@@ -366,7 +376,15 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
       </Route>
       <Route path="/factory/financial-snapshot" component={FactoryFinancialSnapshot} />
       <Route path="/factory/production-comparison" component={ProductionComparison} />
-      <Route path="/factory/production-report" component={DailyProductionReport} />
+      <Route path="/factory/others" component={FactoryOthers} />
+      <Route path="/factory/production-report">
+        {() => {
+          const legacyTab = new URLSearchParams(window.location.search).get("tab");
+          return legacyTab === "comparison" || legacyTab === "product-comparison"
+            ? <Redirect replace to={`/factory/others?tab=${legacyTab}`} />
+            : <DailyProductionReport />;
+        }}
+      </Route>
       <Route path="/factory/rental/warehouses" component={FactoryRentalWarehouses} />
       <Route path="/factory/rental/shops" component={FactoryRentalShops} />
       <Route path="/factory/rental/payments" component={FactoryRentalPayments} />

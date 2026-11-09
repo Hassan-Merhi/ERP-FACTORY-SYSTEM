@@ -1,0 +1,613 @@
+{
+  "baselineDate": "2026-11-09",
+  "branch": "factory/unification-8-phases-2026-11-09",
+  "sourceBlobs": {
+    "shared/factoryAccessRegistry.ts": "bb321909447afb8084807f298afaff108bd77f21",
+    "client/src/components/FactoryRoutes.tsx": "25418bdcd4f60c9bcde1f45506ade92e3b451402",
+    "client/src/components/FactorySidebar.tsx": "ea1c257581c6bdfe970275cafab8420d6bd534f7",
+    "server/lib/factoryAccessControl.ts": "73d2203b068d7dfc900c83670f289762e9fd9802",
+    "client/src/contexts/CompanyContext.tsx": "6dfc3c329a40fea0f7d17f54a35334f51eac40b1",
+    "client/src/lib/companyQueryScope.ts": "fd4dfe54e397ed800d1e12cecb9c1a63a5c37aa6",
+    "shared/factoryActionCapabilities.ts": "0b7989cfce20ff2a31926a61b6831a5330c2803b"
+  },
+  "counts": {
+    "registryPages": 62,
+    "routerDeclarations": 151,
+    "uniqueRouterPaths": 151,
+    "nonFactoryRouterPaths": [
+      "/my-settings",
+      "/intercompany-requests",
+      "/intercompany-links",
+      "/balance-repair"
+    ]
+  },
+  "registry": [
+    {
+      "key": "factory/help-training",
+      "route": "/factory/help-training",
+      "accessLevel": "user",
+      "sidebar": false,
+      "pinned": false
+    },
+    {
+      "key": "factory/tickets",
+      "route": "/factory/tickets",
+      "accessLevel": "user",
+      "sidebar": true,
+      "pinned": false
+    },
+    {
+      "key": "factory/production-report",
+      "route": "/factory/production-report",
+      "accessLevel": "user",
+      "sidebar": false,
+      "pinned": true
+    },
+    {
+      "key": "factory/agents",
+      "route": "/factory/agents",
+      "accessLevel": "user",
+      "sidebar": false,
+      "pinned": true
+    },
+    {
+      "key": "factory/accounts",
+      "route": "/factory/accounts",
+      "accessLevel": "user",
+      "sidebar": false,
+      "pinned": true
+    },
+    {
+      "key": "factory/cost-centers",
+      "route": "/factory/cost-centers",
+      "accessLevel": "developer",
+      "sidebar": true,
+      "pinned": false
+    },
+    {
+      "key": "factory/daybook",
+      "route": "/factory/daybook",
+      "accessLevel": "admin",
+      "sidebar": true,
+      "pinned": true
+    },
+    {
+      "key": "factory/vouchers",
+      "route": "/factory/vouchers",
+      "accessLevel": "user",
+      "sidebar": false,
+      "pinned": true
+    },
+    {
+      "key": "factory/stock-entry",
+      "route": "/factory/stock-entry",
+      "accessLevel": "user",
+      "sidebar": true,
+      "pinned": false
+    },
+    {
+      "key": "factory/production-bonuses",
+      "route": "/factory/production-bonuses",
+      "accessLevel": "admin",
+      "sidebar": false,
+      "pinned": false
+    },
+    {
+      "key": "factory/raw-materials",
+      "route": "/factory/raw-materials",
+      "accessLevel": "user",
+      "sidebar": true,
+      "pinned": false
+    },
+    {
+      "key": "factory/waste-dispatch",
+      "route": "/factory/waste-dispatch",
+      "accessLevel": "user",
+      "sidebar": true,
+      "pinned": false
+    },
+    {
+      "key": "factory/bales-hub",
+      "route": "/factory/bales-hub",
+      "accessLevel": "user",
+      "sidebar": true,
+      "pinned": false
+    },
+    {
+      "key": "factory/bale-relabeling",
+      "route": "/factory/bale-relabeling",
+      "accessLevel": "user",
+      "sidebar": false,
+      "pinned": false
+    },
+    {
+      "key": "factory/production-comparison",
+      "route": "/factory/production-comparison",
+      "accessLevel": "user",
+      "sidebar": false,
+      "pinned": false
+    },
+    {
+      "key": "factory/pos",
+      "route": "/factory/pos",
+      "accessLevel": "user",
+      "sidebar": true,
+      "pinned": false
+    },
+    {
+      "key": "factory/invoicing",
+      "route": "/factory/invoicing",
+      "accessLevel": "user",
+      "sidebar": true,
+      "pinned": false
+    },
+    {
+      "key": "factory/price-list",
+      "route": "/factory/price-list",
+      "accessLevel": "user",
+      "sidebar": false,
+      "pinned": false
+    },
+    {
+      "key": "factory/dispatch-batches",
+      "route": "/factory/dispatch-batches",
+      "accessLevel": "user",
+      "sidebar": false,
+      "pinned": false
+    },
+    {
+      "key": "factory/location-inventory",
+      "route": "/factory/location-inventory",
+      "accessLevel": "user",
+      "sidebar": true,
+      "pinned": false
+    },
+    {
+      "key": "factory/containers-hub",
+      "route": "/factory/containers-hub",
+      "accessLevel": "user",
+      "sidebar": true,
+      "pinned": false
+    },
+    {
+      "key": "factory/stock-allocation-v5",
+      "route": "/factory/stock-allocation-v5",
+      "accessLevel": "user",
+      "sidebar": true,
+      "pinned": false
+    },
+    {
+      "key": "factory/sheets-sacks",
+      "route": "/factory/sheets-sacks",
+      "accessLevel": "user",
+      "sidebar": true,
+      "pinned": false
+    },
+    {
+      "key": "factory/monthly-production-matrix",
+      "route": "/factory/monthly-production-matrix",
+      "accessLevel": "user",
+      "sidebar": true,
+      "pinned": false
+    },
+    {
+      "key": "factory/stock-query",
+      "route": "/factory/stock-query",
+      "accessLevel": "user",
+      "sidebar": true,
+      "pinned": false
+    },
+    {
+      "key": "factory/stock-bale-list",
+      "route": "/factory/stock-bale-list",
+      "accessLevel": "user",
+      "sidebar": false,
+      "pinned": false
+    },
+    {
+      "key": "factory/bale-tracking",
+      "route": "/factory/bale-tracking",
+      "accessLevel": "user",
+      "sidebar": false,
+      "pinned": false
+    },
+    {
+      "key": "factory/import",
+      "route": "/factory/import",
+      "accessLevel": "user",
+      "sidebar": false,
+      "pinned": false
+    },
+    {
+      "key": "factory/merge-bale-products",
+      "route": "/factory/merge-bale-products",
+      "accessLevel": "user",
+      "sidebar": false,
+      "pinned": false
+    },
+    {
+      "key": "factory/bale-product-images",
+      "route": "/factory/bale-product-images",
+      "accessLevel": "user",
+      "sidebar": false,
+      "pinned": false
+    },
+    {
+      "key": "factory/parties",
+      "route": "/factory/parties",
+      "accessLevel": "user",
+      "sidebar": true,
+      "pinned": false
+    },
+    {
+      "key": "factory/contacts",
+      "route": "/factory/contacts",
+      "accessLevel": "user",
+      "sidebar": true,
+      "pinned": false
+    },
+    {
+      "key": "factory/payroll-hub",
+      "route": "/factory/payroll-hub",
+      "accessLevel": "user",
+      "sidebar": true,
+      "pinned": false
+    },
+    {
+      "key": "factory/analytics",
+      "route": "/factory/analytics",
+      "accessLevel": "admin",
+      "sidebar": true,
+      "pinned": false
+    },
+    {
+      "key": "factory/transporters",
+      "route": "/factory/transporters",
+      "accessLevel": "user",
+      "sidebar": false,
+      "pinned": false
+    },
+    {
+      "key": "factory/broker-visual-statement",
+      "route": "/factory/broker-visual-statement",
+      "accessLevel": "user",
+      "sidebar": false,
+      "pinned": false
+    },
+    {
+      "key": "factory/rental/shops",
+      "route": "/factory/rental/shops",
+      "accessLevel": "user",
+      "sidebar": true,
+      "pinned": false
+    },
+    {
+      "key": "factory/rental/warehouses",
+      "route": "/factory/rental/warehouses",
+      "accessLevel": "developer",
+      "sidebar": true,
+      "pinned": false
+    },
+    {
+      "key": "factory/rental/payments",
+      "route": "/factory/rental/payments",
+      "accessLevel": "developer",
+      "sidebar": true,
+      "pinned": false
+    },
+    {
+      "key": "factory/intelligence/dashboard",
+      "route": "/factory/intelligence/dashboard",
+      "accessLevel": "developer",
+      "sidebar": true,
+      "pinned": false
+    },
+    {
+      "key": "factory/intelligence/kpis",
+      "route": "/factory/intelligence/kpis",
+      "accessLevel": "developer",
+      "sidebar": true,
+      "pinned": false
+    },
+    {
+      "key": "factory/intelligence/supplier-hub",
+      "route": "/factory/intelligence/supplier-hub",
+      "accessLevel": "developer",
+      "sidebar": true,
+      "pinned": false
+    },
+    {
+      "key": "factory/intelligence/financial-hub",
+      "route": "/factory/intelligence/financial-hub",
+      "accessLevel": "developer",
+      "sidebar": true,
+      "pinned": false
+    },
+    {
+      "key": "factory/intelligence/production-hub",
+      "route": "/factory/intelligence/production-hub",
+      "accessLevel": "developer",
+      "sidebar": true,
+      "pinned": false
+    },
+    {
+      "key": "factory/intelligence/alerts",
+      "route": "/factory/intelligence/alerts",
+      "accessLevel": "developer",
+      "sidebar": true,
+      "pinned": false
+    },
+    {
+      "key": "factory/intelligence/mhd-view",
+      "route": "/factory/intelligence/mhd-view",
+      "accessLevel": "admin",
+      "sidebar": true,
+      "pinned": false
+    },
+    {
+      "key": "factory/intelligence/settings",
+      "route": "/factory/intelligence/settings",
+      "accessLevel": "developer",
+      "sidebar": true,
+      "pinned": false
+    },
+    {
+      "key": "factory/accounting/toolbox",
+      "route": "/factory/accounting/toolbox",
+      "accessLevel": "developer",
+      "sidebar": false,
+      "pinned": false
+    },
+    {
+      "key": "factory/balance-repair",
+      "route": "/factory/balance-repair",
+      "accessLevel": "developer",
+      "sidebar": false,
+      "pinned": false
+    },
+    {
+      "key": "factory/net-position-details",
+      "route": "/factory/net-position-details",
+      "accessLevel": "admin",
+      "sidebar": false,
+      "pinned": false
+    },
+    {
+      "key": "factory/conflicts",
+      "route": "/factory/conflicts",
+      "accessLevel": "user",
+      "sidebar": false,
+      "pinned": false
+    },
+    {
+      "key": "factory/settings",
+      "route": "/factory/settings",
+      "accessLevel": "admin",
+      "sidebar": false,
+      "pinned": false
+    },
+    {
+      "key": "factory/spreadsheet",
+      "route": "/factory/spreadsheet",
+      "accessLevel": "developer",
+      "sidebar": false,
+      "pinned": false
+    },
+    {
+      "key": "factory/chat",
+      "route": "/factory/chat",
+      "accessLevel": "developer",
+      "sidebar": false,
+      "pinned": false
+    },
+    {
+      "key": "factory/location-inventory-mockup",
+      "route": "/factory/location-inventory-mockup",
+      "accessLevel": "developer",
+      "sidebar": false,
+      "pinned": false
+    },
+    {
+      "key": "factory/account-groups",
+      "route": "/factory/account-groups",
+      "accessLevel": "admin",
+      "sidebar": false,
+      "pinned": false
+    },
+    {
+      "key": "factory/deleted-items",
+      "route": "/factory/deleted-items",
+      "accessLevel": "admin",
+      "sidebar": false,
+      "pinned": false
+    },
+    {
+      "key": "factory/orphaned-records",
+      "route": "/factory/orphaned-records",
+      "accessLevel": "admin",
+      "sidebar": false,
+      "pinned": false
+    },
+    {
+      "key": "factory/chatbot-settings",
+      "route": "/factory/chatbot-settings",
+      "accessLevel": "admin",
+      "sidebar": false,
+      "pinned": false
+    },
+    {
+      "key": "factory/import-cycle-diagnostics",
+      "route": "/factory/import-cycle-diagnostics",
+      "accessLevel": "admin",
+      "sidebar": false,
+      "pinned": false
+    },
+    {
+      "key": "factory/inventory-repair",
+      "route": "/factory/inventory-repair",
+      "accessLevel": "admin",
+      "sidebar": false,
+      "pinned": false
+    },
+    {
+      "key": "factory/company-data-reset",
+      "route": "/factory/company-data-reset",
+      "accessLevel": "admin",
+      "sidebar": false,
+      "pinned": false
+    }
+  ],
+  "routerPaths": [
+    "/factory/tickets/new",
+    "/factory/tickets",
+    "/factory/help-training",
+    "/factory/daybook",
+    "/factory/transporters",
+    "/factory/finance",
+    "/factory/suppliers",
+    "/factory/containers/new",
+    "/factory/containers",
+    "/factory/bale-products",
+    "/factory/raw-stock/opening-balance/:id/edit",
+    "/factory/raw-stock/recalculate",
+    "/factory/raw-stock",
+    "/factory/raw-materials",
+    "/factory/pressing",
+    "/factory/finalize",
+    "/factory/production-bonuses",
+    "/factory/stock-entry",
+    "/factory/bales-history",
+    "/factory/bales-hub",
+    "/factory/reprint-labels",
+    "/factory/location-inventory",
+    "/factory/location-inventory-mockup",
+    "/factory/bale-product-history/:productId/:locationId/:year/all",
+    "/factory/bale-product-history/:productId/:locationId/:year/:month",
+    "/factory/bale-product-history/:productId/:locationId",
+    "/factory/containers-hub",
+    "/factory/stock-otw",
+    "/factory/stock-bale-list",
+    "/factory/stock-query/:id",
+    "/factory/stock-query",
+    "/factory/monthly-production-matrix/:productId/bales/:workerId",
+    "/factory/monthly-production-matrix/:productId/workers",
+    "/factory/monthly-production-matrix",
+    "/factory/contacts",
+    "/factory/accounts",
+    "/factory/accounting/toolbox",
+    "/factory/balance-repair",
+    "/factory/accounting/open-items",
+    "/factory/accounting/cash-bank",
+    "/factory/accounting/monetary-fx",
+    "/factory/accounting/production",
+    "/factory/accounting/rentals",
+    "/factory/accounting/consolidation",
+    "/factory/accounting/history",
+    "/factory/accounting/statements",
+    "/factory/accounting/fiscal-review",
+    "/factory/accounting/dashboard",
+    "/factory/accounting/rollout",
+    "/factory/cost-centers",
+    "/factory/account-groups",
+    "/factory/agents",
+    "/factory/vouchers",
+    "/factory/vouchers/:id/edit",
+    "/factory/voucher-detail/:voucherId",
+    "/factory/create",
+    "/factory/payroll",
+    "/factory/analytics",
+    "/factory/production-summary",
+    "/factory/sales/new",
+    "/factory/sales/loading/pending",
+    "/factory/sales/loading/dispatch/:orderId/:dispatchId/report",
+    "/factory/sales/loading/dispatch/:orderId/report",
+    "/factory/sales/loading/dispatch/:orderId/:dispatchId/compare",
+    "/factory/sales/loading/dispatch/:orderId/compare",
+    "/factory/sales/loading/dispatch/:orderId/:dispatchId",
+    "/factory/sales/loading/dispatch/:orderId",
+    "/factory/sales/loading/new",
+    "/factory/sales/loadings",
+    "/factory/sales/pending-invoices/:id/verify",
+    "/factory/invoices/:id/loading-scan",
+    "/factory/sales/invoices/:id",
+    "/factory/price-list",
+    "/factory/sales/proformas/:proformaId/add-line",
+    "/factory/bale-tracking",
+    "/factory/dispatch-batches/:batchId/rides/:rideId/scan",
+    "/factory/dispatch-batches/:id",
+    "/factory/dispatch-batches",
+    "/factory/invoicing/proformas/:id/edit",
+    "/factory/invoicing",
+    "/factory/stock-allocation",
+    "/factory/stock-allocation-v3",
+    "/factory/stock-allocation-v5/proformas/new",
+    "/factory/stock-allocation-v5/proformas/:id/edit",
+    "/factory/stock-allocation-v5",
+    "/factory/parties",
+    "/factory/customers/:id",
+    "/factory/customers",
+    "/factory/payroll-hub",
+    "/factory/insurance",
+    "/factory/sheets-sacks",
+    "/factory/employees/:id",
+    "/factory/employees",
+    "/factory/workers/:id",
+    "/factory/workers",
+    "/factory/worker-payroll",
+    "/factory/supplier-report",
+    "/factory/supplier-statement",
+    "/factory/broker-visual-statement",
+    "/factory/barcode-lookup",
+    "/factory/import",
+    "/factory/bale-relabeling",
+    "/factory/merge-bale-products",
+    "/factory/catalog-translations",
+    "/factory/bale-product-images",
+    "/factory/customer-logos",
+    "/factory/label-banners",
+    "/factory/bale-relabeling/wipers-re-entry",
+    "/factory/users",
+    "/factory/ledger-monthly/:accountId",
+    "/factory/ledger-vouchers/:accountId/:year/:month",
+    "/factory/intelligence/dashboard",
+    "/factory/intelligence/kpis",
+    "/factory/intelligence/profitability",
+    "/factory/intelligence/alerts",
+    "/factory/intelligence/supplier-hub",
+    "/factory/intelligence/financial-hub",
+    "/factory/intelligence/production-hub",
+    "/factory/intelligence/supplier-scores",
+    "/factory/intelligence/mix-optimizer",
+    "/factory/intelligence/cashflow",
+    "/factory/intelligence/waste",
+    "/factory/waste-dispatch",
+    "/factory/pos",
+    "/factory/bale-ledger",
+    "/factory/intelligence/mhd-view",
+    "/factory/intelligence/settings",
+    "/factory/spreadsheet",
+    "/factory/chat",
+    "/factory/conflicts",
+    "/factory/settings",
+    "/my-settings",
+    "/intercompany-requests",
+    "/intercompany-links",
+    "/factory/deleted-items",
+    "/factory/orphaned-records",
+    "/factory/chatbot-settings",
+    "/factory/import-cycle-diagnostics",
+    "/factory/inventory-repair",
+    "/factory/company-data-reset",
+    "/factory/net-position-details",
+    "/factory/net-profit-analytics",
+    "/factory/net-position",
+    "/factory/financial-snapshot",
+    "/factory/production-comparison",
+    "/factory/others",
+    "/factory/production-report",
+    "/factory/rental/warehouses",
+    "/factory/rental/shops",
+    "/factory/rental/payments",
+    "/balance-repair"
+  ]
+}

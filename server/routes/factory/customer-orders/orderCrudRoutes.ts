@@ -28,6 +28,7 @@ import { acquireProformaCapacityTransactionLock } from "./proformaCapacityConcur
 import { linkOrderProformaAtomically, LinkOrderProformaError } from "./linkProformaAtomic";
 import { canViewBookingInfo, isValidBookingInfo } from "./bookingInfo";
 import { registerOrderProfitabilityRoute } from "./orderProfitabilityRoute";
+import { requireCreateOnlyVerifiedCreate } from "../../../services/security/createOnlyVerifiedCreates";
 
 export function registerOrderCrudRoutes(app: Express) {
   // Reassign an unfinalized loading without touching its bales or creating
@@ -444,7 +445,9 @@ export function registerOrderCrudRoutes(app: Express) {
 
   registerOrderProfitabilityRoute(app);
 
-  app.post("/api/factory/customer-orders", requireAuth, async (req: Request, res: Response) => {
+  // Create Only may add a new DRAFT order dated today (createOnlyVerifiedCreates.ts).
+  const createOnlyOrder = requireCreateOnlyVerifiedCreate("factoryCustomerOrders");
+  app.post("/api/factory/customer-orders", requireAuth, createOnlyOrder, async (req: Request, res: Response) => {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -611,7 +614,9 @@ export function registerOrderCrudRoutes(app: Express) {
           .select({ baleId: customerOrderBales.baleId })
           .from(customerOrderBales)
           .where(eq(customerOrderBales.orderId, orderId));
-        const baleIds = [...new Set(bales.map((b) => b.baleId).filter((id): id is number => Number.isSafeInteger(id) && id > 0))];
+        const baleIds = [
+          ...new Set(bales.map((b) => b.baleId).filter((id): id is number => Number.isSafeInteger(id) && id > 0)),
+        ];
         // A soft-deleted loading is no longer an active allocation. Release its
         // physical bales, but never make a bale available when a different
         // non-deleted order still owns it (e.g. an already verified invoice).
@@ -619,11 +624,12 @@ export function registerOrderCrudRoutes(app: Express) {
           await tx
             .update(factoryBales)
             .set({ status: "IN_STOCK", updatedAt: new Date() })
-            .where(and(
-              eq(factoryBales.companyId, companyId),
-              isNull(factoryBales.deletedAt),
-              inArray(factoryBales.id, baleIds),
-              sql`NOT EXISTS (
+            .where(
+              and(
+                eq(factoryBales.companyId, companyId),
+                isNull(factoryBales.deletedAt),
+                inArray(factoryBales.id, baleIds),
+                sql`NOT EXISTS (
                 SELECT 1 FROM customer_order_bales cob
                 JOIN customer_orders co ON co.id = cob.order_id
                 WHERE cob.bale_id = ${factoryBales.id}
@@ -632,13 +638,20 @@ export function registerOrderCrudRoutes(app: Express) {
                   AND co.deleted_at IS NULL
                   AND co.status <> 'CANCELLED'
               )`
-            ));
+              )
+            );
         }
 
         await tx
           .update(customerOrders)
           .set({ deletedAt: new Date(), updatedAt: new Date() })
-          .where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId), isNull(customerOrders.deletedAt)));
+          .where(
+            and(
+              eq(customerOrders.id, orderId),
+              eq(customerOrders.companyId, companyId),
+              isNull(customerOrders.deletedAt)
+            )
+          );
         await logAudit(
           {
             userId: req.session.userId!,

@@ -10,6 +10,7 @@ import { registerOrderDocumentsRoutes } from "./customer-orders/orderDocumentsRo
 import { registerOrderTrackingRoutes } from "./customer-orders/orderTrackingRoutes";
 
 export function registerFactoryCustomerOrderRoutes(app: Express) {
+  // Dispatch routes are registered earlier by factoryRoutes.ts.
   // Priority Scan owns a static /customer-orders/loading-list/priority-scan-configs GET.
   // Register it before the generic /customer-orders/:id GET in CRUD routes so
   // Express never treats "priority-scan-configs" as an order id.

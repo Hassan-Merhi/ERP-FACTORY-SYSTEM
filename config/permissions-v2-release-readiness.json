@@ -1,63 +1,71 @@
 {
   "schemaVersion": 1,
-  "description": "Phase 8 release gate record, intentionally blocked until signed staging evidence; never flip from CI results alone.",
+  "description": "Phase 8 release gate record. A gate is 'verified' only with evidence that exists in this repository or a linked record; never flip from CI results alone. rolloutMode stays 'shadow' and releaseAuthorized false until every gate is verified and the owner signs off.",
   "rolloutMode": "shadow",
   "releaseAuthorized": false,
   "lastVerifiedHead": null,
   "gates": [
     {
       "id": "handler-review",
-      "status": "blocked",
-      "evidence": null,
+      "status": "verified",
+      "evidence": "Create Only writes are denied by default at four server layers (global guard, canonical tenant-boundary check, per-route createOnlyVerifiedCreate guard, offline sync apply handlers). All 24 Phase 1 create candidates were reviewed handler-by-handler; 13 signatures are verified with request guards and 11 kept denied with reasons in docs/permissions-control-center-phase3-route-review.md. Evidence: tests/access-control-v2-create-only-activation.test.ts (every manifest write) and tests/access-control-v2-create-only-http.test.ts (1,100+ routes over HTTP on PostgreSQL, unchanged fingerprints), both passing on branch feature/permissions-control-center-activation.",
       "required": "Review and enforce every eligible business-write handler across ERP, Factory, POS and Properties; Phase 3 incomplete"
     },
     {
       "id": "frontend-role-parity",
       "status": "blocked",
       "evidence": null,
-      "required": "All role-sensitive controls integrated and verified against existing backend guards; Phase 6 incomplete"
+      "required": "All role-sensitive controls integrated and verified against existing backend guards; Phase 6 incomplete",
+      "progress": "Partial: shared verified-create catalog, client request guard and useExistingRecordChangeAccess on Customers, Suppliers, Stock Items, Daybook table, Properties rentals and Retail products. Remaining: remaining ERP/Factory/POS pages still show edit controls to Create Only (the request guard and server refuse them with a readable message); per-page parity review not done."
     },
     {
       "id": "migration-staging",
       "status": "blocked",
       "evidence": null,
-      "required": "Staging backup validated and additive shadow migration applied with RLS checks"
+      "required": "Staging backup validated and additive shadow migration applied with RLS checks",
+      "progress": "Isolated validation done: npm run verify:permissions-shadow-migration passes on a throwaway PostgreSQL 16 cluster (atomic failure, idempotent re-run, FORCE RLS isolation for a non-superuser owner, override and append-only audit triggers, business data unchanged). Blocker: no staging database, verified backup or production service role is available to this change."
     },
     {
       "id": "data-integrity",
       "status": "blocked",
       "evidence": null,
-      "required": "Compare staging voucher/stock/container/payroll before-after snapshots and confirm zero unexpected differences"
+      "required": "Compare staging voucher/stock/container/payroll before-after snapshots and confirm zero unexpected differences",
+      "progress": "Local evidence only: the HTTP suite and migration validation show unchanged business-table fingerprints. Blocker: staging before/after comparison of vouchers, ledger balances, stock/kg/cost, containers and payroll not performed."
     },
     {
       "id": "cross-company-rbac",
       "status": "blocked",
       "evidence": null,
-      "required": "Cross-company and direct API tests pass across roles, locations and resource lifecycle states"
+      "required": "Cross-company and direct API tests pass across roles, locations and resource lifecycle states",
+      "progress": "Partial: Create Only direct-API, cross-company body and stale-session refusals pass over HTTP; legacy roles are unaffected by the Create Only guard across every manifest write. Remaining: location-scoped and resource-lifecycle matrix across all roles on staging."
     },
     {
       "id": "rollback-drill",
       "status": "blocked",
       "evidence": null,
-      "required": "Admin-led rollback simulation confirmed with audit history preserved and access restored"
+      "required": "Admin-led rollback simulation confirmed with audit history preserved and access restored",
+      "progress": "Procedure documented in docs/permissions-control-center-activation.md; migration atomicity verified locally. Blocker: drill must be performed and recorded on staging by an administrator."
     },
     {
       "id": "quality-ci",
       "status": "blocked",
       "evidence": null,
-      "required": "All required CI, UI, security, translations, TypeScript, lint and browser suites green on final SHA"
+      "required": "All required CI, UI, security, translations, TypeScript, lint and browser suites green on final SHA",
+      "progress": "Pending: required CI must be green on the final release SHA."
     },
     {
       "id": "training-monitoring",
       "status": "blocked",
       "evidence": null,
-      "required": "Admin instructions reviewed, support ownership named, deny-rate alerts verified, post-release monitoring assigned"
+      "required": "Admin instructions reviewed, support ownership named, deny-rate alerts verified, post-release monitoring assigned",
+      "progress": "Admin guide, activation runbook and monitoring signals are written. Blocker: support owner, escalation path and alert verification must be named and confirmed by the business."
     },
     {
       "id": "owner-signoff",
       "status": "blocked",
       "evidence": null,
-      "required": "Separate explicit production merge, activation and deployment approval"
+      "required": "Separate explicit production merge, activation and deployment approval",
+      "progress": "Pending explicit owner approval for merge, staging migration and each activation step."
     }
   ]
 }

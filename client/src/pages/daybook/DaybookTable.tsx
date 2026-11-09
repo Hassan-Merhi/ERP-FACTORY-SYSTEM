@@ -1,13 +1,15 @@
+import { ErpListTable } from "@/erp-core";
 import { ChevronDown, ChevronRight, Package, Eye, ExternalLink, Lock, Edit, EyeOff, Trash2 } from "lucide-react";
 import { parseISO } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getVoucherTypeBadge } from "@/lib/voucherTypeBadge";
 import { cn } from "@/lib/utils";
 import { isVoucherMutationBlocked, voucherLockLabel } from "@/lib/migratedVoucherGuard";
 import { DaybookRow, Voucher, ViewVoucherEntry } from "./types";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 
 interface DaybookTableProps {
   displayedRows: DaybookRow[];
@@ -70,8 +72,8 @@ export function DaybookTable({
   handleView,
   handleEdit,
   handleDelete,
-  canEdit,
-  canDelete,
+  canEdit: canEditVoucher,
+  canDelete: canDeleteVoucher,
   setDaybookRowLimit,
   DAYBOOK_PAGE_SIZE,
   navigate,
@@ -79,6 +81,9 @@ export function DaybookTable({
   errorMessage = null,
   onRetry,
 }: DaybookTableProps) {
+  const { allowed: changesAllowed } = useExistingRecordChangeAccess(); // View Only / Create Only
+  const canEdit = (v: Voucher) => changesAllowed && canEditVoucher(v);
+  const canDelete = () => changesAllowed && canDeleteVoucher();
   // Loading, failure and empty are three different situations. Rendering a bare
   // header for all three makes a failed request look like a day with no
   // transactions, so each one gets its own visible state.
@@ -148,7 +153,7 @@ export function DaybookTable({
       });
 
     return (
-      <Table wrapperClassName="max-h-[calc(100dvh-220px)]">
+      <ErpListTable pageKey="daybook-condensed" scrollLabel="Condensed daybook" wrapperClassName="max-h-[calc(100dvh-220px)]">
         <TableHeader className="sticky top-0 z-20 bg-muted [&_th]:bg-muted [&_th]:text-foreground/90">
           <TableRow>
             <TableHead className="sticky left-0 bg-muted z-10 pl-4">
@@ -228,7 +233,9 @@ export function DaybookTable({
                               const o = row.data;
                               const desc = [
                                 o.containerNumber,
-                                ...(offloadAlphabetical ? [formatDisplayDate(parseISO(o.offloadedAt.slice(0, 10)))] : []),
+                                ...(offloadAlphabetical
+                                  ? [formatDisplayDate(parseISO(o.offloadedAt.slice(0, 10)))]
+                                  : []),
                                 o.locationName,
                               ]
                                 .filter(Boolean)
@@ -319,7 +326,7 @@ export function DaybookTable({
             );
           })}
         </TableBody>
-      </Table>
+      </ErpListTable>
     );
   }
 
@@ -873,7 +880,7 @@ export function DaybookTable({
 
       {/* ── Desktop table (hidden below sm) ── */}
       <div className="hidden sm:block">
-        <Table wrapperClassName="max-h-[calc(100dvh-220px)]">
+        <ErpListTable pageKey="daybook-detailed" scrollLabel="Detailed daybook" wrapperClassName="max-h-[calc(100dvh-220px)]">
           <TableHeader className="sticky top-0 z-20 bg-muted [&_th]:bg-muted [&_th]:text-foreground/90">
             <TableRow>
               <TableHead className="sticky left-0 bg-muted z-10">Date &amp; Time</TableHead>
@@ -883,8 +890,10 @@ export function DaybookTable({
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
-          <TableBody className="text-foreground dark:[&_tr]:border-border/70 dark:[&_td]:border-border/70">{tableRows}</TableBody>
-        </Table>
+          <TableBody className="text-foreground dark:[&_tr]:border-border/70 dark:[&_td]:border-border/70">
+            {tableRows}
+          </TableBody>
+        </ErpListTable>
         {loadMoreButton}
       </div>
     </>

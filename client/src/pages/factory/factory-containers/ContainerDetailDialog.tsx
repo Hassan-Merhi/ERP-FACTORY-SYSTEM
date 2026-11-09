@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { factoryApiRequest } from "@/lib/factoryApi";
 import { formatNumber } from "@/lib/formatNumber";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { getContainerStatusLabel } from "./otwHelpers";
 import type { ContainerWithSupplier } from "./otwHelpers";
 import type { ApiListRow } from "@shared/apiTypes";
@@ -62,6 +63,7 @@ export function ContainerDetailDialog({
   onClose,
   onEdit,
 }: ContainerDetailDialogProps) {
+  const recordChanges = useExistingRecordChangeAccess();
   const { data: viewContainerCharges = [] } = useQuery<ContainerOtherChargeRow[]>({
     queryKey: ["/api/factory/containers", container?.id, "other-charges"],
     queryFn: async () => {
@@ -245,6 +247,8 @@ export function ContainerDetailDialog({
           </Button>
           <Button
             variant="ghost"
+            disabled={!recordChanges.allowed}
+            title={recordChanges.reason ?? undefined}
             onClick={() => {
               onClose();
               onEdit(container);
