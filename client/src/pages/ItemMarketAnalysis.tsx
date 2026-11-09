@@ -1,49 +1,23 @@
-import {
-  Fragment,
-  useEffect,
-  useMemo,
-  useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { BarChart3,
-  Building2,
-  ChevronDown,
-  ChevronRight,
-  Download,
-  RefreshCw,
-  Search } from "lucide-react";
+import { BarChart3, Building2, ChevronDown, ChevronRight, Download, RefreshCw, Search } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
-import { ErpListTable,
-  ErpPendingButton,
-  useToast } from "@/hooks/use-toast";
-import { getTopProfitCompanyByItem,
-  groupMarketRows } from "./itemMarketAnalysisGrouping";
+import { ErpListTable, ErpPendingButton, erpCompanyDataKey } from "@/erp-core";
+import { useToast } from "@/hooks/use-toast";
+import { getTopProfitCompanyByItem, groupMarketRows } from "./itemMarketAnalysisGrouping";
 import { fetchSalePriceExportRows } from "./itemMarketAnalysisSalePrices";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Popover,
-  PopoverContent,
-  PopoverTrigger } from "@/components/ui/popover";
-import { PeriodFilter,
-  getDefaultPeriodValue,
-  type PeriodFilterValue } from "@/components/ui/period-filter";
-import { Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { PeriodFilter, getDefaultPeriodValue, type PeriodFilterValue } from "@/components/ui/period-filter";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow } from "@/components/ui/table";
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { formatNumber } from "@/lib/formatNumber";
-import { erpCompanyDataKey,
-} from "@/erp-core";
 
 
 import {
