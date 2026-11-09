@@ -41,7 +41,9 @@ import "./property-rental/propertiesRentalsPremium.css";
 
 import type { CashAccount, Props, Unit } from "./property-rental/types";
 import { getRentalModulePolicy } from "@/properties/config/rentalModulePolicy";
-import { fmtMoney, fmtMoneyCurrency } from "./property-rental/utils";
+import { fmtMoneyCurrency } from "./property-rental/utils";
+import { formatMoneyDisplay } from "@/lib/moneyDisplay";
+import { hasHassanPropertiesHistoricalReportingPolicy } from "@/properties/config/historicalRentReportingPolicy";
 import { ApiBaseCtx } from "./property-rental/shared";
 import { NoteCell } from "./property-rental/components/NoteCell";
 import { CreateUnitDialog } from "./property-rental/components/CreateUnitDialog";
@@ -49,7 +51,6 @@ import { UnitActionDialog } from "./property-rental/components/UnitActionDialog"
 import { BulkPaymentDialog } from "./property-rental/components/BulkPaymentDialog";
 import { RentalUnitCards } from "./property-rental/components/RentalUnitCards";
 import { ErpMobileActionsMenu, ErpMobileSummaryGrid } from "@/components/ui/erp-mobile-records";
-import { HISTORICAL_RENT_COMPANY } from "./property-rental/historicalRentSnapshot";
 import {
   PaymentsReconciliation,
   type ReconciliationSnapshot,
@@ -92,7 +93,7 @@ export default function PropertyRentalPage({
   const showHistoricalPaid =
     isPropertiesRental &&
     unitType === "WAREHOUSE" &&
-    selectedCompany?.name === HISTORICAL_RENT_COMPANY;
+    hasHassanPropertiesHistoricalReportingPolicy(selectedCompany);
   const {
     data: historicalPayments = [],
     isLoading: historicalLoading,
@@ -175,9 +176,11 @@ export default function PropertyRentalPage({
       : 0
     : totals.totalGuarantee;
   const paidLabel = showHistoricalPaid ? "RENT + CASH BALANCES" : "TOTAL PAID";
-  const paidValue = !showHistoricalPaid || reconciledAccountTotalsReady ? "$" + fmtMoney(summaryPaid) : "Unavailable";
+  // Aggregated summary figures historically use USD; this is presentation only, never FX conversion.
+  const summaryMoney = (amount: number) => formatMoneyDisplay(amount, { currency: "USD" });
+  const paidValue = !showHistoricalPaid || reconciledAccountTotalsReady ? summaryMoney(summaryPaid) : "Unavailable";
   const guaranteeValue =
-    !showHistoricalPaid || reconciledAccountTotalsReady ? "$" + fmtMoney(summaryGuarantee) : "Unavailable";
+    !showHistoricalPaid || reconciledAccountTotalsReady ? summaryMoney(summaryGuarantee) : "Unavailable";
   const historicalAccountMismatch =
     reconciledAccountTotalsReady &&
     historyReconciliation!.reconciled !== null &&
@@ -461,15 +464,13 @@ export default function PropertyRentalPage({
           <p className="text-xs text-muted-foreground" data-testid="properties-rent-account-balance-explanation">
             Combined account balances:{" "}
             <span className="font-semibold tabular-nums">
-              {"$"}
-              {fmtMoney(historyReconciliation!.accountSum! / 100)}
+              {summaryMoney(historyReconciliation!.accountSum! / 100)}
             </span>{" "}
             (rent withdrawal, ALI cash, Properties cashbox if present, and tenant deposits).
             {historyReconciliation!.guaranteeCashOverlap != null && historyReconciliation!.guaranteeCashOverlap > 0 && (
               <>
                 {" "}
-                Guarantee cash of {"$"}
-                {fmtMoney(historyReconciliation!.guaranteeCashOverlap / 100)} appears in both a cash account and the
+                Guarantee cash of {summaryMoney(historyReconciliation!.guaranteeCashOverlap / 100)} appears in both a cash account and the
                 deposit liability; these are not unique receipts.
               </>
             )}
@@ -490,19 +491,19 @@ export default function PropertyRentalPage({
               { label: "TOTAL UNITS", value: units.length },
               {
                 label: "RENT / MONTH",
-                value: `$${fmtMoney(totals.totalMonthlyRent)}`,
+                value: `${summaryMoney(totals.totalMonthlyRent)}`,
                 valueClassName: "text-blue-600 dark:text-blue-400",
               },
               {
                 label: isPropertiesRental ? "TO COLLECT" : "OUTSTANDING",
-                value: `$${fmtMoney(totals.totalOwed)}`,
+                value: `${summaryMoney(totals.totalOwed)}`,
                 valueClassName: isPropertiesRental
                   ? "text-green-600 dark:text-green-400"
                   : "text-red-600 dark:text-red-400",
               },
               {
                 label: isPropertiesRental ? "OWED TO TENANTS" : "CREDIT",
-                value: `$${fmtMoney(totals.totalCredit)}`,
+                value: `${summaryMoney(totals.totalCredit)}`,
                 valueClassName: isPropertiesRental
                   ? "text-red-600 dark:text-red-400"
                   : "text-green-600 dark:text-green-400",
@@ -558,7 +559,7 @@ export default function PropertyRentalPage({
                   className="text-lg font-bold text-blue-600 dark:text-blue-400"
                   data-testid={`stat-${testIdPrefix}-monthly-rent`}
                 >
-                  ${fmtMoney(totals.totalMonthlyRent)}
+                  {summaryMoney(totals.totalMonthlyRent)}
                 </div>
                 <p className="text-[11px] text-muted-foreground mt-0.5">expected from active leases</p>
               </CardContent>
@@ -623,7 +624,7 @@ export default function PropertyRentalPage({
                   className={`text-lg font-bold ${isPropertiesRental ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}
                   data-testid={`stat-${testIdPrefix}-total-outstanding`}
                 >
-                  ${fmtMoney(totals.totalOwed)}
+                  {summaryMoney(totals.totalOwed)}
                 </div>
                 <p className="text-[11px] text-muted-foreground mt-0.5">
                   {isPropertiesRental ? "tenants owe you" : "owed by tenants"}
@@ -646,7 +647,7 @@ export default function PropertyRentalPage({
                   className={`text-lg font-bold ${isPropertiesRental ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}
                   data-testid={`stat-${testIdPrefix}-total-credit`}
                 >
-                  ${fmtMoney(totals.totalCredit)}
+                  {summaryMoney(totals.totalCredit)}
                 </div>
                 <p className="text-[11px] text-muted-foreground mt-0.5">
                   {isPropertiesRental ? "tenant prepayments / overpayments" : "advance / overpaid"}
