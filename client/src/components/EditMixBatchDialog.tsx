@@ -97,6 +97,20 @@ function hasChangedSourceWeights(
   return false;
 }
 
+interface SourceEditReview {
+  changed: boolean;
+  allowed: boolean;
+  reviewHash: string | null;
+  recordedWeightKg: string;
+  proposedWeightKg: string;
+  recordedTotalCost: string;
+  estimatedTotalCost: string | null;
+  estimatedCostPerKg: string | null;
+  estimatedDeltaUsd: string | null;
+  warnings: string[];
+  previewOnly: boolean;
+}
+
 export function EditMixBatchDialog({
   batch,
   open,
@@ -114,6 +128,9 @@ export function EditMixBatchDialog({
   const [notes, setNotes] = useState("");
   const [batchDate, setBatchDate] = useState<string>("");
   const [initialized, setInitialized] = useState(false);
+  const [sourceTouched, setSourceTouched] = useState(false);
+  const [sourceEditReason, setSourceEditReason] = useState("");
+  const [sourceReview, setSourceReview] = useState<SourceEditReview | null>(null);
 
   const { data: supplierStock } = useQuery<SupplierRawStock[]>({
     queryKey: ["/api/factory/raw-stock"],
@@ -224,6 +241,9 @@ export function EditMixBatchDialog({
       setBatchDate("");
       setInitialized(false);
       setAddSourceType("supplier");
+      setSourceTouched(false);
+      setSourceEditReason("");
+      setSourceReview(null);
     }
   }, [open]);
 
@@ -242,25 +262,48 @@ export function EditMixBatchDialog({
     );
   });
 
+  const sourcesChanged = sourceTouched && hasChangedSourceWeights(selectedSources, currentSources);
+
+  // Never submit supplier or upstream cost/kg from the browser: the server
+  // resolves all rates and quantities again during its atomic source edit.
+  const sourcePayload = () => ({
+    supplierSources: selectedSources
+      .filter((s) => s.type === "supplier")
+      .map((s) => ({ supplierId: s.sourceId, weightKg: s.weightKg.toString() })),
+    batchSources: selectedSources
+      .filter((s) => s.type === "batch")
+      .map((s) => ({ sourceBatchId: s.sourceId, weightKg: s.weightKg.toString() })),
+  });
+
+  const previewMutation = useMutation<SourceEditReview>({
+    mutationFn: async () => {
+      if (!batch || !sourcesChanged) throw new Error("No source changes to review.");
+      const res = await fetch(`/api/factory/mix-batches/${batch.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          ...sourcePayload(),
+          sourceEditReason,
+          sourceEditPreview: true,
+        }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.message || "Could not review mix sources.");
+      return result;
+    },
+    onSuccess: (review) => setSourceReview(review),
+    onError: (error: ClientErrorLike) => {
+      setSourceReview(null);
+      toast({ title: "Review failed", description: error.message, variant: "destructive" });
+    },
+  });
+
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const sourcesChanged = hasChangedSourceWeights(selectedSources, currentSources);
-      if (sourcesChanged && (batch?.status === "COMPLETED" || batch?.status === "CLOSED")) {
-        throw new Error(
-          "Completed mix-batch sources are protected from automatic repricing. " +
-          "Phase 2 will add the reviewed historical source-edit workflow. Name, notes, and date can still be updated."
-        );
+      if (sourcesChanged && (!sourceReview?.allowed || !sourceReview.reviewHash)) {
+        throw new Error("Review and approve the proposed material changes before saving.");
       }
-      // Never send costPerKg for supplier sources — the server always applies the
-      // supplier's locked rate and ignores any client-supplied cost.
-      const supplierSourcesPayload = selectedSources
-        .filter((s) => s.type === "supplier")
-        .map((s) => ({ supplierId: s.sourceId, weightKg: s.weightKg.toString() }));
-
-      const batchSourcesPayload = selectedSources
-        .filter((s) => s.type === "batch")
-        .map((s) => ({ sourceBatchId: s.sourceId, weightKg: s.weightKg.toString() }));
-
       const res = await fetch(`/api/factory/mix-batches/${batch!.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -269,7 +312,12 @@ export function EditMixBatchDialog({
           name: batchName || undefined,
           notes: notes || undefined,
           batchDate: batchDate || undefined,
-          ...(sourcesChanged ? { supplierSources: supplierSourcesPayload, batchSources: batchSourcesPayload } : {}),
+          ...(sourcesChanged ? {
+            ...sourcePayload(),
+            sourceEditReason,
+            sourceEditReviewHash: sourceReview!.reviewHash,
+            confirmSourceEdit: true,
+          } : {}),
         }),
       });
       if (!res.ok) {
@@ -282,11 +330,15 @@ export function EditMixBatchDialog({
       queryClient.invalidateQueries({ queryKey: ["/api/factory/mix-batches"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/raw-stock"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/mix-batches", batch?.id, "sources"] });
+      setSourceReview(null);
       onOpenChange(false);
-      toast({ title: "Batch updated", description: "Saved without silently repricing recorded historical materials." });
+      toast({ title: "Batch updated", description: "Saved with recorded costs protected and inventory changes reviewed." });
     },
     onError: (err: ClientErrorLike) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      setSourceReview(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/mix-batches"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/raw-stock"] });
+      toast({ title: "Edit rejected", description: err.message, variant: "destructive" });
     },
   });
 
