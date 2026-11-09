@@ -34,6 +34,8 @@ import {
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { factoryApiRequest } from "@/lib/factoryApi";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import type { ContainerWithSupplier, OtwTrackingTabProps } from "./factoryotwtrackingtab/types";
 import {
   STATUS_ACTIVE,
@@ -51,6 +53,7 @@ import { useOtwCsvTools } from "./factoryotwtrackingtab/hooks/useOtwCsvTools";
 import type { AuthMe } from "@shared/apiTypes";
 export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = {}) {
   const { toast } = useToast();
+  const { selectedCompany } = useCompany();
   const tqClient = useTQClient();
   const { data: currentUser } = useQuery<AuthMe>({ queryKey: ["/api/auth/me"] });
   const [supplierFilter, setSupplierFilter] = useState<string>("all");
@@ -63,9 +66,9 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
   const [showFilters, setShowFilters] = useState(false);
   const [detailedView, setDetailedView] = useState(false);
   // Use activeOnly=true so the backend pre-filters to PENDING/IN_TRANSIT/ARRIVED.
-  // The queryKey uses the base path so existing invalidations (prefix-match) still work.
+  // Canonical scoped query key retains the URL-first prefix for invalidations.
   const { data: containers, isLoading } = useQuery<ContainerWithSupplier[]>({
-    queryKey: ["/api/factory/containers", "otw"],
+    queryKey: companyQueryKey("/api/factory/containers", selectedCompany?.id, "otw"),
     queryFn: async () => {
       const res = await fetch("/api/factory/containers?activeOnly=true", { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch containers");
@@ -168,7 +171,7 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
   /** Immediately patch the in-memory cache entry so the UI reflects the new
    *  value without waiting for the background refetch to complete. */
   function patchCacheContainer(id: number, patch: Partial<ContainerWithSupplier>) {
-    tqClient.setQueriesData<ContainerWithSupplier[]>({ queryKey: ["/api/factory/containers"] }, (old) =>
+    tqClient.setQueriesData<ContainerWithSupplier[]>({ queryKey: companyQueryKey("/api/factory/containers", selectedCompany?.id) }, (old) =>
       old?.map((c) => (c.id === id ? { ...c, ...patch } : c))
     );
   }
@@ -176,7 +179,7 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
     try {
       await factoryApiRequest("PATCH", `/api/factory/containers/${id}`, { otwNote: val || null });
       patchCacheContainer(id, { otwNote: val || null });
-      tqClient.invalidateQueries({ queryKey: ["/api/factory/containers"] });
+      tqClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/containers", selectedCompany?.id) });
     } catch (err) {
       toast({
         title: "Failed to save note",
@@ -189,7 +192,7 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
     try {
       await factoryApiRequest("PATCH", `/api/factory/containers/${id}`, { otwDocsReceived: checked });
       patchCacheContainer(id, { otwDocsReceived: checked });
-      tqClient.invalidateQueries({ queryKey: ["/api/factory/containers"] });
+      tqClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/containers", selectedCompany?.id) });
     } catch (err) {
       toast({
         title: "Failed to update docs",
@@ -211,7 +214,7 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
     },
     onSuccess: (_data, variables) => {
       patchCacheContainer(variables.id, { arrivalDate: variables.arrivalDate });
-      tqClient.invalidateQueries({ queryKey: ["/api/factory/containers"] });
+      tqClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/containers", selectedCompany?.id) });
     },
     onError: (err: ClientErrorLike) => {
       toast({ title: "Failed to update ETA", description: err?.message, variant: "destructive" });

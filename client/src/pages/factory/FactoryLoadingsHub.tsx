@@ -4,6 +4,8 @@ import FactoryPendingLoadings from "./FactoryPendingLoadings";
 import FactoryPriorityScan from "./FactoryPriorityScan";
 import { Truck } from "lucide-react";
 import type { FactoryMyAccess } from "@shared/apiTypes";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import { TabsList, PillTabButton } from "@/components/ui/tabs";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
@@ -13,23 +15,28 @@ type LoadingsTab = "loadings" | "pending" | "priority";
 const ALL_LOADING_TABS: readonly LoadingsTab[] = ["loadings", "pending", "priority"];
 
 export default function FactoryLoadingsHub() {
+  const { selectedCompany } = useCompany();
   const { language } = useApplicationLanguage();
   const priorityScanLabel = translatePriorityScanText("priorityScan", language);
 
   const { data: settings } = useQuery({
-    queryKey: ["/api/factory/settings"],
+    queryKey: companyQueryKey("/api/factory/settings", selectedCompany?.id),
     queryFn: async () => {
       const r = await fetch("/api/factory/settings");
       return r.ok ? r.json() : {};
     },
     staleTime: 60000,
+    enabled: Boolean(selectedCompany?.id),
   });
 
   const { data: myAccess } = useQuery<FactoryMyAccess>({
-    queryKey: ["/api/factory/my-access"],
+    queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     staleTime: 5 * 60000,
   });
-  const hiddenTabs = myAccess?.hiddenCostFields ?? [];
+  const hiddenTabs = myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
+    ? myAccess.hiddenCostFields
+    : ["hide_invoicing_loadings_tab","hide_tab_loadings_pending"];
 
   const showLoadings = !hiddenTabs.includes("hide_invoicing_loadings_tab");
   const showPending =

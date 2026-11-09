@@ -9,15 +9,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/PageHeader";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { factorySupplierReportDefaultDates, isValidFactoryReportDateRange } from "@shared/factoryReportDateRange";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 
 export default function FactorySupplierReport() {
   const { toast } = useToast();
-  const today = new Date().toLocaleDateString("en-CA");
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toLocaleDateString("en-CA");
-
   const [companyId, setCompanyId] = useState<number | null>(null);
-  const [startDate, setStartDate] = useState(thirtyDaysAgo);
-  const [endDate, setEndDate] = useState(today);
+  const [initialDates] = useState(factorySupplierReportDefaultDates);
+  const [startDate, setStartDate] = useState(initialDates.startDate);
+  const [endDate, setEndDate] = useState(initialDates.endDate);
   const [supplierId, setSupplierId] = useState<string>("");
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -37,7 +37,7 @@ export default function FactorySupplierReport() {
   }, [companies, companyId]);
 
   const { data: suppliers = [], isLoading: suppliersLoading } = useQuery<CompanyOption[]>({
-    queryKey: ["/api/factory/suppliers", companyId],
+    queryKey: companyQueryKey("/api/factory/suppliers", companyId),
     queryFn: async () => {
       const res = await fetch(`/api/factory/suppliers?companyId=${companyId}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch suppliers");
@@ -51,8 +51,8 @@ export default function FactorySupplierReport() {
       toast({ title: "Please select a company", variant: "destructive" });
       return;
     }
-    if (!startDate || !endDate) {
-      toast({ title: "Please select a date range", variant: "destructive" });
+    if (!isValidFactoryReportDateRange(startDate, endDate)) {
+      toast({ title: "Choose a valid date range, From before or equal to To", variant: "destructive" });
       return;
     }
 

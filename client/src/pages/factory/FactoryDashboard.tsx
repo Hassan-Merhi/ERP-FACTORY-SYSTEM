@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -92,12 +94,14 @@ function CollapsiblePane({ open, children }: { open: boolean; children: React.Re
 }
 
 export default function FactoryDashboard() {
+  const { selectedCompany } = useCompany();
   const today = new Date().toLocaleDateString("en-CA");
   const [date, setDate] = useState(today);
   const [showBalesPane, setShowBalesPane] = useState(false);
 
   const { data, isLoading } = useQuery<DashboardData>({
-    queryKey: ["/api/factory/dashboard", date],
+    queryKey: companyQueryKey("/api/factory/dashboard", selectedCompany?.id, date),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const res = await fetch(`/api/factory/dashboard?date=${date}`);
       if (!res.ok) throw new Error("Failed to load dashboard");
@@ -106,11 +110,13 @@ export default function FactoryDashboard() {
   });
 
   const { data: kpis } = useQuery<KpiData>({
-    queryKey: ["/api/factory/dashboard-kpis"],
+    queryKey: companyQueryKey("/api/factory/dashboard-kpis", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
   });
 
   const { data: containers } = useQuery<Container[]>({
-    queryKey: ["/api/factory/containers"],
+    queryKey: companyQueryKey("/api/factory/containers", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
   });
 
   const containersOtw = (containers || [])

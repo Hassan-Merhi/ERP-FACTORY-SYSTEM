@@ -20,6 +20,10 @@ import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { companyQueryKey } from "@/lib/companyQueryScope";
+import { factoryActionCapabilities } from "@shared/factoryActionCapabilities";
+import { factoryStatusLabel } from "@shared/factoryStatusPresentation";
+import { useCompany } from "@/contexts/CompanyContext";
+import type { FactoryMyAccess } from "@shared/apiTypes";
 
 interface ClosingSummary {
   expectedBales: number | null;
@@ -102,13 +106,22 @@ async function getJson<T>(url: string): Promise<T> {
 
 export default function FactoryLoadingDispatchLifecycle({ orderId, dispatchId, companyId, status, role, onChanged }: Props) {
   const { toast } = useToast();
+  const { selectedCompany } = useCompany();
+  const { data: access } = useQuery<FactoryMyAccess>({
+    queryKey: companyQueryKey("/api/factory/my-access", companyId),
+    enabled: Boolean(companyId) && selectedCompany?.id === companyId,
+  });
   const { formatDisplayDateTime } = useDateFormat();
   const [, navigate] = useLocation();
   const base = "/api/factory/customer-orders/" + orderId + "/loading-dispatches/" + dispatchId;
   const previewUrl = base + "/close-preview";
   const lifecycleUrl = base + "/lifecycle";
-  const supervisory = ["owner", "admin", "developer"].includes(role.trim().toLowerCase());
-  const canClose = !["view only", "create only"].includes(role.trim().toLowerCase()) && status === "OPEN";
+  const capabilities = factoryActionCapabilities({
+    role,
+    hasFactoryAccess: Boolean(selectedCompany?.id === companyId && access?.companyId === companyId && access.hasFactoryAccess),
+  });
+  const supervisory = capabilities["dispatch.approve-discrepancy"];
+  const canClose = capabilities["dispatch.close"] && status === "OPEN";
   const [closeOpen, setCloseOpen] = useState(false);
   const [reopenOpen, setReopenOpen] = useState(false);
   const [closeConfirmed, setCloseConfirmed] = useState(false);
@@ -221,7 +234,7 @@ export default function FactoryLoadingDispatchLifecycle({ orderId, dispatchId, c
               </div>
             </div>
             <Badge variant="outline" className={status === "CLOSED" ? "border-emerald-500 text-emerald-600" : "border-blue-400 text-blue-600"}>
-              {status === "CLOSED" ? "Completed" : status === "OPEN" ? "Open" : status}
+              {status === "CLOSED" ? "Completed" : factoryStatusLabel("dispatch", status)}
             </Badge>
           </div>
 
@@ -244,7 +257,7 @@ export default function FactoryLoadingDispatchLifecycle({ orderId, dispatchId, c
                 <LockKeyhole className="mr-1.5 h-4 w-4" /> End Dispatch
               </Button>
             )}
-            {status === "CLOSED" && supervisory && (
+            {status === "CLOSED" && capabilities["dispatch.reopen"] && (
               <Button size="sm" variant="outline" onClick={() => {
                 setReopenReason(""); setReopenOpen(true);
               }} data-testid="button-reopen-dispatch">
