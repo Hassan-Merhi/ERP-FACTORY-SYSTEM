@@ -473,9 +473,9 @@ export function useAccountsLegacyModel() {
   // Groups = accounts marked with subType "Group" OR accounts that happen to have children
   // (backward-compat: groups created before subType tagging still show up)
   const { data: groupOptions = [] } = useQuery<GroupOption[]>({
-    queryKey: ["/api/ledger-accounts", selectedCompany?.id],
+    queryKey: ["/api/ledger-accounts/parent-groups", selectedCompany?.id],
     queryFn: async () => {
-      const url = selectedCompany?.id ? `/api/ledger-accounts?companyId=${selectedCompany.id}` : "/api/ledger-accounts";
+      const url = `/api/ledger-accounts/parent-groups?companyId=${selectedCompany!.id}`;
       const res = await fetch(url, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch ledger accounts");
       return res.json();
