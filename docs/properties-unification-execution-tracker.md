@@ -16,7 +16,7 @@
 | 3 | Reporting identity and currency | **Code complete; identity verified** | 11/11 static checks passed; runtime parity pending | `108b08f2a3fc9efc0588b25eb74d724fce1ba42b`, `431943cc27d69d754eb68e438e9d9eb81c63807e` |
 | 4 | Payments and rental view models | **Code complete** | 12 static source checks passed; runtime/typecheck pending | `125c1c66012b2de2619b35796094a30917e76c37` through `652f333a935bcceb84f5565a082fb6dd6dc2e392` |
 | 5 | Permissions and navigation registry | **Code complete** | 13 static consistency checks passed; runtime/role QA pending | `794e2204c31c1fa27cea1ba39d56a5cf89e8ee09` through `ac7bcb0d4056b2dd12182c3ce85761bf3a33874c` |
-| 6 | Final parity and legacy cleanup | Not started | Not started | — |
+| 6 | Final parity and legacy cleanup | **Source audit/cleanup complete** | 15/15 static checks passed; regression tests authored but not executed; runtime/accounting parity outstanding | `f1895e5af9ac5b8dd0452bf4b2aae9fcc824d0c4`, `ed25bf961276fe0aaa705288aea3a6bf57f26891`, `cb32bc81a167a11f72e2579178306c8911d2b240`, `63cf74c2c172a04082fcf383699d6b7eac2ebd8b`, `43e9dcd7cd0eb5db12f01780732523f48e39bc99` |
 
 ## Phase 1 — Fix navigation mismatch
 
@@ -160,6 +160,35 @@
 - [ ] TypeScript compilation, browser tests and merge integration review (not run).
 
 **Disposition:** Phase 5 frontend source implementation complete. Build, runtime, selected-company session and backend authorization review remain for independent merge certification. Phase 3 company-ID blocker resolved; runtime parity QA remains.
+
+## Phase 6 — Final parity audit, regression coverage and legacy cleanup
+
+**Source work committed (2026-11-09)**
+- Found and fixed an actual Phase 4 integration error: `RentalPaymentsLog.tsx` duplicated `reconciliationView` and `setReconciliationView` declarations already supplied by `useRentalPaymentsFilters`. The hook now owns these values alone.
+- Classified `PropertiesDashboard.tsx` as **compatibility-only**, not dead: `PropertiesRoutes.tsx` still mounts `/properties/dashboard`, and the dashboard still has cash/payable account creation, deletion and reordering actions. Preserved route, file and server endpoints; removed the obsolete primary `Properties Dashboard` command-search result only.
+- Removed the historical category count from the category toolbar because the historical category is filtered out from that toolbar, and removed the unreachable Hassan Properties `effectiveView === "OTHER"` callout since the Properties typed module policy forces `ALL`. Did **not** remove, rewrite, reverse or backfill the original billing adjustment or any record.
+- Added `tests/properties-unification-regression.test.ts`, focused on verified HP identity, dated voucher-backed snapshot selection, rental navigation/redirects, selected-company permissions, and exclusion of Factory/ERP reference projections from landlord totals. **Tests written, not run**.
+- Added `docs/properties-unification-phase6-handoff.md` with a parity matrix, legacy dashboard disposition, explicit risk boundaries, and Claude's independent pre-merge review checklist.
+
+**Static audit**
+- Re-fetched twelve current feature-branch source/test/document files and checked fifteen invariants (duplicate state removed, view hook authoritative, unreachable UI removed, dashboard still routed but hidden from command search, typed tabs and aliases, isolated API roots, verified HP ID/code, historical cutoff/vouchers, existing reconciliation math, new tests and handoff). **15/15 passed**.
+- Compared `main` with feature branch: last check **48 commits ahead / 1 commit behind**, **32 changed files**; no `server/`, `migrations/` or `shared/` files in the change list. **No merge or rebase performed.**
+- No CI, TypeScript compilation, test execution, running-app inspection, safe-company simulation or financial reconciliation took place. Static review is **not** runtime or accounting certification.
+
+**Acceptance checklist**
+- [x] Determine `PropertiesDashboard` disposition; keep compatibility route and account workflows.
+- [x] Remove only confirmed unreachable payment UI and stale command navigation.
+- [x] Fix duplicate shared view state introduced during Phase 4 integration.
+- [x] Add targeted regression test coverage without executing CI.
+- [x] Document parity review, risk boundaries and independent merge checklist.
+- [x] Confirm branch diff introduces no backend, migration or shared accounting code changes.
+- [x] Commit source work and record 15/15 static checks.
+- [ ] Execute TypeScript check, focused regression suite and existing receipt/reconciliation suite.
+- [ ] Browser smoke tests of Shops/Warehouses/Payments, deep links, role changes and compatibility dashboard.
+- [ ] Finance parity review: receipts, vouchers, deposits, cashbox, guarantee overlap, historical totals and Factory/ERP isolation in a safe non-production company.
+- [ ] Reconcile latest `main` (one commit ahead at last check), review potential conflicts, obtain independent certification and determine merge readiness.
+
+**Disposition:** **Phase 6 source implementation and cleanup complete; all six phases have committed source changes on this one branch.** The six-phase project is *not* certified or merged. Claude must perform remaining independent runtime/finance/typecheck/integration work before any main merge. This distinction is intentional and preserves the owner's no-CI request for this implementation.
 
 ## Mandatory boundaries for phases 2–6
 
