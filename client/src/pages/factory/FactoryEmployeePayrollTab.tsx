@@ -1,7 +1,9 @@
 import type { ClientErrorLike } from "@/lib/clientError";
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import { Play, DollarSign, Users, Building2, WalletCards, Loader2, ChevronDown, ChevronRight, Minus, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -64,6 +66,7 @@ const currentMonthEnd = () => {
 };
 
 export default function FactoryEmployeePayrollTab() {
+  const { selectedCompany } = useCompany();
   const { toast } = useToast();
   const [payrollOpen, setPayrollOpen] = useState(false);
   const [payDate, setPayDate] = useState(today());
@@ -77,7 +80,8 @@ export default function FactoryEmployeePayrollTab() {
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
 
   const { data: employees = [], isLoading } = useQuery<Employee[]>({
-    queryKey: ["/api/factory/employees"],
+    queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const res = await fetch("/api/factory/employees", { credentials: "include" });
       if (!res.ok) throw new Error("Failed");
@@ -87,7 +91,7 @@ export default function FactoryEmployeePayrollTab() {
   });
 
   const { isLoading: previewLoading, refetch: refetchPreview } = useQuery<{ preview: PayrollPreview[] }>({
-    queryKey: ["/api/factory/employee-payroll-preview", startDate, endDate],
+    queryKey: companyQueryKey("/api/factory/employee-payroll-preview", selectedCompany?.id, startDate, endDate),
     queryFn: async () => {
       const res = await fetch(`/api/factory/employee-payroll-preview?startDate=${startDate}&endDate=${endDate}`, {
         credentials: "include",
@@ -98,7 +102,15 @@ export default function FactoryEmployeePayrollTab() {
     enabled: false,
   });
 
+  useEffect(() => {
+    setPreviewRows({});
+    setAmounts({});
+    setDeductions({});
+    setPayrollOpen(false);
+  }, [selectedCompany?.id]);
+
   const loadPreview = async () => {
+    if (!selectedCompany?.id) return;
     const { data } = await refetchPreview();
     const preview = data?.preview || [];
     const initialAmounts: Record<number, string> = {};
