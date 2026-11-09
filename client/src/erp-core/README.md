@@ -1,4 +1,4 @@
-# ERP Core UI — Phases 1–3
+# ERP Core UI — Phases 1–4
 
 Use `@/erp-core` for new ERP-mode page presentation. This folder is a **composition/adoption layer**, not a new visual framework.
 
@@ -52,9 +52,21 @@ import { ErpPage, ErpPageActions, ErpDataTableToolbar, ErpEmptyState } from "@/e
 
 **Safety rule:** staged display-only account grouping is still saved through its original mutation; deleting a display group must not delete any ledger account or voucher. Preserve existing test IDs and domain callbacks.
 
+
+## Phase 4: unified ERP navigation and access decisions
+
+- `shared/erpNavigationPolicy.ts` is the authoritative **frontend role-visibility policy** for ERP navigation and route restrictions. It combines the existing role constraints with `shared/erpRouteAccess.ts` feature mapping. The server remains the final authorization boundary.
+- `client/src/app/erpPageRegistry.ts` owns the ERP pinned/section/utility navigation metadata, plus phone bottom-nav destination membership. The sidebar re-exports its public constants for older consumers; the command palette and phone More sheet already consume the sidebar's filtered list.
+- `client/src/app/erpAccessQuery.ts` supplies the company-scoped `/api/my-erp-pages` query options for **ErpAccessBoundary**, **ErpRoutes**, and **AppSidebar**, so selecting another company does not mix page grants. The boundary still mirrors the historical unscoped cache key for existing components; do not use that legacy key in new route or navigation code.
+- `ErpRoutes` uses the shared role policy for restricted `R(...)` route entries and preserves explicit feature-key guards for `G(...)` routes and composite hubs. Role restrictions are checked even if the ERP page API says `fullAccess`.
+- `useErpCan`, `useErpRecordChangeAccess`, and `erpCanDenialMessage` in the ERP barrel are aliases of the existing permission hooks. For mutation buttons, use those existing permission decisions with `ErpRecordAction`; no new authorization algorithm or role inferred from hard-coded UI strings.
+- Roles and special cases covered in tests: Developer-only accounting/tools, Admin-only maintenance, Owner-eligible review pages, POS menu limitations, View Only/Create Only dashboard suppression, ERP Tester settings/daybook exceptions, retail-hidden entries, composite inventory feature grants, company switching, and desktop/phone registry consistency.
+
+**Scope:** This phase changes frontend navigation and guards. It does not widen backend permissions, add permissions migrations, or change Factory/Properties routing. Run the full TypeScript, UI and route-permissions regression suites before merging, and reconcile the branch with the current `main` first.
+
 ## Rollout rules
 
 1. Phase 1 sets the stable API and migrates Opening/Closing Stock Summary as non-accounting pilot pages, retaining their existing shell spacing and header semantics.
-2. Phase 2 introduces the standard list table, shared filter toolbar, and pagination controls. Phase 3 standardizes controlled fields, async form actions, row buttons and confirmations; Phase 4 centralizes permissions/route visibility; Phase 5 standardizes queries and number/date display; Phase 6 handles reports/export; Phase 7 removes proven duplicates.
+2. Phase 2 introduces the standard list table, shared filter toolbar, and pagination controls. Phase 3 standardizes controlled fields, async form actions, row buttons and confirmations; Phase 4 centralizes ERP route/navigation roles and company-scoped page grants; Phase 5 standardizes queries and number/date display; Phase 6 handles reports/export; Phase 7 removes proven duplicates.
 3. Never move voucher posting, ledger calculations, stock valuation, payroll arithmetic, or company authorization into UI components. Server authorization remains definitive.
 4. Do not change data-testid, route URLs, stock balance calculations, or create/edit behavior as part of a presentational migration. Stock Query's former 200-result cap is separately replaced by explicit company-aware server pagination.
