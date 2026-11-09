@@ -84,6 +84,8 @@ describe("Historical Replay V7 final safety wiring", () => {
     expect(guard).toContain("QUANTITY_ONLY");
     expect(guard).toContain("VALUED_TRANSFER");
     expect(guard).toContain("OPENING_BALANCE");
+    expect(guard).toContain("HISTORICAL_ADJUSTMENT_EVIDENCE_REQUIRED");
+    expect(guard).toContain("basisEvidence");
   });
 
   it("keeps the migration cost-only and reversible replay separate", () => {
