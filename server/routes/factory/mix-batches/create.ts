@@ -80,12 +80,10 @@ export function registerFactoryMixBatchCreateRoutes(app: Express) {
           }
         })
       ) {
-        return res
-          .status(400)
-          .json({
-            code: "MIX_BATCH_LIFECYCLE_REFUSED",
-            message: "Source kg must be positive with no more than 3 decimal places.",
-          });
+        return res.status(400).json({
+          code: "MIX_BATCH_LIFECYCLE_REFUSED",
+          message: "Source kg must be positive with no more than 3 decimal places.",
+        });
       }
       const weightOf = (source: { weightKg?: unknown }) => mixKilograms(source.weightKg, "Source kg");
 
