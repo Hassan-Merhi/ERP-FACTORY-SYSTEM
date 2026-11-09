@@ -40,6 +40,7 @@ import { authenticatedUserQueryOptions } from "@/contracts/sessionQueryContracts
 import "./property-rental/propertiesRentalsPremium.css";
 
 import type { CashAccount, Props, Unit } from "./property-rental/types";
+import { getRentalModulePolicy } from "@/properties/config/rentalModulePolicy";
 import { fmtMoney, fmtMoneyCurrency } from "./property-rental/utils";
 import { ApiBaseCtx } from "./property-rental/shared";
 import { NoteCell } from "./property-rental/components/NoteCell";
@@ -55,15 +56,17 @@ import {
   type ReconciliationPayment,
 } from "./property-rental/components/PaymentsReconciliation";
 export default function PropertyRentalPage({
+  rentalModule,
   unitType,
   pageTitle,
   pageIcon,
   testIdPrefix,
-  apiBase = "/api/properties/rental",
   paymentsLogUrl,
 }: Props) {
   const { selectedCompany } = useCompany();
-  const isPropertiesRental = apiBase === "/api/properties/rental";
+  const rentalPolicy = getRentalModulePolicy(rentalModule);
+  const apiBase = rentalPolicy.apiBase;
+  const isPropertiesRental = rentalPolicy.usesPropertiesReconciliation;
   const { toast } = useToast();
   const appMode = useAppMode();
   const [, navigate] = useLocation();
@@ -87,7 +90,7 @@ export default function PropertyRentalPage({
   // Read-only accounting presentation shared with the Payments Log.
   // The historical cutoff alone excludes the later ALI cash ledger balance.
   const showHistoricalPaid =
-    apiBase === "/api/properties/rental" &&
+    isPropertiesRental &&
     unitType === "WAREHOUSE" &&
     selectedCompany?.name === HISTORICAL_RENT_COMPANY;
   const {
