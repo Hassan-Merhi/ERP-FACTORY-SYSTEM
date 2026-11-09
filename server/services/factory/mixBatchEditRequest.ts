@@ -47,7 +47,7 @@ function parseRows(rows: unknown, idField: "supplierId" | "sourceBatchId"): MixE
     }
     const row = raw as Record<string, unknown>;
     const id = row[idField];
-    if (!Number.isSafeInteger(id) || Number(id) <= 0) {
+    if (typeof id !== "number" || !Number.isSafeInteger(id) || id <= 0) {
       throw new MixEditRequestError(`Invalid ${idField}.`);
     }
     if (seen.has(Number(id))) {
