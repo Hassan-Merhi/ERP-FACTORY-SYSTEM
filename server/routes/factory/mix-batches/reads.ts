@@ -15,12 +15,30 @@ import { eq, and, desc, isNull } from "drizzle-orm";
 import { toMoney } from "../../../lib/money";
 import { getHistoricalMixBatchReconciliation, historicalMixAuditCsv } from "../../../services/factory/historicalMixBatchReconciliation";
 import { getPhase4MixProvenanceReport, phase4MixProvenanceCsv } from "../../../services/factory/mixPhase4ProvenanceAudit";
+import { getPhase5MixDownstreamReconciliation, phase5MixDownstreamCsv } from "../../../services/factory/mixPhase5DownstreamAudit";
 
 export function registerFactoryMixBatchReadRoutes(app: Express) {
   app.get("/api/factory/mix-batches", requireAuth, async (req: Request, res: Response) => {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
+
+      // Phase 5: all-mix downstream production/bale/sales/GL lineage.
+      if (req.query.profile === "downstream-audit") {
+        const role = String(req.session.currentRole || req.session.role || "").trim().toLowerCase();
+        if (!["admin", "owner", "developer", "dev"].includes(role)) {
+          return res.status(403).json({ message: "Downstream cost reconciliation requires Admin, Owner or Developer access." });
+        }
+        const report = await getPhase5MixDownstreamReconciliation(companyId);
+        res.set("Cache-Control", "private, no-store");
+        res.set("X-ERP-Payload-Profile", "factory-mix-downstream-audit-read-only");
+        if (req.query.format === "csv") {
+          res.set("Content-Type", "text/csv; charset=utf-8");
+          res.set("Content-Disposition", 'attachment; filename="factory-mix-downstream-audit.csv"');
+          return res.send(phase5MixDownstreamCsv(report));
+        }
+        return res.json(report);
+      }
 
       // Phase 4 supplier and ADD/raw-stock provenance. Access and exports
       // are privileged and never mutate historical production records.
