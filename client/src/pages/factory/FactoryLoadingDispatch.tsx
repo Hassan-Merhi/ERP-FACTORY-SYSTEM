@@ -108,12 +108,25 @@ function printNumber(n: number, digits = 0): string {
 }
 
 async function getJson<T>(url: string): Promise<T> {
-  const response = await fetch(url, { credentials: "include" });
-  if (!response.ok) {
-    const body = await response.json().catch(() => null);
-    throw new Error(body?.message || "Unable to load dispatch information");
+  // Dispatch evidence must never be substituted with the SPA index.html by
+  // a stale browser/proxy cache. Expect the API's JSON response explicitly.
+  const response = await fetch(url, {
+    credentials: "include",
+    cache: "no-store",
+    headers: { Accept: "application/json" },
+  });
+  const contentType = response.headers.get("content-type") || "";
+  if (!contentType.toLowerCase().includes("application/json")) {
+    throw new Error(
+      "Dispatch API returned a webpage instead of data (HTTP " +
+      response.status + "). Check the backend deployment and refresh the page."
+    );
   }
-  return response.json() as Promise<T>;
+  const body = await response.json();
+  if (!response.ok) {
+    throw new Error(body?.message || "Unable to load dispatch information (HTTP " + response.status + ")");
+  }
+  return body as T;
 }
 
 function getError(error: unknown): string {

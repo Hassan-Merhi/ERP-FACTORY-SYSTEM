@@ -47,6 +47,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 |---|---|
 | [accounting-flow.md](accounting-flow.md) | Voucher types, posting, the ledger |
 | [accounting-audit-2026-10.md](accounting-audit-2026-10.md) | Accounting audit findings, production evidence and remediation waves |
+| [accounting/factory-rent-open-exception.md](accounting/factory-rent-open-exception.md) | Factory Mode unresolved Warehouse 5001 November rent, preserved prepaid balance and safe-reconciliation rules |
 | [accounting/factory-worker-advance-ledger-audit-2026-11-03.md](accounting/factory-worker-advance-ledger-audit-2026-11-03.md) | Factory Worker Advances production reconciliation, verified accrual repair, and residual historical exceptions |
 | [unified-accounting-phase1.md](unified-accounting-phase1.md) | Unified accounting (ERP, Factory, Rentals): Phase 1: Foundation |
 | [unified-accounting-phase2.md](unified-accounting-phase2.md) | Unified accounting (ERP, Factory, Rentals): Phase 2: Posting and Voucher Lifecycle |
@@ -155,6 +156,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 |---|---|
 | [permissions-security.md](permissions-security.md) | Roles and permission model |
 | [security-privacy.md](security-privacy.md) | Authentication, sessions, data handling |
+| [security-posture.md](security-posture.md) | Current security controls, remaining risks and verification scorecard |
 | [security-company-isolation-wave3.md](security-company-isolation-wave3.md) | Company isolation, RLS, and privileged maintenance boundaries |
 | [program-8b-approval-exception-workflows.md](program-8b-approval-exception-workflows.md) | Control model for high-risk actions |
 | [audit-framework.md](audit-framework.md) | Server-side audit foundation |

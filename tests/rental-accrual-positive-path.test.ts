@@ -336,6 +336,35 @@ describe("rental accrual positive paths", () => {
     expect(harness.postErpVoucherTx).not.toHaveBeenCalled();
   });
 
+  it("refuses prepaid recognition on a held November Factory row before creating a journal", async () => {
+    harness.executeResults.push({
+      rows: [{
+        id: 889178,
+        company_id: 12,
+        module: "FACTORY",
+        accrual_voucher_id: null,
+        used_prepaid_account: true,
+        used_advance_account: false,
+        prior_rent_accrual: false,
+        notes: "[RENT_RECOGNITION_HOLD] Warehouse 5001 November review",
+      }],
+    });
+    await expect(
+      postAccrualPassTx(harness.tx as never, {
+        companyId: 12,
+        module: "FACTORY",
+        pass: "prepaid-recognition",
+        voucherDate: "2026-11-09",
+        description: "November warehouse rent",
+        currency: "USD",
+        lines: [],
+        ledgerRowIds: [889178],
+        options: {},
+      })
+    ).rejects.toThrow("RENTAL_ACCRUAL_ALREADY_POSTED_OR_ROW_CHANGED");
+    expect(harness.postErpVoucherTx).not.toHaveBeenCalled();
+  });
+
   it("refuses missing or mis-scoped monthly rows before writing a voucher", async () => {
     harness.executeResults.push({rows:[]});
     await expect(postAccrualPassTx(harness.tx as never,{

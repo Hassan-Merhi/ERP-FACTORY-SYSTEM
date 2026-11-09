@@ -11,6 +11,12 @@ import { registerFactoryProductsRoutes } from "./factory/products";
 import { registerFactoryContainersRoutes } from "./factory/containers";
 import { registerFactoryBalesRoutes } from "./factory/bales";
 import { registerFactoryCustomersRoutes } from "./factory/customers-core";
+import { registerFactoryLoadingDispatchRoutes } from "./factory/customer-orders/loadingDispatchRoutes";
+import { registerFactoryLoadingDispatchScanRoutes } from "./factory/customer-orders/loadingDispatchScanRoutes";
+import { registerFactoryLoadingDispatchComparisonRoutes } from "./factory/customer-orders/loadingDispatchComparisonRoutes";
+import { registerFactoryLoadingDispatchAllocationRoutes } from "./factory/customer-orders/loadingDispatchAllocationRoutes";
+import { registerFactoryLoadingDispatchLifecycleRoutes } from "./factory/customer-orders/loadingDispatchLifecycleRoutes";
+import { registerFactoryLoadingDispatchReportRoutes } from "./factory/customer-orders/loadingDispatchReportRoutes";
 import { registerFactoryContainerReadAccessRoutes } from "./factory/factoryContainerReadAccessRoutes";
 import { registerFactoryDocsUsersRoutes } from "./factory/docs-users";
 import { registerFactoryEmployeesPosRoutes } from "./factory/factoryEmployeesPosRoutes";
@@ -205,6 +211,18 @@ export function registerFactoryRoutes(app: Express, requireAuth: RequestHandler,
   registerFactoryStockEntryHistoryPaginationRoutes(app);
   registerFactoryStockAllocationV5PaginationRoutes(app);
   registerCentralFactoryPayrollGenerationRoute(app, requireAuth);
+
+  // Dispatch API endpoints must be registered before the older Factory
+  // routers: legacy broad routes must not consume /customer-orders/:id/
+  // loading-dispatches and let the SPA HTML fallback masquerade as JSON.
+  // Security middleware above already authorizes the Factory company, role,
+  // access flags and tenant scope. Read-only GETs remain company-scoped.
+  registerFactoryLoadingDispatchReportRoutes(app);
+  registerFactoryLoadingDispatchLifecycleRoutes(app);
+  registerFactoryLoadingDispatchAllocationRoutes(app);
+  registerFactoryLoadingDispatchComparisonRoutes(app);
+  registerFactoryLoadingDispatchScanRoutes(app);
+  registerFactoryLoadingDispatchRoutes(app);
 
   registerFactoryStockRoutes(app);
   registerFactorySuppliersRoutes(app);
