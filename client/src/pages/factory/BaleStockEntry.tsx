@@ -51,7 +51,7 @@ export default function BaleStockEntry() {
 
   const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id), enabled: Boolean(selectedCompany?.id), staleTime: 5 * 60000 });
   const { data: session } = useQuery<AuthMe>({ queryKey: ["/api/auth/me"], staleTime: 60000 });
-  const scopedAccess = myAccess?.companyId === selectedCompany?.id && myAccess.hasFactoryAccess ? myAccess : undefined;
+  const scopedAccess = myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true ? myAccess : undefined;
   const hiddenTabs = scopedAccess?.hiddenCostFields ?? [
     "hide_tab_stockentry_entry", "hide_tab_stockentry_history", "hide_tab_stockentry_ground_scan",
     "hide_tab_stockentry_daily_scan", "hide_tab_stockentry_pressing_machines",
