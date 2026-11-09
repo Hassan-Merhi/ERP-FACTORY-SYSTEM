@@ -35,6 +35,8 @@ type QueueEntry = {
 };
 
 const MAX_CONCURRENT_API_GETS = 6;
+// Bound occupied slots so one hung backend request cannot starve every page.
+const API_GET_TIMEOUT_MS = 45_000;
 const MAX_CACHE_ENTRIES = 32;
 const MAX_CACHEABLE_RESPONSE_BYTES = 1_500_000;
 const HIDDEN_TAB_STALE_MS = 10 * 60_000;
@@ -503,11 +505,24 @@ export function installRequestStormGuard(): void {
     const requestPromise = (async () => {
       if (shouldDeferUntilVisible(url.pathname, ttlMs)) await waitUntilVisible(lifetime.controller.signal);
       const release = await acquireGetSlot(lifetime.controller.signal);
+      let timedOut = false;
+      const requestTimeout = window.setTimeout(() => {
+        timedOut = true;
+        lifetime.controller.abort();
+      }, API_GET_TIMEOUT_MS);
       try {
-        const response = await originalFetch(
-          input,
-          forwardRequestInit(input, init, lifetime.controller.signal, revalidationEntry?.etag)
-        );
+        let response: Response;
+        try {
+          response = await originalFetch(
+            input,
+            forwardRequestInit(input, init, lifetime.controller.signal, revalidationEntry?.etag)
+          );
+        } catch (error) {
+          // A timeout is a real network failure, not a caller cancellation.
+          // Do not silently retry an unshared request and occupy another slot.
+          if (timedOut) throw new Error(`Request timed out: ${url.pathname}`);
+          throw error;
+        }
         // The response exists; its body is still unread. Any later abort would
         // tear that stream down under the caller, so disarm before handing over.
         lifetime.disarm();
@@ -523,6 +538,7 @@ export function installRequestStormGuard(): void {
 
         return response;
       } finally {
+        window.clearTimeout(requestTimeout);
         release();
       }
     })().finally(() => {
