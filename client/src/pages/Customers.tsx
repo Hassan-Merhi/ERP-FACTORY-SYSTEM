@@ -37,7 +37,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { z } from "zod";
 import { usePaginatedFilterState } from "@/hooks/use-paginated-filter-state";
-import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
+import { useErpRecordChangeAccess as useExistingRecordChangeAccess } from "@/erp-core";
 
 const formSchema = insertCustomerSchema.extend({
   legalName: z.string().min(1, "Legal name is required"),
