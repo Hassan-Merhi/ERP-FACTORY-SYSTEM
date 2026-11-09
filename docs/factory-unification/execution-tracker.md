@@ -15,7 +15,7 @@
 | 5 | Attendance & scanning | **SOURCE DONE — RUNTIME UNVERIFIED** | Shared Beirut date and camera-error/queue feedback helpers consumed by attendance/pressing views; existing scanner gate, server approval and separate offline queues preserved. Tests authored, not run. See `docs/factory-unification/phase-5-implementation.md` |
 | 6 | Stock allocation & proformas | **SOURCE DONE — RUNTIME UNVERIFIED** | Shared V5 read-only proforma projection, company-isolated read keys and shared debounce; V2/V3 compatibility and costing/reservations preserved. Tests authored, not run. See `docs/factory-unification/phase-6-implementation.md` |
 | 7 | Reports & historical accounting | **SOURCE DONE — RUNTIME UNVERIFIED** | Shared Net Position UI date navigation, Beirut supplier report defaults/range checks, company-scoped supplier read; historical as-of and financial pipeline unchanged. Tests authored, not run. See `docs/factory-unification/phase-7-implementation.md` |
-| 8 | Final regression & documentation | NOT STARTED | Manual/source regression and documentation without CI |
+| 8 | Final regression & documentation | **SOURCE DONE — RELEASE GATES OPEN** | Pinned 62/151 source parity checked through GitHub; nine focused source fragments found, dependency-free read-only source-check script and eight authored test suites verified present. Three source issues corrected. No TypeScript, Vitest, browser, API, financial or runtime tests executed. NO-GO pending manual acceptance; see `docs/factory-unification/phase-8-regression-handoff.md` |
 
 ## Completion protocol
 - Mark a phase **DONE** only after its recorded deliverables and source-level validations are complete. Runtime-dependent claims must either be verified or explicitly labeled unverified.
@@ -24,6 +24,7 @@
 - Keep all work on the same branch. Any future merge or production changes are outside this tracker.
 
 ## History
+- 2026-11-09: Phase 8 source audit and handoff committed: 62 registry entries and 151 routes matched fixture, nine targeted source assertions inspected; six worker reads gated on active company, production local rows reset on company change, proforma location query scoped. Added read-only Node source gate (not run); verified eight authored test suites exist; full runtime/financial release remains NO-GO. No CI, no main merge.
 - 2026-11-09: Continued Phase 2: scoped staff/attendance, Workers/bonuses, nested hub/settings and inventory reads; fail-closed company-matched controls; added unexecuted source characterization tests. High-risk source hardening done, exhaustive repo-wide and runtime audit still open; no CI.
 - 2026-11-09: Continued Phase 1: corrected source parser for commented Production Bonuses entry, pinned all 62 registry pages / 151 routes, created read-only regression test and non-CI manual capture matrix; source inventory complete while UI/API fixtures and runtime checks remain unverified.
 - 2026-11-09: Phase 7 source consolidation committed: common Net Position date navigation and supplier report calendar validation. Historical as-of and financial posting/valuation are unchanged; runtime and historical parity unverified. No CI.
