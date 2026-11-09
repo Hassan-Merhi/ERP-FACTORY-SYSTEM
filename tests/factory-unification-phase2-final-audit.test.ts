@@ -20,7 +20,7 @@ describe("Factory Phase 2 further source coverage", () => {
     ]) {
       const src = code("client/src/pages/factory/" + filename);
       expect(src, filename).toContain('companyQueryKey("/api/factory/my-access", selectedCompany?.id)');
-      expect(src, filename).toContain("myAccess?.companyId === selectedCompany?.id && myAccess.hasFactoryAccess");
+      expect(src, filename).toContain("myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true");
     }
   });
 
@@ -54,7 +54,7 @@ describe("Factory Phase 2 further source coverage", () => {
     expect(src).not.toContain("const canEdit = !myAccess ||");
     expect(src).toContain("accessReady &&");
     expect(src).toContain("myAccess?.companyId === selectedCompany?.id");
-    expect(src).toContain("myAccess.hasFactoryAccess");
+    expect(src).toContain("myAccess?.hasFactoryAccess");
   });
 
   it("keeps the dispatch capability matrix fail closed regardless of UI state", () => {
