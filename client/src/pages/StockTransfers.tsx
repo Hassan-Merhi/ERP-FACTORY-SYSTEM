@@ -11,13 +11,21 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ArrowRight, ExternalLink, Pencil, Save, X, ArrowLeftRight, Package, DollarSign, Clock } from "lucide-react";
-import { parseISO } from "date-fns";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
-import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { PageHeader } from "@/components/PageHeader";
-import { ErpListFilters, ErpListTable, ErpField, ErpFormActions, ErpPendingButton } from "@/erp-core";
+import {
+  ErpListFilters,
+  ErpListTable,
+  ErpField,
+  ErpFormActions,
+  ErpPendingButton,
+  erpCompanyDataKey,
+  erpRequestUrl,
+  invalidateErpDataFamilies,
+  useErpDateFormat,
+} from "@/erp-core";
 import { PeriodFilter, PeriodFilterValue, getDefaultPeriodValue } from "@/components/ui/period-filter";
 import { useDateJump } from "@/hooks/use-date-jump";
 import { usePaginatedFilterState } from "@/hooks/use-paginated-filter-state";
@@ -54,7 +62,7 @@ function createStockTransferFilters(): StockTransferFilters {
 export default function StockTransfers({ hideVoucherNotes = false }: StockTransfersProps) {
   const [, setLocation] = useLocation();
   const { formatAmount } = useCurrencyContext();
-  const { formatShortDate: formatDate } = useDateFormat();
+  const { formatShortDate: formatDate } = useErpDateFormat();
   const { toast } = useToast();
   const { selectedCompany } = useCompany();
 
@@ -75,20 +83,16 @@ export default function StockTransfers({ hideVoucherNotes = false }: StockTransf
   const startDate = period.fromDate ?? "";
   const endDate = period.toDate ?? "";
 
-  const params = new URLSearchParams();
-  if (startDate) params.set("startDate", startDate);
-  if (endDate) params.set("endDate", endDate);
-  const queryString = params.toString();
+  const queryUrl = erpRequestUrl("/api/stock-transfers/list", { startDate, endDate });
 
   const { data: transfers = [], isLoading } = useQuery<StockTransferRow[]>({
-    queryKey: ["/api/stock-transfers/list", startDate, endDate],
+    queryKey: erpCompanyDataKey(queryUrl, selectedCompany?.id),
     queryFn: async () => {
-      const res = await fetch(`/api/stock-transfers/list${queryString ? `?${queryString}` : ""}`, {
-        credentials: "include",
-      });
+      const res = await fetch(queryUrl, { credentials: "include" });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
+    enabled: selectedCompany?.id != null,
   });
 
   const updateNotesMutation = useMutation({
@@ -99,7 +103,7 @@ export default function StockTransfers({ hideVoucherNotes = false }: StockTransf
     },
     onSuccess: () => {
       toast({ title: "Notes updated" });
-      queryClient.invalidateQueries({ queryKey: ["/api/stock-transfers/list"] });
+      void invalidateErpDataFamilies(queryClient, ["/api/stock-transfers/list"]);
       setEditingTransfer(null);
     },
     onError: (err: Error) => {
@@ -135,7 +139,7 @@ export default function StockTransfers({ hideVoucherNotes = false }: StockTransf
 
   const formatVoucherDate = (d: string) => {
     try {
-      return formatDate(parseISO(d));
+      return formatDate(d);
     } catch {
       return d;
     }
