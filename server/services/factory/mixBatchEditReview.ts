@@ -29,6 +29,7 @@ export interface MixBatchForSourceReview {
   totalCost: string;
   usedKg: string;
   costPerKg: string;
+  batchDate?: string | null;
 }
 
 export interface MixSourceForReview {
@@ -62,7 +63,7 @@ export async function prepareMixSourceEditReview(
   oldSources: readonly MixSourceForReview[],
   proposed: MixEditSelection,
   reason: string,
-  opts: { forUpdate?: boolean } = {},
+  opts: { forUpdate?: boolean; proposedBatchDate?: string | null } = {},
 ): Promise<MixSourceEditReview> {
   const changed = !sameMixEditSources(oldSources, proposed);
   const warnings: string[] = [];
@@ -234,6 +235,7 @@ export async function prepareMixSourceEditReview(
     },
     old: normalizedOld, proposed,
     live: snapshot, reason: reason.trim(),
+    proposedBatchDate: opts.proposedBatchDate ?? batch.batchDate ?? null,
   });
   return {
     changed,
