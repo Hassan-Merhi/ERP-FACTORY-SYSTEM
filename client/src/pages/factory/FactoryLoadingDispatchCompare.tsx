@@ -60,6 +60,7 @@ interface Summary {
   loadedWeightKg: number;
   expectedBales: number | null;
   expectedWeightKg: number | null;
+  weightDifferenceKg: number | null;
   verifiedBales: number;
   verifiedWeightKg: number;
   matchedBales: number;
@@ -167,8 +168,8 @@ function Findings({ title, subtitle, items, kind, orderId }: {
   kind: FindingsKind; orderId: number;
 }) {
   const [, navigate] = useLocation();
-  const [expanded, setExpanded] = useState(false);
-  const visible = expanded ? items.slice(0, 500) : items.slice(0, 30);
+  const [visibleCount, setVisibleCount] = useState(30);
+  const visible = items.slice(0, visibleCount);
   const icon = kind === "missing" ? <FileSearch className="h-4 w-4 text-amber-600" />
     : kind === "unexpected" ? <AlertCircle className="h-4 w-4 text-red-600" />
     : kind === "cross" ? <Truck className="h-4 w-4 text-blue-500" />
@@ -226,11 +227,16 @@ function Findings({ title, subtitle, items, kind, orderId }: {
                 </tbody>
               </table>
             </div>
-            {items.length > 30 && (
-              <Button size="sm" variant="outline" onClick={() => setExpanded((v) => !v)}>
-                {expanded ? "Show fewer" : "Show more (" + printNumber(Math.min(items.length, 500)) + " of " + printNumber(items.length) + ")"}
-              </Button>
-            )}
+            <div className="flex flex-wrap items-center gap-2">
+              {items.length > visibleCount && (
+                <Button size="sm" variant="outline" onClick={() => setVisibleCount((count) => count + 100)}>
+                  Show next {printNumber(Math.min(100, items.length - visibleCount))} references
+                </Button>
+              )}
+              {visibleCount > 30 && (
+                <Button size="sm" variant="ghost" onClick={() => setVisibleCount(30)}>Show fewer</Button>
+              )}
+            </div>
           </>
         )}
       </CardContent>
@@ -377,6 +383,7 @@ export default function FactoryLoadingDispatchCompare() {
                 <div className="flex flex-wrap justify-between gap-2 text-xs text-muted-foreground">
                   <span>Expected weight: {printNumber(s?.expectedWeightKg ?? null, 3)} kg</span>
                   <span>Scanned weight: {printNumber(s?.verifiedWeightKg ?? null, 3)} kg</span>
+                  <span>Weight difference: {printNumber(s?.weightDifferenceKg ?? null, 3)} kg</span>
                   <span>Loading: {printNumber(s?.loadedBales ?? null)} bales · {printNumber(s?.loadedWeightKg ?? null, 3)} kg</span>
                 </div>
                 {s && (s.crossTripMisplacedBales > 0 || s.duplicateBales > 0) && (
@@ -419,7 +426,7 @@ export default function FactoryLoadingDispatchCompare() {
                   </div>
                 </div>
                 <div className="overflow-x-auto rounded-xl border dark:border-slate-700">
-                  <table className="w-full min-w-[760px] text-left text-xs">
+                  <table className="w-full min-w-[900px] text-left text-xs">
                     <thead className="sticky top-0 bg-slate-100 text-muted-foreground dark:bg-[#0c192e]">
                       <tr>
                         <th className="px-3 py-3 font-semibold">Article</th>
@@ -427,7 +434,9 @@ export default function FactoryLoadingDispatchCompare() {
                         <th className="px-3 py-3 text-right font-semibold">Scanned</th>
                         <th className="px-3 py-3 text-right font-semibold">Missing</th>
                         <th className="px-3 py-3 text-right font-semibold">Extra</th>
+                        <th className="px-3 py-3 text-right font-semibold">Expected KG</th>
                         <th className="px-3 py-3 text-right font-semibold">Scanned KG</th>
+                        <th className="px-3 py-3 text-right font-semibold">KG difference</th>
                         <th className="px-3 py-3 font-semibold">Result</th>
                       </tr>
                     </thead>
@@ -447,11 +456,13 @@ export default function FactoryLoadingDispatchCompare() {
                           <td className={"px-3 py-3 text-right font-mono " + (article.extraQty > 0 ? "font-bold text-red-600" : "")}>
                             {article.expectedQty === null ? "—" : printNumber(article.extraQty)}
                           </td>
+                          <td className="px-3 py-3 text-right font-mono">{printNumber(article.expectedWeightKg, 3)}</td>
                           <td className="px-3 py-3 text-right font-mono">{printNumber(article.scannedWeightKg, 3)}</td>
+                          <td className="px-3 py-3 text-right font-mono">{printNumber(article.expectedWeightKg === null ? null : article.expectedWeightKg - article.scannedWeightKg, 3)}</td>
                           <td className="px-3 py-3"><StatusBadge value={article.status} /></td>
                         </tr>
                       ))}
-                      {rows.length === 0 && <tr><td colSpan={7} className="p-8 text-center text-muted-foreground">No articles match this filter.</td></tr>}
+                      {rows.length === 0 && <tr><td colSpan={9} className="p-8 text-center text-muted-foreground">No articles match this filter.</td></tr>}
                     </tbody>
                   </table>
                 </div>
