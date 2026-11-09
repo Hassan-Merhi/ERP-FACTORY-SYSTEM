@@ -61,7 +61,7 @@ requireTokens("Mix Batch history", sources.mixBatches, [
 
 requireTokens("Container Loading", sources.containerLoading, [
   'data-testid="factory-container-loading-page"',
-  "bg-slate-50/70 p-3 dark:bg-[#080f1c] sm:p-4 lg:p-6",
+  "bg-background p-3 sm:p-4 lg:p-6",
   "flex min-h-0 min-w-0 flex-1 flex-col gap-4 xl:flex-row",
   "mobile-action-bar",
 ]);

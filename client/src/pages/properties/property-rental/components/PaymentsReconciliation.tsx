@@ -11,7 +11,7 @@ export type { ReconciliationSnapshot, ReconciliationPayment };
 /** Compatibility adapter: reconciliation is a pure read-model hook, not a dashboard. */
 export function PaymentsReconciliation({
   payments,
-  companyId,
+  companyId: scopedCompanyId,
   isLoading,
   isError = false,
   onReconciliationChange,
@@ -22,25 +22,53 @@ export function PaymentsReconciliation({
   isError?: boolean;
   onReconciliationChange?: (snapshot: ReconciliationSnapshot) => void;
 }) {
-  const snapshot = useRentalReconciliation({ payments, companyId, isLoading, isError });
+  const {
+    companyId,
+    loading,
+    verified,
+    accountSum,
+    aliCashLedgerId,
+    cashboxLedgerId,
+    rentAndCashBalance,
+    depositBalance,
+    guaranteeCashOverlap,
+    recorded,
+    netAdjustment,
+    reconciled,
+    difference,
+  } = useRentalReconciliation({ payments, companyId: scopedCompanyId, isLoading, isError });
 
   useEffect(() => {
-    onReconciliationChange?.(snapshot);
+    onReconciliationChange?.({
+      companyId,
+      loading,
+      verified,
+      accountSum,
+      aliCashLedgerId,
+      cashboxLedgerId,
+      rentAndCashBalance,
+      depositBalance,
+      guaranteeCashOverlap,
+      recorded,
+      netAdjustment,
+      reconciled,
+      difference,
+    });
   }, [
     onReconciliationChange,
-    snapshot.companyId,
-    snapshot.loading,
-    snapshot.verified,
-    snapshot.accountSum,
-    snapshot.aliCashLedgerId,
-    snapshot.cashboxLedgerId,
-    snapshot.rentAndCashBalance,
-    snapshot.depositBalance,
-    snapshot.guaranteeCashOverlap,
-    snapshot.recorded,
-    snapshot.netAdjustment,
-    snapshot.reconciled,
-    snapshot.difference,
+    companyId,
+    loading,
+    verified,
+    accountSum,
+    aliCashLedgerId,
+    cashboxLedgerId,
+    rentAndCashBalance,
+    depositBalance,
+    guaranteeCashOverlap,
+    recorded,
+    netAdjustment,
+    reconciled,
+    difference,
   ]);
 
   return null;

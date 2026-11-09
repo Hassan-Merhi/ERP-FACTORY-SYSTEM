@@ -28,27 +28,35 @@ async function sendReport(req: Request, res: Response, scope: "overall" | "trip"
     const rawClosure = req.query.closureId;
     let closureId: number | undefined;
     if (rawClosure !== undefined) {
-      if (scope !== "trip" || typeof rawClosure !== "string" ||
-          !/^[1-9]\d*$/.test(rawClosure) || !Number.isSafeInteger(Number(rawClosure))) {
+      if (
+        scope !== "trip" ||
+        typeof rawClosure !== "string" ||
+        !/^[1-9]\d*$/.test(rawClosure) ||
+        !Number.isSafeInteger(Number(rawClosure))
+      ) {
         return res.status(400).json({ message: "Invalid closureId. Historical reports require a selected dispatch" });
       }
       closureId = Number(rawClosure);
     }
     const report = await loadFactoryDispatchReport({
-      companyId: state.companyId, orderId,
-      ...(dispatchId === undefined ? {} : { dispatchId }),
+      companyId: state.companyId,
+      orderId,
+      ...(dispatchId == null ? {} : { dispatchId }),
       ...(closureId === undefined ? {} : { closureId }),
     });
     res.setHeader("Cache-Control", "private, no-store");
     res.setHeader("X-Content-Type-Options", "nosniff");
     if (!excel) return res.json(report);
 
-    const name = buildSafeFilename([
-      "Factory_Dispatch",
-      report.loading.containerNumber ?? "loading_" + orderId,
-      report.trip ? "trip_" + report.trip.dispatchNumber : "all_trips",
-      report.closure ? "closure_" + report.closure.revision : "live",
-    ], "xlsx");
+    const name = buildSafeFilename(
+      [
+        "Factory_Dispatch",
+        report.loading.containerNumber ?? "loading_" + orderId,
+        report.trip ? "trip_" + report.trip.dispatchNumber : "all_trips",
+        report.closure ? "closure_" + report.closure.revision : "live",
+      ],
+      "xlsx"
+    );
     const workbook = buildFactoryLoadingDispatchWorkbook(report);
     await writeWorkbookToResponse(workbook, res, name);
     return;

@@ -304,3 +304,28 @@ These current-reference documents are indexed here for audit coverage. Their beh
 | [Factory worker-advance ledger audit](accounting/factory-worker-advance-ledger-audit-2026-11-03.md) | Current worker-advance ledger investigation, safeguards and payment evidence |
 
 | [October 2026 payroll overlap reconciliation](accounting/october-2026-paid-payroll-overlap-reclassification-20261103.md) | Current safeguards and backdated accounting evidence for approved paid-payroll overlap reclassification |
+
+| Document | Covers |
+|---|---|
+| [factory-loading-dispatch-phase1.md](factory-loading-dispatch-phase1.md) | Factory Loading Dispatch — Phase 1 (Verification Only) |
+| [factory-loading-dispatch-phase2.md](factory-loading-dispatch-phase2.md) | Factory Loading Dispatch — Phase 2 implementation |
+| [factory-loading-dispatch-phase3.md](factory-loading-dispatch-phase3.md) | Factory Loading Dispatch — Phase 3: Barcode verification |
+| [factory-loading-dispatch-phase4.md](factory-loading-dispatch-phase4.md) | Factory Loading Dispatch — Phase 4: Comparison |
+| [factory-loading-dispatch-phase5.md](factory-loading-dispatch-phase5.md) | Factory Loading Dispatch — Phase 5: Priority allocation and cross-trip coordination |
+| [factory-loading-dispatch-phase6.md](factory-loading-dispatch-phase6.md) | Factory Loading Dispatch — Phase 6: End Dispatch and audit controls |
+| [factory-loading-dispatch-phase7.md](factory-loading-dispatch-phase7.md) | Factory Loading Dispatch — Phase 7: Reports, manifests and exports |
+| [factory-unification/execution-tracker.md](factory-unification/execution-tracker.md) | Factory Unification — Execution Tracker |
+| [factory-unification/phase-1-baseline.md](factory-unification/phase-1-baseline.md) | Factory Unification — Phase 1 Source Baseline |
+| [factory-unification/phase-1-manual-baseline-protocol.md](factory-unification/phase-1-manual-baseline-protocol.md) | Phase 1 — Manual Runtime Baseline Capture Protocol |
+| [factory-unification/phase-2-implementation.md](factory-unification/phase-2-implementation.md) | Factory Unification — Phase 2 Implementation Record |
+| [factory-unification/phase-3-implementation.md](factory-unification/phase-3-implementation.md) | Factory Unification — Phase 3 Implementation Record |
+| [factory-unification/phase-4-implementation.md](factory-unification/phase-4-implementation.md) | Factory Unification — Phase 4 Implementation Record |
+| [factory-unification/phase-5-implementation.md](factory-unification/phase-5-implementation.md) | Factory Unification — Phase 5 Implementation Record |
+| [factory-unification/phase-6-implementation.md](factory-unification/phase-6-implementation.md) | Factory Unification — Phase 6 Implementation Record |
+| [factory-unification/phase-7-implementation.md](factory-unification/phase-7-implementation.md) | Factory Unification — Phase 7 Implementation Record |
+| [factory-unification/phase-8-regression-handoff.md](factory-unification/phase-8-regression-handoff.md) | Factory Unification — Phase 8 Source Regression & Release Handoff |
+| [properties-unification-execution-tracker.md](properties-unification-execution-tracker.md) | Properties Mode — Unification Execution Tracker |
+| [properties-unification-phase11-verification.md](properties-unification-phase11-verification.md) | Properties Mode — Phase 11 Regression & Integration Verification |
+| [properties-unification-phase6-handoff.md](properties-unification-phase6-handoff.md) | Properties Unification — Phase 6 Parity Audit and Claude Merge Handoff |
+| [properties-unification-phases-12-15-tracker.md](properties-unification-phases-12-15-tracker.md) | Properties Mode — Follow-up Unification Execution Tracker (Phases 12–15) |
+| [properties-unification-phases-7-11-tracker.md](properties-unification-phases-7-11-tracker.md) | Properties Mode — Unification Execution Tracker (Phases 7–11) |
