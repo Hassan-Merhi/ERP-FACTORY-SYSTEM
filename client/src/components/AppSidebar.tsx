@@ -86,7 +86,6 @@ export const ERP_NAV_SECTIONS: NavSection[] = [
     color: NAV_COLOR.sales,
     items: [
       { title: "POS", url: "/pos", icon: ShoppingCart },
-      { title: "POS Item Replacement", url: "/pos-item-replacement", icon: Replace },
       { title: "Sales Tools", url: "/sales-tools", icon: LayoutGrid },
     ],
   },
@@ -98,7 +97,6 @@ export const ERP_NAV_SECTIONS: NavSection[] = [
       { title: "Cost Centers", url: "/cost-centers", icon: ListTree },
       { title: "Parties", url: "/parties", icon: Handshake },
       { title: "Payroll", url: "/payroll", icon: UserCheck },
-      { title: "Ticket Management", url: "/tickets", icon: Ticket },
     ],
   },
   {
@@ -112,9 +110,6 @@ export const ERP_NAV_SECTIONS: NavSection[] = [
     color: NAV_COLOR.analytics,
     items: [
       { title: "Sales Report", url: "/sales-report", icon: PieChart },
-      { title: "Supplier Profit Reconciliation", url: "/supplier-profit-reconciliation", icon: Calculator },
-      { title: "Stock In & Sales", url: "/stock-in-sales-report", icon: BarChart3 },
-      { title: "Item Market Analysis", url: "/item-market-analysis", icon: BarChart3 },
       { title: "Analytics", url: "/analytics", icon: BarChart3 },
     ],
   },
@@ -130,6 +125,17 @@ export const ERP_NAV_SECTIONS: NavSection[] = [
     items: [
       { title: "AI Command Center", url: "/ai-command-center", icon: Bot },
       { title: "AI Validation", url: "/ai-validation", icon: ShieldCheck },
+    ],
+  },
+  {
+    label: "Others",
+    color: NAV_COLOR.analytics,
+    items: [
+      { title: "Ticket Management", url: "/tickets", icon: Ticket },
+      { title: "Supplier Profit Review", url: "/supplier-profit-reconciliation", icon: Calculator },
+      { title: "Stock & Sales Report", url: "/stock-in-sales-report", icon: BarChart3 },
+      { title: "Market Price Analysis", url: "/item-market-analysis", icon: BarChart3 },
+      { title: "POS Item Replacement", url: "/pos-item-replacement", icon: Replace },
     ],
   },
 ];
