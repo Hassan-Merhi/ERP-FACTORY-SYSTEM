@@ -73,6 +73,7 @@ export interface LoadingDispatchComparison {
     loadedWeightKg: number;
     expectedBales: number | null;
     expectedWeightKg: number | null;
+    weightDifferenceKg: number | null;
     verifiedBales: number;
     verifiedWeightKg: number;
     matchedBales: number;
@@ -347,6 +348,7 @@ export function compareFactoryLoadingDispatch(input: {
       loadedBales: loadedMap.size,
       loadedWeightKg: roundKg([...loadedMap.values()].reduce((sum,b) => sum + weight(b.weightKg), 0)),
       expectedBales: expectedBalesCount, expectedWeightKg,
+      weightDifferenceKg: expectedWeightKg === null ? null : roundKg(expectedWeightKg - verifiedWeightKg),
       verifiedBales, verifiedWeightKg, matchedBales,
       missingBales: missingQtyTotal,
       unexpectedBales: unexpectedBales.length,
