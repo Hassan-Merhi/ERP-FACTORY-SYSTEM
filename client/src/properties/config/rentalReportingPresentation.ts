@@ -3,7 +3,7 @@ import type { PaymentsPeriod } from "@/pages/properties/property-rental/componen
 
 /** Read-only presentation currency. Never silently add unconverted currencies. */
 export function hasSingleUsdBasis(rows: readonly { currency?: string | null }[]): boolean {
-  return rows.every((row) => !row.currency || row.currency.trim().toUpperCase() === "USD");
+  return rows.every((row) => !row.currency?.trim() || row.currency.trim().toUpperCase() === "USD");
 }
 
 /** A financial figure explicitly identifies the source of its calculation. */
