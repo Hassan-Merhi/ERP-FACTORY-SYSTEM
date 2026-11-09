@@ -20,9 +20,12 @@ import "./stockEntryApprovedDesign.css";
 import { StockEntryTab } from "./bale-stock-entry/StockEntryTab";
 import { DailyStockSummary } from "./bale-stock-entry/DailyStockSummary";
 import type { AuthMe, FactoryMyAccess } from "@shared/apiTypes";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import { canUseFactorySurface } from "@/lib/factoryClientAccess";
 
 export default function BaleStockEntry() {
+  const { selectedCompany } = useCompany();
   const todayStr = new Date().toLocaleDateString("en-CA");
   const [summaryDate] = useState<string>(todayStr);
   const { language } = useApplicationLanguage();
@@ -37,7 +40,8 @@ export default function BaleStockEntry() {
   const handleTabChange = (tab: string) => setMountedTabs((prev) => (prev.has(tab) ? prev : new Set([...prev, tab])));
 
   const { data: settings } = useQuery({
-    queryKey: ["/api/factory/settings"],
+    queryKey: companyQueryKey("/api/factory/settings", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const r = await fetch("/api/factory/settings");
       return r.ok ? r.json() : {};
@@ -45,9 +49,14 @@ export default function BaleStockEntry() {
     staleTime: 60000,
   });
 
-  const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: ["/api/factory/my-access"], staleTime: 5 * 60000 });
+  const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id), enabled: Boolean(selectedCompany?.id), staleTime: 5 * 60000 });
   const { data: session } = useQuery<AuthMe>({ queryKey: ["/api/auth/me"], staleTime: 60000 });
-  const hiddenTabs = myAccess?.hiddenCostFields ?? [];
+  const scopedAccess = myAccess?.companyId === selectedCompany?.id && myAccess.hasFactoryAccess ? myAccess : undefined;
+  const hiddenTabs = scopedAccess?.hiddenCostFields ?? [
+    "hide_tab_stockentry_entry", "hide_tab_stockentry_history", "hide_tab_stockentry_ground_scan",
+    "hide_tab_stockentry_daily_scan", "hide_tab_stockentry_pressing_machines",
+    "hide_tab_stockentry_production_targets",
+  ];
 
   const showEntry = settings?.stockEntryTabEntryEnabled !== false && !hiddenTabs.includes("hide_tab_stockentry_entry");
   const showHistory =
@@ -56,7 +65,7 @@ export default function BaleStockEntry() {
   const showDailyScan = !hiddenTabs.includes("hide_tab_stockentry_daily_scan");
   const showPressingMachines = !hiddenTabs.includes("hide_tab_stockentry_pressing_machines");
   const showProductionTargets = !hiddenTabs.includes("hide_tab_stockentry_production_targets");
-  const canReadProductionSession = canUseFactorySurface(myAccess, "factory/stock-entry", [
+  const canReadProductionSession = canUseFactorySurface(scopedAccess, "factory/stock-entry", [
     "hide_tab_stockentry_production_targets",
   ]);
   // With pressing as the only granted Stock Entry section, workers should
@@ -97,13 +106,13 @@ export default function BaleStockEntry() {
   // The page still loads today's production session for permitted users
   // (tests/ui/factory-permission-query-gating.test.tsx pins this request).
   useQuery({
-    queryKey: ["/api/factory/stock-entry/production-session", todayStr],
+    queryKey: companyQueryKey("/api/factory/stock-entry/production-session", selectedCompany?.id, todayStr),
     queryFn: async () => {
       const r = await fetch(`/api/factory/stock-entry/production-session?date=${todayStr}`);
       return r.ok ? r.json() : null;
     },
     staleTime: 30000,
-    enabled: canReadProductionSession,
+    enabled: Boolean(selectedCompany?.id) && canReadProductionSession,
   });
 
   if (isPressingOnlyWorker) {
