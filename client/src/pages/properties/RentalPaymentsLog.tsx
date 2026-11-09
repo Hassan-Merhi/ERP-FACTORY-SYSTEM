@@ -12,7 +12,8 @@ import { PageHeader } from "@/components/PageHeader";
 import { DataTableToolbar } from "@/components/DataTableToolbar";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { MoneyAmount } from "@/components/MoneyAmount";
-import { formatMoneyNumber } from "@/lib/moneyDisplay";
+import { formatMoneyNumber, formatMoneyDisplay } from "@/lib/moneyDisplay";
+import { hasSingleUsdBasis, rentalReportingFigure } from "@/properties/config/rentalReportingPresentation";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { useMobileCardTable } from "@/components/ui/mobile-card-table";
 import { AlertTriangle, ClipboardList, Copy, Trash2 } from "lucide-react";
@@ -130,7 +131,12 @@ export default function RentalPaymentsLog({
   const total = isPropertiesPayments
     ? paymentTotals.cash / 100
     : filtered.reduce((sum, payment) => sum + Number(payment.amount), 0);
-  const clipboardIsUsd = filtered.every((payment) => !payment.currency || payment.currency.toUpperCase() === "USD");
+  const clipboardIsUsd = hasSingleUsdBasis(filtered);
+  const fullHistoryIsUsd = hasSingleUsdBasis(payments);
+  const displayedFigure = rentalReportingFigure(
+    clipboardIsUsd ? total : null,
+    "posted-cash",
+  );
   const copyHistory = async () => {
     try {
       await navigator.clipboard.writeText(paymentHistoryTsv(filtered));
@@ -148,7 +154,7 @@ export default function RentalPaymentsLog({
     }
   };
   const copyFullHistory = async () => {
-    if (!reconciliationReady || reconciliation?.aliCashLedgerId == null || reconciliation.accountSum == null) return;
+    if (!reconciliationReady || !fullHistoryIsUsd || reconciliation?.aliCashLedgerId == null || reconciliation.accountSum == null) return;
     try {
       await navigator.clipboard.writeText(
         reconciledHistoryTsv(payments, {
@@ -176,19 +182,22 @@ export default function RentalPaymentsLog({
     !warehouseTotalsLoading &&
     !warehouseTotalsError &&
     !isLoading &&
+    clipboardIsUsd &&
     Math.abs(total - activeWarehouseRentPaid) > 0.009;
 
   if (isPropertiesPayments) {
     const amountDisplay = paymentsError
       ? "Unavailable"
-      : isFullHistory
-        ? reconciliationReady && reconciliation?.reconciled != null
-          ? formatMoneyNumber(reconciliation.reconciled / 100)
-          : "Verifying…"
-        : formatMoneyNumber(total);
+      : !clipboardIsUsd
+        ? "Mixed currencies — see entries"
+        : isFullHistory
+          ? reconciliationReady && fullHistoryIsUsd && reconciliation?.reconciled != null
+            ? formatMoneyDisplay(reconciliation.reconciled / 100, { currency: "USD" })
+            : "Verifying…"
+          : formatMoneyDisplay(displayedFigure.amount, { currency: displayedFigure.currency });
     const copyIsFull = noFilters;
     const copyAllowed =
-      !isLoading && !paymentsError && filtered.length > 0 && clipboardIsUsd && (!isFullHistory || reconciliationReady);
+      !isLoading && !paymentsError && filtered.length > 0 && clipboardIsUsd && (!isFullHistory || (reconciliationReady && fullHistoryIsUsd));
     return (
       <div className="space-y-4 sm:p-4" data-testid={`page-${testIdPrefix}-payments-log`}>
         {isHassanProperties && (
@@ -216,7 +225,7 @@ export default function RentalPaymentsLog({
           unitOptions={unitOptions}
           tenantOptions={tenantOptions}
           totalAmount={amountDisplay}
-          amountLabel={isHassanProperties && !isFullHistory ? "Cash Received" : "Total Amount Recorded"}
+          amountLabel={isFullHistory ? "Reconciled account balances (USD)" : "Voucher-backed cash received (USD)"}
           canCopy={copyAllowed}
           fullHistory={copyIsFull}
           onCopy={() => {
@@ -226,7 +235,7 @@ export default function RentalPaymentsLog({
         />
         {!clipboardIsUsd && (
           <p className="text-xs text-amber-600 dark:text-amber-400">
-            Non-USD entries need their booked currency conversion before copying history.
+            Payments contain different recorded currencies. No unconverted combined USD total is shown; copy/export requires an explicit booked-currency conversion.
           </p>
         )}
         <ConfirmDialog
