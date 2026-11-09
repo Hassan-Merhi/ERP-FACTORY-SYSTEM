@@ -209,7 +209,7 @@ export function registerOrderBaleRemovalRoutes(app: Express) {
                AND deleted_at IS NULL
           `);
           const status = resultRows(currentRows)[0]?.status;
-          if (!["LOADING", "PENDING_VERIFICATION"].includes(status || "")) {
+          if (!["LOADING", "PENDING_VERIFICATION"].includes(String(status ?? ""))) {
             throw new DispatchReconciliationRefusal(409, "Only active Pending Loading orders can be reconciled");
           }
           const tripRows = await tx.execute(sql`
