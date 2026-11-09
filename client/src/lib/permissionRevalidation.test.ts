@@ -19,6 +19,7 @@ describe("permission revalidation", () => {
   it("recognises role and permission refusals only", () => {
     expect(isPermissionDenial(403, "BUSINESS_ACTION_NOT_VERIFIED")).toBe(true);
     expect(isPermissionDenial(403, "FACTORY_PAGE_ACCESS_DENIED")).toBe(true);
+    expect(isPermissionDenial(403, "PERMISSION_V2_DENIED")).toBe(true);
     expect(isPermissionDenial(403, undefined, "View Only accounts cannot make changes")).toBe(true);
     expect(isPermissionDenial(403, "CSRF_TOKEN_MISMATCH")).toBe(false);
     expect(isPermissionDenial(409, "BUSINESS_ACTION_NOT_VERIFIED")).toBe(false);

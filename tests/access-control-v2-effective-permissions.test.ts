@@ -384,3 +384,67 @@ describe("permissionsV2Enforcement middleware", () => {
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: "PERMISSION_SERVICE_UNAVAILABLE" }));
   });
 });
+
+describe("V2 policy snapshot failure handling", () => {
+  beforeEach(() => {
+    // The middleware tests above replace these modules; use the real store here.
+    vi.doUnmock("../server/services/security/effectivePermissionStore");
+    vi.doUnmock("../server/services/security/activeCompanyPermissionContext");
+    vi.resetModules();
+  });
+
+  const schemaMissing = Object.assign(new Error("relation does not exist"), { code: "42P01" });
+
+  function fakeDb(mode: string | null, rulesError?: unknown, versionsError?: unknown) {
+    return {
+      query: vi.fn(async (sql: string) => {
+        if (sql.includes("access_policy_versions")) {
+          if (versionsError) throw versionsError;
+          return { rows: mode ? [{ revision: "4", mode }] : [] };
+        }
+        if (rulesError) throw rulesError;
+        return { rows: [] };
+      }),
+    };
+  }
+
+  it("treats a missing policy-version table as V2 not installed", async () => {
+    const { loadV2PolicySnapshot } = await import("../server/services/security/effectivePermissionStore");
+    await expect(
+      loadV2PolicySnapshot(1, "Manager", "u", fakeDb(null, undefined, schemaMissing) as never)
+    ).resolves.toMatchObject({
+      available: false,
+      mode: "shadow",
+    });
+  });
+
+  it("fails closed when an active company's rules cannot be read", async () => {
+    const { loadV2PolicySnapshot } = await import("../server/services/security/effectivePermissionStore");
+    await expect(loadV2PolicySnapshot(1, "Manager", "u", fakeDb("active", schemaMissing) as never)).rejects.toBe(
+      schemaMissing
+    );
+    const dbDown = new Error("connection reset");
+    await expect(loadV2PolicySnapshot(1, "Manager", "u", fakeDb("active", dbDown) as never)).rejects.toBe(dbDown);
+  });
+
+  it("keeps a shadow or rolled-back company on legacy decisions when rules are missing", async () => {
+    const { loadV2PolicySnapshot } = await import("../server/services/security/effectivePermissionStore");
+    for (const mode of ["shadow", "rolled_back"]) {
+      await expect(
+        loadV2PolicySnapshot(1, "Manager", "u", fakeDb(mode, schemaMissing) as never)
+      ).resolves.toMatchObject({
+        available: false,
+        mode,
+      });
+    }
+  });
+
+  it("reads mode, revision and rules when everything is present", async () => {
+    const { loadV2PolicySnapshot } = await import("../server/services/security/effectivePermissionStore");
+    await expect(loadV2PolicySnapshot(1, "Manager", "u", fakeDb("active") as never)).resolves.toMatchObject({
+      available: true,
+      mode: "active",
+      revision: 4,
+    });
+  });
+});

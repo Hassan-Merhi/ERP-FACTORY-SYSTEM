@@ -77,12 +77,26 @@ export async function loadV2PolicySnapshot(
   userId: string,
   db: Queryable = pool
 ): Promise<V2PolicySnapshot> {
+  // The mode is read first. Only a missing policy-version table means V2 is
+  // not installed; once a company's mode is readable, an active policy whose
+  // rules cannot be read must fail closed (the caller answers 503), never fall
+  // back to legacy decisions.
+  let version: { rows: Array<{ revision: string; mode: string }> };
   try {
-    const [version, roleRules, userRules] = await Promise.all([
-      db.query<{ revision: string; mode: string }>(
-        "SELECT revision::text AS revision, mode FROM access_policy_versions WHERE company_id=$1",
-        [companyId]
-      ),
+    version = await db.query<{ revision: string; mode: string }>(
+      "SELECT revision::text AS revision, mode FROM access_policy_versions WHERE company_id=$1",
+      [companyId]
+    );
+  } catch (error) {
+    if (isSchemaMissing(error)) {
+      return { available: false, mode: "shadow", revision: 0, roleRules: [], userRules: [] };
+    }
+    throw error;
+  }
+  const mode = toMode(version.rows[0]?.mode);
+  const revision = Number(version.rows[0]?.revision ?? 0);
+  try {
+    const [roleRules, userRules] = await Promise.all([
       db.query<V2RuleRow>(
         `SELECT r.resource_key AS "resource", r.action_key AS "action", r.decision
            FROM access_role_rules r
@@ -96,17 +110,18 @@ export async function loadV2PolicySnapshot(
         [companyId, userId]
       ),
     ]);
-    const revision = Number(version.rows[0]?.revision ?? 0);
     return {
       available: true,
-      mode: toMode(version.rows[0]?.mode),
+      mode,
       revision: Number.isSafeInteger(revision) && revision >= 0 ? revision : 0,
       roleRules: roleRules.rows,
       userRules: userRules.rows,
     };
   } catch (error) {
-    if (isSchemaMissing(error)) {
-      return { available: false, mode: "shadow", revision: 0, roleRules: [], userRules: [] };
+    // A shadow or rolled-back company never enforces V2, so unreadable rules
+    // leave it on legacy decisions. An active company propagates the error.
+    if (mode !== "active" && isSchemaMissing(error)) {
+      return { available: false, mode, revision: 0, roleRules: [], userRules: [] };
     }
     throw error;
   }
