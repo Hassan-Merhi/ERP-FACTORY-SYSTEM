@@ -124,6 +124,100 @@ export function registerFactoryLoadingDispatchRoutes(app: Express): void {
     }
   });
 
+
+  // Phase 2: update trip metadata only. Never touch main loading, bale
+  // inventory, accounting, status/finalization or another company's trips.
+  app.patch("/api/factory/customer-orders/:id/loading-dispatches/:dispatchId", requireAuth, loadingAccess, async (req, res) => {
+    try {
+      const scope = await resolveOrder(req, res);
+      if (!scope) return;
+      if (["View Only", "Create Only"].includes(scope.state.role)) {
+        return res.status(403).json({ message: "This Factory role cannot modify dispatch trips" });
+      }
+      const dispatchId = parseId(req.params.dispatchId);
+      if (dispatchId === null) return res.status(400).json({ message: "Invalid dispatch ID" });
+
+      const editable = ["truckPlate", "driverName", "destination", "notes"] as const;
+      const body: Record<string, unknown> =
+        req.body && typeof req.body === "object" && !Array.isArray(req.body) ? req.body : {};
+      const provided = Object.keys(body);
+      if (provided.length === 0 || provided.some((key) => !editable.includes(key as (typeof editable)[number]))) {
+        return res.status(400).json({ message: "Only truckPlate, driverName, destination and notes may be updated" });
+      }
+      const values: Partial<Record<(typeof editable)[number], string | null>> = {};
+      try {
+        for (const key of editable) {
+          if (Object.prototype.hasOwnProperty.call(body, key)) {
+            const max = key === "truckPlate" ? 120 : key === "driverName" ? 200 : key === "destination" ? 500 : 3000;
+            values[key] = parseOptionalText(body[key], key, max);
+          }
+        }
+      } catch (error) {
+        return res.status(400).json({ message: getErrorMessage(error) });
+      }
+
+      const actorUserId = String(scope.state.userId);
+      const actorUsername = String(req.session.username || actorUserId);
+      const result = await db.transaction(async (tx) => {
+        const locked = await tx.execute(sql`
+          SELECT id, status, truck_plate AS "truckPlate",
+                 driver_name AS "driverName", destination, notes
+            FROM factory_loading_dispatches
+           WHERE id = ${dispatchId} AND company_id = ${scope.state.companyId}
+             AND order_id = ${scope.orderId}
+           FOR UPDATE
+        `);
+        const previous = resultRows(locked)[0];
+        if (!previous) return { httpStatus: 404, message: "Dispatch not found for this loading" };
+        if (previous.status !== "OPEN") return { httpStatus: 409, message: "Only open dispatches may be edited" };
+
+        const next = {
+          truckPlate: values.truckPlate !== undefined ? values.truckPlate : previous.truckPlate,
+          driverName: values.driverName !== undefined ? values.driverName : previous.driverName,
+          destination: values.destination !== undefined ? values.destination : previous.destination,
+          notes: values.notes !== undefined ? values.notes : previous.notes,
+        };
+        const changes: Record<string, { old: unknown; new: unknown }> = {};
+        for (const key of editable) {
+          if (Object.prototype.hasOwnProperty.call(values, key) && next[key] !== previous[key]) {
+            changes[key] = { old: previous[key] ?? null, new: next[key] ?? null };
+          }
+        }
+        if (Object.keys(changes).length === 0) return { trip: previous };
+
+        const updated = await tx.execute(sql`
+          UPDATE factory_loading_dispatches
+             SET truck_plate = ${next.truckPlate}, driver_name = ${next.driverName},
+                 destination = ${next.destination}, notes = ${next.notes},
+                 updated_at = NOW()
+           WHERE id = ${dispatchId} AND company_id = ${scope.state.companyId}
+             AND order_id = ${scope.orderId} AND status = 'OPEN'
+          RETURNING id, order_id AS "orderId", dispatch_number AS "dispatchNumber",
+                    status, truck_plate AS "truckPlate", driver_name AS "driverName",
+                    destination, notes, updated_at AS "updatedAt"
+        `);
+        const trip = resultRows(updated)[0];
+        if (!trip) throw new Error("Dispatch metadata update lost concurrent status lock");
+        await tx.execute(sql`
+          INSERT INTO factory_loading_dispatch_events
+            (company_id, order_id, dispatch_id, event_type,
+             actor_user_id, actor_username, event_data)
+          VALUES (${scope.state.companyId}, ${scope.orderId}, ${dispatchId},
+                  'DETAILS_UPDATED', ${actorUserId}, ${actorUsername},
+                  ${JSON.stringify(changes)}::jsonb)
+        `);
+        return { trip };
+      });
+      if ("httpStatus" in result && typeof result.httpStatus === "number") {
+        return res.status(result.httpStatus).json({ message: result.message });
+      }
+      return res.json(result.trip);
+    } catch (error) {
+      logger.error("Error updating Factory loading dispatch metadata", { error });
+      return res.status(500).json({ message: "Could not update dispatch details" });
+    }
+  });
+
   // Phase 1 create endpoint. Serializing by order-row lock assigns unique,
   // gap-safe trip numbers even when multiple dispatchers create at once.
   app.post("/api/factory/customer-orders/:id/loading-dispatches", requireAuth, loadingAccess, async (req, res) => {
