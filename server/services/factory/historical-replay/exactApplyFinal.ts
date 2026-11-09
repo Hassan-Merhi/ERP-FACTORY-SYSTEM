@@ -105,6 +105,7 @@ export async function applyExactHistoricalCostReplayV6(
   try {
     await client.query("BEGIN");
     await client.query("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE");
+    await client.query("SELECT set_config('app.current_company_id', $1, true)", [String(companyId)]);
     await client.query(`SELECT pg_advisory_xact_lock(9003, $1)`, [companyId]);
 
     const scope = await buildExactHistoricalReplayScopeInternal({
