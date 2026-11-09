@@ -180,13 +180,17 @@ export function compareFactoryLoadingDispatch(input: {
     if (!loadedMap.has(scan.baleId)) {
       unexpectedBales.push({ ...scan, reason: "NO_LONGER_IN_LOADING", dispatchId: scan.dispatchId,
         dispatchNumber: scan.dispatchNumber, scannedBy: scan.scannedBy, scannedAt: scan.scannedAt });
-    } else if (byTrip && assigned && assigned.dispatchId !== selectedDispatchId) {
-      unexpectedBales.push({
+    } else if (assigned && assigned.dispatchId !== scan.dispatchId) {
+      const mismatch: ComparisonBaleFinding = {
         ...scan, reason: "ASSIGNED_TO_ANOTHER_TRIP", dispatchId: scan.dispatchId,
         dispatchNumber: scan.dispatchNumber,
         expectedDispatchNumber: tripNumber(assigned.dispatchId),
         scannedBy: scan.scannedBy, scannedAt: scan.scannedAt,
-      });
+      };
+      unexpectedBales.push(mismatch);
+      if (!byTrip) {
+        crossTripBales.push({ ...mismatch, reason: "SCANNED_DIFFERENT_TRIP" });
+      }
     } else if (byTrip && hasTripPlan && !selectedPlanIds.has(scan.baleId) &&
         !scopedPlannedArticles.some((article) =>
           articleKey(article.articleCode) === articleKey(scan.articleCode))) {
