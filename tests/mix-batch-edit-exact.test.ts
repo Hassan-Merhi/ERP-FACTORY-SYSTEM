@@ -238,7 +238,7 @@ describe("mix batch edit", () => {
     const res = await patch({ ...proposal, sourceEditPreview: true });
     expect(res.statusCode).toBe(200);
     expect(res.body).toMatchObject({ allowed: false });
-    expect((res.body as { warnings: string[] }).warnings.join(" ")).toContain("bale, pressing or consumption");
+    expect((res.body as { warnings: string[] }).warnings.join(" ")).toContain("dependent bale, pressing, consumption");
     expect(h.writes).toEqual([]);
   });
 
