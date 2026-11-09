@@ -16,7 +16,7 @@ const SECTIONS = ["customers", "suppliers"] as const;
 export default function FactoryPartiesHub() {
   const { selectedCompany } = useCompany();
   const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id), enabled: Boolean(selectedCompany?.id), staleTime: 5 * 60000 });
-  const hidden = myAccess?.companyId === selectedCompany?.id && myAccess.hasFactoryAccess
+  const hidden = myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
     ? myAccess.hiddenCostFields
     : ["hide_tab_parties_customers", "hide_tab_parties_suppliers"];
   const sections: Section[] = SECTIONS.filter((section) =>
