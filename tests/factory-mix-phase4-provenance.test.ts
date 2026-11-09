@@ -66,6 +66,7 @@ describe("Phase 4 Factory supplier ADD and raw-stock integrity", () => {
     const tx = {
       select: () => ({
         from() { return this; },
+        innerJoin() { return this; },
         where() { return Promise.resolve(queues.shift()); },
       }),
     };
