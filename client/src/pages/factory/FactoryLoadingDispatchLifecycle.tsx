@@ -117,7 +117,7 @@ export default function FactoryLoadingDispatchLifecycle({ orderId, dispatchId, c
   const lifecycleUrl = base + "/lifecycle";
   const capabilities = factoryActionCapabilities({
     role,
-    hasFactoryAccess: selectedCompany?.id === companyId && access?.companyId === companyId && access.hasFactoryAccess,
+    hasFactoryAccess: Boolean(selectedCompany?.id === companyId && access?.companyId === companyId && access.hasFactoryAccess),
   });
   const supervisory = capabilities["dispatch.approve-discrepancy"];
   const canClose = capabilities["dispatch.close"] && status === "OPEN";
