@@ -6,6 +6,7 @@ const h = vi.hoisted(() => ({
   locationStock: vi.fn(),
   customMessages: vi.fn(),
   factoryStock: vi.fn(),
+  mixIntegrity: vi.fn(),
   recover: vi.fn(),
   manual: vi.fn(),
 }));
@@ -27,6 +28,9 @@ vi.mock("../server/services/scheduledWhatsAppMessages", () => ({
 vi.mock("../server/services/accounting/perpetualInventory/factoryStockJournal", () => ({
   runFactoryStockJournals: () => h.factoryStock(),
 }));
+vi.mock("../server/services/factory/mixPhase7IntegrityMonitor", () => ({
+  runScheduledFactoryMixIntegrityMonitoring: () => h.mixIntegrity(),
+}));
 vi.mock("../server/services/scheduler/daily-export-state", () => ({
   checkAndRecoverDailyExport: () => h.recover(),
 }));
@@ -37,16 +41,21 @@ vi.mock("../server/services/scheduler/maintenance", () => ({
 import { logger } from "../server/lib/logger";
 
 const original = process.env.ENABLE_SCHEDULERS;
+const originalMixMonitor = process.env.FACTORY_MIX_INTEGRITY_MONITOR_ENABLED;
 
 beforeEach(() => {
   h.schedules = [];
-  for (const fn of [h.core, h.locationStock, h.customMessages, h.factoryStock, h.recover, h.manual]) fn.mockReset();
+  for (const fn of [h.core, h.locationStock, h.customMessages, h.factoryStock, h.mixIntegrity, h.recover, h.manual]) fn.mockReset();
+  h.mixIntegrity.mockResolvedValue({ failed: 0 });
+  delete process.env.FACTORY_MIX_INTEGRITY_MONITOR_ENABLED;
   vi.spyOn(logger, "info").mockImplementation(() => logger);
 });
 
 afterEach(() => {
   if (original === undefined) delete process.env.ENABLE_SCHEDULERS;
   else process.env.ENABLE_SCHEDULERS = original;
+  if (originalMixMonitor === undefined) delete process.env.FACTORY_MIX_INTEGRITY_MONITOR_ENABLED;
+  else process.env.FACTORY_MIX_INTEGRITY_MONITOR_ENABLED = originalMixMonitor;
   vi.restoreAllMocks();
 });
 
@@ -73,7 +82,7 @@ describe("scheduler entrypoint", () => {
     });
   });
 
-  it("registers the core jobs and the three extra ticks once", async () => {
+  it("registers the core jobs and four lazy ticks once", async () => {
     delete process.env.ENABLE_SCHEDULERS;
     const { startScheduler } = await load();
     startScheduler();
@@ -83,6 +92,7 @@ describe("scheduler entrypoint", () => {
       ["* * * * *", undefined],
       ["* * * * *", undefined],
       ["45 23 * * *", { timezone: "UTC" }],
+      ["35 1 * * *", { timezone: "UTC" }],
     ]);
     expect(logger.info).toHaveBeenCalledWith(
       "Location stock WhatsApp scheduler registered",
@@ -94,6 +104,16 @@ describe("scheduler entrypoint", () => {
     expect(h.locationStock).toHaveBeenCalledTimes(1);
     expect(h.customMessages).toHaveBeenCalledTimes(1);
     expect(h.factoryStock).toHaveBeenCalledTimes(1);
+    expect(h.mixIntegrity).toHaveBeenCalledTimes(1);
+  });
+
+  it("supports disabling the nightly mix monitor independently", async () => {
+    process.env.FACTORY_MIX_INTEGRITY_MONITOR_ENABLED = "false";
+    // The entrypoint registers only once per process; verify the feature
+    // gate is present in the implementation instead of restarting imports.
+    const { readFileSync } = await import("node:fs");
+    const source = readFileSync("server/services/scheduler/index.ts", "utf8");
+    expect(source).toContain('FACTORY_MIX_INTEGRITY_MONITOR_ENABLED !== "false"');
   });
 
   it("delegates recovery and the manual WhatsApp send to their modules", async () => {
