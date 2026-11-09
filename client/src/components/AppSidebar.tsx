@@ -1,37 +1,10 @@
-import {
-  LayoutDashboard,
-  ShoppingCart,
-  Package,
-  FileText,
-  Settings,
-  Layers,
-  ListTree,
-  BarChart3,
-  FolderPlus,
-  Wallet,
-  Receipt,
-  Book,
-  UserCheck,
-  PieChart,
-  Ship,
-  Calculator,
-  MessageCircle,
-  TableProperties,
-  ExternalLink,
-  AlertTriangle,
-  UserRound,
-  ScrollText,
-  Store,
-  KeyRound,
-  LayoutGrid,
-  Handshake,
-  Bot,
-  ShieldCheck,
-  Ticket,
-  ArrowRight,
-  Replace,
-} from "lucide-react";
+import { Package, Settings, Book, MessageCircle, AlertTriangle, KeyRound, ArrowRight } from "lucide-react";
 import { useConnectivity } from "@/contexts/ConnectivityContext";
+import { ERP_NAV_SECTIONS, ERP_PINNED_ITEMS, ERP_UTILITY_ITEMS } from "@/app/erpPageRegistry";
+export { ERP_NAV_SECTIONS, ERP_PINNED_ITEMS, ERP_UTILITY_ITEMS } from "@/app/erpPageRegistry";
+const defaultPinnedItems = ERP_PINNED_ITEMS;
+const utilityItems = ERP_UTILITY_ITEMS;
+
 import { Sidebar, SidebarContent } from "@/components/ui/sidebar";
 import { useQuery } from "@tanstack/react-query";
 import { useRef, useEffect, useMemo } from "react";
@@ -59,92 +32,7 @@ import {
   type NavSection,
 } from "@/components/sidebar/sidebarPrimitives";
 
-const defaultPinnedItems: NavItem[] = [
-  { title: "Tracking", url: "/tracking", icon: Ship },
-  { title: "Dashboard", url: "/financial-overview", icon: LayoutDashboard },
-  { title: "Agent Ledger", url: "/agents", icon: UserRound },
-  { title: "Daybook", url: "/daybook", icon: Book },
-  { title: "All Daybook", url: "/transaction-journal", icon: ScrollText },
-  { title: "Vouchers", url: "/vouchers", icon: Receipt },
-];
-
 export const SETTINGS_HIDDEN_ROLES = ERP_PERSONAL_SETTINGS_HIDDEN_ROLES;
-
-export const ERP_NAV_SECTIONS: NavSection[] = [
-  {
-    label: "Inventory",
-    color: NAV_COLOR.inventory,
-    items: [
-      { title: "Inventory", url: "/inventory", icon: Layers },
-      { title: "Stock", url: "/stock", icon: Package },
-      { title: "Optional Vouchers", url: "/optional-vouchers", icon: FileText },
-      { title: "Profit Check", url: "/supplier-profit-check", icon: Calculator },
-    ],
-  },
-  {
-    label: "Sales & POS",
-    color: NAV_COLOR.sales,
-    items: [
-      { title: "POS", url: "/pos", icon: ShoppingCart },
-      { title: "Sales Tools", url: "/sales-tools", icon: LayoutGrid },
-    ],
-  },
-  {
-    label: "Accounting",
-    color: NAV_COLOR.accounting,
-    items: [
-      { title: "Accounts", url: "/accounts", icon: Wallet },
-      { title: "Cost Centers", url: "/cost-centers", icon: ListTree },
-      { title: "Parties", url: "/parties", icon: Handshake },
-      { title: "Payroll", url: "/payroll", icon: UserCheck },
-    ],
-  },
-  {
-    label: "Accounting Tools",
-    color: NAV_COLOR.accounting,
-    devOnly: true,
-    items: [{ title: "Accounting Toolbox", url: "/accounting/toolbox", icon: ShieldCheck }],
-  },
-  {
-    label: "Analytics",
-    color: NAV_COLOR.analytics,
-    items: [
-      { title: "Sales Report", url: "/sales-report", icon: PieChart },
-      { title: "Analytics", url: "/analytics", icon: BarChart3 },
-    ],
-  },
-  {
-    label: "Rentals",
-    color: NAV_COLOR.rentals,
-    items: [{ title: "Shops", url: "/erp/rental/shops", icon: Store }],
-  },
-  {
-    label: "AI Tools",
-    color: NAV_COLOR.analytics,
-    devOnly: true,
-    items: [
-      { title: "AI Command Center", url: "/ai-command-center", icon: Bot },
-      { title: "AI Validation", url: "/ai-validation", icon: ShieldCheck },
-    ],
-  },
-  {
-    label: "Others",
-    color: NAV_COLOR.analytics,
-    items: [
-      { title: "Ticket Management", url: "/tickets", icon: Ticket },
-      { title: "Supplier Profit Review", url: "/supplier-profit-reconciliation", icon: Calculator },
-      { title: "Stock & Sales Report", url: "/stock-in-sales-report", icon: BarChart3 },
-      { title: "Market Price Analysis", url: "/item-market-analysis", icon: BarChart3 },
-      { title: "POS Item Replacement", url: "/pos-item-replacement", icon: Replace },
-    ],
-  },
-];
-
-const utilityItems: NavItem[] = [
-  { title: "Create", url: "/create", icon: FolderPlus },
-  { title: "Spreadsheet", url: "/spreadsheet", icon: TableProperties },
-  { title: "Live Sheets", url: "/live-sheets", icon: ExternalLink },
-];
 
 export const RETAIL_HIDDEN_ERP_ROUTES = ERP_RETAIL_HIDDEN_ROUTES;
 
@@ -153,8 +41,6 @@ export function isRetailHiddenErpPath(path: string): boolean {
   return isErpRetailHiddenPath(path);
 }
 
-export const ERP_PINNED_ITEMS = defaultPinnedItems;
-export const ERP_UTILITY_ITEMS = utilityItems;
 
 interface SidebarUser {
   username?: string | null;
