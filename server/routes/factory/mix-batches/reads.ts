@@ -14,12 +14,33 @@ import { factoryMixBatches } from "@shared/schema";
 import { eq, and, desc, isNull } from "drizzle-orm";
 import { toMoney } from "../../../lib/money";
 import { getHistoricalMixBatchReconciliation, historicalMixAuditCsv } from "../../../services/factory/historicalMixBatchReconciliation";
+import { getPhase4MixProvenanceReport, phase4MixProvenanceCsv } from "../../../services/factory/mixPhase4ProvenanceAudit";
 
 export function registerFactoryMixBatchReadRoutes(app: Express) {
   app.get("/api/factory/mix-batches", requireAuth, async (req: Request, res: Response) => {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
+
+      // Phase 4 supplier and ADD/raw-stock provenance. Access and exports
+      // are privileged and never mutate historical production records.
+      if (req.query.profile === "raw-provenance-audit") {
+        const role = String(req.session.currentRole || req.session.role || "").trim().toLowerCase();
+        if (!["admin", "owner", "developer", "dev"].includes(role)) {
+          return res.status(403).json({ message: "Raw-stock reconciliation requires Admin, Owner or Developer access." });
+        }
+        const report = await getPhase4MixProvenanceReport(companyId);
+        res.set("Cache-Control", "private, no-store");
+        res.set("X-ERP-Payload-Profile", "factory-mix-raw-provenance-read-only");
+        if (req.query.format === "csv") {
+          const section = req.query.section === "ownership" || req.query.section === "adjustments"
+            ? req.query.section : "stock";
+          res.set("Content-Type", "text/csv; charset=utf-8");
+          res.set("Content-Disposition", `attachment; filename="factory-mix-${section}-audit.csv"`);
+          return res.send(phase4MixProvenanceCsv(report, section));
+        }
+        return res.json(report);
+      }
 
       // Phase 3: a full read-only snapshot of recorded historical values.
       // Reuse this existing authenticated URL (profile switch) to avoid
