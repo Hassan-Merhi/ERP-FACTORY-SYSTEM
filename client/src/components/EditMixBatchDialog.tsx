@@ -64,6 +64,39 @@ interface StoredMixBatchSource {
   recordedUnvalued?: boolean;
 }
 
+/**
+ * Compare submitted source identities and quantities with the recorded sources.
+ * Metadata-only edits must not send source arrays: doing so would reprice the
+ * old batch using today's locked supplier rates.
+ */
+function hasChangedSourceWeights(
+  selections: readonly SourceSelection[],
+  sources: readonly StoredMixBatchSource[] | undefined,
+): boolean {
+  if (!sources) return true;
+  const original = new Map<string, number>();
+  const proposed = new Map<string, number>();
+  for (const source of sources) {
+    const key = source.sourceBatchId != null
+      ? `batch-${source.sourceBatchId}`
+      : source.supplierId != null ? `supplier-${source.supplierId}` : null;
+    if (key === null) return true; // An unmapped historical source cannot be silently dropped.
+    original.set(key, (original.get(key) ?? 0) + Number(source.weightKg));
+  }
+  for (const source of selections) {
+    const key = `${source.type}-${source.sourceId}`;
+    proposed.set(key, (proposed.get(key) ?? 0) + source.weightKg);
+  }
+  if (original.size !== proposed.size) return true;
+  for (const [key, oldKg] of original) {
+    const nextKg = proposed.get(key);
+    if (nextKg === undefined || !Number.isFinite(oldKg) || !Number.isFinite(nextKg) || Math.abs(oldKg - nextKg) > 0.0005) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function EditMixBatchDialog({
   batch,
   open,
@@ -211,6 +244,13 @@ export function EditMixBatchDialog({
 
   const saveMutation = useMutation({
     mutationFn: async () => {
+      const sourcesChanged = hasChangedSourceWeights(selectedSources, currentSources);
+      if (sourcesChanged && (batch?.status === "COMPLETED" || batch?.status === "CLOSED")) {
+        throw new Error(
+          "Completed mix-batch sources are protected from automatic repricing. " +
+          "Phase 2 will add the reviewed historical source-edit workflow. Name, notes, and date can still be updated."
+        );
+      }
       // Never send costPerKg for supplier sources — the server always applies the
       // supplier's locked rate and ignores any client-supplied cost.
       const supplierSourcesPayload = selectedSources
@@ -229,8 +269,7 @@ export function EditMixBatchDialog({
           name: batchName || undefined,
           notes: notes || undefined,
           batchDate: batchDate || undefined,
-          supplierSources: supplierSourcesPayload,
-          batchSources: batchSourcesPayload,
+          ...(sourcesChanged ? { supplierSources: supplierSourcesPayload, batchSources: batchSourcesPayload } : {}),
         }),
       });
       if (!res.ok) {
@@ -244,7 +283,7 @@ export function EditMixBatchDialog({
       queryClient.invalidateQueries({ queryKey: ["/api/factory/raw-stock"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/mix-batches", batch?.id, "sources"] });
       onOpenChange(false);
-      toast({ title: "Batch updated", description: "Sources and totals have been recalculated." });
+      toast({ title: "Batch updated", description: "Saved without silently repricing recorded historical materials." });
     },
     onError: (err: ClientErrorLike) => {
       toast({ title: "Error", description: err.message, variant: "destructive" });
@@ -703,7 +742,7 @@ export function EditMixBatchDialog({
                       <TableHead>Type</TableHead>
                       <TableHead>Source</TableHead>
                       <TableHead className="text-right">Weight (kg)</TableHead>
-                      <TableHead className="text-right">Current cost/kg (recorded below)</TableHead>
+                      <TableHead className="text-right">Current $/kg</TableHead>
                       <TableHead className="text-right">Estimated cost</TableHead>
                       <TableHead className="w-12"></TableHead>
                     </TableRow>
@@ -804,9 +843,9 @@ export function EditMixBatchDialog({
             </div>
 
             <p className="text-xs text-muted-foreground" data-testid="mix-batch-cost-basis-notice">
-              The estimate uses current supplier rates for source edits. It is not a correction to
-              recorded historical costs. A historical cost difference alone is not an error;
-              source edits must be reviewed before saving, especially on completed batches.
+              The estimate uses current supplier rates for proposed source edits. It is not a correction to
+              recorded historical costs. Metadata-only saves preserve existing costs; source edits to
+              completed batches are blocked until the reviewed edit workflow is available in Phase 2.
             </p>
 
             {/* Notes */}
@@ -827,7 +866,7 @@ export function EditMixBatchDialog({
               </Button>
               <Button
                 onClick={() => saveMutation.mutate()}
-                disabled={saveMutation.isPending || selectedSources.length === 0}
+                disabled={saveMutation.isPending || sourcesError || !currentSources || selectedSources.length === 0}
                 data-testid="button-save-edit"
               >
                 {saveMutation.isPending ? "Saving…" : "Save Changes"}
