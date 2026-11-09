@@ -2,6 +2,7 @@ import type { ClientErrorLike } from "@/lib/clientError";
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { formatNumber } from "@/lib/formatNumber";
+import { recordedMixBatchCost, summarizeRecordedMixSources } from "@/lib/recordedMixBatchCost";
 import { Plus, Trash2, Layers, Package } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -60,6 +61,7 @@ interface StoredMixBatchSource {
   weightKg: string;
   costPerKg: string;
   totalCost: string;
+  recordedUnvalued?: boolean;
 }
 
 export function EditMixBatchDialog({
@@ -368,9 +370,31 @@ export function EditMixBatchDialog({
     setSelectedSources((prev) => prev.filter((s) => !(s.type === type && s.sourceId === sourceId)));
   };
 
+  // Two intentionally separate values:
+  // 1. Recorded historical: authoritative saved batch cost, independent of today's rates.
+  // 2. Prospective edit: the current supplier-rate estimate used by the edit UI.
+  const recordedBatchCost = recordedMixBatchCost({
+    totalWeightKg: batch?.totalWeightKg,
+    totalCost: batch?.totalCost,
+    costPerKg: batch?.costPerKg,
+  });
+  const recordedSourceCost = summarizeRecordedMixSources(currentSources ?? []);
+  const savedSourceDifference = Math.abs(recordedSourceCost.totalCost - recordedBatchCost.totalCost);
   const totalWeight = selectedSources.reduce((s, x) => s + x.weightKg, 0);
   const totalCost = selectedSources.reduce((s, x) => s + x.totalCost, 0);
   const blendedCostPerKg = totalWeight > 0 ? totalCost / totalWeight : 0;
+  const originalSupplierRates = new Map<number, number>();
+  const supplierRecorded = new Map<number, { weightKg: number; totalCost: number }>();
+  for (const source of currentSources ?? []) {
+    if (source.supplierId == null || source.sourceBatchId != null) continue;
+    const existing = supplierRecorded.get(source.supplierId) ?? { weightKg: 0, totalCost: 0 };
+    existing.weightKg += Number(source.weightKg) || 0;
+    existing.totalCost += Number(source.totalCost) || 0;
+    supplierRecorded.set(source.supplierId, existing);
+  }
+  for (const [supplierId, values] of supplierRecorded) {
+    if (values.weightKg > 0) originalSupplierRates.set(supplierId, values.totalCost / values.weightKg);
+  }
   const currentUsedKg = batch ? parseFloat(batch.usedKg || "0") : 0;
   // Warn if clearly below used (>1 kg gap). Backend enforces the strict check.
   const belowUsed = totalWeight < currentUsedKg - 1;
@@ -384,7 +408,7 @@ export function EditMixBatchDialog({
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" data-testid="mix-batch-details-dialog">
           <DialogHeader>
             <DialogTitle>Mix Batch Details — {batch?.batchCode || "Loading…"}</DialogTitle>
-            <DialogDescription>Raw materials and existing batches recorded in this mix.</DialogDescription>
+            <DialogDescription>Recorded historical raw materials and costs, not current supplier prices.</DialogDescription>
           </DialogHeader>
           {!batch && !errorMessage ? (
             <div className="space-y-3 py-4">
@@ -471,15 +495,15 @@ export function EditMixBatchDialog({
                 {!hideCosts && (
                   <>
                     <div>
-                      <p className="text-sm text-muted-foreground">Total Cost</p>
+                      <p className="text-sm text-muted-foreground">Recorded Total Cost</p>
                       <p className="text-lg font-semibold font-mono">
                         ${formatNumber(parseFloat(batch?.totalCost || "0"), 4)}
                       </p>
                     </div>
                     <div>
-                      <p className="text-sm text-muted-foreground">Blended Cost/kg</p>
-                      <p className="text-lg font-semibold font-mono">
-                        ${formatNumber(parseFloat(batch?.costPerKg || "0"), 4)}
+                      <p className="text-sm text-muted-foreground">Recorded Blended Cost/kg</p>
+                      <p className="text-lg font-semibold font-mono" data-testid="text-recorded-blended-cost">
+                        ${formatNumber(recordedBatchCost.costPerKg, 4)}
                       </p>
                     </div>
                   </>
@@ -509,8 +533,9 @@ export function EditMixBatchDialog({
         <DialogHeader>
           <DialogTitle>Edit Mix Batch — {batch?.batchCode}</DialogTitle>
           <DialogDescription>
-            Change the raw material sources. Old consumption will be reversed and new amounts will be consumed.
-            Already-produced bales ({formatNumber(currentUsedKg)} kg used) must remain covered.
+            Recorded historical costs stay separate from today's supplier-rate estimate.
+            Saving a source edit currently reverses and reapplies consumption; already-produced bales
+            ({formatNumber(currentUsedKg)} kg used) must remain covered.
           </DialogDescription>
         </DialogHeader>
 
@@ -522,6 +547,35 @@ export function EditMixBatchDialog({
           </div>
         ) : (
           <div className="space-y-6">
+            {/* Historical snapshot. It never uses the live raw-stock supplier rate. */}
+            <div className="rounded-md border border-border p-4 space-y-2" data-testid="mix-batch-recorded-valuation">
+              <p className="text-sm font-semibold">Recorded Historical Valuation</p>
+              <p className="text-xs text-muted-foreground">
+                Saved at the original batch valuation. This matches the batch list, details, and historical export.
+              </p>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div>
+                  <p className="text-xs text-muted-foreground">Recorded weight</p>
+                  <p className="font-mono font-semibold">{formatNumber(recordedBatchCost.totalWeightKg, 3)} kg</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Recorded total cost</p>
+                  <p className="font-mono font-semibold">${formatNumber(recordedBatchCost.totalCost, 4)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Recorded blended cost/kg</p>
+                  <p className="font-mono font-semibold" data-testid="text-edit-recorded-blended-cost">
+                    ${recordedBatchCost.costPerKg.toFixed(4)}
+                  </p>
+                </div>
+              </div>
+              {currentSources && savedSourceDifference > 0.02 && (
+                <p role="alert" className="text-xs text-destructive">
+                  Recorded source total differs from the saved batch header by
+                  ${formatNumber(savedSourceDifference, 2)}. Review before changing costs.
+                </p>
+              )}
+            </div>
             {/* Name / Date row */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -649,8 +703,8 @@ export function EditMixBatchDialog({
                       <TableHead>Type</TableHead>
                       <TableHead>Source</TableHead>
                       <TableHead className="text-right">Weight (kg)</TableHead>
-                      <TableHead className="text-right">Cost/kg</TableHead>
-                      <TableHead className="text-right">Total Cost</TableHead>
+                      <TableHead className="text-right">Current cost/kg (recorded below)</TableHead>
+                      <TableHead className="text-right">Estimated cost</TableHead>
                       <TableHead className="w-12"></TableHead>
                     </TableRow>
                   </TableHeader>
@@ -676,15 +730,20 @@ export function EditMixBatchDialog({
                         </TableCell>
                         <TableCell className="text-right">
                           {sel.type === "supplier" ? (
-                            // Supplier rate is always the server-locked rate — read-only,
-                            // it only changes via a real container offload/correction.
-                            <span
-                              className="font-mono text-xs text-muted-foreground"
-                              data-testid={`text-cost-per-kg-${sel.type}-${sel.sourceId}`}
-                              title="Locked supplier rate — only changes via a container offload or an explicit correction"
-                            >
-                              ${sel.costPerKg.toFixed(4)}
-                            </span>
+                            <div className="text-right">
+                              <span
+                                className="font-mono text-xs text-muted-foreground"
+                                data-testid={`text-cost-per-kg-${sel.type}-${sel.sourceId}`}
+                                title="Current supplier rate, used only for the estimated cost if the sources are saved"
+                              >
+                                ${sel.costPerKg.toFixed(4)}
+                              </span>
+                              {originalSupplierRates.has(sel.sourceId) && (
+                                <div className="text-[11px] text-muted-foreground" title="Saved weighted-average supplier cost in this batch">
+                                  Recorded: ${originalSupplierRates.get(sel.sourceId)!.toFixed(4)}
+                                </div>
+                              )}
+                            </div>
                           ) : (
                             <div className="relative ml-auto w-28">
                               <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
@@ -735,14 +794,20 @@ export function EditMixBatchDialog({
                 )}
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Total Cost</p>
+                <p className="text-sm text-muted-foreground">Estimated total cost if saved</p>
                 <p className="text-2xl font-bold font-mono">${formatNumber(totalCost, 4)}</p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Blended Cost/kg</p>
-                <p className="text-2xl font-bold font-mono">${blendedCostPerKg.toFixed(4)}</p>
+                <p className="text-sm text-muted-foreground">Estimated blended cost/kg if saved</p>
+                <p className="text-2xl font-bold font-mono" data-testid="text-edit-current-estimate">${blendedCostPerKg.toFixed(4)}</p>
               </div>
             </div>
+
+            <p className="text-xs text-muted-foreground" data-testid="mix-batch-cost-basis-notice">
+              The estimate uses current supplier rates for source edits. It is not a correction to
+              recorded historical costs. A historical cost difference alone is not an error;
+              source edits must be reviewed before saving, especially on completed batches.
+            </p>
 
             {/* Notes */}
             <div className="space-y-2">
