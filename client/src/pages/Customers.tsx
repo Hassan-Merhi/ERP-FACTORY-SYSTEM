@@ -1,7 +1,5 @@
-import {
-  searchIncludes } from "@shared/searchNormalization";
-import { useQuery,
-  useMutation } from "@tanstack/react-query";
+import { searchIncludes } from "@shared/searchNormalization";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -12,38 +10,16 @@ import type { RetailCustomerHistory } from "./pos/retailWave2Types";
 import { drCrClass } from "@/lib/formatNumber";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
-import { Plus,
-  Building2,
-  Pencil,
-  Users,
-  Wallet,
-  TrendingUp,
-  TrendingDown,
-  EyeOff,
-  Eye,
-  Printer } from "lucide-react";
+import { Plus, Building2, Pencil, Users, Wallet, TrendingUp, TrendingDown, EyeOff, Eye, Printer } from "lucide-react";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useState,
-  useEffect } from "react";
+import { useState, useEffect } from "react";
 import { PageHeader } from "@/components/PageHeader";
-import { ErpListFilters,
-  ErpListTable,
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger } from "@/components/ui/dialog";
-import { Table,
-  TableBody,
-  TableCell,
-  TableFooter,
-  TableHead,
-  TableHeader,
-  TableRow } from "@/components/ui/table";
-import { insertCustomerSchema,
-  type Customer } from "@shared/schema";
+import { ErpListFilters, ErpListTable, ErpFormActions, ErpPendingButton, ErpRecordAction, erpCompanyDataKey, invalidateErpDataFamilies, useErpRecordChangeAccess as useExistingRecordChangeAccess } from "@/erp-core";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { insertCustomerSchema, type Customer } from "@shared/schema";
 import { useForm } from "react-hook-form";
 import {
   Form,
@@ -53,24 +29,12 @@ import {
   FormLabel,
   FormMessage,
   FormDescription,
-  } from "@/components/ui/form";
+} from "@/components/ui/form";
 import { zodResolver } from "@/lib/form-resolver";
-import {
-  ErpFormActions,
-  ErpPendingButton,
-  ErpRecordAction,
-  erpCompanyDataKey,
-  invalidateErpDataFamilies,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue } from "@/components/ui/select";
+
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { z } from "zod";
 import { usePaginatedFilterState } from "@/hooks/use-paginated-filter-state";
-import { useErpRecordChangeAccess as useExistingRecordChangeAccess,
-} from "@/erp-core";
-
 
 
 const formSchema = insertCustomerSchema.extend({
