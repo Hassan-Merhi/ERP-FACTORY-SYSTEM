@@ -27,6 +27,8 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import { factoryApiRequest } from "@/lib/factoryApi";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 
@@ -105,6 +107,7 @@ export default function FactoryEmployeeDetail() {
   const [, params] = useRoute("/factory/employees/:id");
   const employeeId = params?.id ? parseInt(params.id) : null;
   const { toast } = useToast();
+  const { selectedCompany } = useCompany();
   const { formatDisplayDate } = useDateFormat();
 
   const formatDate = (val: string | Date | null | undefined) => {
@@ -146,23 +149,23 @@ export default function FactoryEmployeeDetail() {
     isLoading: empLoading,
     error: empError,
   } = useQuery<Employee>({
-    queryKey: ["/api/factory/employees", employeeId],
+    queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id, employeeId),
     queryFn: async () => {
       const res = await factoryApiRequest("GET", `/api/factory/employees/${employeeId}`);
       if (!res.ok) throw new Error("Employee not found");
       return res.json();
     },
-    enabled: !!employeeId,
+    enabled: Boolean(selectedCompany?.id) && !!employeeId,
   });
 
   const { data: statement, isLoading: stmtLoading } = useQuery<{ employee: Employee; rows: StatementRow[] }>({
-    queryKey: ["/api/factory/employees", employeeId, "statement"],
+    queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id, employeeId, "statement"),
     queryFn: async () => {
       const res = await factoryApiRequest("GET", `/api/factory/employees/${employeeId}/statement`);
       if (!res.ok) throw new Error("Failed to fetch statement");
       return res.json();
     },
-    enabled: !!employeeId,
+    enabled: Boolean(selectedCompany?.id) && !!employeeId,
   });
 
   const { data: cashAccounts = [] } = useQuery<LedgerAccount[]>({
@@ -190,8 +193,8 @@ export default function FactoryEmployeeDetail() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/employees", employeeId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/employees"] });
+      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id, employeeId) });
+      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id) });
       toast({ title: "Employee updated" });
       setEditOpen(false);
     },
@@ -211,8 +214,8 @@ export default function FactoryEmployeeDetail() {
       return res.json();
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/employees", employeeId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/employees"] });
+      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id, employeeId) });
+      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id) });
       toast({ title: "Balance recalculated", description: `New balance: $${data.newBalance?.toFixed(2)}` });
     },
     onError: (e: ClientErrorLike) => {
@@ -236,9 +239,9 @@ export default function FactoryEmployeeDetail() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/employees", employeeId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/employees", employeeId, "statement"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/employees"] });
+      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id, employeeId) });
+      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id, employeeId, "statement") });
+      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id) });
       toast({ title: "Deposit recorded" });
       setDepositOpen(false);
       setDepositAmount("");
@@ -266,9 +269,9 @@ export default function FactoryEmployeeDetail() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/employees", employeeId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/employees", employeeId, "statement"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/employees"] });
+      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id, employeeId) });
+      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id, employeeId, "statement") });
+      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id) });
       toast({ title: "Withdrawal recorded" });
       setWithdrawOpen(false);
       setWithdrawAmount("");
