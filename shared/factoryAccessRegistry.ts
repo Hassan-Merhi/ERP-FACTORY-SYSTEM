@@ -46,7 +46,7 @@ export const FACTORY_ACCESS_REGISTRY: readonly FactoryPageDefinition[] = [
     label: "Overview",
     group: "Production",
     route: "/factory/production-report",
-    aliases: ["/factory/bale-ledger"],
+    aliases: ["/factory/bale-ledger", "/factory/others"],
     pinned: true,
     landing: true,
   },
