@@ -186,6 +186,17 @@ export async function ensureFactoryLoadingDispatchSchema(pool: Pick<Pool, "query
         UNIQUE (dispatch_id, revision)
     )
   `);
+  // Phase 7: freeze individual bale manifest and truck identity alongside
+  // the Phase 6 comparison snapshot. Keep ALTER for existing deployments.
+  await pool.query(`
+    ALTER TABLE factory_loading_dispatch_closure_history
+      ADD COLUMN IF NOT EXISTS manifest_snapshot JSONB
+  `);
+  await pool.query(`
+    ALTER TABLE factory_loading_dispatch_closure_history
+      ADD COLUMN IF NOT EXISTS truck_snapshot JSONB
+  `);
+
   await pool.query(`
     CREATE INDEX IF NOT EXISTS factory_loading_dispatch_closure_order_idx
       ON factory_loading_dispatch_closure_history
