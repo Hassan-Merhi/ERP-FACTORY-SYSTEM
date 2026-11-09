@@ -9,7 +9,8 @@ import { runRentalReconciliation } from "../services/rental/rentalReconciliation
 import { registerDeferredRentReclassificationRoutes } from "./rental/deferredRentReclassificationRoutes";
 import { registerDueRentalPostingRoutes } from "./rental/dueRentalPostingRoutes";
 import { registerLegacyPrepaidRecognitionRoutes } from "./rental/legacyPrepaidRecognitionRoutes";
-import { requireAuth, requireRole } from "../auth";
+import { requireAuth } from "../auth";
+import { requireRentalReconciliationPermission } from "./rental/rentalRoutePermissions";
 import { getClientDate } from "../lib/dateUtils";
 import { getCompanyId } from "./rental/shared";
 export { ensureMonthlyForCompany, postRentAccrualForCompany } from "./rental/shared";
@@ -44,11 +45,11 @@ export function registerRentalRoutes(
   registerRentalAccrualConfigRoutes(app, module, urlPrefix, incomeAccountName, shopExpenseAccountName);
 
   // ── Reconciliation endpoint (Admin / Developer only) ──
-  app.get(`${urlPrefix}/reconciliation`, requireAuth, requireRole("Admin"), async (req: Request, res: Response) => {
+  app.get(`${urlPrefix}/reconciliation`, requireAuth, requireRentalReconciliationPermission, async (req: Request, res: Response) => {
     try {
       const companyId = getCompanyId(req);
       if (!companyId) return res.status(400).json({ message: "No company selected" });
-      // requireAuth resolves the active company role; requireRole checks it before any reads.
+      // The guard checks the canonical active-company role before any accounting reads.
       const asOf = (req.query.asOf as string | undefined) || getClientDate(req);
       const result = await runRentalReconciliation(companyId, module, asOf);
       res.json(result);
