@@ -1,4 +1,4 @@
-# ERP Core UI — Phases 1–2
+# ERP Core UI — Phases 1–3
 
 Use `@/erp-core` for new ERP-mode page presentation. This folder is a **composition/adoption layer**, not a new visual framework.
 
@@ -39,9 +39,22 @@ import { ErpPage, ErpPageActions, ErpDataTableToolbar, ErpEmptyState } from "@/e
 
 **Verification**: unit tests cover ERP page composition, table density persistence, filter delegation, and pagination bounds. Run the frontend Vitest suite and TypeScript checks before merging; the migration itself does not change ledger/voucher arithmetic or stock posting.
 
+
+## Phase 3: common fields, validation, and actions
+
+- `ErpField` provides consistent labels, required indicators, description text, inline errors, and accessible `id` / `aria-describedby` / `aria-invalid` wiring for forms with caller-owned state. Use its render function for an existing `Input`, `Textarea`, `SelectTrigger`, or `ErpNativeSelect`; never duplicate model validation in this component.
+- React Hook Form screens **keep their form resolver and field state**. The barrel re-exports the existing `Form`, `FormField`, `FormControl`, `FormLabel`, `FormDescription`, `FormMessage`, `FormGrid`, and `FormSection` under `Erp*` names to give ERP pages one adoption surface without a second validation implementation.
+- `ErpFormActions` has `inline`, `dialog`, and `sticky` variants; `dialog` delegates to the existing responsive `DialogFooter`, retaining phone-sheet behavior, and `sticky` delegates to `FormActionBar`.
+- `ErpPendingButton` delegates to `Button.isLoading` for consistent pending text, spinner, disabled state and `aria-busy`. It defaults to `type="button"`; set `type="submit"` inside a real form.
+- `ErpRecordAction` is a non-submitting row action with optional caller-provided `permitted` and `deniedReason`. It never replaces backend authorization. Do not infer permission from role strings inside the UI component.
+- `ErpConfirmDialog` is the existing robust `ConfirmDialog`, which handles pending operations, failure feedback and destructive confirmations. When possible, supply a promise-returning mutation (e.g. `mutateAsync`) to avoid closing before failure can be surfaced.
+- The first migrations cover Customers' React Hook Form actions, Account Groups (display and legacy editors), Stock Transfers notes, Supplier Profit Review filters, Suppliers delete/edit, Stock Items edit, and Optional Vouchers view/edit/finalize/delete buttons. No endpoints, voucher posting logic, stock allocation arithmetic, financial formulas or permissions sources were changed.
+
+**Safety rule:** staged display-only account grouping is still saved through its original mutation; deleting a display group must not delete any ledger account or voucher. Preserve existing test IDs and domain callbacks.
+
 ## Rollout rules
 
 1. Phase 1 sets the stable API and migrates Opening/Closing Stock Summary as non-accounting pilot pages, retaining their existing shell spacing and header semantics.
-2. Phase 2 introduces the standard list table, shared filter toolbar, and pagination controls. Phase 3 handles forms/actions; Phase 4 centralizes permissions/route visibility; Phase 5 standardizes queries and number/date display; Phase 6 handles reports/export; Phase 7 removes proven duplicates.
+2. Phase 2 introduces the standard list table, shared filter toolbar, and pagination controls. Phase 3 standardizes controlled fields, async form actions, row buttons and confirmations; Phase 4 centralizes permissions/route visibility; Phase 5 standardizes queries and number/date display; Phase 6 handles reports/export; Phase 7 removes proven duplicates.
 3. Never move voucher posting, ledger calculations, stock valuation, payroll arithmetic, or company authorization into UI components. Server authorization remains definitive.
 4. Do not change data-testid, route URLs, stock balance calculations, or create/edit behavior as part of a presentational migration. Stock Query's former 200-result cap is separately replaced by explicit company-aware server pagination.
