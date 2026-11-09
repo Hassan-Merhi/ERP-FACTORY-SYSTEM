@@ -77,12 +77,27 @@ function evaluate(snapshot: Exclude<LoadedSnapshot, { notFoundTrip: true }>, dis
   const s = comparison.summary;
   const policy = assessFactoryLoadingDispatchClose(comparison);
 
-  // Hash all mutable data that influences a closure. A user must acknowledge
-  // the CURRENT preview, never a stale one while other trucks are scanning.
+  // Fingerprint only dependencies relevant to THIS truck. Simultaneous
+  // unrelated scans on other open trucks must not prevent a trip from ending.
+  // The selected truck's own scans, its allocated references, and conflicts
+  // on those references still invalidate a stale confirmation.
+  const plannedIds = new Set(snapshot.expectedBales
+    .filter((b) => b.dispatchId === id).map((b) => b.baleId));
+  const scannedIds = new Set(snapshot.scans
+    .filter((s) => s.dispatchId === id).map((s) => s.baleId));
+  const relevantIds = new Set([...plannedIds, ...scannedIds]);
   const fingerprint = createHash("sha256").update(JSON.stringify({
-    order: snapshot.order, trips: snapshot.trips, loaded: snapshot.loaded,
-    scans: snapshot.scans, expectedBales: snapshot.expectedBales,
-    expectedArticles: snapshot.expectedArticles,
+    order: snapshot.order,
+    trip,
+    loaded: snapshot.loaded.filter((b) => relevantIds.has(b.baleId)),
+    scans: snapshot.scans.filter((s) => s.dispatchId === id || plannedIds.has(s.baleId)),
+    expectedBales: snapshot.expectedBales.filter((b) =>
+      b.dispatchId === id || scannedIds.has(b.baleId)),
+    expectedArticles: snapshot.expectedArticles.filter((a) => a.dispatchId === id),
+    relatedTrips: snapshot.trips.filter((t) =>
+      t.id === id || snapshot.expectedBales.some((b) =>
+        b.dispatchId === t.id && scannedIds.has(b.baleId)) ||
+      snapshot.scans.some((s) => s.dispatchId === t.id && plannedIds.has(s.baleId))),
   })).digest("hex");
   return {
     dispatchId, dispatchNumber: trip.dispatchNumber, status: trip.status,
