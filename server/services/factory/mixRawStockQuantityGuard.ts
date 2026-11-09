@@ -42,7 +42,7 @@ export interface SupplierStockUsage {
  * again would double-count them. When no container exists, count supplier-only
  * source consumption explicitly, since it cannot appear in raw usedKg.
  *
- * Supply-row locks and the supplier advisory lock must be held by the caller
+ * Source supplier row/physical stock locks must be held by the caller
  * before using this allowance in a write transaction.
  */
 export async function availableSupplierAddAllowance(
@@ -65,7 +65,11 @@ export async function availableSupplierAddAllowance(
     const overdraft = toMoney(row.usedKg).minus(row.receivedKg);
     if (overdraft.gt(0)) consumedFromAdds = consumedFromAdds.plus(overdraft);
   }
-  if (rawRows.length === 0) {
+  // Legacy supplier-only rows may have been recorded without a container
+  // link. We cannot prove whether the quantity was already deducted from a
+  // physical row, so subtract it conservatively from the ADD allowance.
+  // This can block a legitimate source edit, but cannot mint extra stock.
+  if (addKg.gt(consumedFromAdds)) {
     const [manual] = await tx.select({
       kg: sql<string>`COALESCE(SUM(${factoryMixBatchSources.weightKg}), 0)`,
     }).from(factoryMixBatchSources)
