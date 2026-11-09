@@ -34,7 +34,7 @@ import {
   employees,
   ledgerAccounts,
 } from "@shared/schema";
-import { eq, and, sql, isNotNull } from "drizzle-orm";
+import { eq, and, sql, isNotNull, isNull } from "drizzle-orm";
 import { companyScopedSuppliers } from "@shared/schema/supplierCompanyScope";
 import { syncPurchaseOrderGitForVoucherTx } from "../../../services/accounting/perpetualInventory/stockReceipts";
 import { syncStockAdjustmentInventoryTx } from "../../../services/accounting/perpetualInventory/stockAdjustments";
@@ -45,6 +45,8 @@ import {
   STOCK_DOCUMENT_NOT_RESTORABLE_MESSAGE,
 } from "../../../services/inventory/voucherStockReversal";
 import { syncContainerCommissionJournalTx } from "../../../services/factory/containerCommissionJournal";
+import { MixLifecycleRefusal, requireMixDeletionSafe, requireMixLifecycleAvailable } from "../../../services/factory/mixLifecyclePhase6";
+import { isPerpetualInventoryActive } from "../../../services/accounting/perpetualInventory/cutover";
 import {
   isRetiredVoucherNumber,
   RETIRED_VOUCHER_NOT_RESTORABLE,
@@ -245,59 +247,102 @@ export function registerDeletedItemsRestoreRoutes(app: Express) {
               and(eq(factoryRawMaterialAdjustments.id, itemId), eq(factoryRawMaterialAdjustments.companyId, companyId))
             );
           break;
-        case "factoryMixBatch":
-          // Restoring must re-apply the usedKg consumption on its sources — the
-          // DELETE route (factoryMixBatchRoutes.ts) reverses that consumption on
-          // delete, so skipping it here would leave the source stock artificially
-          // over-available (double-counted as both free and locked in this batch).
-          await db.transaction(async (tx) => {
-            // Guard: only restore rows that are actually soft-deleted, so calling
-            // restore twice (or on an already-active batch) can't re-apply
-            // consumption a second time.
-            const [restored] = await tx
-              .update(factoryMixBatches)
-              .set({ deletedAt: null, updatedAt: new Date() })
-              .where(
-                and(
-                  eq(factoryMixBatches.id, itemId),
-                  eq(factoryMixBatches.companyId, companyId),
-                  isNotNull(factoryMixBatches.deletedAt)
-                )
-              )
-              .returning({ id: factoryMixBatches.id });
-            if (!restored) return;
-
-            const batchSourceRows = await tx
-              .select({
-                containerId: factoryMixBatchSources.containerId,
-                sourceBatchId: factoryMixBatchSources.sourceBatchId,
-                weightKg: factoryMixBatchSources.weightKg,
-              })
-              .from(factoryMixBatchSources)
+        case "factoryMixBatch": {
+          // Only exact, evidence-backed restoration is permitted. The old
+          // restore updated every raw-stock row sharing a container and could
+          // manufacture stock consumption a second time.
+          const result = await db.transaction(async (tx) => {
+            const [mix] = await tx.select().from(factoryMixBatches).where(and(
+              eq(factoryMixBatches.id, itemId),
+              eq(factoryMixBatches.companyId, companyId),
+              isNotNull(factoryMixBatches.deletedAt),
+            )).for("update");
+            if (!mix) return "not-deleted";
+            requireMixDeletionSafe({ ...mix, deletedAt: null }, false);
+            if (await isPerpetualInventoryActive(tx, companyId, new Date().toISOString().slice(0, 10))) {
+              throw new MixLifecycleRefusal(
+                "Restoring mix source consumption after perpetual inventory cutover requires an approved balancing journal."
+              );
+            }
+            const sources = await tx.select({
+              containerId: factoryMixBatchSources.containerId,
+              sourceBatchId: factoryMixBatchSources.sourceBatchId,
+              sourceType: factoryMixBatchSources.sourceType,
+              weightKg: factoryMixBatchSources.weightKg,
+            }).from(factoryMixBatchSources)
               .where(eq(factoryMixBatchSources.mixBatchId, itemId));
-
-            for (const src of batchSourceRows) {
-              const weight = toMoney(src.weightKg).toNumber();
-              if (weight <= 0) continue;
-              if (src.containerId) {
-                // Scope to companyId too (via a join-equivalent subselect) so a
-                // corrupted/cross-tenant containerId can never mutate another
-                // company's raw stock.
-                await tx
-                  .update(factoryRawStock)
-                  .set({ usedKg: sql`${factoryRawStock.usedKg} + ${weight}` })
-                  .where(
-                    and(eq(factoryRawStock.containerId, src.containerId), eq(factoryRawStock.companyId, companyId))
+            if (!sources.length) {
+              throw new MixLifecycleRefusal("Deleted mix lacks the source rows needed to reverse its original deletion.");
+            }
+            for (const src of sources) {
+              const weight = toMoney(src.weightKg);
+              if (!weight.isFinite() || weight.lte(0)) {
+                throw new MixLifecycleRefusal("Invalid source kg in deleted mix; manual historical review required.");
+              }
+              if (src.containerId != null) {
+                // Refuse unverified supplier-only ADD stock or ambiguous
+                // original container allocation rather than overdraw it.
+                if (src.sourceType === "SUPPLIER_ADJUSTMENT_BACKED") {
+                  throw new MixLifecycleRefusal("ADD-backed supplier stock needs dated adjustment evidence before restore.");
+                }
+                const rows = await tx.select({
+                  id: factoryRawStock.id,
+                  receivedKg: factoryRawStock.receivedKg,
+                  usedKg: factoryRawStock.usedKg,
+                }).from(factoryRawStock).where(and(
+                  eq(factoryRawStock.companyId, companyId),
+                  eq(factoryRawStock.containerId, src.containerId),
+                  isNull(factoryRawStock.deletedAt),
+                )).for("update");
+                if (rows.length !== 1 ||
+                    toMoney(rows[0].receivedKg).minus(rows[0].usedKg).lt(weight)) {
+                  throw new MixLifecycleRefusal(
+                    "Restoring this mix would consume unavailable or ambiguously attributed container stock."
                   );
-              } else if (src.sourceBatchId) {
-                await tx
-                  .update(factoryMixBatches)
-                  .set({ usedKg: sql`${factoryMixBatches.usedKg} + ${weight}`, updatedAt: new Date() })
-                  .where(and(eq(factoryMixBatches.id, src.sourceBatchId), eq(factoryMixBatches.companyId, companyId)));
+                }
+                await tx.update(factoryRawStock).set({
+                  usedKg: toMoney(rows[0].usedKg).plus(weight).toFixed(3),
+                }).where(and(eq(factoryRawStock.id, rows[0].id),
+                  eq(factoryRawStock.companyId, companyId)));
+              } else if (src.sourceBatchId != null) {
+                const [parent] = await tx.select().from(factoryMixBatches).where(and(
+                  eq(factoryMixBatches.id, src.sourceBatchId),
+                  eq(factoryMixBatches.companyId, companyId),
+                  isNull(factoryMixBatches.deletedAt),
+                )).for("update");
+                if (!parent) throw new MixLifecycleRefusal("Upstream mix source for restore is missing.");
+                const available = requireMixLifecycleAvailable(parent);
+                if (available.lt(weight)) {
+                  throw new MixLifecycleRefusal("Upstream mix lacks the quantity needed for safe restore.");
+                }
+                const nextUsed = toMoney(parent.usedKg).plus(weight);
+                await tx.update(factoryMixBatches).set({
+                  usedKg: nextUsed.toFixed(3),
+                  status: nextUsed.eq(toMoney(parent.totalWeightKg)) ? "CLOSED" : parent.status,
+                  updatedAt: new Date(),
+                }).where(and(eq(factoryMixBatches.id, parent.id),
+                  eq(factoryMixBatches.companyId, companyId)));
+              } else {
+                throw new MixLifecycleRefusal(
+                  "Supplier-only mix sources have no provable receipt allocation; generic restore is blocked."
+                );
               }
             }
+            const [restored] = await tx.update(factoryMixBatches)
+              .set({ deletedAt: null, updatedAt: new Date() })
+              .where(and(
+                eq(factoryMixBatches.id, itemId),
+                eq(factoryMixBatches.companyId, companyId),
+                isNotNull(factoryMixBatches.deletedAt),
+              )).returning({ id: factoryMixBatches.id });
+            if (!restored) throw new MixLifecycleRefusal("Mix changed during restore. Recheck its current status.");
+            return "restored";
           });
+          if (result === "not-deleted") {
+            return res.status(409).json({ message: "Mix is not in Deleted Items or belongs to a different company." });
+          }
           break;
+        }
         case "factoryBale": {
           const result = await db.transaction(async (tx) => {
             await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, ${companyId})`);
@@ -368,6 +413,9 @@ export function registerDeletedItemsRestoreRoutes(app: Express) {
 
       res.json({ message: `${type} restored successfully` });
     } catch (error: unknown) {
+      if (error instanceof MixLifecycleRefusal) {
+        return res.status(error.statusCode).json({ code: error.code, message: error.message });
+      }
       res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
     }
   });
