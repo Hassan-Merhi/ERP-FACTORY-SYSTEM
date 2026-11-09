@@ -244,7 +244,7 @@ export function useFactoryStockAllocationV5Model() {
   const [linkSelected, setLinkSelected] = useState<Set<number>>(new Set());
 
   const unlinkedQuery = useQuery<{ orders: UnlinkedOrder[] }>({
-    queryKey: ["/api/factory/v5/unlinked-loading-orders"],
+    queryKey: companyQueryKey("/api/factory/v5/unlinked-loading-orders", selectedCompany?.id),
     queryFn: async () => {
       const res = await fetch("/api/factory/v5/unlinked-loading-orders", { credentials: "include" });
       if (!res.ok) {
@@ -253,7 +253,7 @@ export function useFactoryStockAllocationV5Model() {
       }
       return res.json();
     },
-    enabled: !!linkDialog,
+    enabled: !!linkDialog && Boolean(selectedCompany?.id),
     staleTime: 15000,
   });
 
@@ -290,7 +290,7 @@ export function useFactoryStockAllocationV5Model() {
   const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
 
   const cancelledContainersQuery = useQuery<{ orders: CancelledContainerRow[] }>({
-    queryKey: ["/api/factory/v5/recently-cancelled-containers"],
+    queryKey: companyQueryKey("/api/factory/v5/recently-cancelled-containers", selectedCompany?.id),
     queryFn: async () => {
       const res = await fetch("/api/factory/v5/recently-cancelled-containers", { credentials: "include" });
       if (!res.ok) {
@@ -299,7 +299,7 @@ export function useFactoryStockAllocationV5Model() {
       }
       return res.json();
     },
-    enabled: restoreDialogOpen,
+    enabled: restoreDialogOpen && Boolean(selectedCompany?.id),
     staleTime: 15000,
   });
 
