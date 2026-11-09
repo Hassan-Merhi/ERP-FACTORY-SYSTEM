@@ -2,7 +2,7 @@
  * Read-only tenant labels for previously posted Properties rental vouchers.
  * Do not rewrite immutable historical GL vouchers or voucher-entry narrations.
  */
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, or } from "drizzle-orm";
 import { db } from "../../db";
 import { propertyContracts, propertyPayments } from "@shared/schema";
 import { appendRentalTenantName } from "./rentalVoucherTenantDescription";
@@ -39,8 +39,9 @@ export async function withPropertiesRentalTenantNames<T extends VoucherRow>(
         and(
           eq(propertyPayments.companyId, companyId),
           eq(propertyPayments.module, "PROPERTIES"),
-          eq(propertyContracts.companyId, companyId),
-          eq(propertyContracts.module, "PROPERTIES"),
+          // Shared external contracts can belong to a linked company, while
+          // their actual payment voucher belongs to the selected Properties company.
+          or(eq(propertyContracts.companyId, companyId), eq(propertyContracts.linkedCompanyId, companyId)),
           inArray(propertyPayments.voucherId, rentVoucherIds),
         ),
       );
