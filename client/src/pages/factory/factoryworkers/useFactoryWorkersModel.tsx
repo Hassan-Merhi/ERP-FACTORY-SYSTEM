@@ -107,6 +107,7 @@ export function useFactoryWorkersModel() {
 
   const { data: cashAccounts } = useQuery<CashAccount[]>({
     queryKey: companyQueryKey("/api/factory/cash-accounts", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const res = await fetch("/api/factory/cash-accounts", { credentials: "include" });
       return res.json();
@@ -117,6 +118,7 @@ export function useFactoryWorkersModel() {
 
   const { data: workers, isLoading } = useQuery<FactoryWorkerRecord[]>({
     queryKey: companyQueryKey("/api/factory/workers", selectedCompany?.id, "full"),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const res = await fetch("/api/factory/workers?profile=full", { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch workers");
@@ -126,6 +128,7 @@ export function useFactoryWorkersModel() {
 
   const { data: docCounts = {} } = useQuery<Record<number, number>>({
     queryKey: companyQueryKey("/api/factory/workers/document-counts", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const res = await fetch("/api/factory/workers/document-counts", { credentials: "include" });
       if (!res.ok) return {};
@@ -136,6 +139,7 @@ export function useFactoryWorkersModel() {
 
   const { data: savedNationalities = [] } = useQuery<string[]>({
     queryKey: companyQueryKey("/api/factory/workers/nationalities", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const res = await fetch("/api/factory/workers/nationalities", { credentials: "include" });
       if (!res.ok) return [];
@@ -161,6 +165,7 @@ export function useFactoryWorkersModel() {
     >
   >({
     queryKey: companyQueryKey("/api/factory/workers/amount-due", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const res = await fetch("/api/factory/workers/amount-due", { credentials: "include" });
       if (!res.ok) return {};
@@ -178,6 +183,7 @@ export function useFactoryWorkersModel() {
 
   const { data: categories = [] } = useQuery<FactoryWorkerCategory[]>({
     queryKey: companyQueryKey("/api/factory/worker-categories", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const res = await fetch("/api/factory/worker-categories", { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch worker categories");
