@@ -1,7 +1,7 @@
-// One-time rollout of the new global admin refresh listener. Updating the
-// worker lets existing desktop/Android/PWA sessions load the new listener.
-// Do not bump this again for routine application releases.
-const CACHE_VERSION = "erp-v14";
+// Incident recovery: invalidate cached app shells and old hashed chunks after
+// confirmed production 404s on assets from previous Render releases.
+// Future routine releases must not bump this marker unnecessarily.
+const CACHE_VERSION = "erp-v15";
 const CACHE_PREFIX = "erp-";
 // One-time campaign marker kept outside CACHE_PREFIX so normal ERP cache cleanup
 // cannot erase it and accidentally trigger this migration again later.
