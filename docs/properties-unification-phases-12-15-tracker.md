@@ -75,3 +75,7 @@ npx vitest run --config vitest.config.frontend.ts tests/ui/parent-routes-behavio
 ```
 
 **Phase 13 disposition:** Source implementation complete; automated and runtime certification pending.
+
+### Integration notice (final Phase 13 comparison)
+
+At the final Phase 13 comparison, `properties-unification-phase12` was **13 commits ahead and 157 behind** `main`. This is a changing snapshot, not a merge readiness certification. Phase 14/15 must reconcile current main, inspect semantic conflicts and rerun all relevant regression tests. No merge, rebase, CI or deployment has been initiated.
