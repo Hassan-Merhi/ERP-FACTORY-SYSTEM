@@ -4,9 +4,9 @@ import { Card } from "@/components/ui/card";
 import { Package, ChevronRight } from "lucide-react";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
-import { PageHeader } from "@/components/PageHeader";
+import { ErpPage } from "@/erp-core";
 import { EmptyState, LoadingRows } from "@/components/ui/display-state";
-import { PageShell, financialNumberClassName } from "@/components/ui/page-shell";
+import { financialNumberClassName } from "@/components/ui/page-shell";
 import { cn } from "@/lib/utils";
 
 interface StockGroupSummary {
@@ -70,12 +70,11 @@ export default function OpeningStockSummary() {
       : 0;
 
   return (
-    <PageShell>
-      <PageHeader
-        title="Opening Stock Summary"
-        subtitle={selectedCompany?.name}
-        icon={<Package className="h-5 w-5" />}
-      />
+    <ErpPage
+      title="Opening Stock Summary"
+      subtitle={selectedCompany?.name}
+      icon={<Package className="h-5 w-5" />}
+    >
 
       <Card className="overflow-hidden">
         <div className="bg-primary text-primary-foreground">
@@ -164,6 +163,6 @@ export default function OpeningStockSummary() {
           </div>
         ) : null}
       </Card>
-    </PageShell>
+    </ErpPage>
   );
 }
