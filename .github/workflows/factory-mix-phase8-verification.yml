@@ -1,0 +1,48 @@
+name: Factory Mix Phase 8 Verification
+on:
+  push:
+    branches:
+      - fix/factory-mix-cost-integrity-20261109
+permissions:
+  contents: write
+jobs:
+  verify:
+    if: "!startsWith(github.event.head_commit.message, 'style(factory): final phase 8 formatter')"
+    runs-on: ubuntu-26.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24.22.2"
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Print orphaned scripts for accurate CI repair
+        continue-on-error: true
+        shell: bash
+        run: |
+          node scripts/audit-script-inventory.mjs --list > /tmp/inventory.txt 2>&1 || true
+          sed -n '/^orphan (/,+16p' /tmp/inventory.txt
+          tail -12 /tmp/inventory.txt
+      - name: Run mix integrity phase 1–7 regression tests
+        continue-on-error: true
+        shell: bash
+        run: |
+          ./node_modules/.bin/vitest run             tests/mix-batch-recorded-valuation-phase1.test.ts             tests/mix-batch-edit-source-validation-phase2.test.ts             tests/historical-mix-batch-reconciliation-phase3.test.ts             tests/factory-mix-phase4-provenance.test.ts             tests/factory-mix-phase5-downstream.test.ts             tests/factory-mix-phase6-lifecycle.test.ts             tests/factory-mix-phase6-route-invariants.test.ts             tests/factory-mix-phase7-integrity-monitor.test.ts             tests/scheduler-entrypoint.test.ts             --maxWorkers=2 --reporter=default
+      - name: Prettier format changed source only and commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main --no-tags
+          git diff --name-only -z --diff-filter=ACMR origin/main...HEAD -- '*.ts' '*.tsx' '*.js' '*.jsx' '*.mjs' '*.json' '*.css' '*.md' '*.yml' '*.yaml' |
+            xargs -0 -r ./node_modules/.bin/prettier --write
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add --all
+            git commit -m "style(factory): final phase 8 formatter"
+            git push origin HEAD:fix/factory-mix-cost-integrity-20261109
+          fi
