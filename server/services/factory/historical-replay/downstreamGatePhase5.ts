@@ -142,7 +142,7 @@ export async function inspectPhase5ReplayScopeSafety(
   const proposedValueRows =
     scope.containerIdsToUpdate.length + scope.rawStockIdsToUpdate.length +
     scope.sourceIdsToUpdate.length + scope.batchIdsToUpdate.length +
-    scope.availableBaleIdsToUpdate.length;
+    scope.availableBaleIdsToUpdate.length + scope.supplierIds.length;
   return evaluatePhase5ReplaySafety({
     companyId,
     missingLineageBatchIds: mixRows.rows.map(row => row.id),
