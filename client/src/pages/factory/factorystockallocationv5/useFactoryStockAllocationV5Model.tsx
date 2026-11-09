@@ -6,6 +6,10 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { fetchAllV5AllocationData } from "@/lib/v5AllocationPaginationClient";
+import { FACTORY_V5_ALLOCATION_BASE } from "@/lib/factoryAllocationReadModel";
+import { companyQueryKey } from "@/lib/companyQueryScope";
+import { useCompany } from "@/contexts/CompanyContext";
+import { useDebounce } from "@/hooks/use-debounce";
 import type { V5Data, V5Row } from "./types";
 
 function isGarbageOrWipers(row: V5Row) {
@@ -16,6 +20,7 @@ function isGarbageOrWipers(row: V5Row) {
 
 export function useFactoryStockAllocationV5Model() {
   const { toast } = useToast();
+  const { selectedCompany } = useCompany();
   const [, navigate] = useLocation();
   const searchString = useSearch();
   const focusProformaId = useMemo(() => {
@@ -42,11 +47,7 @@ export function useFactoryStockAllocationV5Model() {
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
   // Debounced value sent to the server — prevents one request per keystroke.
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(searchQuery), 300);
-    return () => clearTimeout(t);
-  }, [searchQuery]);
+  const debouncedSearch = useDebounce(searchQuery, 300);
 
   /* ── Export dialog state ─────────────────────────────────────────────────── */
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
@@ -353,7 +354,8 @@ export function useFactoryStockAllocationV5Model() {
 
   /* ── Query ──────────────────────────────────────────────────────────────── */
   const query = useQuery<V5Data>({
-    queryKey: ["/api/factory/v5/stock-allocation", hideZero, debouncedSearch || undefined],
+    queryKey: companyQueryKey(FACTORY_V5_ALLOCATION_BASE, selectedCompany?.id, hideZero, debouncedSearch || undefined),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const params = new URLSearchParams();
       if (hideZero) params.set("hideZero", "true");
