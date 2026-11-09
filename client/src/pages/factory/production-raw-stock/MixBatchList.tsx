@@ -163,6 +163,7 @@ interface MixPhase7MonitorStatus {
   companyId: number;
   initialized: boolean;
   lastSuccessAt: string | null;
+  stale: boolean;
   summary: { critical: number; warning: number; review: number; total: number; suppressedCurrentRateDrift: boolean } | null;
   unreadAlerts: number;
   monitoringEnabled: boolean;
@@ -668,6 +669,11 @@ export function MixBatchList({
                     ? "Last successful check: " + new Date(phase7Monitor.lastSuccessAt!).toLocaleString()
                     : "Awaiting the first successful scan to establish a historical baseline."}
                 </p>
+                {phase7Monitor.stale && (
+                  <p role="alert" className="text-xs font-semibold text-destructive">
+                    Last successful scan is over 48 hours old. Monitoring findings may be outdated; review Factory Alerts and server logs.
+                  </p>
+                )}
                 {phase7Monitor.summary && (
                   <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
                     <div><p className="text-xs text-muted-foreground">Critical findings</p>
