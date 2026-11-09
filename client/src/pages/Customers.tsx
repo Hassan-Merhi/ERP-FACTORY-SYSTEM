@@ -32,6 +32,7 @@ import {
   ErpFormDescription as FormDescription,
   ErpFormActions,
   ErpPendingButton,
+  ErpRecordAction,
 } from "@/erp-core";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { z } from "zod";
@@ -503,20 +504,20 @@ function CompanyCustomers() {
                   </TableCell>
                   <TableCell className="py-3">
                     <div className="flex items-center justify-end opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity">
-                      <Button
+                      <ErpRecordAction
                         variant="ghost"
                         size="icon"
                         onClick={(e) => {
                           e.stopPropagation();
                           if (recordChanges.allowed) handleEditClick(customer);
                         }}
-                        disabled={!recordChanges.allowed}
-                        title={recordChanges.reason ?? undefined}
+                        permitted={recordChanges.allowed}
+                        deniedReason={recordChanges.reason}
                         aria-label={recordChanges.reason ?? "Edit customer"}
                         data-testid={`button-edit-customer-${customer.id}`}
                       >
                         <Pencil className="h-4 w-4" />
-                      </Button>
+                      </ErpRecordAction>
                     </div>
                   </TableCell>
                 </TableRow>
