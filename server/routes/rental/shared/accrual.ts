@@ -488,14 +488,14 @@ export async function postRentAccrualForCompany(
             sql`${propertyMonthlyLedger.expectedAmount}::numeric > 0`
           )
         );
-      const heldDuePrepaid = prepaidUnaccrued.filter((r) => isDue(r) && isRentRecognitionHeld(r.notes));
+      const heldDuePrepaid = prepaidUnaccrued.filter((r) => isDue(r) && isRentRecognitionHeld(r.notes, { companyId, rowId: r.id }));
       if (heldDuePrepaid.length > 0) {
         logger.warn("[ERP/rental] Rent recognition held pending accounting reconciliation", {
           companyId,
           rentalMonthIds: heldDuePrepaid.map((r) => r.id),
         });
       }
-      const duePrepaid = prepaidUnaccrued.filter((r) => isDue(r) && !isRentRecognitionHeld(r.notes));
+      const duePrepaid = prepaidUnaccrued.filter((r) => isDue(r) && !isRentRecognitionHeld(r.notes, { companyId, rowId: r.id }));
       if (duePrepaid.length > 0) {
         await db.transaction(async (tx) => {
           const expenseId = await findOrCreateLedgerAccount(
