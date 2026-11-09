@@ -302,4 +302,20 @@ describe("Capture when offline", () => {
       "OFFLINE_ACTOR_NOT_PREPARED"
     );
   });
+
+  it("saves for the signed-in user and the selected company when no verified offline scope exists", async () => {
+    const { captureOfflineWriteForSignedInUser, offlineCaptureActor } =
+      await import("../../client/src/lib/offline/browserCapture");
+    localStorage.setItem("selectedCompanyId", "7");
+    expect(offlineCaptureActor({ id: "u-9" })).toEqual({ companyId: 7, userId: "u-9" });
+    expect(offlineCaptureActor(null)).toBeNull();
+    expect(offlineCaptureActor(undefined)).toBeNull();
+    localStorage.setItem("selectedCompanyId", "none");
+    expect(offlineCaptureActor({ id: "u-9" })).toBeNull();
+    localStorage.removeItem("selectedCompanyId");
+    expect(offlineCaptureActor({ id: "u-9" })).toBeNull();
+    await expect(
+      captureOfflineWriteForSignedInUser({ id: "u-9" }, "POST", "/api/inventory/quick-adjust", adjust)
+    ).rejects.toThrow("OFFLINE_ACTOR_NOT_PREPARED");
+  });
 });

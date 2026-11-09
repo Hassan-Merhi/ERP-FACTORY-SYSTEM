@@ -16,6 +16,7 @@
 import { offlineError } from "./offlineError";
 import { offlineAvailability, supportedOfflineWrite, type SupportedOfflineWrite } from "./offlineCoverage";
 import { saveBrowserOperation, type BrowserActor } from "./browserOutbox";
+import { getVerifiedOfflineReadScope } from "./offlineReadCache";
 
 export interface OfflineQueuedError extends Error {
   name: "OfflineQueued";
@@ -68,4 +69,34 @@ export async function captureOfflineWrite(
   error.operationId = saved.record.id;
   error.duplicate = saved.duplicate;
   throw error;
+}
+
+/**
+ * Who a write saved offline belongs to: the verified offline scope (online
+ * verification or the sealed read-only ticket), else the signed-in user this
+ * tab already knows and its selected company. The cloud re-checks the session
+ * before delivering anything, and never sends another user's records.
+ */
+export function offlineCaptureActor(signedInUser: unknown): BrowserActor | null {
+  const scope = getVerifiedOfflineReadScope();
+  if (scope) return scope;
+  const userId = (signedInUser as { id?: string | number } | null | undefined)?.id;
+  let companyId: number;
+  try {
+    companyId = Number(localStorage.getItem("selectedCompanyId"));
+  } catch {
+    companyId = NaN;
+  }
+  if (!userId || !Number.isSafeInteger(companyId) || companyId <= 0) return null;
+  return { companyId, userId: String(userId) };
+}
+
+/** `captureOfflineWrite` for the global request path (queryClient.ts). */
+export function captureOfflineWriteForSignedInUser(
+  signedInUser: unknown,
+  method: string,
+  url: string,
+  data: unknown
+): Promise<never> {
+  return captureOfflineWrite(offlineCaptureActor(signedInUser), method, url, data);
 }

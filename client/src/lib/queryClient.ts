@@ -563,27 +563,6 @@ function assertCreateOnlyRequestAllowed(method: string, url: string): void {
   }
 }
 
-/**
- * Who a write saved offline belongs to: the verified offline scope (online
- * verification or the sealed read-only ticket), else the signed-in user and the
- * selected company this tab already knows. The cloud re-checks the session
- * before delivering anything, and never sends another user's records.
- */
-async function offlineCaptureActor(): Promise<{ companyId: number; userId: string } | null> {
-  const { getVerifiedOfflineReadScope } = await import("./offline/offlineReadCache");
-  const scope = getVerifiedOfflineReadScope();
-  if (scope) return scope;
-  const user = queryClient.getQueryData<{ id?: string | number }>(["/api/auth/me"]);
-  let companyId: number;
-  try {
-    companyId = Number(localStorage.getItem("selectedCompanyId"));
-  } catch {
-    companyId = NaN;
-  }
-  if (!user?.id || !Number.isSafeInteger(companyId) || companyId <= 0) return null;
-  return { companyId, userId: String(user.id) };
-}
-
 export async function apiRequest(
   method: string,
   url: string,
@@ -612,8 +591,8 @@ export async function apiRequest(
     // Standalone offline mode: known to be offline BEFORE sending. Supported
     // writes are saved on this device for later delivery to the cloud; every
     // other write is refused with its reason. Never after a send was cut off.
-    const { captureOfflineWrite } = await import("./offline/browserCapture");
-    return captureOfflineWrite(await offlineCaptureActor(), method, url, data);
+    const { captureOfflineWriteForSignedInUser } = await import("./offline/browserCapture");
+    return captureOfflineWriteForSignedInUser(queryClient.getQueryData(["/api/auth/me"]), method, url, data);
   }
   const prepared = await prepareApiRequest(method, url, data, timeoutMs);
 
