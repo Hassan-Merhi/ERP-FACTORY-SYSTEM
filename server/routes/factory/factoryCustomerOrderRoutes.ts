@@ -13,12 +13,14 @@ import { registerFactoryLoadingDispatchScanRoutes } from "./customer-orders/load
 import { registerFactoryLoadingDispatchComparisonRoutes } from "./customer-orders/loadingDispatchComparisonRoutes";
 import { registerFactoryLoadingDispatchAllocationRoutes } from "./customer-orders/loadingDispatchAllocationRoutes";
 import { registerFactoryLoadingDispatchLifecycleRoutes } from "./customer-orders/loadingDispatchLifecycleRoutes";
+import { registerFactoryLoadingDispatchReportRoutes } from "./customer-orders/loadingDispatchReportRoutes";
 
 export function registerFactoryCustomerOrderRoutes(app: Express) {
   // Priority Scan owns a static /customer-orders/loading-list/priority-scan-configs GET.
   // Register it before the generic /customer-orders/:id GET in CRUD routes so
   // Express never treats "priority-scan-configs" as an order id.
   registerPriorityScanConfigRoutes(app);
+  registerFactoryLoadingDispatchReportRoutes(app);
   registerFactoryLoadingDispatchLifecycleRoutes(app);
   registerFactoryLoadingDispatchAllocationRoutes(app);
   registerFactoryLoadingDispatchComparisonRoutes(app);
