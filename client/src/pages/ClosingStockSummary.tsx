@@ -21,9 +21,9 @@ import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
 import { PeriodFilter, type PeriodFilterValue, getDefaultPeriodValue } from "@/components/ui/period-filter";
 import { useDateJump } from "@/hooks/use-date-jump";
-import { PageHeader } from "@/components/PageHeader";
+import { ErpPage } from "@/erp-core";
 import { EmptyState, LoadingRows } from "@/components/ui/display-state";
-import { PageActions, PageShell, financialNumberClassName } from "@/components/ui/page-shell";
+import { PageActions, financialNumberClassName } from "@/components/ui/page-shell";
 import { cn } from "@/lib/utils";
 
 interface StockGroupSummary {
@@ -113,12 +113,11 @@ export default function ClosingStockSummary() {
   };
 
   return (
-    <PageShell>
-      <PageHeader
-        title="Closing Stock Summary"
-        subtitle={`Current inventory values${selectedCompany?.name ? ` — ${selectedCompany.name}` : ""}`}
-        icon={<Package className="h-5 w-5" />}
-      >
+    <ErpPage
+      title="Closing Stock Summary"
+      subtitle={`Current inventory values${selectedCompany?.name ? ` — ${selectedCompany.name}` : ""}`}
+      icon={<Package className="h-5 w-5" />}
+      headerActions={
         <PageActions>
           <PeriodFilter value={periodFilter} onChange={setPeriodFilter} data-testid="period-filter-closing-stock" />
           {data?.grandTotal && data.grandTotal.value > 0 ? (
@@ -128,7 +127,8 @@ export default function ClosingStockSummary() {
             </Button>
           ) : null}
         </PageActions>
-      </PageHeader>
+      }
+    >
 
       <Dialog open={showCarryForwardDialog} onOpenChange={setShowCarryForwardDialog}>
         <DialogContent>
@@ -249,6 +249,6 @@ export default function ClosingStockSummary() {
           </div>
         ) : null}
       </Card>
-    </PageShell>
+    </ErpPage>
   );
 }
