@@ -22,7 +22,17 @@ import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, Table
 import { insertCustomerSchema, type Customer } from "@shared/schema";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@/lib/form-resolver";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
+import {
+  ErpFormProvider as Form,
+  ErpFormControl as FormControl,
+  ErpControlledField as FormField,
+  ErpFormItem as FormItem,
+  ErpFormLabel as FormLabel,
+  ErpFormMessage as FormMessage,
+  ErpFormDescription as FormDescription,
+  ErpFormActions,
+  ErpPendingButton,
+} from "@/erp-core";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { z } from "zod";
 import { usePaginatedFilterState } from "@/hooks/use-paginated-filter-state";
@@ -306,7 +316,7 @@ function CompanyCustomers() {
             />
           </div>
         )}
-        <div className="flex justify-end gap-2 pt-2">
+        <ErpFormActions>
           <Button
             type="button"
             variant="outline"
@@ -315,20 +325,15 @@ function CompanyCustomers() {
           >
             Cancel
           </Button>
-          <Button
+          <ErpPendingButton
             type="submit"
-            disabled={isEdit ? updateMutation.isPending : createMutation.isPending}
+            pending={isEdit ? updateMutation.isPending : createMutation.isPending}
+            pendingLabel={isEdit ? "Updating..." : "Creating..."}
             data-testid={isEdit ? "button-submit-edit-customer" : "button-submit-customer"}
           >
-            {isEdit
-              ? updateMutation.isPending
-                ? "Updating..."
-                : "Update Customer"
-              : createMutation.isPending
-                ? "Creating..."
-                : "Create Customer"}
-          </Button>
-        </div>
+            {isEdit ? "Update Customer" : "Create Customer"}
+          </ErpPendingButton>
+        </ErpFormActions>
       </form>
     </Form>
   );
