@@ -1,3 +1,5 @@
+import { useEffect } from "react";
+import { useSearch } from "wouter";
 import { BarChart3, GitCompareArrows } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -11,6 +13,7 @@ const ALL_TABS: readonly OthersTab[] = ["comparison", "product-comparison"];
 
 export default function FactoryOthers() {
   const { ready, access, isPrivileged } = useFactoryNavigationAccess();
+  const search = useSearch();
   const hidden = isPrivileged ? [] : (access?.hiddenCostFields ?? []);
   const visibleTabs = ALL_TABS.filter((tab) =>
     !hidden.includes(tab === "comparison" ? "hide_tab_overview_comparison" : "hide_tab_overview_product_comparison")
@@ -21,6 +24,15 @@ export default function FactoryOthers() {
     knownValues: ALL_TABS,
     defaultValue: visibleTabs[0] ?? "comparison",
   });
+
+  // Sidebar links can change the query while this hub stays mounted.
+  // Sync that navigation as well as the tab strip's own clicks.
+  useEffect(() => {
+    const requested = new URLSearchParams(search).get("tab") as OthersTab | null;
+    if (ready && requested && visibleTabs.includes(requested) && requested !== activeTab) {
+      setActiveTab(requested);
+    }
+  }, [search, ready, visibleTabs.join(","), activeTab, setActiveTab]);
 
   if (!ready) return <div className="p-5 text-sm text-muted-foreground">Loading access...</div>;
   if (visibleTabs.length === 0) {
