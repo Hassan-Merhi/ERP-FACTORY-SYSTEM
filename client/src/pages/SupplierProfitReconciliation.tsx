@@ -183,7 +183,7 @@ export default function SupplierProfitReconciliation() {
   return (
     <div className="flex h-full min-w-0 flex-col" data-testid="supplier-profit-reconciliation">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-background px-4 py-3">
-        <PageHeader title="Supplier Profit Reconciliation" />
+        <PageHeader title="Supplier Profit Review" />
         <Button
           variant="outline"
           size="sm"

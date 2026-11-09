@@ -159,8 +159,8 @@ const ERP_CONTEXT_ITEMS: NavItem[] = [
   { title: "Optional Vouchers", url: "/optional-vouchers", icon: FileText },
   { title: "Supplier Profit Check", url: "/supplier-profit-check", icon: PieChart },
   { title: "POS Item Replacement", url: "/pos-item-replacement", icon: Archive },
-  { title: "Stock In & Sales", url: "/stock-in-sales-report", icon: BarChart3 },
-  { title: "Item Market Analysis", url: "/item-market-analysis", icon: BarChart3 },
+  { title: "Stock & Sales Report", url: "/stock-in-sales-report", icon: BarChart3 },
+  { title: "Market Price Analysis", url: "/item-market-analysis", icon: BarChart3 },
 ];
 
 // Keep every original developer accounting destination searchable after collapsing the sidebar.

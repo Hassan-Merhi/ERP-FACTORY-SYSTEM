@@ -32,6 +32,7 @@ import {
   CreditCard,
   Layers,
   BookMarked,
+  GitCompareArrows,
 } from "lucide-react";
 import { Sidebar, SidebarContent } from "@/components/ui/sidebar";
 import { useQuery } from "@tanstack/react-query";
@@ -41,6 +42,7 @@ import { companyQueryKey } from "@/lib/companyQueryScope";
 import { accessQueryPolicy, liveCountQueryPolicy, stableSettingsQueryPolicy } from "@/lib/queryPolicies";
 import { useConnectivity } from "@/contexts/ConnectivityContext";
 import { useRef, useEffect, useMemo } from "react";
+import { useLocation } from "wouter";
 import { useRecentNav } from "@/hooks/use-recent-nav";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Clock } from "lucide-react";
@@ -124,8 +126,11 @@ const FACTORY_SIDEBAR_GROUP_ORDER = [
   "Finance",
   "Rentals",
   "Intelligence",
+  "Others",
 ] as const;
 function visibleFactoryGroup(page: (typeof FACTORY_SIDEBAR_PAGES)[number]): string {
+  if (page.key === "factory/waste-dispatch") return "Sales & Loading";
+  if (page.key === "factory/tickets" || page.key === "factory/stock-query") return "Others";
   return page.group === "Sales" ? "Sales & Loading" : page.group;
 }
 const FACTORY_SIDEBAR_COLORS: Record<string, string> = {
@@ -135,26 +140,78 @@ const FACTORY_SIDEBAR_COLORS: Record<string, string> = {
   Finance: NAV_COLOR.finance,
   Rentals: NAV_COLOR.rentals,
   Intelligence: NAV_COLOR.intelligence,
+  Others: NAV_COLOR.pinned,
 };
 
 export const FACTORY_NAV_SECTIONS: FactoryNavSection[] = FACTORY_SIDEBAR_GROUP_ORDER.map((label) => {
-  const pages = FACTORY_SIDEBAR_PAGES.filter((page) => visibleFactoryGroup(page) === label && !page.pinned);
+  // The matrix and consumables now live inside Overview; retain their direct URLs and original permissions.
+  const pages = FACTORY_SIDEBAR_PAGES.filter(
+    (page) =>
+      visibleFactoryGroup(page) === label &&
+      !page.pinned &&
+      page.key !== "factory/monthly-production-matrix" &&
+      page.key !== "factory/sheets-sacks",
+  );
+  const orderedPages = label === "Others"
+    ? [...pages].sort((a, b) =>
+        ["factory/stock-query", "factory/tickets"].indexOf(a.key) -
+        ["factory/stock-query", "factory/tickets"].indexOf(b.key))
+    : pages;
   return {
     label,
     color: FACTORY_SIDEBAR_COLORS[label],
     developerOnly: pages.length > 0 && pages.every((page) => page.accessLevel === "developer"),
-    items: pages.map((page) => ({
-      title: page.key === "factory/invoicing" ? "Invoices & Loading" : page.label,
-      url: page.route,
-      icon: FACTORY_NAV_ICONS[page.key] ?? FileText,
-      accessKey: page.key,
-      adminOnly: page.accessLevel === "admin",
-      developerOnly: page.accessLevel === "developer",
-      featureFlag: page.featureFlag,
-      featureFlagDefaultOn: page.featureFlagDefaultOn,
-    })),
+    items: [
+      ...(label === "Others"
+        ? [
+            {
+              title: "Comparison",
+              url: "/factory/others?tab=comparison",
+              icon: GitCompareArrows,
+              accessKey: "factory/production-report",
+              hideKey: "hide_tab_overview_comparison",
+            },
+            {
+              title: "Product Comparison",
+              url: "/factory/others?tab=product-comparison",
+              icon: BarChart3,
+              accessKey: "factory/production-report",
+              hideKey: "hide_tab_overview_product_comparison",
+            },
+          ]
+        : []),
+      ...orderedPages.map((page) => ({
+        title:
+          page.key === "factory/invoicing"
+            ? "Invoices & Loading"
+            : page.key === "factory/pos" || page.key === "factory/waste-dispatch"
+              ? "POS & Dispatch"
+              : page.label,
+        url: page.route,
+        icon: FACTORY_NAV_ICONS[page.key] ?? FileText,
+        accessKey: page.key,
+        adminOnly: page.accessLevel === "admin",
+        developerOnly: page.accessLevel === "developer",
+        featureFlag: page.featureFlag,
+        featureFlagDefaultOn: page.featureFlagDefaultOn,
+      })),
+    ],
   };
 }).filter((section) => section.items.length > 0);
+
+/**
+ * A single sidebar entry represents POS and Waste Dispatch, but keeps whichever
+ * direct route is active highlighted. Each route still enforces its own grants.
+ */
+export function collapseFactorySalesDispatchNav<T extends { accessKey: string }>(
+  items: T[],
+  location: string,
+): T[] {
+  if (!items.some((item) => item.accessKey === "factory/pos") ||
+      !items.some((item) => item.accessKey === "factory/waste-dispatch")) return items;
+  const hide = location.startsWith("/factory/waste-dispatch") ? "factory/pos" : "factory/waste-dispatch";
+  return items.filter((item) => item.accessKey !== hide);
+}
 
 const FACTORY_PINNED_DEFAULTS: NavItem[] = FACTORY_PINNED_PAGES.map((page) => ({
   title: page.label,
@@ -180,6 +237,7 @@ export function useFactoryVisibleSections(user?: FactorySidebarUser): {
   seesAllTabs: boolean;
 } {
   const { selectedCompany } = useCompany();
+  const [currentLocation] = useLocation();
   const isDeveloper = user?.role === "Developer";
   const isAdmin = user?.role === "Admin" || isDeveloper;
 
@@ -250,6 +308,10 @@ export function useFactoryVisibleSections(user?: FactorySidebarUser): {
         customers: "hide_tab_parties_customers",
         suppliers: "hide_tab_parties_suppliers",
       },
+      "/factory/others": {
+        comparison: "hide_tab_overview_comparison",
+        "product-comparison": "hide_tab_overview_product_comparison",
+      },
       "/factory/payroll-hub": {
         workers: "hide_tab_payrollhub_workers",
         employees: "hide_tab_payrollhub_employees",
@@ -289,6 +351,9 @@ export function useFactoryVisibleSections(user?: FactorySidebarUser): {
         // from a parent hub. Visibility remains controlled by the access registry.
         return true;
       }),
+    })).map((s) => ({
+      ...s,
+      items: s.label === "Sales & Loading" ? collapseFactorySalesDispatchNav(s.items, currentLocation) : s.items,
     }))
     .filter((s) => s.items.length > 0);
 

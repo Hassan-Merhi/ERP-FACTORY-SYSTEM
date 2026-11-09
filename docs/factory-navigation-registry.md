@@ -19,11 +19,12 @@ This document is the authoritative inventory for Factory Mode navigation. It rec
 
 | Area | Canonical route | State key | Parent | Current status |
 |---|---|---|---|---|
-| Overview | `/factory/production-report` | `tab` | none | canonical |
-| Factory POS | `/factory/pos` | component state | none | canonical restored |
+| Overview | `/factory/production-report` | `tab` | none | canonical, six tabs | 
+| Others | `/factory/others` | `tab` | Overview access grant | canonical comparison hub |
+| Factory POS | `/factory/pos` | component state | POS & Dispatch | canonical; shared sidebar entry |
 | Stock Entry | `/factory/stock-entry` | component state | none | canonical |
 | Raw Materials | `/factory/raw-materials` | `section` | none | canonical hub |
-| Waste Dispatch | `/factory/waste-dispatch` | component state | none | canonical |
+| Waste Dispatch | `/factory/waste-dispatch` | component state | POS & Dispatch | canonical; shared sidebar entry |
 | Bale Explorer | `/factory/bales-hub` | `tab` or `section` | none | canonical hub |
 | Invoicing | `/factory/invoicing` | `tab` | none | canonical hub |
 | Location Inventory | `/factory/location-inventory` | filters/query | none | canonical |
@@ -172,3 +173,10 @@ Checked against `client/src/components/FactoryRoutes.tsx` and `shared/factoryAcc
 - The year-level product history route is `/factory/bale-product-history/:productId/:locationId/:year/all`.
 
 `tests/ui/factory-mobile-route-registry.test.ts` keeps these in agreement.
+
+
+## Factory navigation organization (November 2026)
+
+- **Overview** has OTW Tracking, Production, Monthly Production (previously Monthly Production Matrix), Shipping, Sheets & Sacks, and Sheets. The embedded Monthly Production and Sheets & Sacks components still require their original page-access grants. Their standalone URLs remain usable for direct links and drilldowns.
+- **Others** is the last Factory sidebar section, with Comparison, Product Comparison, Stock Query, then Ticket Management. The first two open `/factory/others?tab=...` and reuse Overview's access key and existing comparison-specific hidden-tab keys. Previous `/factory/production-report?tab=comparison` and `?tab=product-comparison` URLs redirect to the new Others view.
+- **Sales & Loading** contains one **POS & Dispatch** navigation entry. Its switcher moves between `/factory/pos` and `/factory/waste-dispatch`; these original routes retain independent access checks and their own data/operations. No accounting or dispatch records are migrated.
