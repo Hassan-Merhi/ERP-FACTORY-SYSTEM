@@ -52,49 +52,12 @@ function hardNavigate(path: string) {
   window.location.href = path + (path.includes("?") ? "&" : "?") + "_r=" + Date.now();
 }
 
-const RETRY_WINDOW_MS = 30_000; // 30s sliding window
-const MAX_RETRIES = 2;
-
-function getRetryState(path: string): { count: number; firstAt: number } {
-  try {
-    const raw = sessionStorage.getItem("chunkRetry:" + path);
-    if (raw) return JSON.parse(raw);
-  } catch {
-    /* ignore */
-  }
-  return { count: 0, firstAt: 0 };
-}
-
-function recordRetry(path: string) {
-  try {
-    const now = Date.now();
-    const state = getRetryState(path);
-    // Reset window if it's been long enough
-    const base = now - state.firstAt < RETRY_WINDOW_MS ? state : { count: 0, firstAt: now };
-    sessionStorage.setItem(
-      "chunkRetry:" + path,
-      JSON.stringify({
-        count: base.count + 1,
-        firstAt: base.count === 0 ? now : state.firstAt,
-      })
-    );
-  } catch {
-    /* ignore */
-  }
-}
-
 function clearRetries(path: string) {
   try {
     sessionStorage.removeItem("chunkRetry:" + path);
   } catch {
     /* ignore */
   }
-}
-
-function canAutoRetry(path: string): boolean {
-  const { count, firstAt } = getRetryState(path);
-  const withinWindow = Date.now() - firstAt < RETRY_WINDOW_MS;
-  return count < MAX_RETRIES && (count === 0 || withinWindow);
 }
 
 export class ErrorBoundary extends Component<Props, State> {
