@@ -4,6 +4,7 @@
  * grouped bale list and the removal log.
  */
 import { useMemo } from "react";
+import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import {
   AlignJustify,
@@ -16,6 +17,7 @@ import {
   ScanLine,
   ShieldOff,
   Trash2,
+  Truck,
   Upload,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -384,6 +386,7 @@ function RemovalLog({ model }: { model: FactoryContainerLoadingScanModel }) {
 }
 
 export function ScannedBalesPanel({ model }: { model: FactoryContainerLoadingScanModel }) {
+  const [, navigate] = useLocation();
   const { scanFlash, bales, totalWeight, viewMode, lastScannedRef } = model;
   const { data: currentUser } = useQuery<{
     id?: string | number;
@@ -458,6 +461,21 @@ export function ScannedBalesPanel({ model }: { model: FactoryContainerLoadingSca
               <Badge variant="outline" className="rounded-lg px-2.5 py-1 font-mono" data-testid="badge-total-weight">
                 {formatNumber(totalWeight, 2)} {model.tr("kgUnit")}
               </Badge>
+            )}
+
+            {model.orderId && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8 border-blue-300 bg-blue-50 px-2.5 text-blue-700 hover:bg-blue-100 dark:border-blue-500/40 dark:bg-blue-500/10 dark:text-sky-200 dark:hover:bg-blue-500/20"
+                onClick={() => navigate("/factory/sales/loading/dispatch/" + model.orderId)}
+                title="Open truck dispatch verification for this loading"
+                data-testid="button-loading-dispatch"
+              >
+                <Truck className="mr-1.5 h-3.5 w-3.5" />
+                Dispatch
+              </Button>
             )}
 
             {model.canChangeExistingRecords && canEmptyContainer && (

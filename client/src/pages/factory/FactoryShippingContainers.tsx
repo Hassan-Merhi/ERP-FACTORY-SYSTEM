@@ -398,7 +398,7 @@ export default function FactoryShippingContainers() {
         </p>
 
         {/* ── Main Table ── */}
-        <div className="overflow-hidden rounded-xl border border-border/70 bg-card shadow-sm dark:bg-[#0e1b2e]">
+        <div className="overflow-hidden rounded-xl border border-border/70 bg-card shadow-sm dark:bg-card">
           <Table
             mobileLayout="cards"
             className="text-xs [&_td]:px-2.5 [&_td]:py-1.5 [&_th]:h-9 [&_th]:px-2.5 [&_th]:py-1.5"
@@ -406,7 +406,7 @@ export default function FactoryShippingContainers() {
             style={{ minWidth: "1100px" }}
           >
             <TableHeader className="sticky top-0 z-20">
-              <TableRow className="bg-slate-100/90 hover:bg-slate-100/90 dark:bg-[#182a43] dark:hover:bg-[#182a43]">
+              <TableRow className="bg-slate-100/90 hover:bg-slate-100/90 dark:bg-muted dark:hover:bg-muted">
                 {colVis.orderDate && <TableHead className="text-xs w-20 min-w-[80px]">Order Date</TableHead>}
                 {colVis.invoiceNumber && (
                   <TableHead

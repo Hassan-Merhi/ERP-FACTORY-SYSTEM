@@ -26,6 +26,8 @@ const harness = vi.hoisted(() => {
     },
     propertyMonthlyLedger: {
       id: "propertyMonthlyLedger.id",
+      companyId: "propertyMonthlyLedger.companyId",
+      module: "propertyMonthlyLedger.module",
       contractId: "propertyMonthlyLedger.contractId",
       accrualVoucherId: "propertyMonthlyLedger.accrualVoucherId",
       usedPrepaidAccount: "propertyMonthlyLedger.usedPrepaidAccount",
@@ -158,6 +160,7 @@ import {
   postRentAccrualForCompany,
   postRentAccrualForContract,
 } from "../server/routes/rental/shared/accrual";
+import { postAccrualPassTx } from "../server/routes/rental/shared/accrual-posting";
 
 describe("rental accrual positive paths", () => {
   beforeEach(() => {
@@ -220,7 +223,14 @@ describe("rental accrual positive paths", () => {
         ],
       },
       { rows: [{ ledger_row_id: 11, total_paid: "25" }] },
-      { rows: [{ id: 13, expected_amount: "100", paid_amount: "60", unit_id: 101, month: 8, year: 2026 }] }
+      { rows: [
+        {id:11,company_id:4,module:"ERP",accrual_voucher_id:null,used_prepaid_account:false,used_advance_account:false},
+        {id:12,company_id:4,module:"ERP",accrual_voucher_id:null,used_prepaid_account:false,used_advance_account:false}
+      ] },
+      { rows: [{ id: 13, expected_amount: "100", paid_amount: "60", unit_id: 101, month: 8, year: 2026 }] },
+      { rows: [{id:13,company_id:4,module:"ERP",accrual_voucher_id:null,used_prepaid_account:false,used_advance_account:true}] },
+      { rows: [{id:14,company_id:4,module:"ERP",accrual_voucher_id:null,used_prepaid_account:true,used_advance_account:false}] },
+      { rows: [{id:15,company_id:4,module:"ERP",accrual_voucher_id:null,used_prepaid_account:true,used_advance_account:false}] }
     );
 
     const result = await postRentAccrualForCompany(4, "Shop Rent Expense", "ERP", "Rental Income", "2026-08-11");
@@ -302,4 +312,37 @@ describe("rental accrual positive paths", () => {
     await expect(postRentAccrualForContract(999, "Shop Rent Expense")).resolves.toEqual({ accrued: 0, skipped: 0 });
     await expect(postRentAccrualForContract(8, "Shop Rent Expense")).resolves.toEqual({ accrued: 0, skipped: 0 });
   });
+  it("refuses a second monthly posting when the row is already linked, before creating a voucher", async () => {
+    harness.executeResults.push({rows:[{
+      id:19,company_id:4,module:"ERP",accrual_voucher_id:13139,
+      used_prepaid_account:false,used_advance_account:false
+    }]});
+    await expect(postAccrualPassTx(harness.tx as never,{
+      companyId:4,module:"ERP",pass:"accrual",voucherDate:"2026-09-21",
+      description:"September rent",currency:"USD",lines:[],ledgerRowIds:[19],options:{}
+    })).rejects.toThrow("RENTAL_ACCRUAL_ALREADY_POSTED_OR_ROW_CHANGED");
+    expect(harness.postErpVoucherTx).not.toHaveBeenCalled();
+  });
+
+  it("refuses a legacy orphan September accrual even when its monthly link is null", async () => {
+    harness.executeResults.push({rows:[{
+      id:19,company_id:4,module:"ERP",accrual_voucher_id:null,
+      used_prepaid_account:false,used_advance_account:false,prior_rent_accrual:true
+    }]});
+    await expect(postAccrualPassTx(harness.tx as never,{
+      companyId:4,module:"ERP",pass:"accrual",voucherDate:"2026-09-21",
+      description:"September rent",currency:"USD",lines:[],ledgerRowIds:[19],options:{}
+    })).rejects.toThrow("RENTAL_ACCRUAL_ALREADY_POSTED_OR_ROW_CHANGED");
+    expect(harness.postErpVoucherTx).not.toHaveBeenCalled();
+  });
+
+  it("refuses missing or mis-scoped monthly rows before writing a voucher", async () => {
+    harness.executeResults.push({rows:[]});
+    await expect(postAccrualPassTx(harness.tx as never,{
+      companyId:4,module:"FACTORY",pass:"accrual",voucherDate:"2026-09-21",
+      description:"September rent",currency:"USD",lines:[],ledgerRowIds:[19],options:{}
+    })).rejects.toThrow("RENTAL_ACCRUAL_ALREADY_POSTED_OR_ROW_CHANGED");
+    expect(harness.postErpVoucherTx).not.toHaveBeenCalled();
+  });
+
 });

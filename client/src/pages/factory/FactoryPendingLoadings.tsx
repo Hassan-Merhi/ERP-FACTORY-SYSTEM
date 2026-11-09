@@ -316,10 +316,8 @@ export default function FactoryPendingLoadings() {
     <div
       key={load.id}
       className={
-        "group relative overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm transition-all hover:border-sky-400/60 hover:shadow-md dark:border-slate-700/70 dark:bg-[#0d1c33] dark:hover:border-sky-500/50 " +
-        (nested
-          ? "border-l-4 border-l-violet-500 dark:border-l-violet-400"
-          : "border-l-4 border-l-sky-500 dark:border-l-sky-400")
+        "group relative overflow-hidden rounded-2xl border border-border bg-card shadow-sm transition-all hover:border-primary/50 hover:shadow-md " +
+        (nested ? "border-l-4 border-l-primary" : "border-l-4 border-l-primary")
       }
       data-testid={"card-load-" + load.id}
     >
@@ -334,7 +332,7 @@ export default function FactoryPendingLoadings() {
             </span>
             <Badge
               variant="secondary"
-              className="rounded-md border border-blue-200 bg-blue-50 px-2 py-0.5 font-semibold text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/20 dark:text-blue-200"
+              className="rounded-md border border-primary/20 bg-primary/10 px-2 py-0.5 font-semibold text-primary"
               data-testid={"badge-load-id-" + load.id}
             >
               Loading #{load.id}
@@ -438,7 +436,7 @@ export default function FactoryPendingLoadings() {
           <Button
             variant="outline"
             size="icon"
-            className="rounded-xl border-slate-200 dark:border-slate-700 dark:bg-[#132540]"
+            className="rounded-xl border-border bg-card"
             onClick={() => handleExport(load)}
             data-testid={"button-export-" + load.id}
             title="Export to Excel"
@@ -451,7 +449,7 @@ export default function FactoryPendingLoadings() {
               <Button
                 variant="outline"
                 size="sm"
-                className="rounded-xl border-slate-200 bg-white font-medium dark:border-slate-700 dark:bg-[#132540]"
+                className="rounded-xl border-border bg-card font-medium"
                 onClick={() => handleOpenLink(load)}
                 data-testid={"button-link-proforma-" + load.id}
                 title="Link proforma"
@@ -472,7 +470,7 @@ export default function FactoryPendingLoadings() {
                 <Trash2 className="h-4 w-4" />
               </Button>
               <Button
-                className="rounded-xl bg-blue-600 px-4 font-semibold text-white shadow-sm shadow-blue-500/20 hover:bg-blue-500 dark:bg-blue-600 dark:hover:bg-blue-500"
+                className="rounded-xl bg-primary px-4 font-semibold text-primary-foreground shadow-sm hover:bg-primary/90"
                 onClick={() => navigate("/factory/sales/loading/new?orderId=" + load.id)}
                 data-testid={"button-resume-" + load.id}
               >
@@ -487,7 +485,7 @@ export default function FactoryPendingLoadings() {
   );
 
   return (
-    <div className="flex h-full flex-col gap-4 bg-gradient-to-b from-slate-50/80 via-background to-background px-3 py-4 dark:from-[#09172b] dark:via-[#081324] dark:to-background sm:px-5">
+    <div className="flex h-full flex-col gap-4 bg-background px-3 py-4 sm:px-5">
       {/* Undo banners */}
       {undoItems.length > 0 && (
         <div className="space-y-2">
@@ -546,40 +544,39 @@ export default function FactoryPendingLoadings() {
             label: "Pending Loadings",
             value: loads.length.toLocaleString(),
             icon: Truck,
-            accent: "text-sky-600 dark:text-sky-300",
-            surface: "bg-sky-100 dark:bg-sky-500/20",
-            border: "border-sky-200/70 dark:border-sky-600/30",
+            accent: "text-primary",
+            surface: "bg-primary/10",
+            border: "border-primary/20",
           },
           {
             label: "Total Bales",
             value: totalBales.toLocaleString(),
             icon: Package,
-            accent: "text-cyan-600 dark:text-cyan-300",
-            surface: "bg-cyan-100 dark:bg-cyan-500/20",
-            border: "border-cyan-200/70 dark:border-cyan-600/30",
+            accent: "text-primary",
+            surface: "bg-primary/10",
+            border: "border-primary/20",
           },
           {
             label: "Total Weight",
             value: fmtKg(totalKg),
             icon: Weight,
-            accent: "text-emerald-600 dark:text-emerald-300",
-            surface: "bg-emerald-100 dark:bg-emerald-500/20",
-            border: "border-emerald-200/70 dark:border-emerald-600/30",
+            accent: "text-primary",
+            surface: "bg-primary/10",
+            border: "border-primary/20",
           },
           {
             label: "Customers",
             value: customerCount.toLocaleString(),
             icon: Users,
-            accent: "text-violet-600 dark:text-violet-300",
-            surface: "bg-violet-100 dark:bg-violet-500/20",
-            border: "border-violet-200/70 dark:border-violet-600/30",
+            accent: "text-primary",
+            surface: "bg-primary/10",
+            border: "border-primary/20",
           },
         ].map((metric) => (
           <div
             key={metric.label}
             className={
-              "flex min-w-0 items-center gap-3 rounded-2xl border bg-white/90 px-4 py-3 shadow-sm dark:bg-[#10233e] " +
-              metric.border
+              "flex min-w-0 items-center gap-3 rounded-2xl border bg-card px-4 py-3 shadow-sm " + metric.border
             }
           >
             <div className={"flex h-11 w-11 shrink-0 items-center justify-center rounded-xl " + metric.surface}>
@@ -595,14 +592,14 @@ export default function FactoryPendingLoadings() {
         ))}
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-border/60 bg-background/80 p-2 shadow-sm dark:bg-[#0b1b31] sm:gap-3">
+      <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-border/60 bg-card p-2 shadow-sm sm:gap-3">
         <div className="relative min-w-44 flex-1 sm:max-w-xl">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
             placeholder="Search customer, loading #, proforma or note..."
-            className="h-10 rounded-xl border-border/80 bg-background pl-9 dark:bg-[#152842]"
+            className="h-10 rounded-xl border-border/80 bg-background pl-9"
             aria-label="Search pending loadings"
             data-testid="input-pending-loadings-search"
           />
@@ -708,14 +705,14 @@ export default function FactoryPendingLoadings() {
             return (
               <div
                 key={"group-" + group.customerId}
-                className="overflow-hidden rounded-2xl border border-slate-200 bg-white/80 shadow-sm dark:border-slate-700/80 dark:bg-[#10213b]"
+                className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm"
               >
                 <button
                   type="button"
                   onClick={() => toggleCustomer(group.customerId)}
                   aria-expanded={isExpanded}
                   aria-label={(isExpanded ? "Collapse " : "Expand ") + group.customerName + " loadings"}
-                  className="flex w-full flex-wrap items-center justify-between gap-2 bg-gradient-to-r from-slate-100 to-blue-50/70 px-4 py-3 text-left transition-colors hover:from-blue-50 hover:to-sky-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 dark:from-[#182c49] dark:to-[#14243d] dark:hover:from-[#1b3658]"
+                  className="flex w-full flex-wrap items-center justify-between gap-2 bg-primary/5 px-4 py-3 text-left transition-colors hover:bg-primary/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                   data-testid={"card-group-" + group.customerId}
                 >
                   <span className="flex min-w-0 flex-wrap items-center gap-2.5">
@@ -724,7 +721,7 @@ export default function FactoryPendingLoadings() {
                     ) : (
                       <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
                     )}
-                    <Users className="h-4 w-4 shrink-0 text-blue-600 dark:text-sky-300" />
+                    <Users className="h-4 w-4 shrink-0 text-primary" />
                     <span className="font-bold tracking-tight" data-testid={"text-group-customer-" + group.customerId}>
                       {group.customerName}
                     </span>

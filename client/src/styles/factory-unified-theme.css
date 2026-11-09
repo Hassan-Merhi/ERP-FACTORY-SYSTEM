@@ -1,0 +1,283 @@
+/**
+ * Factory Mode's single visual source of truth.
+ *
+ * The document marker is set by useDocumentAppShell("factory") in FactoryShell.
+ * Scoping to <html> also themes Radix portals (dialogs, menus, popovers).
+ * ERP, POS and Properties modes remain unchanged.
+ *
+ * To change the Factory brand hue everywhere, edit ONLY --factory-hue.
+ * 217 = blue. All shades, page backgrounds, navigation and legacy
+ * blue/indigo/purple/violet/sky/fuchsia Tailwind utilities follow it.
+ * Status colors (green/yellow/red) and chart data colors are NOT remapped.
+ */
+:root[data-app-shell="factory"] {
+  --factory-hue: 217;
+
+  /* Shared 11-shade scale used by all existing Factory blue/purple utilities. */
+  --factory-color-50: hsl(var(--factory-hue) 100% 98%);
+  --factory-color-100: hsl(var(--factory-hue) 95% 95%);
+  --factory-color-200: hsl(var(--factory-hue) 95% 89%);
+  --factory-color-300: hsl(var(--factory-hue) 92% 80%);
+  --factory-color-400: hsl(var(--factory-hue) 88% 70%);
+  --factory-color-500: hsl(var(--factory-hue) 83% 60%);
+  --factory-color-600: hsl(var(--factory-hue) 80% 52%);
+  --factory-color-700: hsl(var(--factory-hue) 74% 43%);
+  --factory-color-800: hsl(var(--factory-hue) 66% 34%);
+  --factory-color-900: hsl(var(--factory-hue) 58% 27%);
+  --factory-color-950: hsl(var(--factory-hue) 68% 15%);
+
+  /* Existing Tailwind blue utilities all inherit the Factory palette. */
+  --color-blue-50: var(--factory-color-50);
+  --color-blue-100: var(--factory-color-100);
+  --color-blue-200: var(--factory-color-200);
+  --color-blue-300: var(--factory-color-300);
+  --color-blue-400: var(--factory-color-400);
+  --color-blue-500: var(--factory-color-500);
+  --color-blue-600: var(--factory-color-600);
+  --color-blue-700: var(--factory-color-700);
+  --color-blue-800: var(--factory-color-800);
+  --color-blue-900: var(--factory-color-900);
+  --color-blue-950: var(--factory-color-950);
+
+  /* Existing Tailwind indigo utilities all inherit the Factory palette. */
+  --color-indigo-50: var(--factory-color-50);
+  --color-indigo-100: var(--factory-color-100);
+  --color-indigo-200: var(--factory-color-200);
+  --color-indigo-300: var(--factory-color-300);
+  --color-indigo-400: var(--factory-color-400);
+  --color-indigo-500: var(--factory-color-500);
+  --color-indigo-600: var(--factory-color-600);
+  --color-indigo-700: var(--factory-color-700);
+  --color-indigo-800: var(--factory-color-800);
+  --color-indigo-900: var(--factory-color-900);
+  --color-indigo-950: var(--factory-color-950);
+
+  /* Existing Tailwind purple utilities all inherit the Factory palette. */
+  --color-purple-50: var(--factory-color-50);
+  --color-purple-100: var(--factory-color-100);
+  --color-purple-200: var(--factory-color-200);
+  --color-purple-300: var(--factory-color-300);
+  --color-purple-400: var(--factory-color-400);
+  --color-purple-500: var(--factory-color-500);
+  --color-purple-600: var(--factory-color-600);
+  --color-purple-700: var(--factory-color-700);
+  --color-purple-800: var(--factory-color-800);
+  --color-purple-900: var(--factory-color-900);
+  --color-purple-950: var(--factory-color-950);
+
+  /* Existing Tailwind violet utilities all inherit the Factory palette. */
+  --color-violet-50: var(--factory-color-50);
+  --color-violet-100: var(--factory-color-100);
+  --color-violet-200: var(--factory-color-200);
+  --color-violet-300: var(--factory-color-300);
+  --color-violet-400: var(--factory-color-400);
+  --color-violet-500: var(--factory-color-500);
+  --color-violet-600: var(--factory-color-600);
+  --color-violet-700: var(--factory-color-700);
+  --color-violet-800: var(--factory-color-800);
+  --color-violet-900: var(--factory-color-900);
+  --color-violet-950: var(--factory-color-950);
+
+  /* Existing Tailwind sky utilities all inherit the Factory palette. */
+  --color-sky-50: var(--factory-color-50);
+  --color-sky-100: var(--factory-color-100);
+  --color-sky-200: var(--factory-color-200);
+  --color-sky-300: var(--factory-color-300);
+  --color-sky-400: var(--factory-color-400);
+  --color-sky-500: var(--factory-color-500);
+  --color-sky-600: var(--factory-color-600);
+  --color-sky-700: var(--factory-color-700);
+  --color-sky-800: var(--factory-color-800);
+  --color-sky-900: var(--factory-color-900);
+  --color-sky-950: var(--factory-color-950);
+
+  /* Existing Tailwind fuchsia utilities all inherit the Factory palette. */
+  --color-fuchsia-50: var(--factory-color-50);
+  --color-fuchsia-100: var(--factory-color-100);
+  --color-fuchsia-200: var(--factory-color-200);
+  --color-fuchsia-300: var(--factory-color-300);
+  --color-fuchsia-400: var(--factory-color-400);
+  --color-fuchsia-500: var(--factory-color-500);
+  --color-fuchsia-600: var(--factory-color-600);
+  --color-fuchsia-700: var(--factory-color-700);
+  --color-fuchsia-800: var(--factory-color-800);
+  --color-fuchsia-900: var(--factory-color-900);
+  --color-fuchsia-950: var(--factory-color-950);
+
+  /* Shared semantic surfaces and accents (light theme). */
+  --background: var(--factory-hue) 35% 98%;
+  --card: 0 0% 100%;
+  --popover: 0 0% 100%;
+  --sidebar: var(--factory-hue) 32% 96%;
+  --sidebar-accent: var(--factory-hue) 38% 91%;
+  --border: var(--factory-hue) 17% 87%;
+  --card-border: var(--factory-hue) 17% 87%;
+  --sidebar-border: var(--factory-hue) 16% 87%;
+  --muted: var(--factory-hue) 22% 94%;
+  --accent: var(--factory-hue) 30% 92%;
+  --primary: var(--factory-hue) 80% 52%;
+  --primary-border: var(--factory-hue) 75% 42%;
+  --ring: var(--factory-hue) 80% 52%;
+  --sidebar-primary: var(--factory-hue) 80% 52%;
+  --sidebar-ring: var(--factory-hue) 80% 52%;
+  --module-factory: var(--factory-hue) 80% 52%;
+
+  /* Sections remain distinguishable by label, not unrelated colors. */
+  --nav-overview: var(--factory-hue) 74% 43%;
+  --nav-pinned: var(--factory-hue) 74% 43%;
+  --nav-inventory: var(--factory-hue) 74% 43%;
+  --nav-sales: var(--factory-hue) 74% 43%;
+  --nav-accounting: var(--factory-hue) 74% 43%;
+  --nav-analytics: var(--factory-hue) 74% 43%;
+  --nav-rentals: var(--factory-hue) 74% 43%;
+  --nav-finance: var(--factory-hue) 74% 43%;
+  --nav-operations: var(--factory-hue) 74% 43%;
+  --nav-bales: var(--factory-hue) 74% 43%;
+  --nav-reports: var(--factory-hue) 74% 43%;
+  --nav-intelligence: var(--factory-hue) 74% 43%;
+  --nav-utility: var(--factory-hue) 74% 43%;
+}
+
+:root.dark[data-app-shell="factory"] {
+  /* Dark theme uses the same hue with surfaces tuned for legibility. */
+  --background: var(--factory-hue) 19% 9%;
+  --card: var(--factory-hue) 16% 13%;
+  --popover: var(--factory-hue) 16% 15%;
+  --sidebar: var(--factory-hue) 18% 12%;
+  --sidebar-accent: var(--factory-hue) 20% 21%;
+  --border: var(--factory-hue) 14% 23%;
+  --card-border: var(--factory-hue) 14% 22%;
+  --sidebar-border: var(--factory-hue) 13% 22%;
+  --muted: var(--factory-hue) 16% 18%;
+  --accent: var(--factory-hue) 19% 20%;
+  --primary: var(--factory-hue) 79% 59%;
+  --primary-border: var(--factory-hue) 74% 48%;
+  --ring: var(--factory-hue) 88% 70%;
+  --sidebar-primary: var(--factory-hue) 79% 59%;
+  --sidebar-ring: var(--factory-hue) 88% 70%;
+  --module-factory: var(--factory-hue) 88% 70%;
+
+  --nav-overview: var(--factory-hue) 88% 76%;
+  --nav-pinned: var(--factory-hue) 88% 76%;
+  --nav-inventory: var(--factory-hue) 88% 76%;
+  --nav-sales: var(--factory-hue) 88% 76%;
+  --nav-accounting: var(--factory-hue) 88% 76%;
+  --nav-analytics: var(--factory-hue) 88% 76%;
+  --nav-rentals: var(--factory-hue) 88% 76%;
+  --nav-finance: var(--factory-hue) 88% 76%;
+  --nav-operations: var(--factory-hue) 88% 76%;
+  --nav-bales: var(--factory-hue) 88% 76%;
+  --nav-reports: var(--factory-hue) 88% 76%;
+  --nav-intelligence: var(--factory-hue) 88% 76%;
+  --nav-utility: var(--factory-hue) 88% 76%;
+}
+
+/* Main workspace canvas does not depend on a per-page background class. */
+:root[data-app-shell="factory"] [data-factory-workspace="true"] {
+  background-color: hsl(var(--background));
+}
+
+/* Factory bespoke blue surfaces: all link back to --factory-hue. */
+:root[data-app-shell="factory"] {
+  --factory-brand: var(--factory-hue) 80% 52%;
+  --factory-brand-strong: var(--factory-hue) 74% 43%;
+  --factory-brand-soft: var(--factory-hue) 95% 95%;
+  --factory-brand-ink: var(--factory-hue) 74% 37%;
+  --factory-brand-border: var(--factory-hue) 70% 85%;
+  --secondary: var(--factory-hue) 30% 94%;
+  --input: var(--factory-hue) 20% 82%;
+  --pnav-violet: var(--factory-color-600);
+  --pnav-violet-text: hsl(var(--factory-brand-ink));
+  --pnav-surface: hsl(var(--sidebar));
+  --pnav-raised: hsl(var(--card));
+  --pnav-border: hsl(var(--factory-brand) / .18);
+  --pnav-hover: hsl(var(--factory-brand) / .075);
+  --pnav-active: linear-gradient(100deg, var(--factory-color-100), hsl(var(--background)));
+  --pnav-brand: linear-gradient(120deg, var(--factory-color-100), hsl(var(--card)));
+  --pnav-top: linear-gradient(105deg, hsl(var(--card)), var(--factory-color-100));
+}
+:root.dark[data-app-shell="factory"] {
+  --factory-brand: var(--factory-hue) 80% 49%;
+  --factory-brand-strong: var(--factory-hue) 70% 39%;
+  --factory-brand-soft: var(--factory-hue) 32% 19%;
+  --factory-brand-ink: var(--factory-hue) 90% 82%;
+  --factory-brand-border: var(--factory-hue) 35% 36%;
+  --secondary: var(--factory-hue) 18% 20%;
+  --input: var(--factory-hue) 18% 29%;
+  --pnav-violet: var(--factory-color-400);
+  --pnav-violet-text: hsl(var(--factory-brand-ink));
+  --pnav-surface: hsl(var(--sidebar));
+  --pnav-raised: hsl(var(--card));
+  --pnav-border: hsl(var(--factory-brand) / .22);
+  --pnav-hover: hsl(var(--factory-brand) / .14);
+  --pnav-active: linear-gradient(105deg, hsl(var(--factory-brand-strong) / .7), hsl(var(--factory-brand-soft)));
+  --pnav-brand: linear-gradient(120deg, hsl(var(--factory-brand-soft)), hsl(var(--sidebar)));
+  --pnav-top: linear-gradient(105deg, hsl(var(--sidebar)), hsl(var(--factory-brand-soft)));
+}
+:root[data-app-shell="factory"] .factory-brand-gradient {
+  background: linear-gradient(115deg, hsl(var(--factory-brand-strong)), hsl(var(--factory-brand)));
+  color: white;
+}
+:root[data-app-shell="factory"] .factory-brand-soft {
+  background: hsl(var(--factory-brand-soft));
+  border-color: hsl(var(--factory-brand-border));
+  color: hsl(var(--factory-brand-ink));
+}
+:root[data-app-shell="factory"] .factory-brand-text { color: hsl(var(--factory-brand-ink)); }
+:root[data-app-shell="factory"] .factory-brand-surface {
+  background: hsl(var(--card));
+  border-color: hsl(var(--border));
+}
+
+/* Production Targets preserves categorical/status KPI colors; large surfaces
+ * and buttons follow the single blue brand instead of mixed blue and purple. */
+:root[data-app-shell="factory"] .production-targets-modern {
+  background: radial-gradient(ellipse at 55% 0%, hsl(var(--factory-brand) / .15), transparent 45%), #101a2e;
+  border-color: hsl(var(--factory-brand) / .22);
+}
+:root[data-app-shell="factory"] .production-targets-modern .pt-hero {
+  background: linear-gradient(112deg, #1b3c70, #14233e 65%, #1c3152);
+  border-color: hsl(var(--factory-brand) / .48);
+}
+:root[data-app-shell="factory"] .production-targets-modern .pt-hero-icon {
+  background: linear-gradient(145deg, #2056ac, #153971);
+}
+:root[data-app-shell="factory"] .production-targets-modern .pt-btn-primary,
+:root[data-app-shell="factory"] .production-targets-modern .pt-btn-violet {
+  background: #205ec5;
+  border-color: #6199ed;
+  color: white;
+  box-shadow: 0 5px 15px rgba(25, 85, 184, .26);
+}
+:root[data-app-shell="factory"] .production-targets-modern .pt-btn-primary:hover:not(:disabled),
+:root[data-app-shell="factory"] .production-targets-modern .pt-btn-violet:hover:not(:disabled) {
+  background: #2f70d5;
+}
+:root[data-app-shell="factory"] .production-targets-modern .pt-hero-controls,
+:root[data-app-shell="factory"] .production-targets-modern .pt-filters input,
+:root[data-app-shell="factory"] .production-targets-modern .pt-filters [role="combobox"],
+:root[data-app-shell="factory"] .production-targets-modern .pt-hero-controls input,
+:root[data-app-shell="factory"] .production-targets-modern .pt-hero-controls [role="combobox"],
+:root[data-app-shell="factory"] .production-targets-modern .pt-hero-controls button:not(.pt-btn-primary):not(.pt-btn-gold):not(.pt-btn-wa) {
+  background: #182a48;
+  border-color: rgba(116, 160, 230, .30);
+}
+:root[data-app-shell="factory"] .production-targets-modern .pt-kpi {
+  background: linear-gradient(120deg, var(--pt-tint), #18263d 82%);
+}
+:root[data-app-shell="factory"] .production-targets-modern .pt-bonus-banner {
+  background: linear-gradient(110deg, #182c51, #18263f);
+}
+:root[data-app-shell="factory"] .production-targets-modern .pt-staff-table {
+  background: #142239;
+  border-color: rgba(116, 160, 230, .32);
+}
+:root[data-app-shell="factory"] .production-targets-modern .pt-staff-table thead tr {
+  background: #203858;
+}
+:root[data-app-shell="factory"] .production-targets-modern .pt-staff-table .pt-worker-row {
+  background: #172942;
+}
+:root[data-app-shell="factory"] .production-targets-modern .pt-staff-table .pt-worker-row:hover {
+  background: #223956;
+}

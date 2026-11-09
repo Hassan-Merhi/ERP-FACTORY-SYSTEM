@@ -161,6 +161,32 @@
   border-radius: .7rem;
 }
 .factory-location-inventory .inventory-stock-table { border-collapse: separate; border-spacing: 0; }
+/* Keep large location inventories usable without scrolling the entire page.
+   Only table rows scroll; column headings and totals remain in view. */
+.factory-location-inventory.inventory-product-view .inventory-scroll-frame {
+  max-height: min(68vh, 680px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.factory-location-inventory.inventory-product-view .inventory-scroll-frame:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.factory-location-inventory.inventory-product-view .inventory-scroll-frame .inventory-table-head th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--card);
+  box-shadow: 0 1px 0 var(--border);
+}
+.factory-location-inventory.inventory-product-view .inventory-scroll-frame tfoot .inventory-section-total td {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  background: var(--card);
+  box-shadow: 0 -1px 0 var(--border);
+}
 .factory-location-inventory .inventory-table-head {
   background: linear-gradient(100deg, rgba(139, 92, 246, .14), rgba(99, 102, 241, .055));
 }

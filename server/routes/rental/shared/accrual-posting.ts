@@ -9,7 +9,7 @@
  * identity makes a replay of the same batch return the voucher already posted.
  */
 import { createHash } from "node:crypto";
-import { inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { propertyMonthlyLedger } from "@shared/schema";
 import type { DbTransaction } from "../../../db";
 import { writeAuditEvent } from "../../../services/audit";
@@ -38,6 +38,51 @@ export interface AccrualPassPosting {
 /** Posts the journal, stamps the ledger rows with it and audits it, all in `tx`. */
 export async function postAccrualPassTx(tx: DbTransaction, input: AccrualPassPosting): Promise<number> {
   const rowIds = [...input.ledgerRowIds].sort((a, b) => a - b);
+
+  // Company/module scoped row-lock before posting. The old flow only read
+  // accrualVoucherId before the transaction and stamped it after posting;
+  // concurrent runs or a reset link could generate duplicate rent expense.
+  // FOR UPDATE (not SKIP LOCKED) ensures the second writer sees the first
+  // writer's newly stamped voucher and refuses to post.
+  if (rowIds.length===0 || rowIds.some(id=>!Number.isSafeInteger(id)||id<=0) ||
+      new Set(rowIds).size!==rowIds.length) {
+    throw new Error("RENTAL_ACCRUAL_INVALID_LEDGER_ROWS");
+  }
+  const locked=(await tx.execute(sql`
+    SELECT ml.id,ml.company_id,ml.module,ml.accrual_voucher_id,
+      ml.used_prepaid_account,ml.used_advance_account,
+      EXISTS(
+        SELECT 1 FROM voucher_entries ve
+        JOIN vouchers v ON v.id=ve.voucher_id AND v.company_id=${input.companyId}
+        WHERE ve.company_id=${input.companyId}
+          AND v.deleted_at IS NULL AND v.optional=false
+          AND ve.debit_amount > 0
+          AND ve.narration=(
+            'Rent accrual - ' || u.unit_number || ' - ' ||
+            lpad(ml.month::text,2,'0') || '/' || ml.year::text
+          )
+      ) AS prior_rent_accrual
+    FROM property_monthly_ledger ml
+    JOIN property_units u ON u.id=ml.unit_id
+    WHERE ml.id IN (${sql.raw(rowIds.join(","))})
+      AND ml.company_id=${input.companyId} AND ml.module=${input.module}
+    ORDER BY ml.id FOR UPDATE OF ml
+  `)).rows as Array<{
+    id:number; company_id:number; module:string; accrual_voucher_id:number|null;
+    used_prepaid_account:boolean; used_advance_account:boolean; prior_rent_accrual:boolean;
+  }>;
+  if(locked.length!==rowIds.length ||
+    locked.some((r,i)=>
+      Number(r.id)!==rowIds[i] ||
+      r.accrual_voucher_id!==null ||
+      // Catch legacy orphan journals even if somebody cleared the month link.
+      (input.pass==="accrual" && r.prior_rent_accrual===true) ||
+      (input.pass==="accrual" && (r.used_prepaid_account || r.used_advance_account)) ||
+      (input.pass==="advance-recognition" && (!r.used_advance_account || r.used_prepaid_account)) ||
+      ((input.pass==="prepaid-recognition" || input.pass==="deferred-recognition") &&
+        (!r.used_prepaid_account || r.used_advance_account)))) {
+    throw new Error("RENTAL_ACCRUAL_ALREADY_POSTED_OR_ROW_CHANGED");
+  }
   const rowsKey = createHash("sha256").update(rowIds.join(",")).digest("hex").slice(0, 24);
   const posted = await postErpVoucherTx(tx, {
     companyId: input.companyId,
@@ -52,10 +97,17 @@ export async function postAccrualPassTx(tx: DbTransaction, input: AccrualPassPos
   });
   const voucher = posted.voucher;
 
+  // Preserve the same company, module and null-stamp invariant when writing.
+  // Locks above protect against racing schedulers and manual posting.
   await tx
     .update(propertyMonthlyLedger)
     .set({ accrualVoucherId: voucher.id })
-    .where(inArray(propertyMonthlyLedger.id, rowIds));
+    .where(and(
+      eq(propertyMonthlyLedger.companyId, input.companyId),
+      eq(propertyMonthlyLedger.module, input.module),
+      inArray(propertyMonthlyLedger.id, rowIds),
+      isNull(propertyMonthlyLedger.accrualVoucherId)
+    ));
 
   const actor = input.options.actor ?? SYSTEM_RENTAL_ACTOR;
   await writeAuditEvent(

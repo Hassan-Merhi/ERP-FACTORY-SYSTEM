@@ -27,6 +27,7 @@ import { useDocumentAppShell } from "@/hooks/use-document-app-shell";
 import { useVisualViewportMetrics } from "@/hooks/use-visual-viewport-metrics";
 import { ReadOnlyRoleRouteGate } from "@/components/ReadOnlyRoleRouteGate";
 import "@/factory-mobile-operations.css";
+import "@/styles/factory-unified-theme.css";
 
 const FactoryFrenchCatalogManager = lazy(() =>
   import("@/components/FactoryFrenchCatalogManager").then((module) => ({
