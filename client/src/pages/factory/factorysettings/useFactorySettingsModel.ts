@@ -268,6 +268,15 @@ export function useFactorySettingsModel() {
   const { data, isLoading } = useQuery<FactorySettingsData & FactoryCompanyUiSettings>({ queryKey: companyQueryKey("/api/factory/settings", selectedCompany?.id), enabled: Boolean(selectedCompany?.id) });
 
   useEffect(() => {
+    // Never carry editable rename input or preview from one company to another.
+    const defaults = factoryRenameDefaults();
+    setCodePrefix(defaults.codePrefix);
+    setFindStr(defaults.find);
+    setReplaceStr(defaults.replace);
+    setRenamePreview(null);
+  }, [selectedCompany?.id]);
+
+  useEffect(() => {
     if (data) {
       // Select company-specific rename UI default only if the existing settings API provides it.
       // Never write a legacy default to stock codes or backfill database settings.
