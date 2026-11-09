@@ -33,6 +33,8 @@ import {
   ErpFormActions,
   ErpPendingButton,
   ErpRecordAction,
+  erpCompanyDataKey,
+  invalidateErpDataFamilies,
 } from "@/erp-core";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { z } from "zod";
@@ -93,10 +95,11 @@ function CompanyCustomers() {
     (Customer & { balance: number; balanceSide: string }) | null
   >(null);
 
+  const statementUrl = `/api/customers/${statementCustomer?.id ?? "no-customer"}/transactions`;
   const { data: ledgerTxns = [], isLoading: txnsLoading } = useQuery({
-    queryKey: ["/api/customers", statementCustomer?.id, "transactions"],
-    queryFn: () => fetch(`/api/customers/${statementCustomer!.id}/transactions`).then((r) => r.json()),
-    enabled: !!statementCustomer?.id,
+    queryKey: erpCompanyDataKey(statementUrl, selectedCompany?.id),
+    queryFn: () => fetch(statementUrl).then((r) => r.json()),
+    enabled: selectedCompany?.id != null && statementCustomer?.id != null,
   });
 
   // Paid retail sales do not generate customer receivables, but they are
@@ -113,7 +116,7 @@ function CompanyCustomers() {
   });
 
   const { data: customers = [], isLoading } = useQuery<(Customer & { balance: number; balanceSide: string })[]>({
-    queryKey: ["/api/customers/stats", selectedCompany?.id],
+    queryKey: erpCompanyDataKey("/api/customers/stats", selectedCompany?.id),
     enabled: !!selectedCompany?.id,
   });
 
@@ -146,10 +149,11 @@ function CompanyCustomers() {
     },
     onSuccess: () => {
       toast({ title: "Success", description: "Customer created successfully" });
-      queryClient.invalidateQueries({ queryKey: ["/api/customers/stats", selectedCompany?.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/customers", selectedCompany?.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/accounts/all", selectedCompany?.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/ledger-accounts", selectedCompany?.id] });
+      void invalidateErpDataFamilies(queryClient, [
+        "/api/customers",
+        "/api/accounts/all",
+        "/api/ledger-accounts",
+      ]);
       setIsCreateOpen(false);
       form.reset({
         companyId: selectedCompany?.id || 0,
@@ -171,10 +175,11 @@ function CompanyCustomers() {
     },
     onSuccess: () => {
       toast({ title: "Success", description: "Customer updated successfully" });
-      queryClient.invalidateQueries({ queryKey: ["/api/customers/stats", selectedCompany?.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/customers", selectedCompany?.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/accounts/all", selectedCompany?.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/ledger-accounts", selectedCompany?.id] });
+      void invalidateErpDataFamilies(queryClient, [
+        "/api/customers",
+        "/api/accounts/all",
+        "/api/ledger-accounts",
+      ]);
       setIsEditOpen(false);
       setEditingCustomer(null);
       form.reset({
