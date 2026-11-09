@@ -156,6 +156,7 @@ function explainReason(reason: string): string {
     PLAN_BALE_NO_LONGER_LOADED: "Assigned bale was removed from main loading",
     NO_LONGER_IN_LOADING: "Verified on a truck, but no longer in main loading",
     ASSIGNED_TO_ANOTHER_TRIP: "Verified here, allocated to a different trip",
+    SCANNED_DIFFERENT_TRIP: "Bale was assigned to one truck but scanned on another",
     NOT_IN_TRIP_PLAN: "Verified here, but not assigned to this trip\u0027s article or bale plan",
     NOT_IN_EXACT_TRIP_PLAN: "Verified here, but not assigned in this trip's exact-bale plan",
     PLANNED_HERE_SCANNED_ELSEWHERE: "Assigned to this trip, verified on a different one",
