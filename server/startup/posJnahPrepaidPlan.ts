@@ -1,7 +1,10 @@
 /**
- * Exact, pure before-image guard for POS Jnah's 2026/27 legacy annual rent.
- * This is intentionally not a generic rent backfill: unexpected edits to any
- * period or accrual flag MUST abort the owner-approved one-off correction.
+ * Exact guard for the two owner-reviewed POS Jnah annual rent snapshots.
+ *
+ * Before: the November $20k correction journal is active, December–July are
+ * marked prepaid, and August/November are included in the original $30k debit
+ * to Rent Expense. After: the original voucher and two old reclassification
+ * journals are corrected in place; no additional vouchers exist.
  */
 export interface PosJnahMonth {
   id: number;
@@ -16,35 +19,37 @@ export interface PosJnahMonth {
   used_advance_account: boolean;
 }
 
-function check(condition: unknown, reason: string): asserts condition {
-  if (!condition) throw new Error("POS_JNAH_RENT_REPAIR_REFUSED_" + reason);
+function requireMatch(condition: unknown, reason: string): asserts condition {
+  if (!condition) throw new Error("POS_JNAH_RENT_REWORK_REFUSED_" + reason);
 }
 
-export function planPosJnahPrepaidMonths(rows: readonly PosJnahMonth[]): number[] {
-  check(rows.length === 12, "MONTH_COUNT_CHANGED");
-  const future: number[] = [];
+/** Only the August and November rows need their existing recognition links. */
+export function verifyPosJnahPrepaidMonths(
+  rows: readonly PosJnahMonth[],
+  state: "before" | "after"
+): readonly { id: number; voucherId: number }[] {
+  requireMatch(rows.length === 12, "MONTH_COUNT");
   for (let i = 0; i < 12; i++) {
-    const row = rows[i];
-    const month = (7 + i) % 12 + 1;
+    const m = rows[i];
     const year = i < 5 ? 2026 : 2027;
-    const expectedAccrualId = i === 1 ? 13142 : i === 2 ? 15041 : null;
-    check(
-      row.id === 701216 + i &&
-        row.contract_id === 36 &&
-        row.unit_id === 59 &&
-        row.year === year &&
-        row.month === month &&
-        Number(row.expected_amount) === 2500 &&
-        Number(row.paid_amount) === 2500 &&
-        row.used_advance_account === false &&
-        row.accrual_voucher_id === expectedAccrualId &&
-        row.used_prepaid_account === (i === 1 || i === 2),
-      "MONTH_SNAPSHOT_CHANGED_" + i
+    const month = (7 + i) % 12 + 1;
+    const expectedVoucher = i === 1 ? 13142 : i === 2 ? 15041 :
+      state === "after" && i === 0 ? 13141 :
+      state === "after" && i === 3 ? 15040 : null;
+    const prepaid = state === "after" || i === 1 || i === 2 || i >= 4;
+    requireMatch(
+      m.id === 701216 + i &&
+      m.contract_id === 36 &&
+      m.unit_id === 59 &&
+      m.year === year &&
+      m.month === month &&
+      Number(m.expected_amount) === 2500 &&
+      Number(m.paid_amount) === 2500 &&
+      m.used_advance_account === false &&
+      m.used_prepaid_account === prepaid &&
+      m.accrual_voucher_id === expectedVoucher,
+      "MONTH_DRIFT_" + i
     );
-    // The August and November expenses are already in the original payment.
-    // Flag ONLY Dec 2026 through Jul 2027 for future automatic GL recognition.
-    if (i >= 4) future.push(row.id);
   }
-  check(future.length === 8, "FUTURE_MONTH_COUNT");
-  return future;
+  return [{ id: 701216, voucherId: 13141 }, { id: 701219, voucherId: 15040 }];
 }

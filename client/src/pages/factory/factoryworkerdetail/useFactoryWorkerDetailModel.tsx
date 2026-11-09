@@ -8,6 +8,9 @@ import { useEscapeToParent } from "@/hooks/use-escape-to-parent";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { factoryApiRequest } from "@/lib/factoryApi";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
+import type { FactoryMyAccess } from "@shared/apiTypes";
 import type { FactoryWorker, FactoryBale, FactoryWorkerDocument, FactoryWorkerAdvance } from "@shared/schema";
 
 import type { CashAccount, PayrollRecord, WorkerStats, WorkerWithStats } from "./types";
@@ -20,10 +23,6 @@ interface WorkerDetailTabSettings {
   workerDetailTabDocumentsEnabled?: boolean;
 }
 
-interface WorkerDetailAccess {
-  hiddenCostFields?: string[];
-}
-
 function isHandledGlobally(error: unknown): boolean {
   return typeof error === "object" && error !== null && "_handledGlobally" in error && Boolean(error._handledGlobally);
 }
@@ -32,6 +31,7 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 export function useFactoryWorkerDetailModel() {
+  const { selectedCompany } = useCompany();
   const { wrapAdminAction, AdminDialog } = useAdminOverride();
   const [, navigate] = useLocation();
   useEscapeToParent("/factory/payroll-hub?tab=workers");
@@ -47,7 +47,8 @@ export function useFactoryWorkerDetailModel() {
   const isDeveloper = currentUser?.role === "Developer";
 
   const { data: tabSettings } = useQuery<WorkerDetailTabSettings>({
-    queryKey: ["/api/factory/settings"],
+    queryKey: companyQueryKey("/api/factory/settings", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const r = await fetch("/api/factory/settings");
       return r.ok ? r.json() : {};
@@ -55,11 +56,14 @@ export function useFactoryWorkerDetailModel() {
     staleTime: 60000,
   });
 
-  const { data: myAccess } = useQuery<WorkerDetailAccess>({
-    queryKey: ["/api/factory/my-access"],
+  const { data: myAccess } = useQuery<FactoryMyAccess>({
+    queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     staleTime: 5 * 60000,
   });
-  const hiddenTabs = myAccess?.hiddenCostFields ?? [];
+  const hiddenTabs = myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
+    ? myAccess.hiddenCostFields
+    : ["hide_tab_workerdetail_profile", "hide_tab_workerdetail_statement", "hide_tab_workerdetail_advances", "hide_tab_workerdetail_bales", "hide_tab_workerdetail_documents"];
   const showProfile = !hiddenTabs.includes("hide_tab_workerdetail_profile");
 
   const showStatement =
@@ -140,33 +144,33 @@ export function useFactoryWorkerDetailModel() {
     isLoading: workerLoading,
     error: workerError,
   } = useQuery<WorkerWithStats>({
-    queryKey: ["/api/factory/workers", workerId],
+    queryKey: companyQueryKey("/api/factory/workers", selectedCompany?.id, workerId),
     queryFn: async () => {
       const res = await fetch(`/api/factory/workers/${workerId}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch worker");
       return res.json();
     },
-    enabled: !!workerId,
+    enabled: !!workerId && Boolean(selectedCompany?.id),
   });
 
   const { data: stats, isLoading: statsLoading } = useQuery<WorkerStats>({
-    queryKey: ["/api/factory/workers", workerId, "stats"],
+    queryKey: companyQueryKey("/api/factory/workers", selectedCompany?.id, workerId, "stats"),
     queryFn: async () => {
       const res = await fetch(`/api/factory/workers/${workerId}/stats`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch stats");
       return res.json();
     },
-    enabled: !!workerId,
+    enabled: !!workerId && Boolean(selectedCompany?.id),
   });
 
   const { data: payrolls, isLoading: payrollsLoading } = useQuery<PayrollRecord[]>({
-    queryKey: ["/api/factory/workers", workerId, "payrolls"],
+    queryKey: companyQueryKey("/api/factory/workers", selectedCompany?.id, workerId, "payrolls"),
     queryFn: async () => {
       const res = await fetch(`/api/factory/workers/${workerId}/payrolls`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch payrolls");
       return res.json();
     },
-    enabled: !!workerId,
+    enabled: !!workerId && Boolean(selectedCompany?.id),
   });
 
   const { data: payrollDetail, isLoading: payrollDetailLoading } = useQuery<{
@@ -184,51 +188,52 @@ export function useFactoryWorkerDetailModel() {
     };
     attendance: { id: number; attendanceDate: string; status: string; shift: string | null; notes: string | null }[];
   }>({
-    queryKey: ["/api/factory/payrolls", detailPayrollId, "detail"],
+    queryKey: companyQueryKey("/api/factory/payrolls", selectedCompany?.id, detailPayrollId, "detail"),
     queryFn: async () => {
       const res = await fetch(`/api/factory/payrolls/${detailPayrollId}/detail`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch detail");
       return res.json();
     },
-    enabled: detailPayrollId !== null,
+    enabled: detailPayrollId !== null && Boolean(selectedCompany?.id),
   });
 
   const baleQueryString = [startDate && `startDate=${startDate}`, endDate && `endDate=${endDate}`]
     .filter(Boolean)
     .join("&");
   const { data: bales, isLoading: balesLoading } = useQuery<FactoryBale[]>({
-    queryKey: ["/api/factory/workers", workerId, "bales", startDate, endDate],
+    queryKey: companyQueryKey("/api/factory/workers", selectedCompany?.id, workerId, "bales", startDate, endDate),
     queryFn: async () => {
       const url = `/api/factory/workers/${workerId}/bales${baleQueryString ? `?${baleQueryString}` : ""}`;
       const res = await fetch(url, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch bales");
       return res.json();
     },
-    enabled: !!workerId,
+    enabled: !!workerId && Boolean(selectedCompany?.id),
   });
 
   const { data: documents, isLoading: docsLoading } = useQuery<FactoryWorkerDocument[]>({
-    queryKey: ["/api/factory/workers", workerId, "documents"],
+    queryKey: companyQueryKey("/api/factory/workers", selectedCompany?.id, workerId, "documents"),
     queryFn: async () => {
       const res = await fetch(`/api/factory/workers/${workerId}/documents`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch documents");
       return res.json();
     },
-    enabled: !!workerId,
+    enabled: !!workerId && Boolean(selectedCompany?.id),
   });
 
   const { data: workerAdvances, isLoading: advancesLoading } = useQuery<FactoryWorkerAdvance[]>({
-    queryKey: ["/api/factory/workers", workerId, "advances"],
+    queryKey: companyQueryKey("/api/factory/workers", selectedCompany?.id, workerId, "advances"),
     queryFn: async () => {
       const res = await fetch(`/api/factory/workers/${workerId}/advances`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch advances");
       return res.json();
     },
-    enabled: !!workerId,
+    enabled: !!workerId && Boolean(selectedCompany?.id),
   });
 
   const { data: cashAccounts } = useQuery<CashAccount[]>({
-    queryKey: ["/api/factory/cash-accounts"],
+    queryKey: companyQueryKey("/api/factory/cash-accounts", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     staleTime: 60_000,
     refetchOnWindowFocus: false,
   });
@@ -249,7 +254,7 @@ export function useFactoryWorkerDetailModel() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers", workerId, "advances"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers"] });
       toast({ title: "Advance recorded" });
       setAdvanceAmount("");
       setAdvanceNotes("");
@@ -279,7 +284,7 @@ export function useFactoryWorkerDetailModel() {
       return res.json();
     },
     onSuccess: (_data, vars) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers", workerId, "advances"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/advances", vars.advanceId, "repayments"] });
       toast({ title: "Repayment recorded" });
       setRepayAdvanceId(null);
@@ -307,7 +312,7 @@ export function useFactoryWorkerDetailModel() {
       return res.json();
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers", workerId, "advances"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers"] });
       toast({
         title: `${data.count} advance${data.count !== 1 ? "s" : ""} repaid`,
         description: `Total: $${data.totalRepaid.toFixed(2)}`,
@@ -332,7 +337,7 @@ export function useFactoryWorkerDetailModel() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers", workerId, "advances"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers"] });
       toast({ title: "Advance deleted" });
     },
     onError: (err: Error) => {
@@ -351,7 +356,7 @@ export function useFactoryWorkerDetailModel() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers", workerId, "documents"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers"] });
       toast({ title: "Document deleted" });
     },
     onError: (err: Error) => {
@@ -377,7 +382,7 @@ export function useFactoryWorkerDetailModel() {
         const err = await res.json();
         throw new Error(err.message || "Upload failed");
       }
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers", workerId, "documents"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers"] });
       toast({ title: "Document uploaded" });
     } catch (err: unknown) {
       toast({ title: "Upload failed", description: errorMessage(err), variant: "destructive" });
@@ -397,9 +402,9 @@ export function useFactoryWorkerDetailModel() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers", workerId, "payrolls"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers", workerId, "stats"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers", workerId, "advances"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers"] });
       toast({ title: "Marked as paid" });
       setPayOpen(false);
       setPayTargetId(null);
@@ -422,7 +427,7 @@ export function useFactoryWorkerDetailModel() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers", workerId, "payrolls"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers"] });
       toast({ title: "Accounting entry generated" });
       setFixAcctOpen(false);
       setFixAcctTargetId(null);
@@ -444,7 +449,7 @@ export function useFactoryWorkerDetailModel() {
       return res.json();
     },
     onSuccess: (data: FactoryWorker) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers", workerId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/workers"] });
       toast({ title: "Worker reactivated", description: `${data.fullName} is now active again.` });
     },
@@ -469,7 +474,7 @@ export function useFactoryWorkerDetailModel() {
         const err = await res.json();
         throw new Error(err.message || "Upload failed");
       }
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers", workerId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers"] });
       toast({ title: "Photo updated" });
     } catch (err: unknown) {
       toast({ title: "Error", description: errorMessage(err), variant: "destructive" });
@@ -539,9 +544,9 @@ export function useFactoryWorkerDetailModel() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed to end contract");
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers", workerId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers", workerId, "stats"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers", workerId, "payrolls"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers"] });
       toast({
         title: "Contract ended",
         description: payNow ? `Paid ${fmt(data.balance)}` : "Balance recorded as pending",
@@ -570,9 +575,9 @@ export function useFactoryWorkerDetailModel() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed to end contract");
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers", workerId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers", workerId, "stats"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers", workerId, "payrolls"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers"] });
       toast({ title: "Contract ended", description: "Worker deactivated. No settlement payroll was created." });
       setEndOpen(false);
     } catch (err: unknown) {

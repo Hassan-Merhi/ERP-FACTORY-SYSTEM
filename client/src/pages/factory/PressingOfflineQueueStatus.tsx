@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { PressingQueueSnapshot } from "./pressing-scanner/usePressingOfflineSync";
 import type { PressingQueuedScan } from "./pressing-scanner/pressingOfflineQueue";
 import { PRESSING_TIME_ZONE } from "@shared/pressingTimeZone";
+import { factoryScanStateLabel } from "@/factory/scanner/scannerFeedback";
 
 function timeLabel(row: PressingQueuedScan): string {
   const recorded = row.receipt?.confirmedAt || row.payload.deviceCapturedAt;
@@ -16,14 +17,6 @@ function timeLabel(row: PressingQueuedScan): string {
     });
   } catch {
     return recorded;
-  }
-}
-function stateLabel(row: PressingQueuedScan): string {
-  switch (row.state) {
-    case "confirmed": return "Server confirmed";
-    case "rejected": return "Rejected";
-    case "syncing": return "Sending";
-    default: return "Saved locally — pending";
   }
 }
 
@@ -103,7 +96,7 @@ export default function PressingOfflineQueueStatus({
                       {row.state === "confirmed" ? <CheckCircle2 className="mr-1 inline h-4 w-4" /> :
                         row.state === "rejected" ? <AlertTriangle className="mr-1 inline h-4 w-4" /> :
                         <Clock className="mr-1 inline h-4 w-4" />}
-                      {stateLabel(row)}
+                      {factoryScanStateLabel(row.state)}
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground">

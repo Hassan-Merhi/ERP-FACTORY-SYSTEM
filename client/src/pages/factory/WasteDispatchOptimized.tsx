@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
 import { PageHeader } from "@/components/PageHeader";
+import { FactorySalesDispatchSwitcher } from "./FactorySalesDispatchSwitcher";
 import { Textarea } from "@/components/ui/textarea";
 import { fmt, fmtKg } from "./wastedispatch/utils";
 import { useWasteDispatchModel } from "./wastedispatch/useWasteDispatchModel";
@@ -36,10 +37,11 @@ export default function WasteDispatchOptimized() {
   } = model;
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-slate-50/70 dark:bg-[#0b111b]" data-testid="waste-dispatch-page">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background" data-testid="waste-dispatch-page">
       <div className="flex-1 space-y-5 overflow-y-auto p-3 sm:p-5 lg:p-6">
+        <FactorySalesDispatchSwitcher />
         {/* Presentation only: all dispatch state, permissions, scanning, and accounting remain in the existing model. */}
-        <section className="relative isolate overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-r from-white via-slate-50 to-orange-50/70 shadow-sm dark:border-slate-700/70 dark:from-[#101b2a] dark:via-[#152234] dark:to-[#1e2937]">
+        <section className="relative isolate overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-r from-white via-slate-50 to-orange-50/70 shadow-sm dark:border-slate-700/70 dark:from-card dark:via-blue-950/25 dark:to-card">
           <div className="pointer-events-none absolute -right-8 -top-12 hidden h-52 w-80 -rotate-12 items-center justify-center rounded-[3rem] border border-orange-400/20 bg-gradient-to-br from-orange-400/15 via-sky-400/5 to-transparent text-orange-500/15 dark:text-orange-300/10 md:flex" aria-hidden="true">
             <Boxes className="h-40 w-40 stroke-[0.7]" />
           </div>

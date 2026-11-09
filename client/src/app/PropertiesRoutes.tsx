@@ -1,6 +1,8 @@
 import { lazyRetry as lazy } from "@/lib/lazyRetry";
 import { Switch, Route, Redirect } from "wouter";
 import PropertiesRentalsHub from "@/pages/properties/PropertiesRentalsHub";
+import { useCompany } from "@/contexts/CompanyContext";
+import { canUsePropertiesCapability, PROPERTIES_LEGACY_RENTAL_REDIRECTS } from "@/properties/config/propertiesNavigation";
 import { AccountingToolbox } from "@/lazyPages";
 
 const PropertiesHelpTraining = lazy(() =>
@@ -52,12 +54,15 @@ interface PropertiesRoutesProps {
  * All canonical workspace routes live under `/properties/*`.
  */
 export function PropertiesRoutes({ user }: PropertiesRoutesProps) {
-  const isAdmin = user.role === "Admin" || user.role === "Developer";
-  const isDeveloper = user.role === "Developer";
+  const { selectedCompany } = useCompany();
+  const isAdmin = canUsePropertiesCapability("admin", user, selectedCompany);
+  const isDeveloper = canUsePropertiesCapability("developer", user, selectedCompany);
+  const canOpenPersonalSettings = canUsePropertiesCapability("personal", user, selectedCompany);
 
   return (
     <Switch>
       <Route path="/properties/help-training">{() => <PropertiesHelpTraining user={user} />}</Route>
+      {/* Compatibility-only dashboard: real cash/payable management remains reachable by old bookmarks. */}
       <Route path="/properties/dashboard" component={PropertiesDashboard} />
       <Route path="/properties/accounts" component={PropertiesAccounts} />
       {isDeveloper && <Route path="/properties/accounting/toolbox" component={AccountingToolbox} />}
@@ -80,13 +85,13 @@ export function PropertiesRoutes({ user }: PropertiesRoutesProps) {
       <Route path="/properties/daybook" component={PropertiesDaybook} />
 
       <Route path="/properties/rentals" component={PropertiesRentalsHub} />
-      <Route path="/properties/rental/warehouses">{() => <Redirect replace to="/properties/rentals" />}</Route>
-      <Route path="/properties/rental/shops">{() => <Redirect replace to="/properties/rentals?tab=shops" />}</Route>
-      <Route path="/properties/rental/payments">
-        {() => <Redirect replace to="/properties/rentals?tab=payments" />}
-      </Route>
+      {Object.entries(PROPERTIES_LEGACY_RENTAL_REDIRECTS).map(([from, to]) => (
+        <Route key={from} path={from}>
+          {() => <Redirect replace to={to} />}
+        </Route>
+      ))}
 
-      {user?.role === "Developer" && <Route path="/properties/transfer" component={CompanyTransfer} />}
+      {isDeveloper && <Route path="/properties/transfer" component={CompanyTransfer} />}
       <Route path="/properties/ledger-monthly/:accountId" component={PropertiesLedgerMonthly} />
       <Route path="/properties/ledger-vouchers/:accountId/:year/:month" component={PropertiesLedgerVouchers} />
       {isAdmin && <Route path="/properties/settings" component={PropertiesSettings} />}
@@ -99,7 +104,7 @@ export function PropertiesRoutes({ user }: PropertiesRoutesProps) {
       {isAdmin && <Route path="/properties/company-data-reset" component={CompanyDataReset} />}
       {isAdmin && <Route path="/properties/account-groups" component={AccountGroups} />}
       {isAdmin && <Route path="/properties/balance-repair" component={BalanceRepair} />}
-      {user.role !== "ERP Tester" && <Route path="/properties/my-settings" component={MySettings} />}
+      {canOpenPersonalSettings && <Route path="/properties/my-settings" component={MySettings} />}
 
       <Route>
         <Redirect replace to="/properties/daybook" />

@@ -3,6 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { BarChart3, Building2, ChevronDown, ChevronRight, Download, RefreshCw, Search } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
+import { ErpListTable, ErpPendingButton } from "@/erp-core";
+import { erpCompanyDataKey } from "@/erp-core/erpData";
 import { useToast } from "@/hooks/use-toast";
 import { getTopProfitCompanyByItem, groupMarketRows } from "./itemMarketAnalysisGrouping";
 import { fetchSalePriceExportRows } from "./itemMarketAnalysisSalePrices";
@@ -13,10 +15,11 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { PeriodFilter, getDefaultPeriodValue, type PeriodFilterValue } from "@/components/ui/period-filter";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { formatNumber } from "@/lib/formatNumber";
+
 
 import {
   StatusBadge,
@@ -98,7 +101,7 @@ export default function ItemMarketAnalysis() {
   }, [period, debouncedSearch, selectedStockGroupNames, selectedCompanyIds]);
 
   const { data, isLoading, isFetching, isError, error, refetch } = useQuery<MarketResponse, Error>({
-    queryKey: [queryUrl, selectedCompany?.id, selectedCompanyIds],
+    queryKey: erpCompanyDataKey(queryUrl, selectedCompany?.id, selectedCompanyIds),
     enabled: selectedCompany?.companyType === "erp" && selectedCompanyIds.length > 0,
     staleTime: 5 * 60_000,
     gcTime: 15 * 60_000,
@@ -125,7 +128,7 @@ export default function ItemMarketAnalysis() {
     totalSales: number;
     adjustedCostProfit: number;
   }>({
-    queryKey: ["/api/sales-report/cogs-reconciliation", selectedCompany?.id],
+    queryKey: erpCompanyDataKey("/api/sales-report/cogs-reconciliation", selectedCompany?.id),
     enabled: comparableToSalesReport,
     staleTime: 30_000,
     refetchOnWindowFocus: false,
@@ -272,7 +275,7 @@ export default function ItemMarketAnalysis() {
   if (selectedCompany && selectedCompany.companyType !== "erp") {
     return (
       <div className="container mx-auto p-4 sm:p-6">
-        <PageHeader title="Item Market Analysis" onBack={() => window.history.back()} />
+        <PageHeader title="Market Price Analysis" onBack={() => window.history.back()} />
         <div className="mt-6 rounded-xl border p-6 text-sm text-muted-foreground">
           Item Market Analysis is available for ERP companies only.
         </div>
@@ -288,7 +291,7 @@ export default function ItemMarketAnalysis() {
   return (
     <div className="container mx-auto space-y-5 p-0 sm:p-6">
       <PageHeader
-        title="Item Market Analysis"
+        title="Market Price Analysis"
         onBack={() => window.history.back()}
         meta={
           <span>
@@ -301,16 +304,18 @@ export default function ItemMarketAnalysis() {
           </span>
         }
       >
-        <Button
+        <ErpPendingButton
           variant="outline"
           size="sm"
           onClick={handleExportExcel}
-          disabled={isLoading || isFetching || isExporting || !data || !!isError || search.trim() !== debouncedSearch}
+          disabled={isLoading || isFetching || !data || !!isError || search.trim() !== debouncedSearch}
+          pending={isExporting}
+          pendingLabel="Exporting..."
           data-testid="button-item-market-export-excel"
         >
-          <Download className="mr-2 h-4 w-4" />
-          {isExporting ? "Exporting..." : "Export Excel"}
-        </Button>
+          {!isExporting && <Download className="mr-2 h-4 w-4" />}
+          Export Excel
+        </ErpPendingButton>
         <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
           <RefreshCw className={`mr-2 h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
           Refresh
@@ -520,20 +525,22 @@ export default function ItemMarketAnalysis() {
               ? "Items are matched by code · expand Companies to compare each company"
               : "Historical item performance for this company"}
           </div>
-          <Button
+          <ErpPendingButton
             variant="outline"
             size="sm"
             className="ml-auto shrink-0 lg:ml-0"
             onClick={handleExportExcel}
-            disabled={isLoading || isFetching || isExporting || !data || !!isError || search.trim() !== debouncedSearch}
+            disabled={isLoading || isFetching || !data || !!isError || search.trim() !== debouncedSearch}
+            pending={isExporting}
+            pendingLabel="Exporting..."
             data-testid="button-item-market-export-excel-table"
           >
-            <Download className="mr-2 h-4 w-4" />
-            {isExporting ? "Exporting..." : "Export Excel"}
-          </Button>
+            {!isExporting && <Download className="mr-2 h-4 w-4" />}
+            Export Excel
+          </ErpPendingButton>
         </div>
         <div className="overflow-x-auto">
-          <Table>
+          <ErpListTable pageKey="market-analysis" companyId={selectedCompany?.id} scrollLabel="Market price analysis">
             <TableHeader>
               <TableRow>
                 <TableHead>Item</TableHead>
@@ -654,7 +661,7 @@ export default function ItemMarketAnalysis() {
                                 Company breakdown for {group.name}
                               </div>
                               <div className="overflow-x-auto rounded-md border">
-                                <Table>
+                                <ErpListTable pageKey="market-company-breakdown" companyId={selectedCompany?.id} showDensityControl={false} scrollLabel="Market company breakdown">
                                   <TableHeader>
                                     <TableRow>
                                       <TableHead>Company</TableHead>
@@ -784,7 +791,7 @@ export default function ItemMarketAnalysis() {
                                       );
                                     })}
                                   </TableBody>
-                                </Table>
+                                </ErpListTable>
                               </div>
                             </div>
                           </TableCell>
@@ -879,7 +886,7 @@ export default function ItemMarketAnalysis() {
                 </TableRow>
               )}
             </TableBody>
-          </Table>
+          </ErpListTable>
         </div>
         {!isLoading && visibleRowCount < totalVisibleSourceRows && (
           <div className="flex items-center justify-between border-t px-4 py-3">

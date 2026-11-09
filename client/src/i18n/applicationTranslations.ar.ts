@@ -394,7 +394,7 @@ export const applicationArabicTranslations = {
   "offlineReads.intro":
     "احفظ بيانات للقراءة فقط بعد التحقق منها لهذا الحساب والشركة. تسجيل الدخول دون اتصال والصفحات غير المحفوظة غير مدعومين بعد.",
   "supplierPartner.postOpeningStock": "ترحيل المخزون الافتتاحي",
-  "monthlyProduction.title": "مصفوفة الإنتاج الشهري",
+  "monthlyProduction.title": "الإنتاج الشهري",
   "monthlyProduction.subtitle": "البالات المنتجة حسب الصنف والشهر · ترتيب مشترك للأصناف",
   "monthlyProduction.refresh": "تحديث",
   "monthlyProduction.exportCsv": "تصدير CSV",

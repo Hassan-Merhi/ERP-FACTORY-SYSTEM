@@ -6,30 +6,18 @@ import { useDebounce } from "@/hooks/use-debounce";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import { PageHeader } from "@/components/PageHeader";
-import { DataTableToolbar } from "@/components/DataTableToolbar";
+import { ErpListFilters, ErpConfirmDialog, ErpRecordAction, erpReportFileName, exportErpReportRowsExcel, useErpCan as useCan, erpCanDenialMessage as canDenialMessage, useErpRecordChangeAccess as useExistingRecordChangeAccess } from "@/erp-core";
+import { erpCompanyDataKey, invalidateErpDataFamilies } from "@/erp-core/erpData";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Edit, Eye, EyeOff, FileText, Search, Truck, Users, Container, DollarSign } from "lucide-react";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useCompany } from "@/contexts/CompanyContext";
-import { useCan, canDenialMessage } from "@/hooks/useCan";
-import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
+
+
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
-import { companyDataKey } from "@/lib/frontendDataArchitecture";
 import { suppliersApi } from "@/api/suppliersApi";
-import { format } from "date-fns";
-import { utils, writeFile } from "@/lib/excelHelper";
 import { useEscapeBack } from "@/hooks/use-escape-back";
 import { useSuppliersFilters } from "./suppliers/useSuppliersFilters";
 import type { Company } from "@/contexts/CompanyContext";
@@ -73,8 +61,7 @@ export default function Suppliers() {
       return suppliersApi.delete(id);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/suppliers"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/suppliers/stats"] });
+      void invalidateErpDataFamilies(queryClient, ["/api/suppliers"]);
       toast({ title: "Supplier deleted" });
       setSupplierToDelete(null);
     },
@@ -101,7 +88,8 @@ export default function Suppliers() {
   };
 
   const { data: suppliers = [], isLoading } = useQuery<SupplierWithStats[]>({
-    queryKey: companyDataKey("/api/suppliers/stats", selectedCompany?.id),
+    queryKey: erpCompanyDataKey("/api/suppliers/stats", selectedCompany?.id),
+    enabled: selectedCompany?.id != null,
   });
 
   const { data: companies = [] } = useQuery<Company[]>({
@@ -114,8 +102,8 @@ export default function Suppliers() {
       : `/api/suppliers/${selectedSupplier?.id}/unified-ledger`;
 
   const { data: unifiedLedger = [], isLoading: ledgerLoading } = useQuery<SupplierLedgerRow[]>({
-    queryKey: [unifiedLedgerUrl],
-    enabled: !!selectedSupplier,
+    queryKey: erpCompanyDataKey(unifiedLedgerUrl, selectedCompany?.id),
+    enabled: !!selectedSupplier && selectedCompany?.id != null,
   });
 
   const purchaseOrdersUrl =
@@ -124,8 +112,8 @@ export default function Suppliers() {
       : `/api/suppliers/${selectedSupplier?.id}/purchase-orders`;
 
   const { data: purchaseOrders = [], isLoading: posLoading } = useQuery<SupplierPurchaseOrder[]>({
-    queryKey: [purchaseOrdersUrl],
-    enabled: !!selectedSupplier,
+    queryKey: erpCompanyDataKey(purchaseOrdersUrl, selectedCompany?.id),
+    enabled: !!selectedSupplier && selectedCompany?.id != null,
   });
 
   const activeSuppliers = suppliers.filter((s) => s.active);
@@ -182,11 +170,11 @@ export default function Suppliers() {
       });
       return;
     }
-    const worksheet = utils.json_to_sheet(supplierLedgerToExportRows(unifiedLedger));
-    const workbook = utils.book_new();
-    utils.book_append_sheet(workbook, worksheet, "Supplier Ledger");
-    const fileName = `${selectedSupplier.legalName}_Ledger_${format(new Date(), "yyyy-MM-dd")}.xlsx`;
-    await writeFile(workbook, fileName);
+    await exportErpReportRowsExcel({
+      rows: supplierLedgerToExportRows(unifiedLedger),
+      sheetName: "Supplier Ledger",
+      fileName: erpReportFileName(`${selectedSupplier.legalName}_Ledger`, "xlsx"),
+    });
   };
 
   return (
@@ -240,7 +228,7 @@ export default function Suppliers() {
         )}
       </div>
 
-      <DataTableToolbar
+      <ErpListFilters
         search={searchTerm}
         onSearchChange={(value) => setFilter("searchTerm", value)}
         searchPlaceholder="Search suppliers..."
@@ -389,19 +377,20 @@ export default function Suppliers() {
                 >
                   <FileText className="h-4 w-4" />
                 </Button>
-                <Button
+                <ErpRecordAction
                   variant="ghost"
                   size="icon"
                   onClick={() => {
                     if (recordChanges.allowed) navigate(`/suppliers/${supplier.id}/edit`);
                   }}
-                  disabled={!recordChanges.allowed}
+                  permitted={recordChanges.allowed}
+                  deniedReason={recordChanges.reason}
                   data-testid={`button-edit-supplier-${supplier.id}`}
                   title={recordChanges.reason ?? "Edit"}
                   aria-label={recordChanges.reason ?? "Edit supplier"}
                 >
                   <Edit className="h-4 w-4" />
-                </Button>
+                </ErpRecordAction>
               </div>
             </div>
           ))}
@@ -434,38 +423,22 @@ export default function Suppliers() {
         onContainerClick={handleContainerClick}
       />
 
-      {/* Delete confirmation */}
-      <AlertDialog open={!!supplierToDelete} onOpenChange={(open) => !open && setSupplierToDelete(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Supplier</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete <strong>{supplierToDelete?.name}</strong>? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() =>
-                supplierToDelete &&
-                mayDeleteSupplier.allowed &&
-                recordChanges.allowed &&
-                deleteMutation.mutate(supplierToDelete.id)
-              }
-              disabled={!mayDeleteSupplier.allowed || !recordChanges.allowed || deleteMutation.isPending}
-              title={
-                !mayDeleteSupplier.allowed
-                  ? canDenialMessage(mayDeleteSupplier.reason)
-                  : (recordChanges.reason ?? undefined)
-              }
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              data-testid="button-confirm-delete-supplier"
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Centralized destructive confirmation, with the existing permission checks. */}
+      <ErpConfirmDialog
+        open={supplierToDelete !== null}
+        onOpenChange={(open) => !open && setSupplierToDelete(null)}
+        title="Delete Supplier"
+        description={<>Are you sure you want to delete <strong>{supplierToDelete?.name}</strong>? This action cannot be undone.</>}
+        tone="destructive"
+        confirmText="Delete"
+        confirmButtonTestId="button-confirm-delete-supplier"
+        confirmDisabled={!mayDeleteSupplier.allowed || !recordChanges.allowed}
+        loading={deleteMutation.isPending}
+        onConfirm={async () => {
+          if (!supplierToDelete || !mayDeleteSupplier.allowed || !recordChanges.allowed) return;
+          await deleteMutation.mutateAsync(supplierToDelete.id);
+        }}
+      />
     </div>
   );
 }

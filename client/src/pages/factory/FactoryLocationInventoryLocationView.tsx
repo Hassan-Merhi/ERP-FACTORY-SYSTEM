@@ -1,6 +1,6 @@
 import "./FactoryLocationInventoryRedesign.css";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MapPin, Search, FileSpreadsheet, Pencil, ChevronRight } from "lucide-react";
 import { RenameLocationDialog } from "./factory-location-inventory/dialogs/RenameLocationDialog";
@@ -69,13 +69,14 @@ export function FactoryLocationInventoryLocationView({ inventory }: { inventory:
             </p>
           </div>
           <div className="relative mt-4 w-full sm:max-w-sm">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-            <Input
+            <SearchField
               placeholder="Search locations..."
               value={locationSearch}
-              onChange={(e) => setLocationSearch(e.target.value)}
-              className="inventory-search-input pl-8 h-9 text-sm"
+              onValueChange={setLocationSearch}
+              className="inventory-search-input h-9 text-sm"
               data-testid="input-search-locations"
+              showClear={false}
+              clearOnEscape={false}
             />
           </div>
         </div>

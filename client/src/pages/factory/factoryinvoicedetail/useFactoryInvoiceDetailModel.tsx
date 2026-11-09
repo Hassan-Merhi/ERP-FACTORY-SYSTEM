@@ -4,6 +4,9 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useToast } from "@/hooks/use-toast";
 import { useAppMode } from "@/contexts/AppModeContext";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
+import type { FactoryMyAccess } from "@shared/apiTypes";
 import { getApiRequest } from "@/lib/factoryApi";
 import { Badge } from "@/components/ui/badge";
 import { useLocation, useRoute } from "wouter";
@@ -13,6 +16,7 @@ import { useState, useRef } from "react";
 import type { OrderDetail } from "./types";
 
 export function useFactoryInvoiceDetailModel() {
+  const { selectedCompany } = useCompany();
   const { formatDisplayDate } = useDateFormat();
   const { toast } = useToast();
   const [, navigate] = useLocation();
@@ -45,17 +49,18 @@ export function useFactoryInvoiceDetailModel() {
   const orderId = params?.id ? parseInt(params.id) : null;
 
   const { data: order, isLoading } = useQuery<OrderDetail>({
-    queryKey: ["/api/factory/customer-orders", orderId],
+    queryKey: companyQueryKey("/api/factory/customer-orders", selectedCompany?.id, orderId),
     queryFn: async () => {
       const res = await fetch(`/api/factory/customer-orders/${orderId}`, { credentials: "include" });
       if (!res.ok) throw new Error((await res.json()).message);
       return res.json();
     },
-    enabled: !!orderId,
+    enabled: !!orderId && Boolean(selectedCompany?.id),
   });
 
   const { data: ledgerAccounts = [] } = useQuery<{ id: number; name: string; code: string }[]>({
-    queryKey: ["/api/ledger-accounts?includeHidden=true"],
+    queryKey: companyQueryKey("/api/ledger-accounts?includeHidden=true", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     staleTime: 60_000,
     refetchOnWindowFocus: false,
   });
@@ -69,7 +74,7 @@ export function useFactoryInvoiceDetailModel() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders", orderId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders"] });
       setEditingChargeLedger(null);
       toast({ title: "Ledger account updated" });
     },
@@ -98,7 +103,7 @@ export function useFactoryInvoiceDetailModel() {
       return res.json();
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders", orderId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders"] });
       setShowAddCharge(false);
       setNewChargeName("");
       setNewChargeAmount("");
@@ -120,7 +125,7 @@ export function useFactoryInvoiceDetailModel() {
       return res.json();
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders", orderId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders"] });
       toast({ title: data.linked > 0 ? "Ledger entries created" : "Nothing to relink", description: data.message });
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
@@ -135,7 +140,7 @@ export function useFactoryInvoiceDetailModel() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders", orderId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders"] });
       setEditingChargeAmount(null);
       setChargeAmountInput("");
       toast({ title: "Charge amount updated" });
@@ -143,8 +148,9 @@ export function useFactoryInvoiceDetailModel() {
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
-  const { data: myAccess } = useQuery<{ hiddenCostFields: string[]; fullAccess?: boolean }>({
-    queryKey: ["/api/factory/my-access"],
+  const { data: myAccess } = useQuery<FactoryMyAccess>({
+    queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
   });
   const { data: me } = useQuery<{ role: string }>({ queryKey: ["/api/auth/me"] });
   const isDeveloper = me?.role === "Developer";
@@ -153,7 +159,7 @@ export function useFactoryInvoiceDetailModel() {
   type ProformaSummary = { id: number; name: string; lineCount: number; lines?: ProformaPriceLine[] };
 
   const { data: proformas = [] } = useQuery<ProformaSummary[]>({
-    queryKey: ["/api/factory/customer-proformas", order?.customerId, "summary"],
+    queryKey: companyQueryKey("/api/factory/customer-proformas", selectedCompany?.id, order?.customerId, "summary"),
     queryFn: async () => {
       if (!order?.customerId) return [];
       const res = await fetch(`/api/factory/customer-proformas?customerId=${order.customerId}&profile=summary`, {
@@ -162,12 +168,12 @@ export function useFactoryInvoiceDetailModel() {
       if (!res.ok) throw new Error("Failed to fetch proformas");
       return res.json();
     },
-    enabled: !!order?.customerId && showProformaDialog,
+    enabled: !!order?.customerId && showProformaDialog && Boolean(selectedCompany?.id),
     staleTime: 5 * 60_000,
   });
 
   const { data: selectedProforma } = useQuery<ProformaSummary>({
-    queryKey: ["/api/factory/customer-proformas", selectedProformaId, "detail"],
+    queryKey: companyQueryKey("/api/factory/customer-proformas", selectedCompany?.id, selectedProformaId, "detail"),
     queryFn: async () => {
       const res = await fetch(`/api/factory/customer-proformas/${selectedProformaId}`, {
         credentials: "include",
@@ -175,7 +181,7 @@ export function useFactoryInvoiceDetailModel() {
       if (!res.ok) throw new Error(res.statusText || String(res.status));
       return res.json();
     },
-    enabled: showProformaDialog && !!selectedProformaId,
+    enabled: showProformaDialog && !!selectedProformaId && Boolean(selectedCompany?.id),
     staleTime: 60_000,
   });
 
@@ -187,17 +193,19 @@ export function useFactoryInvoiceDetailModel() {
     totals: { totalBales: number; totalWeightKg: string; grandTotal: string };
   }
   const { data: dispatchBatch } = useQuery<DispatchBatchSummary>({
-    queryKey: ["/api/factory/dispatch-batches", order?.dispatchBatchId],
+    queryKey: companyQueryKey("/api/factory/dispatch-batches", selectedCompany?.id, order?.dispatchBatchId),
     queryFn: async () => {
       const res = await fetch(`/api/factory/dispatch-batches/${order!.dispatchBatchId}`, { credentials: "include" });
       if (!res.ok) return null;
       return res.json();
     },
-    enabled: !!order?.dispatchBatchId,
+    enabled: !!order?.dispatchBatchId && Boolean(selectedCompany?.id),
   });
 
-  const hideExportSelling = (myAccess?.hiddenCostFields ?? []).includes("hide_export_selling_price");
-  const isAdmin = myAccess?.fullAccess === true;
+  const accessReady = myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true;
+  const hideExportSelling = !accessReady || myAccess?.hideAllCosts === true ||
+    myAccess?.hiddenCostFields.includes("hide_export_selling_price") === true;
+  const isAdmin = accessReady && myAccess?.fullAccess === true;
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -291,7 +299,7 @@ export function useFactoryInvoiceDetailModel() {
           description: `Updated ${data.repriced} bale(s) to current catalogue prices.`,
         });
       }
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders", orderId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders"] });
     },
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;
@@ -316,7 +324,7 @@ export function useFactoryInvoiceDetailModel() {
         title: "Price updated",
         description: "All bales for this article have been repriced and totals recalculated.",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders", orderId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders"] });
       setEditingArticleCode(null);
     },
     onError: (error: ClientErrorLike) => {
@@ -367,7 +375,7 @@ export function useFactoryInvoiceDetailModel() {
           description: `Updated ${data.repriced} bale(s) to production prices.`,
         });
       }
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders", orderId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders"] });
     },
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;
@@ -396,7 +404,7 @@ export function useFactoryInvoiceDetailModel() {
       } else {
         toast({ title: "Proforma prices applied", description: `Updated ${repriced} bale(s).` });
       }
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders", orderId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders"] });
       setShowProformaDialog(false);
       setSelectedProformaId("");
     },
@@ -420,7 +428,7 @@ export function useFactoryInvoiceDetailModel() {
     },
     onSuccess: () => {
       toast({ title: "Bale exchanged", description: `Replaced successfully.` });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders", orderId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders"] });
       setExchangeBale(null);
       setNewRefInput("");
     },
@@ -441,7 +449,7 @@ export function useFactoryInvoiceDetailModel() {
     },
     onSuccess: () => {
       toast({ title: "Bale removed", description: "Bale returned to stock." });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders", orderId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders"] });
       setRemoveBaleState(null);
     },
     onError: (error: ClientErrorLike) => {

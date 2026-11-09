@@ -24,15 +24,21 @@ import { FactoryDaybookFilters } from "./daybook/FactoryDaybookFilters";
 import { FactoryDaybookTable } from "./daybook/FactoryDaybookTable";
 import { FactoryDaybookDialogs } from "./daybook/FactoryDaybookDialogs";
 import type { FactoryMyAccess } from "@shared/apiTypes";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 
 export default function FactoryDaybook() {
+  const { selectedCompany } = useCompany();
   const model = useFactoryDaybookModel();
   const { activeDaybookTab, setActiveDaybookTab } = model;
   const { data: myAccess } = useQuery<FactoryMyAccess>({
-    queryKey: ["/api/factory/my-access"],
+    queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     staleTime: 5 * 60000,
   });
-  const hiddenTabs = myAccess?.hiddenCostFields ?? [];
+  const hiddenTabs = myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
+    ? myAccess.hiddenCostFields
+    : ["hide_tab_daybook_transactions","hide_tab_daybook_activity"];
   const showTransactions = !hiddenTabs.includes("hide_tab_daybook_transactions");
   const showActivity = !hiddenTabs.includes("hide_tab_daybook_activity");
   const visibleTabs = [showTransactions ? "transactions" : null, showActivity ? "activity" : null].filter(

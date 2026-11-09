@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useMainContentFocus } from "@/hooks/use-main-content-focus";
 import { PhoneSheetDialogs } from "@/components/ui/phone-sheet";
 import { useDocumentAppShell } from "@/hooks/use-document-app-shell";
@@ -16,6 +16,7 @@ import { WorkspaceRouteBoundary } from "@/components/ui/workspace-route-boundary
 import { PropertiesRoutes } from "@/app/PropertiesRoutes";
 import { canUseAdminSearch, type ShellUser } from "./shellUser";
 import { MODULE_ACCENT } from "@/components/sidebar/sidebarPrimitives";
+import "@/styles/properties-unified-theme.css";
 
 interface PropertiesShellProps {
   user: ShellUser;
@@ -38,12 +39,21 @@ export function PropertiesShell({ user, currentLocation, handleLogout, leaveConf
   useScrollOverflowProbe(propertiesContainerRef);
   const hasAdminSearch = canUseAdminSearch(user);
 
+  // Fetch the frequently used Agent Ledger module in the background after the shell
+  // becomes interactive, instead of waiting until the first sidebar navigation.
+  // The same dynamic import is reused by React.lazy when the route opens.
+  useEffect(() => {
+    void import("@/pages/Agents").catch(() => {
+      // An unavailable chunk is handled by lazyRetry when the route is opened.
+    });
+  }, []);
+
   return (
     <PhoneSheetDialogs>
       <AppModeProvider mode="properties">
         <SkipLink>{t("accessibility.skipToMainContent")}</SkipLink>
         <SidebarProvider style={style as React.CSSProperties}>
-          <div ref={propertiesContainerRef} className="flex h-full w-full min-w-0 overflow-hidden">
+          <div ref={propertiesContainerRef} data-properties-shell="" className="flex h-full w-full min-w-0 overflow-hidden">
             <PropertiesSidebar user={user} onLogout={handleLogout} />
             <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
               <OfflineBanner />

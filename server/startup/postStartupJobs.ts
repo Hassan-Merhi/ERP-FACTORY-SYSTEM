@@ -17,16 +17,32 @@ export function runPostStartupJobs(): void {
   if (installed) return;
   installed = true;
 
-  // One-time, owner-approved POS Jnah 2026/27 rent correction (company 17).
-  // Locked and audited; only runs in the verified production database/service,
-  // with an explicit opt-in and exact before-image guards.
-  if (process.env.ERP_REPAIR_POS_JNAH_PREPAID_20261109 === "approved-company17-contract36-20000") {
+  // Explicitly approved Factory rent cleanup, company 12 only. All voucher
+  // changes are to existing IDs; no cash or prepaid ledger lines are edited.
+  // Opt-in is one-shot; after verifying the live balances, remove the flag.
+  if (process.env.ERP_REPAIR_FACTORY_RENT_SAFE_20261109 === "company12-keep-prepaid29566.66-retire13139-fix-memos") {
+    const factoryRentTimer = setTimeout(async () => {
+      try {
+        const { runApprovedFactoryRentSafeRepair } = await import("./runApprovedFactoryRentSafeRepair");
+        await runApprovedFactoryRentSafeRepair();
+      } catch (error: unknown) {
+        logger.error("[FactoryRentSafeRepair] Refused or rolled back historical correction", {
+          error: getErrorMessage(error),
+        });
+      }
+    }, 3000);
+    unrefTimer(factoryRentTimer);
+  }
+
+  // Owner-approved, single-use POS Jnah in-place historical voucher reconciliation.
+  // The old extra-journal posting is retired and cannot run again.
+  if (process.env.ERP_REWORK_POS_JNAH_VOUCHERS_20261109 === "approved-company17-original10613-retire17399") {
     const posJnahRentTimer = setTimeout(async () => {
       try {
-        const { runApprovedPosJnahPrepaidRepair } = await import("./runApprovedPosJnahPrepaidRepair");
-        await runApprovedPosJnahPrepaidRepair();
+        const { runPosJnahExistingVoucherRepair } = await import("./posJnahOriginalVoucherRework");
+        await runPosJnahExistingVoucherRepair();
       } catch (error: unknown) {
-        logger.error("[PosJnahPrepaidRepair] Refused or rolled back without partial changes", {
+        logger.error("[PosJnahOriginalVoucherRepair] Refused; transaction rolled back", {
           error: getErrorMessage(error),
         });
       }

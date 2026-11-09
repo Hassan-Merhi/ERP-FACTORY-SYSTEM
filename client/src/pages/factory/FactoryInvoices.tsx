@@ -58,6 +58,7 @@ const INVOICE_OPTIONAL_COLUMNS: { key: InvoiceColumnKey; label: string }[] = [
 ];
 
 export default function FactoryInvoices() {
+  const { selectedCompany } = useCompany();
   const { toast } = useToast();
   const [, navigate] = useLocation();
   const { formatDisplayDate } = useDateFormat();
@@ -135,13 +136,14 @@ export default function FactoryInvoices() {
     [toast]
   );
 
-  const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: ["/api/factory/my-access"], staleTime: 5 * 60000 });
-  const isAdmin = myAccess?.fullAccess === true;
+  const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id), enabled: Boolean(selectedCompany?.id), staleTime: 5 * 60000 });
+  const accessReady = Boolean(myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess);
+  const isAdmin = accessReady && myAccess?.fullAccess === true;
   const { data: authUser } = useQuery<AuthMe>({ queryKey: ["/api/auth/me"], staleTime: 5 * 60000 });
-  const showBookingInfo = ["admin", "owner", "developer"].includes(
+  const showBookingInfo = accessReady && ["admin", "owner", "developer"].includes(
     String(authUser?.currentRole || authUser?.role || "").toLowerCase()
   );
-  const hidden: string[] = myAccess?.hiddenCostFields ?? [];
+  const hidden: string[] = accessReady ? myAccess!.hiddenCostFields : ["hide_invoicing_proforma_col", "hide_invoicing_totals_usd"];
   const hideProformaCol = !isAdmin || hidden.includes("hide_invoicing_proforma_col");
   const hideTotalsUsd = hidden.includes("hide_invoicing_totals_usd");
 
@@ -168,7 +170,8 @@ export default function FactoryInvoices() {
   };
 
   const { data: customers = [] } = useQuery<Customer[]>({
-    queryKey: ["/api/factory/customers"],
+    queryKey: companyQueryKey("/api/factory/customers", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
   });
 
   const queryParams = new URLSearchParams();
@@ -181,7 +184,8 @@ export default function FactoryInvoices() {
     isLoading,
     isError,
   } = useQuery<CustomerOrder[]>({
-    queryKey: [`/api/factory/customer-orders${queryString ? `?${queryString}` : ""}`, customerFilter, showHidden],
+    queryKey: companyQueryKey(`/api/factory/customer-orders${queryString ? `?${queryString}` : ""}`, selectedCompany?.id, customerFilter, showHidden),
+    enabled: Boolean(selectedCompany?.id),
   });
 
   const changeCustomerMutation = useMutation({
@@ -453,7 +457,7 @@ export default function FactoryInvoices() {
       )}
 
       {!isLoading && <InvoiceDashboardMetrics orders={scopedOrders} hideTotalsUsd={hideTotalsUsd} />}
-      <div className="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm dark:bg-[#0e1a2b]">
+      <div className="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm dark:bg-card">
         {/* Toolbar strip */}
         <div className="flex flex-wrap items-center justify-between gap-2.5 border-b border-border/60 bg-blue-500/[0.025] px-3 py-3">
           <div className="flex flex-wrap items-center gap-1.5" data-testid="filter-tabs">
@@ -621,7 +625,7 @@ export default function FactoryInvoices() {
           <div className="overflow-x-auto">
             <Table className="text-xs [&_td]:px-2.5 [&_td]:py-2 [&_th]:h-10 [&_th]:px-2.5 [&_th]:py-2">
               <TableHeader>
-                <TableRow className="border-b-2 border-border/60 bg-slate-100/80 hover:bg-slate-100/80 dark:bg-[#172940] dark:hover:bg-[#172940]">
+                <TableRow className="border-b-2 border-border/60 bg-slate-100/80 hover:bg-slate-100/80 dark:bg-muted dark:hover:bg-muted">
                   {/* Drag handle column */}
                   <TableHead className="w-7 px-1" />
                   <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Customer</TableHead>

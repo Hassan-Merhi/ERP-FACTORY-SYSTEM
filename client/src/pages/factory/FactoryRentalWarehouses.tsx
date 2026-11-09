@@ -8,7 +8,7 @@ export default function FactoryRentalWarehouses() {
       pageTitle="Factory — Warehouse Rentals"
       pageIcon={<Warehouse className="h-7 w-7 text-orange-600" />}
       testIdPrefix="factory-rental-warehouses"
-      apiBase="/api/factory/rental"
+      rentalModule="FACTORY"
     />
   );
 }

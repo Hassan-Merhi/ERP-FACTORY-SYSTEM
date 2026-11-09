@@ -2,16 +2,11 @@ import { formatMoneyDisplay } from "@/lib/moneyDisplay";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
-import { Download, FileSpreadsheet, FileText, PackageMinus, PackagePlus, RefreshCw, TrendingDown } from "lucide-react";
+import { PackageMinus, PackagePlus, RefreshCw, TrendingDown } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
+import { ErpReportExportMenu, ErpReportPrintFooter } from "@/erp-core";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -516,21 +511,16 @@ export default function StockInSalesReportDetail() {
           </span>
         }
       >
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="gap-2 print:hidden" disabled={isLoading || isExporting}>
-              {isExporting ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} Export
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={exportExcel}>
-              <FileSpreadsheet className="mr-2 h-4 w-4" /> Export Excel
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => window.print()}>
-              <FileText className="mr-2 h-4 w-4" /> Export PDF
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <ErpReportExportMenu
+          size="sm"
+          className="gap-2 print:hidden"
+          busy={isExporting}
+          disabled={isLoading}
+          options={[
+            { id: "stock-flow-excel", label: "Export Excel", kind: "excel", onSelect: exportExcel },
+            { id: "stock-flow-print", label: "Print / Save PDF", kind: "print", onSelect: () => window.print() },
+          ]}
+        />
       </PageHeader>
 
       <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
@@ -883,9 +873,12 @@ export default function StockInSalesReportDetail() {
         </p>
       )}
 
-      <div className="hidden print:block text-xs text-muted-foreground">
-        Generated {format(new Date(), "yyyy-MM-dd HH:mm")}
-      </div>
+      <ErpReportPrintFooter
+        title="Stock Flow Details"
+        companyName={selectedCompany?.name}
+        fromDate={startDate}
+        toDate={endDate}
+      />
     </div>
   );
 }

@@ -16,17 +16,27 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useState, useEffect } from "react";
 import { PageHeader } from "@/components/PageHeader";
-import { DataTableToolbar } from "@/components/DataTableToolbar";
+import { ErpListFilters, ErpListTable, ErpFormActions, ErpPendingButton, ErpRecordAction, useErpRecordChangeAccess as useExistingRecordChangeAccess } from "@/erp-core";
+import { erpCompanyDataKey, invalidateErpDataFamilies } from "@/erp-core/erpData";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { insertCustomerSchema, type Customer } from "@shared/schema";
 import { useForm } from "react-hook-form";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+  FormDescription,
+} from "@/components/ui/form";
 import { zodResolver } from "@/lib/form-resolver";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
+
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { z } from "zod";
 import { usePaginatedFilterState } from "@/hooks/use-paginated-filter-state";
-import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
+
 
 const formSchema = insertCustomerSchema.extend({
   legalName: z.string().min(1, "Legal name is required"),
@@ -82,10 +92,11 @@ function CompanyCustomers() {
     (Customer & { balance: number; balanceSide: string }) | null
   >(null);
 
+  const statementUrl = `/api/customers/${statementCustomer?.id ?? "no-customer"}/transactions`;
   const { data: ledgerTxns = [], isLoading: txnsLoading } = useQuery({
-    queryKey: ["/api/customers", statementCustomer?.id, "transactions"],
-    queryFn: () => fetch(`/api/customers/${statementCustomer!.id}/transactions`).then((r) => r.json()),
-    enabled: !!statementCustomer?.id,
+    queryKey: erpCompanyDataKey(statementUrl, selectedCompany?.id),
+    queryFn: () => fetch(statementUrl).then((r) => r.json()),
+    enabled: selectedCompany?.id != null && statementCustomer?.id != null,
   });
 
   // Paid retail sales do not generate customer receivables, but they are
@@ -102,7 +113,7 @@ function CompanyCustomers() {
   });
 
   const { data: customers = [], isLoading } = useQuery<(Customer & { balance: number; balanceSide: string })[]>({
-    queryKey: ["/api/customers/stats", selectedCompany?.id],
+    queryKey: erpCompanyDataKey("/api/customers/stats", selectedCompany?.id),
     enabled: !!selectedCompany?.id,
   });
 
@@ -135,10 +146,11 @@ function CompanyCustomers() {
     },
     onSuccess: () => {
       toast({ title: "Success", description: "Customer created successfully" });
-      queryClient.invalidateQueries({ queryKey: ["/api/customers/stats", selectedCompany?.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/customers", selectedCompany?.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/accounts/all", selectedCompany?.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/ledger-accounts", selectedCompany?.id] });
+      void invalidateErpDataFamilies(queryClient, [
+        "/api/customers",
+        "/api/accounts/all",
+        "/api/ledger-accounts",
+      ]);
       setIsCreateOpen(false);
       form.reset({
         companyId: selectedCompany?.id || 0,
@@ -160,10 +172,11 @@ function CompanyCustomers() {
     },
     onSuccess: () => {
       toast({ title: "Success", description: "Customer updated successfully" });
-      queryClient.invalidateQueries({ queryKey: ["/api/customers/stats", selectedCompany?.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/customers", selectedCompany?.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/accounts/all", selectedCompany?.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/ledger-accounts", selectedCompany?.id] });
+      void invalidateErpDataFamilies(queryClient, [
+        "/api/customers",
+        "/api/accounts/all",
+        "/api/ledger-accounts",
+      ]);
       setIsEditOpen(false);
       setEditingCustomer(null);
       form.reset({
@@ -306,7 +319,7 @@ function CompanyCustomers() {
             />
           </div>
         )}
-        <div className="flex justify-end gap-2 pt-2">
+        <ErpFormActions>
           <Button
             type="button"
             variant="outline"
@@ -315,20 +328,15 @@ function CompanyCustomers() {
           >
             Cancel
           </Button>
-          <Button
+          <ErpPendingButton
             type="submit"
-            disabled={isEdit ? updateMutation.isPending : createMutation.isPending}
+            pending={isEdit ? updateMutation.isPending : createMutation.isPending}
+            pendingLabel={isEdit ? "Updating..." : "Creating..."}
             data-testid={isEdit ? "button-submit-edit-customer" : "button-submit-customer"}
           >
-            {isEdit
-              ? updateMutation.isPending
-                ? "Updating..."
-                : "Update Customer"
-              : createMutation.isPending
-                ? "Creating..."
-                : "Create Customer"}
-          </Button>
-        </div>
+            {isEdit ? "Update Customer" : "Create Customer"}
+          </ErpPendingButton>
+        </ErpFormActions>
       </form>
     </Form>
   );
@@ -389,7 +397,7 @@ function CompanyCustomers() {
       </div>
 
       {/* Shared search and phone filter sheet; original persisted filters remain unchanged. */}
-      <DataTableToolbar
+      <ErpListFilters
         search={searchQuery}
         onSearchChange={(value) => setFilter("searchQuery", value)}
         searchPlaceholder="Search customers..."
@@ -420,7 +428,7 @@ function CompanyCustomers() {
 
       {/* Table */}
       <div className="border rounded-xl overflow-hidden">
-        <Table mobileLayout="cards">
+        <ErpListTable pageKey="customers" companyId={selectedCompany?.id} mobileLayout="cards" scrollLabel="Customer accounts">
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
               <TableHead className="text-xs h-9 font-semibold">Customer</TableHead>
@@ -498,27 +506,27 @@ function CompanyCustomers() {
                   </TableCell>
                   <TableCell className="py-3">
                     <div className="flex items-center justify-end opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity">
-                      <Button
+                      <ErpRecordAction
                         variant="ghost"
                         size="icon"
                         onClick={(e) => {
                           e.stopPropagation();
                           if (recordChanges.allowed) handleEditClick(customer);
                         }}
-                        disabled={!recordChanges.allowed}
-                        title={recordChanges.reason ?? undefined}
+                        permitted={recordChanges.allowed}
+                        deniedReason={recordChanges.reason}
                         aria-label={recordChanges.reason ?? "Edit customer"}
                         data-testid={`button-edit-customer-${customer.id}`}
                       >
                         <Pencil className="h-4 w-4" />
-                      </Button>
+                      </ErpRecordAction>
                     </div>
                   </TableCell>
                 </TableRow>
               ))
             )}
           </TableBody>
-        </Table>
+        </ErpListTable>
       </div>
 
       {/* Edit Dialog */}

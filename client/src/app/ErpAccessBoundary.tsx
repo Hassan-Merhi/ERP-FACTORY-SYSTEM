@@ -4,13 +4,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ErrorState, LoadingState } from "@/components/ui/page-state";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { useCompany } from "@/contexts/CompanyContext";
-import { companyQueryKey } from "@/lib/companyQueryScope";
-import { accessQueryPolicy } from "@/lib/queryPolicies";
+import { erpPageAccessQueryOptions } from "./erpAccessQuery";
+import type { ErpFeatureAccess } from "./erpAccess";
 
-export interface ErpPageAccess {
-  fullAccess: boolean;
-  pageKeys: string[];
-}
+export type ErpPageAccess = ErpFeatureAccess;
 
 export const LEGACY_ERP_PAGE_ACCESS_QUERY_KEY = ["/api/my-erp-pages"] as const;
 
@@ -58,9 +55,7 @@ export function ErpAccessBoundary({ user, children }: ErpAccessBoundaryProps) {
   const [synchronizedCompanyId, setSynchronizedCompanyId] = useState<number | string | null>(null);
 
   const accessQuery = useQuery<ErpPageAccess>({
-    queryKey: companyQueryKey("/api/my-erp-pages", companyId),
-    ...accessQueryPolicy,
-    enabled: Boolean(user && companyId != null),
+    ...erpPageAccessQueryOptions(companyId, Boolean(user)),
     retry: 2,
     retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 2_000),
     refetchOnReconnect: true,

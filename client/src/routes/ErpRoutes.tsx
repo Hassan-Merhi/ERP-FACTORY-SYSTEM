@@ -8,6 +8,9 @@ const ErpHelpTraining = lazy(() =>
 );
 const TicketManagement = lazy(() => import("@/pages/TicketManagement"));
 import { canAccessAnyErpFeature, canAccessErpFeature, type ErpFeatureAccess } from "@/app/erpAccess";
+import { erpPageAccessQueryOptions } from "@/app/erpAccessQuery";
+import { useCompany } from "@/contexts/CompanyContext";
+import { canEnterErpGuardedRoute, effectiveErpRole, isErpRouteRoleAllowed } from "@shared/erpNavigationPolicy";
 import type { FeatureKey } from "@shared/schema";
 import SpOverview from "@/pages/sp/SpOverview";
 import {
@@ -112,7 +115,6 @@ import {
   VoucherEdit,
   Vouchers,
 } from "@/lazyPages";
-import { isExistingRecordReadOnlyRole } from "@shared/createOnlyRolePolicy";
 
 interface ErpRouteUser {
   role?: string | null;
@@ -126,20 +128,17 @@ interface ErpRoutesProps {
 type RouteComponent = ComponentType;
 
 export function ErpRoutes({ user }: ErpRoutesProps) {
+  const { selectedCompany } = useCompany();
   const { data: erpAccess } = useQuery<ErpFeatureAccess>({
-    queryKey: ["/api/my-erp-pages"],
-    enabled: !!user,
-    staleTime: 30000,
+    ...erpPageAccessQueryOptions(selectedCompany?.id, Boolean(user)),
   });
 
-  const effectiveRole = user?.currentRole ?? user?.role ?? "";
-  const isDeveloper = effectiveRole === "Developer";
-  const isAdminOrDev = effectiveRole === "Admin" || isDeveloper;
-  const isAdminOwnerOrDev = effectiveRole === "Admin" || effectiveRole === "Owner" || isDeveloper;
+  const effectiveRole = effectiveErpRole(user);
+  const roleAllowed = (path: string) => isErpRouteRoleAllowed(path, effectiveRole);
   const canAccess = (key: FeatureKey) => canAccessErpFeature(erpAccess, key);
   const canAccessAny = (keys: readonly FeatureKey[]) => canAccessAnyErpFeature(erpAccess, keys);
   const G = (path: string, key: FeatureKey, Comp: RouteComponent) =>
-    canAccess(key) ? (
+    canAccess(key) && roleAllowed(path) ? (
       <Route path={path} component={Comp} />
     ) : (
       <Route path={path}>
@@ -147,7 +146,7 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
       </Route>
     );
   const R = (path: string, allowed: boolean, Comp: RouteComponent) =>
-    allowed ? (
+    allowed && canEnterErpGuardedRoute(path, effectiveRole) ? (
       <Route path={path} component={Comp} />
     ) : (
       <Route path={path}>
@@ -159,10 +158,10 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
     <Switch>
       <Route path="/tickets/new">{() => <TicketManagement sourceMode="erp" />}</Route>
       <Route path="/tickets">{() => <TicketManagement sourceMode="erp" />}</Route>
-      <Route path="/">{() => (isAdminOrDev ? <ContainersOTW /> : <Redirect replace to="/tracking" />)}</Route>
+      <Route path="/">{() => (roleAllowed("/") ? <ContainersOTW /> : <Redirect replace to="/tracking" />)}</Route>
       <Route path="/tracking" component={TrackingHub} />
       <Route path="/help-training">{() => <ErpHelpTraining user={user} />}</Route>
-      {R("/financial-overview", !isExistingRecordReadOnlyRole(effectiveRole) && canAccess("dashboard"), Dashboard)}
+      {R("/financial-overview", canAccess("dashboard"), Dashboard)}
 
       {canAccess("pos") ? (
         <Route path="/pos">{() => <POSPage />}</Route>
@@ -178,7 +177,7 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
           <Redirect replace to="/tracking" />
         </Route>
       )}
-      {effectiveRole !== "POS" && canAccess("pos") ? (
+      {roleAllowed("/pos-item-replacement") && canAccess("pos") ? (
         <Route path="/pos-item-replacement" component={POSItemReplacement} />
       ) : (
         <Route path="/pos-item-replacement">
@@ -228,10 +227,10 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
         </Route>
       )}
 
-      {R("/mock-containers-otw", isAdminOrDev, ContainersOTW as RouteComponent)}
-      {R("/containers-otw", isAdminOrDev, ContainersOTW as RouteComponent)}
-      {R("/mock-git", isAdminOrDev, GITMockup as RouteComponent)}
-      {R("/git", isAdminOrDev, GITMockup as RouteComponent)}
+      {R("/mock-containers-otw", true, ContainersOTW as RouteComponent)}
+      {R("/containers-otw", true, ContainersOTW as RouteComponent)}
+      {R("/mock-git", true, GITMockup as RouteComponent)}
+      {R("/git", true, GITMockup as RouteComponent)}
 
       {G("/containers/:containerId/verification", "containers", ContainerVerification)}
       {G("/containers/:id", "containers", ContainerDetailPage)}
@@ -248,28 +247,28 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
       {G("/offloads/:id", "containers", OffloadDetail)}
 
       {G("/po-import", "containers", POImport)}
-      {R("/ai-validation", isDeveloper, AiValidationPage)}
-      {R("/ai-command-center", isDeveloper, AICommandCenter)}
+      {R("/ai-validation", true, AiValidationPage)}
+      {R("/ai-command-center", true, AICommandCenter)}
       {G("/pos-import", "pos", POSImport)}
       <Route path="/agents" component={Agents} />
       {G("/analytics", "analytics", Analytics)}
 
-      {R("/accounts/historical-openings", isAdminOwnerOrDev && canAccess("accounts"), HistoricalOpenings)}
+      {R("/accounts/historical-openings", canAccess("accounts"), HistoricalOpenings)}
       {G("/accounts", "accounts", Accounts)}
-      {R("/accounting/toolbox", isDeveloper, AccountingToolbox)}
-      {R("/accounting/open-items", isDeveloper, AccountingOpenItems)}
-      {R("/accounting/cash-bank", isDeveloper, CashBankReconciliation)}
-      {R("/accounting/monetary-fx", isDeveloper, MonetaryFxAccounting)}
-      {R("/accounting/erp-inventory", isDeveloper, ErpInventoryAccounting)}
-      {R("/accounting/factory-production", isDeveloper, FactoryProductionAccounting)}
-      {R("/accounting/rentals", isDeveloper, UnifiedRentalAccounting)}
-      {R("/accounting/consolidation", isDeveloper, GroupConsolidationAccounting)}
-      {R("/accounting/history", isDeveloper, HistoricalAccounting)}
-      {R("/accounting/statements", isDeveloper, ProfessionalFinancialStatements)}
-      {R("/accounting/fiscal-review", isDeveloper, FiscalCloseReview)}
-      {R("/accounting/dashboard", isDeveloper, UnifiedAccountingDashboard)}
-      {R("/accounting/rollout", isDeveloper, UnifiedAccountingRollout)}
-      {R("/cost-centers", isDeveloper && canAccess("accounts"), CostCenters)}
+      {R("/accounting/toolbox", true, AccountingToolbox)}
+      {R("/accounting/open-items", true, AccountingOpenItems)}
+      {R("/accounting/cash-bank", true, CashBankReconciliation)}
+      {R("/accounting/monetary-fx", true, MonetaryFxAccounting)}
+      {R("/accounting/erp-inventory", true, ErpInventoryAccounting)}
+      {R("/accounting/factory-production", true, FactoryProductionAccounting)}
+      {R("/accounting/rentals", true, UnifiedRentalAccounting)}
+      {R("/accounting/consolidation", true, GroupConsolidationAccounting)}
+      {R("/accounting/history", true, HistoricalAccounting)}
+      {R("/accounting/statements", true, ProfessionalFinancialStatements)}
+      {R("/accounting/fiscal-review", true, FiscalCloseReview)}
+      {R("/accounting/dashboard", true, UnifiedAccountingDashboard)}
+      {R("/accounting/rollout", true, UnifiedAccountingRollout)}
+      {R("/cost-centers", canAccess("accounts"), CostCenters)}
       {canAccess("accounts") ? (
         <Route path="/ledger-monthly/:accountId" component={LedgerMonthlySummary} />
       ) : (
@@ -338,7 +337,7 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
           <Redirect replace to="/tracking" />
         </Route>
       )}
-      {R("/transaction-journal", effectiveRole !== "ERP Tester" && canAccess("daybook"), TransactionJournal)}
+      {R("/transaction-journal", canAccess("daybook"), TransactionJournal)}
       {G("/payroll", "payroll", Payroll)}
       {G("/create", "create", AccountingCreate)}
 
@@ -401,10 +400,10 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
       {G("/sales-report/detail", "sales_report", SalesReportDetail)}
       {G("/sales-report/comparison", "sales_report", SalesReportComparison)}
 
-      {R("/company-transfer", isDeveloper, CompanyTransfer)}
-      {R("/net-profit-report", isDeveloper, NetProfitReport)}
-      {R("/spreadsheet", isDeveloper, SpreadsheetEditor)}
-      {R("/live-sheets", isDeveloper, LiveSheets)}
+      {R("/company-transfer", true, CompanyTransfer)}
+      {R("/net-profit-report", true, NetProfitReport)}
+      {R("/spreadsheet", true, SpreadsheetEditor)}
+      {R("/live-sheets", true, LiveSheets)}
 
       {canAccess("stock_items") ? (
         <Route path="/combined-inventory">
@@ -437,7 +436,7 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
       {G("/closing-stock-summary", "stock_items", ClosingStockSummary)}
       {G("/closing-stock/:groupId", "stock_items", ClosingStockDetail)}
       {G("/barcode-manager", "stock_items", BarcodeManager)}
-      {R("/chat", isDeveloper, Chat)}
+      {R("/chat", true, Chat)}
 
       <Route path="/factory-production">
         <Redirect to="/factory/raw-stock" />
@@ -457,23 +456,23 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
       <Route path="/erp/rental/payments" component={ErpRentalPayments} />
       <Route path="/conflicts" component={ConflictCenter} />
 
-      {R("/settings", isAdminOrDev, Settings)}
-      {R("/intercompany-links", isAdminOrDev, IntercompanyLinks)}
+      {R("/settings", true, Settings)}
+      {R("/intercompany-links", true, IntercompanyLinks)}
       <Route path="/intercompany-requests" component={IntercompanyRequests} />
-      {R("/orphaned-records", isAdminOrDev, OrphanedRecords)}
-      {R("/deleted-items", isAdminOrDev, DeletedItems)}
-      {R("/chatbot-settings", isAdminOrDev, ChatbotSettings)}
-      {R("/notification-settings", isAdminOrDev, NotificationSettings)}
-      {R("/account-groups", isAdminOrDev, AccountGroups)}
-      {R("/import-cycle-diagnostics", isAdminOrDev, ImportCycleDiagnostics)}
-      {R("/inventory-repair", isAdminOrDev, InventoryRepair)}
-      {R("/balance-repair", isAdminOrDev, BalanceRepair)}
-      {R("/convergence-reconciliation", isAdminOwnerOrDev, ConvergenceReconciliation)}
-      {R("/net-position-details", isAdminOrDev, NetProfitDetails)}
-      {R("/company-data-reset", isAdminOrDev, CompanyDataReset)}
-      {R("/account-migration", isAdminOrDev, AccountMigration)}
-      {R("/account-transfer", isAdminOrDev, AccountTransfer)}
-      {R("/my-settings", effectiveRole !== "ERP Tester", MySettings)}
+      {R("/orphaned-records", true, OrphanedRecords)}
+      {R("/deleted-items", true, DeletedItems)}
+      {R("/chatbot-settings", true, ChatbotSettings)}
+      {R("/notification-settings", true, NotificationSettings)}
+      {R("/account-groups", true, AccountGroups)}
+      {R("/import-cycle-diagnostics", true, ImportCycleDiagnostics)}
+      {R("/inventory-repair", true, InventoryRepair)}
+      {R("/balance-repair", true, BalanceRepair)}
+      {R("/convergence-reconciliation", true, ConvergenceReconciliation)}
+      {R("/net-position-details", true, NetProfitDetails)}
+      {R("/company-data-reset", true, CompanyDataReset)}
+      {R("/account-migration", true, AccountMigration)}
+      {R("/account-transfer", true, AccountTransfer)}
+      {R("/my-settings", true, MySettings)}
 
       <Route path="/sp" component={SpOverview} />
       <Route path="/sp/opening-stock" component={SpOpeningStock} />

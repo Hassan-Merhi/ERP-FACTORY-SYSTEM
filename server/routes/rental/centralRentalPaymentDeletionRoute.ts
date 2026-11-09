@@ -1,6 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { RentalAutoTransferScopeError } from "../../services/rental/autoTransferScope";
 import { requireAuth } from "../../auth";
+import { requireRentalDeletePermission } from "./rentalRoutePermissions";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { deleteRentalPaymentGroup, type RentalModule } from "../../services/rental/rentalPaymentDeletionService";
@@ -8,7 +9,7 @@ import { getCompanyId } from "./shared";
 import { sessionRetirementActor } from "../../services/accounting/voucherRetirement";
 
 export function registerCentralRentalPaymentDeletionRoute(app: Express, module: RentalModule, urlPrefix: string): void {
-  app.delete(`${urlPrefix}/payments/:id`, requireAuth, async (req: Request, res: Response) => {
+  app.delete(`${urlPrefix}/payments/:id`, requireAuth, requireRentalDeletePermission, async (req: Request, res: Response) => {
     try {
       const companyId = Number(getCompanyId(req));
       if (!Number.isInteger(companyId) || companyId <= 0) {

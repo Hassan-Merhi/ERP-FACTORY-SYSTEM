@@ -196,7 +196,7 @@ export default function FactoryStockQueryWorkspace() {
           title="Stock Query – Factory"
           subtitle="Live inventory in hand and finalized sales by product, customer and date"
         />
-        <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-800 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-200">
+        <span className="rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
           Read-only · Factory
         </span>
       </div>
@@ -354,7 +354,7 @@ export default function FactoryStockQueryWorkspace() {
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-xs font-semibold text-muted-foreground">{title}</p>
                   <span
-                    className={`rounded-lg p-2 ${tone === "green" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" : tone === "amber" ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" : "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"}`}
+                    className={`rounded-lg p-2 ${tone === "green" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" : tone === "amber" ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" : "bg-primary/10 text-primary"}`}
                   >
                     <Icon className="h-4 w-4" />
                   </span>
@@ -367,7 +367,7 @@ export default function FactoryStockQueryWorkspace() {
 
           <div className="grid gap-4 xl:grid-cols-2">
             <section className="min-w-0 overflow-hidden rounded-2xl border bg-card shadow-sm">
-              <div className="flex flex-wrap items-center gap-2 border-b bg-gradient-to-r from-blue-700 to-blue-600 p-3.5 text-white">
+              <div className="flex flex-wrap items-center gap-2 border-b factory-brand-gradient p-3.5 text-white">
                 <Package className="h-5 w-5" />
                 <h2 className="font-semibold">Inventory in Hand (by item)</h2>
                 <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs">{products.length} items</span>
@@ -441,7 +441,7 @@ export default function FactoryStockQueryWorkspace() {
                         tabIndex={0}
                         aria-selected={selectedId === p.id}
                         data-testid={`row-stock-item-${p.id}`}
-                        className={`cursor-pointer border-t transition-colors hover:bg-muted/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${selectedId === p.id ? "bg-blue-50 dark:bg-blue-950/35" : ""}`}
+                        className={`cursor-pointer border-t transition-colors hover:bg-muted/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${selectedId === p.id ? "bg-primary/10" : ""}`}
                       >
                         <td className={cell}>
                           <span className="block font-medium">{mhd.nameFor(p.code, p.name)}</span>
@@ -473,7 +473,7 @@ export default function FactoryStockQueryWorkspace() {
             </section>
 
             <section className="min-w-0 overflow-hidden rounded-2xl border bg-card shadow-sm">
-              <div className="flex flex-wrap items-center gap-2 border-b bg-gradient-to-r from-emerald-700 to-emerald-600 p-3.5 text-white">
+              <div className="flex flex-wrap items-center gap-2 border-b factory-brand-gradient p-3.5 text-white">
                 <ShoppingCart className="h-5 w-5" />
                 <h2 className="font-semibold">Finalized Sales (by item)</h2>
                 <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs">{sales.length} rows</span>
@@ -552,7 +552,7 @@ export default function FactoryStockQueryWorkspace() {
                 </Button>
               </div>
               <div className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-xl border bg-blue-50/60 p-3 dark:bg-blue-950/20">
+                <div className="rounded-xl border bg-primary/10 p-3">
                   <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     <Warehouse className="h-4 w-4" /> Current inventory
                   </p>
@@ -566,7 +566,7 @@ export default function FactoryStockQueryWorkspace() {
                   <p className="mt-1 text-xl font-bold">{fmt(selected.soldBales)} bales</p>
                   <p className="text-xs text-muted-foreground">{fmt(selected.soldKg)} kg</p>
                 </div>
-                <div className="rounded-xl border bg-violet-50/60 p-3 dark:bg-violet-950/20">
+                <div className="rounded-xl border bg-primary/10 p-3">
                   <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     <TrendingUp className="h-4 w-4" /> Sales total
                   </p>
@@ -625,7 +625,7 @@ export default function FactoryStockQueryWorkspace() {
                         >
                           <span className="text-[10px] text-muted-foreground">{fmt(qty)}</span>
                           <div
-                            className="w-full max-w-14 rounded-t bg-blue-500 dark:bg-blue-400"
+                            className="w-full max-w-14 rounded-t bg-primary"
                             style={{ height: `${Math.max(4, Math.round((qty / maxTrend) * 112))}px` }}
                           />
                           <span className="text-[10px] text-muted-foreground">{day.slice(5)}</span>

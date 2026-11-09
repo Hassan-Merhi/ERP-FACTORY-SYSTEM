@@ -413,7 +413,7 @@ export const applicationFrenchTranslations = {
   "offlineReads.intro":
     "Enregistrez des données en lecture seule vérifiées pour ce compte et cette société. La connexion hors ligne et les pages non mises en cache ne sont pas encore prises en charge.",
   "supplierPartner.postOpeningStock": "Enregistrer le stock d'ouverture",
-  "monthlyProduction.title": "Tableau de production mensuelle",
+  "monthlyProduction.title": "Production mensuelle",
   "monthlyProduction.subtitle": "Balles produites par article et par mois · ordre partagé",
   "monthlyProduction.refresh": "Actualiser",
   "monthlyProduction.exportCsv": "Exporter CSV",

@@ -7,13 +7,18 @@ import FactoryCustomers from "@/pages/factory/FactoryCustomers";
 import FactorySuppliers from "@/pages/factory/FactorySuppliers";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import type { FactoryMyAccess } from "@shared/apiTypes";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 
 type Section = "customers" | "suppliers";
 const SECTIONS = ["customers", "suppliers"] as const;
 
 export default function FactoryPartiesHub() {
-  const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: ["/api/factory/my-access"], staleTime: 5 * 60000 });
-  const hidden = myAccess?.hiddenCostFields ?? [];
+  const { selectedCompany } = useCompany();
+  const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id), enabled: Boolean(selectedCompany?.id), staleTime: 5 * 60000 });
+  const hidden = myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
+    ? myAccess.hiddenCostFields
+    : ["hide_tab_parties_customers", "hide_tab_parties_suppliers"];
   const sections: Section[] = SECTIONS.filter((section) =>
     section === "customers"
       ? !hidden.includes("hide_tab_parties_customers")
@@ -38,14 +43,14 @@ export default function FactoryPartiesHub() {
   const showSuppliers = sections.includes("suppliers");
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-slate-50/30 dark:bg-[#080f20]">
+    <div className="flex h-full flex-col overflow-hidden bg-background">
       <Tabs
         value={section}
         onValueChange={(value) => setSection(value as Section)}
         className="flex flex-col h-full overflow-hidden"
       >
         {/* Presentation only: preserve the hub query state and permission-gated tabs. */}
-        <div className="relative mx-4 mt-4 shrink-0 overflow-hidden rounded-2xl border border-blue-500/15 bg-linear-to-r from-blue-500/10 via-background to-cyan-500/5 px-4 py-4 shadow-sm dark:border-blue-400/20 dark:from-blue-600/15 dark:via-[#0b1933] dark:to-blue-950/30 [&>header]:mb-0 [&>header]:border-b-0 [&>header]:pb-0">
+        <div className="relative mx-4 mt-4 shrink-0 overflow-hidden rounded-2xl border border-blue-500/15 bg-linear-to-r from-blue-500/10 via-background to-cyan-500/5 px-4 py-4 shadow-sm dark:border-blue-400/20 dark:from-blue-600/15 dark:via-background dark:to-blue-950/30 [&>header]:mb-0 [&>header]:border-b-0 [&>header]:pb-0">
           <PageHeader
             title="Parties"
             subtitle="Customers and suppliers of the factory"

@@ -1,7 +1,6 @@
-import { useState } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { CalendarDays, LayoutGrid, SlidersHorizontal, Truck, X } from "lucide-react";
+import { SlidersHorizontal, X } from "lucide-react";
 import { MultiFilterSelect } from "./MultiFilterSelect";
 import { EtaDateFilter } from "./EtaDateFilter";
 import { cn } from "@/lib/utils";
@@ -158,7 +157,6 @@ export function FilterBar({
 }: FilterBarProps) {
 
   const inSheet = variant === "sheet";
-  const [category, setCategory] = useState<"general" | "logistics" | "status" | "other">("general");
   if (!showFilters && !inSheet) return null;
 
   const activeCount = countGitContainerFilters({
@@ -166,12 +164,6 @@ export function FilterBar({
     agentFilters, truckFilters, locationFilters, docsFilter, delayedFilter,
     freightFilter, etaFilter, notesFilter, sortOrder,
   });
-  const categoryTabs = [
-    { id: "general" as const, title: "General", icon: LayoutGrid, count: Number(companyFilter !== "ALL") + containerFilters.length + supplierFilters.length },
-    { id: "logistics" as const, title: "Logistics", icon: Truck, count: transporterFilters.length + agentFilters.length + truckFilters.length + locationFilters.length },
-    { id: "status" as const, title: "Dates & Status", icon: CalendarDays, count: Number(docsFilter !== "ALL") + Number(delayedFilter !== "ALL") + Number(freightFilter !== "ALL") + Number(etaFilter !== "ALL") },
-    { id: "other" as const, title: "Other", icon: SlidersHorizontal, count: Number(notesFilter !== "ALL") + Number(sortOrder !== "DEFAULT") },
-  ];
   const sx = inSheet ? "h-11 text-sm w-full" : "h-9 text-sm w-full";
 
   return (
@@ -202,44 +194,8 @@ export function FilterBar({
             </span>
           </div>
         )}
-        <div className={cn("flex min-w-0", inSheet ? "flex-col gap-3" : "flex-col sm:flex-row")}>
-          <nav
-            aria-label="Filter categories"
-            className={cn(
-              "flex shrink-0 gap-1 p-2",
-              inSheet ? "w-full flex-wrap" : "w-full overflow-x-auto border-b border-border/60 sm:w-48 sm:flex-col sm:overflow-visible sm:border-b-0 sm:border-r sm:p-3"
-            )}
-          >
-            {categoryTabs.map(({ id, title, icon: Icon, count }) => (
-              <button
-                key={id}
-                type="button"
-                aria-current={category === id ? "true" : undefined}
-                data-testid={`otw-filter-category-${id}`}
-                onClick={() => setCategory(id)}
-                className={cn(
-                  "flex min-h-9 items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-medium transition-colors",
-                  inSheet ? "flex-1 justify-center whitespace-nowrap" : "shrink-0 sm:w-full",
-                  category === id
-                    ? "bg-violet-600 text-white shadow-sm"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground dark:hover:bg-white/10"
-                )}
-              >
-                <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-                <span>{title}</span>
-                {count > 0 && <span className={cn("ml-auto rounded-full px-1.5 py-0.5 text-[10px] tabular-nums",category === id ? "bg-white/20" : "bg-violet-500/10 text-violet-700 dark:text-violet-300")}>{count}</span>}
-              </button>
-            ))}
-          </nav>
-          <div className={cn("min-w-0 flex-1", inSheet ? "py-1" : "p-4 sm:p-5")}>
-            <div className="mb-4 flex items-center justify-between gap-2">
-              <div>
-                <h3 className="text-sm font-semibold">{categoryTabs.find((tab) => tab.id === category)?.title}</h3>
-                <p className="text-xs text-muted-foreground">Select the options you want to narrow the list.</p>
-              </div>
-            </div>
-            <div className={cn("grid min-w-0 gap-x-4 gap-y-4", inSheet ? "grid-cols-1 min-[420px]:grid-cols-2" : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4")}>
-              {category === "general" && (<>
+        <div className={cn("min-w-0", inSheet ? "py-1" : "p-4 sm:p-5")}>
+          <div className={cn("grid min-w-0 gap-x-4 gap-y-4", inSheet ? "grid-cols-1 min-[420px]:grid-cols-2" : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4")}>
                 <Col label="Company" className="w-full">
             <Select value={companyFilter} onValueChange={setCompanyFilter}>
               <SelectTrigger className={sx} data-testid="select-filter-company">
@@ -274,8 +230,6 @@ export function FilterBar({
               testId="multi-filter-supplier"
             />
           </Col>
-              </>)}
-              {category === "logistics" && (<>
                 <Col label="Transporter" className="w-full">
             <MultiFilterSelect
               allLabel="All Transporters"
@@ -330,8 +284,6 @@ export function FilterBar({
               testId="multi-filter-location"
             />
           </Col>
-              </>)}
-              {category === "status" && (<>
                 <Col label="Docs" className="w-full">
             <Select value={docsFilter} onValueChange={setDocsFilter}>
               <SelectTrigger className={sx} data-testid="select-filter-docs">
@@ -378,8 +330,6 @@ export function FilterBar({
               testId="select-filter-eta"
             />
           </Col>
-              </>)}
-              {category === "other" && (<>
                 <Col label="Notes" className="w-full">
             <Select value={notesFilter} onValueChange={setNotesFilter}>
               <SelectTrigger className={sx} data-testid="select-filter-notes">
@@ -404,9 +354,7 @@ export function FilterBar({
               </SelectContent>
             </Select>
           </Col>
-              </>)}
             </div>
-          </div>
         </div>
         {!inSheet && (
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 px-4 py-3">

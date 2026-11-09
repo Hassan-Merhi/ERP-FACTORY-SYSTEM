@@ -26,6 +26,7 @@ import { PhoneSheetDialogs } from "@/components/ui/phone-sheet";
 import { useDocumentAppShell } from "@/hooks/use-document-app-shell";
 import { useVisualViewportMetrics } from "@/hooks/use-visual-viewport-metrics";
 import "@/factory-mobile-operations.css";
+import "@/styles/factory-unified-theme.css";
 
 const FactoryFrenchCatalogManager = lazy(() =>
   import("@/components/FactoryFrenchCatalogManager").then((module) => ({

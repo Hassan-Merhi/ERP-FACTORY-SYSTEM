@@ -1,7 +1,7 @@
 import React from "react";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ProductionBonusWeeklySheet, linkedDailyProgress, type BonusSheetWorker } from "@/pages/factory/productiontargets/ProductionBonusWeeklySheet";
+import { ProductionBonusWeeklySheet, linkedDailyProgress, productionTeamPeriodTotals, type BonusSheetWorker } from "@/pages/factory/productiontargets/ProductionBonusWeeklySheet";
 
 vi.mock("@/contexts/ApplicationLanguageContext", () => ({
   useApplicationLanguage: () => ({ language: "en" }),
@@ -101,12 +101,44 @@ describe("same-category linked daily target", () => {
     const shared = screen.getByTestId("linked-daily-cell-2026-11-05-18");
     expect(shared).toHaveAttribute("rowspan", "2");
     expect(within(shared).getByText("16")).toBeInTheDocument();
+    const periodTotal = screen.getByTestId("linked-period-total-18");
+    expect(periodTotal).toHaveAttribute("rowspan", "2");
+    expect(within(periodTotal).getByText("16")).toBeInTheDocument();
+    expect(within(periodTotal).getByText(/Target: 20/)).toBeInTheDocument();
+    expect(within(periodTotal).getByRole("progressbar")).toHaveAttribute("aria-valuenow", "80");
+    expect(screen.queryByTestId("linked-period-total-19")).not.toBeInTheDocument();
+    expect(screen.getByTestId("linked-mobile-period-total-18")).toHaveTextContent("16");
+    expect(screen.queryByTestId("linked-mobile-period-total-19")).not.toBeInTheDocument();
     expect(within(shared).getByText("/ 20")).toBeInTheDocument();
     expect(within(shared).queryByLabelText("Target met")).not.toBeInTheDocument();
     expect(screen.queryByTestId("linked-daily-cell-2026-11-05-19")).not.toBeInTheDocument();
     // The footer uses raw per-worker credits, not the repeated shared display.
     expect(screen.getByTestId("bonus-mobile-summary")).toHaveTextContent("16 / 20");
     expect(within(screen.getByTestId("bonus-mobile-worker-18")).getByText("16 / 20")).toBeInTheDocument();
+  });
+
+  it("shows a single three-worker period total even when only one worker has output", () => {
+    const workers = linkedWorkers();
+    workers[0].days[0].target = 0;
+    workers[1].days[0].target = 0;
+    workers[1].days[0].produced = 82;
+    workers.push({
+      ...worker, workerId: 20, workerName: "Third Dress Worker",
+      days: [{ ...worker.days[0], category: "DRESS", linkGroupId: 701, target: 0, produced: 0 }],
+      target: 0, produced: 0, extra: 0, amount: 0,
+    });
+    expect(productionTeamPeriodTotals(workers)).toMatchObject({ produced: 82, target: 0, percent: 0 });
+    render(<ProductionBonusWeeklySheet from="2026-11-05" to="2026-11-05"
+      workers={workers} selected={[]} onToggle={vi.fn()} loading={false} />);
+    const total = screen.getByTestId("linked-period-total-18");
+    expect(total).toHaveAttribute("rowspan", "3");
+    expect(within(total).getByText("82")).toBeInTheDocument();
+    expect(within(total).getByText(/Target: 0/)).toBeInTheDocument();
+    expect(screen.queryByTestId("linked-period-total-19")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("linked-period-total-20")).not.toBeInTheDocument();
+    // The one-per-team visual does not merge or change individual payouts.
+    expect(screen.getByTestId("bonus-mobile-worker-19")).toHaveTextContent("$3.00");
+    expect(screen.getByTestId("bonus-mobile-worker-18")).toHaveTextContent("$0.00");
   });
 
   it("does not combine different categories despite the same link ID", () => {

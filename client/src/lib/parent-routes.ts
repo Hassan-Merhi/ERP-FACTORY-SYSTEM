@@ -1,4 +1,5 @@
 import { FACTORY_ACCESS_REGISTRY, normalizeFactoryAccessPath } from "@shared/factoryAccessRegistry";
+import { getPropertiesParentRoute } from "@/properties/config/propertiesNavigation";
 
 export function getParentRoute(pathname: string): string | null {
   const cleanPath = pathname.split("?")[0].split("#")[0];
@@ -11,6 +12,10 @@ export function getParentRoute(pathname: string): string | null {
 
     // Containers, loading, and invoicing details → owning workflow.
     if (cleanPath === "/factory/containers/new") return "/factory/containers-hub?section=containers";
+    if (/^\/factory\/sales\/loading\/dispatch\/\d+/.test(cleanPath)) {
+      const match = cleanPath.match(/^\/factory\/sales\/loading\/dispatch\/(\d+)/);
+      if (match) return "/factory/sales/loading/new?orderId=" + match[1];
+    }
     if (cleanPath === "/factory/sales/loading/new") return "/factory/sales/loadings";
     if (cleanPath === "/factory/sales/loading/pending") return "/factory/sales/loadings";
     if (/^\/factory\/sales\/invoices\/\d+/.test(cleanPath)) return "/factory/invoicing?tab=invoices";
@@ -64,34 +69,7 @@ export function getParentRoute(pathname: string): string | null {
   }
 
   if (cleanPath.startsWith("/properties/")) {
-    // Rentals children and compatibility pages → shared Rentals hub.
-    if (cleanPath === "/properties/create") return "/properties/rentals?tab=warehouses";
-    if (cleanPath === "/properties/transfer") return "/properties/rentals";
-    if (cleanPath === "/properties/rental/warehouses") return "/properties/rentals?tab=warehouses";
-    if (cleanPath === "/properties/rental/shops") return "/properties/rentals?tab=shops";
-    if (cleanPath === "/properties/rental/payments") return "/properties/rentals?tab=payments";
-
-    // Accounting detail hierarchy.
-    if (/^\/properties\/voucher-detail\//.test(cleanPath)) return "/properties/vouchers";
-    if (/^\/properties\/vouchers\/\d+\/edit/.test(cleanPath)) return "/properties/vouchers";
-    {
-      const match = cleanPath.match(/^\/properties\/ledger-vouchers\/([^/]+)\//);
-      if (match) return `/properties/ledger-monthly/${match[1]}`;
-    }
-    if (/^\/properties\/ledger-monthly\//.test(cleanPath)) return "/properties/accounts";
-    if (cleanPath === "/properties/account-groups") return "/properties/accounts";
-
-    // Administration children.
-    if (/^\/properties\/net-position-details/.test(cleanPath)) return "/properties/settings";
-    if (/^\/properties\/import-cycle-diagnostics/.test(cleanPath)) return "/properties/settings";
-    if (/^\/properties\/inventory-repair/.test(cleanPath)) return "/properties/settings";
-    if (/^\/properties\/company-data-reset/.test(cleanPath)) return "/properties/settings";
-    if (/^\/properties\/orphaned-records/.test(cleanPath)) return "/properties/settings";
-    if (/^\/properties\/deleted-items/.test(cleanPath)) return "/properties/settings";
-    if (/^\/properties\/chatbot-settings/.test(cleanPath)) return "/properties/settings";
-    if (cleanPath === "/properties/balance-repair") return "/properties/settings";
-
-    return null;
+    return getPropertiesParentRoute(pathname);
   }
 
   // ERP — parties and supplier workflows.

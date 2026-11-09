@@ -400,7 +400,7 @@ export const applicationEnglishTranslations = {
   "offlineReads.intro":
     "Save verified read-only data for this account and company. Offline login and uncached pages are not supported yet.",
   "supplierPartner.postOpeningStock": "Post Opening Stock",
-  "monthlyProduction.title": "Monthly Production Matrix",
+  "monthlyProduction.title": "Monthly Production",
   "monthlyProduction.subtitle": "Produced bales by item and month · shared item order",
   "monthlyProduction.refresh": "Refresh",
   "monthlyProduction.exportCsv": "Export CSV",
