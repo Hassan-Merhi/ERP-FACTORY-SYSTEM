@@ -12,7 +12,7 @@ import { parseId } from "../../../lib/parseId";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { factoryRawStock, factoryMixBatches, factoryMixBatchSources, factoryBales, factoryPressingBatches, factoryDailyUsages } from "@shared/schema";
-import { eq, and, sql, isNull } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import { withFactoryValuationEventTx } from "../../../services/factory/factoryStockValueEvents";
 import { toMoney } from "../../../lib/money";
 import { MixLifecycleRefusal, requireMixFinalizeDecision, requireMixDeletionSafe } from "../../../services/factory/mixLifecyclePhase6";
