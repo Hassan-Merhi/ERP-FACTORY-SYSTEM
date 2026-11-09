@@ -15,6 +15,7 @@ import { useRecentNav } from "@/hooks/use-recent-nav";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Clock, LifeBuoy } from "lucide-react";
 import type { ShellUser } from "@/app/shellUser";
+import { canUsePropertiesCapability, canNavigateProperties } from "@/properties/config/propertiesNavigation";
 import {
   ModuleHeader,
   ModuleFooter,
@@ -75,8 +76,10 @@ export const PROPERTIES_PINNED_DEFAULTS: NavItem[] = [
 ];
 
 export function PropertiesSidebar({ user, onLogout }: { user?: ShellUser; onLogout: () => void | Promise<void> }) {
-  const isAdmin = user?.role === "Admin" || user?.role === "Developer";
-  const isDeveloper = user?.role === "Developer";
+  const { selectedCompany } = useCompany();
+  const isAdmin = canUsePropertiesCapability("admin", user, selectedCompany);
+  const isDeveloper = canUsePropertiesCapability("developer", user, selectedCompany);
+  const canOpenPersonalSettings = canUsePropertiesCapability("personal", user, selectedCompany);
   // These pages are pinned at the top and should not also appear in
   // collapsible sections. Keep the registry entries for command search.
   const visibleSections = useMemo(
@@ -100,8 +103,7 @@ export function PropertiesSidebar({ user, onLogout }: { user?: ShellUser; onLogo
     () => [...PROPERTIES_PINNED_DEFAULTS, ...visibleSections.flatMap((s) => s.items)],
     [visibleSections]
   );
-  const { selectedCompany } = useCompany();
-  const recentItems = useRecentNav(allNavItems, selectedCompany?.id);
+  const recentItems = useRecentNav(allNavItems.filter((item) => canNavigateProperties(item.url, user, selectedCompany)), selectedCompany?.id);
 
   const testIdFor = (i: NavItem) => `link-properties-${i.url.split("/").pop()}`;
 
@@ -156,7 +158,7 @@ export function PropertiesSidebar({ user, onLogout }: { user?: ShellUser; onLogo
             label="Help & Training"
             testId="link-properties-help-training"
           />
-          {user?.role !== "ERP Tester" && (
+          {canOpenPersonalSettings && (
             <SidebarFlatLink
               href="/properties/my-settings"
               icon={KeyRound}
