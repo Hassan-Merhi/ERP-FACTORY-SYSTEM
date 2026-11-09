@@ -142,3 +142,12 @@ Unauthorized routes must not mount hidden page content before redirecting to a s
 - **Sidebar icons.** Pinned icons are bound to canonical path identities, not array positions; the six pinned paths, labels and drag-reorder behavior remain unchanged.
 - **Unknown and forbidden links.** The existing fallback remains `/properties/daybook` with replacement navigation. Selected-company frontend role checks are maintained; server permission and tenant boundaries remain authoritative.
 - **Verification.** `tests/properties-unification-phase10-navigation.test.ts` was committed to cover redirects, deep links, gating, sidebar pins, dashboard reachability and fail-safe unknown paths. This implementation was source-inspected, **not** browser-tested or Vitest-executed. Phase 11 must test actual navigation and account-management actions before any release.
+
+## Unification Phase 13 — deterministic parent routes (2026-11-09)
+
+- `client/src/properties/config/propertiesNavigation.ts` is now the single source for Properties route parents; `getPropertiesParentRoute` resolves concrete route IDs and historical rental aliases.
+- `client/src/lib/parent-routes.ts` delegates Properties Back/Escape targets to that resolver. Factory and ERP parent logic is untouched.
+- Resolved registry drift: `/properties/account-groups` returns to `/properties/accounts`; `/properties/create` returns to the Warehouses tab; ledger voucher details return to the corresponding `/properties/ledger-monthly/:accountId`.
+- Preserved historical one-segment ledger period bookmarks as a parent-navigation compatibility rule and `/properties/rental/*` alias behavior.
+- Dynamic route parents use exact path-segment matching. Unknown and malformed URLs receive no invented parent; root Properties pages still have no deterministic Back target.
+- Added Phase 13 test cases to `tests/properties-parent-routes.test.ts`. **Source authored and inspected, not executed**; browser Escape, Back/Forward and tests require execution before release.
