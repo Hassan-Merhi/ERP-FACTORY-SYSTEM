@@ -434,6 +434,10 @@ export function EditMixBatchDialog({
   for (const [supplierId, values] of supplierRecorded) {
     if (values.weightKg > 0) originalSupplierRates.set(supplierId, values.totalCost / values.weightKg);
   }
+  const historicalSourcesLocked = batch?.status === "COMPLETED" || batch?.status === "CLOSED";
+  const hasMissingCurrentRates = selectedSources.some(
+    (source) => source.type === "supplier" && (!Number.isFinite(source.costPerKg) || source.costPerKg <= 0),
+  );
   const currentUsedKg = batch ? parseFloat(batch.usedKg || "0") : 0;
   // Warn if clearly below used (>1 kg gap). Backend enforces the strict check.
   const belowUsed = totalWeight < currentUsedKg - 1;
@@ -640,6 +644,12 @@ export function EditMixBatchDialog({
             {/* Add source controls */}
             <div className="space-y-3">
               <h3 className="font-medium">Sources</h3>
+              {historicalSourcesLocked && (
+                <p role="status" className="text-xs text-amber-600 dark:text-amber-400" data-testid="mix-batch-completed-source-lock">
+                  Completed batch: historical sources and weights are locked to prevent automatic repricing.
+                  Name, date, and notes can still be updated. Reviewed source edits will be added in Phase 2.
+                </p>
+              )}
               <div className="flex gap-2 flex-wrap">
                 <Button
                   type="button"
@@ -650,6 +660,7 @@ export function EditMixBatchDialog({
                     setSelectedSourceId("");
                     setWeightInput("");
                   }}
+                  disabled={historicalSourcesLocked}
                   data-testid="button-source-type-supplier"
                 >
                   <Package className="h-3 w-3 mr-1" /> Supplier Stock
@@ -663,6 +674,7 @@ export function EditMixBatchDialog({
                     setSelectedSourceId("");
                     setWeightInput("");
                   }}
+                  disabled={historicalSourcesLocked}
                   data-testid="button-source-type-batch"
                 >
                   <Layers className="h-3 w-3 mr-1" /> Existing Batch
@@ -671,7 +683,7 @@ export function EditMixBatchDialog({
 
               <div className="grid grid-cols-3 gap-2">
                 {addSourceType === "supplier" ? (
-                  <Select value={selectedSourceId} onValueChange={handleSourceIdChange}>
+                  <Select value={selectedSourceId} disabled={historicalSourcesLocked} onValueChange={handleSourceIdChange}>
                     <SelectTrigger data-testid="select-supplier-source">
                       <SelectValue placeholder="Select supplier" />
                     </SelectTrigger>
@@ -690,7 +702,7 @@ export function EditMixBatchDialog({
                     </SelectContent>
                   </Select>
                 ) : (
-                  <Select value={selectedSourceId} onValueChange={handleSourceIdChange}>
+                  <Select value={selectedSourceId} disabled={historicalSourcesLocked} onValueChange={handleSourceIdChange}>
                     <SelectTrigger data-testid="select-batch-source">
                       <SelectValue placeholder="Select batch" />
                     </SelectTrigger>
@@ -719,13 +731,14 @@ export function EditMixBatchDialog({
                   value={weightInput}
                   onChange={(e) => setWeightInput(e.target.value)}
                   step="0.001"
+                  disabled={historicalSourcesLocked}
                   data-testid="input-source-weight"
                 />
 
                 <Button
                   type="button"
                   onClick={handleAddSource}
-                  disabled={!selectedSourceId || !weightInput || selectedSourceId === "__none__"}
+                  disabled={historicalSourcesLocked || !selectedSourceId || !weightInput || selectedSourceId === "__none__"}
                   data-testid="button-add-source"
                 >
                   <Plus className="h-4 w-4 mr-2" /> Add
@@ -764,6 +777,7 @@ export function EditMixBatchDialog({
                             step="0.001"
                             min="0.001"
                             onChange={(e) => handleUpdateSourceWeight(sel.type, sel.sourceId, e.target.value)}
+                            disabled={historicalSourcesLocked}
                             data-testid={`input-weight-${sel.type}-${sel.sourceId}`}
                           />
                         </TableCell>
@@ -795,6 +809,7 @@ export function EditMixBatchDialog({
                                 step="0.0001"
                                 min="0"
                                 onChange={(e) => handleUpdateSourceCost(sel.type, sel.sourceId, e.target.value)}
+                                disabled={historicalSourcesLocked}
                                 data-testid={`input-cost-per-kg-${sel.type}-${sel.sourceId}`}
                               />
                             </div>
@@ -809,6 +824,7 @@ export function EditMixBatchDialog({
                             variant="ghost"
                             size="icon"
                             onClick={() => handleRemoveSource(sel.type, sel.sourceId)}
+                            disabled={historicalSourcesLocked}
                             data-testid={`button-remove-${sel.type}-${sel.sourceId}`}
                           >
                             <Trash2 className="h-4 w-4" />
@@ -834,14 +850,20 @@ export function EditMixBatchDialog({
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Estimated total cost if saved</p>
-                <p className="text-2xl font-bold font-mono">${formatNumber(totalCost, 4)}</p>
+                <p className="text-2xl font-bold font-mono">{hasMissingCurrentRates ? "Unavailable" : `${formatNumber(totalCost, 4)}`}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Estimated blended cost/kg if saved</p>
-                <p className="text-2xl font-bold font-mono" data-testid="text-edit-current-estimate">${blendedCostPerKg.toFixed(4)}</p>
+                <p className="text-2xl font-bold font-mono" data-testid="text-edit-current-estimate">{hasMissingCurrentRates ? "Unavailable" : `${blendedCostPerKg.toFixed(4)}`}</p>
               </div>
             </div>
 
+            {hasMissingCurrentRates && (
+              <p role="alert" className="text-xs text-amber-600 dark:text-amber-400">
+                One or more suppliers have no current USD rate. The current-rate estimate is unavailable;
+                their recorded historical costs remain unchanged.
+              </p>
+            )}
             <p className="text-xs text-muted-foreground" data-testid="mix-batch-cost-basis-notice">
               The estimate uses current supplier rates for proposed source edits. It is not a correction to
               recorded historical costs. Metadata-only saves preserve existing costs; source edits to
