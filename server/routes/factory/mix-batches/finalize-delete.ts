@@ -155,28 +155,69 @@ export function registerFactoryMixBatchFinalizeDeleteRoutes(app: Express) {
               .where(eq(factoryMixBatchSources.mixBatchId, id));
 
             for (const src of batchSourceRows) {
-              const weight = toMoney(src.weightKg).toNumber();
-              if (weight <= 0) continue;
-              if (src.containerId) {
-                // Reverse consumption on the underlying raw-stock container. Scoped to
-                // companyId too so a corrupted/cross-tenant containerId can never
-                // mutate another company's raw stock. GREATEST(...,0) is a defensive
-                // floor only — the restore path in deletedItemsRoutes.ts re-adds the
-                // same `weight` (not a clamped value), so a normal delete→restore
-                // round trip is exact as long as usedKg wasn't already corrupted below
-                // this batch's own contribution.
-                await tx
-                  .update(factoryRawStock)
-                  .set({ usedKg: sql`GREATEST(${factoryRawStock.usedKg} - ${weight}, 0)` })
-                  .where(
-                    and(eq(factoryRawStock.containerId, src.containerId), eq(factoryRawStock.companyId, companyId))
+              const weight = toMoney(src.weightKg);
+              if (!weight.isFinite() || weight.lte(0)) {
+                throw new MixLifecycleRefusal("Historical mix has an invalid source quantity; deletion requires a reviewed source correction.");
+              }
+              if (src.containerId != null) {
+                // A source has only a container ID, not the raw-stock row ID.
+                // Reverse only when that original row is uniquely identifiable.
+                // Never decrement every row sharing a container or clamp usage.
+                const rawRows = await tx.select({
+                  id: factoryRawStock.id, usedKg: factoryRawStock.usedKg,
+                }).from(factoryRawStock).where(and(
+                  eq(factoryRawStock.companyId, companyId),
+                  eq(factoryRawStock.containerId, src.containerId),
+                  isNull(factoryRawStock.deletedAt),
+                )).for("update");
+                if (rawRows.length !== 1) {
+                  throw new MixLifecycleRefusal(
+                    "Cannot reverse mix source container #" + src.containerId +
+                    ": its physical raw-stock allocation is missing or ambiguous."
                   );
-              } else if (src.sourceBatchId) {
-                // Reverse consumption on the upstream batch this batch topped up from.
-                await tx
-                  .update(factoryMixBatches)
-                  .set({ usedKg: sql`GREATEST(${factoryMixBatches.usedKg} - ${weight}, 0)`, updatedAt: new Date() })
-                  .where(and(eq(factoryMixBatches.id, src.sourceBatchId), eq(factoryMixBatches.companyId, companyId)));
+                }
+                const currentUsed = toMoney(rawRows[0].usedKg);
+                if (currentUsed.lt(weight)) {
+                  throw new MixLifecycleRefusal(
+                    "Cannot reverse mix source container #" + src.containerId +
+                    ": recorded usage is lower than the source kg. No negative or clamped stock change was applied."
+                  );
+                }
+                await tx.update(factoryRawStock)
+                  .set({ usedKg: currentUsed.minus(weight).toFixed(3) })
+                  .where(and(
+                    eq(factoryRawStock.id, rawRows[0].id),
+                    eq(factoryRawStock.companyId, companyId),
+                  ));
+              } else if (src.sourceBatchId != null) {
+                const [parent] = await tx.select({
+                  id: factoryMixBatches.id,
+                  totalWeightKg: factoryMixBatches.totalWeightKg,
+                  usedKg: factoryMixBatches.usedKg,
+                  status: factoryMixBatches.status,
+                }).from(factoryMixBatches).where(and(
+                  eq(factoryMixBatches.id, src.sourceBatchId),
+                  eq(factoryMixBatches.companyId, companyId),
+                  isNull(factoryMixBatches.deletedAt),
+                )).for("update");
+                if (!parent || parent.status === "COMPLETED" || toMoney(parent.usedKg).lt(weight)) {
+                  throw new MixLifecycleRefusal("Upstream mix quantity/status cannot be exactly reversed.");
+                }
+                const nextUsed = toMoney(parent.usedKg).minus(weight);
+                await tx.update(factoryMixBatches).set({
+                  usedKg: nextUsed.toFixed(3),
+                  status: parent.status === "CLOSED" && nextUsed.lt(toMoney(parent.totalWeightKg))
+                    ? "ACTIVE" : parent.status,
+                  updatedAt: new Date(),
+                }).where(and(
+                  eq(factoryMixBatches.id, parent.id), eq(factoryMixBatches.companyId, companyId),
+                ));
+              } else {
+                // No container or upstream batch = no exact raw-stock attribution.
+                // Supplier-only manual material must use a reviewed reconciliation.
+                throw new MixLifecycleRefusal(
+                  "A supplier-only historical source has no exact raw-stock or batch attribution; ordinary deletion is unsafe."
+                );
               }
             }
 
