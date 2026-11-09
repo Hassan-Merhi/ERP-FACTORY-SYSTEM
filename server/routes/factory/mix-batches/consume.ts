@@ -7,6 +7,7 @@
 import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logAudit } from "../../helpers/auditHelpers";
+import { isPerpetualInventoryActive } from "../../../services/accounting/perpetualInventory/cutover";
 import { logger } from "../../../lib/logger";
 import { parseId } from "../../../lib/parseId";
 import { db } from "../../../db";
@@ -37,6 +38,14 @@ export function registerFactoryMixBatchConsumeRoutes(app: Express) {
       await db.transaction(async (tx) => {
         // Serialize carry-forward code assignment across consumption requests.
         await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('factory_mix_batch_sequence'), ${companyId})`);
+        // This legacy endpoint has no bale/COGS or linked GL posting for
+        // the kg consumed. Under perpetual inventory, an unbalanced WIP
+        // reduction is not permitted.
+        if (await isPerpetualInventoryActive(tx, companyId, usedDate)) {
+          throw new MixLifecycleRefusal(
+            "Mix consumption requires a matching production-output and accounting posting after inventory cutover. Use the reviewed production workflow."
+          );
+        }
         for (const { batchId, kgUsed, notes } of entries) {
 
           const [batch] = await tx
