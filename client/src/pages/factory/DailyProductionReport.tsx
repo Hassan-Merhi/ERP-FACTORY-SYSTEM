@@ -37,8 +37,8 @@ const HIDDEN_KEYS: Record<OverviewTab, string> = {
 // them in Overview. Moving navigation must not grant access to either workflow.
 export default function DailyProductionReport() {
   const report = useDailyProductionReport();
-  const { ready, canOpen, access } = useFactoryNavigationAccess();
-  const hidden = access?.hiddenCostFields ?? [];
+  const { ready, canOpen, access, isPrivileged } = useFactoryNavigationAccess();
+  const hidden = isPrivileged ? [] : (access?.hiddenCostFields ?? []);
   const visibleTabs = OVERVIEW_TABS.filter((tab) => {
     if (hidden.includes(HIDDEN_KEYS[tab])) return false;
     if (tab === "monthly-production") return canOpen("/factory/monthly-production-matrix");
