@@ -21,6 +21,10 @@
     {
       "file": "client/src/components/financial/VoucherCostCenters.tsx",
       "reason": "Cost-centre allocation editing renders only for the Developer role."
+    },
+    {
+      "file": "client/src/pages/itemMarketAnalysisSalePrices.ts",
+      "reason": "POST /api/reports/item-market-analysis/export-sale-prices only builds an export file; it changes no business data."
     }
   ],
   "pages": [

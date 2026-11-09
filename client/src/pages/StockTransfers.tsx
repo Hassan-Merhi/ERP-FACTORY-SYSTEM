@@ -16,6 +16,7 @@ import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { PageHeader } from "@/components/PageHeader";
 import { DataTableToolbar } from "@/components/DataTableToolbar";
 import { PeriodFilter, PeriodFilterValue, getDefaultPeriodValue } from "@/components/ui/period-filter";
@@ -57,6 +58,7 @@ export default function StockTransfers({ hideVoucherNotes = false }: StockTransf
   const { formatShortDate: formatDate } = useDateFormat();
   const { toast } = useToast();
   const { selectedCompany } = useCompany();
+  const recordChanges = useExistingRecordChangeAccess();
 
   const {
     filters: { period, search },
@@ -304,15 +306,17 @@ export default function StockTransfers({ hideVoucherNotes = false }: StockTransf
                       )}
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            title="Edit notes"
-                            onClick={() => startEdit(t)}
-                            data-testid={`button-edit-${t.transferId}`}
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
+                          {recordChanges.allowed && (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              title="Edit notes"
+                              onClick={() => startEdit(t)}
+                              data-testid={`button-edit-${t.transferId}`}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
                           <Button
                             size="icon"
                             variant="ghost"
@@ -378,15 +382,17 @@ export default function StockTransfers({ hideVoucherNotes = false }: StockTransf
                       {!hideVoucherNotes && t.notes && <span className="ml-1 italic">{t.notes}</span>}
                     </div>
                     <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        title="Edit notes"
-                        onClick={() => startEdit(t)}
-                        data-testid={`button-edit-mobile-${t.transferId}`}
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
+                      {recordChanges.allowed && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          title="Edit notes"
+                          onClick={() => startEdit(t)}
+                          data-testid={`button-edit-mobile-${t.transferId}`}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
                       <Button
                         size="icon"
                         variant="ghost"
@@ -402,15 +408,17 @@ export default function StockTransfers({ hideVoucherNotes = false }: StockTransf
                 {(t.stockItemNames ?? []).length === 0 && (hideVoucherNotes || !t.notes) && (
                   <div className="mt-2 flex justify-end" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center gap-1">
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        title="Edit notes"
-                        onClick={() => startEdit(t)}
-                        data-testid={`button-edit-mobile-${t.transferId}`}
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
+                      {recordChanges.allowed && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          title="Edit notes"
+                          onClick={() => startEdit(t)}
+                          data-testid={`button-edit-mobile-${t.transferId}`}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
                       <Button
                         size="icon"
                         variant="ghost"

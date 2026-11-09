@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from "react";
 import { useLocation } from "@/contexts/LocationContext";
 import { queryClient } from "@/lib/queryClient";
 import { apiRequest } from "@/lib/queryClient";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { getDefaultPeriodValue } from "@/components/ui/period-filter";
 import type {
   InventoryLocation as Location,
@@ -19,6 +20,7 @@ interface UseLocationInventoryStateParams {
 
 export function useLocationInventoryState({ companyId, toast }: UseLocationInventoryStateParams) {
   const { setSelectedLocation } = useLocation();
+  const recordChanges = useExistingRecordChangeAccess();
 
   // ─── Main view state ──────────────────────────────────────────────────────
   const [selectedLocationLocal, setSelectedLocationLocal] = useState<Location | null>(null);
@@ -107,7 +109,7 @@ export function useLocationInventoryState({ companyId, toast }: UseLocationInven
 
   // ─── Action handlers ──────────────────────────────────────────────────────
   const handleDeleteLocation = async () => {
-    if (!selectedLocationLocal) return;
+    if (!selectedLocationLocal || !recordChanges.allowed) return;
     setIsDeleting(true);
     try {
       await apiRequest("DELETE", `/api/locations/${selectedLocationLocal.id}`);
@@ -123,7 +125,7 @@ export function useLocationInventoryState({ companyId, toast }: UseLocationInven
   };
 
   const handleArchiveStockGroup = async () => {
-    if (!selectedLocationLocal || !selectedGroup) return;
+    if (!selectedLocationLocal || !selectedGroup || !recordChanges.allowed) return;
     setIsArchiving(true);
     try {
       await apiRequest("POST", "/api/stock-group-archives", {
@@ -233,5 +235,6 @@ export function useLocationInventoryState({ companyId, toast }: UseLocationInven
     handleDeleteLocation,
     handleArchiveStockGroup,
     goBackToLocations,
+    canChangeExistingRecords: recordChanges.allowed,
   };
 }

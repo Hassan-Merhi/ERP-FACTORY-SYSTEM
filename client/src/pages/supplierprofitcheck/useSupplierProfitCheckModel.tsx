@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type PeriodFilterValue } from "@/components/ui/period-filter";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { apiRequest } from "@/lib/queryClient";
 import type { AnalysisRow, ColKey, ColVisibility, ComputedRow, LocationGroup, OtwContainer } from "./types";
 import { ALL_COLUMNS, DEFAULT_COL_VISIBILITY, STATUS_OPTIONS, STORAGE_KEY_COLS, loadColVisibility } from "./utils";
@@ -61,6 +62,7 @@ function errorMessage(error: unknown, fallback: string): string {
 export function useSupplierProfitCheckModel() {
   const { selectedCompany } = useCompany();
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
   const queryClient = useQueryClient();
   const companyId = selectedCompany?.id;
 
@@ -126,6 +128,7 @@ export function useSupplierProfitCheckModel() {
 
   const linkStockGroupMutation = useMutation({
     mutationFn: async (stockGroupId: number | null) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const response = await apiRequest("PATCH", `/api/suppliers/${supplierId}/stock-group`, { stockGroupId });
       return response.json();
     },
@@ -232,6 +235,7 @@ export function useSupplierProfitCheckModel() {
 
   const saveOverrideMutation = useMutation({
     mutationFn: async (payload: { supplierId: number; stockItemId: number; poPrice?: number; avgPrice?: number }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const response = await apiRequest("PUT", "/api/supplier-profit-check/po-overrides", payload);
       return response.json();
     },
@@ -393,20 +397,20 @@ export function useSupplierProfitCheckModel() {
     (stockItemId: number, value: string) => {
       setManualPoPrices((previous) => ({ ...previous, [stockItemId]: value }));
       const number = Number(value);
-      if (value.trim() && Number.isFinite(number) && number > 0 && supplierId)
+      if (recordChanges.allowed && value.trim() && Number.isFinite(number) && number > 0 && supplierId)
         saveOverrideMutation.mutate({ supplierId: Number(supplierId), stockItemId, poPrice: number });
     },
-    [supplierId, saveOverrideMutation]
+    [supplierId, saveOverrideMutation, recordChanges.allowed]
   );
 
   const handleManualAvgChange = useCallback(
     (stockItemId: number, value: string) => {
       setManualAvgPrices((previous) => ({ ...previous, [stockItemId]: value }));
       const number = Number(value);
-      if (value.trim() && Number.isFinite(number) && number > 0 && supplierId)
+      if (recordChanges.allowed && value.trim() && Number.isFinite(number) && number > 0 && supplierId)
         saveOverrideMutation.mutate({ supplierId: Number(supplierId), stockItemId, avgPrice: number });
     },
-    [supplierId, saveOverrideMutation]
+    [supplierId, saveOverrideMutation, recordChanges.allowed]
   );
 
   const handleArrowNav = useCallback((event: React.KeyboardEvent<HTMLInputElement>, dataAttr: string) => {
@@ -479,7 +483,7 @@ export function useSupplierProfitCheckModel() {
   }, [rows, importedRows, extraCostPerBale, manualPoPrices, manualAvgPrices, sellPriceSource]);
 
   useEffect(() => {
-    if (qtyVersion === 0) return;
+    if (qtyVersion === 0 || !recordChanges.allowed) return;
     const targetId = sourceType === "proforma" && proformaId ? Number(proformaId) : (savedProforma?.id ?? null);
     if (!targetId) return;
     if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
@@ -786,6 +790,8 @@ export function useSupplierProfitCheckModel() {
     toggleCol,
     resetCols,
     handleSaveProforma,
+    canChangeExistingRecords: recordChanges.allowed,
+    canCreate: recordChanges.canCreate,
     handleExportSupplier,
     handleExportInternal,
   };

@@ -2,6 +2,7 @@ import { getErrorDetails } from "@shared/errorUtils";
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { queryClient } from "@/lib/queryClient";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { getApiRequest } from "@/lib/factoryApi";
@@ -49,6 +50,7 @@ export function useBaleProductsModel() {
   const [searchQuery, setSearchQuery] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
   const appMode = useAppMode();
   const modeApiRequest = getApiRequest(appMode);
 
@@ -171,6 +173,7 @@ export function useBaleProductsModel() {
 
   const updateCategoryMutation = useMutation({
     mutationFn: async ({ id, name }: { id: number; name: string }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const response = await modeApiRequest("PATCH", `/api/factory/categories/${id}`, { name });
       return response.json();
     },
@@ -188,6 +191,7 @@ export function useBaleProductsModel() {
 
   const deleteCategoryMutation = useMutation({
     mutationFn: async (id: number) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const response = await modeApiRequest("DELETE", `/api/factory/categories/${id}`);
       return response.json();
     },
@@ -203,6 +207,7 @@ export function useBaleProductsModel() {
 
   const importMutation = useMutation({
     mutationFn: async (file: File) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const formData = new FormData();
       formData.append("file", file);
       const response = await fetch("/api/factory/bale-products/import-excel", {
@@ -286,6 +291,7 @@ export function useBaleProductsModel() {
         grade: string;
       }>
     ) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       if (!editingProduct) throw new Error("Select a product before saving changes");
       const response = await modeApiRequest(
         "POST",
@@ -314,6 +320,7 @@ export function useBaleProductsModel() {
 
   const colorUpdateMutation = useMutation({
     mutationFn: async ({ id, labelDesignColor }: { id: number; labelDesignColor: string | null }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const response = await modeApiRequest("POST", `/api/factory/bale-products/${id}/cascade-update`, {
         labelDesignColor,
       });
@@ -335,6 +342,7 @@ export function useBaleProductsModel() {
 
   const deleteProductMutation = useMutation({
     mutationFn: async (id: number) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const response = await modeApiRequest("DELETE", `/api/factory/bale-products/${id}`);
       if (!response.ok) throw new Error("Failed to delete product");
       return response.json();
@@ -352,6 +360,7 @@ export function useBaleProductsModel() {
 
   const bulkToggleActiveMutation = useMutation({
     mutationFn: async ({ ids, active }: { ids: number[]; active: boolean }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const response = await modeApiRequest("POST", "/api/factory/bale-products/bulk-toggle-active", { ids, active });
       if (!response.ok) throw new Error("Failed to update products");
       return response.json();
@@ -564,5 +573,5 @@ export function useBaleProductsModel() {
   })();
 
   // prettier-ignore
-  return { designColors, createDialogOpen, setCreateDialogOpen, adminAuthOpen, setAdminAuthOpen, pendingAdminAuth, setPendingAdminAuth, importDialogOpen, setImportDialogOpen, importPreview, setImportPreview, importError, setImportFile, condensedView, expandedGroups, showCategories, setShowCategories, expandedCategories, setExpandedCategories, newCategoryName, setNewCategoryName, editingCategory, setEditingCategory, editingProduct, setEditingProduct, editForm, setEditForm, pendingDelete, setPendingDelete, selectedIds, setSelectedIds, showHidden, setShowHidden, showZeroPrice, setShowZeroPrice, showNoColor, setShowNoColor, filterCategoryId, setFilterCategoryId, filterWeight, setFilterWeight, searchQuery, setSearchQuery, fileInputRef, isAdmin, hideAvgRate, hideSellingPriceBP, products, isLoading, categories, categoryMap, noColorCount, distinctWeights, activeProducts, hiddenProducts, toggleSelectId, toggleSelectAll, selectedActiveIds, selectedHiddenIds, createCategoryMutation, updateCategoryMutation, deleteCategoryMutation, importMutation, editProductMutation, colorUpdateMutation, deleteProductMutation, bulkToggleActiveMutation, handleEditSubmit, handleExportExcel, handleExportNoPrices, handleDownloadTemplate, handleFileSelect, handleConfirmImport, toggleGroup, groupedProducts } as const;
+  return { designColors, createDialogOpen, setCreateDialogOpen, adminAuthOpen, setAdminAuthOpen, pendingAdminAuth, setPendingAdminAuth, importDialogOpen, setImportDialogOpen, importPreview, setImportPreview, importError, setImportFile, condensedView, expandedGroups, showCategories, setShowCategories, expandedCategories, setExpandedCategories, newCategoryName, setNewCategoryName, editingCategory, setEditingCategory, editingProduct, setEditingProduct, editForm, setEditForm, pendingDelete, setPendingDelete, selectedIds, setSelectedIds, showHidden, setShowHidden, showZeroPrice, setShowZeroPrice, showNoColor, setShowNoColor, filterCategoryId, setFilterCategoryId, filterWeight, setFilterWeight, searchQuery, setSearchQuery, fileInputRef, isAdmin, hideAvgRate, hideSellingPriceBP, products, isLoading, categories, categoryMap, noColorCount, distinctWeights, activeProducts, hiddenProducts, toggleSelectId, toggleSelectAll, selectedActiveIds, selectedHiddenIds, createCategoryMutation, updateCategoryMutation, deleteCategoryMutation, importMutation, editProductMutation, colorUpdateMutation, deleteProductMutation, bulkToggleActiveMutation, handleEditSubmit, handleExportExcel, handleExportNoPrices, handleDownloadTemplate, handleFileSelect, handleConfirmImport, toggleGroup, groupedProducts, canChangeExistingRecords: recordChanges.allowed, canCreate: recordChanges.canCreate } as const;
 }

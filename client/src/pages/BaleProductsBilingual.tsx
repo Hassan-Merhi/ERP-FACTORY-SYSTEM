@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { BaleProductArabicEditBridge } from "@/components/BaleProductArabicEditBridge";
 import { FACTORY_CATALOG_LANGUAGE_EVENT } from "@/components/FactoryCatalogLanguageSwitch";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { queryClient } from "@/lib/queryClient";
 import { getApiRequest } from "@/lib/factoryApi";
 import { useAppMode } from "@/contexts/AppModeContext";
@@ -160,6 +161,7 @@ export default function BaleProductsBilingual() {
   const appMode = useAppMode();
   const modeApiRequest = getApiRequest(appMode);
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
   const { data: currentUser } = useQuery<{ role?: string }>({ queryKey: ["/api/auth/me"] });
   const isAdmin = ["Admin", "Owner", "Developer"].includes(currentUser?.role ?? "");
 
@@ -204,7 +206,11 @@ export default function BaleProductsBilingual() {
   });
 
   return (
-    <div data-factory-catalog-language={language} data-bale-products-modern="true" dir={language === "ar" ? "rtl" : "ltr"}>
+    <div
+      data-factory-catalog-language={language}
+      data-bale-products-modern="true"
+      dir={language === "ar" ? "rtl" : "ltr"}
+    >
       <div className="container mx-auto max-w-none px-3 pt-4 sm:px-6 sm:pt-6">
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200/80 bg-gradient-to-r from-slate-50 via-white to-blue-50/60 px-4 py-3 shadow-sm dark:border-blue-400/20 dark:from-[#141e30] dark:via-[#151f32] dark:to-[#172847]">
           <div className="flex items-center gap-2 flex-wrap">
@@ -212,7 +218,10 @@ export default function BaleProductsBilingual() {
               value={translationFilter}
               onValueChange={(value) => setTranslationFilter(value as TranslationFilter)}
             >
-              <SelectTrigger className="h-10 w-56 rounded-xl border-slate-300 bg-white/90 dark:border-blue-300/20 dark:bg-[#0d192c]" data-testid="select-translation-status">
+              <SelectTrigger
+                className="h-10 w-56 rounded-xl border-slate-300 bg-white/90 dark:border-blue-300/20 dark:bg-[#0d192c]"
+                data-testid="select-translation-status"
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -249,7 +258,7 @@ export default function BaleProductsBilingual() {
                 </button>
               )}
             </div>
-            {isAdmin && (
+            {isAdmin && recordChanges.canCreate("POST", "/api/factory/categories") && (
               <Button
                 type="button"
                 size="sm"
@@ -275,7 +284,7 @@ export default function BaleProductsBilingual() {
         search={requestSearch}
         translationFilter={translationFilter}
       />
-      {isAdmin && <BaleProductArabicEditBridge />}
+      {isAdmin && recordChanges.allowed && <BaleProductArabicEditBridge />}
 
       <Dialog open={categoryDialogOpen} onOpenChange={setCategoryDialogOpen}>
         <DialogContent className="max-w-lg" dir="ltr">
