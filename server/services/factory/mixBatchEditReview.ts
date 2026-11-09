@@ -7,7 +7,7 @@
  * only until the downstream bale/GL reconciliation phases are implemented.
  */
 import { and, eq, isNull } from "drizzle-orm";
-import { factoryMixBatches, factoryBales, factoryPressingBatches, factoryDailyUsages } from "@shared/schema";
+import { factoryMixBatches, factoryMixBatchSources, factoryBales, factoryPressingBatches, factoryDailyUsages } from "@shared/schema";
 import type { DatabaseOrTransaction } from "../../db";
 import { MoneyDecimal, toMoney } from "../../lib/money";
 import { getStableSupplierCost } from "./rawStockStableCost";
@@ -130,7 +130,7 @@ export async function prepareMixSourceEditReview(
   }
   // Do not rely on usedKg alone: legacy imports and partial pressing can have
   // downstream records even when a batch's usage counter has not caught up.
-  const [linkedBales, linkedPressing, linkedUsage] = await Promise.all([
+  const [linkedBales, linkedPressing, linkedUsage, linkedDownstreamMix] = await Promise.all([
     executor.select({ id: factoryBales.id }).from(factoryBales).where(and(
       eq(factoryBales.companyId, companyId),
       eq(factoryBales.mixBatchId, batch.id),
@@ -144,9 +144,14 @@ export async function prepareMixSourceEditReview(
       eq(factoryDailyUsages.companyId, companyId),
       eq(factoryDailyUsages.mixBatchId, batch.id),
     )).limit(1),
+    // Also protect against circular mix source references when an old usage
+    // counter failed to reflect consumption by another mix.
+    executor.select({ id: factoryMixBatchSources.id }).from(factoryMixBatchSources).where(
+      eq(factoryMixBatchSources.sourceBatchId, batch.id),
+    ).limit(1),
   ]);
-  if (linkedBales.length || linkedPressing.length || linkedUsage.length) {
-    warnings.push("This mix is referenced by bale, pressing or consumption records and requires downstream reconciliation.");
+  if (linkedBales.length || linkedPressing.length || linkedUsage.length || linkedDownstreamMix.length) {
+    warnings.push("This mix has dependent bale, pressing, consumption or downstream mix records; reconcile them before editing sources.");
   }
   const supplierIds = [...new Set([
     ...oldBySupplier.keys(),
