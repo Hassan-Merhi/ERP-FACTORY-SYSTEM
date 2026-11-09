@@ -50,7 +50,7 @@ export default function FactoryPendingInvoices() {
   const { toast } = useToast();
 
   const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id), enabled: Boolean(selectedCompany?.id), staleTime: 5 * 60000 });
-  const isAdmin = myAccess?.companyId === selectedCompany?.id && myAccess.hasFactoryAccess && myAccess.fullAccess === true;
+  const isAdmin = myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true && myAccess.fullAccess === true;
 
   const {
     data: pendingOrders = [],
