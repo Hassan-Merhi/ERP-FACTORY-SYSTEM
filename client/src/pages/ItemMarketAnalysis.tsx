@@ -272,7 +272,7 @@ export default function ItemMarketAnalysis() {
   if (selectedCompany && selectedCompany.companyType !== "erp") {
     return (
       <div className="container mx-auto p-4 sm:p-6">
-        <PageHeader title="Item Market Analysis" onBack={() => window.history.back()} />
+        <PageHeader title="Market Price Analysis" onBack={() => window.history.back()} />
         <div className="mt-6 rounded-xl border p-6 text-sm text-muted-foreground">
           Item Market Analysis is available for ERP companies only.
         </div>
@@ -288,7 +288,7 @@ export default function ItemMarketAnalysis() {
   return (
     <div className="container mx-auto space-y-5 p-0 sm:p-6">
       <PageHeader
-        title="Item Market Analysis"
+        title="Market Price Analysis"
         onBack={() => window.history.back()}
         meta={
           <span>
