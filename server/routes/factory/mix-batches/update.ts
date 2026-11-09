@@ -49,10 +49,20 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
 
       if (id === null) return res.status(400).json({ message: "Invalid id" });
       const { name, notes, batchDate, supplierSources, batchSources } = req.body;
+      if (batchDate !== undefined && batchDate !== null && batchDate !== "") {
+        const iso = String(batchDate);
+        if (typeof batchDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(iso) ||
+            Number.isNaN(Date.parse(iso)) || new Date(iso).toISOString().slice(0, 10) !== iso) {
+          throw new MixEditRequestError("Batch date must be a valid YYYY-MM-DD date.", "MIX_EDIT_INVALID_DATE");
+        }
+      }
 
       // Identical source weights are metadata-only, even if an older client
       // submits all its sources. Never silently reprice that historical batch.
       const hasSourceUpdate = supplierSources !== undefined || batchSources !== undefined;
+      if (req.body.sourceEditPreview === true && !hasSourceUpdate) {
+        throw new MixEditRequestError("A source-edit preview requires both source lists.");
+      }
       const parsedSources = hasSourceUpdate ? parseMixEditSelection(req.body) : null;
       const reason = typeof req.body.sourceEditReason === "string" ? req.body.sourceEditReason.trim() : "";
       let identicalSources = false;
