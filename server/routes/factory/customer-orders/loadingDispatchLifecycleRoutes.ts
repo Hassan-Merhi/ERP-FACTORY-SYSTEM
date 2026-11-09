@@ -219,12 +219,34 @@ export function registerFactoryLoadingDispatchLifecycleRoutes(app: Express): voi
              AND s.dispatch_id = ${scope.dispatchId} AND s.removed_at IS NULL
            ORDER BY s.scanned_at, s.id
         `));
+        // Freeze human-readable loading labels as well as truck fields.
+        // A later customer/proforma rename must not rewrite this manifest.
+        const labelRows = rows(await tx.execute(sql`
+          SELECT co.status AS "loadingStatus",
+                 co.container_number AS "containerNumber",
+                 c.legal_name AS "customerName", p.name AS "proformaName",
+                 cmp.name AS "companyName"
+            FROM customer_orders co
+            LEFT JOIN customers c ON c.id = co.customer_id AND c.company_id = co.company_id
+            LEFT JOIN customer_proformas p ON p.id = co.proforma_id_used AND p.company_id = co.company_id
+            JOIN companies cmp ON cmp.id = co.company_id
+           WHERE co.company_id = ${scope.companyId} AND co.id = ${scope.orderId}
+           LIMIT 1
+        `));
+        const label = labelRows[0] ?? {};
         const truckAtClosure = {
           dispatchId: String(lockedTrip.id), dispatchNumber: lockedTrip.dispatchNumber,
           truckPlate: lockedTrip.truckPlate, driverName: lockedTrip.driverName,
           destination: lockedTrip.destination, notes: lockedTrip.notes,
           containerNumberSnapshot: lockedTrip.containerNumberSnapshot,
           createdByUsername: lockedTrip.createdByUsername, createdAt: lockedTrip.createdAt,
+          loadingMetadata: {
+            companyName: label.companyName ?? null,
+            customerName: label.customerName ?? null,
+            proformaName: label.proformaName ?? null,
+            containerNumber: label.containerNumber ?? null,
+            status: label.loadingStatus ?? null,
+          },
         };
         const summaryJson = JSON.stringify(evaluation.summary);
         const comparisonJson = JSON.stringify(evaluation.comparison);
