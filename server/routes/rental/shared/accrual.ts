@@ -7,6 +7,7 @@ import { eq, and, sql, inArray, isNull, isNotNull, ne } from "drizzle-orm";
 import { RentalModule, findOrCreateLedgerAccount } from "./ledger";
 import { ensureMonthlyLedgerRows } from "./monthly-rows";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
+import { isRentRecognitionHeld } from "../../../services/rental/rentRecognitionHold";
 import { postAccrualPassTx, type RentAccrualPostingOptions } from "./accrual-posting";
 
 export type { RentAccrualPostingOptions } from "./accrual-posting";
@@ -487,7 +488,14 @@ export async function postRentAccrualForCompany(
             sql`${propertyMonthlyLedger.expectedAmount}::numeric > 0`
           )
         );
-      const duePrepaid = prepaidUnaccrued.filter((r) => isDue(r));
+      const heldDuePrepaid = prepaidUnaccrued.filter((r) => isDue(r) && isRentRecognitionHeld(r.notes, { companyId, rowId: r.id }));
+      if (heldDuePrepaid.length > 0) {
+        logger.warn("[ERP/rental] Rent recognition held pending accounting reconciliation", {
+          companyId,
+          rentalMonthIds: heldDuePrepaid.map((r) => r.id),
+        });
+      }
+      const duePrepaid = prepaidUnaccrued.filter((r) => isDue(r) && !isRentRecognitionHeld(r.notes, { companyId, rowId: r.id }));
       if (duePrepaid.length > 0) {
         await db.transaction(async (tx) => {
           const expenseId = await findOrCreateLedgerAccount(

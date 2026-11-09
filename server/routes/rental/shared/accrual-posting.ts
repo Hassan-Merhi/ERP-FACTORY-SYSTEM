@@ -13,6 +13,7 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { propertyMonthlyLedger } from "@shared/schema";
 import type { DbTransaction } from "../../../db";
 import { writeAuditEvent } from "../../../services/audit";
+import { isRentRecognitionHeld } from "../../../services/rental/rentRecognitionHold";
 import { postErpVoucherTx, type ErpVoucherLine } from "../../../services/accounting/erpVoucherPosting";
 
 /** Who posts an accrual run, and from where (wave 18 A: audited in the posting transaction). */
@@ -49,7 +50,7 @@ export async function postAccrualPassTx(tx: DbTransaction, input: AccrualPassPos
     throw new Error("RENTAL_ACCRUAL_INVALID_LEDGER_ROWS");
   }
   const locked=(await tx.execute(sql`
-    SELECT ml.id,ml.company_id,ml.module,ml.accrual_voucher_id,
+    SELECT ml.id,ml.company_id,ml.module,ml.accrual_voucher_id,ml.notes,
       ml.used_prepaid_account,ml.used_advance_account,
       EXISTS(
         SELECT 1 FROM voucher_entries ve
@@ -70,11 +71,13 @@ export async function postAccrualPassTx(tx: DbTransaction, input: AccrualPassPos
   `)).rows as Array<{
     id:number; company_id:number; module:string; accrual_voucher_id:number|null;
     used_prepaid_account:boolean; used_advance_account:boolean; prior_rent_accrual:boolean;
+    notes: string | null;
   }>;
   if(locked.length!==rowIds.length ||
     locked.some((r,i)=>
       Number(r.id)!==rowIds[i] ||
       r.accrual_voucher_id!==null ||
+      isRentRecognitionHeld(r.notes, { companyId: input.companyId, rowId: r.id }) ||
       // Catch legacy orphan journals even if somebody cleared the month link.
       (input.pass==="accrual" && r.prior_rent_accrual===true) ||
       (input.pass==="accrual" && (r.used_prepaid_account || r.used_advance_account)) ||
