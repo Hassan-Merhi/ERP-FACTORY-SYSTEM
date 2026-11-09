@@ -268,7 +268,7 @@ export default function FactoryContacts() {
   };
 
   return (
-    <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-slate-50 text-slate-900 dark:bg-[#081426] dark:text-slate-100">
+    <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-background text-foreground">
       <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-72 bg-gradient-to-br from-indigo-100/75 via-blue-50/30 to-transparent dark:from-blue-700/15 dark:via-indigo-800/10 dark:to-transparent" />
       <div className="relative min-h-0 flex-1 overflow-y-auto">
         <div className="px-4 pt-5 sm:px-6">
@@ -314,12 +314,12 @@ export default function FactoryContacts() {
               setPage(1);
             }}
             searchPlaceholder="Search name, role, number…"
-            className="mb-0 gap-3 rounded-xl border border-slate-200/90 bg-white/80 p-3 shadow-sm dark:border-indigo-400/15 dark:bg-[#0e1c35]/80"
+            className="mb-0 gap-3 rounded-xl border border-slate-200/90 bg-white/80 p-3 shadow-sm dark:border-indigo-400/15 dark:bg-card/80"
             actions={
               <>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button type="button" size="sm" variant="outline" className="gap-2 rounded-lg dark:border-indigo-400/30 dark:bg-[#152747]">
+                    <Button type="button" size="sm" variant="outline" className="gap-2 rounded-lg dark:border-indigo-400/30 dark:bg-muted">
                       <Filter className="h-4 w-4" aria-hidden="true" />
                       Filters{contactFilter !== "all" ? " • 1" : ""}
                     </Button>
@@ -354,7 +354,7 @@ export default function FactoryContacts() {
                   variant="outline"
                   aria-label="Refresh contacts"
                   title="Refresh contacts"
-                  className="h-9 w-9 rounded-lg dark:border-indigo-400/30 dark:bg-[#152747]"
+                  className="h-9 w-9 rounded-lg dark:border-indigo-400/30 dark:bg-muted"
                   onClick={() => void queryClient.invalidateQueries({ queryKey: ["/api/factory/contacts"] })}
                 >
                   <RefreshCw className="h-4 w-4" aria-hidden="true" />
@@ -366,11 +366,11 @@ export default function FactoryContacts() {
           {isLoading ? (
             <div className="space-y-2" aria-label="Loading contacts">
               {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="h-12 animate-pulse rounded-xl border border-slate-200 bg-white/70 dark:border-indigo-400/15 dark:bg-[#13243e]" />
+                <div key={i} className="h-12 animate-pulse rounded-xl border border-slate-200 bg-white/70 dark:border-indigo-400/15 dark:bg-muted" />
               ))}
             </div>
           ) : filtered.length === 0 ? (
-            <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white/80 px-4 py-20 text-center dark:border-indigo-400/20 dark:bg-[#0e1c35]">
+            <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white/80 px-4 py-20 text-center dark:border-indigo-400/20 dark:bg-card">
               <BookMarked className="mb-4 h-12 w-12 text-indigo-300 dark:text-indigo-400/50" />
               <p className="text-sm text-muted-foreground">
                 {search || contactFilter !== "all"
@@ -393,15 +393,15 @@ export default function FactoryContacts() {
               )}
             </div>
           ) : (
-            <div className="rounded-2xl border border-slate-200 bg-white/90 p-1 shadow-lg shadow-slate-200/30 dark:border-indigo-400/25 dark:bg-[#0b1930]/95 dark:shadow-black/20 sm:p-1.5">
+            <div className="rounded-2xl border border-slate-200 bg-white/90 p-1 shadow-lg shadow-slate-200/30 dark:border-indigo-400/25 dark:bg-card/95 dark:shadow-black/20 sm:p-1.5">
               <Table
                 mobileLayout="cards"
                 density={prefs.density}
                 data-testid="factory-contacts-table"
                 wrapperClassName="rounded-xl border-0 dark:border-0"
               >
-                <TableHeader className="bg-indigo-50 dark:bg-[#1a315a]">
-                  <TableRow className="border-indigo-200 bg-indigo-50 hover:bg-indigo-50 dark:border-indigo-400/25 dark:bg-[#1a315a] dark:hover:bg-[#1a315a]">
+                <TableHeader className="bg-indigo-50 dark:bg-muted">
+                  <TableRow className="border-indigo-200 bg-indigo-50 hover:bg-indigo-50 dark:border-indigo-400/25 dark:bg-muted dark:hover:bg-muted">
                     <TableHead className="w-[180px] text-indigo-900 dark:text-indigo-100">
                       <button
                         type="button"
@@ -423,7 +423,7 @@ export default function FactoryContacts() {
                   {visibleContacts.map((c) => (
                     <TableRow
                       key={c.id}
-                      className="group border-slate-200/80 odd:bg-white even:bg-slate-50/80 hover:bg-indigo-50/70 dark:border-indigo-400/15 dark:odd:bg-[#0c1a32] dark:even:bg-[#11213d] dark:hover:bg-indigo-500/15"
+                      className="group border-slate-200/80 odd:bg-white even:bg-slate-50/80 hover:bg-indigo-50/70 dark:border-indigo-400/15 dark:odd:bg-card dark:even:bg-muted/30 dark:hover:bg-indigo-500/15"
                     >
                       <TableCell className="align-top font-semibold text-slate-900 dark:text-slate-100">{c.name}</TableCell>
                       {show("role") && (

@@ -38,14 +38,14 @@ export default function FactoryPartiesHub() {
   const showSuppliers = sections.includes("suppliers");
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-slate-50/30 dark:bg-[#080f20]">
+    <div className="flex h-full flex-col overflow-hidden bg-background">
       <Tabs
         value={section}
         onValueChange={(value) => setSection(value as Section)}
         className="flex flex-col h-full overflow-hidden"
       >
         {/* Presentation only: preserve the hub query state and permission-gated tabs. */}
-        <div className="relative mx-4 mt-4 shrink-0 overflow-hidden rounded-2xl border border-blue-500/15 bg-linear-to-r from-blue-500/10 via-background to-cyan-500/5 px-4 py-4 shadow-sm dark:border-blue-400/20 dark:from-blue-600/15 dark:via-[#0b1933] dark:to-blue-950/30 [&>header]:mb-0 [&>header]:border-b-0 [&>header]:pb-0">
+        <div className="relative mx-4 mt-4 shrink-0 overflow-hidden rounded-2xl border border-blue-500/15 bg-linear-to-r from-blue-500/10 via-background to-cyan-500/5 px-4 py-4 shadow-sm dark:border-blue-400/20 dark:from-blue-600/15 dark:via-background dark:to-blue-950/30 [&>header]:mb-0 [&>header]:border-b-0 [&>header]:pb-0">
           <PageHeader
             title="Parties"
             subtitle="Customers and suppliers of the factory"
