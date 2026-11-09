@@ -478,6 +478,7 @@ async function buildSnapshot(params: { companyId: number; requestedSupplierIds?:
   try {
     await client.query("BEGIN");
     await client.query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY");
+    await client.query("SELECT set_config('app.current_company_id', $1, true)", [String(params.companyId)]);
     const schema = await inspectHistoricalReplayProductionSchema(executor);
     const integrity = await loadIntegrity(executor, params.companyId);
     const postOffloadSupplierIds = await loadPostOffloadSupplierIds(executor, params.companyId);
