@@ -510,7 +510,7 @@ export default function FactoryLoadingDispatchCompare() {
                   <div className="h-full rounded-full bg-blue-600 transition-[width]" style={{ width: (s?.progressPercent ?? 0) + "%" }} />
                 </div>
                 <div className="flex flex-wrap justify-between gap-2 text-xs text-muted-foreground">
-                  <span>Expected weight: {printNumber(s?.expectedWeightKg ?? null, 3)} kg</span>
+                  <span>{selectedId ? "Trip scans are recorded without a per-truck target" : "Pending Loading weight: " + printNumber(s?.expectedWeightKg ?? null, 3) + " kg"}</span>
                   <span>Scanned weight: {printNumber(s?.verifiedWeightKg ?? null, 3)} kg</span>
                   <span>Weight difference: {printNumber(s?.weightDifferenceKg ?? null, 3)} kg</span>
                   <span>Loading: {printNumber(s?.loadedBales ?? null)} bales · {printNumber(s?.loadedWeightKg ?? null, 3)} kg</span>
@@ -559,11 +559,11 @@ export default function FactoryLoadingDispatchCompare() {
                     <thead className="sticky top-0 bg-slate-100 text-muted-foreground dark:bg-[#0c192e]">
                       <tr>
                         <th className="px-3 py-3 font-semibold">Article</th>
-                        <th className="px-3 py-3 text-right font-semibold">Expected</th>
+                        <th className="px-3 py-3 text-right font-semibold">Pending Loading</th>
                         <th className="px-3 py-3 text-right font-semibold">Scanned</th>
                         <th className="px-3 py-3 text-right font-semibold">Missing</th>
                         <th className="px-3 py-3 text-right font-semibold">Extra</th>
-                        <th className="px-3 py-3 text-right font-semibold">Expected KG</th>
+                        <th className="px-3 py-3 text-right font-semibold">Loading KG</th>
                         <th className="px-3 py-3 text-right font-semibold">Scanned KG</th>
                         <th className="px-3 py-3 text-right font-semibold">KG difference</th>
                         <th className="px-3 py-3 font-semibold">Result</th>
