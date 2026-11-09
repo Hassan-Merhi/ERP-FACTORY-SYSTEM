@@ -340,6 +340,16 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
         }
 
         const settled = await mixCost.settle(tx, companyId, batchDate || batch.batchDate || getClientDate(req));
+        // A supplier's locked rate could have changed between the in-transaction
+        // review and this final valuation. Refuse rather than silently apply a
+        // different USD amount than the operator explicitly reviewed.
+        if (review.estimatedTotalCost === null ||
+            toMoney(review.estimatedTotalCost).minus(settled.totalCost).abs().gt("0.0001")) {
+          throw new MixEditRequestError(
+            "Source rates changed during the edit. Review the proposal again.",
+            "MIX_EDIT_REVIEW_STALE", 409,
+          );
+        }
 
         // ── 5. Update batch totals ──
         const batchUpdates: Partial<typeof factoryMixBatches.$inferInsert> = {
