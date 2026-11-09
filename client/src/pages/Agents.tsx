@@ -7,7 +7,7 @@ import { searchAny } from "@shared/searchNormalization";
  * math in pages/agents/agentStatementMath.ts, and Excel export in
  * pages/agents/agentStatementExcel.ts. Behaviour is unchanged.
  */
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, Suspense, lazy } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -30,8 +30,8 @@ import {
 } from "./agents/agentStatementMath";
 import { useAgentLedger } from "./agents/useAgentLedger";
 import { AgentListPanel } from "./agents/AgentListPanel";
-import { AgentStatementPanel } from "./agents/AgentStatementPanel";
-import { AddAgentDialog } from "./agents/AddAgentDialog";
+const AgentStatementPanel = lazy(() => import("./agents/AgentStatementPanel").then((m) => ({ default: m.AgentStatementPanel })));
+const AddAgentDialog = lazy(() => import("./agents/AddAgentDialog").then((m) => ({ default: m.AddAgentDialog })));
 
 export default function Agents() {
   const { selectedCompany } = useCompany();
@@ -165,6 +165,7 @@ export default function Agents() {
     />
   );
   const statementPanel = selectedAccount ? (
+    <Suspense fallback={<div className="rounded-2xl border border-border bg-card p-6 text-sm text-muted-foreground" role="status">Opening agent statement…</div>}>
     <AgentStatementPanel
       companyName={selectedCompany?.name}
       selectedAccount={selectedAccount}
@@ -183,8 +184,10 @@ export default function Agents() {
       formatDisplayDate={formatDisplayDate}
       phone={isPhone}
     />
+    </Suspense>
   ) : null;
-  const addDialog = (
+  const addDialog = addDialogOpen ? (
+    <Suspense fallback={null}>
     <AddAgentDialog
       open={addDialogOpen}
       onOpenChange={setAddDialogOpen}
@@ -195,7 +198,8 @@ export default function Agents() {
       formatAmount={formatAmount}
       onAdd={handleAddAgent}
     />
-  );
+    </Suspense>
+  ) : null;
 
   // Phones show one screen at a time: the agent list, then the selected agent's statement.
   if (isPhone) {
