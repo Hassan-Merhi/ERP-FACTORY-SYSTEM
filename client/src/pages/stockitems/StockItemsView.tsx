@@ -10,7 +10,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ErpMobileFilters } from "@/components/ui/erp-mobile-filters";
-import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
+import { ErpListTable } from "@/erp-core";
+import { TableHeader, TableBody, TableFooter, TableHead, TableCell, TableRow } from "@/components/ui/table";
+import { useCompany } from "@/contexts/CompanyContext";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState } from "@/components/ui/page-state";
@@ -27,7 +30,6 @@ import {
   List,
   Package,
   Plus,
-  Search,
   Settings,
   Tag,
   Trash2,
@@ -44,6 +46,7 @@ type StockItemsModel = ReturnType<typeof useStockItems>;
 
 export function StockItemsView({ stockItems }: { stockItems: StockItemsModel }) {
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
+  const { selectedCompany } = useCompany();
   // View Only and Create Only roles cannot change existing stock items.
   const recordChanges = useExistingRecordChangeAccess();
   const recordChangeReason = recordChanges.reason ?? undefined;
@@ -101,16 +104,14 @@ export function StockItemsView({ stockItems }: { stockItems: StockItemsModel }) 
   } = stockItems;
 
   const searchControl = (
-    <div className="stock-items-search relative min-w-0 flex-1 sm:min-w-48">
-      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-      <Input
-        placeholder="Search by name or code..."
-        value={searchTerm}
-        onChange={(event) => setSearchTerm(event.target.value)}
-        className="stock-items-search-input pl-9"
-        data-testid="input-search"
-      />
-    </div>
+    <SearchField
+      placeholder="Search by name or code..."
+      value={searchTerm}
+      onValueChange={setSearchTerm}
+      wrapperClassName="stock-items-search min-w-0 flex-1 sm:min-w-48"
+      className="stock-items-search-input"
+      data-testid="input-search"
+    />
   );
   const selectFilters = (
     <>
@@ -418,55 +419,57 @@ export function StockItemsView({ stockItems }: { stockItems: StockItemsModel }) 
       ) : (
         <>
           {viewMode === "list" ? (
-            <div
-              data-horizontal-scroll="true"
-              className="stock-items-table-shell hidden md:block phone-land:hidden border rounded-xl overflow-x-auto"
+            <ErpListTable
+              pageKey="stock-items"
+              companyId={selectedCompany?.id}
+              scrollLabel="Stock items"
+              wrapperClassName="stock-items-table-shell hidden md:block phone-land:hidden rounded-xl"
+              minimumWidth="800px"
             >
-              <table className="w-full min-w-[800px] text-sm">
-                <thead className="sticky top-0 z-30 bg-muted">
-                  <tr className="h-11 bg-muted/40 border-b">
-                    <th className="w-10 px-3">
+                <TableHeader className="sticky top-0 z-30 bg-muted">
+                  <TableRow className="h-11 bg-muted/40 border-b">
+                    <TableHead className="w-10 px-3">
                       <Checkbox
                         checked={allPageSelected}
                         onCheckedChange={(checked) => handleSelectAll(checked === true)}
                         data-testid="checkbox-select-all"
                       />
-                    </th>
-                    <th className="text-left px-3 font-medium">Name</th>
-                    <th className="text-left px-3 font-medium">Group</th>
-                    {stockGrades.length > 0 && <th className="text-left px-3 font-medium">Grade</th>}
-                    {stockCategories.length > 0 && <th className="text-left px-3 font-medium">Category</th>}
-                    <th className="text-left px-3 font-medium">Aliases</th>
-                    <th className="text-left px-3 font-medium">Status</th>
-                    <th className="w-20 px-3 text-right font-medium">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
+                    </TableHead>
+                    <TableHead className="text-left px-3 font-medium">Name</TableHead>
+                    <TableHead className="text-left px-3 font-medium">Group</TableHead>
+                    {stockGrades.length > 0 && <TableHead className="text-left px-3 font-medium">Grade</TableHead>}
+                    {stockCategories.length > 0 && <TableHead className="text-left px-3 font-medium">Category</TableHead>}
+                    <TableHead className="text-left px-3 font-medium">Aliases</TableHead>
+                    <TableHead className="text-left px-3 font-medium">Status</TableHead>
+                    <TableHead className="w-20 px-3 text-right font-medium">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {displayItems.length === 0 ? (
-                    <tr>
-                      <td
+                    <TableRow>
+                      <TableCell
                         colSpan={6 + (stockGrades.length > 0 ? 1 : 0) + (stockCategories.length > 0 ? 1 : 0)}
                         className="text-center py-12 text-muted-foreground"
                       >
                         {debouncedSearch ? "No items match your search" : "No stock items found"}
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ) : (
                     displayItems.map((item) => (
-                      <tr
+                      <TableRow
                         key={item.id}
                         className="stock-items-table-row border-t hover:bg-muted/30 transition-colors cursor-pointer"
                         onClick={() => handleStockItemClick(item.id, item.name)}
                         data-testid={`row-stock-item-${item.id}`}
                       >
-                        <td className="px-3 py-3" onClick={(event) => event.stopPropagation()}>
+                        <TableCell className="px-3 py-3" onClick={(event) => event.stopPropagation()}>
                           <Checkbox
                             checked={selectedIds.includes(item.id)}
                             onCheckedChange={(checked) => handleSelectItem(item.id, checked as boolean)}
                             data-testid={`checkbox-${item.id}`}
                           />
-                        </td>
-                        <td className="px-3 py-3" data-testid={`name-${item.id}`}>
+                        </TableCell>
+                        <TableCell className="px-3 py-3" data-testid={`name-${item.id}`}>
                           <div className="stock-items-name-cell">
                             <span className="stock-items-row-icon">
                               <Package className="h-4 w-4" aria-hidden="true" />
@@ -478,16 +481,16 @@ export function StockItemsView({ stockItems }: { stockItems: StockItemsModel }) 
                               </div>
                             </div>
                           </div>
-                        </td>
-                        <td className="px-3 py-3 text-sm text-muted-foreground" data-testid={`group-${item.id}`}>
+                        </TableCell>
+                        <TableCell className="px-3 py-3 text-sm text-muted-foreground" data-testid={`group-${item.id}`}>
                           {getStockGroupName(item.stockGroupId) ? (
                             <span className="stock-items-group-pill">{getStockGroupName(item.stockGroupId)}</span>
                           ) : (
                             <span className="text-xs">—</span>
                           )}
-                        </td>
+                        </TableCell>
                         {stockGrades.length > 0 && (
-                          <td className="px-3 py-3" data-testid={`grade-${item.id}`}>
+                          <TableCell className="px-3 py-3" data-testid={`grade-${item.id}`}>
                             {getGradeName(item.gradeId) ? (
                               <Badge variant="outline" className="text-xs font-normal">
                                 {getGradeName(item.gradeId)}
@@ -495,10 +498,10 @@ export function StockItemsView({ stockItems }: { stockItems: StockItemsModel }) 
                             ) : (
                               <span className="text-xs text-muted-foreground">—</span>
                             )}
-                          </td>
+                          </TableCell>
                         )}
                         {stockCategories.length > 0 && (
-                          <td className="px-3 py-3" data-testid={`category-${item.id}`}>
+                          <TableCell className="px-3 py-3" data-testid={`category-${item.id}`}>
                             {getCategoryName(item.categoryId) ? (
                               <Badge variant="secondary" className="stock-items-category-pill text-xs">
                                 {getCategoryName(item.categoryId)}
@@ -506,9 +509,9 @@ export function StockItemsView({ stockItems }: { stockItems: StockItemsModel }) 
                             ) : (
                               <span className="text-xs text-muted-foreground">—</span>
                             )}
-                          </td>
+                          </TableCell>
                         )}
-                        <td className="px-3 py-3 max-w-[180px]" data-testid={`aliases-${item.id}`}>
+                        <TableCell className="px-3 py-3 max-w-[180px]" data-testid={`aliases-${item.id}`}>
                           {(aliasMap.get(item.id) ?? []).length > 0 ? (
                             <div className="flex flex-wrap gap-1">
                               {(aliasMap.get(item.id) ?? []).map((code) => (
@@ -520,8 +523,8 @@ export function StockItemsView({ stockItems }: { stockItems: StockItemsModel }) 
                           ) : (
                             <span className="text-xs text-muted-foreground">—</span>
                           )}
-                        </td>
-                        <td className="px-3 py-3" data-testid={`status-${item.id}`}>
+                        </TableCell>
+                        <TableCell className="px-3 py-3" data-testid={`status-${item.id}`}>
                           <Badge
                             variant="outline"
                             className={
@@ -533,8 +536,8 @@ export function StockItemsView({ stockItems }: { stockItems: StockItemsModel }) 
                             <span className="stock-items-status-dot" aria-hidden="true" />
                             {item.active ? "Active" : "Inactive"}
                           </Badge>
-                        </td>
-                        <td className="px-3 py-3 text-right" onClick={(event) => event.stopPropagation()}>
+                        </TableCell>
+                        <TableCell className="px-3 py-3 text-right" onClick={(event) => event.stopPropagation()}>
                           <Button
                             size="sm"
                             variant="ghost"
@@ -548,15 +551,15 @@ export function StockItemsView({ stockItems }: { stockItems: StockItemsModel }) 
                             <Edit className="h-3.5 w-3.5" />
                             Edit
                           </Button>
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))
                   )}
-                </tbody>
+                </TableBody>
                 {totalItems > 0 && (
-                  <tfoot>
-                    <tr className="border-t bg-muted/40">
-                      <td
+                  <TableFooter>
+                    <TableRow className="border-t bg-muted/40">
+                      <TableCell
                         colSpan={6 + (stockGrades.length > 0 ? 1 : 0) + (stockCategories.length > 0 ? 1 : 0)}
                         className="px-3 py-2"
                       >
@@ -589,12 +592,11 @@ export function StockItemsView({ stockItems }: { stockItems: StockItemsModel }) 
                             </Button>
                           </div>
                         </div>
-                      </td>
-                    </tr>
-                  </tfoot>
+                      </TableCell>
+                    </TableRow>
+                  </TableFooter>
                 )}
-              </table>
-            </div>
+            </ErpListTable>
           ) : (
             <div className="hidden md:block phone-land:hidden">
               {displayItems.length === 0 ? (
