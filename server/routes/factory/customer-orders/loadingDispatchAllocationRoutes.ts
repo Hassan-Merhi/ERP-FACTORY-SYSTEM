@@ -207,7 +207,7 @@ function buildOverview(s: Source, dispatchId: number, orderId: number) {
     let t = otherByTrip.get(trip);
     if (!t) { t = new Map(); otherByTrip.set(trip, t); }
     let a = t.get(article);
-    if (!a) { a = { planned: 0, exact: new Set(), scanned: new Set() }; t.set(article, a); }
+    if (!a) { a = { planned: 0, exact: new Set<number>(), scanned: new Set<number>() }; t.set(article, a); }
     return a;
   };
   for (const p of s.existingArticles) if (str(p.dispatchId) !== id) {
@@ -330,6 +330,10 @@ export function registerFactoryLoadingDispatchAllocationRoutes(app: Express) {
             if (!b) fail(409, "LOADING_CHANGED", "A scanned bale was removed from the loading. Correct the scan before planning.");
             if ((requested.get(b.articleCode) ?? 0) === 0) fail(409, "TARGET_BELOW_SCANS",
               "Keep a target for " + b.articleCode + "; this truck already has verified bales");
+            const conflict = otherOccupied.get(b.baleId);
+            if (conflict) fail(409, "WRONG_TRIP_SCAN",
+              "Bale " + b.baleReference + " was scanned here but reserved for Dispatch #" +
+              conflict.dispatchNumber + ". Correct the other trip's plan before assigning it.");
             chosen.add(b.baleId);
           }
 
