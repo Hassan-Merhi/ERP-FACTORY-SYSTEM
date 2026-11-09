@@ -301,7 +301,7 @@ export async function getMixMonitorStatus(companyId: number): Promise<MixMonitor
     companyId, initialized: baseline !== null,
     lastSuccessAt: baseline?.lastSuccessAt ?? null, summary: baseline?.summary ?? null,
     unreadAlerts: Number(r.rows[0]?.unread_alerts ?? 0),
-    monitoringEnabled: process.env.FACTORY_MIX_INTEGRITY_MONITOR_ENABLED !== "false",
+    monitoringEnabled: process.env.ENABLE_SCHEDULERS !== "false" && process.env.FACTORY_MIX_INTEGRITY_MONITOR_ENABLED !== "false",
     nextCheck: "Daily at 01:35 UTC when server schedulers are enabled",
     legacyBaselinePolicy: "First successful scan records existing issues without alerts. Only new or escalated issues create Factory Alerts.",
   };
