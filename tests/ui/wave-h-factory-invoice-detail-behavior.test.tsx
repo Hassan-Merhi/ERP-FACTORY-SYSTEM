@@ -39,6 +39,8 @@ vi.mock("@/contexts/AppModeContext", () => ({
 }));
 
 vi.mock("@/contexts/CompanyContext", () => ({
+  // No provider role: the shared change-access helper leaves controls as they are.
+  useOptionalCompany: () => null,
   useCompany: () => ({
     selectedCompany: {
       id: 1,

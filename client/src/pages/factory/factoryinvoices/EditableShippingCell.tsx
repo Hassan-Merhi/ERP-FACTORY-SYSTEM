@@ -16,9 +16,19 @@ interface Props {
   multiline?: boolean;
   maxLength: number;
   onSave: (orderId: number, field: EditableShippingField, value: string) => Promise<void>;
+  /** Read-only roles see the value without the inline editor. */
+  readOnly?: boolean;
 }
 
-export function EditableShippingCell({ orderId, field, value, multiline = false, maxLength, onSave }: Props) {
+export function EditableShippingCell({
+  orderId,
+  field,
+  value,
+  multiline = false,
+  maxLength,
+  onSave,
+  readOnly = false,
+}: Props) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [saving, setSaving] = useState(false);
@@ -48,6 +58,18 @@ export function EditableShippingCell({ orderId, field, value, multiline = false,
     } finally {
       setSaving(false);
     }
+  }
+
+  if (readOnly) {
+    return (
+      <div
+        className="min-w-[100px] max-w-[220px] truncate"
+        title={value || undefined}
+        data-testid={`text-inline-${field}-${orderId}`}
+      >
+        {value || <span className="text-muted-foreground/50">—</span>}
+      </div>
+    );
   }
 
   return (
@@ -100,12 +122,27 @@ export function EditableShippingCell({ orderId, field, value, multiline = false,
             />
           )}
           <div className="flex justify-end gap-1">
-            <Button type="button" size="icon" variant="ghost" className="h-7 w-7" disabled={saving}
-              onClick={cancel} aria-label="Cancel edit" data-testid={`cancel-inline-${field}-${orderId}`}>
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7"
+              disabled={saving}
+              onClick={cancel}
+              aria-label="Cancel edit"
+              data-testid={`cancel-inline-${field}-${orderId}`}
+            >
               <X className="h-3.5 w-3.5" />
             </Button>
-            <Button type="button" size="icon" className="h-7 w-7" disabled={saving}
-              onClick={() => void save()} aria-label="Save changes" data-testid={`save-inline-${field}-${orderId}`}>
+            <Button
+              type="button"
+              size="icon"
+              className="h-7 w-7"
+              disabled={saving}
+              onClick={() => void save()}
+              aria-label="Save changes"
+              data-testid={`save-inline-${field}-${orderId}`}
+            >
               {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
             </Button>
           </div>

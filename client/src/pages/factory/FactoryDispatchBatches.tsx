@@ -15,6 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { PageHeader } from "@/components/PageHeader";
 import { Plus, Truck, Package, Filter, ChevronRight, Search, BarChart2 } from "lucide-react";
@@ -81,6 +82,8 @@ function fmt(n: number | string) {
 export default function FactoryDispatchBatches() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
+  const canCreateBatch = recordChanges.canCreate("POST", "/api/factory/dispatch-batches");
   const { formatDisplayDate } = useDateFormat();
 
   const [filterCustomer, setFilterCustomer] = useState("_all");
@@ -274,7 +277,7 @@ export default function FactoryDispatchBatches() {
     <div className="flex flex-col h-full">
       <PageHeader title="Dispatch Batches" subtitle="Manage local truck dispatch batches for bale sales">
         <div className="flex items-center gap-2 flex-wrap">
-          {showBatches && (
+          {showBatches && canCreateBatch && (
             <Button onClick={() => setCreateOpen(true)} data-testid="button-new-dispatch-batch">
               <Plus className="w-4 h-4 mr-2" />
               New Dispatch Batch
@@ -492,9 +495,11 @@ export default function FactoryDispatchBatches() {
                   <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
                     <Truck className="w-10 h-10 opacity-40" />
                     <p className="text-sm">No dispatch batches found</p>
-                    <Button variant="outline" size="sm" onClick={() => setCreateOpen(true)}>
-                      <Plus className="w-4 h-4 mr-1" /> Create first batch
-                    </Button>
+                    {canCreateBatch && (
+                      <Button variant="outline" size="sm" onClick={() => setCreateOpen(true)}>
+                        <Plus className="w-4 h-4 mr-1" /> Create first batch
+                      </Button>
+                    )}
                   </div>
                 ) : (
                   <Table mobileLayout="cards">
@@ -554,7 +559,7 @@ export default function FactoryDispatchBatches() {
       </div>
 
       <Dialog
-        open={createOpen}
+        open={canCreateBatch && createOpen}
         onOpenChange={(o) => {
           if (!o) resetForm();
           setCreateOpen(o);

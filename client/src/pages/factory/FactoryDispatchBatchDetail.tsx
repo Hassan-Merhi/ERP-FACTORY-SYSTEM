@@ -30,6 +30,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { PageHeader } from "@/components/PageHeader";
 import {
@@ -68,6 +69,7 @@ export default function FactoryDispatchBatchDetail() {
   const [reopenReason, setReopenReason] = useState("");
   const { data: me } = useQuery<{ role: string }>({ queryKey: ["/api/auth/me"] });
   const isDeveloper = me?.role === "Developer";
+  const recordChanges = useExistingRecordChangeAccess();
 
   const [showBales, setShowBales] = useState(false);
   const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split("T")[0]);
@@ -224,6 +226,8 @@ export default function FactoryDispatchBatchDetail() {
 
   const { batch, customerName, proforma, proformaLines, rides, articleTotals, finalInvoice } = data;
   const isReadOnly = batch.status === "INVOICED" || batch.status === "CANCELLED";
+  // Rides, cancel, reopen, scan and invoice generation all change this existing batch.
+  const canChangeBatch = !isReadOnly && recordChanges.allowed;
 
   const totalBales = rides.reduce((s, r) => s + parseInt(String(r.baleCount || 0)), 0);
   const totalWeight = rides.reduce((s, r) => s + parseFloat(r.totalWeightKg || "0"), 0);
@@ -264,20 +268,24 @@ export default function FactoryDispatchBatchDetail() {
         <div className="flex flex-wrap gap-2">
           {!isReadOnly && (
             <>
-              <Button variant="outline" onClick={() => setAddRideOpen(true)} data-testid="button-add-truck-ride">
-                <Plus className="w-4 h-4 mr-1" /> Add Truck Ride
-              </Button>
+              {canChangeBatch && (
+                <Button variant="outline" onClick={() => setAddRideOpen(true)} data-testid="button-add-truck-ride">
+                  <Plus className="w-4 h-4 mr-1" /> Add Truck Ride
+                </Button>
+              )}
               <Button variant="outline" onClick={() => setPreviewOpen(true)} data-testid="button-preview-invoice">
                 <Eye className="w-4 h-4 mr-1" /> Preview Invoice
               </Button>
-              <Button
-                variant="outline"
-                className="text-destructive"
-                onClick={() => setCancelOpen(true)}
-                data-testid="button-cancel-batch"
-              >
-                Cancel Batch
-              </Button>
+              {canChangeBatch && (
+                <Button
+                  variant="outline"
+                  className="text-destructive"
+                  onClick={() => setCancelOpen(true)}
+                  data-testid="button-cancel-batch"
+                >
+                  Cancel Batch
+                </Button>
+              )}
             </>
           )}
           {batch.status === "INVOICED" && finalInvoice && (
@@ -445,7 +453,7 @@ export default function FactoryDispatchBatchDetail() {
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm flex items-center gap-1.5">
                   <Truck className="w-4 h-4" /> Truck Rides
-                  {!isReadOnly && (
+                  {canChangeBatch && (
                     <Button size="sm" variant="outline" className="ml-auto" onClick={() => setAddRideOpen(true)}>
                       <Plus className="w-3.5 h-3.5 mr-1" /> Add
                     </Button>
@@ -457,7 +465,7 @@ export default function FactoryDispatchBatchDetail() {
                   <div className="flex flex-col items-center gap-2 py-10 text-muted-foreground">
                     <Truck className="w-8 h-8 opacity-40" />
                     <p className="text-sm">No truck rides yet</p>
-                    {!isReadOnly && (
+                    {canChangeBatch && (
                       <Button size="sm" variant="outline" onClick={() => setAddRideOpen(true)}>
                         <Plus className="w-4 h-4 mr-1" /> Add first ride
                       </Button>
@@ -491,7 +499,7 @@ export default function FactoryDispatchBatchDetail() {
                           </TableCell>
                           <TableCell>
                             <div className="flex gap-1.5 justify-end">
-                              {(ride.status === "LOADING" || ride.status === "DRAFT") && !isReadOnly && (
+                              {(ride.status === "LOADING" || ride.status === "DRAFT") && canChangeBatch && (
                                 <Button
                                   size="sm"
                                   variant="outline"
@@ -501,7 +509,7 @@ export default function FactoryDispatchBatchDetail() {
                                   <ScanLine className="w-3.5 h-3.5 mr-1" /> Scan
                                 </Button>
                               )}
-                              {ride.status === "DISPATCHED" && !isReadOnly && (
+                              {ride.status === "DISPATCHED" && canChangeBatch && (
                                 <Button
                                   size="sm"
                                   variant="ghost"
@@ -782,7 +790,7 @@ export default function FactoryDispatchBatchDetail() {
             <Button variant="outline" onClick={() => setPreviewOpen(false)}>
               Close
             </Button>
-            {preview?.canGenerate && (
+            {recordChanges.allowed && preview?.canGenerate && (
               <Button
                 onClick={() => setGenerateOpen(true)}
                 disabled={!preview.canGenerate}

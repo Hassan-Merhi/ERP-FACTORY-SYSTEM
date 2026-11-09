@@ -22,6 +22,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { apiRequest } from "@/lib/queryClient";
 import type { V5Data } from "./factorystockallocationv5/types";
 import {
@@ -74,6 +75,8 @@ export default function CustomerLoading() {
   const mhd = useFactoryMhdView();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const recordChanges = useExistingRecordChangeAccess();
+  const canCreateProforma = recordChanges.canCreate("POST", "/api/factory/customer-proformas/bulk");
   const [customerId, setCustomerId] = useState("");
   const [search, setSearch] = useState("");
   const [loadingFilter, setLoadingFilter] = useState<LoadingFilter>("ALL");
@@ -861,10 +864,12 @@ export default function CustomerLoading() {
               <Button variant="outline" onClick={resetSelection}>
                 Clear
               </Button>
-              <Button onClick={openPreview} disabled={validSelectedLines.length === 0 || hasInvalidSelectedLine}>
-                <ShoppingCart className="mr-2 h-4 w-4" />
-                Create Proforma
-              </Button>
+              {canCreateProforma && (
+                <Button onClick={openPreview} disabled={validSelectedLines.length === 0 || hasInvalidSelectedLine}>
+                  <ShoppingCart className="mr-2 h-4 w-4" />
+                  Create Proforma
+                </Button>
+              )}
             </div>
           </div>
         </div>
@@ -879,7 +884,7 @@ export default function CustomerLoading() {
       />
 
       <CustomerLoadingProformaDialog
-        open={previewOpen}
+        open={canCreateProforma && previewOpen}
         onOpenChange={setPreviewOpen}
         customerName={loadingQuery.data?.customer.legalName}
         proformaName={proformaName}

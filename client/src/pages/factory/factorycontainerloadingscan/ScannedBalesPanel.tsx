@@ -55,7 +55,10 @@ function ScanControls({ model }: { model: FactoryContainerLoadingScanModel }) {
   if (!model.orderId) return null;
 
   return (
-    <div className="mb-4 rounded-2xl border border-blue-100/80 bg-blue-50/40 p-3 dark:border-blue-500/20 dark:bg-[#0b1a31]/70 sm:p-4" data-testid="container-loading-scan-controls">
+    <div
+      className="mb-4 rounded-2xl border border-blue-100/80 bg-blue-50/40 p-3 dark:border-blue-500/20 dark:bg-[#0b1a31]/70 sm:p-4"
+      data-testid="container-loading-scan-controls"
+    >
       <div className="mb-3 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex items-center gap-2 text-sm font-semibold">
@@ -68,36 +71,40 @@ function ScanControls({ model }: { model: FactoryContainerLoadingScanModel }) {
         </div>
 
         <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-2 sm:flex sm:w-auto sm:items-center">
-          <Button
-            type="button"
-            size="sm"
-            variant={model.ignoreProforma ? "default" : "outline"}
-            onClick={model.toggleIgnoreProforma}
-            aria-pressed={model.ignoreProforma}
-            className={
-              model.ignoreProforma
-                ? "min-w-0 bg-amber-500 px-2 text-white hover:bg-amber-600 sm:px-3"
-                : "min-w-0 px-2 text-muted-foreground sm:px-3"
-            }
-            title={model.ignoreProforma ? model.tr("ignoreProformaOnTitle") : model.tr("ignoreProformaOffTitle")}
-            data-testid="button-ignore-proforma"
-          >
-            <ShieldOff className="h-3.5 w-3.5 shrink-0 sm:mr-1.5" />
-            <span className="hidden truncate min-[360px]:inline">
-              {model.ignoreProforma ? model.tr("ignoreOn") : model.tr("ignoreProforma")}
-            </span>
-          </Button>
+          {model.canChangeExistingRecords && (
+            <Button
+              type="button"
+              size="sm"
+              variant={model.ignoreProforma ? "default" : "outline"}
+              onClick={model.toggleIgnoreProforma}
+              aria-pressed={model.ignoreProforma}
+              className={
+                model.ignoreProforma
+                  ? "min-w-0 bg-amber-500 px-2 text-white hover:bg-amber-600 sm:px-3"
+                  : "min-w-0 px-2 text-muted-foreground sm:px-3"
+              }
+              title={model.ignoreProforma ? model.tr("ignoreProformaOnTitle") : model.tr("ignoreProformaOffTitle")}
+              data-testid="button-ignore-proforma"
+            >
+              <ShieldOff className="h-3.5 w-3.5 shrink-0 sm:mr-1.5" />
+              <span className="hidden truncate min-[360px]:inline">
+                {model.ignoreProforma ? model.tr("ignoreOn") : model.tr("ignoreProforma")}
+              </span>
+            </Button>
+          )}
 
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => model.importFileRef.current?.click()}
-            className="min-w-0 px-2 sm:px-3"
-            data-testid="button-import-excel"
-          >
-            <Upload className="h-3.5 w-3.5 shrink-0 sm:mr-1.5" />
-            <span className="truncate">{model.tr("importExcel")}</span>
-          </Button>
+          {model.canChangeExistingRecords && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => model.importFileRef.current?.click()}
+              className="min-w-0 px-2 sm:px-3"
+              data-testid="button-import-excel"
+            >
+              <Upload className="h-3.5 w-3.5 shrink-0 sm:mr-1.5" />
+              <span className="truncate">{model.tr("importExcel")}</span>
+            </Button>
+          )}
 
           <Button
             size="sm"
@@ -112,37 +119,50 @@ function ScanControls({ model }: { model: FactoryContainerLoadingScanModel }) {
           </Button>
         </div>
 
-        <input
-          ref={model.importFileRef}
-          type="file"
-          accept=".xlsx"
-          className="hidden"
-          onChange={model.handleImportFile}
-          data-testid="input-import-file"
-        />
+        {model.canChangeExistingRecords && (
+          <input
+            ref={model.importFileRef}
+            type="file"
+            accept=".xlsx"
+            className="hidden"
+            onChange={model.handleImportFile}
+            data-testid="input-import-file"
+          />
+        )}
       </div>
 
       <div className="flex items-center gap-2">
         <div className="relative min-w-0 flex-1">
-        <ScanLine className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          ref={model.scannerRef}
-          value={model.scanCode}
-          onChange={(e) => model.setScanCode(e.target.value)}
-          onKeyDown={model.handleScan}
-          placeholder={model.tr("scanPlaceholder")}
-          disabled={
-            !model.orderId || !model.orderDetail || !model.selectedLocationId || model.addBaleMutation.isPending
-          }
-          className={`h-14 min-w-0 rounded-xl border-blue-200/80 bg-white pl-12 font-mono text-base shadow-sm transition-all focus-visible:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500/30 dark:border-blue-500/25 dark:bg-[#0c172b] sm:text-lg ${model.scanInputClass}`}
-          autoFocus
-          data-testid="input-scan-code"
-        />
+          <ScanLine className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            ref={model.scannerRef}
+            value={model.scanCode}
+            onChange={(e) => model.setScanCode(e.target.value)}
+            onKeyDown={model.handleScan}
+            placeholder={model.tr("scanPlaceholder")}
+            disabled={
+              !model.canChangeExistingRecords ||
+              !model.orderId ||
+              !model.orderDetail ||
+              !model.selectedLocationId ||
+              model.addBaleMutation.isPending
+            }
+            title={model.changeDisabledReason ?? undefined}
+            className={`h-14 min-w-0 rounded-xl border-blue-200/80 bg-white pl-12 font-mono text-base shadow-sm transition-all focus-visible:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500/30 dark:border-blue-500/25 dark:bg-[#0c172b] sm:text-lg ${model.scanInputClass}`}
+            autoFocus
+            data-testid="input-scan-code"
+          />
         </div>
         <MobileBarcodeScanner
           onScan={model.submitScannedCode}
           feedback={model.cameraScanFeedback}
-          disabled={!model.orderId || !model.orderDetail || !model.selectedLocationId || model.addBaleMutation.isPending}
+          disabled={
+            !model.canChangeExistingRecords ||
+            !model.orderId ||
+            !model.orderDetail ||
+            !model.selectedLocationId ||
+            model.addBaleMutation.isPending
+          }
           className="h-14 w-14 shrink-0"
         />
       </div>
@@ -163,12 +183,27 @@ function BaleGroups({
         className="relative flex min-h-[280px] flex-col items-center justify-center overflow-hidden rounded-[22px] border border-dashed border-blue-200 bg-gradient-to-b from-blue-50/80 to-white px-4 py-12 text-center text-muted-foreground dark:border-blue-500/35 dark:from-[#0d2447] dark:via-[#0b1c37] dark:to-[#0a1528]"
         data-testid="text-no-bales"
       >
-        <div aria-hidden="true" className="pointer-events-none absolute left-1/2 top-1/2 h-44 w-44 -translate-x-1/2 -translate-y-[70%] rounded-full bg-blue-400/10 blur-3xl dark:bg-blue-500/20" />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute left-1/2 top-1/2 h-44 w-44 -translate-x-1/2 -translate-y-[70%] rounded-full bg-blue-400/10 blur-3xl dark:bg-blue-500/20"
+        />
         <div className="relative mb-4 flex h-20 w-20 items-center justify-center rounded-[22px] border border-blue-300/60 bg-white/90 shadow-[0_16px_38px_-20px_rgba(37,99,235,0.6)] dark:border-blue-400/40 dark:bg-blue-500/15">
-          <span aria-hidden="true" className="absolute -left-2 -top-2 h-4 w-4 rounded-tl-lg border-l-[3px] border-t-[3px] border-sky-500" />
-          <span aria-hidden="true" className="absolute -right-2 -top-2 h-4 w-4 rounded-tr-lg border-r-[3px] border-t-[3px] border-sky-500" />
-          <span aria-hidden="true" className="absolute -bottom-2 -left-2 h-4 w-4 rounded-bl-lg border-b-[3px] border-l-[3px] border-sky-500" />
-          <span aria-hidden="true" className="absolute -bottom-2 -right-2 h-4 w-4 rounded-br-lg border-b-[3px] border-r-[3px] border-sky-500" />
+          <span
+            aria-hidden="true"
+            className="absolute -left-2 -top-2 h-4 w-4 rounded-tl-lg border-l-[3px] border-t-[3px] border-sky-500"
+          />
+          <span
+            aria-hidden="true"
+            className="absolute -right-2 -top-2 h-4 w-4 rounded-tr-lg border-r-[3px] border-t-[3px] border-sky-500"
+          />
+          <span
+            aria-hidden="true"
+            className="absolute -bottom-2 -left-2 h-4 w-4 rounded-bl-lg border-b-[3px] border-l-[3px] border-sky-500"
+          />
+          <span
+            aria-hidden="true"
+            className="absolute -bottom-2 -right-2 h-4 w-4 rounded-br-lg border-b-[3px] border-r-[3px] border-sky-500"
+          />
           <Package className="h-10 w-10 text-blue-500 dark:text-sky-300" />
         </div>
         <p className="relative text-base font-semibold text-foreground">{model.tr("noBalesScanned")}</p>
@@ -252,18 +287,22 @@ function BaleGroups({
                             {formatNumber(parseFloat(bale.weight || "0"), 2)} {model.tr("kgUnit")}
                           </TableCell>
                           <TableCell className="w-[44px] py-2.5">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                              onClick={() => model.setBaleToDelete({ id: bale.id, baleReference: bale.baleReference })}
-                              disabled={model.removeBaleMutation.isPending}
-                              data-testid={`button-remove-bale-${bale.id}`}
-                              title={model.tr("returnBaleToStock")}
-                              aria-label={model.tr("returnNamedBaleToStock", { reference: bale.baleReference })}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
+                            {model.canChangeExistingRecords && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                onClick={() =>
+                                  model.setBaleToDelete({ id: bale.id, baleReference: bale.baleReference })
+                                }
+                                disabled={model.removeBaleMutation.isPending}
+                                data-testid={`button-remove-bale-${bale.id}`}
+                                title={model.tr("returnBaleToStock")}
+                                aria-label={model.tr("returnNamedBaleToStock", { reference: bale.baleReference })}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
                           </TableCell>
                         </TableRow>
                       );
@@ -408,7 +447,11 @@ export function ScannedBalesPanel({ model }: { model: FactoryContainerLoadingSca
           </div>
 
           <div className="flex flex-wrap items-center justify-end gap-1.5">
-            <Badge variant="secondary" className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 font-semibold text-blue-700 dark:border-blue-400/30 dark:bg-blue-500/15 dark:text-sky-300" data-testid="badge-bale-count">
+            <Badge
+              variant="secondary"
+              className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 font-semibold text-blue-700 dark:border-blue-400/30 dark:bg-blue-500/15 dark:text-sky-300"
+              data-testid="badge-bale-count"
+            >
               {bales.length} {model.tr("balesLower")}
             </Badge>
             {bales.length > 0 && (
@@ -417,7 +460,7 @@ export function ScannedBalesPanel({ model }: { model: FactoryContainerLoadingSca
               </Badge>
             )}
 
-            {canEmptyContainer && (
+            {model.canChangeExistingRecords && canEmptyContainer && (
               <Button
                 type="button"
                 size="sm"

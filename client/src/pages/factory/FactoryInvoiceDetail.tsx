@@ -95,6 +95,7 @@ export default function FactoryInvoiceDetail() {
     handleExportPdf,
     handleExportPdfNoCharges,
     handleExportLoadingStatus,
+    canChangeExistingRecords,
   } = model;
 
   const invoiceQueryParams =
@@ -203,7 +204,7 @@ export default function FactoryInvoiceDetail() {
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {/* Primary context action */}
-          {order.status === "DRAFT" && (
+          {canChangeExistingRecords && order.status === "DRAFT" && (
             <Button
               variant="outline"
               onClick={() => navigate(`/factory/sales/new?orderId=${order.id}`)}
@@ -269,7 +270,7 @@ export default function FactoryInvoiceDetail() {
                 </>
               )}
 
-              {isAdmin && (
+              {isAdmin && canChangeExistingRecords && (
                 <>
                   <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">Pricing</DropdownMenuLabel>
                   {order.status !== "CANCELLED" && (
@@ -333,10 +334,11 @@ export default function FactoryInvoiceDetail() {
                 </DropdownMenuItem>
               )}
 
-              {isAdmin && (isFinalized || order.status !== "FINALIZED") && order.status !== "CANCELLED" && (
-                <DropdownMenuSeparator />
-              )}
-              {isAdmin && isFinalized && (
+              {canChangeExistingRecords &&
+                isAdmin &&
+                (isFinalized || order.status !== "FINALIZED") &&
+                order.status !== "CANCELLED" && <DropdownMenuSeparator />}
+              {canChangeExistingRecords && isAdmin && isFinalized && (
                 <DropdownMenuItem
                   className="text-destructive focus:text-destructive"
                   onSelect={() => setRevertDialogOpen(true)}
@@ -346,7 +348,7 @@ export default function FactoryInvoiceDetail() {
                   Revert to Draft
                 </DropdownMenuItem>
               )}
-              {order.status !== "FINALIZED" && order.status !== "CANCELLED" && (
+              {canChangeExistingRecords && order.status !== "FINALIZED" && order.status !== "CANCELLED" && (
                 <DropdownMenuItem
                   className="text-destructive focus:text-destructive"
                   onSelect={() => setDeleteDialogOpen(true)}
@@ -506,7 +508,9 @@ export default function FactoryInvoiceDetail() {
                           className={`text-right font-mono${hideExportSelling ? " print:hidden" : ""}`}
                           data-testid={`text-price-per-bale-${idx}`}
                         >
-                          {(isVerifiedStatus || order.status === "FINALIZED") && !isPerKg ? (
+                          {canChangeExistingRecords &&
+                          (isVerifiedStatus || order.status === "FINALIZED") &&
+                          !isPerKg ? (
                             editingArticleCode === line.articleCode ? (
                               <Input
                                 ref={inputRef}
@@ -573,29 +577,31 @@ export default function FactoryInvoiceDetail() {
             <h3 className="font-semibold" data-testid="text-charges-header">
               Freight &amp; Charges
             </h3>
-            {isFinalized && [...freightCharges, ...otherCharges].some((c) => !c.voucherId) && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => relinkVouchersMutation.mutate()}
-                disabled={relinkVouchersMutation.isPending}
-                data-testid="button-relink-charge-vouchers"
-              >
-                {relinkVouchersMutation.isPending ? "Linking..." : "Fix Ledger Entries"}
-              </Button>
-            )}
+            {canChangeExistingRecords &&
+              isFinalized &&
+              [...freightCharges, ...otherCharges].some((c) => !c.voucherId) && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => relinkVouchersMutation.mutate()}
+                  disabled={relinkVouchersMutation.isPending}
+                  data-testid="button-relink-charge-vouchers"
+                >
+                  {relinkVouchersMutation.isPending ? "Linking..." : "Fix Ledger Entries"}
+                </Button>
+              )}
           </div>
           <div className="space-y-3">
             {[...freightCharges, ...otherCharges].map((charge, idx) => {
               const linkedAccount = ledgerAccounts.find((a) => a.id === charge.ledgerAccountId);
               const isEditingLedger = editingChargeLedger === charge.id;
               const isEditingAmount = editingChargeAmount === charge.id;
-              const canEditAmount = isFinalized && !!charge.voucherId;
+              const canEditAmount = canChangeExistingRecords && isFinalized && !!charge.voucherId;
               return (
                 <div key={charge.id} className="space-y-1" data-testid={`row-charge-${idx}`}>
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-sm">{charge.name}</span>
-                    {isEditingAmount ? (
+                    {canChangeExistingRecords && isEditingAmount ? (
                       <div className="flex items-center gap-1 print:hidden">
                         <Input
                           type="number"
@@ -668,7 +674,7 @@ export default function FactoryInvoiceDetail() {
                       </div>
                     )}
                   </div>
-                  {isEditingLedger ? (
+                  {canChangeExistingRecords && isEditingLedger ? (
                     <div className="flex items-center gap-2 print:hidden">
                       <Select
                         value={String(charge.ledgerAccountId ?? "")}
@@ -710,16 +716,18 @@ export default function FactoryInvoiceDetail() {
                           No ledger account — not posted
                         </span>
                       )}
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-6 text-xs px-2"
-                        onClick={() => setEditingChargeLedger(charge.id)}
-                        data-testid={`button-edit-charge-ledger-${charge.id}`}
-                      >
-                        <Pencil className="h-3 w-3 mr-1" />
-                        Link
-                      </Button>
+                      {canChangeExistingRecords && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 text-xs px-2"
+                          onClick={() => setEditingChargeLedger(charge.id)}
+                          data-testid={`button-edit-charge-ledger-${charge.id}`}
+                        >
+                          <Pencil className="h-3 w-3 mr-1" />
+                          Link
+                        </Button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -727,7 +735,7 @@ export default function FactoryInvoiceDetail() {
             })}
           </div>
 
-          {isFinalized && (
+          {canChangeExistingRecords && isFinalized && (
             <div className="mt-3 pt-3 border-t print:hidden">
               {showAddCharge ? (
                 <div className="space-y-2">

@@ -10,28 +10,27 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import {
-  Archive,
-  Check,
-  ChevronDown,
-  ChevronRight,
-  Loader2,
-  Plus,
-  RotateCcw,
-  Trash2,
-  X,
-} from "lucide-react";
+import { Archive, Check, ChevronDown, ChevronRight, Loader2, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import type { AvailRow, EditingAvail } from "../types";
 import { AVAIL_KEY } from "../utils";
 
 export function ShippingAvailabilityTable() {
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
+  const canAddRow = recordChanges.canCreate("POST", AVAIL_KEY);
   const [editing, setEditing] = useState<EditingAvail | null>(null);
   const [adding, setAdding] = useState(false);
   const [expanded, setExpanded] = useState(true);
   const [archivedExpanded, setArchivedExpanded] = useState(false);
-  const [newRow, setNewRow] = useState({ date: "", shippingCompany: "", availableContainers: "", note: "", details: "" });
+  const [newRow, setNewRow] = useState({
+    date: "",
+    shippingCompany: "",
+    availableContainers: "",
+    note: "",
+    details: "",
+  });
 
   const { data: rows = [], isLoading } = useQuery<AvailRow[]>({
     queryKey: [AVAIL_KEY],
@@ -148,17 +147,19 @@ export function ShippingAvailabilityTable() {
             <span>Container Availability</span>
             <span className="text-xs text-muted-foreground">({activeRows.length})</span>
           </button>
-          <Button
-            size="sm"
-            onClick={() => {
-              setExpanded(true);
-              setAdding(true);
-            }}
-            disabled={adding}
-            data-testid="button-add-availability"
-          >
-            <Plus className="h-3.5 w-3.5 mr-1" /> Add Row
-          </Button>
+          {canAddRow && (
+            <Button
+              size="sm"
+              onClick={() => {
+                setExpanded(true);
+                setAdding(true);
+              }}
+              disabled={adding}
+              data-testid="button-add-availability"
+            >
+              <Plus className="h-3.5 w-3.5 mr-1" /> Add Row
+            </Button>
+          )}
         </div>
 
         {expanded && (
@@ -191,7 +192,7 @@ export function ShippingAvailabilityTable() {
                 ) : (
                   <>
                     {activeRows.map((row) =>
-                      editing?.id === row.id ? (
+                      recordChanges.allowed && editing?.id === row.id ? (
                         <TableRow key={row.id} className="bg-muted/30">
                           <TableCell>
                             <Input
@@ -269,8 +270,8 @@ export function ShippingAvailabilityTable() {
                       ) : (
                         <TableRow
                           key={row.id}
-                          className="hover-elevate cursor-pointer"
-                          onClick={() => startEdit(row)}
+                          className={recordChanges.allowed ? "hover-elevate cursor-pointer" : undefined}
+                          onClick={recordChanges.allowed ? () => startEdit(row) : undefined}
                           data-testid={`row-avail-${row.id}`}
                         >
                           <TableCell>{row.date}</TableCell>
@@ -279,38 +280,40 @@ export function ShippingAvailabilityTable() {
                           <TableCell className="text-muted-foreground">{row.note || "—"}</TableCell>
                           <TableCell className="text-muted-foreground">{row.details || "—"}</TableCell>
                           <TableCell>
-                            <div className="flex items-center justify-end gap-1">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  archiveMutation.mutate({ id: row.id, archived: true });
-                                }}
-                                disabled={archiveMutation.isPending}
-                                title="Archive this availability row"
-                                data-testid={`button-avail-archive-${row.id}`}
-                              >
-                                <Archive className="h-3.5 w-3.5 mr-1" /> Archive
-                              </Button>
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  deleteMutation.mutate(row.id);
-                                }}
-                                disabled={deleteMutation.isPending}
-                                data-testid={`button-avail-delete-${row.id}`}
-                              >
-                                <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                              </Button>
-                            </div>
+                            {recordChanges.allowed && (
+                              <div className="flex items-center justify-end gap-1">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    archiveMutation.mutate({ id: row.id, archived: true });
+                                  }}
+                                  disabled={archiveMutation.isPending}
+                                  title="Archive this availability row"
+                                  data-testid={`button-avail-archive-${row.id}`}
+                                >
+                                  <Archive className="h-3.5 w-3.5 mr-1" /> Archive
+                                </Button>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    deleteMutation.mutate(row.id);
+                                  }}
+                                  disabled={deleteMutation.isPending}
+                                  data-testid={`button-avail-delete-${row.id}`}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                                </Button>
+                              </div>
+                            )}
                           </TableCell>
                         </TableRow>
                       )
                     )}
-                    {adding && (
+                    {canAddRow && adding && (
                       <TableRow className="bg-muted/30">
                         <TableCell>
                           <Input
@@ -381,7 +384,13 @@ export function ShippingAvailabilityTable() {
                               variant="ghost"
                               onClick={() => {
                                 setAdding(false);
-                                setNewRow({ date: "", shippingCompany: "", availableContainers: "", note: "", details: "" });
+                                setNewRow({
+                                  date: "",
+                                  shippingCompany: "",
+                                  availableContainers: "",
+                                  note: "",
+                                  details: "",
+                                });
                               }}
                               data-testid="button-new-avail-cancel"
                             >
@@ -446,26 +455,28 @@ export function ShippingAvailabilityTable() {
                         {row.archivedAt ? new Date(row.archivedAt).toLocaleString() : "—"}
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center justify-end gap-1">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => archiveMutation.mutate({ id: row.id, archived: false })}
-                            disabled={archiveMutation.isPending}
-                            data-testid={`button-avail-restore-${row.id}`}
-                          >
-                            <RotateCcw className="h-3.5 w-3.5 mr-1" /> Restore
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => deleteMutation.mutate(row.id)}
-                            disabled={deleteMutation.isPending}
-                            data-testid={`button-avail-delete-archived-${row.id}`}
-                          >
-                            <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                          </Button>
-                        </div>
+                        {recordChanges.allowed && (
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => archiveMutation.mutate({ id: row.id, archived: false })}
+                              disabled={archiveMutation.isPending}
+                              data-testid={`button-avail-restore-${row.id}`}
+                            >
+                              <RotateCcw className="h-3.5 w-3.5 mr-1" /> Restore
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => deleteMutation.mutate(row.id)}
+                              disabled={deleteMutation.isPending}
+                              data-testid={`button-avail-delete-archived-${row.id}`}
+                            >
+                              <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                            </Button>
+                          </div>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}

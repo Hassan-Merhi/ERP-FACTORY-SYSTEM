@@ -54,6 +54,10 @@ interface ProformaCardProps {
   customerId: string | number | null;
   hideProformaPrice: boolean;
   canEdit: boolean;
+  /** False for View Only and Create Only. */
+  canChangeExistingRecords: boolean;
+  changeDisabledReason: string | null;
+  canCreateDispatchBatch: boolean;
   formatAmount: (amount: number | string | null | undefined) => string;
   formatProformaDate: (createdAt: string | null, updatedAt: string | null) => { label: string; value: string };
   navigate: (path: string) => void;
@@ -92,6 +96,9 @@ export function ProformaCard(props: ProformaCardProps) {
     customerId,
     hideProformaPrice,
     canEdit,
+    canChangeExistingRecords,
+    changeDisabledReason,
+    canCreateDispatchBatch,
     formatAmount,
     formatProformaDate,
     navigate,
@@ -201,9 +208,9 @@ export function ProformaCard(props: ProformaCardProps) {
             size="icon"
             className="h-8 w-8 rounded-lg hover:bg-amber-500/10"
             onClick={() => toggleActiveMutation.mutate({ id: proforma.id, isActive: !proforma.isActive })}
-            disabled={toggleActiveMutation.isPending}
+            disabled={!canChangeExistingRecords || toggleActiveMutation.isPending}
             data-testid={`button-toggle-active-proforma-${proforma.id}`}
-            title={proforma.isActive ? "Deactivate" : "Set active"}
+            title={changeDisabledReason ?? (proforma.isActive ? "Deactivate" : "Set active")}
           >
             <Star
               className={
@@ -211,18 +218,20 @@ export function ProformaCard(props: ProformaCardProps) {
               }
             />
           </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 rounded-lg hover:bg-violet-500/10"
-            onClick={() =>
-              navigate(`/factory/dispatch-batches?customerId=${customerId}&proformaId=${proforma.id}&openCreate=1`)
-            }
-            data-testid={`button-create-dispatch-batch-${proforma.id}`}
-            title="Create dispatch batch"
-          >
-            <Truck className="h-4 w-4 text-muted-foreground" />
-          </Button>
+          {canCreateDispatchBatch && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 rounded-lg hover:bg-violet-500/10"
+              onClick={() =>
+                navigate(`/factory/dispatch-batches?customerId=${customerId}&proformaId=${proforma.id}&openCreate=1`)
+              }
+              data-testid={`button-create-dispatch-batch-${proforma.id}`}
+              title="Create dispatch batch"
+            >
+              <Truck className="h-4 w-4 text-muted-foreground" />
+            </Button>
+          )}
           {canEdit && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -304,44 +313,48 @@ export function ProformaCard(props: ProformaCardProps) {
                 Edit in Stock Allocation
               </Button>
             )}
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => saveAgreedPricesMutation.mutate(proforma.id)}
-              disabled={saveAgreedPricesMutation.isPending || !proforma.destination}
-              className="h-9 rounded-xl border-border/70 bg-background/70 px-3 shadow-sm"
-              data-testid={`button-save-agreed-prices-${proforma.id}`}
-              title={
-                proforma.destination
-                  ? `Save these as agreed prices for ${proforma.destination}`
-                  : "Assign a destination first"
-              }
-            >
-              <BookmarkCheck className="mr-1.5 h-3.5 w-3.5" />
-              Save as Agreed Prices
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => applyProductionPricesMutation.mutate(proforma.id)}
-              disabled={applyProductionPricesMutation.isPending}
-              className="h-9 rounded-xl border-border/70 bg-background/70 px-3 shadow-sm"
-              data-testid={`button-apply-production-prices-${proforma.id}`}
-              title="Set all line prices to the production (cost) price from the catalogue"
-            >
-              Apply Production Price
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => applyCatalogPricesMutation.mutate(proforma.id)}
-              disabled={applyCatalogPricesMutation.isPending}
-              className="h-9 rounded-xl border-border/70 bg-background/70 px-3 shadow-sm"
-              data-testid={`button-apply-selling-prices-${proforma.id}`}
-              title="Set all line prices to the selling price from the catalogue"
-            >
-              Apply Selling Price
-            </Button>
+            {canChangeExistingRecords && (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => saveAgreedPricesMutation.mutate(proforma.id)}
+                  disabled={saveAgreedPricesMutation.isPending || !proforma.destination}
+                  className="h-9 rounded-xl border-border/70 bg-background/70 px-3 shadow-sm"
+                  data-testid={`button-save-agreed-prices-${proforma.id}`}
+                  title={
+                    proforma.destination
+                      ? `Save these as agreed prices for ${proforma.destination}`
+                      : "Assign a destination first"
+                  }
+                >
+                  <BookmarkCheck className="mr-1.5 h-3.5 w-3.5" />
+                  Save as Agreed Prices
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => applyProductionPricesMutation.mutate(proforma.id)}
+                  disabled={applyProductionPricesMutation.isPending}
+                  className="h-9 rounded-xl border-border/70 bg-background/70 px-3 shadow-sm"
+                  data-testid={`button-apply-production-prices-${proforma.id}`}
+                  title="Set all line prices to the production (cost) price from the catalogue"
+                >
+                  Apply Production Price
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => applyCatalogPricesMutation.mutate(proforma.id)}
+                  disabled={applyCatalogPricesMutation.isPending}
+                  className="h-9 rounded-xl border-border/70 bg-background/70 px-3 shadow-sm"
+                  data-testid={`button-apply-selling-prices-${proforma.id}`}
+                  title="Set all line prices to the selling price from the catalogue"
+                >
+                  Apply Selling Price
+                </Button>
+              </>
+            )}
             <Button
               size="sm"
               variant="outline"

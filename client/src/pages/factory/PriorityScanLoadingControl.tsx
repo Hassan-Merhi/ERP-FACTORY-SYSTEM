@@ -15,6 +15,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { apiRequest } from "@/lib/queryClient";
 import { visibleTabInterval } from "@/lib/queryPolicies";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
@@ -60,6 +61,7 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
   );
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const recordChanges = useExistingRecordChangeAccess();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedColor, setSelectedColor] = useState<string>(DEFAULT_COLOR);
   const [selectedPriority, setSelectedPriority] = useState(1);
@@ -103,6 +105,7 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
 
   const saveMutation = useMutation({
     mutationFn: async ({ color, priority }: { color?: string; priority?: number }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       if (color !== undefined && !isApprovedPriorityScanColor(color)) {
         throw new Error("Select one of the eleven approved Priority Scan colors.");
       }
@@ -135,6 +138,7 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
 
   const moveMutation = useMutation({
     mutationFn: async (priority: number) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       if (!activeConfig) throw new Error(tr("priorityNotActive"));
       // Position-only updates must not recolor active legacy priorities.
       const res = await apiRequest("PUT", `/api/factory/customer-orders/${load.id}/loading-list/priority-scan-config`, {
@@ -152,6 +156,7 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
 
   const removeMutation = useMutation({
     mutationFn: async () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       await apiRequest("DELETE", `/api/factory/customer-orders/${load.id}/loading-list/priority-scan-config`);
     },
     onSuccess: async () => {
@@ -188,6 +193,17 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
   };
 
   const busy = saveMutation.isPending || moveMutation.isPending || removeMutation.isPending;
+
+  // Read-only roles see the saved priority but get no controls that change it.
+  if (!recordChanges.allowed) {
+    if (!activeConfig) return null;
+    return (
+      <div className="flex items-center gap-2 text-sm" data-testid={`priority-config-readonly-${load.id}`}>
+        <PriorityScanColorLetter color={activeConfig.color} size="sm" />
+        {tr("priorityNumber", { priority: activeConfig.priority })}
+      </div>
+    );
+  }
 
   return (
     <>
@@ -292,7 +308,8 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
                   );
                 })}
                 <Badge variant="outline" className="font-mono text-xs" aria-live="polite">
-                  {getPriorityScanLetter(selectedColor) ? `${getPriorityScanLetter(selectedColor)} · ` : ""}{selectedColor.toUpperCase()}
+                  {getPriorityScanLetter(selectedColor) ? `${getPriorityScanLetter(selectedColor)} · ` : ""}
+                  {selectedColor.toUpperCase()}
                 </Badge>
               </div>
               {config?.color && !isApprovedPriorityScanColor(config.color) && (

@@ -77,6 +77,8 @@ export default function FactoryProformas() {
         setExcelImportErrors={model.setExcelImportErrors}
         setIsExcelImportOpen={model.setIsExcelImportOpen}
         setIsCreateOpen={model.setIsCreateOpen}
+        canImportProforma={model.canImportProforma}
+        canCreateProforma={model.canCreateProforma}
         customersLoading={customersLoading}
         selectedCustomerId={model.selectedCustomerId}
         setSelectedCustomerId={model.setSelectedCustomerId}
@@ -119,10 +121,12 @@ export default function FactoryProformas() {
             </div>
             <p className="font-medium text-muted-foreground">No proformas yet</p>
             <p className="text-sm text-muted-foreground mt-1">Create a proforma to define this customer's pricing</p>
-            <Button size="sm" className="mt-4" onClick={() => model.setIsCreateOpen(true)}>
-              <Plus className="mr-1.5 h-3.5 w-3.5" />
-              New Proforma
-            </Button>
+            {model.canCreateProforma && (
+              <Button size="sm" className="mt-4" onClick={() => model.setIsCreateOpen(true)}>
+                <Plus className="mr-1.5 h-3.5 w-3.5" />
+                New Proforma
+              </Button>
+            )}
           </div>
         )}
 
@@ -212,6 +216,9 @@ export default function FactoryProformas() {
                     customerId={customerId}
                     hideProformaPrice={model.hideProformaPrice}
                     canEdit={model.canEdit}
+                    canChangeExistingRecords={model.canChangeExistingRecords}
+                    changeDisabledReason={model.changeDisabledReason}
+                    canCreateDispatchBatch={model.canCreateDispatchBatch}
                     formatAmount={model.formatAmount}
                     formatProformaDate={model.formatProformaDate}
                     navigate={navigate}

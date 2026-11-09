@@ -48,6 +48,7 @@ import { PaginationBar } from "@/components/PaginationBar";
 import { useTablePrefs } from "@/hooks/use-table-prefs";
 import { useClientTablePagination } from "@/hooks/use-client-table-pagination";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { FactoryCustomerFormDialogs } from "./factorycustomers/FactoryCustomerFormDialogs";
 import type { Customer } from "./factorycustomers/types";
 
@@ -60,6 +61,8 @@ export default function FactoryCustomers() {
   const { prefs, setPrefs } = useTablePrefs("factory-customers", { companyId: selectedCompany?.id });
 
   const pageSize = prefs.pageSize ?? 25;
+  const recordChanges = useExistingRecordChangeAccess();
+  const canAddCustomer = recordChanges.canCreate("POST", "/api/factory/customers");
   const [search, setSearch] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
@@ -402,15 +405,17 @@ export default function FactoryCustomers() {
               {showZeroBalance ? "Hide 0 Balance" : `Show 0 Balance (${zeroBalanceCount})`}
             </Button>
           )}
-          <Button
-            onClick={openCreate}
-            data-testid="button-add-customer"
-            size="sm"
-            className="h-10 gap-2 rounded-xl bg-blue-600 px-4 text-white shadow-sm hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500"
-          >
-            <Plus className="h-4 w-4" />
-            Add Customer
-          </Button>
+          {canAddCustomer && (
+            <Button
+              onClick={openCreate}
+              data-testid="button-add-customer"
+              size="sm"
+              className="h-10 gap-2 rounded-xl bg-blue-600 px-4 text-white shadow-sm hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500"
+            >
+              <Plus className="h-4 w-4" />
+              Add Customer
+            </Button>
+          )}
         </div>
       </div>
 
@@ -616,29 +621,33 @@ export default function FactoryCustomers() {
                           >
                             <FileText className="h-4 w-4" />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => openEdit(customer)}
-                            title="Edit Customer"
-                            aria-label={`Edit ${customer.legalName}`}
-                            className="h-9 w-9 rounded-xl border border-border/60 hover:border-blue-400/60 hover:text-blue-500"
-                            data-testid={`button-edit-customer-${customer.id}`}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <div className="w-px h-5 bg-border mx-0.5" />
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setDeletingCustomer(customer)}
-                            title="Delete Customer"
-                            aria-label={`Delete ${customer.legalName}`}
-                            className="h-9 w-9 rounded-xl border border-destructive/20 text-destructive hover:border-destructive/50 hover:bg-destructive/10"
-                            data-testid={`button-delete-customer-${customer.id}`}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          {recordChanges.allowed && (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => openEdit(customer)}
+                                title="Edit Customer"
+                                aria-label={`Edit ${customer.legalName}`}
+                                className="h-9 w-9 rounded-xl border border-border/60 hover:border-blue-400/60 hover:text-blue-500"
+                                data-testid={`button-edit-customer-${customer.id}`}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <div className="w-px h-5 bg-border mx-0.5" />
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setDeletingCustomer(customer)}
+                                title="Delete Customer"
+                                aria-label={`Delete ${customer.legalName}`}
+                                className="h-9 w-9 rounded-xl border border-destructive/20 text-destructive hover:border-destructive/50 hover:bg-destructive/10"
+                                data-testid={`button-delete-customer-${customer.id}`}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </>
+                          )}
                         </div>
                       </TableCell>
                     )}
@@ -691,16 +700,18 @@ export default function FactoryCustomers() {
                     <TableRow key={customer.id} data-testid={`row-deleted-customer-${customer.id}`}>
                       <TableCell className="font-medium text-muted-foreground">{customer.legalName}</TableCell>
                       <TableCell>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => restoreMutation.mutate(customer.id)}
-                          disabled={restoreMutation.isPending}
-                          data-testid={`button-restore-customer-${customer.id}`}
-                        >
-                          <RotateCcw className="h-3 w-3 mr-1" />
-                          Restore
-                        </Button>
+                        {recordChanges.allowed && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => restoreMutation.mutate(customer.id)}
+                            disabled={restoreMutation.isPending}
+                            data-testid={`button-restore-customer-${customer.id}`}
+                          >
+                            <RotateCcw className="h-3 w-3 mr-1" />
+                            Restore
+                          </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}

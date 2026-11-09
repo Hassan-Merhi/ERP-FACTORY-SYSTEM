@@ -7,6 +7,7 @@
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from "react";
 import { useMutation } from "@tanstack/react-query";
 import type { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { queryClient, keyStartsWith } from "@/lib/queryClient";
 import type { FactoryContainerLoadingTranslationKey } from "@/i18n/factoryContainerLoadingTranslations";
 import type { getApiRequest } from "@/lib/factoryApi";
@@ -68,8 +69,14 @@ export function useLoadingOrderMutations({
   setLoadingNote,
   setShowFinalizeDialog,
 }: LoadingOrderMutationsInput) {
+  // Every mutation here changes an existing loading; read-only roles never run them.
+  const recordChanges = useExistingRecordChangeAccess();
+  const assertCanChange = () => {
+    if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
+  };
   const removeBaleMutation = useMutation({
     mutationFn: async (baleId: number) => {
+      assertCanChange();
       await modeApiRequest("DELETE", `/api/factory/customer-orders/${orderId}/bales/${baleId}`);
     },
     onSuccess: () => {
@@ -106,6 +113,7 @@ export function useLoadingOrderMutations({
 
   const emptyContainerMutation = useMutation({
     mutationFn: async () => {
+      assertCanChange();
       const res = await modeApiRequest("POST", `/api/factory/customer-orders/${orderId}/bales/empty`, {});
       return (await res.json()) as { removed: number };
     },
@@ -159,6 +167,7 @@ export function useLoadingOrderMutations({
         | { mode: "articleCode"; items: Array<{ articleCode: string; qty: number }> }
         | { mode: "refNumber"; refNumbers: string[] }
     ) => {
+      assertCanChange();
       const body =
         payload.mode === "refNumber"
           ? {
@@ -218,6 +227,7 @@ export function useLoadingOrderMutations({
       createCarryoverProforma?: boolean;
       createNextLoading?: boolean;
     }) => {
+      assertCanChange();
       const res = await modeApiRequest("POST", `/api/factory/customer-orders/${orderId}/finalize-loading`, variables);
       return await res.json();
     },
@@ -267,6 +277,7 @@ export function useLoadingOrderMutations({
 
   const saveNoteMutation = useMutation({
     mutationFn: async (note: string) => {
+      assertCanChange();
       await modeApiRequest("PATCH", `/api/factory/customer-orders/${orderId}/loading-note`, { note });
     },
     onSuccess: () => {
@@ -282,5 +293,12 @@ export function useLoadingOrderMutations({
     },
   });
 
-  return { removeBaleMutation, emptyContainerMutation, bulkImportMutation, finalizeMutation, saveNoteMutation };
+  return {
+    removeBaleMutation,
+    emptyContainerMutation,
+    bulkImportMutation,
+    finalizeMutation,
+    saveNoteMutation,
+    canChangeExistingRecords: recordChanges.allowed,
+  };
 }

@@ -34,11 +34,16 @@ export default function FactoryContainerLoadingScan() {
 
       <div className="relative isolate mb-4 overflow-hidden rounded-[22px] border border-blue-200/70 bg-gradient-to-r from-white via-blue-50/80 to-sky-100/70 px-4 py-4 shadow-[0_16px_40px_-32px_rgba(37,99,235,0.65)] dark:border-blue-500/30 dark:from-[#12213e] dark:via-[#102448] dark:to-[#0a2e62] sm:px-5 sm:py-5">
         {/* Decorative freight-container artwork; no loading or scan behavior lives here. */}
-        <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-0 hidden w-1/3 overflow-hidden lg:block">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-y-0 right-0 hidden w-1/3 overflow-hidden lg:block"
+        >
           <div className="absolute inset-0 bg-gradient-to-r from-blue-50/0 via-sky-300/5 to-blue-500/10 dark:from-transparent dark:to-blue-500/20" />
           <div
             className="absolute -right-8 top-5 h-24 w-[85%] -skew-x-12 rounded-lg border border-blue-700/20 shadow-[0_18px_40px_rgba(0,37,100,0.25)] dark:border-sky-300/35"
-            style={{ backgroundImage: "repeating-linear-gradient(90deg, #0d3f85 0px, #1c66bb 9px, #154c92 14px, #09376d 17px)" }}
+            style={{
+              backgroundImage: "repeating-linear-gradient(90deg, #0d3f85 0px, #1c66bb 9px, #154c92 14px, #09376d 17px)",
+            }}
           />
           <div className="absolute -right-5 top-5 h-24 w-[85%] -skew-x-12 rounded-lg bg-gradient-to-t from-blue-950/30 to-sky-300/15" />
         </div>
@@ -85,15 +90,21 @@ export default function FactoryContainerLoadingScan() {
               <div className="flex items-center gap-2 rounded-xl border border-blue-200/80 bg-white/80 px-3 py-2 shadow-sm backdrop-blur-sm dark:border-blue-400/25 dark:bg-[#071632]/75">
                 <Package className="h-5 w-5 text-blue-600 dark:text-sky-400" />
                 <div>
-                  <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{model.tr("bales")}</div>
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    {model.tr("bales")}
+                  </div>
                   <div className="font-mono text-sm font-bold">{model.bales.length}</div>
                 </div>
               </div>
               <div className="flex items-center gap-2 rounded-xl border border-blue-200/80 bg-white/80 px-3 py-2 shadow-sm backdrop-blur-sm dark:border-blue-400/25 dark:bg-[#071632]/75">
                 <Scale className="h-5 w-5 text-blue-600 dark:text-sky-400" />
                 <div>
-                  <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{model.tr("weight")}</div>
-                  <div className="font-mono text-sm font-bold">{formatNumber(model.totalWeight, 2)} {model.tr("kgUnit")}</div>
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    {model.tr("weight")}
+                  </div>
+                  <div className="font-mono text-sm font-bold">
+                    {formatNumber(model.totalWeight, 2)} {model.tr("kgUnit")}
+                  </div>
                 </div>
               </div>
             </div>
@@ -119,15 +130,17 @@ export default function FactoryContainerLoadingScan() {
                 <Save className="mr-2 h-4 w-4" />
                 {model.tr("saveAndExit")}
               </Button>
-              <Button
-                className="h-11 w-full rounded-xl bg-gradient-to-r from-sky-500 to-blue-700 font-semibold text-white shadow-md shadow-blue-500/20 hover:from-sky-600 hover:to-blue-800"
-                onClick={() => model.setShowFinalizeDialog(true)}
-                disabled={model.bales.length === 0 || model.finalizeMutation.isPending}
-                data-testid="button-finalize-loading"
-              >
-                <CheckCircle className="mr-2 h-5 w-5" />
-                {model.tr("validateFinalize")}
-              </Button>
+              {model.canChangeExistingRecords && (
+                <Button
+                  className="h-11 w-full rounded-xl bg-gradient-to-r from-sky-500 to-blue-700 font-semibold text-white shadow-md shadow-blue-500/20 hover:from-sky-600 hover:to-blue-800"
+                  onClick={() => model.setShowFinalizeDialog(true)}
+                  disabled={model.bales.length === 0 || model.finalizeMutation.isPending}
+                  data-testid="button-finalize-loading"
+                >
+                  <CheckCircle className="mr-2 h-5 w-5" />
+                  {model.tr("validateFinalize")}
+                </Button>
+              )}
             </div>
           )}
         </div>

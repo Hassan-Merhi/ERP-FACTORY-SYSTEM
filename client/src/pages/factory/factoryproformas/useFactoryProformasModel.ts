@@ -3,6 +3,7 @@ import { useMutation, useQueries, useQuery } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { queryClient, keyStartsWith } from "@/lib/queryClient";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { getApiRequest } from "@/lib/factoryApi";
@@ -14,6 +15,10 @@ import type { CatalogStockItem, Customer, Proforma, ProformaLine } from "./types
 export function useFactoryProformasModel() {
   const { selectedCompany } = useCompany();
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
+  const assertCanChange = () => {
+    if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
+  };
   const { formatAmount } = useCurrencyContext();
   const appMode = useAppMode();
   const modeApiRequest = getApiRequest(appMode);
@@ -76,7 +81,8 @@ export function useFactoryProformasModel() {
   const hideProformaPrice = myAccess?.hiddenCostFields?.includes("hide_proforma_price") ?? false;
 
   const { data: currentUser } = useQuery<{ role: string }>({ queryKey: ["/api/auth/me"] });
-  const canEdit = ["Admin", "Owner", "Developer"].includes(currentUser?.role || "");
+  // canEdit covers rename, transfer, delete, destination, lines and allocation edits.
+  const canEdit = recordChanges.allowed && ["Admin", "Owner", "Developer"].includes(currentUser?.role || "");
 
   const { data: customers = [], isLoading: customersLoading } = useQuery<Customer[]>({
     queryKey: ["/api/factory/customers"],
@@ -171,6 +177,7 @@ export function useFactoryProformasModel() {
 
   const createLoadingMutation = useMutation({
     mutationFn: async ({ proformaId, locationId }: { proformaId: number; locationId: string }) => {
+      assertCanChange();
       const res = await modeApiRequest("POST", `/api/factory/customer-proformas/${proformaId}/create-loading`, {
         locationId: parseInt(locationId),
       });
@@ -216,6 +223,7 @@ export function useFactoryProformasModel() {
 
   const toggleActiveMutation = useMutation({
     mutationFn: async ({ id, isActive }: { id: number; isActive: boolean }) => {
+      assertCanChange();
       return await modeApiRequest("PUT", `/api/factory/customer-proformas/${id}`, { isActive });
     },
     onSuccess: (_, vars) => {
@@ -238,6 +246,7 @@ export function useFactoryProformasModel() {
 
   const deleteProformaMutation = useMutation({
     mutationFn: async (id: number) => {
+      assertCanChange();
       return await modeApiRequest("DELETE", `/api/factory/customer-proformas/${id}`);
     },
     onSuccess: () => {
@@ -253,6 +262,7 @@ export function useFactoryProformasModel() {
   // Header-only update: linking an older proforma must never save/reprice its lines.
   const assignDestinationMutation = useMutation({
     mutationFn: async ({ id, destination }: { id: number; destination: string }) => {
+      assertCanChange();
       const response = await modeApiRequest("PUT", `/api/factory/customer-proformas/${id}`, { destination });
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
@@ -276,6 +286,7 @@ export function useFactoryProformasModel() {
 
   const renameProformaMutation = useMutation({
     mutationFn: async ({ id, name }: { id: number; name: string }) => {
+      assertCanChange();
       return await modeApiRequest("PUT", `/api/factory/customer-proformas/${id}`, { name });
     },
     onSuccess: () => {
@@ -292,6 +303,7 @@ export function useFactoryProformasModel() {
 
   const transferProformaMutation = useMutation({
     mutationFn: async ({ id, targetCustomerId }: { id: number; targetCustomerId: number }) => {
+      assertCanChange();
       const res = await modeApiRequest("PATCH", `/api/factory/customer-proformas/${id}/transfer`, {
         targetCustomerId,
       });
@@ -346,6 +358,7 @@ export function useFactoryProformasModel() {
       quantity: string;
       weightPerBaleKg: string;
     }) => {
+      assertCanChange();
       return await modeApiRequest("PUT", `/api/factory/customer-proforma-lines/${data.id}`, {
         pricePerBale: data.pricePerBale,
         productName: data.productName,
@@ -367,6 +380,7 @@ export function useFactoryProformasModel() {
 
   const deleteLineMutation = useMutation({
     mutationFn: async (id: number) => {
+      assertCanChange();
       return await modeApiRequest("DELETE", `/api/factory/customer-proforma-lines/${id}`);
     },
     onSuccess: () => {
@@ -381,6 +395,7 @@ export function useFactoryProformasModel() {
 
   const inlineQtyMutation = useMutation({
     mutationFn: async ({ id, quantity }: { id: number; quantity: number }) => {
+      assertCanChange();
       const res = await modeApiRequest("PUT", `/api/factory/customer-proforma-lines/${id}`, { quantity });
       if (!res.ok) {
         const e = await res.json();
@@ -549,6 +564,7 @@ export function useFactoryProformasModel() {
 
   const saveAgreedPricesMutation = useMutation({
     mutationFn: async (proformaId: number) => {
+      assertCanChange();
       if (!customerId) throw new Error("No customer selected");
       const res = await modeApiRequest(
         "POST",
@@ -573,6 +589,7 @@ export function useFactoryProformasModel() {
 
   const applyCatalogPricesMutation = useMutation({
     mutationFn: async (proformaId: number) => {
+      assertCanChange();
       const res = await modeApiRequest(
         "POST",
         `/api/factory/customer-proformas/${proformaId}/apply-catalog-prices`,
@@ -596,6 +613,7 @@ export function useFactoryProformasModel() {
 
   const applyProductionPricesMutation = useMutation({
     mutationFn: async (proformaId: number) => {
+      assertCanChange();
       const res = await modeApiRequest(
         "POST",
         `/api/factory/customer-proformas/${proformaId}/apply-production-prices`,
@@ -727,6 +745,12 @@ export function useFactoryProformasModel() {
     customerId,
     hideProformaPrice,
     canEdit,
+    /** False for View Only and Create Only: hide status, price and other changes to existing proformas. */
+    canChangeExistingRecords: recordChanges.allowed,
+    changeDisabledReason: recordChanges.reason,
+    canCreateProforma: recordChanges.canCreate("POST", "/api/factory/customer-proformas"),
+    canImportProforma: recordChanges.canCreate("POST", "/api/factory/customer-proformas/bulk"),
+    canCreateDispatchBatch: recordChanges.canCreate("POST", "/api/factory/dispatch-batches"),
     customers,
     customersLoading,
     proformas,

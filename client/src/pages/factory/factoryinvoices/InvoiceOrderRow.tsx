@@ -81,6 +81,8 @@ export interface InvoiceOrderRowContext {
   onToggleHideOrder: (order: CustomerOrder) => void;
   onDownload: (url: string, fallbackName: string) => void;
   isAdmin: boolean;
+  /** False for View Only and Create Only: hide hide/revert/delete/change-customer and inline edits. */
+  canChangeExistingRecords: boolean;
   unfinalizePending: boolean;
   onRevertOrder: (orderId: number) => void;
   onDeleteOrder: (orderId: number) => void;
@@ -115,6 +117,7 @@ export function InvoiceOrderRow({
   onToggleHideOrder,
   onDownload,
   isAdmin,
+  canChangeExistingRecords,
   unfinalizePending,
   onRevertOrder,
   onDeleteOrder,
@@ -151,84 +154,127 @@ export function InvoiceOrderRow({
       <TableCell data-testid={`text-customer-name-${order.id}`}>
         {indented ? <span className="pl-5 text-muted-foreground/50 text-xs">↳</span> : order.customerName}
       </TableCell>
-      {isColumnVisible("loading") && <TableCell className="font-mono text-sm text-muted-foreground" data-testid={`text-loading-number-${order.id}`}>
-        #{order.id}
-      </TableCell>}
+      {isColumnVisible("loading") && (
+        <TableCell className="font-mono text-sm text-muted-foreground" data-testid={`text-loading-number-${order.id}`}>
+          #{order.id}
+        </TableCell>
+      )}
       {isColumnVisible("proforma") && (
         <TableCell className="text-sm text-muted-foreground" data-testid={`text-proforma-${order.id}`}>
           {order.proformaName || <span className="text-muted-foreground/50">—</span>}
         </TableCell>
       )}
-      {isColumnVisible("container") && <TableCell className="font-mono text-sm" data-testid={`text-container-${order.id}`}>
-        <EditableShippingCell orderId={order.id} field="containerNumber" value={order.containerNumber}
-          maxLength={100} onSave={onSaveShippingField} />
-      </TableCell>}
-      {isColumnVisible("bookingInfo") && (
-        <TableCell className="text-sm max-w-[180px]" data-testid={`text-booking-info-${order.id}`}>
-          <EditableShippingCell orderId={order.id} field="bookingInfo" value={order.bookingInfo}
-            maxLength={2000} onSave={onSaveShippingField} />
+      {isColumnVisible("container") && (
+        <TableCell className="font-mono text-sm" data-testid={`text-container-${order.id}`}>
+          <EditableShippingCell
+            orderId={order.id}
+            field="containerNumber"
+            value={order.containerNumber}
+            maxLength={100}
+            onSave={onSaveShippingField}
+            readOnly={!canChangeExistingRecords}
+          />
         </TableCell>
       )}
-      {isColumnVisible("destination") && <TableCell className="text-sm" data-testid={`text-destination-${order.id}`}>
-        <EditableShippingCell orderId={order.id} field="destination" value={order.destination}
-          maxLength={500} onSave={onSaveShippingField} />
-      </TableCell>}
-      {isColumnVisible("notes") && <TableCell className="text-sm max-w-[200px]" data-testid={`text-notes-${order.id}`}>
-        <EditableShippingCell orderId={order.id} field="containerNotes" value={order.containerNotes}
-          maxLength={10000} multiline onSave={onSaveShippingField} />
-      </TableCell>}
-      {isColumnVisible("date") && <TableCell className="font-mono text-sm" data-testid={`text-order-date-${order.id}`}>
-        {displayDate}
-      </TableCell>}
+      {isColumnVisible("bookingInfo") && (
+        <TableCell className="text-sm max-w-[180px]" data-testid={`text-booking-info-${order.id}`}>
+          <EditableShippingCell
+            orderId={order.id}
+            field="bookingInfo"
+            value={order.bookingInfo}
+            maxLength={2000}
+            onSave={onSaveShippingField}
+            readOnly={!canChangeExistingRecords}
+          />
+        </TableCell>
+      )}
+      {isColumnVisible("destination") && (
+        <TableCell className="text-sm" data-testid={`text-destination-${order.id}`}>
+          <EditableShippingCell
+            orderId={order.id}
+            field="destination"
+            value={order.destination}
+            maxLength={500}
+            onSave={onSaveShippingField}
+            readOnly={!canChangeExistingRecords}
+          />
+        </TableCell>
+      )}
+      {isColumnVisible("notes") && (
+        <TableCell className="text-sm max-w-[200px]" data-testid={`text-notes-${order.id}`}>
+          <EditableShippingCell
+            orderId={order.id}
+            field="containerNotes"
+            value={order.containerNotes}
+            maxLength={10000}
+            multiline
+            onSave={onSaveShippingField}
+            readOnly={!canChangeExistingRecords}
+          />
+        </TableCell>
+      )}
+      {isColumnVisible("date") && (
+        <TableCell className="font-mono text-sm" data-testid={`text-order-date-${order.id}`}>
+          {displayDate}
+        </TableCell>
+      )}
       {isColumnVisible("status") && <TableCell>{getStatusBadge(order.status)}</TableCell>}
-      {isColumnVisible("bales") && <TableCell
-        className="text-right font-mono text-sm font-semibold tabular-nums"
-        data-testid={`text-total-bales-${order.id}`}
-      >
-        <span className={getLoadedBalesColorClass(order.totalQtyBales ?? 0)}>{order.totalQtyBales ?? "-"}</span>
-      </TableCell>}
-      {isColumnVisible("weight") && <TableCell className="text-right font-mono text-sm" data-testid={`text-weight-${order.id}`}>
-        {fmtKg(order.totalWeightKg)}
-      </TableCell>}
-      {isColumnVisible("remaining") && <TableCell className="text-right font-mono" data-testid={`text-remaining-${order.id}`}>
-        {expected <= 0 ? (
-          <span className="text-muted-foreground/40">—</span>
-        ) : remaining > 0 ? (
-          <span className="text-red-600 dark:text-red-400 font-medium">{remaining}</span>
-        ) : overloaded > 0 ? (
-          <span className="text-amber-600 dark:text-amber-400 font-medium">+{overloaded}</span>
-        ) : (
-          <span className="text-green-600 dark:text-green-400 font-medium">Done</span>
-        )}
-      </TableCell>}
-      {isColumnVisible("extras") && <TableCell className="text-right font-mono text-sm" data-testid={`text-extras-${order.id}`}>
-        {parseFloat(order.freightAmount || "0") <= 0 && parseFloat(order.otherChargesTotal || "0") <= 0 ? (
-          <span className="text-muted-foreground/40">—</span>
-        ) : (
-          <div className="flex flex-col items-end gap-0.5">
-            {parseFloat(order.freightAmount || "0") > 0 && (
-              <span className="text-blue-600 dark:text-blue-400">
-                $
-                {parseFloat(order.freightAmount).toLocaleString(undefined, {
-                  minimumFractionDigits: 0,
-                  maximumFractionDigits: 2,
-                })}
-                <span className="text-muted-foreground/60 text-xs ml-1">freight</span>
-              </span>
-            )}
-            {parseFloat(order.otherChargesTotal || "0") > 0 && (
-              <span className="text-purple-600 dark:text-purple-400">
-                $
-                {parseFloat(order.otherChargesTotal).toLocaleString(undefined, {
-                  minimumFractionDigits: 0,
-                  maximumFractionDigits: 2,
-                })}
-                <span className="text-muted-foreground/60 text-xs ml-1">other</span>
-              </span>
-            )}
-          </div>
-        )}
-      </TableCell>}
+      {isColumnVisible("bales") && (
+        <TableCell
+          className="text-right font-mono text-sm font-semibold tabular-nums"
+          data-testid={`text-total-bales-${order.id}`}
+        >
+          <span className={getLoadedBalesColorClass(order.totalQtyBales ?? 0)}>{order.totalQtyBales ?? "-"}</span>
+        </TableCell>
+      )}
+      {isColumnVisible("weight") && (
+        <TableCell className="text-right font-mono text-sm" data-testid={`text-weight-${order.id}`}>
+          {fmtKg(order.totalWeightKg)}
+        </TableCell>
+      )}
+      {isColumnVisible("remaining") && (
+        <TableCell className="text-right font-mono" data-testid={`text-remaining-${order.id}`}>
+          {expected <= 0 ? (
+            <span className="text-muted-foreground/40">—</span>
+          ) : remaining > 0 ? (
+            <span className="text-red-600 dark:text-red-400 font-medium">{remaining}</span>
+          ) : overloaded > 0 ? (
+            <span className="text-amber-600 dark:text-amber-400 font-medium">+{overloaded}</span>
+          ) : (
+            <span className="text-green-600 dark:text-green-400 font-medium">Done</span>
+          )}
+        </TableCell>
+      )}
+      {isColumnVisible("extras") && (
+        <TableCell className="text-right font-mono text-sm" data-testid={`text-extras-${order.id}`}>
+          {parseFloat(order.freightAmount || "0") <= 0 && parseFloat(order.otherChargesTotal || "0") <= 0 ? (
+            <span className="text-muted-foreground/40">—</span>
+          ) : (
+            <div className="flex flex-col items-end gap-0.5">
+              {parseFloat(order.freightAmount || "0") > 0 && (
+                <span className="text-blue-600 dark:text-blue-400">
+                  $
+                  {parseFloat(order.freightAmount).toLocaleString(undefined, {
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 2,
+                  })}
+                  <span className="text-muted-foreground/60 text-xs ml-1">freight</span>
+                </span>
+              )}
+              {parseFloat(order.otherChargesTotal || "0") > 0 && (
+                <span className="text-purple-600 dark:text-purple-400">
+                  $
+                  {parseFloat(order.otherChargesTotal).toLocaleString(undefined, {
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 2,
+                  })}
+                  <span className="text-muted-foreground/60 text-xs ml-1">other</span>
+                </span>
+              )}
+            </div>
+          )}
+        </TableCell>
+      )}
       {isColumnVisible("total") && (
         <TableCell className="text-right font-mono font-semibold" data-testid={`text-grand-total-${order.id}`}>
           $
@@ -240,19 +286,21 @@ export function InvoiceOrderRow({
       )}
       <TableCell>
         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-          <Button
-            variant="ghost"
-            size="icon"
-            title={order.isHidden ? "Unhide loading" : "Hide loading"}
-            data-testid={`button-hide-order-${order.id}`}
-            onClick={() => onToggleHideOrder(order)}
-          >
-            {order.isHidden ? (
-              <Eye className="h-4 w-4 text-muted-foreground" />
-            ) : (
-              <EyeOff className="h-4 w-4 text-muted-foreground" />
-            )}
-          </Button>
+          {canChangeExistingRecords && (
+            <Button
+              variant="ghost"
+              size="icon"
+              title={order.isHidden ? "Unhide loading" : "Hide loading"}
+              data-testid={`button-hide-order-${order.id}`}
+              onClick={() => onToggleHideOrder(order)}
+            >
+              {order.isHidden ? (
+                <Eye className="h-4 w-4 text-muted-foreground" />
+              ) : (
+                <EyeOff className="h-4 w-4 text-muted-foreground" />
+              )}
+            </Button>
+          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" data-testid={`button-download-${order.id}`} title="Download Invoice">
@@ -319,7 +367,7 @@ export function InvoiceOrderRow({
           >
             <Eye className="h-4 w-4" />
           </Button>
-          {isAdmin && order.status === "LOADING" && (
+          {canChangeExistingRecords && isAdmin && order.status === "LOADING" && (
             <Button
               variant="ghost"
               size="icon"
@@ -330,7 +378,7 @@ export function InvoiceOrderRow({
               <UserRoundCog className="h-4 w-4" />
             </Button>
           )}
-          {order.status === "FINALIZED" && (
+          {canChangeExistingRecords && order.status === "FINALIZED" && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button
@@ -363,7 +411,7 @@ export function InvoiceOrderRow({
               </AlertDialogContent>
             </AlertDialog>
           )}
-          {order.status !== "FINALIZED" && (
+          {canChangeExistingRecords && order.status !== "FINALIZED" && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button variant="ghost" size="icon" data-testid={`button-delete-order-${order.id}`}>
@@ -374,9 +422,9 @@ export function InvoiceOrderRow({
                 <AlertDialogHeader>
                   <AlertDialogTitle>Delete Loading</AlertDialogTitle>
                   <AlertDialogDescription>
-                    Delete loading {order.invoiceNumber || `#${order.id}`} for{" "}
-                    {order.customerName}? Its eligible bales will become available in stock again.
-                    The loading is moved to Settings → Deleted Items for recovery; finalized invoices cannot be deleted here.
+                    Delete loading {order.invoiceNumber || `#${order.id}`} for {order.customerName}? Its eligible bales
+                    will become available in stock again. The loading is moved to Settings → Deleted Items for recovery;
+                    finalized invoices cannot be deleted here.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
