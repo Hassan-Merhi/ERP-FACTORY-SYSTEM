@@ -141,6 +141,7 @@ const FactoryProductionBonuses = lazy(() => import("@/pages/factory/FactoryProdu
 const WasteDispatchPage = lazy(() => import("@/pages/factory/WasteDispatchOptimized"));
 const FactoryLoadingDispatch = lazy(() => import("@/pages/factory/FactoryLoadingDispatch"));
 const FactoryLoadingDispatchCompare = lazy(() => import("@/pages/factory/FactoryLoadingDispatchCompare"));
+const FactoryLoadingDispatchReport = lazy(() => import("@/pages/factory/FactoryLoadingDispatchReport"));
 const FactoryStockAllocationV5CreateProforma = lazy(
   () => import("@/pages/factory/FactoryStockAllocationV5CreateProforma")
 );
@@ -258,6 +259,8 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
       <Route path="/factory/sales/loading/pending">
         <Redirect replace to="/factory/sales/loadings?tab=pending" />
       </Route>
+      <Route path="/factory/sales/loading/dispatch/:orderId/:dispatchId/report" component={FactoryLoadingDispatchReport} />
+      <Route path="/factory/sales/loading/dispatch/:orderId/report" component={FactoryLoadingDispatchReport} />
       <Route path="/factory/sales/loading/dispatch/:orderId/:dispatchId/compare" component={FactoryLoadingDispatchCompare} />
       <Route path="/factory/sales/loading/dispatch/:orderId/compare" component={FactoryLoadingDispatchCompare} />
       <Route path="/factory/sales/loading/dispatch/:orderId/:dispatchId" component={FactoryLoadingDispatch} />
