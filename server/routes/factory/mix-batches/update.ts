@@ -29,6 +29,7 @@ import {
 } from "../../../services/factory/baleCostBasis";
 import { recordFactoryStockValueEventTx } from "../../../services/factory/factoryStockValueEvents";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
+import type Decimal from "decimal.js";
 import { MixEditRequestError, parseMixEditSelection, sameMixEditSources } from "../../../services/factory/mixBatchEditRequest";
 import { prepareMixSourceEditReview } from "../../../services/factory/mixBatchEditReview";
 
