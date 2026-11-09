@@ -108,7 +108,7 @@ export default function FactoryProductionTargets() {
     setRows([]);
     setEditorOpen(false);
     setDefaultsEditorOpen(false);
-  }, [periodType, period.start, period.end]);
+  }, [selectedCompany?.id, periodType, period.start, period.end]);
 
   useEffect(() => {
     if (data) setRows(data.rows);
