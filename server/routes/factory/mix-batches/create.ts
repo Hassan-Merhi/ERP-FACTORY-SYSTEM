@@ -26,6 +26,7 @@ import { recordFactoryStockValueEventTx } from "../../../services/factory/factor
 import Decimal from "decimal.js";
 import { MoneyDecimal, parseMoneyInput, toMoney } from "../../../lib/money";
 import { MixRawStockShortageError, requireMixFifoFullyAllocated, requireMixRawStockCapacity, availableSupplierAddAllowance } from "../../../services/factory/mixRawStockQuantityGuard";
+import { mixKilograms, requireMixLifecycleAvailable } from "../../../services/factory/mixLifecyclePhase6";
 
 /** A source's rate as stored on its row (0 when it has no USD rate: the mix is then unvalued). */
 const storedRate = (rate: Decimal | null) => (rate ?? new MoneyDecimal(0)).toFixed();
@@ -58,12 +59,17 @@ export function registerFactoryMixBatchCreateRoutes(app: Express) {
       // Source weights are read the way parseFloat reads them; one that does not
       // parse would otherwise reach usedKg as NaN.
       const allSources: Array<{ weightKg?: unknown }> = [...supplierSources, ...sources, ...batchSources];
-      if (allSources.some((source) => parseMoneyInput(source.weightKg) === null)) {
-        return res.status(400).json({ message: "Invalid amount" });
+      if (allSources.some((source) => {
+        try { mixKilograms(source.weightKg, "Source kg"); return false; }
+        catch { return true; }
+      })) {
+        return res.status(400).json({ code: "MIX_BATCH_LIFECYCLE_REFUSED", message: "Source kg must be positive with no more than 3 decimal places." });
       }
-      const weightOf = (source: { weightKg?: unknown }) => parseMoneyInput(source.weightKg) as Decimal;
+      const weightOf = (source: { weightKg?: unknown }) => mixKilograms(source.weightKg, "Source kg");
 
       const result = await db.transaction(async (tx) => {
+        // Serialize batch-code assignment with carry-forward creation.
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('factory_mix_batch_sequence'), ${companyId})`);
         const year = new Date().getFullYear();
         const existingBatches = await tx
           .select({ batchCode: factoryMixBatches.batchCode })
@@ -98,8 +104,8 @@ export function registerFactoryMixBatchCreateRoutes(app: Express) {
 
           if (!srcBatch) throw new Error(`Opening batch not found`);
 
-          const remaining = toMoney(srcBatch.totalWeightKg).minus(toMoney(srcBatch.usedKg));
-          if (remaining.lessThanOrEqualTo(0.001)) throw new Error(`Opening batch has no remaining stock`);
+          const remaining = requireMixLifecycleAvailable(srcBatch);
+          if (remaining.lte(0)) throw new Error(`Opening batch has no remaining stock`);
 
           const cost = toMoney(srcBatch.costPerKg);
 
@@ -288,9 +294,9 @@ export function registerFactoryMixBatchCreateRoutes(app: Express) {
 
           if (!srcBatch) throw new Error(`Source batch ${sourceBatchId} not found`);
 
-          const batchRemaining = toMoney(srcBatch.totalWeightKg).minus(toMoney(srcBatch.usedKg));
+          const batchRemaining = requireMixLifecycleAvailable(srcBatch);
           const weight = weightOf(bSource);
-          if (weight.greaterThan(batchRemaining.plus(0.001))) {
+          if (weight.greaterThan(batchRemaining)) {
             throw new Error(`Not enough in batch ${srcBatch.batchCode}. Available: ${batchRemaining.toFixed(3)} kg`);
           }
 
