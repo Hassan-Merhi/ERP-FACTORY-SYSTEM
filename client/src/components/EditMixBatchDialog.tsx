@@ -285,6 +285,7 @@ export function EditMixBatchDialog({
         body: JSON.stringify({
           ...sourcePayload(),
           sourceEditReason,
+          batchDate: batchDate || null,
           sourceEditPreview: true,
         }),
       });
@@ -309,9 +310,9 @@ export function EditMixBatchDialog({
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
-          name: batchName || undefined,
-          notes: notes || undefined,
-          batchDate: batchDate || undefined,
+          name: batchName.trim(),
+          notes: notes.trim(),
+          batchDate: batchDate || null,
           ...(sourcesChanged ? {
             ...sourcePayload(),
             sourceEditReason,
@@ -686,7 +687,10 @@ export function EditMixBatchDialog({
                 <Input
                   type="date"
                   value={batchDate}
-                  onChange={(e) => setBatchDate(e.target.value)}
+                  onChange={(e) => {
+                    setBatchDate(e.target.value);
+                    setSourceReview(null);
+                  }}
                   data-testid="input-edit-batch-date"
                 />
               </div>
