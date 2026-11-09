@@ -341,7 +341,6 @@ export default function RentalPaymentsLog({
                     <th className="text-right px-3 py-2 font-semibold">
                       Amount
                     </th>
-}
                     <th className="text-left px-3 py-2 font-semibold">For Month</th>
                     <th className="text-left px-3 py-2 font-semibold">Notes</th>
                     <th className="text-left px-3 py-2 font-semibold">Daybook</th>
