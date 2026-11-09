@@ -64,7 +64,7 @@ describe("Phase 7 rental active-company authorization", () => {
   });
 
   it("allows deletion only when the active company grants it", async () => {
-    permissionContext.get.mockResolvedValue(activeContext("Manager", true, 20));
+    permissionContext.get.mockResolvedValue(activeContext("Manager", true, 13));
     const next = vi.fn();
     await requireRentalDeletePermission(requestDouble(), responseDouble(), next);
     expect(next).toHaveBeenCalledOnce();
