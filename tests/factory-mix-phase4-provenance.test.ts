@@ -48,6 +48,12 @@ describe("Phase 4 Factory supplier ADD and raw-stock integrity", () => {
     expect(() => requireMixFifoFullyAllocated("0.300", 7, "0.300")).not.toThrow();
   });
 
+  it("rejects an invalid business date before using any supplier ADD history", async () => {
+    const tx = { select: () => { throw new Error("Unexpected query"); } };
+    await expect(availableSupplierAddAllowance(tx as never, 12, 26, [], "tomorrow"))
+      .rejects.toThrow(MixRawStockShortageError);
+  });
+
   it("deducts existing receipt overuse from new ADD allowance", async () => {
     const payload = [{ kg: "3516.000" }];
     const tx = {
