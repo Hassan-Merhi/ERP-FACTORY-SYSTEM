@@ -20,13 +20,10 @@ import {
   invalidateCompanyApiFamily,
 } from "@/lib/frontendDataArchitecture";
 import { useToast } from "@/hooks/use-toast";
+import { ErpReportExportMenu } from "@/erp-core";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { DaybookOverview } from "./daybook/DaybookOverview";
+import { exportDaybookDetail, exportDaybookSummary } from "./daybook/exportDaybook";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -37,7 +34,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { EyeOff, Plus, ChevronDown, FileDown, LayoutList, Layers, BookOpen } from "lucide-react";
+import { EyeOff, Plus, LayoutList, Layers, BookOpen } from "lucide-react";
 import { format, addDays } from "date-fns";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { cn } from "@/lib/utils";
@@ -70,8 +67,6 @@ import { VoucherEditDialog } from "./daybook/VoucherEditDialog";
 import { voucherEditPath } from "./daybook/voucherEditRoute";
 import { usePaginatedDaybookVouchers } from "./daybook/usePaginatedDaybookVouchers";
 import { VOUCHER_TYPE_ORDER } from "./daybook/constants";
-import { DaybookOverview } from "./daybook/DaybookOverview";
-import { exportDaybookDetail, exportDaybookSummary } from "./daybook/exportDaybook";
 import { useDaybookFilterState } from "./daybook/useDaybookFilterState";
 import { entryBalanceUrl, selectBalanceDisplayEntries, selectCashAccountId } from "./daybook/voucherBalanceSelection";
 
@@ -88,6 +83,7 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
   const hiddenErpCosts = myErpPages?.hiddenErpCostFields ?? [];
   const hideAmounts = hiddenErpCosts.includes("daybook_amounts");
   const [activeDaybookTab, setActiveDaybookTab] = useState<"transactions" | "activity">("transactions");
+  const [isExportingReport, setIsExportingReport] = useState(false);
   const {
     periodFilter,
     filters,
@@ -631,6 +627,22 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
     toast({ title: "Export complete", description: `${detailRows.length} detail rows exported.` });
   };
 
+  const runDaybookExport = async (exportAction: () => Promise<void>) => {
+    if (isExportingReport) return;
+    setIsExportingReport(true);
+    try {
+      await exportAction();
+    } catch (error) {
+      toast({
+        title: "Export failed",
+        description: error instanceof Error ? error.message : "Unable to export the Daybook.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsExportingReport(false);
+    }
+  };
+
   return (
     <div className="daybook-premium flex min-w-0 flex-col gap-4 p-3 md:gap-5 md:p-6">
       <section className="daybook-hero" aria-label="Daybook heading">
@@ -644,19 +656,24 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
           icon={<BookOpen className="h-6 w-6" />}
           showBackButton
         >
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="daybook-export gap-2">
-                <FileDown className="w-4 h-4" />
-                Export
-                <ChevronDown className="w-4 h-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              <DropdownMenuItem onClick={handleExportToExcel}>Summary</DropdownMenuItem>
-              <DropdownMenuItem onClick={handleExportDetailedToExcel}>Detailed</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <ErpReportExportMenu
+            className="daybook-export gap-2"
+            busy={isExportingReport}
+            options={[
+              {
+                id: "daybook-summary",
+                label: "Summary",
+                kind: "excel",
+                onSelect: () => runDaybookExport(handleExportToExcel),
+              },
+              {
+                id: "daybook-detail",
+                label: "Detailed",
+                kind: "excel",
+                onSelect: () => runDaybookExport(handleExportDetailedToExcel),
+              },
+            ]}
+          />
           {recordChanges.canCreate("POST", "/api/vouchers") && (
             <Button onClick={() => navigate(vouchersBase)} className="daybook-new-voucher gap-2">
               <Plus className="w-4 h-4" />

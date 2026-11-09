@@ -165,8 +165,8 @@ function transformDaybookTable(source: string): string {
   );
   code = replaceAllChecked(
     code,
-    `<Table wrapperClassName="max-h-[calc(100dvh-220px)]">`,
-    `<Table scrollRef={daybookDesktopWindow.scrollRef} wrapperClassName="max-h-[calc(100dvh-220px)]">`,
+    `wrapperClassName="max-h-[calc(100dvh-220px)]">`,
+    `scrollRef={daybookDesktopWindow.scrollRef} wrapperClassName="max-h-[calc(100dvh-220px)]">`,
     2,
     "Daybook table scroll owner",
   );

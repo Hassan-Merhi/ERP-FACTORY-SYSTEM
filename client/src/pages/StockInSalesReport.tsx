@@ -1,4 +1,3 @@
-import { downloadBlob } from "@/lib/downloadBlob";
 import { useEffect, useMemo, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -7,9 +6,6 @@ import {
   ChevronDown,
   ChevronRight,
   Coins,
-  Download,
-  FileSpreadsheet,
-  FileText,
   GitCompare,
   PackageMinus,
   PackagePlus,
@@ -19,25 +15,22 @@ import {
 } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
+import { ErpListTable, ErpReportExportMenu, ErpReportPrintFooter, erpReportFileName, exportErpReportCsv } from "@/erp-core";
+import { erpCompanyDataKey, erpReferenceKeys } from "@/erp-core/erpData";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { PeriodFilter, getDefaultPeriodValue, type PeriodFilterValue } from "@/components/ui/period-filter";
 import { ErpMobileFilters } from "@/components/ui/erp-mobile-filters";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useToast } from "@/hooks/use-toast";
 import { ExcelJS, writeFile } from "@/lib/excelHelper";
 import { formatNumber } from "@/lib/formatNumber";
+
 import StockInSalesReportComparison from "./StockInSalesReportComparison";
 import StockInSalesReportDetail from "./StockInSalesReportDetail";
 
@@ -252,13 +245,13 @@ function StockInSalesReportSummary() {
   }, [selectedCompany?.id]);
 
   const { data: locations = [] } = useQuery<LocationOption[]>({
-    queryKey: ["/api/locations", selectedCompany?.id],
+    queryKey: erpReferenceKeys.locations(selectedCompany?.id),
     enabled: !!selectedCompany?.id,
     staleTime: 5 * 60 * 1000,
   });
 
   const { data: stockGroups = [] } = useQuery<StockGroupOption[]>({
-    queryKey: ["/api/stock-groups", selectedCompany?.id],
+    queryKey: erpReferenceKeys.stockGroups(selectedCompany?.id),
     enabled: !!selectedCompany?.id,
     staleTime: 5 * 60 * 1000,
   });
@@ -281,7 +274,7 @@ function StockInSalesReportSummary() {
   }, [periodFilter, grouping, selectedLocations, selectedStockGroups, debouncedSearch]);
 
   const { data, isLoading, isFetching, isError, error, refetch } = useQuery<StockInSalesResponse, Error>({
-    queryKey: [queryUrl, selectedCompany?.id],
+    queryKey: erpCompanyDataKey(queryUrl, selectedCompany?.id),
     enabled: !!selectedCompany?.id,
     staleTime: 30_000,
   });
@@ -359,7 +352,7 @@ function StockInSalesReportSummary() {
       ];
       rows.forEach((row) => sheet.addRow({ period: formatPeriodLabel(row), ...row }));
       sheet.getRow(1).font = { bold: true };
-      await writeFile(workbook, `stock-in-sales-report-${format(new Date(), "yyyy-MM-dd")}.xlsx`);
+      await writeFile(workbook, erpReportFileName("stock-in-sales-report", "xlsx", new Date(), "-"));
     } catch (exportError: unknown) {
       toast({
         title: "Export failed",
@@ -393,10 +386,11 @@ function StockInSalesReportSummary() {
       row.totalSales,
       row.costProfit,
     ]);
-    const escape = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
-    const csv = [headers, ...values].map((row) => row.map(escape).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-    downloadBlob(blob, `stock-in-sales-report-${format(new Date(), "yyyy-MM-dd")}.csv`);
+    exportErpReportCsv({
+      headers,
+      rows: values,
+      fileName: erpReportFileName("stock-in-sales-report", "csv", new Date(), "-"),
+    });
   };
 
   const profitTone = summary.costProfit > 0 ? "positive" : summary.costProfit < 0 ? "negative" : "default";
@@ -412,25 +406,17 @@ function StockInSalesReportSummary() {
         <Button variant="outline" size="sm" onClick={openComparison} data-testid="button-stock-in-sales-compare">
           <GitCompare className="mr-2 h-4 w-4" /> Compare
         </Button>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="gap-2" disabled={rows.length === 0 || isExporting}>
-              {isExporting ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} Export
-              <ChevronDown className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={exportExcel}>
-              <FileSpreadsheet className="mr-2 h-4 w-4" /> Export Excel
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={exportCsv}>
-              <FileText className="mr-2 h-4 w-4" /> Export CSV
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => window.print()}>
-              <FileText className="mr-2 h-4 w-4" /> Export PDF
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <ErpReportExportMenu
+          size="sm"
+          className="gap-2"
+          busy={isExporting}
+          disabled={rows.length === 0 || isFetching || isLoading}
+          options={[
+            { id: "stock-sales-excel", label: "Export Excel", kind: "excel", onSelect: exportExcel },
+            { id: "stock-sales-csv", label: "Export CSV", kind: "csv", onSelect: exportCsv },
+            { id: "stock-sales-print", label: "Print / Save PDF", kind: "print", onSelect: () => window.print() },
+          ]}
+        />
       </PageHeader>
 
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6" aria-busy={isLoading || isFetching}>
@@ -572,7 +558,7 @@ function StockInSalesReportSummary() {
         </p>
         <div className="overflow-hidden rounded-xl border max-sm:overflow-visible max-sm:border-0">
           <div className="overflow-x-auto">
-            <Table className="min-w-[900px]" mobileLayout="cards">
+            <ErpListTable pageKey="stock-in-sales-report" companyId={selectedCompany?.id} className="min-w-[900px]" mobileLayout="cards" scrollLabel="Stock and sales reporting">
               <TableHeader>
                 <TableRow className="bg-muted/40 hover:bg-muted/40">
                   <TableHead>{periodColumnLabel}</TableHead>
@@ -663,14 +649,17 @@ function StockInSalesReportSummary() {
                   </>
                 )}
               </TableBody>
-            </Table>
+            </ErpListTable>
           </div>
         </div>
       </div>
 
-      <div className="hidden text-xs text-muted-foreground print:block">
-        Generated {format(new Date(), "yyyy-MM-dd HH:mm")}
-      </div>
+      <ErpReportPrintFooter
+        title="Stock & Sales Report"
+        companyName={selectedCompany?.name}
+        fromDate={periodFilter.fromDate}
+        toDate={periodFilter.toDate}
+      />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { MoreHorizontal, Package, Ship, ShoppingCart, Wallet, type LucideIcon } from "lucide-react";
 import { useLocation } from "wouter";
 import { useErpVisibleSections } from "@/components/AppSidebar";
+import { erpPrimaryGroupDestinations, type ErpPrimaryGroup } from "@/app/erpPageRegistry";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import type { ApplicationTranslationKey } from "@/i18n/applicationTranslations";
 
@@ -16,7 +17,7 @@ interface ErpMobileBottomNavProps {
 }
 
 interface MobileSection {
-  id: "tracking" | "inventory" | "sales" | "accounts";
+  id: ErpPrimaryGroup;
   labelKey: ApplicationTranslationKey;
   icon: LucideIcon;
   destinations: Array<{ title: string; href: string }>;
@@ -31,19 +32,14 @@ const mobileSections: MobileSection[] = [
     id: "tracking",
     labelKey: "mobileNav.tracking",
     icon: Ship,
-    destinations: [{ title: "Tracking", href: "/tracking" }],
+    destinations: erpPrimaryGroupDestinations("tracking"),
     isActive: (path) => path === "/tracking" || path.startsWith("/tracking/"),
   },
   {
     id: "inventory",
     labelKey: "mobileNav.inventory",
     icon: Package,
-    destinations: [
-      { title: "Inventory", href: "/inventory" },
-      { title: "Stock", href: "/stock" },
-      { title: "Optional Vouchers", href: "/optional-vouchers" },
-      { title: "Profit Check", href: "/supplier-profit-check" },
-    ],
+    destinations: erpPrimaryGroupDestinations("inventory"),
     isActive: (path) =>
       path === "/inventory" ||
       path.startsWith("/inventory/") ||
@@ -57,13 +53,7 @@ const mobileSections: MobileSection[] = [
     id: "sales",
     labelKey: "mobileNav.sales",
     icon: ShoppingCart,
-    destinations: [
-      { title: "POS", href: "/pos" },
-      { title: "Sales Tools", href: "/sales-tools" },
-      { title: "Sales Report", href: "/sales-report" },
-      { title: "Stock In & Sales", href: "/stock-in-sales-report" },
-      { title: "POS Item Replacement", href: "/pos-item-replacement" },
-    ],
+    destinations: erpPrimaryGroupDestinations("sales"),
     isActive: (path) =>
       path === "/pos" ||
       path.startsWith("/pos/") ||
@@ -80,16 +70,7 @@ const mobileSections: MobileSection[] = [
     id: "accounts",
     labelKey: "mobileNav.accounts",
     icon: Wallet,
-    destinations: [
-      { title: "Accounts", href: "/accounts" },
-      { title: "Parties", href: "/parties" },
-      { title: "Daybook", href: "/daybook" },
-      { title: "All Daybook", href: "/transaction-journal" },
-      { title: "Vouchers", href: "/vouchers" },
-      { title: "Agent Ledger", href: "/agents" },
-      { title: "Dashboard", href: "/financial-overview" },
-      { title: "Payroll", href: "/payroll" },
-    ],
+    destinations: erpPrimaryGroupDestinations("accounts"),
     isActive: (path) =>
       path === "/accounts" ||
       path.startsWith("/accounts/") ||

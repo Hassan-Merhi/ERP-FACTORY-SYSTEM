@@ -5,11 +5,12 @@ import { useQuery } from "@tanstack/react-query";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import { PageHeader } from "@/components/PageHeader";
+import { ErpListTable } from "@/erp-core";
 import { FileText } from "lucide-react";
 import { PeriodFilter, PeriodFilterValue, getDefaultPeriodValue } from "@/components/ui/period-filter";
 import { useDateJump } from "@/hooks/use-date-jump";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
@@ -179,7 +180,7 @@ export default function LedgerVouchers() {
                     bal === 0 ? "—" : `${formatAmount(Math.abs(bal))} ${bal >= 0 ? "Cr" : "Dr"}`;
                   return (
                     <div className="border rounded-lg overflow-x-auto max-sm:border-0">
-                      <Table mobileLayout="cards">
+                      <ErpListTable pageKey="ledger-vouchers" mobileLayout="cards" scrollLabel="Ledger vouchers">
                         <TableHeader className="sticky top-0 z-30 bg-background">
                           <TableRow className="bg-muted/50">
                             <TableHead className="w-28">Date</TableHead>
@@ -283,7 +284,7 @@ export default function LedgerVouchers() {
                             </TableCell>
                           </TableRow>
                         </tfoot>
-                      </Table>
+                      </ErpListTable>
                     </div>
                   );
                 })()}

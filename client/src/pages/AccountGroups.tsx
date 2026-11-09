@@ -10,24 +10,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SearchField } from "@/components/ui/search-field";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PageHeader } from "@/components/PageHeader";
 import { useAppMode } from "@/contexts/AppModeContext";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ErpField, ErpFormActions, ErpPendingButton, ErpConfirmDialog } from "@/erp-core";
 import { Layers, Plus, Trash2, UserPlus, Search, FolderOpen, Folder, Pencil, X } from "lucide-react";
 import type { LedgerAccount } from "@shared/schema";
 
@@ -441,45 +431,49 @@ function LegacyAccountGroups() {
             <DialogTitle>Create Account Group</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="group-name">Group Name</Label>
-              <Input
-                id="group-name"
-                placeholder="e.g. Fixed Assets, Operating Expenses"
-                value={newGroupName}
-                onChange={(e) => setNewGroupName(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleCreateGroup()}
-                data-testid="input-group-name"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="group-type">Account Type</Label>
-              <Select value={newGroupType} onValueChange={setNewGroupType}>
-                <SelectTrigger id="group-type" data-testid="select-group-type">
-                  <SelectValue placeholder="Select account type…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {ACCOUNT_TYPES.map((t) => (
-                    <SelectItem key={t} value={t}>
-                      {t}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <ErpField id="group-name" label="Group Name" required>
+              {(control) => (
+                <Input
+                  {...control}
+                  placeholder="e.g. Fixed Assets, Operating Expenses"
+                  value={newGroupName}
+                  onChange={(e) => setNewGroupName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleCreateGroup()}
+                  data-testid="input-group-name"
+                />
+              )}
+            </ErpField>
+            <ErpField id="group-type" label="Account Type" required>
+              {(control) => (
+                <Select value={newGroupType} onValueChange={setNewGroupType}>
+                  <SelectTrigger {...control} data-testid="select-group-type">
+                    <SelectValue placeholder="Select account type…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ACCOUNT_TYPES.map((t) => (
+                      <SelectItem key={t} value={t}>
+                        {t}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </ErpField>
           </div>
-          <DialogFooter>
+          <ErpFormActions layout="dialog">
             <Button variant="outline" onClick={() => setCreateOpen(false)}>
               Cancel
             </Button>
-            <Button
+            <ErpPendingButton
               onClick={handleCreateGroup}
-              disabled={!newGroupName.trim() || !newGroupType || createGroupMutation.isPending}
+              disabled={!newGroupName.trim() || !newGroupType}
+              pending={createGroupMutation.isPending}
+              pendingLabel="Creating…"
               data-testid="button-confirm-create-group"
             >
-              {createGroupMutation.isPending ? "Creating…" : "Create Group"}
-            </Button>
-          </DialogFooter>
+              Create Group
+            </ErpPendingButton>
+          </ErpFormActions>
         </DialogContent>
       </Dialog>
 
@@ -489,32 +483,35 @@ function LegacyAccountGroups() {
           <DialogHeader>
             <DialogTitle>Rename Group</DialogTitle>
           </DialogHeader>
-          <div className="space-y-1.5 py-2">
-            <Label htmlFor="rename-group">Group Name</Label>
-            <Input
-              id="rename-group"
-              value={renameName}
-              onChange={(e) => setRenameName(e.target.value)}
-              onKeyDown={(e) =>
-                e.key === "Enter" &&
-                selectedGroup &&
-                renameMutation.mutate({ id: selectedGroup.id, name: renameName.trim() })
-              }
-              data-testid="input-rename-group"
-            />
-          </div>
-          <DialogFooter>
+          <ErpField id="rename-group" label="Group Name" className="py-2" required>
+            {(control) => (
+              <Input
+                {...control}
+                value={renameName}
+                onChange={(e) => setRenameName(e.target.value)}
+                onKeyDown={(e) =>
+                  e.key === "Enter" &&
+                  selectedGroup &&
+                  renameMutation.mutate({ id: selectedGroup.id, name: renameName.trim() })
+                }
+                data-testid="input-rename-group"
+              />
+            )}
+          </ErpField>
+          <ErpFormActions layout="dialog">
             <Button variant="outline" onClick={() => setRenameOpen(false)}>
               Cancel
             </Button>
-            <Button
+            <ErpPendingButton
               onClick={() => selectedGroup && renameMutation.mutate({ id: selectedGroup.id, name: renameName.trim() })}
-              disabled={!renameName.trim() || renameMutation.isPending}
+              disabled={!renameName.trim()}
+              pending={renameMutation.isPending}
+              pendingLabel="Saving…"
               data-testid="button-confirm-rename"
             >
-              {renameMutation.isPending ? "Saving…" : "Save"}
-            </Button>
-          </DialogFooter>
+              Save
+            </ErpPendingButton>
+          </ErpFormActions>
         </DialogContent>
       </Dialog>
 
@@ -576,46 +573,38 @@ function LegacyAccountGroups() {
               </p>
             )}
           </div>
-          <DialogFooter>
+          <ErpFormActions layout="dialog">
             <Button variant="outline" onClick={() => setAddAccountsOpen(false)}>
               Cancel
             </Button>
-            <Button
+            <ErpPendingButton
               onClick={handleAssignAccounts}
-              disabled={selectedToAdd.size === 0 || assignMutation.isPending}
+              disabled={selectedToAdd.size === 0}
+              pending={assignMutation.isPending}
+              pendingLabel="Adding…"
               data-testid="button-confirm-add-accounts"
             >
-              {assignMutation.isPending
-                ? "Adding…"
-                : `Add ${selectedToAdd.size > 0 ? selectedToAdd.size : ""} Account${selectedToAdd.size !== 1 ? "s" : ""}`}
-            </Button>
-          </DialogFooter>
+              { `Add ${selectedToAdd.size > 0 ? selectedToAdd.size : ""} Account${selectedToAdd.size !== 1 ? "s" : ""}` }
+            </ErpPendingButton>
+          </ErpFormActions>
         </DialogContent>
       </Dialog>
 
-      {/* Dissolve confirm */}
-      <AlertDialog open={dissolveConfirmId !== null} onOpenChange={(o) => !o && setDissolveConfirmId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Dissolve this group?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will remove the group and unlink all {dissolveConfirmId ? childCount(dissolveConfirmId) : 0} account
-              {(dissolveConfirmId ? childCount(dissolveConfirmId) : 0) !== 1 ? "s" : ""} from it. The accounts
-              themselves are not deleted — they just won't be grouped anymore.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => dissolveConfirmId && dissolveMutation.mutate(dissolveConfirmId)}
-              className="bg-destructive text-destructive-foreground"
-              data-testid="button-confirm-dissolve"
-            >
-              {dissolveMutation.isPending ? "Dissolving…" : "Dissolve Group"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Shared ERP destructive confirmation. Reuses the existing guarded mutation. */}
+      <ErpConfirmDialog
+        open={dissolveConfirmId !== null}
+        onOpenChange={(open) => { if (!open) setDissolveConfirmId(null); }}
+        title="Dissolve this group?"
+        description={`This will unlink ${dissolveConfirmId ? childCount(dissolveConfirmId) : 0} account(s) from the group. The accounts and their vouchers remain unchanged.`}
+        tone="destructive"
+        confirmText="Dissolve Group"
+        confirmButtonTestId="button-confirm-dissolve"
+        loading={dissolveMutation.isPending}
+        onConfirm={async () => {
+          if (dissolveConfirmId === null) return;
+          await dissolveMutation.mutateAsync(dissolveConfirmId);
+        }}
+      />
     </div>
   );
 }

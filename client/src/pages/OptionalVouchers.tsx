@@ -1,4 +1,7 @@
-import { ErpMobileFilters } from "@/components/ui/erp-mobile-filters";
+import { ErpListFilters, ErpListTable, ErpConfirmDialog, ErpRecordAction, useErpDateFormat } from "@/erp-core";
+import { erpCompanyDataKey, erpRequestUrl, invalidateErpDataFamilies } from "@/erp-core/erpData";
+import { TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useCompany } from "@/contexts/CompanyContext";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useMemo, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -9,17 +12,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/PageHeader";
-import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { FileText, Search, Pencil, Check, Trash2, X, Eye } from "lucide-react";
-import { format } from "date-fns";
+import { FileText, Pencil, Check, Trash2, X, Eye } from "lucide-react";
 import { OptionalVoucherDetailsDialog } from "./optional-vouchers/OptionalVoucherDetailsDialog";
 import type { Voucher } from "./daybook/types";
 
 export default function OptionalVouchers() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const { selectedCompany } = useCompany();
+  const { formatShortDate } = useErpDateFormat();
   const [typeFilter, setTypeFilter] = useState("all");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -28,13 +31,12 @@ export default function OptionalVouchers() {
   const [deleteVoucherId, setDeleteVoucherId] = useState<number | null>(null);
   const [viewVoucher, setViewVoucher] = useState<Voucher | null>(null);
 
-  const queryParams = new URLSearchParams();
-  if (typeFilter && typeFilter !== "all") queryParams.set("type", typeFilter);
-  if (startDate) queryParams.set("startDate", startDate);
-  if (endDate) queryParams.set("endDate", endDate);
-  if (search) queryParams.set("search", search);
-  const queryString = queryParams.toString();
-  const queryUrl = `/api/vouchers/optional${queryString ? `?${queryString}` : ""}`;
+  const queryUrl = erpRequestUrl("/api/vouchers/optional", {
+    type: typeFilter !== "all" ? typeFilter : undefined,
+    startDate,
+    endDate,
+    search,
+  });
 
   const {
     data: vouchers = [],
@@ -42,7 +44,8 @@ export default function OptionalVouchers() {
     isError,
     error,
   } = useQuery<Voucher[]>({
-    queryKey: ["/api/vouchers/optional", typeFilter, startDate, endDate, search],
+    queryKey: erpCompanyDataKey(queryUrl, selectedCompany?.id),
+    enabled: selectedCompany?.id != null,
     queryFn: async () => {
       const res = await apiRequest("GET", queryUrl);
       if (!res.ok) {
@@ -66,12 +69,14 @@ export default function OptionalVouchers() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/vouchers/optional"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/vouchers"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/daybook"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/inventory-by-location"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/location-summary"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/stock-transfers/list"] });
+      void invalidateErpDataFamilies(queryClient, [
+        "/api/vouchers/optional",
+        "/api/vouchers",
+        "/api/daybook",
+        "/api/inventory-by-location",
+        "/api/location-summary",
+        "/api/stock-transfers/list",
+      ]);
       toast({ title: "Voucher Finalized", description: "The voucher has been posted successfully." });
       setFinalizeVoucherId(null);
     },
@@ -86,9 +91,7 @@ export default function OptionalVouchers() {
       await apiRequest("DELETE", `/api/vouchers/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/vouchers/optional"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/vouchers"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/daybook"] });
+      void invalidateErpDataFamilies(queryClient, ["/api/vouchers/optional", "/api/vouchers", "/api/daybook"]);
       toast({ title: "Voucher Deleted", description: "The voucher has been deleted." });
       setDeleteVoucherId(null);
     },
@@ -182,118 +185,55 @@ export default function OptionalVouchers() {
         }
       />
 
-      {/* ── Filter row (phones: search + Filters sheet) ── */}
-      <ErpMobileFilters
-        label="Optional voucher filters"
-        quick={
-          <div className="relative w-full">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+      {/* Shared ERP search, desktop filters and phone filter sheet. */}
+      <ErpListFilters
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search voucher #, notes..."
+        searchTestId="input-search-vouchers"
+        mobileFilters
+        filterLabel="Optional voucher filters"
+        activeFilterCount={[typeFilter !== "all", !!startDate, !!endDate].filter(Boolean).length}
+        onResetFilters={clearFilters}
+        data-testid="optional-voucher"
+        filters={
+          <>
+            <Select value={typeFilter} onValueChange={setTypeFilter}>
+              <SelectTrigger className="w-40" data-testid="select-voucher-type">
+                <SelectValue placeholder="All Types" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Types</SelectItem>
+                {voucherTypes.map((type) => (
+                  <SelectItem key={type} value={type}>{type}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Input
-              placeholder="Search voucher #, notes..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9"
-              data-testid="input-search-vouchers"
+              type="date"
+              value={startDate}
+              onChange={(event) => setStartDate(event.target.value)}
+              className="w-40"
+              data-testid="input-start-date"
             />
-          </div>
+            <Input
+              type="date"
+              value={endDate}
+              onChange={(event) => setEndDate(event.target.value)}
+              className="w-40"
+              data-testid="input-end-date"
+            />
+          </>
         }
-        activeCount={[typeFilter !== "all", !!startDate, !!endDate].filter(Boolean).length}
-        onClear={clearFilters}
-        canClear={!!hasFilters}
-        data-testid="optional-voucher-filters"
-      >
-        {(layout) =>
-          layout === "sheet" ? (
-            <div className="grid gap-3">
-              <Select value={typeFilter} onValueChange={setTypeFilter}>
-                <SelectTrigger className="w-40" data-testid="select-voucher-type">
-                  <SelectValue placeholder="All Types" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Types</SelectItem>
-                  {voucherTypes.map((t) => (
-                    <SelectItem key={t} value={t}>
-                      {t}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="w-40"
-                data-testid="input-start-date"
-              />
-
-              <Input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="w-40"
-                data-testid="input-end-date"
-              />
-            </div>
-          ) : (
-            <div className="flex flex-wrap gap-2 items-center">
-              <Select value={typeFilter} onValueChange={setTypeFilter}>
-                <SelectTrigger className="w-40" data-testid="select-voucher-type">
-                  <SelectValue placeholder="All Types" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Types</SelectItem>
-                  {voucherTypes.map((t) => (
-                    <SelectItem key={t} value={t}>
-                      {t}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <div className="relative flex-1 min-w-44">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search voucher #, notes..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-9"
-                  data-testid="input-search-vouchers"
-                />
-              </div>
-
-              <Input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="w-40"
-                data-testid="input-start-date"
-              />
-
-              <Input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="w-40"
-                data-testid="input-end-date"
-              />
-
-              {hasFilters && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={clearFilters}
-                  data-testid="button-clear-filters"
-                  className="gap-1.5"
-                >
-                  <X className="h-4 w-4" />
-                  Clear
-                </Button>
-              )}
-            </div>
-          )
+        actions={
+          hasFilters ? (
+            <Button variant="ghost" size="sm" onClick={clearFilters} data-testid="button-clear-filters" className="gap-1.5">
+              <X className="h-4 w-4" />
+              Clear
+            </Button>
+          ) : undefined
         }
-      </ErpMobileFilters>
+      />
 
       {/* ── Stats pill bar ── */}
       {!isLoading && !isError && vouchers.length > 0 && (
@@ -346,45 +286,46 @@ export default function OptionalVouchers() {
       ) : (
         <>
           {/* Desktop table */}
-          <div
-            data-horizontal-scroll="true"
-            className="hidden md:block phone-land:hidden border rounded-xl overflow-x-auto"
+          <ErpListTable
+            pageKey="optional-vouchers"
+            companyId={selectedCompany?.id}
+            scrollLabel="Optional vouchers"
+            wrapperClassName="hidden md:block phone-land:hidden rounded-xl"
           >
-            <table className="w-full text-sm">
-              <thead className="sticky top-0 z-30 bg-muted">
-                <tr className="h-11 bg-muted/40 border-b">
-                  <th className="text-left px-4 font-medium">Date</th>
-                  <th className="text-left px-4 font-medium">Type</th>
-                  <th className="text-left px-4 font-medium">Description</th>
-                  <th className="text-right px-4 font-medium">Total</th>
-                  <th className="text-right px-4 font-medium">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
+              <TableHeader className="sticky top-0 z-30 bg-muted">
+                <TableRow className="h-11 bg-muted/40 border-b">
+                  <TableHead className="text-left px-4 font-medium">Date</TableHead>
+                  <TableHead className="text-left px-4 font-medium">Type</TableHead>
+                  <TableHead className="text-left px-4 font-medium">Description</TableHead>
+                  <TableHead className="text-right px-4 font-medium">Total</TableHead>
+                  <TableHead className="text-right px-4 font-medium">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {orderedVouchers.map((v) => (
-                  <tr
+                  <TableRow
                     key={v.id}
                     className="border-t hover:bg-muted/30 transition-colors"
                     data-testid={`row-voucher-${v.id}`}
                   >
-                    <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
-                      {v.voucherDate ? format(new Date(v.voucherDate + "T00:00:00"), "dd MMM yyyy") : "—"}
-                    </td>
-                    <td className="px-4 py-3">
+                    <TableCell className="px-4 py-3 text-muted-foreground whitespace-nowrap">
+                      {v.voucherDate ? formatShortDate(v.voucherDate) : "—"}
+                    </TableCell>
+                    <TableCell className="px-4 py-3">
                       <Badge variant={getTypeBadgeVariant(v.voucherType)} className="text-xs">
                         {v.voucherType}
                       </Badge>
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground text-sm">{v.description || "—"}</td>
-                    <td className="px-4 py-3 text-right tabular-nums font-medium">
+                    </TableCell>
+                    <TableCell className="px-4 py-3 text-muted-foreground text-sm">{v.description || "—"}</TableCell>
+                    <TableCell className="px-4 py-3 text-right tabular-nums font-medium">
                       {parseFloat(v.totalAmount || "0").toLocaleString(undefined, {
                         minimumFractionDigits: 0,
                         maximumFractionDigits: 2,
                       })}
-                    </td>
-                    <td className="px-4 py-3">
+                    </TableCell>
+                    <TableCell className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
-                        <Button
+                        <ErpRecordAction
                           size="icon"
                           variant="ghost"
                           onClick={() => setViewVoucher(v)}
@@ -394,8 +335,8 @@ export default function OptionalVouchers() {
                           aria-label="View voucher details"
                         >
                           <Eye className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
+                        </ErpRecordAction>
+                        <ErpRecordAction
                           size="sm"
                           variant="ghost"
                           onClick={() => handleEdit(v)}
@@ -404,8 +345,8 @@ export default function OptionalVouchers() {
                         >
                           <Pencil className="h-3.5 w-3.5" />
                           Edit
-                        </Button>
-                        <Button
+                        </ErpRecordAction>
+                        <ErpRecordAction
                           size="sm"
                           variant="ghost"
                           onClick={() => setFinalizeVoucherId(v.id)}
@@ -414,8 +355,8 @@ export default function OptionalVouchers() {
                         >
                           <Check className="h-3.5 w-3.5" />
                           Finalize
-                        </Button>
-                        <Button
+                        </ErpRecordAction>
+                        <ErpRecordAction
                           size="icon"
                           variant="ghost"
                           onClick={() => setDeleteVoucherId(v.id)}
@@ -423,28 +364,27 @@ export default function OptionalVouchers() {
                           className="h-8 w-8 text-destructive"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                        </ErpRecordAction>
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-              <tfoot>
-                <tr className="border-t bg-muted/40">
-                  <td colSpan={3} className="px-4 py-2 text-sm font-medium">
+              </TableBody>
+              <TableFooter>
+                <TableRow className="border-t bg-muted/40">
+                  <TableCell colSpan={3} className="px-4 py-2 text-sm font-medium">
                     Total ({vouchers.length} voucher{vouchers.length !== 1 ? "s" : ""})
-                  </td>
-                  <td
+                  </TableCell>
+                  <TableCell
                     className="px-4 py-2 text-right tabular-nums font-semibold"
                     data-testid="text-optional-grand-total-footer"
                   >
                     {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
-                  </td>
-                  <td />
-                </tr>
-              </tfoot>
-            </table>
-          </div>
+                  </TableCell>
+                  <TableCell />
+                </TableRow>
+              </TableFooter>
+          </ErpListTable>
 
           {/* Mobile cards */}
           <div className="md:hidden phone-land:block space-y-2">
@@ -453,7 +393,7 @@ export default function OptionalVouchers() {
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <div className="text-sm font-medium">
-                      {v.voucherDate ? format(new Date(v.voucherDate + "T00:00:00"), "dd MMM yyyy") : "—"}
+                      {v.voucherDate ? formatShortDate(v.voucherDate) : "—"}
                     </div>
                     {v.description && <div className="text-xs text-muted-foreground mt-0.5">{v.description}</div>}
                   </div>
@@ -470,7 +410,7 @@ export default function OptionalVouchers() {
                   </span>
                 </div>
                 <div className="flex items-center gap-1 pt-1 border-t">
-                  <Button
+                  <ErpRecordAction
                     size="icon"
                     variant="ghost"
                     onClick={() => setViewVoucher(v)}
@@ -480,8 +420,8 @@ export default function OptionalVouchers() {
                     aria-label="View voucher details"
                   >
                     <Eye className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
+                  </ErpRecordAction>
+                  <ErpRecordAction
                     size="sm"
                     variant="ghost"
                     onClick={() => handleEdit(v)}
@@ -490,8 +430,8 @@ export default function OptionalVouchers() {
                   >
                     <Pencil className="h-3.5 w-3.5" />
                     Edit
-                  </Button>
-                  <Button
+                  </ErpRecordAction>
+                  <ErpRecordAction
                     size="sm"
                     variant="ghost"
                     onClick={() => setFinalizeVoucherId(v.id)}
@@ -500,8 +440,8 @@ export default function OptionalVouchers() {
                   >
                     <Check className="h-3.5 w-3.5" />
                     Finalize
-                  </Button>
-                  <Button
+                  </ErpRecordAction>
+                  <ErpRecordAction
                     size="icon"
                     variant="ghost"
                     onClick={() => setDeleteVoucherId(v.id)}
@@ -509,7 +449,7 @@ export default function OptionalVouchers() {
                     className="h-8 w-8 text-destructive"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                  </ErpRecordAction>
                 </div>
               </div>
             ))}
@@ -529,7 +469,7 @@ export default function OptionalVouchers() {
         }}
       />
 
-      <ConfirmDialog
+      <ErpConfirmDialog
         open={finalizeVoucherId !== null}
         onOpenChange={(open) => !open && setFinalizeVoucherId(null)}
         title="Finalize Voucher"
@@ -541,7 +481,7 @@ export default function OptionalVouchers() {
         }}
       />
 
-      <ConfirmDialog
+      <ErpConfirmDialog
         open={deleteVoucherId !== null}
         onOpenChange={(open) => !open && setDeleteVoucherId(null)}
         title="Delete Voucher"

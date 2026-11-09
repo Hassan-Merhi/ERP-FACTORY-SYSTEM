@@ -14,6 +14,7 @@ import {
   CoreErpSummaryValue,
 } from "@/components/ui/core-erp-mobile";
 import { PageHeader } from "@/components/PageHeader";
+import { ErpListTable } from "@/erp-core";
 import {
   ResponsiveDataList,
   ResponsiveDataListField,
@@ -22,7 +23,7 @@ import {
   ResponsiveDataListItem,
   ResponsiveDataListTitle,
 } from "@/components/ui/responsive-data-list";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useState } from "react";
@@ -159,7 +160,7 @@ export default function StockItemHistory() {
         </CardHeader>
         <CardContent>
           <div className="hidden md:block phone-land:hidden">
-            <Table minimumWidth="52rem" scrollLabel="Stock item monthly summary">
+            <ErpListTable pageKey="stock-item-monthly-history" minimumWidth="52rem" scrollLabel="Stock item monthly summary">
               <TableHeader className="sticky top-0 z-30 bg-background">
                 <TableRow>
                   <TableHead rowSpan={2} className="align-bottom border-r">
@@ -239,7 +240,7 @@ export default function StockItemHistory() {
                   </TableCell>
                 </TableRow>
               </TableBody>
-            </Table>
+            </ErpListTable>
           </div>
 
           <div className="space-y-3 md:hidden phone-land:block">

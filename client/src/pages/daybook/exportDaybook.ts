@@ -1,5 +1,4 @@
-import { format } from "date-fns";
-import { utils, writeFile } from "@/lib/excelHelper";
+import { erpReportFileName, exportErpReportRowsExcel } from "@/erp-core";
 import { buildDetailedDaybookRows } from "@/lib/daybook-export";
 import type { Voucher } from "./types";
 
@@ -27,13 +26,11 @@ export async function exportDaybookSummary(
     "Total Amount": formatAmount(v.totalAmount),
     Optional: v.optional ? "Yes" : "No",
   }));
-  const ws = utils.json_to_sheet(data);
-  const wb = utils.book_new();
-  utils.book_append_sheet(wb, ws, operationalFiltered ? "Operational Filtered" : "Daybook");
-  await writeFile(
-    wb,
-    `${operationalFiltered ? "Operational_Filtered_Daybook" : "Daybook"}_${format(new Date(), "yyyy-MM-dd")}.xlsx`
-  );
+  await exportErpReportRowsExcel({
+    rows: data,
+    sheetName: operationalFiltered ? "Operational Filtered" : "Daybook",
+    fileName: erpReportFileName(operationalFiltered ? "Operational_Filtered_Daybook" : "Daybook", "xlsx"),
+  });
 }
 
 /** Writes the detailed export workbook and returns the exported detail rows. */
@@ -42,12 +39,10 @@ export async function exportDaybookDetail(
   { operationalFiltered, formatDisplayDate }: DaybookExportOptions
 ): Promise<ReturnType<typeof buildDetailedDaybookRows>> {
   const detailRows = buildDetailedDaybookRows(vouchers as unknown as Array<Record<string, unknown>>, formatDisplayDate);
-  const ws = utils.json_to_sheet(detailRows);
-  const wb = utils.book_new();
-  utils.book_append_sheet(wb, ws, operationalFiltered ? "Operational Detail Filtered" : "Daybook Detail");
-  await writeFile(
-    wb,
-    `${operationalFiltered ? "Operational_Filtered_Detail" : "Daybook_Detail"}_${format(new Date(), "yyyy-MM-dd")}.xlsx`
-  );
+  await exportErpReportRowsExcel({
+    rows: detailRows,
+    sheetName: operationalFiltered ? "Operational Detail Filtered" : "Daybook Detail",
+    fileName: erpReportFileName(operationalFiltered ? "Operational_Filtered_Detail" : "Daybook_Detail", "xlsx"),
+  });
   return detailRows;
 }
