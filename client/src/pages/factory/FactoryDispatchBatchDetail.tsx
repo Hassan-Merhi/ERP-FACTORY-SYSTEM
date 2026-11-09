@@ -54,6 +54,7 @@ import { useDateFormat } from "@/contexts/DateFormatContext";
 import type { AuditScan, BatchDetail, InvoicePreview } from "./factorydispatchbatchdetail/types";
 import { BATCH_STATUS_CONFIG, fmt } from "./factorydispatchbatchdetail/utils";
 import { RideStatusBadge } from "./factorydispatchbatchdetail/components/RideStatusBadge";
+import { BatchInfoCard } from "./factorydispatchbatchdetail/components/BatchInfoCard";
 export default function FactoryDispatchBatchDetail() {
   const [, navigate] = useLocation();
   const [, params] = useRoute("/factory/dispatch-batches/:id");
@@ -353,49 +354,7 @@ export default function FactoryDispatchBatchDetail() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="md:col-span-1 space-y-3">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Batch Info</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Customer</span>
-                  <span className="font-medium">{customerName || "—"}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Proforma</span>
-                  <span>{proforma?.name || "None"}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Currency</span>
-                  <span>{batch.currency}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Price Mode</span>
-                  <span>{batch.priceMode === "PER_KG" ? "Per Kg" : "Per Bale"}</span>
-                </div>
-                {batch.destination && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Destination</span>
-                    <span>{batch.destination}</span>
-                  </div>
-                )}
-                {batch.notes && (
-                  <div>
-                    <span className="text-muted-foreground text-xs">Notes</span>
-                    <p className="text-sm mt-0.5">{batch.notes}</p>
-                  </div>
-                )}
-                {finalInvoice && (
-                  <div className="flex justify-between pt-1 border-t">
-                    <span className="text-muted-foreground">Invoice</span>
-                    <span className="font-mono font-medium text-green-700 dark:text-green-400">
-                      {finalInvoice.invoiceNumber}
-                    </span>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            <BatchInfoCard batch={batch} customerName={customerName} proforma={proforma} finalInvoice={finalInvoice} />
 
             {progress.length > 0 && (
               <Card>
