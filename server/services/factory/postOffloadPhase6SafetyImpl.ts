@@ -513,8 +513,10 @@ async function buildSnapshot(params: { companyId: number; requestedSupplierIds?:
     // Phase 5: include downstream production/GL reconciliation in the
     // preflight, not only the final serializable apply. A report with missing
     // production links must not advertise an automatic-repair token as ready.
-    const downstreamSafety = await inspectPhase5ReplayScopeSafety(executor, params.companyId, scope);
-    if (!downstreamSafety.safeToApply) {
+    const downstreamSafety = schema.ready
+      ? await inspectPhase5ReplayScopeSafety(executor, params.companyId, scope)
+      : null;
+    if (downstreamSafety && !downstreamSafety.safeToApply) {
       safety = {
         ...safety,
         allSafetyGatesPassed: false,
