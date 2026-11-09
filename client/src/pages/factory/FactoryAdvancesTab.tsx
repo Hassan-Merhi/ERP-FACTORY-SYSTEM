@@ -9,20 +9,27 @@ import { AdvancesView } from "./factoryadvancestab/components/AdvancesView";
 import { RepaymentsView } from "./factoryadvancestab/components/RepaymentsView";
 import { DeductionsView } from "./factoryadvancestab/components/DeductionsView";
 import type { FactoryMyAccess } from "@shared/apiTypes";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 export default function FactoryAdvancesTab() {
+  const { selectedCompany } = useCompany();
   const [subTab, setSubTab] = useState<"advances" | "repayments" | "deductions">("advances");
 
   const { data: settings } = useQuery({
-    queryKey: ["/api/factory/settings"],
+    queryKey: companyQueryKey("/api/factory/settings", selectedCompany?.id),
     queryFn: async () => {
       const r = await fetch("/api/factory/settings");
       return r.ok ? r.json() : {};
     },
     staleTime: 60000,
+    enabled: Boolean(selectedCompany?.id),
   });
 
-  const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: ["/api/factory/my-access"], staleTime: 5 * 60000 });
-  const hiddenTabs = myAccess?.hiddenCostFields ?? [];
+  const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id), staleTime: 5 * 60000 });
+  const hiddenTabs = myAccess?.companyId === selectedCompany?.id && myAccess.hasFactoryAccess
+    ? myAccess.hiddenCostFields
+    : ["hide_tab_advances_advances","hide_tab_advances_repayments","hide_tab_advances_deductions"];
 
   const showAdvances = !hiddenTabs.includes("hide_tab_advances_advances");
   const showRepayments =
