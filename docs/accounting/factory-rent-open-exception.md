@@ -24,7 +24,9 @@ These are the balances **after** the approved Factory rent cleanup in PR #3057. 
 
 1. The accrual engine in `server/routes/rental/shared/accrual-posting.ts` now locks each company/module rental row and refuses to post an already linked or legacy-orphaned accrual.
 2. The prepaid recognition pass in `server/routes/rental/shared/accrual.ts` excludes zero-expected monthly rows. This prevents a zero-dollar voucher from silently stamping the missing November entry.
-3. Preserve the existing prepaid debit, payment voucher and all original evidence until a reviewed explanation establishes a **legitimate** balancing source. Any later remedy must be reviewed for its effect on all three GL accounts and Net Position.
+3. The production database now has an audited `[RENT_RECOGNITION_HOLD]` note on company 12 / contract 40 / monthly row **889178**. Both the monthly due scheduler and the transactional posting boundary refuse recognition of held months. This was verified live on November 9, 2026 with Prepaid Rent still USD 29,566.66.
+4. The one-off installer and temporary company/row bootstrap guard were removed after the persistent note was confirmed. Future protection uses the same note-based mechanism for any explicitly reviewed rental month; it does not rely on permanent hardcoded company 12 exceptions.
+5. Preserve the existing prepaid debit, payment voucher and all original evidence until a reviewed explanation establishes a **legitimate** balancing source. Any later remedy must be reviewed for its effect on all three GL accounts and Net Position.
 
 ## Required checks before closing this exception
 

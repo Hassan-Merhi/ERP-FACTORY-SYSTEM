@@ -77,7 +77,7 @@ export async function postAccrualPassTx(tx: DbTransaction, input: AccrualPassPos
     locked.some((r,i)=>
       Number(r.id)!==rowIds[i] ||
       r.accrual_voucher_id!==null ||
-      isRentRecognitionHeld(r.notes, { companyId: input.companyId, rowId: r.id }) ||
+      isRentRecognitionHeld(r.notes) ||
       // Catch legacy orphan journals even if somebody cleared the month link.
       (input.pass==="accrual" && r.prior_rent_accrual===true) ||
       (input.pass==="accrual" && (r.used_prepaid_account || r.used_advance_account)) ||
