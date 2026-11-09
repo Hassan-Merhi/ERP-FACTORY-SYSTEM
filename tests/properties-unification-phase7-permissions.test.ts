@@ -114,13 +114,13 @@ function source(path: string) {
 describe("Phase 7 rental route wiring", () => {
   it("protects posted and scheduled payment deletion after authentication", () => {
     expect(source("../server/routes/rental/centralRentalPaymentDeletionRoute.ts"))
-      .toMatch(/app\.delete\(`${urlPrefix}\/payments\/:id`, requireAuth, requireRentalDeletePermission,/);
+      .toContain('app.delete(`${urlPrefix}/payments/:id`, requireAuth, requireRentalDeletePermission,');
     expect(source("../server/routes/rental/rentalPaymentsAccrualRoutes.ts"))
-      .toMatch(/app\.delete\(`${urlPrefix}\/payments\/scheduled\/:groupId`, requireAuth, requireRentalDeletePermission,/);
+      .toContain('app.delete(`${urlPrefix}/payments/scheduled/:groupId`, requireAuth, requireRentalDeletePermission,');
   });
 
   it("protects reconciliation with the active company role", () => {
     expect(source("../server/routes/rentalRouteFactory.ts"))
-      .toMatch(/app\.get\(`${urlPrefix}\/reconciliation`, requireAuth, requireRentalReconciliationPermission,/);
+      .toContain('app.get(`${urlPrefix}/reconciliation`, requireAuth, requireRentalReconciliationPermission,');
   });
 });
