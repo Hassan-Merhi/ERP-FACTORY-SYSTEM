@@ -406,6 +406,7 @@ function StockInSalesReportSummary() {
           <GitCompare className="mr-2 h-4 w-4" /> Compare
         </Button>
         <ErpReportExportMenu
+          size="sm"
           className="gap-2"
           busy={isExporting}
           disabled={rows.length === 0 || isFetching || isLoading}
