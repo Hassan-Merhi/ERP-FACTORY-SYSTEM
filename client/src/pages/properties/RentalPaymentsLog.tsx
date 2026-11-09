@@ -17,7 +17,7 @@ import { hasSingleUsdBasis, rentalReportingFigure } from "@/properties/config/re
 import { useAppMode } from "@/contexts/AppModeContext";
 import { useMobileCardTable } from "@/components/ui/mobile-card-table";
 import { AlertTriangle, ClipboardList, Copy, Trash2 } from "lucide-react";
-import { format } from "date-fns";
+import { rentalPaymentDateLabel, mayOfferRentalPaymentDelete } from "@/properties/config/rentalPaymentPresentation";
 import { PropertiesPaymentsPremium } from "./property-rental/components/PropertiesPaymentsPremium";
 import { RentalPaymentDeleteDialog } from "./property-rental/components/RentalPaymentDeleteDialog";
 import "./property-rental/propertiesPaymentsPremium.css";
@@ -358,7 +358,7 @@ export default function RentalPaymentsLog({
                       data-testid={`row-payment-${p.id}`}
                     >
                       <td className="px-3 py-2 tabular-nums text-sm">
-                        {format(new Date(p.paymentDate), "dd MMM yyyy")}
+                        {rentalPaymentDateLabel(p.paymentDate)}
                       </td>
                       <td className="px-3 py-2 font-medium">{p.tenantName ?? "—"}</td>
                       <td className="px-3 py-2">
@@ -398,7 +398,7 @@ export default function RentalPaymentsLog({
                         )}
                       </td>
                       <td className="px-2 py-1 text-right">
-                        {p.readOnly ? (
+                        {!mayOfferRentalPaymentDelete(p.sourceModule, p.readOnly, rentalModule) ? (
                           <span
                             className="text-xs text-muted-foreground"
                             title="Original posted guarantee voucher; no editable payment record exists."
