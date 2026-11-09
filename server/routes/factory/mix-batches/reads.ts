@@ -13,12 +13,35 @@ import { requireAuth } from "../../../auth";
 import { factoryMixBatches } from "@shared/schema";
 import { eq, and, desc, isNull } from "drizzle-orm";
 import { toMoney } from "../../../lib/money";
+import { getHistoricalMixBatchReconciliation, historicalMixAuditCsv } from "../../../services/factory/historicalMixBatchReconciliation";
 
 export function registerFactoryMixBatchReadRoutes(app: Express) {
   app.get("/api/factory/mix-batches", requireAuth, async (req: Request, res: Response) => {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
+
+      // Phase 3: a full read-only snapshot of recorded historical values.
+      // Reuse this existing authenticated URL (profile switch) to avoid
+      // adding an unregistered dynamic route or changing route order.
+      if (req.query.profile === "historical-audit") {
+        const report = await getHistoricalMixBatchReconciliation(companyId);
+        res.set("Cache-Control", "private, no-store");
+        res.set("X-ERP-Payload-Profile", "historical-mix-batch-audit-read-only");
+        if (req.query.format === "csv") {
+          const level = req.query.level === "sources" ? "sources" : "batches";
+          res.set("Content-Type", "text/csv; charset=utf-8");
+          res.set("Content-Disposition", "attachment; filename=\"factory-mix-historical-" + level + "-audit.csv\"");
+          return res.send(historicalMixAuditCsv(report, level));
+        }
+        if (req.query.includeSources === "false") {
+          return res.json({
+            ...report,
+            batches: report.batches.map(({ sources: _sources, ...batch }) => batch),
+          });
+        }
+        return res.json(report);
+      }
 
       const where = and(eq(factoryMixBatches.companyId, companyId), isNull(factoryMixBatches.deletedAt));
 
