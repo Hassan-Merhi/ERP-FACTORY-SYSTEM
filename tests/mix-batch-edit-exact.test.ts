@@ -95,6 +95,7 @@ async function patch(body: Record<string, unknown>) {
   const res = {
     statusCode: 200,
     body: undefined as unknown,
+    set(_key: string, _value: string) { return this; },
     status(code: number) {
       this.statusCode = code;
       return this;
