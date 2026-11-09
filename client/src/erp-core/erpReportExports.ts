@@ -14,8 +14,12 @@ export function erpReportFileName(
   date: Date = new Date(),
   separator: "_" | "-" = "_",
 ): string {
-  const prefix = label
-    .replace(/[\\/<>:"|?*\x00-\x1f]+/g, "_")
+  // Strip control characters without a control-character regex (lint gate).
+  const safeCharacters = Array.from(label, (character) =>
+    character.charCodeAt(0) < 32 ? "_" : character,
+  ).join("");
+  const prefix = safeCharacters
+    .replace(/[\\/<>:"|?*]+/g, "_")
     .replace(/[.\s]+$/g, "")
     .trim() || "ERP_Report";
   return `${prefix}${separator}${format(date, "yyyy-MM-dd")}.${extension}`;
