@@ -368,14 +368,14 @@ export function registerFactoryLoadingDispatchAllocationRoutes(app: Express) {
           const kept = new Set(previousIds);
           const removed = previousIds.filter((id) => !chosen.has(id));
           const added = [...chosen].filter((id) => !kept.has(id));
-          if (removed.length) {
+          for (const id of removed) {
             await tx.execute(sql`
               UPDATE factory_loading_dispatch_expected_bales
                  SET removed_at = NOW(), removed_by_user_id = ${actor},
                      removal_reason = 'TRIP_PLAN_REPLACED'
                WHERE company_id = ${state.companyId} AND order_id = ${orderId}
-                 AND dispatch_id = ${dispatchId} AND removed_at IS NULL
-                 AND bale_id NOT IN (SELECT unnest(${sql.array([...chosen], "int4")}::int[]))
+                 AND dispatch_id = ${dispatchId} AND bale_id = ${id}
+                 AND removed_at IS NULL
             `);
           }
           // Individual values are bound through Drizzle. The parent row lock
