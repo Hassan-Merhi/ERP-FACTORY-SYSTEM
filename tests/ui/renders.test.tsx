@@ -7,6 +7,7 @@
 import React from "react";
 import { screen } from "@testing-library/react";
 import { renderWithProviders, stubFetch } from "./helpers";
+import { FACTORY_MY_ACCESS_URL, factoryFullAccess } from "./pageMocks";
 
 // ── Global stubs ─────────────────────────────────────────────────────────────
 
@@ -219,7 +220,10 @@ describe("Settings", () => {
 describe("FactoryWorkersHub", () => {
   it("renders the section tabs", async () => {
     const { default: FactoryWorkersHub } = await import("@/pages/factory/FactoryWorkersHub");
-    renderWithProviders(<FactoryWorkersHub />);
+    // Hub tabs fail closed until access for the selected company (id 1) is known.
+    renderWithProviders(<FactoryWorkersHub />, {
+      seedQueries: [[[FACTORY_MY_ACCESS_URL, mockCompany.selectedCompany.id], factoryFullAccess()]],
+    });
     const tabs = await screen.findByTestId("tabs-workers-section");
     expect(tabs).toHaveAttribute("role", "tablist");
     expect(tabs).toHaveAccessibleName("Worker sections");

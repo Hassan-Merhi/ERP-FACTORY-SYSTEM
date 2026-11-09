@@ -50,7 +50,12 @@ vi.mock("@tanstack/react-query", () => ({
         isLoading: false,
       };
     }
-    if (root === "/api/factory/my-access") return { data: { fullAccess: true, hiddenCostFields: [] } };
+    if (root === "/api/factory/my-access") {
+      // Cost figures are shown only for a grant that names the selected company.
+      return {
+        data: { fullAccess: true, hasFactoryAccess: true, hideAllCosts: false, hiddenCostFields: [], companyId: 1 },
+      };
+    }
     if (root === "/api/factory/settings") return { data: { hideSellingPrice: false, hideAvgCost: false } };
     if (root === "/api/factory/location-inventory/11") return { data: inventory, isLoading: false };
     if (root === "/api/factory/location-inventory/11/available") return { data: inventory, isLoading: false };
@@ -92,7 +97,14 @@ vi.mock("@tanstack/react-query", () => ({
     }),
   }),
 }));
-vi.mock("wouter", () => ({ useLocation: () => ["/factory/location-inventory", harness.navigate] }));
+vi.mock("wouter", () => ({
+  useLocation: () => ["/factory/location-inventory", harness.navigate],
+  Link: ({ children, href, ...props }: any) => (
+    <a href={href} {...props}>
+      {children}
+    </a>
+  ),
+}));
 vi.mock("@/contexts/CurrencyContext", () => ({
   useCurrencyContext: () => ({ formatAmount: (value: unknown) => `$${Number(value).toFixed(2)}` }),
 }));

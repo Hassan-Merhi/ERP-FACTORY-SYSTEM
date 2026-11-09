@@ -64,7 +64,7 @@ function RouteLoadingFallback({ title, description, fill }: { title: string; des
   }, []);
 
   return (
-    <div className={fill ? "h-full" : "p-3 sm:p-6"} role="status" aria-live="polite">
+    <div className={fill ? "h-full" : "p-3 sm:p-6"}>
       <LoadingState
         className={fill ? "h-full border-0 bg-transparent" : undefined}
         title={title}
