@@ -1,4 +1,4 @@
-# ERP Core UI — Phases 1–4
+# ERP Core UI — Phases 1–5
 
 Use `@/erp-core` for new ERP-mode page presentation. This folder is a **composition/adoption layer**, not a new visual framework.
 
@@ -64,9 +64,25 @@ import { ErpPage, ErpPageActions, ErpDataTableToolbar, ErpEmptyState } from "@/e
 
 **Scope:** This phase changes frontend navigation and guards. It does not widen backend permissions, add permissions migrations, or change Factory/Properties routing. Run the full TypeScript, UI and route-permissions regression suites before merging, and reconcile the branch with the current `main` first.
 
+
+## Phase 5: company-scoped data and presentation formatting
+
+**Do not introduce new request or money business logic.** The ERP barrel exports thin adapters over the existing, shared foundations:
+
+- `erpRequestUrl` reuses `canonicalApiUrl`, with stable sorted filter keys and no empty query parameters. `erpCompanyDataKey` and `erpDataKeys` reuse the system's URL-first, company-second cache factories. A query's first key must be the **actual GET URL** when it uses the default queryFn.
+- `invalidateErpDataFamilies` uses the existing `invalidateApiFamily` matcher, so writes invalidate both older URL-only query keys and newer `?filters` + company-scoped keys. This invalidates read models; it **does not** change records or copy other-company cache entries.
+- `useErpServerPagination` owns the requested page and resets on company or filter changes. It never slices a server response; pages send `page` and `pageSize` to the backend. `ErpListPagination` delegates to the existing shared `PaginationBar` when total and page-size metadata are available.
+- `useErpDateFormat` aliases the existing `DateFormatContext`: dates obey the user's saved DD/MM/YYYY versus MM/DD/YYYY preference. API date filters remain ISO strings; never format those for display before sending.
+- `formatErpNumber`, `ErpMoneyAmount`, `formatErpMoneyDisplay` and `formatErpMoneyNumber` reuse established formatting. Explicit-currency money presentation does not perform FX conversion. `formatErpFixedQuantity` preserves the **exact two-decimal** display already used in opening/closing stock reports.
+- The first migrations cover Stock Query, Optional Vouchers, Stock Transfers, Customers (including their per-customer statement cache), Suppliers (including their unified ledger and purchase orders), Opening/Closing Stock Summary, Market Price Analysis, and Stock & Sales Report.
+
+**Migration rules:** Company identities are part of every company-owned query key; use `enabled` when the selected company is unavailable. Never cache a customer statement under a fake URL key such as `["/api/customers", customerId, "transactions"]`. Keep financial calculations, historical base amounts, account-side colors, currency precision and mutations untouched. Company switches must not show another company's cached statement.
+
+**Tests:** `erpData.test.ts` covers URL normalization, company isolation, legacy/filter invalidation and display precision; `useErpServerPagination.test.tsx` covers company/filter reset and page bounds. CI type-check, build and frontend test suites still need to pass before merging the combined branch.
+
 ## Rollout rules
 
 1. Phase 1 sets the stable API and migrates Opening/Closing Stock Summary as non-accounting pilot pages, retaining their existing shell spacing and header semantics.
-2. Phase 2 introduces the standard list table, shared filter toolbar, and pagination controls. Phase 3 standardizes controlled fields, async form actions, row buttons and confirmations; Phase 4 centralizes ERP route/navigation roles and company-scoped page grants; Phase 5 standardizes queries and number/date display; Phase 6 handles reports/export; Phase 7 removes proven duplicates.
+2. Phase 2 introduces the standard list table, shared filter toolbar, and pagination controls. Phase 3 standardizes controlled fields, async form actions, row buttons and confirmations; Phase 4 centralizes ERP route/navigation roles and company-scoped page grants; Phase 5 standardizes queries, server paging and number/date display; Phase 6 handles reports/export; Phase 7 removes proven duplicates.
 3. Never move voucher posting, ledger calculations, stock valuation, payroll arithmetic, or company authorization into UI components. Server authorization remains definitive.
 4. Do not change data-testid, route URLs, stock balance calculations, or create/edit behavior as part of a presentational migration. Stock Query's former 200-result cap is separately replaced by explicit company-aware server pagination.
