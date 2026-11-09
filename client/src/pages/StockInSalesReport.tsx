@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
+import { ErpListTable } from "@/erp-core";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -32,7 +33,7 @@ import { PeriodFilter, getDefaultPeriodValue, type PeriodFilterValue } from "@/c
 import { ErpMobileFilters } from "@/components/ui/erp-mobile-filters";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useToast } from "@/hooks/use-toast";
@@ -572,7 +573,7 @@ function StockInSalesReportSummary() {
         </p>
         <div className="overflow-hidden rounded-xl border max-sm:overflow-visible max-sm:border-0">
           <div className="overflow-x-auto">
-            <Table className="min-w-[900px]" mobileLayout="cards">
+            <ErpListTable pageKey="stock-in-sales-report" companyId={selectedCompany?.id} className="min-w-[900px]" mobileLayout="cards" scrollLabel="Stock and sales reporting">
               <TableHeader>
                 <TableRow className="bg-muted/40 hover:bg-muted/40">
                   <TableHead>{periodColumnLabel}</TableHead>
@@ -663,7 +664,7 @@ function StockInSalesReportSummary() {
                   </>
                 )}
               </TableBody>
-            </Table>
+            </ErpListTable>
           </div>
         </div>
       </div>
