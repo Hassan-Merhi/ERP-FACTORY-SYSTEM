@@ -1,4 +1,4 @@
-import { ErpListFilters, ErpListTable } from "@/erp-core";
+import { ErpListFilters, ErpListTable, ErpConfirmDialog } from "@/erp-core";
 import { TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useCompany } from "@/contexts/CompanyContext";
 import type { ClientErrorLike } from "@/lib/clientError";
@@ -11,7 +11,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/PageHeader";
-import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { FileText, Pencil, Check, Trash2, X, Eye } from "lucide-react";
@@ -469,7 +468,7 @@ export default function OptionalVouchers() {
         }}
       />
 
-      <ConfirmDialog
+      <ErpConfirmDialog
         open={finalizeVoucherId !== null}
         onOpenChange={(open) => !open && setFinalizeVoucherId(null)}
         title="Finalize Voucher"
@@ -481,7 +480,7 @@ export default function OptionalVouchers() {
         }}
       />
 
-      <ConfirmDialog
+      <ErpConfirmDialog
         open={deleteVoucherId !== null}
         onOpenChange={(open) => !open && setDeleteVoucherId(null)}
         title="Delete Voucher"
