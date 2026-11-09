@@ -5,7 +5,7 @@
  *
  * The allowance computation never changes historical rates or vouchers.
  */
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, lte, sql } from "drizzle-orm";
 import { factoryRawMaterialAdjustments, factoryMixBatchSources, factoryMixBatches } from "@shared/schema";
 import type { DatabaseOrTransaction } from "../../db";
 import { toMoney, MoneyDecimal } from "../../lib/money";
@@ -50,7 +50,11 @@ export async function availableSupplierAddAllowance(
   companyId: number,
   supplierId: number,
   rawRows: readonly SupplierStockUsage[],
+  asOfBusinessDate?: string,
 ): Promise<ReturnType<typeof toMoney>> {
+  if (asOfBusinessDate && !/^\d{4}-\d{2}-\d{2}$/.test(asOfBusinessDate)) {
+    throw new MixRawStockShortageError("Supplier ADD stock requires a valid YYYY-MM-DD mix business date.");
+  }
   const [additions] = await tx.select({
     kg: sql<string>`COALESCE(SUM(${factoryRawMaterialAdjustments.kg}), 0)`,
   }).from(factoryRawMaterialAdjustments).where(and(
@@ -58,6 +62,7 @@ export async function availableSupplierAddAllowance(
     eq(factoryRawMaterialAdjustments.supplierId, supplierId),
     eq(factoryRawMaterialAdjustments.type, "ADD"),
     isNull(factoryRawMaterialAdjustments.deletedAt),
+    asOfBusinessDate ? lte(factoryRawMaterialAdjustments.date, asOfBusinessDate) : undefined,
   ));
   const addKg = toMoney(additions?.kg ?? "0");
   let consumedFromAdds = new MoneyDecimal(0);
