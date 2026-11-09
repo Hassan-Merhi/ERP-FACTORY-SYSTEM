@@ -4,8 +4,8 @@ import { describe, expect, it } from "vitest";
 import {
   mayOfferRentalPaymentDelete,
   rentalPaymentDateLabel,
+  rentalPaymentDeletionImpact,
 } from "../client/src/properties/config/rentalPaymentPresentation";
-import { rentalPaymentDeletionImpact } from "../client/src/pages/properties/property-rental/components/RentalPaymentDeleteDialog";
 import { receiptTotals, cashCents, nonCashCents } from "../client/src/pages/properties/property-rental/paymentsReceiptMath";
 import { getRentalModulePolicy } from "../client/src/properties/config/rentalModulePolicy";
 
