@@ -3,6 +3,9 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useAppMode } from "@/contexts/AppModeContext";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
+import type { FactoryMyAccess } from "@shared/apiTypes";
 import { getApiRequest } from "@/lib/factoryApi";
 import { apiRequest } from "@/lib/queryClient";
 import { queryClient, keyStartsWith } from "@/lib/queryClient";
@@ -42,6 +45,7 @@ export function useFactoryLocationInventory() {
   const { formatAmount } = useCurrencyContext();
   const { toast } = useToast();
   const appMode = useAppMode();
+  const { selectedCompany } = useCompany();
   const modeApiRequest = getApiRequest(appMode);
 
   const [proformaMode, setProformaMode] = useState(false);
@@ -110,24 +114,21 @@ export function useFactoryLocationInventory() {
     queryKey: ["/api/locations"],
   });
 
-  const { data: myAccess } = useQuery<{
-    fullAccess: boolean;
-    pageKeys: string[];
-    hasErpAccess: boolean;
-    hasFactoryAccess: boolean;
-    hiddenCostFields: string[];
-  }>({
-    queryKey: ["/api/factory/my-access"],
+  const { data: myAccess } = useQuery<FactoryMyAccess>({
+    queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
   });
 
   const { data: factorySettingsData } = useQuery<{ hideSellingPrice?: boolean; hideAvgCost?: boolean }>({
-    queryKey: ["/api/factory/settings"],
+    queryKey: companyQueryKey("/api/factory/settings", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const res = await fetch("/api/factory/settings", { credentials: "include" });
       return res.ok ? res.json() : {};
     },
   });
-  const perUserHidden = myAccess?.hiddenCostFields ?? [];
+  // Do not apply permission data from a different selected company.
+  const perUserHidden = myAccess?.companyId === selectedCompany?.id ? myAccess.hiddenCostFields : [];
   const hideSellingPrice =
     !!factorySettingsData?.hideSellingPrice ||
     perUserHidden.includes("inventory_sell_price") ||
@@ -140,7 +141,7 @@ export function useFactoryLocationInventory() {
     perUserHidden.includes("hide_export_cost_price");
 
   const { data: inventoryData = [], isLoading: inventoryLoading } = useQuery<FactoryBaleProduct[]>({
-    queryKey: selectedLocation ? [`/api/factory/location-inventory/${selectedLocation.id}`] : [],
+    queryKey: companyQueryKey(`/api/factory/location-inventory/${selectedLocation?.id ?? "none"}`, selectedCompany?.id),
     queryFn: async () => {
       const response = await fetch(`/api/factory/location-inventory/${selectedLocation!.id}`, {
         credentials: "include",
@@ -152,7 +153,7 @@ export function useFactoryLocationInventory() {
   });
 
   const { data: availableInventoryData = [], isLoading: availableLoading } = useQuery<FactoryBaleProduct[]>({
-    queryKey: selectedLocation ? [`/api/factory/location-inventory/${selectedLocation.id}/available`] : [],
+    queryKey: companyQueryKey(`/api/factory/location-inventory/${selectedLocation?.id ?? "none"}/available`, selectedCompany?.id),
     queryFn: async () => {
       const response = await fetch(`/api/factory/location-inventory/${selectedLocation!.id}/available`, {
         credentials: "include",
