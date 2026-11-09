@@ -65,16 +65,9 @@ export { useExistingRecordChangeAccess as useErpRecordChangeAccess } from "@/hoo
 export { erpPageAccessQueryOptions } from "@/app/erpAccessQuery";
 
 /** Phase 5: company-scoped requests, compatible invalidation and server pagination. */
-export {
-  erpDataKeys,
-  erpReferenceKeys,
-  erpStockItemKeys,
-  erpRequestUrl,
-  erpCompanyDataKey,
-  erpUnwrapList,
-  erpUnwrapPage,
-  invalidateErpDataFamilies,
-} from "./erpData";
+// Do not re-export query/data helpers here: importing a simple visual action
+// (e.g. Daybook Export) must not evaluate every request/cache helper.
+// Consumers of data operations import "@/erp-core/erpData" directly.
 export { useErpServerPagination } from "./useErpServerPagination";
 export type { ErpServerPaginationOptions } from "./useErpServerPagination";
 export {
