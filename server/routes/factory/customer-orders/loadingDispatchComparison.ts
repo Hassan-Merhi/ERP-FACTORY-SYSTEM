@@ -186,9 +186,10 @@ export function compareFactoryLoadingDispatch(input: {
         expectedDispatchNumber: tripNumber(assigned.dispatchId),
         scannedBy: scan.scannedBy, scannedAt: scan.scannedAt,
       });
-    } else if (byTrip && scopedPlannedBales.length > 0 &&
-        scopedPlannedArticles.length === 0 && !selectedPlanIds.has(scan.baleId)) {
-      unexpectedBales.push({ ...scan, reason: "NOT_IN_EXACT_TRIP_PLAN",
+    } else if (byTrip && hasTripPlan && !selectedPlanIds.has(scan.baleId) &&
+        !scopedPlannedArticles.some((article) =>
+          articleKey(article.articleCode) === articleKey(scan.articleCode))) {
+      unexpectedBales.push({ ...scan, reason: "NOT_IN_TRIP_PLAN",
         dispatchId: scan.dispatchId, dispatchNumber: scan.dispatchNumber,
         scannedBy: scan.scannedBy, scannedAt: scan.scannedAt });
     }
@@ -257,8 +258,11 @@ export function compareFactoryLoadingDispatch(input: {
     }
   }
 
-  const articles: ComparisonArticleRow[] = [...groups.values()].map((g) => {
-    const expectedQty = byTrip ? g.plannedQty : g.loadedQty;
+  const articles: ComparisonArticleRow[] = [...groups.values()]
+    .filter((g) => !byTrip || g.scannedQty > 0 || g.plannedQty !== null)
+    .map((g) => {
+    const expectedQty = !byTrip ? g.loadedQty
+      : !hasTripPlan ? null : (g.plannedQty ?? 0);
     // A trip without a plan has no meaningful missing/extra count for
     // individual article types: 0 expected would incorrectly mean "extra".
     const missingQty = expectedQty === null ? null
