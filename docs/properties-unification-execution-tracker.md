@@ -14,7 +14,7 @@
 | 1 | Fix rental navigation mismatch | **Code complete** | Static source review complete; browser/runtime checks pending | `e3ac129f5cd36b0b714dce3238bf70b211e0fb3c` |
 | 2 | Typed rental module policy | **Code complete** | Static source parity review passed; runtime/typecheck pending | `60084a305133835447212051b863c9af0745e8ed` through `57771a74a7603ae246908967a0a2f2a1648fc0e6` |
 | 3 | Reporting identity and currency | **Code committed; rollout blocked on verified company ID** | Seven static checks passed; runtime/ID verification outstanding | `62befb3e55efd0439b200496475fe3c370c3189e` through `78e61c82e553ea25c30df07492c9d0fc35fc2414` |
-| 4 | Payments and rental view models | Not started | Not started | — |
+| 4 | Payments and rental view models | **Code complete** | 12 static source checks passed; runtime/typecheck pending | `125c1c66012b2de2619b35796094a30917e76c37` through `652f333a935bcceb84f5565a082fb6dd6dc2e392` |
 | 5 | Permissions and navigation registry | Not started | Not started | — |
 | 6 | Final parity and legacy cleanup | Not started | Not started | — |
 
@@ -100,6 +100,36 @@
 - [ ] TypeScript compile/typecheck and runtime parity verification (not run per no-CI instruction).
 
 **Disposition:** Source refactor committed. **Not fully completed for rollout** until the true company ID is configured and historical UI parity verified. The tracker does not claim an unverified production identity.
+
+## Phase 4 — Payments and rental view models
+
+**Changes committed (2026-11-09)**
+- Added `client/src/properties/hooks/useRentalUnits.ts`: read-only, company-keyed unit and cash-account queries and warehouse-paid totals. Retained endpoint URLs, credentials, query keys and loading/error behavior.
+- Added `client/src/properties/hooks/useRentalPayments.ts`: payment and historical reconciliation queries plus the shared payment query-key factory. Preserved `view=warehouse-reconciliation`, historical payment rows, module differences and all server allocation logic.
+- Added `client/src/properties/hooks/useRentalOverview.ts`: pure rental overview aggregation and grouping hooks. Retained exclusion of internal Factory/ERP projections, contracted totals, guarantee, advance credit, outstanding and active monthly rent rules.
+- Added `client/src/properties/hooks/useRentalPaymentsFilters.ts`: payment search, tenant/unit filters, existing month/year/30-day date range behavior, reconciliation category view selection and a typed reconciliation view list. Retained unvouchered adjustments as records without treating them as cash receipts.
+- Added `client/src/properties/hooks/useRentalReconciliation.ts`: moved all five ledger read queries, source-account matching and existing pure receipt / account-balance reconciliation math into a read-model hook.
+- Reduced `PaymentsReconciliation.tsx` to a compatibility adapter that publishes the snapshot with primitive-value effect dependencies, preserving existing exported types and both existing page consumers.
+- Updated `PropertyRentalPage.tsx` and `RentalPaymentsLog.tsx` to consume the extracted hooks. Existing mutation handlers, ledger posting service and modal/action forms were left untouched.
+- Cash/non-cash breakdown, scheduled records, deposits/guarantee/ended rent and voucher-backed export calculations remain in the existing `paymentsReceiptMath.ts`, not duplicated.
+
+**Static verification**
+- Re-fetched eight source files after changes and checked 12 source invariants: both pages consume the hooks; page-level duplicate queries removed; payment endpoints and unit query keys unchanged; all five reconciliation ledger queries retained; historical cutoff retained; search, correction and date filters retained; internal projections excluded from totals; no accounting write introduced into new hooks; compatibility types retained; no snapshot-object effect dependency loop. **12/12 passed.**
+- Payments filter date calculations retain the previous browser-local semantics intentionally; a company-timezone migration requires separate business-date review, not a silent historical reinterpretation.
+- No CI, TypeScript compile, automated tests, running-app interaction, DB inspection or merge performed.
+
+**Acceptance checklist**
+- [x] Extract read-only company-scoped units / cash accounts / payment queries.
+- [x] Extract reconciliation read-model ledger queries and calculation.
+- [x] Extract unit totals, unit grouping, search, category and date filters.
+- [x] Preserve receipt math, scheduled items, adjustments, tenant deposits, guarantees and historical display boundaries.
+- [x] Preserve existing page mutations, API paths and server accounting authority.
+- [x] Record post-change source-level verification.
+- [ ] TypeScript build/typecheck and browser QA of three rental modules.
+- [ ] Verify live ledger reconciliation, historical totals, copy/export and payment deletion in a safe non-production company.
+- [ ] Confirm Phase 3 verified company-ID setting before historical UI parity QA.
+
+**Disposition:** Phase 4 source implementation complete on the same branch. Runtime, build and accounting-parity certification are outstanding for Claude's later main-merge review; this status does not claim production verification.
 
 ## Mandatory boundaries for phases 2–6
 
