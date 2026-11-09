@@ -41,7 +41,7 @@ describe("Factory Phase 2 continuation: selected-company source invariants", () 
       'companyQueryKey("/api/factory/attendance", selectedCompany?.id, selectedDate)',
     );
     expect(source("client/src/pages/factory/FactoryProductionTargets.tsx")).toContain(
-      "access?.companyId === selectedCompany?.id && access.hasFactoryAccess",
+      "access?.companyId === selectedCompany?.id && access?.hasFactoryAccess === true",
     );
   });
 
@@ -57,7 +57,7 @@ describe("Factory Phase 2 continuation: selected-company source invariants", () 
       expect(worker, endpoint).toContain(`companyQueryKey("${endpoint}", selectedCompany?.id)`);
     }
     expect(bonus).toContain('companyQueryKey("/api/factory/worker-bonuses", selectedCompany?.id');
-    expect(worker).toContain("myAccess.hasFactoryAccess");
+    expect(worker).toContain("myAccess?.hasFactoryAccess");
     expect(companyQueryKey("/api/factory/workers/amount-due", 1)).not.toEqual(
       companyQueryKey("/api/factory/workers/amount-due", 2),
     );
@@ -73,7 +73,7 @@ describe("Factory Phase 2 continuation: selected-company source invariants", () 
     ]) {
       const code = source(path);
       expect(code, path).toContain("myAccess?.companyId === selectedCompany?.id");
-      expect(code, path).toContain("myAccess.hasFactoryAccess");
+      expect(code, path).toContain("myAccess?.hasFactoryAccess");
       expect(code, path).toContain('companyQueryKey("/api/factory/my-access", selectedCompany?.id)');
     }
   });
