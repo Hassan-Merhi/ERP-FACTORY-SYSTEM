@@ -21,6 +21,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { companyQueryKey } from "@/lib/companyQueryScope";
 import { factoryActionCapabilities } from "@shared/factoryActionCapabilities";
+import { factoryStatusLabel } from "@shared/factoryStatusPresentation";
 import { useCompany } from "@/contexts/CompanyContext";
 import type { FactoryMyAccess } from "@shared/apiTypes";
 
@@ -230,7 +231,7 @@ export default function FactoryLoadingDispatchLifecycle({ orderId, dispatchId, c
               </div>
             </div>
             <Badge variant="outline" className={status === "CLOSED" ? "border-emerald-500 text-emerald-600" : "border-blue-400 text-blue-600"}>
-              {status === "CLOSED" ? "Completed" : status === "OPEN" ? "Open" : status}
+              {status === "CLOSED" ? "Completed" : factoryStatusLabel("dispatch", status)}
             </Badge>
           </div>
 
