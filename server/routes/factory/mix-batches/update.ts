@@ -32,6 +32,13 @@ import { recordFactoryStockValueEventTx } from "../../../services/factory/factor
 import Decimal from "decimal.js";
 import { MoneyDecimal, parseMoneyInput, toMoney } from "../../../lib/money";
 
+class CompletedMixBatchSourceEditError extends Error {
+  readonly code = "MIX_BATCH_COMPLETED_SOURCE_EDIT_REQUIRES_REVIEW";
+  constructor() {
+    super("Completed mix batches cannot have source materials repriced automatically. Use the reviewed correction workflow.");
+  }
+}
+
 export function registerFactoryMixBatchUpdateRoutes(app: Express) {
   app.patch("/api/factory/mix-batches/:id", requireAuth, async (req: Request, res: Response) => {
     try {
@@ -113,6 +120,12 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
           .where(and(eq(factoryMixBatches.id, id), eq(factoryMixBatches.companyId, companyId)))
           .for("update");
         if (!batch) throw new Error("Mix batch not found");
+        // A completed batch may already have sold/finalized output. Do not
+        // reverse its historical materials and reprice them at current rates.
+        // Metadata-only PATCH above remains available without source arrays.
+        if (batch.status === "COMPLETED" || batch.status === "CLOSED") {
+          throw new CompletedMixBatchSourceEditError();
+        }
 
         // ── 1. Reverse all existing sources ──
         const oldSources = await tx
@@ -389,6 +402,9 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
 
       res.json(result);
     } catch (error: unknown) {
+      if (error instanceof CompletedMixBatchSourceEditError) {
+        return res.status(409).json({ code: error.code, message: error.message });
+      }
       if (sendFactoryCostBasisRefusal(res, error)) return;
       logger.error("Error updating mix batch:", { error: error });
       res.status(500).json({ message: getErrorMessage(error) });
