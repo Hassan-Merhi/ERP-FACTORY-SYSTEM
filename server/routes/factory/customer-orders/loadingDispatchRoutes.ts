@@ -192,7 +192,12 @@ export function registerFactoryLoadingDispatchRoutes(app: Express): void {
         `);
         return { dispatch };
       });
-      if ("code" in created) return res.status(created.code).json({ message: created.message });
+      if ("code" in created && typeof created.code === "number") {
+        return res.status(created.code).json({ message: created.message });
+      }
+      if (!("dispatch" in created) || !created.dispatch) {
+        return res.status(500).json({ message: "Dispatch could not be created" });
+      }
       return res.status(201).json(created.dispatch);
     } catch (error) {
       logger.error("Error creating Factory loading dispatch", { error });
