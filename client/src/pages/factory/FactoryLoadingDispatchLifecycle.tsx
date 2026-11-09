@@ -144,7 +144,8 @@ export default function FactoryLoadingDispatchLifecycle({ orderId, dispatchId, c
   });
   const frozenUrl = frozenClosureId ? lifecycleUrl + "/closures/" + frozenClosureId : lifecycleUrl;
   const frozen = useQuery<FrozenSnapshot>({
-    queryKey: companyQueryKey(frozenUrl, companyId),
+    // Keep inactive snapshot state out of the lifecycle history query cache.
+    queryKey: companyQueryKey(lifecycleUrl + "/closure-snapshot/" + (frozenClosureId ?? "none"), companyId),
     queryFn: () => getJson<FrozenSnapshot>(frozenUrl),
     enabled: Boolean(companyId) && Boolean(frozenClosureId),
   });
@@ -229,7 +230,7 @@ export default function FactoryLoadingDispatchLifecycle({ orderId, dispatchId, c
                 <p className="mt-1 text-xs text-muted-foreground">
                   {status === "CLOSED"
                     ? "This truck record is locked. Scans, expected allocations and details can no longer be changed."
-                    : "End the trip after physically verifying its bales. Discrepancies require a supervisor approval."}
+                    : "Scan physical bales on this trip and End Dispatch. No truck targets are needed. Compare all trips against Pending Loading at the end."}
                 </p>
               </div>
             </div>
@@ -348,9 +349,8 @@ export default function FactoryLoadingDispatchLifecycle({ orderId, dispatchId, c
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 {([
-                  ["Expected", fmt(s?.expectedBales)],
-                  ["Verified", fmt(s?.verifiedBales)],
-                  ["Missing", fmt(s?.missingBales)],
+                  ["Scanned bales", fmt(s?.verifiedBales)],
+                  ["Scanned KG", fmt(s?.verifiedWeightKg, 3)],
                   ["Unexpected", fmt(s?.unexpectedBales)],
                 ] as const).map(([name, value]) => (
                   <div className="rounded-lg bg-slate-50 p-2.5 dark:bg-[#0b162a]" key={name}>
@@ -360,9 +360,7 @@ export default function FactoryLoadingDispatchLifecycle({ orderId, dispatchId, c
                 ))}
               </div>
               <p className="text-xs text-muted-foreground">
-                {fmt(s?.verifiedWeightKg, 3)} kg physically verified
-                {s?.expectedWeightKg !== null && s?.expectedWeightKg !== undefined
-                  ? " · " + fmt(s.expectedWeightKg, 3) + " kg expected" : " · expected KG not fully allocated"}
+                No expected allocation is needed per truck. Remaining bales will be identified in All Trips comparison.
               </p>
               {issues.length ? (
                 <div className="space-y-2 rounded-xl border border-amber-300 bg-amber-50 p-3 dark:border-amber-700 dark:bg-amber-950/20">
@@ -376,7 +374,7 @@ export default function FactoryLoadingDispatchLifecycle({ orderId, dispatchId, c
                     <div className="space-y-2">
                       <p className="text-xs font-semibold">Supervisor reason for closing with discrepancies</p>
                       <Textarea value={discrepancyReason} maxLength={1000} rows={3}
-                        placeholder="Explain the missing / unexpected bales and why this truck may be finalized"
+                        placeholder="Explain the unexpected scanned bale(s) and why this trip may be ended"
                         onChange={(e) => setDiscrepancyReason(e.target.value)}
                         data-testid="input-dispatch-closure-reason" />
                       <p className="text-[11px] text-muted-foreground">Required: 10–1,000 characters. The reason and approval will be saved in permanent history.</p>
@@ -387,7 +385,7 @@ export default function FactoryLoadingDispatchLifecycle({ orderId, dispatchId, c
                 </div>
               ) : (
                 <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 dark:border-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-200">
-                  <CheckCircle2 className="h-4 w-4" /> All expected items match this truck's physical scans.
+                  <CheckCircle2 className="h-4 w-4" /> No scan anomalies found. This trip can be ended without an expected truck plan.
                 </div>
               )}
               {issues.length > 0 && (
@@ -453,14 +451,14 @@ export default function FactoryLoadingDispatchLifecycle({ orderId, dispatchId, c
           </DialogHeader>
           {frozen.isPending && <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading saved comparison…</p>}
           {frozen.isError && <p className="text-sm text-red-600">{errorMessage(frozen.error)}</p>}
-          {frozen.data && (
+          {frozenClosureId && frozen.data && (
             <div className="space-y-3">
               <p className="text-sm font-semibold">Closure #{frozen.data.revision} · {frozen.data.closedByUsername} · {formatDisplayDateTime(frozen.data.closedAt)}</p>
               <div className="flex flex-wrap gap-2">
-                <Badge variant="secondary">Verified {fmt(frozen.data.summary.verifiedBales)}</Badge>
-                <Badge variant="secondary">Expected {fmt(frozen.data.summary.expectedBales)}</Badge>
-                <Badge variant="secondary">Missing {fmt(frozen.data.summary.missingBales)}</Badge>
-                <Badge variant="secondary">Scanned KG {fmt(frozen.data.summary.verifiedWeightKg, 3)}</Badge>
+                <Badge variant="secondary">Verified {fmt(frozen.data.summary?.verifiedBales)}</Badge>
+                <Badge variant="secondary">Expected {fmt(frozen.data.summary?.expectedBales)}</Badge>
+                <Badge variant="secondary">Missing {fmt(frozen.data.summary?.missingBales)}</Badge>
+                <Badge variant="secondary">Scanned KG {fmt(frozen.data.summary?.verifiedWeightKg, 3)}</Badge>
               </div>
               {frozen.data.approvedWithDiscrepancies && <p className="rounded-lg bg-amber-50 p-2 text-sm text-amber-900 dark:bg-amber-950/20 dark:text-amber-200">
                 Supervisor approval: {frozen.data.discrepancyReason}

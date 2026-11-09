@@ -28,7 +28,6 @@ import { companyQueryKey } from "@/lib/companyQueryScope";
 import { FACTORY_DISPATCH_TRIP_STATUS_LABELS, type FactoryDispatchTripStatus } from "@shared/factoryStatusPresentation";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import FactoryLoadingDispatchScanner from "./FactoryLoadingDispatchScanner";
-import FactoryLoadingDispatchAllocation from "./FactoryLoadingDispatchAllocation";
 import FactoryLoadingDispatchLifecycle from "./FactoryLoadingDispatchLifecycle";
 
 interface OrderBale {
@@ -326,7 +325,7 @@ export default function FactoryLoadingDispatch() {
                   {orderQuery.data?.containerNumber && <Badge variant="outline">{orderQuery.data.containerNumber}</Badge>}
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground sm:text-sm">
-                  Verify truck trips independently from your main loading record.
+                  Scan actual bales on each trip, then compare all trips against Pending Loading.
                 </p>
               </div>
             </div>
@@ -339,7 +338,7 @@ export default function FactoryLoadingDispatch() {
                 <FileSpreadsheet className="mr-1.5 h-4 w-4" /> Reports & Excel
               </Button>
               <Button size="sm" variant="outline" onClick={() => navigate("/factory/sales/loading/dispatch/" + orderId + "/compare")} data-testid="button-compare-all-dispatches">
-                <FileSearch className="mr-1.5 h-4 w-4" /> Compare All
+                <FileSearch className="mr-1.5 h-4 w-4" /> Final Loading Comparison
               </Button>
               <Button size="sm" variant="outline" onClick={() => void refresh()} disabled={tripsQuery.isFetching || orderQuery.isFetching} data-testid="button-refresh-dispatch">
                 <RefreshCw className="mr-1.5 h-4 w-4" /> Refresh
@@ -356,8 +355,9 @@ export default function FactoryLoadingDispatch() {
         <div className="flex items-start gap-2 rounded-xl border border-indigo-200 bg-indigo-50/80 p-3 text-xs text-indigo-900 dark:border-indigo-500/25 dark:bg-indigo-500/10 dark:text-indigo-100">
           <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
           <div>
-            <span className="font-semibold">Verification only.</span> A Dispatch never adds bales to Loading,
-            changes inventory or posts financial transactions. Only unique bales from this loading may be verified on trucks.
+            <span className="font-semibold">Scan-only dispatch.</span> No expected targets per truck.
+            Scanning records the actual bales on each trip. After all trips finish,
+            compare against Pending Loading and choose whether to remove unscanned bales.
           </div>
         </div>
 
@@ -511,12 +511,13 @@ export default function FactoryLoadingDispatch() {
                   </Card>
                   <Card className="border-blue-100 dark:border-blue-500/20 dark:bg-[#101c34]">
                     <CardContent className="space-y-3 p-4">
-                      <div className="flex items-center gap-2"><FileSearch className="h-4 w-4 text-blue-500" /><h3 className="text-sm font-semibold">Trip comparison</h3></div>
-                      <p className="text-xs text-muted-foreground">Compare the expected truck load configured below against physically scanned barcodes, missing references and KG differences.</p>
+                      <div className="flex items-center gap-2"><FileSearch className="h-4 w-4 text-blue-500" /><h3 className="text-sm font-semibold">Final loading comparison</h3></div>
+                      <p className="text-xs text-muted-foreground">Compare every trip's scanned bales against Pending Loading. After all trips finish,
+                        you may choose which unscanned bales to remove from the order.</p>
                       <Button type="button" size="sm" variant="outline" className="w-full justify-between"
-                        onClick={() => navigate("/factory/sales/loading/dispatch/" + orderId + "/" + dispatchId + "/compare")}
+                        onClick={() => navigate("/factory/sales/loading/dispatch/" + orderId + "/compare")}
                         data-testid="button-compare-dispatch">
-                        Compare this trip <ArrowRight className="h-4 w-4" />
+                        Compare all trips <ArrowRight className="h-4 w-4" />
                       </Button>
                     </CardContent>
                   </Card>
@@ -534,19 +535,6 @@ export default function FactoryLoadingDispatch() {
                     }}
                   />
                   </ErrorBoundary>
-                </div>
-                <div className="xl:col-span-2">
-                  <FactoryLoadingDispatchAllocation
-                    orderId={orderId}
-                    dispatchId={dispatchId}
-                    companyId={companyId}
-                    status={selectedTrip.status}
-                    role={user?.currentRole ?? user?.role ?? ""}
-                    onChanged={() => {
-                      void queryClient.invalidateQueries({ queryKey: companyQueryKey(listUrl, companyId) });
-                      if (selectedUrl) void queryClient.invalidateQueries({ queryKey: companyQueryKey(selectedUrl, companyId) });
-                    }}
-                  />
                 </div>
                 <div className="xl:col-span-2">
                   <FactoryLoadingDispatchScanner
