@@ -7,7 +7,9 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Package, Search } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
-import { SearchField } from "@/components/ui/search-field";
+import { useCompany } from "@/contexts/CompanyContext";
+import { ErpListFilters, ErpListTable, ErpListPagination } from "@/erp-core";
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 interface StockItem {
   id: number;
@@ -36,11 +38,14 @@ interface PagedStockItems {
 
 export default function StockQuery() {
   const appMode = useAppMode();
+  const { selectedCompany } = useCompany();
   const isFactory = appMode === "factory";
   const search = useSearch();
   const initialQ = new URLSearchParams(search).get("q") || "";
   const [searchTerm, setSearchTerm] = useState(initialQ);
   const [debouncedSearch, setDebouncedSearch] = useState(initialQ);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 100;
   const [, navigate] = useLocation();
 
   useEffect(() => {
@@ -49,9 +54,9 @@ export default function StockQuery() {
   }, [searchTerm]);
 
   const { data: pagedStockItems, isLoading: erpLoading } = useQuery<PagedStockItems>({
-    queryKey: ["/api/stock-items", { search: debouncedSearch, pageSize: 200 }],
+    queryKey: ["/api/stock-items", { search: debouncedSearch, page: currentPage, pageSize }],
     queryFn: async () => {
-      const params = new URLSearchParams({ page: "1", pageSize: "200" });
+      const params = new URLSearchParams({ page: String(currentPage), pageSize: String(pageSize) });
       if (debouncedSearch.trim()) params.set("search", debouncedSearch.trim());
       const res = await fetch(`/api/stock-items?${params}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch stock items");
@@ -78,26 +83,30 @@ export default function StockQuery() {
   };
 
   const hasSearch = debouncedSearch.trim().length > 0;
+  const totalResults = isFactory ? items.length : (pagedStockItems?.total ?? 0);
 
   return (
     <div className="flex flex-col gap-4 sm:p-4 md:p-6">
       {/* ── Header + Search ── */}
       <PageHeader title="Stock Query" subtitle="Click any item to view purchase history, sales, and inventory" />
-      <SearchField
-        value={searchTerm}
-        onValueChange={setSearchTerm}
-        placeholder="Search by code or name..."
-        wrapperClassName="sm:max-w-md"
-        autoFocus
-        data-testid="input-stock-search"
+      <ErpListFilters
+        search={searchTerm}
+        onSearchChange={(value) => {
+          setSearchTerm(value);
+          setCurrentPage(1);
+        }}
+        searchPlaceholder="Search by code or name..."
+        searchTestId="input-stock-search"
+        searchAutoFocus
+        searchWrapperClassName="sm:max-w-md"
       />
 
       {/* ── Result count ── */}
       {!isLoading && (items.length > 0 || hasSearch) && (
         <p className="text-sm text-muted-foreground">
           {hasSearch
-            ? `${items.length.toLocaleString()} item${items.length !== 1 ? "s" : ""} match "${debouncedSearch}"`
-            : `${items.length.toLocaleString()} item${items.length !== 1 ? "s" : ""}`}
+            ? `${totalResults.toLocaleString()} item${totalResults !== 1 ? "s" : ""} match "${debouncedSearch}"`
+            : `${totalResults.toLocaleString()} item${totalResults !== 1 ? "s" : ""}`}
         </p>
       )}
 
@@ -124,45 +133,45 @@ export default function StockQuery() {
       ) : (
         <>
           {/* Desktop table */}
-          <div
-            data-horizontal-scroll="true"
-            className="hidden md:block phone-land:hidden border rounded-xl overflow-x-auto"
+          <ErpListTable
+            pageKey="stock-query"
+            companyId={selectedCompany?.id}
+            scrollLabel="Stock query results"
+            wrapperClassName="hidden md:block phone-land:hidden rounded-xl"
           >
-            <table className="w-full text-sm">
-              <thead className="sticky top-0 z-30 bg-muted">
-                <tr className="h-11 bg-muted/40 border-b">
-                  <th className="text-left px-4 font-medium w-32">Code</th>
-                  <th className="text-left px-4 font-medium">Name</th>
-                  <th className="text-left px-4 font-medium w-24">Status</th>
-                </tr>
-              </thead>
-              <tbody>
+              <TableHeader className="sticky top-0 z-30 bg-muted">
+                <TableRow className="h-11 bg-muted/40 border-b">
+                  <TableHead className="text-left px-4 font-medium w-32">Code</TableHead>
+                  <TableHead className="text-left px-4 font-medium">Name</TableHead>
+                  <TableHead className="text-left px-4 font-medium w-24">Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {items.map((item) => (
-                  <tr
+                  <TableRow
                     key={item.id}
                     className="border-t hover:bg-muted/30 transition-colors cursor-pointer"
                     onClick={() => handleItemClick(item)}
                     data-testid={`row-stock-item-${item.id}`}
                   >
-                    <td className="px-4 py-3 text-muted-foreground font-mono text-xs" data-testid={`code-${item.id}`}>
+                    <TableCell className="px-4 py-3 text-muted-foreground font-mono text-xs" data-testid={`code-${item.id}`}>
                       {item.code}
-                    </td>
-                    <td className="px-4 py-3 font-medium" data-testid={`button-item-name-${item.id}`}>
+                    </TableCell>
+                    <TableCell className="px-4 py-3 font-medium" data-testid={`button-item-name-${item.id}`}>
                       <div className="flex items-center gap-2">
                         <Package className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                         {item.name}
                       </div>
-                    </td>
-                    <td className="px-4 py-3" data-testid={`status-${item.id}`}>
+                    </TableCell>
+                    <TableCell className="px-4 py-3" data-testid={`status-${item.id}`}>
                       <Badge variant={item.active ? "default" : "secondary"} className="text-xs">
                         {item.active ? "Active" : "Inactive"}
                       </Badge>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </TableBody>
+          </ErpListTable>
 
           {/* Mobile list */}
           <div className="md:hidden phone-land:block space-y-1.5">
@@ -186,6 +195,15 @@ export default function StockQuery() {
               </div>
             ))}
           </div>
+          {!isFactory && pagedStockItems ? (
+            <ErpListPagination
+              page={currentPage}
+              totalPages={pagedStockItems.totalPages}
+              totalItems={pagedStockItems.total}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+            />
+          ) : null}
         </>
       )}
     </div>
