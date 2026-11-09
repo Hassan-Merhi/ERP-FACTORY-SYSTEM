@@ -136,6 +136,29 @@ interface MixPhase5Audit {
   batches: Array<{ batchId: number; batchCode: string; classification: string; usedKg: string }>;
 }
 
+interface MixPhase6LifecycleAudit {
+  generatedAt: string;
+  readOnly: true;
+  summary: {
+    allBatches: number;
+    activeBatches: number;
+    completedWithRemainderBatches: number;
+    completedRemainderKg: string;
+    completedRemainderPotentialValueUsd: string;
+    overusedBatches: number;
+    overusedKg: string;
+    carryForwardBatches: number;
+    carryForwardExceptions: number;
+    batchesWithDailyUsage: number;
+  };
+  batches: Array<{
+    batchId: number; batchCode: string; status: string; deleted: boolean;
+    totalKg: string; usedKg: string; remainingKg: string;
+    classification: string;
+    issues: Array<{ code: string; severity: string; detail: string }>;
+  }>;
+}
+
 interface MixBatchListProps {
   mixBatches: MixBatchRow[];
   isLoading: boolean;
@@ -185,6 +208,9 @@ export function MixBatchList({
   const [historicalAudit, setHistoricalAudit] = useState<MixHistoricalAuditPreview | null>(null);
   const [phase4Audit, setPhase4Audit] = useState<MixPhase4Audit | null>(null);
   const [phase5Audit, setPhase5Audit] = useState<MixPhase5Audit | null>(null);
+  const [phase6Audit, setPhase6Audit] = useState<MixPhase6LifecycleAudit | null>(null);
+  const [isAuditingLifecycle, setIsAuditingLifecycle] = useState(false);
+  const [isExportingLifecycle, setIsExportingLifecycle] = useState(false);
   const [isAuditingDownstream, setIsAuditingDownstream] = useState(false);
   const [isExportingDownstream, setIsExportingDownstream] = useState(false);
   const [isAuditingProvenance, setIsAuditingProvenance] = useState(false);
@@ -340,6 +366,41 @@ export function MixBatchList({
     } finally { setIsExportingDownstream(false); }
   };
 
+  const handleRunLifecycleAudit = async () => {
+    setIsAuditingLifecycle(true);
+    try {
+      const response = await fetch("/api/factory/mix-batches?profile=lifecycle-audit", {
+        credentials: "same-origin", cache: "no-store",
+      });
+      if (!response.ok) throw new Error("Cannot load the used-kg and carry-forward reconciliation.");
+      setPhase6Audit((await response.json()) as MixPhase6LifecycleAudit);
+      toast({ title: "Mix lifecycle audit ready", description: "The full active and deleted batch history was inspected without changing quantities." });
+    } catch (error) {
+      toast({ title: "Lifecycle audit failed", description: error instanceof Error ? error.message : "Please retry.", variant: "destructive" });
+    } finally { setIsAuditingLifecycle(false); }
+  };
+
+  const handleExportLifecycleAudit = async () => {
+    setIsExportingLifecycle(true);
+    try {
+      const response = await fetch("/api/factory/mix-batches?profile=lifecycle-audit&format=csv", {
+        credentials: "same-origin", cache: "no-store",
+      });
+      if (!response.ok) throw new Error("Cannot generate the mix lifecycle CSV.");
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = "factory-mix-lifecycle-audit.csv";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      toast({ title: "Lifecycle export failed", description: error instanceof Error ? error.message : "Please retry.", variant: "destructive" });
+    } finally { setIsExportingLifecycle(false); }
+  };
+
   const BATCH_PREVIEW_COUNT = 15;
 
   const visibleMixBatches = useMemo(
@@ -472,6 +533,17 @@ export function MixBatchList({
               data-testid="button-export-mix-bale-gl-audit">
               <Download className="h-4 w-4" /> Bale/GL CSV
             </Button>
+            <Button type="button" variant="outline" size="sm" disabled={isAuditingLifecycle}
+              onClick={handleRunLifecycleAudit} className="gap-2"
+              data-testid="button-audit-mix-lifecycle">
+              {isAuditingLifecycle ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+              {isAuditingLifecycle ? "Auditing…" : "Audit Used KG"}
+            </Button>
+            <Button type="button" variant="outline" size="sm" disabled={isExportingLifecycle}
+              onClick={handleExportLifecycleAudit} className="gap-2"
+              data-testid="button-export-mix-lifecycle-audit">
+              <Download className="h-4 w-4" /> Lifecycle CSV
+            </Button>
           </div>
         </div>
         )}
@@ -511,6 +583,43 @@ export function MixBatchList({
       </CardHeader>
 
       <CardContent className="min-w-0 p-4 sm:p-5">
+        {phase6Audit && (
+          <div className="mb-4 space-y-3 rounded-xl border border-border/70 p-4" data-testid="mix-phase6-audit-results">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-semibold">Phase 6 · Completed Mix and Carry-Forward Audit</p>
+              <span className="text-xs text-muted-foreground">Read-only · {phase6Audit.generatedAt.slice(0, 10)}</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
+              <div><p className="text-xs text-muted-foreground">Completed with remaining kg</p>
+                <p className="font-mono font-bold">{phase6Audit.summary.completedWithRemainderBatches}</p></div>
+              <div><p className="text-xs text-muted-foreground">Total remaining kg</p>
+                <p className="font-mono font-bold">{formatNumber(Number(phase6Audit.summary.completedRemainderKg), 3)}</p></div>
+              <div><p className="text-xs text-muted-foreground">Over-consumed batches</p>
+                <p className="font-mono font-bold">{phase6Audit.summary.overusedBatches}</p></div>
+              <div><p className="text-xs text-muted-foreground">Carry-forward integrity flags</p>
+                <p className="font-mono font-bold">{phase6Audit.summary.carryForwardExceptions}</p></div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Existing completed discrepancies are protected. Remaining kilograms are not automatically
+              treated as physical stock or discarded waste. Verify original production and adjustments first.
+              The CSV contains every exception and its recorded used/total kilograms.
+            </p>
+            {phase6Audit.batches.filter((row) => !row.deleted && row.issues.some((issue) => issue.severity !== "informational")).length > 0 && (
+              <div className="space-y-1 text-xs">
+                <p className="font-semibold">First 12 historical quantity exceptions</p>
+                {phase6Audit.batches.filter((row) => !row.deleted &&
+                  row.issues.some((issue) => issue.severity !== "informational")).slice(0, 12).map((row) => (
+                  <p key={row.batchId} className="font-mono text-muted-foreground">
+                    <span className="text-foreground">{row.batchCode}</span>
+                    {" · "}total {formatNumber(Number(row.totalKg), 3)} kg
+                    {" · "}used {formatNumber(Number(row.usedKg), 3)} kg
+                    {" · "}{row.issues.map((issue) => issue.code).join(", ")}
+                  </p>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         {phase5Audit && (
           <div className="mb-4 space-y-3 rounded-xl border border-border/70 p-4" data-testid="mix-phase5-audit-results">
             <div className="flex flex-wrap items-center justify-between gap-2">
