@@ -3,7 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { BarChart3, Building2, ChevronDown, ChevronRight, Download, RefreshCw, Search } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
-import { ErpListTable, ErpPendingButton, erpCompanyDataKey } from "@/erp-core";
+import { ErpListTable, ErpPendingButton } from "@/erp-core";
+import { erpCompanyDataKey } from "@/erp-core/erpData";
 import { useToast } from "@/hooks/use-toast";
 import { getTopProfitCompanyByItem, groupMarketRows } from "./itemMarketAnalysisGrouping";
 import { fetchSalePriceExportRows } from "./itemMarketAnalysisSalePrices";
