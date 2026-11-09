@@ -17,16 +17,15 @@ export function runPostStartupJobs(): void {
   if (installed) return;
   installed = true;
 
-  // One-time, owner-approved POS Jnah 2026/27 rent correction (company 17).
-  // Locked and audited; only runs in the verified production database/service,
-  // with an explicit opt-in and exact before-image guards.
-  if (process.env.ERP_REPAIR_POS_JNAH_PREPAID_20261109 === "approved-company17-contract36-20000") {
+  // Owner-approved, single-use POS Jnah in-place historical voucher reconciliation.
+  // The old extra-journal posting is retired and cannot run again.
+  if (process.env.ERP_REWORK_POS_JNAH_VOUCHERS_20261109 === "approved-company17-original10613-retire17399") {
     const posJnahRentTimer = setTimeout(async () => {
       try {
-        const { runApprovedPosJnahPrepaidRepair } = await import("./runApprovedPosJnahPrepaidRepair");
-        await runApprovedPosJnahPrepaidRepair();
+        const { runPosJnahExistingVoucherRepair } = await import("./posJnahOriginalVoucherRework");
+        await runPosJnahExistingVoucherRepair();
       } catch (error: unknown) {
-        logger.error("[PosJnahPrepaidRepair] Refused or rolled back without partial changes", {
+        logger.error("[PosJnahOriginalVoucherRepair] Refused; transaction rolled back", {
           error: getErrorMessage(error),
         });
       }
