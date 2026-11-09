@@ -1,4 +1,13 @@
-import { ErpListFilters, ErpListTable, ErpConfirmDialog, ErpRecordAction } from "@/erp-core";
+import {
+  ErpListFilters,
+  ErpListTable,
+  ErpConfirmDialog,
+  ErpRecordAction,
+  erpCompanyDataKey,
+  erpRequestUrl,
+  invalidateErpDataFamilies,
+  useErpDateFormat,
+} from "@/erp-core";
 import { TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useCompany } from "@/contexts/CompanyContext";
 import type { ClientErrorLike } from "@/lib/clientError";
@@ -14,7 +23,6 @@ import { PageHeader } from "@/components/PageHeader";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { FileText, Pencil, Check, Trash2, X, Eye } from "lucide-react";
-import { format } from "date-fns";
 import { OptionalVoucherDetailsDialog } from "./optional-vouchers/OptionalVoucherDetailsDialog";
 import type { Voucher } from "./daybook/types";
 
@@ -22,6 +30,7 @@ export default function OptionalVouchers() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const { selectedCompany } = useCompany();
+  const { formatShortDate } = useErpDateFormat();
   const [typeFilter, setTypeFilter] = useState("all");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -30,13 +39,12 @@ export default function OptionalVouchers() {
   const [deleteVoucherId, setDeleteVoucherId] = useState<number | null>(null);
   const [viewVoucher, setViewVoucher] = useState<Voucher | null>(null);
 
-  const queryParams = new URLSearchParams();
-  if (typeFilter && typeFilter !== "all") queryParams.set("type", typeFilter);
-  if (startDate) queryParams.set("startDate", startDate);
-  if (endDate) queryParams.set("endDate", endDate);
-  if (search) queryParams.set("search", search);
-  const queryString = queryParams.toString();
-  const queryUrl = `/api/vouchers/optional${queryString ? `?${queryString}` : ""}`;
+  const queryUrl = erpRequestUrl("/api/vouchers/optional", {
+    type: typeFilter !== "all" ? typeFilter : undefined,
+    startDate,
+    endDate,
+    search,
+  });
 
   const {
     data: vouchers = [],
@@ -44,7 +52,8 @@ export default function OptionalVouchers() {
     isError,
     error,
   } = useQuery<Voucher[]>({
-    queryKey: ["/api/vouchers/optional", typeFilter, startDate, endDate, search],
+    queryKey: erpCompanyDataKey(queryUrl, selectedCompany?.id),
+    enabled: selectedCompany?.id != null,
     queryFn: async () => {
       const res = await apiRequest("GET", queryUrl);
       if (!res.ok) {
@@ -68,12 +77,14 @@ export default function OptionalVouchers() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/vouchers/optional"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/vouchers"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/daybook"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/inventory-by-location"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/location-summary"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/stock-transfers/list"] });
+      void invalidateErpDataFamilies(queryClient, [
+        "/api/vouchers/optional",
+        "/api/vouchers",
+        "/api/daybook",
+        "/api/inventory-by-location",
+        "/api/location-summary",
+        "/api/stock-transfers/list",
+      ]);
       toast({ title: "Voucher Finalized", description: "The voucher has been posted successfully." });
       setFinalizeVoucherId(null);
     },
@@ -88,9 +99,7 @@ export default function OptionalVouchers() {
       await apiRequest("DELETE", `/api/vouchers/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/vouchers/optional"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/vouchers"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/daybook"] });
+      void invalidateErpDataFamilies(queryClient, ["/api/vouchers/optional", "/api/vouchers", "/api/daybook"]);
       toast({ title: "Voucher Deleted", description: "The voucher has been deleted." });
       setDeleteVoucherId(null);
     },
@@ -308,7 +317,7 @@ export default function OptionalVouchers() {
                     data-testid={`row-voucher-${v.id}`}
                   >
                     <TableCell className="px-4 py-3 text-muted-foreground whitespace-nowrap">
-                      {v.voucherDate ? format(new Date(v.voucherDate + "T00:00:00"), "dd MMM yyyy") : "—"}
+                      {v.voucherDate ? formatShortDate(v.voucherDate) : "—"}
                     </TableCell>
                     <TableCell className="px-4 py-3">
                       <Badge variant={getTypeBadgeVariant(v.voucherType)} className="text-xs">
@@ -392,7 +401,7 @@ export default function OptionalVouchers() {
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <div className="text-sm font-medium">
-                      {v.voucherDate ? format(new Date(v.voucherDate + "T00:00:00"), "dd MMM yyyy") : "—"}
+                      {v.voucherDate ? formatShortDate(v.voucherDate) : "—"}
                     </div>
                     {v.description && <div className="text-xs text-muted-foreground mt-0.5">{v.description}</div>}
                   </div>
