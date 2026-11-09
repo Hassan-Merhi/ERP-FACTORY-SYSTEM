@@ -97,7 +97,7 @@ export default function FactoryDispatchBatches() {
     enabled: Boolean(selectedCompany?.id),
     staleTime: 5 * 60000,
   });
-  const hiddenTabs = myAccess?.companyId === selectedCompany?.id && myAccess.hasFactoryAccess
+  const hiddenTabs = myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
     ? myAccess.hiddenCostFields
     : ["hide_tab_dispatch_batches", "hide_tab_dispatch_reports"];
   const showBatches = !hiddenTabs.includes("hide_tab_dispatch_batches");
