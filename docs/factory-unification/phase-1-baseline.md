@@ -364,3 +364,19 @@ The list below comes from `client/src/components/FactoryRoutes.tsx`. The static 
 
 ## Phase 1 completion boundary
 Static route mapping and targeted source baseline are recorded. **Outstanding before marking fully complete:** exhaustive Factory query/default/capability inventory beyond these representative files; captured before/after API response fixtures and UI screenshots from an executable environment; runtime characterization of affected workflows. CI remains disabled as requested, but avoiding CI does not replace manual parity evidence. No runtime verification claimed.
+
+
+## 2026-11-09 continuation — pinned complete source inventory
+
+The **historical selected defaults/cache examples above** record the original source observations from the beginning of the unification project. They are intentionally not rewritten to pretend those examples describe the later Phase 2–7 source. For current source status, consult each phase implementation report and the pinned fixture below.
+
+- **Source fixture:** `docs/factory-unification/phase-1-source-fixture.json`, generated from the actual current branch `shared/factoryAccessRegistry.ts` and `client/src/components/FactoryRoutes.tsx`, with file blob hashes for the access registry, router, sidebar, backend access controller, company context, company cache helper and action capability policy.
+- **Canonical page count:** 62 unique Factory page keys, each with a live declared canonical route.
+- **Declared route count:** 151 unique route paths. Four routes within the Factory switch are non-`/factory/` utility paths: `/my-settings`, `/intercompany-requests`, `/intercompany-links`, `/balance-repair`.
+- **Access-level counts:** 34 user-level, 13 admin-level, 15 developer-level page definitions. This is registry metadata, not a blanket grant for all users.
+- **Navigation metadata:** 30 sidebar-designated registry entries and 5 pinned entries. The actual sidebar additionally has special Others links and a POS/Dispatch presentation collapse; its derived visibility remains role/feature-flag/company-dependent.
+- **Critical sensitive route:** `factory/production-bonuses` was included in the verified 62 entries. The server and direct route keep this Admin/Owner-only; Developer must not be granted access via a generic admin grouping.
+- **Characterization test:** `tests/factory-unification-phase1-baseline.test.ts` pins the registry, routes, compatibility URLs, selected-company query isolation and the typed action capability policy. It is committed **but has not been executed**.
+- **Runtime capture protocol:** `docs/factory-unification/phase-1-manual-baseline-protocol.md` lists twelve role/company/stock/proforma/scan/historical-report checks and exact evidence requirements. The matrix is **not captured**.
+
+**Completion assessment:** Phase 1 **source inventory and repeatable source-level characterization are complete**. Live API/UI baseline fixtures, screenshots, role matrix, TypeScript and tests remain **runtime-unverified**. Phase 1 should not be marked fully DONE until those manual observations exist. No CI was run, and no production records or main branch were changed.
