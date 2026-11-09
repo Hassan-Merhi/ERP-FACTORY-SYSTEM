@@ -165,6 +165,8 @@ export default function FactoryLoadingDispatchReport() {
     ["Matched", qty(summary?.matchedBales)],
     ["Missing", qty(summary?.missingBales)],
     ["Unexpected", qty(summary?.unexpectedBales)],
+    ["Wrong Truck", qty(summary?.crossTripMisplacedBales)],
+    ["Duplicates", qty(summary?.duplicateBales)],
     ["Verified KG", kg(summary?.verifiedWeightKg)],
   ]), [summary]);
 
@@ -272,7 +274,7 @@ export default function FactoryLoadingDispatchReport() {
                   </div>
                 </div>
                 <div className="text-right text-xs">
-                  <p className="font-semibold">{report.source === "CLOSURE" ? "SIGNED CLOSURE RECORD" : "LIVE VERIFICATION"}</p>
+                  <p className="font-semibold">{report.source === "CLOSURE" ? "FROZEN CLOSURE RECORD" : "LIVE VERIFICATION"}</p>
                   <p>Generated {formatDisplayDateTime(report.generatedAt)}</p>
                   {report.closure && <p>Closure revision #{report.closure.revision}</p>}
                 </div>
