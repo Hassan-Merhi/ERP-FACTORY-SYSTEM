@@ -25,6 +25,7 @@ import {
 import { recordFactoryStockValueEventTx } from "../../../services/factory/factoryStockValueEvents";
 import Decimal from "decimal.js";
 import { MoneyDecimal, parseMoneyInput, toMoney } from "../../../lib/money";
+import { MixRawStockShortageError, requireMixFifoFullyAllocated, requireMixRawStockCapacity } from "../../../services/factory/mixRawStockQuantityGuard";
 
 /** A source's rate as stored on its row (0 when it has no USD rate: the mix is then unvalued). */
 const storedRate = (rate: Decimal | null) => (rate ?? new MoneyDecimal(0)).toFixed();
@@ -159,16 +160,10 @@ export function registerFactoryMixBatchCreateRoutes(app: Express) {
             remaining = remaining.minus(deduct);
           }
 
-          if (remaining.greaterThan(0.001) && supplierRawStocks.length > 0) {
-            const lastRs = supplierRawStocks[supplierRawStocks.length - 1];
-            await tx
-              .update(factoryRawStock)
-              .set({ usedKg: sql`${factoryRawStock.usedKg} + ${remaining.toFixed()}` })
-              .where(eq(factoryRawStock.id, lastRs.id));
-            // Add to the last deduction entry if it already exists, otherwise push a new one
-            const existing = perRsDeductions.find((d) => d.containerId === lastRs.containerId);
-            if (existing) existing.deduct = existing.deduct.plus(remaining);
-            else perRsDeductions.push({ containerId: lastRs.containerId, deduct: remaining });
+          // Any outstanding quantity would otherwise create negative raw
+          // stock. Roll the entire mix creation back, including earlier FIFO.
+          if (supplierRawStocks.length > 0) {
+            requireMixFifoFullyAllocated(remaining.toFixed(3), supplierId);
           }
 
           if (supplierRawStocks.length === 0) {
@@ -243,7 +238,11 @@ export function registerFactoryMixBatchCreateRoutes(app: Express) {
           const priced = await rawSourceUsdRate(tx, companyId, { supplierId: ctnSupplierId, containerId });
           const costUsd = priced?.rate ?? null;
 
-          // Allow over-use: usedKg may exceed receivedKg, driving stock negative
+          requireMixRawStockCapacity({
+            availableKg: toMoney(rawStock.receivedKg).minus(rawStock.usedKg).toFixed(3),
+            requestedKg: weight.toFixed(3),
+            source: `container #${containerId}`,
+          });
           await tx
             .update(factoryRawStock)
             .set({ usedKg: sql`${factoryRawStock.usedKg} + ${weight.toFixed()}` })
@@ -385,6 +384,9 @@ export function registerFactoryMixBatchCreateRoutes(app: Express) {
 
       res.json(result);
     } catch (error: unknown) {
+      if (error instanceof MixRawStockShortageError) {
+        return res.status(error.status).json({ code: error.code, message: error.message });
+      }
       if (sendFactoryCostBasisRefusal(res, error)) return;
       logger.error("Error creating mix batch:", { error: error });
       res.status(400).json({ message: getErrorMessage(error) });
