@@ -8,6 +8,7 @@ import type { FactorySettingsData, Location, RenamePreviewItem, WaChat } from ".
 import { defaultSettings } from "./utils";
 import { factoryRenameDefaults, type FactoryCompanyUiSettings } from "@shared/factoryUiDefaults";
 import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 
 type OcContainer = {
   containerId: number;
@@ -264,7 +265,7 @@ export function useFactorySettingsModel() {
   });
 
   const { data: locations } = useQuery<Location[]>({ queryKey: ["/api/locations"] });
-  const { data, isLoading } = useQuery<FactorySettingsData & FactoryCompanyUiSettings>({ queryKey: ["/api/factory/settings"] });
+  const { data, isLoading } = useQuery<FactorySettingsData & FactoryCompanyUiSettings>({ queryKey: companyQueryKey("/api/factory/settings", selectedCompany?.id), enabled: Boolean(selectedCompany?.id) });
 
   useEffect(() => {
     if (data) {
