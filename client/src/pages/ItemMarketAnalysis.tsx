@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { BarChart3, Building2, ChevronDown, ChevronRight, Download, RefreshCw, Search } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
+import { ErpListTable } from "@/erp-core";
 import { useToast } from "@/hooks/use-toast";
 import { getTopProfitCompanyByItem, groupMarketRows } from "./itemMarketAnalysisGrouping";
 import { fetchSalePriceExportRows } from "./itemMarketAnalysisSalePrices";
@@ -13,7 +14,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { PeriodFilter, getDefaultPeriodValue, type PeriodFilterValue } from "@/components/ui/period-filter";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { formatNumber } from "@/lib/formatNumber";
@@ -533,7 +534,7 @@ export default function ItemMarketAnalysis() {
           </Button>
         </div>
         <div className="overflow-x-auto">
-          <Table>
+          <ErpListTable pageKey="market-analysis" companyId={selectedCompany?.id} scrollLabel="Market price analysis">
             <TableHeader>
               <TableRow>
                 <TableHead>Item</TableHead>
@@ -654,7 +655,7 @@ export default function ItemMarketAnalysis() {
                                 Company breakdown for {group.name}
                               </div>
                               <div className="overflow-x-auto rounded-md border">
-                                <Table>
+                                <ErpListTable pageKey="market-company-breakdown" companyId={selectedCompany?.id} showDensityControl={false} scrollLabel="Market company breakdown">
                                   <TableHeader>
                                     <TableRow>
                                       <TableHead>Company</TableHead>
@@ -784,7 +785,7 @@ export default function ItemMarketAnalysis() {
                                       );
                                     })}
                                   </TableBody>
-                                </Table>
+                                </ErpListTable>
                               </div>
                             </div>
                           </TableCell>
@@ -879,7 +880,7 @@ export default function ItemMarketAnalysis() {
                 </TableRow>
               )}
             </TableBody>
-          </Table>
+          </ErpListTable>
         </div>
         {!isLoading && visibleRowCount < totalVisibleSourceRows && (
           <div className="flex items-center justify-between border-t px-4 py-3">
