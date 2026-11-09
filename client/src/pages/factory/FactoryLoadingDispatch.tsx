@@ -10,7 +10,7 @@ import { useLocation, useParams } from "wouter";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft, ArrowRight, ClipboardCheck, Clock3, Edit3, FileSearch,
-  Loader2, Package, Plus, RefreshCw, Route, ShieldCheck, Truck,
+  FileSpreadsheet, Loader2, Package, Plus, RefreshCw, Route, ShieldCheck, Truck,
   Weight,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -327,6 +327,10 @@ export default function FactoryLoadingDispatch() {
             <div className="flex flex-wrap items-center gap-2">
               <Button size="sm" variant="outline" onClick={backToLoading} data-testid="button-return-to-loading">
                 <ArrowLeft className="mr-1.5 h-4 w-4" /> Loading
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => navigate("/factory/sales/loading/dispatch/" + orderId + (dispatchId !== null ? "/" + dispatchId : "") + "/report")}
+                data-testid="button-dispatch-reports">
+                <FileSpreadsheet className="mr-1.5 h-4 w-4" /> Reports & Excel
               </Button>
               <Button size="sm" variant="outline" onClick={() => navigate("/factory/sales/loading/dispatch/" + orderId + "/compare")} data-testid="button-compare-all-dispatches">
                 <FileSearch className="mr-1.5 h-4 w-4" /> Compare All
