@@ -320,8 +320,12 @@ export function registerFactoryLoadingDispatchScanRoutes(app: Express): void {
                actor_user_id, actor_username, event_data)
             VALUES (${companyId}, ${orderId}, ${dispatchId}, 'BALE_SCAN_REMOVED',
                     ${userId}, ${username},
-                    jsonb_build_object('scanId', ${scan.id}::text, 'baleId', ${scan.baleId}::integer,
-                                       'baleReference', ${scan.baleReference}, 'reason', ${reason}))
+                    ${JSON.stringify({
+                      scanId: String(scan.id),
+                      baleId: Number(scan.baleId),
+                      baleReference: String(scan.baleReference),
+                      reason,
+                    })}::jsonb)
           `);
           return { scan };
         });
