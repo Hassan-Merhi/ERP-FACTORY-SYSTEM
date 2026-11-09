@@ -7,7 +7,7 @@
  * only until the downstream bale/GL reconciliation phases are implemented.
  */
 import { and, eq, isNull } from "drizzle-orm";
-import { factoryMixBatches } from "@shared/schema";
+import { factoryMixBatches, factoryBales, factoryPressingBatches, factoryDailyUsages } from "@shared/schema";
 import type { DatabaseOrTransaction } from "../../db";
 import { MoneyDecimal, toMoney } from "../../lib/money";
 import { getStableSupplierCost } from "./rawStockStableCost";
@@ -125,6 +125,26 @@ export async function prepareMixSourceEditReview(
   }
   if (reason.trim().length < 10 || reason.trim().length > 500) {
     warnings.push("An audit reason between 10 and 500 characters is required for a source edit.");
+  }
+  // Do not rely on usedKg alone: legacy imports and partial pressing can have
+  // downstream records even when a batch's usage counter has not caught up.
+  const [linkedBales, linkedPressing, linkedUsage] = await Promise.all([
+    executor.select({ id: factoryBales.id }).from(factoryBales).where(and(
+      eq(factoryBales.companyId, companyId),
+      eq(factoryBales.mixBatchId, batch.id),
+      isNull(factoryBales.deletedAt),
+    )).limit(1),
+    executor.select({ id: factoryPressingBatches.id }).from(factoryPressingBatches).where(and(
+      eq(factoryPressingBatches.companyId, companyId),
+      eq(factoryPressingBatches.mixBatchId, batch.id),
+    )).limit(1),
+    executor.select({ id: factoryDailyUsages.id }).from(factoryDailyUsages).where(and(
+      eq(factoryDailyUsages.companyId, companyId),
+      eq(factoryDailyUsages.mixBatchId, batch.id),
+    )).limit(1),
+  ]);
+  if (linkedBales.length || linkedPressing.length || linkedUsage.length) {
+    warnings.push("This mix is referenced by bale, pressing or consumption records and requires downstream reconciliation.");
   }
   const supplierIds = [...new Set([
     ...oldBySupplier.keys(),
