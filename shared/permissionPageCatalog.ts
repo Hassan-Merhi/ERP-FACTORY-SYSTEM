@@ -28,6 +28,9 @@
  * In-page gating status (`inPage`):
  * - "component": the listed files read the shared role helpers and hide or
  *   disable controls that change existing records (checked by tests).
+ * - "gated_graph": every file in the page's import graph that makes a
+ *   business write also reads the shared role helpers, so its controls are
+ *   hidden or disabled for read-only roles (checked by the audit's scan).
  * - "read_only": the page offers no business write at all. The audit follows
  *   every import from `pageFiles` and fails if any write call appears, apart
  *   from `reviewedMutations` that are unreachable for read-only roles.
@@ -53,7 +56,7 @@ import {
 
 export type PermissionPageArea = "erp" | "factory" | "pos_retail" | "properties" | "supplier_partner";
 export type ReadOnlyRouteMode = "browse" | "change" | "create";
-export type InPageGating = "component" | "read_only" | "route" | "role_restricted" | "server_enforced";
+export type InPageGating = "component" | "gated_graph" | "read_only" | "route" | "role_restricted" | "server_enforced";
 
 export interface PermissionPageEntry {
   id: string;
@@ -81,7 +84,14 @@ const ACTIONS: ReadonlySet<string> = new Set(ACCESS_CONTROL_ACTIONS);
 const RESOURCES: ReadonlySet<string> = new Set(ACCESS_CONTROL_RESOURCES);
 const AREAS: ReadonlySet<string> = new Set(["erp", "factory", "pos_retail", "properties", "supplier_partner"]);
 const MODES: ReadonlySet<string> = new Set(["browse", "change", "create"]);
-const GATING: ReadonlySet<string> = new Set(["component", "read_only", "route", "role_restricted", "server_enforced"]);
+const GATING: ReadonlySet<string> = new Set([
+  "component",
+  "gated_graph",
+  "read_only",
+  "route",
+  "role_restricted",
+  "server_enforced",
+]);
 
 type RawPage = Record<string, unknown>;
 
@@ -122,7 +132,7 @@ function parsePage(raw: RawPage): PermissionPageEntry {
     pageFiles === null ||
     !reviewedValid ||
     (raw.inPage === "component" && !files?.length) ||
-    (raw.inPage === "read_only" && !pageFiles?.length) ||
+    ((raw.inPage === "read_only" || raw.inPage === "gated_graph") && !pageFiles?.length) ||
     (raw.createOnlyCreate !== undefined && !isCreateOnlyVerifiedCreateName(String(raw.createOnlyCreate))) ||
     (raw.readView !== undefined && (typeof raw.readView !== "string" || !raw.readView.startsWith("/")))
   ) {
@@ -236,6 +246,7 @@ export function permissionPageCatalogSummary() {
   };
   const byInPage: Record<InPageGating, number> = {
     component: 0,
+    gated_graph: 0,
     read_only: 0,
     route: 0,
     role_restricted: 0,

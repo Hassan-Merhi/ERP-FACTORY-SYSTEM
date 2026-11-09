@@ -40,7 +40,7 @@ const ROUTE_SOURCES = [
 // "/retail/products/:id" is dispatched with startsWith("/retail/products/").
 const PREFIX_ROUTES: Record<string, string> = { "/retail/products/:id": '"/retail/products/"' };
 const GATING_EVIDENCE =
-  /useExistingRecordChangeAccess|isExistingRecordReadOnlyRole|isCreateOnlyRole|\buseCan\(|<Can\b|canScan|changeDisabledReason/;
+  /useExistingRecordChangeAccess|isExistingRecordReadOnlyRole|isCreateOnlyRole|\buseCan\(|<Can\b|canScan|changeDisabledReason|canChangeExistingRecords/;
 const REPORT_PATH = "docs/permissions-v2-frontend-page-audit.md";
 
 const CATALOG_PATH = "config/permissions-v2-page-catalog.json";
@@ -49,6 +49,14 @@ const catalogRows = (
     pages: Array<{ id: string; label?: string; note?: string }>;
   }
 ).pages;
+// Write files reviewed as unreachable or non-business for read-only roles, for every page.
+const globallyReviewed = new Set(
+  (
+    JSON.parse(readFileSync(resolve(root, CATALOG_PATH), "utf8")) as {
+      reviewedWriteFiles?: Array<{ file: string; reason: string }>;
+    }
+  ).reviewedWriteFiles?.map((item) => item.file) ?? []
+);
 const notes = { pages: Object.fromEntries(catalogRows.map((row) => [row.id, { label: row.label, note: row.note }])) };
 // Business write call sites. Session, preference and offline-transport
 // writes live in contexts/, lib/ and api/ infrastructure and are excluded.
@@ -115,8 +123,15 @@ for (const entry of PERMISSION_PAGE_CATALOG) {
   for (const file of entry.pageFiles ?? []) {
     if (!existsSync(resolve(root, file))) failures.push(`${entry.id}: page file ${file} does not exist`);
   }
+  if (entry.inPage === "gated_graph") {
+    const reviewed = new Set([...globallyReviewed, ...(entry.reviewedMutations ?? []).map((item) => item.file)]);
+    const ungated = writeCallFiles(entry.pageFiles ?? []).filter(
+      (file) => !reviewed.has(file) && !GATING_EVIDENCE.test(readFileSync(resolve(root, file), "utf8"))
+    );
+    if (ungated.length > 0) failures.push(`${entry.id}: ungated business writes in ${ungated.join(", ")}`);
+  }
   if (entry.inPage === "read_only") {
-    const reviewed = new Set((entry.reviewedMutations ?? []).map((item) => item.file));
+    const reviewed = new Set([...globallyReviewed, ...(entry.reviewedMutations ?? []).map((item) => item.file)]);
     const unreviewed = writeCallFiles(entry.pageFiles ?? []).filter((file) => !reviewed.has(file));
     if (unreviewed.length > 0) {
       failures.push(`${entry.id}: read-only page has business writes in ${unreviewed.join(", ")}`);
@@ -170,6 +185,7 @@ const AREA_LABEL: Record<string, string> = {
 const GATING_LABEL: Record<string, string> = {
   component: "Gated in page",
   read_only: "Read-only page (verified by import scan)",
+  gated_graph: "Every write in the page gated (verified by import scan)",
   route: "Gated at route",
   role_restricted: "Admin/Owner/Developer only",
   server_enforced: "Server and request guard only (UI work remaining)",

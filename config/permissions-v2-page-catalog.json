@@ -1,6 +1,28 @@
 {
   "formatVersion": 1,
   "description": "Permissions V2 frontend page catalog: business pages per company type, the permission-controlled actions each offers, and how each is gated for View Only and Create Only. Loaded and validated by shared/permissionPageCatalog.ts; checked against the source tree by scripts/permissions/audit-frontend-page-catalog.ts. Presentation policy only; the server stays authoritative.",
+  "reviewedWriteFiles": [
+    {
+      "file": "client/src/app/useAuthenticatedUser.ts",
+      "reason": "Sign-out only (POST /api/auth/logout); not business data."
+    },
+    {
+      "file": "client/src/hooks/use-user-preferences.ts",
+      "reason": "Saves the person's own display preferences; not business data."
+    },
+    {
+      "file": "client/src/hooks/use-factory-mhd-view.ts",
+      "reason": "Saves the person's own Factory view preference; not business data."
+    },
+    {
+      "file": "client/src/hooks/useChristmasMode.ts",
+      "reason": "Seasonal appearance preference; the company-wide setting is only offered to administrators."
+    },
+    {
+      "file": "client/src/components/financial/VoucherCostCenters.tsx",
+      "reason": "Cost-centre allocation editing renders only for the Developer role."
+    }
+  ],
   "pages": [
     {
       "id": "erp.accounts",
@@ -243,7 +265,7 @@
         "export"
       ],
       "mode": "browse",
-      "inPage": "server_enforced"
+      "inPage": "gated_graph"
     },
     {
       "id": "erp.purchase-orders.import",
@@ -389,7 +411,6 @@
       "id": "erp.sales.analysis",
       "area": "erp",
       "label": "Item market analysis and supplier profit check",
-      "note": "Offers sale-price export and profit-check actions; the server refuses them for read-only roles.",
       "paths": [
         "/item-market-analysis",
         "/supplier-profit-check"
@@ -404,7 +425,7 @@
         "export"
       ],
       "mode": "browse",
-      "inPage": "server_enforced"
+      "inPage": "gated_graph"
     },
     {
       "id": "erp.sales.tools",
@@ -425,7 +446,7 @@
         "export"
       ],
       "mode": "browse",
-      "inPage": "server_enforced"
+      "inPage": "gated_graph"
     },
     {
       "id": "erp.inventory",
@@ -443,7 +464,7 @@
         "export"
       ],
       "mode": "browse",
-      "inPage": "server_enforced"
+      "inPage": "gated_graph"
     },
     {
       "id": "erp.stock",
@@ -654,7 +675,7 @@
         "export"
       ],
       "mode": "browse",
-      "inPage": "server_enforced"
+      "inPage": "gated_graph"
     },
     {
       "id": "erp.containers.verification",
@@ -837,7 +858,7 @@
         "export"
       ],
       "mode": "browse",
-      "inPage": "server_enforced"
+      "inPage": "gated_graph"
     },
     {
       "id": "erp.rentals",
@@ -887,7 +908,7 @@
         "reverse"
       ],
       "mode": "browse",
-      "inPage": "server_enforced"
+      "inPage": "gated_graph"
     },
     {
       "id": "erp.conflicts",
@@ -997,7 +1018,7 @@
         "export"
       ],
       "mode": "browse",
-      "inPage": "server_enforced"
+      "inPage": "gated_graph"
     },
     {
       "id": "factory.inventory.opening-edit",
@@ -1126,7 +1147,7 @@
         "export"
       ],
       "mode": "browse",
-      "inPage": "server_enforced"
+      "inPage": "gated_graph"
     },
     {
       "id": "factory.sales.new",
@@ -1200,7 +1221,7 @@
         "export"
       ],
       "mode": "browse",
-      "inPage": "server_enforced"
+      "inPage": "gated_graph"
     },
     {
       "id": "factory.bales.relabel",
@@ -1294,6 +1315,7 @@
         "client/src/pages/factory/DailyProductionReport.tsx",
         "client/src/pages/factory/FactoryMonthlyProductionDrilldown.tsx",
         "client/src/pages/factory/FactoryMonthlyProductionMatrix.tsx",
+        "client/src/pages/factory/FactoryProductionIntelHub.tsx",
         "client/src/pages/factory/ProductionComparison.tsx"
       ],
       "resource": "factory.production",
@@ -1302,7 +1324,7 @@
         "export"
       ],
       "mode": "browse",
-      "inPage": "server_enforced"
+      "inPage": "gated_graph"
     },
     {
       "id": "factory.mixing",
@@ -1319,7 +1341,10 @@
         "edit"
       ],
       "mode": "browse",
-      "inPage": "server_enforced"
+      "inPage": "gated_graph",
+      "pageFiles": [
+        "client/src/pages/factory/FactoryProductionIntelHub.tsx"
+      ]
     },
     {
       "id": "factory.containers",
@@ -1392,7 +1417,7 @@
         "finalize"
       ],
       "mode": "browse",
-      "inPage": "server_enforced"
+      "inPage": "gated_graph"
     },
     {
       "id": "factory.loading.scan",
@@ -1441,7 +1466,7 @@
         "export"
       ],
       "mode": "browse",
-      "inPage": "server_enforced"
+      "inPage": "gated_graph"
     },
     {
       "id": "factory.payroll",
@@ -1468,7 +1493,7 @@
         "export"
       ],
       "mode": "browse",
-      "inPage": "server_enforced"
+      "inPage": "gated_graph"
     },
     {
       "id": "factory.scanning",
@@ -1486,7 +1511,7 @@
         "export"
       ],
       "mode": "browse",
-      "inPage": "server_enforced"
+      "inPage": "gated_graph"
     },
     {
       "id": "factory.accounting",
@@ -1519,7 +1544,7 @@
         "export"
       ],
       "mode": "browse",
-      "inPage": "server_enforced"
+      "inPage": "gated_graph"
     },
     {
       "id": "factory.vouchers.create",
@@ -1672,7 +1697,7 @@
         "export"
       ],
       "mode": "browse",
-      "inPage": "server_enforced"
+      "inPage": "gated_graph"
     },
     {
       "id": "factory.pos",
@@ -1756,7 +1781,7 @@
         "reverse"
       ],
       "mode": "browse",
-      "inPage": "server_enforced"
+      "inPage": "gated_graph"
     },
     {
       "id": "factory.settings",
@@ -1904,13 +1929,13 @@
         "export"
       ],
       "mode": "browse",
-      "inPage": "server_enforced"
+      "inPage": "gated_graph"
     },
     {
       "id": "pos.role-workspace",
       "area": "pos_retail",
       "label": "POS role workspace (daybook, pricing, discounts, refunds, transfers, payments)",
-      "note": "Rendered only for the POS role; governed by pos_perm_* feature keys and the POS operational policy on the server.",
+      "note": "Rendered only for the POS role (PosRoutes); View Only and Create Only never reach it. POS controls follow the pos_perm_* keys and the server's POS operational policy.",
       "paths": [
         "/pos-daybook",
         "/pos-dashboard",
@@ -1941,7 +1966,7 @@
         "export"
       ],
       "mode": "browse",
-      "inPage": "server_enforced"
+      "inPage": "role_restricted"
     },
     {
       "id": "properties.dashboard",
@@ -1961,7 +1986,7 @@
         "export"
       ],
       "mode": "browse",
-      "inPage": "server_enforced"
+      "inPage": "gated_graph"
     },
     {
       "id": "properties.rentals",
@@ -2014,7 +2039,7 @@
         "export"
       ],
       "mode": "browse",
-      "inPage": "server_enforced"
+      "inPage": "gated_graph"
     },
     {
       "id": "properties.daybook",
@@ -2039,7 +2064,7 @@
         "export"
       ],
       "mode": "browse",
-      "inPage": "server_enforced"
+      "inPage": "gated_graph"
     },
     {
       "id": "properties.vouchers.create",
@@ -2157,7 +2182,7 @@
         "export"
       ],
       "mode": "browse",
-      "inPage": "server_enforced",
+      "inPage": "gated_graph",
       "createOnlyCreate": "spSales"
     },
     {
