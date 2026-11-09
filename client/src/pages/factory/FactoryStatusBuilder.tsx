@@ -7,13 +7,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { Input } from "@/components/ui/input";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {} from "@/components/ui/dialog";
 import { LayoutGrid, Plus, X, Link2, Link2Off } from "lucide-react";
 
@@ -45,6 +38,8 @@ import { StatusViewToggle } from "./factorystatusbuilder/components/StatusViewTo
 import { StatusBuilderToolbar } from "./factorystatusbuilder/components/StatusBuilderToolbar";
 import { StatusColumnsMenu } from "./factorystatusbuilder/components/StatusColumnsMenu";
 import { StatusAddRow } from "./factorystatusbuilder/components/StatusAddRow";
+import { StatusCellLinkMenu } from "./factorystatusbuilder/components/StatusCellLinkMenu";
+import { StatusDiffFooterRow } from "./factorystatusbuilder/components/StatusDiffFooterRow";
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export default function FactoryStatusBuilder() {
@@ -783,87 +778,19 @@ export default function FactoryStatusBuilder() {
 
                               {/* Link menu */}
                               {!isDiff && !isTotal && (canEdit || isLinked) && (
-                                <div
-                                  className={`absolute top-0.5 right-0.5 z-10 transition-opacity ${isLinked ? "opacity-100" : "opacity-0 group-hover/cell:opacity-100"}`}
-                                >
-                                  <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                      <button
-                                        className="p-0.5 rounded-sm hover:bg-muted/60"
-                                        onClick={(e) => e.stopPropagation()}
-                                        data-testid={`sb-button-cell-menu-${ri}-${ci}`}
-                                        title={isLinked ? `Linked from: ${linkInfo ?? "…"}` : "Link this cell"}
-                                      >
-                                        {isBroken || isCyclic ? (
-                                          <Link2Off className="h-2.5 w-2.5 text-red-400" />
-                                        ) : isLinked ? (
-                                          <Link2 className="h-2.5 w-2.5 text-blue-400" />
-                                        ) : (
-                                          <Link2 className="h-2.5 w-2.5 text-muted-foreground" />
-                                        )}
-                                      </button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end" className="text-xs min-w-[160px]">
-                                      {isLinked && linkInfo && (
-                                        <>
-                                          <div className="px-2 py-1.5 text-xs text-muted-foreground max-w-[200px] leading-tight">
-                                            {linkInfo}
-                                          </div>
-                                          <DropdownMenuSeparator />
-                                        </>
-                                      )}
-                                      {!canEdit ? (
-                                        srcSheetIdxForJump !== -1 && (
-                                          <DropdownMenuItem
-                                            onClick={() => setActiveIdx(srcSheetIdxForJump)}
-                                            className="text-xs gap-2"
-                                          >
-                                            Jump to source page
-                                          </DropdownMenuItem>
-                                        )
-                                      ) : !isLinked ? (
-                                        <DropdownMenuItem
-                                          onClick={() => openLinkDialog(ri, ci)}
-                                          className="text-xs gap-2"
-                                        >
-                                          <Link2 className="h-3 w-3" />
-                                          Link cell
-                                        </DropdownMenuItem>
-                                      ) : (
-                                        <>
-                                          <DropdownMenuItem
-                                            onClick={() => openLinkDialog(ri, ci)}
-                                            className="text-xs gap-2"
-                                          >
-                                            <Link2 className="h-3 w-3" />
-                                            Change link
-                                          </DropdownMenuItem>
-                                          <DropdownMenuItem
-                                            onClick={() => unlinkCell(ri, ci)}
-                                            className="text-xs gap-2"
-                                          >
-                                            <Link2Off className="h-3 w-3" />
-                                            Remove link
-                                          </DropdownMenuItem>
-                                          <DropdownMenuItem
-                                            onClick={() => copyLinkValueAsManual(ri, ci)}
-                                            className="text-xs gap-2"
-                                          >
-                                            Copy value as manual
-                                          </DropdownMenuItem>
-                                          {srcSheetIdxForJump !== -1 && (
-                                            <DropdownMenuItem
-                                              onClick={() => setActiveIdx(srcSheetIdxForJump)}
-                                              className="text-xs gap-2"
-                                            >
-                                              Jump to source page
-                                            </DropdownMenuItem>
-                                          )}
-                                        </>
-                                      )}
-                                    </DropdownMenuContent>
-                                  </DropdownMenu>
-                                </div>
+                                <StatusCellLinkMenu
+                                  rowIdx={ri}
+                                  colIdx={ci}
+                                  isLinked={isLinked}
+                                  isBroken={isBroken || isCyclic}
+                                  linkInfo={linkInfo}
+                                  canEdit={canEdit}
+                                  sourceSheetIdx={srcSheetIdxForJump}
+                                  onJumpToSource={setActiveIdx}
+                                  onOpenLinkDialog={() => openLinkDialog(ri, ci)}
+                                  onUnlink={() => unlinkCell(ri, ci)}
+                                  onCopyAsManual={() => copyLinkValueAsManual(ri, ci)}
+                                />
                               )}
                             </div>
                           </td>
@@ -884,26 +811,11 @@ export default function FactoryStatusBuilder() {
 
                   {/* Footer — DIFFERENCE row */}
                   {activeSheet.rows.length > 0 && (
-                    <tr className="bg-amber-500/[0.10] dark:bg-amber-950/35">
-                      <td className="border-t-2 border-r border-amber-500/40 px-4 py-3">
-                        <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">DIFFERENCE</span>
-                      </td>
-                      {diffRow.map((val, ci) => {
-                        const isNeg = typeof val === "number" && val < 0;
-                        return (
-                          <td
-                            key={ci}
-                            className={`border-t-2 border-r border-amber-500/40 px-3 py-3 text-center text-sm font-bold tabular-nums ${hiddenColIds.includes(activeSheet.columns[ci]?.id) ? "hidden" : ""}`}
-                            data-testid={`sb-footer-diff-${ci}`}
-                          >
-                            <span className={isNeg ? "text-red-500" : "text-amber-700 dark:text-amber-400"}>
-                              {fmt(val)}
-                            </span>
-                          </td>
-                        );
-                      })}
-                      <td className="border border-border" />
-                    </tr>
+                    <StatusDiffFooterRow
+                      diffRow={diffRow}
+                      columnIds={activeSheet.columns.map((col) => col.id)}
+                      hiddenColumnIds={hiddenColIds}
+                    />
                   )}
                 </tbody>
               </table>

@@ -37,27 +37,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  EyeOff,
-  Plus,
-  ChevronDown,
-  FileDown,
-  LayoutList,
-  Layers,
-  BookOpen,
-  ReceiptText,
-  CheckCircle2,
-  Clock3,
-  Wallet,
-} from "lucide-react";
+import { EyeOff, Plus, ChevronDown, FileDown, LayoutList, Layers, BookOpen } from "lucide-react";
 import { format, addDays } from "date-fns";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { cn } from "@/lib/utils";
 import { isGoldenCoastProgrammeVoucher, isVoucherMutationBlocked } from "@/lib/migratedVoucherGuard";
 import { isBlockingQueryError } from "@/lib/abortError";
-import { utils, writeFile } from "@/lib/excelHelper";
 import { useDateJump } from "@/hooks/use-date-jump";
-import { buildDetailedDaybookRows } from "@/lib/daybook-export";
 import { createVoucherSchema } from "./daybook/types";
 import type {
   LedgerAccount,
@@ -84,6 +70,8 @@ import { VoucherEditDialog } from "./daybook/VoucherEditDialog";
 import { voucherEditPath } from "./daybook/voucherEditRoute";
 import { usePaginatedDaybookVouchers } from "./daybook/usePaginatedDaybookVouchers";
 import { VOUCHER_TYPE_ORDER } from "./daybook/constants";
+import { DaybookOverview } from "./daybook/DaybookOverview";
+import { exportDaybookDetail, exportDaybookSummary } from "./daybook/exportDaybook";
 import { useDaybookFilterState } from "./daybook/useDaybookFilterState";
 import { entryBalanceUrl, selectBalanceDisplayEntries, selectCashAccountId } from "./daybook/voucherBalanceSelection";
 
@@ -629,36 +617,17 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
   });
 
   const handleExportToExcel = async () => {
-    const exportVouchers = await loadAllVouchers();
-    const data = exportVouchers.map((v) => ({
-      "Voucher Number": v.voucherNumber,
-      Date: formatDisplayDate(v.voucherDate),
-      Type: v.voucherType,
-      Description: v.description || "",
-      "Total Amount": formatAmount(v.totalAmount),
-      Optional: v.optional ? "Yes" : "No",
-    }));
-    const ws = utils.json_to_sheet(data);
-    const wb = utils.book_new();
-    utils.book_append_sheet(wb, ws, routineAccountingViewFiltered ? "Operational Filtered" : "Daybook");
-    await writeFile(
-      wb,
-      `${routineAccountingViewFiltered ? "Operational_Filtered_Daybook" : "Daybook"}_${format(new Date(), "yyyy-MM-dd")}.xlsx`
-    );
+    await exportDaybookSummary(await loadAllVouchers(), {
+      operationalFiltered: routineAccountingViewFiltered,
+      formatDisplayDate,
+      formatAmount,
+    });
   };
   const handleExportDetailedToExcel = async () => {
-    const exportVouchers = await loadAllVouchers();
-    const detailRows = buildDetailedDaybookRows(
-      exportVouchers as unknown as Array<Record<string, unknown>>,
-      formatDisplayDate
-    );
-    const ws = utils.json_to_sheet(detailRows);
-    const wb = utils.book_new();
-    utils.book_append_sheet(wb, ws, routineAccountingViewFiltered ? "Operational Detail Filtered" : "Daybook Detail");
-    await writeFile(
-      wb,
-      `${routineAccountingViewFiltered ? "Operational_Filtered_Detail" : "Daybook_Detail"}_${format(new Date(), "yyyy-MM-dd")}.xlsx`
-    );
+    const detailRows = await exportDaybookDetail(await loadAllVouchers(), {
+      operationalFiltered: routineAccountingViewFiltered,
+      formatDisplayDate,
+    });
     toast({ title: "Export complete", description: `${detailRows.length} detail rows exported.` });
   };
 
@@ -697,62 +666,7 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
         </PageHeader>
       </section>
 
-      <section
-        className={cn("daybook-overview", hideAmounts && "daybook-overview--restricted")}
-        aria-label="Daybook overview"
-        data-testid="daybook-overview"
-      >
-        <div className="daybook-kpi daybook-kpi--count">
-          <span className="daybook-kpi__icon">
-            <ReceiptText className="h-5 w-5" aria-hidden="true" />
-          </span>
-          <div className="min-w-0">
-            <div className="daybook-kpi__label">Matching vouchers</div>
-            <div className="daybook-kpi__value" data-testid="daybook-kpi-count">
-              {overviewStats.vouchers.toLocaleString()}
-            </div>
-            <div className="daybook-kpi__caption">Selected period</div>
-          </div>
-        </div>
-        {!hideAmounts && (
-          <div className="daybook-kpi daybook-kpi--value">
-            <span className="daybook-kpi__icon">
-              <Wallet className="h-5 w-5" aria-hidden="true" />
-            </span>
-            <div className="min-w-0">
-              <div className="daybook-kpi__label">Voucher value</div>
-              <div className="daybook-kpi__value" data-testid="daybook-kpi-value">
-                {formatAmount(overviewStats.value)}
-              </div>
-              <div className="daybook-kpi__caption">{overviewStats.scope} · not account balance</div>
-            </div>
-          </div>
-        )}
-        <div className="daybook-kpi daybook-kpi--active">
-          <span className="daybook-kpi__icon">
-            <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
-          </span>
-          <div className="min-w-0">
-            <div className="daybook-kpi__label">Active vouchers</div>
-            <div className="daybook-kpi__value" data-testid="daybook-kpi-active">
-              {overviewStats.active.toLocaleString()}
-            </div>
-            <div className="daybook-kpi__caption">{overviewStats.scope}</div>
-          </div>
-        </div>
-        <div className="daybook-kpi daybook-kpi--optional">
-          <span className="daybook-kpi__icon">
-            <Clock3 className="h-5 w-5" aria-hidden="true" />
-          </span>
-          <div className="min-w-0">
-            <div className="daybook-kpi__label">Optional vouchers</div>
-            <div className="daybook-kpi__value" data-testid="daybook-kpi-optional">
-              {overviewStats.optional.toLocaleString()}
-            </div>
-            <div className="daybook-kpi__caption">{overviewStats.scope}</div>
-          </div>
-        </div>
-      </section>
+      <DaybookOverview stats={overviewStats} hideAmounts={hideAmounts} formatAmount={formatAmount} />
 
       {/* Tab selector: Transactions / Edits & Activity */}
       <Tabs
