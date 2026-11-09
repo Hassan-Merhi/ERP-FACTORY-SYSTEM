@@ -380,7 +380,7 @@ export default function FactoryLoadingDispatchCompare() {
         )}
         {comparison.isPending && (
           <div className="flex items-center gap-2 rounded-xl border p-5 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" /> Comparing the loaded bale references against all truck verifications…
+            <Loader2 className="h-4 w-4 animate-spin" /> Comparing Pending Loading with physical truck scans…
           </div>
         )}
 
@@ -515,10 +515,10 @@ export default function FactoryLoadingDispatchCompare() {
                   <span>Weight difference: {printNumber(s?.weightDifferenceKg ?? null, 3)} kg</span>
                   <span>Loading: {printNumber(s?.loadedBales ?? null)} bales · {printNumber(s?.loadedWeightKg ?? null, 3)} kg</span>
                 </div>
-                {s && (s.crossTripMisplacedBales > 0 || s.duplicateBales > 0) && (
+                {s && s.duplicateBales > 0 && (
                   <p className="flex items-center gap-2 text-xs font-semibold text-red-600">
                     <AlertTriangle className="h-4 w-4" />
-                    {s.crossTripMisplacedBales} cross-trip allocation mismatches · {s.duplicateBales} active duplicate anomalies
+                    {s.duplicateBales} active duplicate anomalies
                   </p>
                 )}
               </CardContent>
@@ -544,7 +544,7 @@ export default function FactoryLoadingDispatchCompare() {
                     <TabsList className="w-max" aria-label="Filter article comparison status">
                       {([
                         ["all", "All"], ["missing", "Missing"], ["extra", "Extra"],
-                        ["match", "Match"], ["unplanned", "No target"],
+                        ["match", "Match"],
                       ] as const).map(([value, label]) => (
                         <PillTabButton key={value} selected={filter === value}
                           onClick={() => { setFilter(value); setVisibleCount(PAGE_SIZE); }}>
@@ -608,7 +608,7 @@ export default function FactoryLoadingDispatchCompare() {
                 subtitle="Use All Trips to review the missing bale references from Pending Loading"
                 items={result.missingBales} kind="missing" orderId={orderId} />}
               <Findings key={"unexpected-" + selectedId} title="Unexpected scanned references"
-                subtitle="Scans no longer in the loading, or conflicting with exact trip allocations"
+                subtitle="Scanned bales that are no longer in Pending Loading"
                 items={result.unexpectedBales} kind="unexpected" orderId={orderId} />
 
               {result.duplicateBales.length > 0 && (
