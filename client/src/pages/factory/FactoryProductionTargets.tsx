@@ -7,7 +7,6 @@ import {
   Loader2,
   LockKeyhole,
   MessageCircle,
-  Search,
   SlidersHorizontal,
   Target,
 } from "lucide-react";
