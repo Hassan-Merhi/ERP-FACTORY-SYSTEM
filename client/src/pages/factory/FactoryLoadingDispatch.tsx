@@ -717,19 +717,19 @@ export default function FactoryLoadingDispatch() {
                     </CardContent>
                   </Card>
                   <ErrorBoundary resetKey={"dispatch-lifecycle-" + dispatchId}>
-                  <FactoryLoadingDispatchLifecycle
-                    key={dispatchId}
-                    orderId={orderId}
-                    dispatchId={dispatchId}
-                    companyId={companyId}
-                    status={selectedTrip.status}
-                    role={user?.currentRole ?? user?.role ?? ""}
-                    onChanged={() => {
-                      void queryClient.invalidateQueries({ queryKey: companyQueryKey(listUrl, companyId) });
-                      if (selectedUrl)
-                        void queryClient.invalidateQueries({ queryKey: companyQueryKey(selectedUrl, companyId) });
-                    }}
-                  />
+                    <FactoryLoadingDispatchLifecycle
+                      key={dispatchId}
+                      orderId={orderId}
+                      dispatchId={dispatchId}
+                      companyId={companyId}
+                      status={selectedTrip.status}
+                      role={user?.currentRole ?? user?.role ?? ""}
+                      onChanged={() => {
+                        void queryClient.invalidateQueries({ queryKey: companyQueryKey(listUrl, companyId) });
+                        if (selectedUrl)
+                          void queryClient.invalidateQueries({ queryKey: companyQueryKey(selectedUrl, companyId) });
+                      }}
+                    />
                   </ErrorBoundary>
                 </div>
                 <div className="xl:col-span-2">

@@ -222,7 +222,11 @@ export default function StockTransfers({ hideVoucherNotes = false }: StockTransf
           {/* Desktop table */}
           <div className="hidden md:block phone-land:hidden border rounded-xl overflow-hidden">
             <div className="table-responsive">
-              <ErpListTable pageKey="stock-transfers" companyId={selectedCompany?.id} scrollLabel="Stock transfer history">
+              <ErpListTable
+                pageKey="stock-transfers"
+                companyId={selectedCompany?.id}
+                scrollLabel="Stock transfer history"
+              >
                 <TableHeader>
                   <TableRow className="bg-muted/40 hover:bg-muted/40">
                     {!hideVoucherNotes && <TableHead className="text-xs whitespace-nowrap">Voucher</TableHead>}

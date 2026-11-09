@@ -129,7 +129,6 @@ export default function ClosingStockSummary() {
         </PageActions>
       }
     >
-
       <Dialog open={showCarryForwardDialog} onOpenChange={setShowCarryForwardDialog}>
         <DialogContent>
           <DialogHeader>
