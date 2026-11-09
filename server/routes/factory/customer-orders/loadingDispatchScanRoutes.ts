@@ -123,8 +123,11 @@ export function registerFactoryLoadingDispatchScanRoutes(app: Express): void {
         if (!scanCode) return res.status(400).json({ code: "INVALID_BARCODE", message: "Scan one bale reference or barcode (up to 120 characters)" });
 
         const result = await db.transaction(async (tx) => {
-          // Serializes scans and corrections for the SAME trip. A partial unique
-          // index enforces cross-trip no-double-scan even with concurrent trucks.
+          // Lock the parent order before the trip, matching trip plan writes.
+          await tx.execute(sql`
+            SELECT id FROM customer_orders WHERE company_id = ${companyId}
+              AND id = ${orderId} FOR UPDATE
+          `);
           const tripRows = await tx.execute(sql`
             SELECT d.id, d.status, co.status AS "loadingStatus", co.deleted_at AS "loadingDeletedAt"
               FROM factory_loading_dispatches d
@@ -178,6 +181,19 @@ export function registerFactoryLoadingDispatchScanRoutes(app: Express): void {
             };
           }
 
+          // Flag exact bales allocated to a different truck while preserving
+          // their actual physical verification for the Compare discrepancy.
+          const otherPlanRows = await tx.execute(sql`
+            SELECT d.dispatch_number AS "expectedDispatchNumber", d.id AS "expectedDispatchId"
+              FROM factory_loading_dispatch_expected_bales e
+              JOIN factory_loading_dispatches d ON d.id = e.dispatch_id
+                AND d.company_id = e.company_id AND d.order_id = e.order_id
+             WHERE e.company_id = ${companyId} AND e.order_id = ${orderId}
+               AND e.bale_id = ${bale.baleId} AND e.removed_at IS NULL
+               AND e.dispatch_id <> ${dispatchId} LIMIT 1
+          `);
+          const assignedOther = resultRows(otherPlanRows)[0] ?? null;
+
           // DO NOTHING handles a race with a different open dispatch. This
           // prevents a failed insert from aborting the surrounding PG tx.
           const inserted = await tx.execute(sql`
@@ -213,7 +229,19 @@ export function registerFactoryLoadingDispatchScanRoutes(app: Express): void {
                     jsonb_build_object('scanId', ${scan.id}, 'baleId', ${bale.baleId},
                                        'baleReference', ${bale.baleReference}))
           `);
-          return { scan };
+          if (assignedOther) {
+            await tx.execute(sql`
+              INSERT INTO factory_loading_dispatch_events
+                (company_id, order_id, dispatch_id, event_type, actor_user_id,
+                 actor_username, event_data)
+              VALUES (${companyId}, ${orderId}, ${dispatchId},
+                'WRONG_TRIP_BALE_VERIFIED', ${userId}, ${username},
+                jsonb_build_object('baleId', ${bale.baleId},
+                  'expectedDispatchId', ${assignedOther.expectedDispatchId},
+                  'expectedDispatchNumber', ${assignedOther.expectedDispatchNumber}))
+            `);
+          }
+          return { scan, assignedOther };
         });
         if ("status" in result && typeof result.status === "number") {
           return res.status(result.status).json({
@@ -222,7 +250,14 @@ export function registerFactoryLoadingDispatchScanRoutes(app: Express): void {
           });
         }
         if (!("scan" in result) || !result.scan) throw new Error("Scan insert returned no row");
-        return res.status(201).json({ ...result.scan, status: "VERIFIED" });
+        return res.status(201).json({
+          ...result.scan, status: result.assignedOther ? "REVIEW_REQUIRED" : "VERIFIED",
+          ...(result.assignedOther ? {
+            warningMessage: "Bale verified on this truck but allocated to Dispatch #" +
+              result.assignedOther.expectedDispatchNumber + ". Check comparison.",
+            expectedDispatchNumber: result.assignedOther.expectedDispatchNumber,
+          } : {}),
+        });
       } catch (error) {
         logger.error("Error recording truck dispatch verification scan", { error });
         return res.status(500).json({ message: "Could not verify bale. Please retry; no stock was changed." });
@@ -249,6 +284,10 @@ export function registerFactoryLoadingDispatchScanRoutes(app: Express): void {
         }
 
         const result = await db.transaction(async (tx) => {
+          await tx.execute(sql`
+            SELECT id FROM customer_orders WHERE company_id = ${companyId}
+              AND id = ${orderId} FOR UPDATE
+          `);
           const tripRows = await tx.execute(sql`
             SELECT id, status FROM factory_loading_dispatches
              WHERE id = ${dispatchId} AND company_id = ${companyId}
