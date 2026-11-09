@@ -7,9 +7,10 @@
  *
  * First successful scan establishes a baseline (legacy problems remain visible
  * in the detailed audits, but do not spam Factory Alerts). Later scans notify
- * only new issues or increased severity. Changes in CURRENT supplier rate are
+ * only new issues, worsened magnitudes or increased severity. Changes in CURRENT supplier rate are
  * not recorded as historical cost defects.
  */
+import Decimal from "decimal.js";
 import { pool } from "../../db";
 import { logger } from "../../lib/logger";
 import { getHistoricalMixBatchReconciliation, type HistoricalMixAuditReport } from "./historicalMixBatchReconciliation";
@@ -26,6 +27,8 @@ export interface MixMonitorFinding {
   detail: string;
   entityType: "mix_batch" | "mix_source" | "raw_stock" | "supplier" | "adjustment";
   entityId: number;
+  /** Tracked signed magnitude; worsening means a material increase. */
+  metric?: { value: string; unit: "kg" | "usd" | "count" };
 }
 export interface MixMonitorSnapshot {
   companyId: number;
@@ -36,7 +39,8 @@ export interface MixMonitorSnapshot {
 interface StoredMonitorState {
   version: 1;
   lastSuccessAt: string;
-  findings: Array<{ key: string; severity: MixMonitorSeverity }>;
+  findings: Array<{ key: string; severity: MixMonitorSeverity;
+    metric?: MixMonitorFinding["metric"] }>;
   summary: MixMonitorSnapshot["summary"];
 }
 export interface MixMonitorStatus {
@@ -80,13 +84,14 @@ export function buildMixMonitorSnapshot(
   }
   const findings = new Map<string, MixMonitorFinding>();
   function add(domain: string, id: number, code: string, severity: MixMonitorSeverity,
-    title: string, detail: string, entityType: MixMonitorFinding["entityType"], entityId: number) {
+    title: string, detail: string, entityType: MixMonitorFinding["entityType"],
+    entityId: number, metric?: MixMonitorFinding["metric"]) {
     if (!Number.isSafeInteger(id) || id <= 0 || !Number.isSafeInteger(entityId) || entityId <= 0) return;
     const key = domain + ":" + String(id) + ":" + code;
     const previous = findings.get(key);
     if (!previous || severityLevel[severity] > severityLevel[previous.severity]) {
       findings.set(key, { key, code, severity,
-        title: title.slice(0, 230), detail: detail.slice(0, 1600), entityType, entityId });
+        title: title.slice(0, 230), detail: detail.slice(0, 1600), entityType, entityId, metric });
     }
     if (findings.size > MAX_FINDINGS) throw new Error("Too many Factory mix findings for safe monitoring");
   }
@@ -95,12 +100,31 @@ export function buildMixMonitorSnapshot(
     for (const issue of batch.issues) {
       if (suppressHistoricalRateChange.has(issue.code)) continue;
       const id = issue.sourceId ?? batch.batchId;
+      let metric: MixMonitorFinding["metric"];
+      try {
+        let delta: Decimal | null = null;
+        let unit: "kg" | "usd" = "usd";
+        if (issue.code === "HEADER_SOURCE_WEIGHT_MISMATCH") {
+          delta = new Decimal(batch.recordedWeightKg).minus(batch.sourceWeightKg).abs();
+          unit = "kg";
+        } else if (issue.code === "HEADER_SOURCE_COST_MISMATCH") {
+          delta = new Decimal(batch.recordedTotalUsd).minus(batch.sourceTotalUsd).abs();
+        } else if (issue.code === "SOURCE_VALUE_MATH_MISMATCH" && issue.sourceId != null) {
+          const source = batch.sources.find(s => s.sourceId === issue.sourceId);
+          if (source) delta = new Decimal(source.recordedTotalUsd)
+            .minus(new Decimal(source.weightKg).times(source.recordedRateUsdPerKg)).abs();
+        } else if (issue.code === "HEADER_BLENDED_RATE_MISMATCH" &&
+          batch.reconstructedBlendedUsdPerKg != null) {
+          delta = new Decimal(batch.recordedBlendedUsdPerKg).minus(batch.reconstructedBlendedUsdPerKg).abs();
+        }
+        if (delta?.isFinite()) metric = { value: delta.toFixed(7), unit };
+      } catch { /* keep invalid historical numeric inputs as issues, never fake a zero magnitude */ }
       add(issue.sourceId != null ? "source" : "mix", id, issue.code,
         codeIsCritical.has(issue.code) || issue.severity === "error" ? "critical" : "warning",
         batch.batchCode + " — " + issue.code,
         issue.detail + " Saved USD/kg: " + batch.recordedBlendedUsdPerKg +
           ". Current supplier price is NOT an authorized repair value.",
-        issue.sourceId != null ? "mix_source" : "mix_batch", id);
+        issue.sourceId != null ? "mix_source" : "mix_batch", id, metric);
     }
   }
   for (const row of stock.rawStockExceptions) {
@@ -108,7 +132,7 @@ export function buildMixMonitorSnapshot(
     add("raw", row.rawStockId, code, codeIsCritical.has(code) ? "critical" : "review",
       (row.containerNumber ?? "Raw stock #" + row.rawStockId) + " — " + code,
       row.excessUsedKg + " kg above the original receipt row. ADD adjustment coverage must be verified at the transaction date.",
-      "raw_stock", row.rawStockId);
+      "raw_stock", row.rawStockId, { value: row.excessUsedKg, unit: "kg" });
   }
   for (const owner of stock.ownershipExceptions) {
     add("owner", owner.sourceId, owner.classification,
@@ -134,17 +158,25 @@ export function buildMixMonitorSnapshot(
       add("bale", batch.batchId, "LINKED_BALE_COST_MISMATCH", "critical",
         batch.batchCode + " — verified linked bale rate mismatch",
         String(batch.mismatchedLinkedBales) + " linked bales have saved cost/rate differences; review sales and GL exposure before recost.",
-        "mix_batch", batch.batchId);
+        "mix_batch", batch.batchId, { value: String(batch.mismatchedLinkedBales), unit: "count" });
     }
   }
   for (const batch of lifecycle.batches) {
     if (batch.deleted) continue;
     for (const issue of batch.issues) {
+      let metric: MixMonitorFinding["metric"];
+      if (["OVERUSED", "COMPLETED_WITH_REMAINDER", "CLOSED_WITH_REMAINDER"].includes(issue.code)) {
+        try {
+          const total = new Decimal(batch.totalKg), used = new Decimal(batch.usedKg);
+          const amount = issue.code === "OVERUSED" ? used.minus(total) : total.minus(used);
+          if (amount.gt(0)) metric = { value: amount.toFixed(3), unit: "kg" };
+        } catch { /* original invalid quantity remains an error with no inferred amount */ }
+      }
       add("lifecycle", batch.batchId, issue.code,
         codeIsCritical.has(issue.code) || issue.severity === "error" ? "critical" : "warning",
         batch.batchCode + " — " + issue.code,
         issue.detail + " Recorded: " + batch.usedKg + " kg used / " + batch.totalKg + " kg total; no automatic correction.",
-        "mix_batch", batch.batchId);
+        "mix_batch", batch.batchId, metric);
     }
   }
   const result = [...findings.values()].sort((a,b) =>
@@ -166,13 +198,21 @@ export function compareMixMonitorFindings(
   current: MixMonitorFinding[],
 ): { baseline: boolean; newOrEscalated: MixMonitorFinding[]; resolvedKeys: string[] } {
   if (previous === null) return { baseline: true, newOrEscalated: [], resolvedKeys: [] };
-  const old = new Map(previous.map(item => [item.key, item.severity] as const));
+  const old = new Map(previous.map(item => [item.key, item] as const));
+  const worsened = (now: MixMonitorFinding, before?: StoredMonitorState["findings"][number]): boolean => {
+    if (!now.metric || !before?.metric || now.metric.unit !== before.metric.unit) return false;
+    try {
+      const tolerance = now.metric.unit === "kg" ? "0.001" : now.metric.unit === "usd" ? "0.02" : "0";
+      return new Decimal(now.metric.value).gt(new Decimal(before.metric.value).plus(tolerance));
+    } catch { return false; }
+  };
   const present = new Set(current.map(item => item.key));
   return {
     baseline: false,
     newOrEscalated: current.filter(item => {
-      const level = old.get(item.key);
-      return level === undefined || severityLevel[item.severity] > severityLevel[level];
+      const prior = old.get(item.key);
+      return prior === undefined || severityLevel[item.severity] > severityLevel[prior.severity] ||
+        worsened(item, prior);
     }),
     resolvedKeys: previous.map(item => item.key).filter(key => !present.has(key)),
   };
@@ -261,7 +301,7 @@ export async function persistMixMonitorSnapshot(snapshot: MixMonitorSnapshot): P
     );
     const state: StoredMonitorState = {
       version: 1, lastSuccessAt: snapshot.generatedAt,
-      findings: snapshot.findings.map(({ key, severity }) => ({ key, severity })),
+      findings: snapshot.findings.map(({ key, severity, metric }) => ({ key, severity, metric })),
       summary: snapshot.summary,
     };
     const serialized = JSON.stringify(state);
@@ -309,7 +349,7 @@ export async function getMixMonitorStatus(companyId: number): Promise<MixMonitor
     unreadAlerts: Number(r.rows[0]?.unread_alerts ?? 0),
     monitoringEnabled: process.env.ENABLE_SCHEDULERS !== "false" && process.env.FACTORY_MIX_INTEGRITY_MONITOR_ENABLED !== "false",
     nextCheck: "Daily at 01:35 UTC when server schedulers are enabled",
-    legacyBaselinePolicy: "First successful scan records existing issues without alerts. Only new or escalated issues create Factory Alerts.",
+    legacyBaselinePolicy: "First successful scan records existing issues without alerts. New, materially worsened, or higher-severity issues create Factory Alerts.",
   };
 }
 
