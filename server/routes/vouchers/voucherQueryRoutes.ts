@@ -21,6 +21,7 @@ import {
 } from "../../security/companyAccessBoundary";
 import { toMoney } from "../../lib/money";
 import { withStockTransferNarrations } from "../../services/inventory/stockTransferNarration";
+import { withPropertiesRentalTenantNames } from "../../services/rental/rentalVoucherTenantRead";
 import { keepRoutineVoucher } from "../../services/accounting/operationalCorrectionVisibility";
 import { isInternalFactoryAdvanceReconciliation, isInternalHistoricalSupplierCatchup } from "../../services/accounting/internalHistoricalSupplierRoutineVisibility";
 
@@ -74,6 +75,9 @@ export function registerVoucherQueryRoutes(app: Express) {
           description: voucher.description,
         })
       );
+
+      // Preserve historical GL descriptions; enrich only the read model.
+      vouchers = await withPropertiesRentalTenantNames(access.activeCompanyId, vouchers);
 
       // Strip totalAmount from Stock Transfer vouchers for POS users
       let sanitizedVouchers = isPOS
@@ -263,6 +267,7 @@ export function registerVoucherQueryRoutes(app: Express) {
         }
       }
 
+      const [displayVoucher] = await withPropertiesRentalTenantNames(access.activeCompanyId, [voucher]);
       const [entries, relatedData] = await Promise.all([
         storage.getVoucherEntriesByVoucher(id),
         loadVoucherRelatedData(voucher),
@@ -282,7 +287,7 @@ export function registerVoucherQueryRoutes(app: Express) {
       }
 
       res.json({
-        ...voucher,
+        ...displayVoucher,
         entries,
         purchaseOrder,
         salesItems: salesItemsList,

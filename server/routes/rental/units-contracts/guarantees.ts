@@ -69,6 +69,8 @@ export function registerRentalGuaranteeRoutes(app: Express, ctx: RentalRoutesCon
 
       const [unit] = await db.select().from(propertyUnits).where(eq(propertyUnits.id, contract.unitId));
       const unitLabel = unit ? `${unit.locationGroup}/${unit.unitNumber}` : `Unit#${contract.unitId}`;
+      const tenantSuffix = module === "PROPERTIES" && contract.tenantName.trim()
+        ? ` - Tenant: ${contract.tenantName.trim()}` : "";
       const dateStr = paymentDate || getClientDate(req);
 
       await db.transaction(async (tx) => {
@@ -104,7 +106,7 @@ export function registerRentalGuaranteeRoutes(app: Express, ctx: RentalRoutesCon
               "Asset",
               "SEC-DEP-PAID"
             );
-            const narration = `Guarantee paid - ${unitLabel}`;
+            const narration = `Guarantee paid - ${unitLabel}${tenantSuffix}`;
             await postErpVoucherTx(tx, {
               companyId,
               voucherType: "Payment",
@@ -128,7 +130,7 @@ export function registerRentalGuaranteeRoutes(app: Express, ctx: RentalRoutesCon
               "Liability",
               "TENANT-DEP"
             );
-            const narration = `Guarantee deposit - ${unitLabel}`;
+            const narration = `Guarantee deposit - ${unitLabel}${tenantSuffix}`;
             await postErpVoucherTx(tx, {
               companyId,
               voucherType: "Receipt",
@@ -216,6 +218,8 @@ export function registerRentalGuaranteeRoutes(app: Express, ctx: RentalRoutesCon
 
       const [unit] = await db.select().from(propertyUnits).where(eq(propertyUnits.id, contract.unitId));
       const unitLabel = unit ? `${unit.locationGroup}/${unit.unitNumber}` : `Unit#${contract.unitId}`;
+      const tenantSuffix = module === "PROPERTIES" && contract.tenantName.trim()
+        ? ` - Tenant: ${contract.tenantName.trim()}` : "";
       const dateStr = paymentDate || getClientDate(req);
 
       const tenantPays = module === "ERP" || module === "FACTORY";
@@ -224,8 +228,8 @@ export function registerRentalGuaranteeRoutes(app: Express, ctx: RentalRoutesCon
       let replayed = false;
       await db.transaction(async (tx) => {
         const narration = notes
-          ? `Guarantee moved to cash - ${unitLabel} - ${notes}`
-          : `Guarantee moved to cash - ${unitLabel}`;
+          ? `Guarantee moved to cash - ${unitLabel}${tenantSuffix} - ${notes}`
+          : `Guarantee moved to cash - ${unitLabel}${tenantSuffix}`;
         // Tenant: Dr Cash / Cr Security Deposits Paid (the guarantee comes back).
         // Landlord: Dr Cash / Cr Tenant Deposits; Properties keeps that cash.
         // No automatic intercompany transfer is generated for new receipts.
@@ -339,6 +343,8 @@ export function registerRentalGuaranteeRoutes(app: Express, ctx: RentalRoutesCon
 
       const [unit] = await db.select().from(propertyUnits).where(eq(propertyUnits.id, contract.unitId));
       const unitLabel = unit ? `${unit.locationGroup}/${unit.unitNumber}` : `Unit#${contract.unitId}`;
+      const tenantSuffix = module === "PROPERTIES" && contract.tenantName.trim()
+        ? ` - Tenant: ${contract.tenantName.trim()}` : "";
       const isShop = unit?.unitType === "SHOP";
       const tenantPays = module === "ERP" || module === "FACTORY";
 
@@ -371,8 +377,8 @@ export function registerRentalGuaranteeRoutes(app: Express, ctx: RentalRoutesCon
             ? `${String(allocations[0].month).padStart(2, "0")}/${allocations[0].year} – ${String(allocations[allocations.length - 1].month).padStart(2, "0")}/${allocations[allocations.length - 1].year}`
             : `${String(m).padStart(2, "0")}/${y}`;
         const narration = notes
-          ? `Guarantee applied to rent - ${unitLabel} - ${monthSpan} - ${notes}`
-          : `Guarantee applied to rent - ${unitLabel} - ${monthSpan}`;
+          ? `Guarantee applied to rent - ${unitLabel} - ${monthSpan}${tenantSuffix} - ${notes}`
+          : `Guarantee applied to rent - ${unitLabel} - ${monthSpan}${tenantSuffix}`;
 
         // Journal: no cash account involved
         const requestSourceId = erpRequestSourceId(req);
