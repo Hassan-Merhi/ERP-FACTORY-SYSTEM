@@ -2,6 +2,8 @@
  * Presentation-only reconciliation. Payment and voucher rows are never changed.
  * All amounts use integer cents and retain the recorded (unconverted) currency.
  */
+import { hasVerifiedUsdBasis } from "@/properties/config/rentalCurrencyBasis";
+
 export type ReceiptRow = {
   id: number;
   paymentDate: string;
@@ -199,7 +201,7 @@ const excelSafe = (value: unknown): string => {
 
 /** Exports name their numeric columns USD; non-USD must never be silently relabeled. */
 function assertUsdHistoryExport(rows: readonly ReceiptRow[]): void {
-  if (rows.some((row) => row.currency?.trim() && row.currency.trim().toUpperCase() !== "USD")) {
+  if (!hasVerifiedUsdBasis(rows)) {
     throw new Error("Cannot export mixed-currency payment history as USD without booked conversion");
   }
 }

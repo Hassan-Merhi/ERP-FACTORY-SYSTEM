@@ -92,7 +92,7 @@ export default function RentalPaymentsLog({
     search, setSearch, period, setPeriod, selectedUnit, setSelectedUnit,
     selectedTenant, setSelectedTenant,
     unitOptions, tenantOptions, filtered, noFilters,
-  } = useRentalPaymentsFilters(payments, isPropertiesPayments);
+  } = useRentalPaymentsFilters(payments, isPropertiesPayments, selectedCompany?.id);
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `${apiBase}/payments/${id}`),
@@ -172,7 +172,7 @@ export default function RentalPaymentsLog({
     const amountDisplay = paymentsError
       ? "Unavailable"
       : !clipboardIsUsd
-        ? "Mixed currencies — see entries"
+        ? "Mixed or unverified currencies — see entries"
         : isFullHistory
           ? reconciliationReady && fullHistoryIsUsd && reconciliation?.reconciled != null
             ? formatMoneyDisplay(reconciliation.reconciled / 100, { currency: "USD" })
@@ -219,7 +219,7 @@ export default function RentalPaymentsLog({
         />
         {!clipboardIsUsd && (
           <p className="text-xs text-amber-600 dark:text-amber-400">
-            Payments contain different recorded currencies. No unconverted combined USD total is shown; copy/export requires an explicit booked-currency conversion.
+            Payments contain non-USD or unverified currencies. No unconverted combined USD total is shown; USD copy/export requires verified currency evidence.
           </p>
         )}
         <RentalPaymentDeleteDialog
@@ -367,7 +367,7 @@ export default function RentalPaymentsLog({
                         )}
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums font-semibold text-green-700 dark:text-green-400">
-                        <MoneyAmount amount={p.amount} currency={p.currency ?? "USD"} />
+                        {p.currency?.trim() ? <MoneyAmount amount={p.amount} currency={p.currency} /> : <span title="Recorded currency not verified">{p.amount} (currency unverified)</span>}
                       </td>
 
                       <td className="px-3 py-2 text-xs text-muted-foreground">

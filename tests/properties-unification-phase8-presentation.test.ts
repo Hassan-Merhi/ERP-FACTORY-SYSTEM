@@ -14,12 +14,14 @@ import { hasHassanPropertiesHistoricalReportingPolicy } from "../client/src/prop
 import { paymentHistoryTsv, reconciledHistoryTsv } from "../client/src/pages/properties/property-rental/paymentsReceiptMath";
 
 describe("Phase 8 rental financial presentation", () => {
-  it("does not sum mixed, blank or mislabeled currencies as USD", () => {
-    expect(hasSingleUsdBasis([{ currency: "USD" }, { currency: "usd" }, {}])).toBe(true);
+  it("requires recorded USD evidence and rejects unknown or mixed currency as USD", () => {
+    expect(hasSingleUsdBasis([{ currency: "USD" }, { currency: "usd" }])).toBe(true);
+    expect(hasSingleUsdBasis([{ currency: "USD" }, {}])).toBe(false);
     expect(hasSingleUsdBasis([{ currency: "USD" }, { currency: "CDF" }])).toBe(false);
     expect(hasSingleUsdBasis([{ currency: " USD " }, { currency: "ZMW" }])).toBe(false);
     expect(hasSingleUsdBasis([])).toBe(true);
-    expect(hasSingleUsdBasis([{ currency: "" }])).toBe(true);
+    expect(hasSingleUsdBasis([{ currency: "" }])).toBe(false);
+    expect(hasSingleUsdBasis([{ currency: null }])).toBe(false);
   });
 
   it("rejects incorrectly labeled USD TSV exports when recorded payments use other currencies", () => {
@@ -27,6 +29,8 @@ describe("Phase 8 rental financial presentation", () => {
     expect(() => paymentHistoryTsv(rows)).toThrow(/mixed-currency/);
     expect(() => reconciledHistoryTsv(rows, { aliCashLedgerId: 1, threeAccountsTotal: 5000 })).toThrow(/mixed-currency/);
     expect(paymentHistoryTsv([{ ...rows[0], currency: "USD" }])).toContain("Cash Received (USD)");
+    expect(() => paymentHistoryTsv([{ ...rows[0], currency: "" }])).toThrow(/mixed-currency/);
+    expect(() => reconciledHistoryTsv([{ ...rows[0], currency: null }], { aliCashLedgerId: 1, threeAccountsTotal: 5000 })).toThrow(/mixed-currency/);
   });
 
   it("preserves calculation provenance without converting financial values", () => {

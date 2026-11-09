@@ -1,9 +1,10 @@
 import { getAppDate } from "@/lib/queryClient";
+import { hasVerifiedUsdBasis } from "./rentalCurrencyBasis";
 import type { PaymentsPeriod } from "@/pages/properties/property-rental/components/PropertiesPaymentsPremium";
 
 /** Read-only presentation currency. Never silently add unconverted currencies. */
 export function hasSingleUsdBasis(rows: readonly { currency?: string | null }[]): boolean {
-  return rows.every((row) => !row.currency?.trim() || row.currency.trim().toUpperCase() === "USD");
+  return hasVerifiedUsdBasis(rows);
 }
 
 /** A financial figure explicitly identifies the source of its calculation. */
@@ -49,4 +50,18 @@ export function isRentalDayInPeriod(paymentDate: string, since: string | null): 
   if (since === null) return true;
   const day = paymentDayKey(paymentDate);
   return day !== null && day >= since;
+}
+
+/** Inclusive company-calendar range. All dates are recorded calendar days, not instants. */
+export type RentalPeriodBounds = Readonly<{ since: string; through: string }>;
+
+/** "All" stays unbounded; invalid business dates fail closed for dated periods. */
+export function rentalPeriodBounds(period: PaymentsPeriod, businessToday: string = getAppDate()): RentalPeriodBounds | null {
+  if (period === "all" || !validDayKey(businessToday)) return null;
+  return { since: rentalPeriodStart(period, businessToday)!, through: businessToday };
+}
+
+export function isRentalDayInRange(paymentDate: string, bounds: RentalPeriodBounds): boolean {
+  const day = paymentDayKey(paymentDate);
+  return day !== null && day >= bounds.since && day <= bounds.through;
 }
