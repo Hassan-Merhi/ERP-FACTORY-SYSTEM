@@ -67,3 +67,8 @@ export {
 export { ErpNativeSelect } from "./ErpNativeSelect";
 export { ErpRecordAction } from "./ErpRecordAction";
 export type { ErpRecordActionProps } from "./ErpRecordAction";
+
+/** Re-export existing action policies; the ERP UI layer does not make new grants. */
+export { useCan as useErpCan, canDenialMessage as erpCanDenialMessage } from "@/hooks/useCan";
+export { useExistingRecordChangeAccess as useErpRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
+export { erpPageAccessQueryOptions } from "@/app/erpAccessQuery";
