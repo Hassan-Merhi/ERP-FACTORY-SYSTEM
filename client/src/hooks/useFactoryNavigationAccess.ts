@@ -15,13 +15,14 @@ export function useFactoryNavigationAccess() {
     enabled: !!user && !!selectedCompany?.id,
   });
   const ready = !!user && !!selectedCompany?.id && !!access && access.companyId === selectedCompany.id;
+  const isPrivileged = ["Admin", "Owner", "Developer"].includes(user?.role ?? "");
   const canOpen = (url: string): boolean => {
     if (!ready) return false;
     const page = resolveFactoryPage(url);
     if (!page || !factoryPageAllowsRole(page, user.role ?? "")) return false;
     if (page.hideKey && access.hiddenCostFields?.includes(page.hideKey)) return false;
-    if (["Admin", "Owner", "Developer"].includes(user.role ?? "")) return true;
+    if (isPrivileged) return true;
     return !!access.fullAccess || hasFactoryPageKey(page, access.pageKeys ?? []);
   };
-  return { ready, canOpen, access };
+  return { ready, canOpen, access, isPrivileged };
 }
