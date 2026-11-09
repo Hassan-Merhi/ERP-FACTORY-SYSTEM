@@ -13,8 +13,8 @@
       "workspace": "factory",
       "companyCode": "PHASE9-FACTORY",
       "requiredRole": "Developer",
-      "staticRoutes": 118,
-      "parameterizedRoutes": 22
+      "staticRoutes": 119,
+      "parameterizedRoutes": 28
     },
     {
       "workspace": "properties",
@@ -52,7 +52,7 @@
       "parameterizedRoutes": 0
     }
   ],
-  "parameterizedRoutesNeedingSeededBrowserEvidence": 50,
+  "parameterizedRoutesNeedingSeededBrowserEvidence": 56,
   "physicalSafariCertification": "NOT VERIFIED — requires user-owned device",
   "fullBrowserMatrixCertification": "NOT VERIFIED by this source-only script",
   "violations": []

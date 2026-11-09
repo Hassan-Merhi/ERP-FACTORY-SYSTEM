@@ -12,8 +12,8 @@
       "workspace": "factory",
       "companyCode": "PHASE9-FACTORY",
       "requiredRole": "Developer",
-      "staticRoutes": 118,
-      "parameterizedRoutes": 22
+      "staticRoutes": 119,
+      "parameterizedRoutes": 28
     },
     {
       "workspace": "properties",
@@ -51,7 +51,7 @@
       "parameterizedRoutes": 0
     }
   ],
-  "staticRoutes": 290,
-  "detailRoutesRequiringFixtures": 50,
+  "staticRoutes": 291,
+  "detailRoutesRequiringFixtures": 56,
   "issues": []
 }
