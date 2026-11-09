@@ -159,7 +159,11 @@ export function registerFactoryLoadingDispatchLifecycleRoutes(app: Express): voi
           refusal(409, "LOADING_INACTIVE", "Cannot close a dispatch on a cancelled or deleted loading");
         }
         const lockedTrip = rows(await tx.execute(sql`
-          SELECT id, status FROM factory_loading_dispatches
+          SELECT id, status, dispatch_number AS "dispatchNumber",
+                 truck_plate AS "truckPlate", driver_name AS "driverName",
+                 destination, notes, container_number_snapshot AS "containerNumberSnapshot",
+                 created_by_username AS "createdByUsername", created_at AS "createdAt"
+            FROM factory_loading_dispatches
            WHERE company_id = ${scope.companyId} AND order_id = ${scope.orderId}
              AND id = ${scope.dispatchId} FOR UPDATE
         `))[0];
@@ -202,18 +206,42 @@ export function registerFactoryLoadingDispatchLifecycleRoutes(app: Express): voi
         `))[0];
         if (!closed) refusal(409, "ALREADY_CLOSED", "This dispatch has already been ended");
 
+        // Capture physical scan evidence and truck identity at this closure.
+        // Later reopen/edit/scan actions cannot change a signed manifest.
+        const manifest = rows(await tx.execute(sql`
+          SELECT s.id AS "scanId", s.bale_id AS "baleId",
+                 s.bale_reference AS "baleReference",
+                 s.article_code AS "articleCode", s.product_name AS "productName",
+                 s.weight_kg AS "weightKg", s.scanned_by_username AS "scannedByUsername",
+                 s.scanned_at AS "scannedAt"
+            FROM factory_loading_dispatch_scans s
+           WHERE s.company_id = ${scope.companyId} AND s.order_id = ${scope.orderId}
+             AND s.dispatch_id = ${scope.dispatchId} AND s.removed_at IS NULL
+           ORDER BY s.scanned_at, s.id
+        `));
+        const truckAtClosure = {
+          dispatchId: String(lockedTrip.id), dispatchNumber: lockedTrip.dispatchNumber,
+          truckPlate: lockedTrip.truckPlate, driverName: lockedTrip.driverName,
+          destination: lockedTrip.destination, notes: lockedTrip.notes,
+          containerNumberSnapshot: lockedTrip.containerNumberSnapshot,
+          createdByUsername: lockedTrip.createdByUsername, createdAt: lockedTrip.createdAt,
+        };
         const summaryJson = JSON.stringify(evaluation.summary);
         const comparisonJson = JSON.stringify(evaluation.comparison);
         const issuesJson = JSON.stringify(evaluation.issues);
+        const manifestJson = JSON.stringify(manifest);
+        const truckJson = JSON.stringify(truckAtClosure);
         const history = rows(await tx.execute(sql`
           INSERT INTO factory_loading_dispatch_closure_history
             (company_id, order_id, dispatch_id, revision, close_fingerprint,
              comparison_snapshot, summary_snapshot, issues_snapshot,
+             manifest_snapshot, truck_snapshot,
              approved_with_discrepancies, discrepancy_reason,
              closed_by_user_id, closed_by_username)
           VALUES (${scope.companyId}, ${scope.orderId}, ${scope.dispatchId},
                   ${revision}, ${evaluation.fingerprint}, ${comparisonJson}::jsonb,
                   ${summaryJson}::jsonb, ${issuesJson}::jsonb,
+                  ${manifestJson}::jsonb, ${truckJson}::jsonb,
                   ${evaluation.needsApproval}, ${evaluation.needsApproval ? approvalReason : null},
                   ${scope.userId}, ${scope.username})
           RETURNING id, closed_at AS "closedAt"
