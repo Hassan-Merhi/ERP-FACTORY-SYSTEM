@@ -1,9 +1,6 @@
 import { Package, Settings, Book, MessageCircle, AlertTriangle, KeyRound, ArrowRight } from "lucide-react";
 import { useConnectivity } from "@/contexts/ConnectivityContext";
 import { ERP_NAV_SECTIONS, ERP_PINNED_ITEMS, ERP_UTILITY_ITEMS } from "@/app/erpPageRegistry";
-export { ERP_NAV_SECTIONS, ERP_PINNED_ITEMS, ERP_UTILITY_ITEMS } from "@/app/erpPageRegistry";
-const defaultPinnedItems = ERP_PINNED_ITEMS;
-const utilityItems = ERP_UTILITY_ITEMS;
 
 import { Sidebar, SidebarContent } from "@/components/ui/sidebar";
 import { useQuery } from "@tanstack/react-query";
@@ -31,6 +28,10 @@ import {
   type NavItem,
   type NavSection,
 } from "@/components/sidebar/sidebarPrimitives";
+export { ERP_NAV_SECTIONS, ERP_PINNED_ITEMS, ERP_UTILITY_ITEMS } from "@/app/erpPageRegistry";
+const defaultPinnedItems = ERP_PINNED_ITEMS;
+const utilityItems = ERP_UTILITY_ITEMS;
+
 
 export const SETTINGS_HIDDEN_ROLES = ERP_PERSONAL_SETTINGS_HIDDEN_ROLES;
 
