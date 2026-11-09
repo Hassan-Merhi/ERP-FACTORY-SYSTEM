@@ -20,7 +20,7 @@ const HIDDEN_KEYS: Record<Section, string> = {
 export default function FactorySupplierHub() {
   const { selectedCompany } = useCompany();
   const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id), enabled: Boolean(selectedCompany?.id), staleTime: 5 * 60000 });
-  const hidden = myAccess?.companyId === selectedCompany?.id && myAccess.hasFactoryAccess
+  const hidden = myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
     ? myAccess.hiddenCostFields
     : Object.values(HIDDEN_KEYS);
   const sections: Section[] = SECTIONS.filter((section) => !hidden.includes(HIDDEN_KEYS[section]));
