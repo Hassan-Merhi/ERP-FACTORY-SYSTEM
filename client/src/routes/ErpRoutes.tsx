@@ -10,7 +10,7 @@ const TicketManagement = lazy(() => import("@/pages/TicketManagement"));
 import { canAccessAnyErpFeature, canAccessErpFeature, type ErpFeatureAccess } from "@/app/erpAccess";
 import { erpPageAccessQueryOptions } from "@/app/erpAccessQuery";
 import { useCompany } from "@/contexts/CompanyContext";
-import { effectiveErpRole, isErpRouteRoleAllowed } from "@shared/erpNavigationPolicy";
+import { canEnterErpGuardedRoute, effectiveErpRole, isErpRouteRoleAllowed } from "@shared/erpNavigationPolicy";
 import type { FeatureKey } from "@shared/schema";
 import SpOverview from "@/pages/sp/SpOverview";
 import {
@@ -138,7 +138,7 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
   const canAccess = (key: FeatureKey) => canAccessErpFeature(erpAccess, key);
   const canAccessAny = (keys: readonly FeatureKey[]) => canAccessAnyErpFeature(erpAccess, keys);
   const G = (path: string, key: FeatureKey, Comp: RouteComponent) =>
-    canAccess(key) ? (
+    canAccess(key) && roleAllowed(path) ? (
       <Route path={path} component={Comp} />
     ) : (
       <Route path={path}>
@@ -146,7 +146,7 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
       </Route>
     );
   const R = (path: string, allowed: boolean, Comp: RouteComponent) =>
-    allowed && roleAllowed(path) ? (
+    allowed && canEnterErpGuardedRoute(path, effectiveRole) ? (
       <Route path={path} component={Comp} />
     ) : (
       <Route path={path}>
