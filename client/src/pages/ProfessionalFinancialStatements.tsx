@@ -6,6 +6,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ErpReportExportMenu, ErpReportPrintFooter, exportErpReportCsv } from "@/erp-core";
 
 interface Line {
   kind: string;
@@ -203,29 +204,11 @@ function exportedCsv(record: Package) {
     rows.push(["Cash flow", key, current.cashFlow[key], prior?.cashFlow[key] ?? ""]);
   }
   rows.push(["", "DISCLAIMER", "All statements provisional; no ledger adjustment applied", ""]);
-  const csv = rows
-    .map((row) =>
-      row
-        .map((value) => {
-          const text = String(value);
-          // User-provided account and party labels must never execute as formulas
-          // when this CSV is opened in Excel.
-          const numeric = /^-?[0-9]+(?:\.[0-9]+)?$/.test(text);
-          const safe = /^[=+@]/.test(text) || (text.startsWith("-") && !numeric) ? "'" + text : text;
-          return '"' + safe.replaceAll('"', '""') + '"';
-        })
-        .join(",")
-    )
-    .join("\r\n");
-  const blob = new Blob(["\ufeff", csv], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `financial-statements-${record.companyId}-${record.asOfDate}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
+  exportErpReportCsv({
+    headers: [],
+    rows,
+    fileName: `financial-statements-${record.companyId}-${record.asOfDate}.csv`,
+  });
 }
 function SectionTable({ title, current, previous }: { title: string; current: Section; previous?: Section }) {
   const previousMap = new Map((previous?.lines ?? []).map((l) => [`${l.kind}:${l.id}`, l.amountUsd]));
@@ -342,14 +325,20 @@ export default function ProfessionalFinancialStatements() {
               <Button variant="outline" disabled={data.isFetching} onClick={() => data.refetch()}>
                 Refresh
               </Button>
-              {pkg && (
-                <Button variant="outline" onClick={() => exportedCsv(pkg)}>
-                  Export CSV
-                </Button>
-              )}
-              <Button variant="outline" onClick={() => window.print()}>
-                Print
-              </Button>
+              <ErpReportExportMenu
+                options={[
+                  {
+                    id: "statements-csv",
+                    label: "Export CSV",
+                    kind: "csv",
+                    disabled: !pkg,
+                    onSelect: () => {
+                      if (pkg) exportedCsv(pkg);
+                    },
+                  },
+                  { id: "statements-print", label: "Print / Save PDF", kind: "print", onSelect: () => window.print() },
+                ]}
+              />
             </div>
           </div>
           <label className="flex gap-2 items-center text-sm">
@@ -713,6 +702,12 @@ export default function ProfessionalFinancialStatements() {
           )}
         </>
       )}
+      <ErpReportPrintFooter
+        title="Provisional Financial Statements — Not Certified"
+        companyName={selectedCompany?.name}
+        fromDate={pkg?.fromDate ?? start}
+        toDate={pkg?.asOfDate ?? end}
+      />
     </div>
   );
 }
