@@ -65,6 +65,15 @@ describe("Phase 9 rental payment UI parity", () => {
     expect(hook).not.toContain("setReconciliationView");
   });
 
+  it("does not label ordinary Properties payment copies as full account reconciliations", () => {
+    const page = read("../client/src/pages/properties/RentalPaymentsLog.tsx");
+    expect(page).toContain("const isFullHistory = isHassanProperties && noFilters");
+    expect(page).toContain("const copyIsFull = isFullHistory;");
+    expect(page).toContain("fullHistory={copyIsFull}");
+    expect(page).toContain('onCopy={() => {');
+    expect(page).toContain('void (isFullHistory ? copyFullHistory() : copyHistory());');
+  });
+
   it("preserves the premium Properties table and existing readonly record protection", () => {
     const premium = read("../client/src/pages/properties/property-rental/components/PropertiesPaymentsPremium.tsx");
     expect(premium).toContain("properties-payments-premium");
