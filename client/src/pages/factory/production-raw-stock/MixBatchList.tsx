@@ -372,7 +372,7 @@ export function MixBatchList({
                     <TableHead>Name</TableHead>
                     <TableHead className="min-w-32 whitespace-nowrap">Date</TableHead>
                     <TableHead className="min-w-32 text-right whitespace-nowrap">Total (kg)</TableHead>
-                    <TableHead className="min-w-36 text-right whitespace-nowrap">Blended Cost</TableHead>
+                    <TableHead className="min-w-36 text-right whitespace-nowrap">Recorded Cost/kg</TableHead>
                     <TableHead className="min-w-20"></TableHead>
                   </TableRow>
                 </TableHeader>
