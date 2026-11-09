@@ -36,7 +36,7 @@ async function sendReport(req: Request, res: Response, scope: "overall" | "trip"
     }
     const report = await loadFactoryDispatchReport({
       companyId: state.companyId, orderId,
-      ...(dispatchId === undefined ? {} : { dispatchId }),
+      ...(dispatchId == null ? {} : { dispatchId }),
       ...(closureId === undefined ? {} : { closureId }),
     });
     res.setHeader("Cache-Control", "private, no-store");
