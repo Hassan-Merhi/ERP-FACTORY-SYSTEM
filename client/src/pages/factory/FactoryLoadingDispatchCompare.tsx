@@ -11,7 +11,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   AlertCircle, AlertTriangle, ArrowLeft, ArrowRight, CheckCircle2,
   ClipboardCheck, FileSearch, Layers3, Loader2, Package, RefreshCw,
-  Search, ShieldCheck, Truck,
+  Printer, Search, ShieldCheck, Truck,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -310,6 +310,10 @@ export default function FactoryLoadingDispatchCompare() {
               <Button size="sm" variant="outline"
                 onClick={() => navigate(dispatchBase(orderId) + (selectedId ? "/" + selectedId : ""))}>
                 <ArrowLeft className="mr-1.5 h-4 w-4" /> Back to {selectedId ? "trip" : "dispatches"}
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => navigate(dispatchBase(orderId) + (selectedId ? "/" + selectedId : "") + "/report")}
+                data-testid="button-compare-dispatch-report">
+                <Printer className="mr-1.5 h-4 w-4" /> Print / Export
               </Button>
               <Button size="sm" variant="outline" onClick={() => void comparison.refetch()} disabled={comparison.isFetching}>
                 <RefreshCw className={"mr-1.5 h-4 w-4" + (comparison.isFetching ? " animate-spin" : "")} /> Refresh
