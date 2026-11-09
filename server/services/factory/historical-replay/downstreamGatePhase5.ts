@@ -101,7 +101,6 @@ export async function inspectPhase5ReplayScopeSafety(
         WHERE b.company_id=$1 AND b.id=ANY($2)
           AND (b.deleted_at IS NOT NULL
            OR b.status IN ('SOLD','DISPATCHED','REMOVED','DELETED','REPACKED')
-           OR b.dispatch_batch_id IS NOT NULL
            OR EXISTS (
               SELECT 1 FROM factory_invoice_loading_bales fil
                WHERE fil.company_id=b.company_id AND fil.bale_id=b.id
