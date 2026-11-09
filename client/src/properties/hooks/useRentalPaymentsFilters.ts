@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { searchAny } from "@shared/searchNormalization";
+import { isRentalDayInPeriod, rentalPeriodStart } from "@/properties/config/rentalReportingPresentation";
 import type { PaymentRow } from "@/pages/properties/RentalPaymentsLog";
 import type { PaymentsPeriod } from "@/pages/properties/property-rental/components/PropertiesPaymentsPremium";
 
@@ -14,10 +15,8 @@ export const RECONCILIATION_VIEWS = [
 ] as const;
 export type ReconciliationView = (typeof RECONCILIATION_VIEWS)[number]["key"];
 
-/**
- * Display-only filters. These never change server due dates, posted periods or
- * receipt allocation; historical browser-local date semantics are preserved
- * until the company-timezone migration is separately verified.
+/** Display-only filtering using the configured company business calendar.
+ * No server posting dates, recorded transaction dates, or allocations change.
  */
 export function useRentalPaymentsFilters(
   payments: readonly PaymentRow[],
@@ -69,14 +68,7 @@ export function useRentalPaymentsFilters(
   );
 
   const filtered = useMemo(() => {
-    const now = new Date();
-    const since = period === "month"
-      ? new Date(now.getFullYear(), now.getMonth(), 1)
-      : period === "year"
-        ? new Date(now.getFullYear(), 0, 1)
-        : period === "30days"
-          ? new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29)
-          : null;
+    const since = rentalPeriodStart(period);
     return viewPayments.filter((p) => {
       if (search.trim() && !searchAny(
         search, p.tenantName, p.unitNumber, p.locationGroup, p.notes,
@@ -84,7 +76,7 @@ export function useRentalPaymentsFilters(
       )) return false;
       if (isPropertiesPayments && selectedUnit !== "all" && String(p.unitId) !== selectedUnit) return false;
       if (isPropertiesPayments && selectedTenant !== "all" && p.tenantName !== selectedTenant) return false;
-      if (isPropertiesPayments && since && new Date(p.paymentDate).getTime() < since.getTime()) return false;
+      if (isPropertiesPayments && !isRentalDayInPeriod(p.paymentDate, since)) return false;
       return true;
     });
   }, [viewPayments, search, period, selectedUnit, selectedTenant, isPropertiesPayments]);
