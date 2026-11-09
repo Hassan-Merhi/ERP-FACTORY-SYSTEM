@@ -49,19 +49,34 @@ export async function postAccrualPassTx(tx: DbTransaction, input: AccrualPassPos
     throw new Error("RENTAL_ACCRUAL_INVALID_LEDGER_ROWS");
   }
   const locked=(await tx.execute(sql`
-    SELECT id,company_id,module,accrual_voucher_id,used_prepaid_account,used_advance_account
-    FROM property_monthly_ledger
-    WHERE id IN (${sql.raw(rowIds.join(","))}) AND company_id=${input.companyId}
-      AND module=${input.module}
-    ORDER BY id FOR UPDATE
+    SELECT ml.id,ml.company_id,ml.module,ml.accrual_voucher_id,
+      ml.used_prepaid_account,ml.used_advance_account,
+      EXISTS(
+        SELECT 1 FROM voucher_entries ve
+        JOIN vouchers v ON v.id=ve.voucher_id AND v.company_id=${input.companyId}
+        WHERE ve.company_id=${input.companyId}
+          AND v.deleted_at IS NULL AND v.optional=false
+          AND ve.debit_amount > 0
+          AND ve.narration=(
+            'Rent accrual - ' || u.unit_number || ' - ' ||
+            lpad(ml.month::text,2,'0') || '/' || ml.year::text
+          )
+      ) AS prior_rent_accrual
+    FROM property_monthly_ledger ml
+    JOIN property_units u ON u.id=ml.unit_id
+    WHERE ml.id IN (${sql.raw(rowIds.join(","))})
+      AND ml.company_id=${input.companyId} AND ml.module=${input.module}
+    ORDER BY ml.id FOR UPDATE OF ml
   `)).rows as Array<{
     id:number; company_id:number; module:string; accrual_voucher_id:number|null;
-    used_prepaid_account:boolean; used_advance_account:boolean;
+    used_prepaid_account:boolean; used_advance_account:boolean; prior_rent_accrual:boolean;
   }>;
   if(locked.length!==rowIds.length ||
     locked.some((r,i)=>
       Number(r.id)!==rowIds[i] ||
       r.accrual_voucher_id!==null ||
+      // Catch legacy orphan journals even if somebody cleared the month link.
+      (input.pass==="accrual" && r.prior_rent_accrual===true) ||
       (input.pass==="accrual" && (r.used_prepaid_account || r.used_advance_account)) ||
       (input.pass==="advance-recognition" && (!r.used_advance_account || r.used_prepaid_account)) ||
       ((input.pass==="prepaid-recognition" || input.pass==="deferred-recognition") &&
