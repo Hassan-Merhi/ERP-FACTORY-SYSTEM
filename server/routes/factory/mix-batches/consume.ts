@@ -11,8 +11,9 @@ import { parseId } from "../../../lib/parseId";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { factoryMixBatches, factoryMixBatchSources, factoryDailyUsages } from "@shared/schema";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, isNull, sql } from "drizzle-orm";
 import { toMoney } from "../../../lib/money";
+import { MixLifecycleRefusal, requireMixLifecycleUsage, validateMixLifecycleUsageRequest } from "../../../services/factory/mixLifecyclePhase6";
 
 export function registerFactoryMixBatchConsumeRoutes(app: Express) {
   app.post("/api/factory/mix-batches/consume", requireAuth, async (req: Request, res: Response) => {
@@ -20,16 +21,7 @@ export function registerFactoryMixBatchConsumeRoutes(app: Express) {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const { usages, operatorUser, usedDate } = req.body as {
-        usages: Array<{ batchId: number; kgUsed: number; notes?: string }>;
-        operatorUser?: string;
-        usedDate: string;
-      };
-
-      if (!Array.isArray(usages) || usages.length === 0) {
-        return res.status(400).json({ message: "usages array is required" });
-      }
-      if (!usedDate) return res.status(400).json({ message: "usedDate is required" });
+      const { entries, operatorUser, usedDate } = validateMixLifecycleUsageRequest(req.body);
 
       type ConsumeResult =
         | { batchId: number; action: "closed"; carryForwardId: null }
@@ -42,14 +34,14 @@ export function registerFactoryMixBatchConsumeRoutes(app: Express) {
           };
       const results: ConsumeResult[] = [];
       await db.transaction(async (tx) => {
-        for (const u of usages) {
-          const { batchId, kgUsed, notes } = u;
-          if (!batchId || !(kgUsed > 0)) continue;
+        // Serialize carry-forward code assignment across consumption requests.
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('factory_mix_batch_sequence'), ${companyId})`);
+        for (const { batchId, kgUsed, notes } of entries) {
 
           const [batch] = await tx
             .select()
             .from(factoryMixBatches)
-            .where(and(eq(factoryMixBatches.id, batchId), eq(factoryMixBatches.companyId, companyId)))
+             .where(and(eq(factoryMixBatches.id, batchId), eq(factoryMixBatches.companyId, companyId), isNull(factoryMixBatches.deletedAt)))
             .for("update");
           if (!batch) throw new Error(`Batch ${batchId} not found`);
 
@@ -57,27 +49,29 @@ export function registerFactoryMixBatchConsumeRoutes(app: Express) {
           // the leftover kg at exactly the closed batch's cost per kg, so
           // carrying a mix forward does not change the factory valuation (the
           // float path drifted it, and the drift landed in production variance).
-          const total = toMoney(batch.totalWeightKg);
-          const remaining = total.minus(toMoney(batch.usedKg));
-          const used = toMoney(kgUsed);
-
-          if (used.gt(remaining.plus("0.001"))) {
-            throw new Error(
-              `Cannot consume ${kgUsed} kg from batch ${batch.batchCode}: only ${remaining.toFixed(3)} kg remaining`
-            );
-          }
+          const { remainingBeforeKg: remaining, usedKg: used } =
+            requireMixLifecycleUsage(batch, kgUsed.toFixed(3));
+          const [hasSource] = await tx.select({ id: factoryMixBatchSources.id })
+            .from(factoryMixBatchSources)
+            .where(eq(factoryMixBatchSources.mixBatchId, batchId)).limit(1);
+          if (!hasSource) throw new MixLifecycleRefusal(
+            `Mix ${batch.batchCode} lacks persisted material-source evidence.`
+          );
+          if (toMoney(batch.costPerKg).lte(0)) throw new MixLifecycleRefusal(
+            `Mix ${batch.batchCode} has no supported recorded USD rate.`
+          );
 
           const now = new Date();
           await tx.insert(factoryDailyUsages).values({
             companyId,
             mixBatchId: batchId,
-            kgUsed: String(kgUsed),
+            kgUsed: kgUsed.toFixed(3),
             operatorUser: operatorUser || null,
             usedDate,
             notes: notes || null,
           });
 
-          const isFullyConsumed = used.gte(remaining.minus("0.001"));
+          const isFullyConsumed = used.eq(remaining);
 
           if (isFullyConsumed) {
             await tx
@@ -96,7 +90,7 @@ export function registerFactoryMixBatchConsumeRoutes(app: Express) {
               .set({ usedKg: batch.totalWeightKg, status: "CLOSED", updatedAt: now })
               .where(eq(factoryMixBatches.id, batchId));
 
-            const year = new Date().getFullYear();
+            const year = Number(usedDate.slice(0, 4));
             const existingBatches = await tx
               .select({ batchCode: factoryMixBatches.batchCode })
               .from(factoryMixBatches)
@@ -122,8 +116,9 @@ export function registerFactoryMixBatchConsumeRoutes(app: Express) {
                 batchNumber: newBatchCode,
                 name: batch.name || null,
                 totalWeightKg: leftoverKg.toFixed(3),
-                costPerKg: costPerKg.toFixed(),
-                totalCost: leftoverCost.toFixed(),
+                usedKg: "0.000",
+                costPerKg: costPerKg.toFixed(7),
+                totalCost: leftoverCost.toDecimalPlaces(7).toFixed(7),
                 notes: batch.notes || null,
                 operatorUser: operatorUser || batch.operatorUser || null,
                 batchDate: usedDate || null,
@@ -131,6 +126,20 @@ export function registerFactoryMixBatchConsumeRoutes(app: Express) {
                 status: "CARRY_FORWARD",
               })
               .returning();
+
+            // A carry-forward is a real source-backed WIP transfer. Without
+            // this row the historical source sum and replay provenance are lost.
+            await tx.insert(factoryMixBatchSources).values({
+              mixBatchId: cfBatch.id,
+              sourceBatchId: batchId,
+              sourceType: "BATCH",
+              sourceId: batchId,
+              weightKg: leftoverKg.toFixed(3),
+              quantityKg: leftoverKg.toFixed(3),
+              costPerKg: costPerKg.toFixed(7),
+              totalCost: leftoverCost.toDecimalPlaces(7).toFixed(7),
+              notes: `Carry-forward of ${leftoverKg.toFixed(3)} kg from ${batch.batchCode} after daily usage ${used.toFixed(3)} kg on ${usedDate}`,
+            });
 
             results.push({
               batchId,
@@ -145,6 +154,9 @@ export function registerFactoryMixBatchConsumeRoutes(app: Express) {
 
       res.json({ success: true, results });
     } catch (error: unknown) {
+      if (error instanceof MixLifecycleRefusal) {
+        return res.status(error.statusCode).json({ code: error.code, message: error.message });
+      }
       logger.error("Error consuming mix batches:", { error: error });
       res.status(500).json({ message: getErrorMessage(error) });
     }
