@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import {
   Dialog,
   DialogContent,
@@ -38,11 +39,13 @@ export function RenameLocationDialog({
   setRenameInput: FactoryLocationInventoryModel["setRenameInput"];
 }) {
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
   const [deleteMode, setDeleteMode] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState("");
 
   const deleteLocationMutation = useMutation({
     mutationFn: async (id: number) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await apiRequest("DELETE", `/api/locations/${id}`);
       return res.json();
     },
@@ -115,7 +118,7 @@ export function RenameLocationDialog({
               placeholder="Location name"
               data-testid="input-rename-location"
               onKeyDown={(e) => {
-                if (e.key === "Enter" && renameInput.trim() && renamingLocation) {
+                if (e.key === "Enter" && recordChanges.allowed && renameInput.trim() && renamingLocation) {
                   renameLocationMutation.mutate({ id: renamingLocation.id, name: renameInput.trim() });
                 }
               }}
@@ -136,35 +139,41 @@ export function RenameLocationDialog({
               >
                 Back
               </Button>
-              <Button
-                variant="destructive"
-                onClick={() => renamingLocation && deleteLocationMutation.mutate(renamingLocation.id)}
-                disabled={deleteConfirm !== "DELETE" || deleteLocationMutation.isPending}
-                data-testid="button-delete-location-confirm"
-              >
-                {deleteLocationMutation.isPending ? "Deleting..." : "Delete Location"}
-              </Button>
+              {recordChanges.allowed && (
+                <Button
+                  variant="destructive"
+                  onClick={() => renamingLocation && deleteLocationMutation.mutate(renamingLocation.id)}
+                  disabled={deleteConfirm !== "DELETE" || deleteLocationMutation.isPending}
+                  data-testid="button-delete-location-confirm"
+                >
+                  {deleteLocationMutation.isPending ? "Deleting..." : "Delete Location"}
+                </Button>
+              )}
             </>
           ) : (
             <>
-              <Button variant="destructive" onClick={() => setDeleteMode(true)} data-testid="button-delete-location">
-                Delete Location
-              </Button>
+              {recordChanges.allowed && (
+                <Button variant="destructive" onClick={() => setDeleteMode(true)} data-testid="button-delete-location">
+                  Delete Location
+                </Button>
+              )}
               <div className="flex gap-2">
                 <Button variant="outline" onClick={closeDialog} data-testid="button-rename-cancel">
                   Cancel
                 </Button>
-                <Button
-                  onClick={() => {
-                    if (renameInput.trim() && renamingLocation) {
-                      renameLocationMutation.mutate({ id: renamingLocation.id, name: renameInput.trim() });
-                    }
-                  }}
-                  disabled={!renameInput.trim() || renameLocationMutation.isPending}
-                  data-testid="button-rename-confirm"
-                >
-                  {renameLocationMutation.isPending ? "Saving..." : "Rename"}
-                </Button>
+                {recordChanges.allowed && (
+                  <Button
+                    onClick={() => {
+                      if (renameInput.trim() && renamingLocation) {
+                        renameLocationMutation.mutate({ id: renamingLocation.id, name: renameInput.trim() });
+                      }
+                    }}
+                    disabled={!renameInput.trim() || renameLocationMutation.isPending}
+                    data-testid="button-rename-confirm"
+                  >
+                    {renameLocationMutation.isPending ? "Saving..." : "Rename"}
+                  </Button>
+                )}
               </div>
             </>
           )}

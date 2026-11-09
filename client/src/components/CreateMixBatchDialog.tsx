@@ -1,6 +1,7 @@
 import { getErrorDetails } from "@shared/errorUtils";
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { formatNumber } from "@/lib/formatNumber";
 import { Plus, Trash2, Layers, Package } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -15,7 +16,10 @@ import { ToastAction } from "@/components/ui/toast";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import type { FactoryMixBatch } from "@shared/schema";
-import { MIX_BATCH_TARGET_OPTIONS, selectMixBatchTarget } from "@/pages/factory/production-raw-stock/mixBatchCategoryTargets";
+import {
+  MIX_BATCH_TARGET_OPTIONS,
+  selectMixBatchTarget,
+} from "@/pages/factory/production-raw-stock/mixBatchCategoryTargets";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { mixBatchTargetTranslation } from "@/i18n/mixBatchCategoryTargetTranslations";
 
@@ -67,8 +71,13 @@ interface CreateMixBatchDialogProps {
 export function CreateMixBatchDialog({ open, onOpenChange, onCreated }: CreateMixBatchDialogProps) {
   const { toast } = useToast();
   const { language } = useApplicationLanguage();
-  const tierText = (key: Parameters<typeof mixBatchTargetTranslation>[0], values?: Record<string, string | number>) => mixBatchTargetTranslation(key, language, values);
+  const tierText = (key: Parameters<typeof mixBatchTargetTranslation>[0], values?: Record<string, string | number>) =>
+    mixBatchTargetTranslation(key, language, values);
   const [mode, setMode] = useState<DialogMode>("new");
+  const recordChanges = useExistingRecordChangeAccess();
+  const canCreateBatch = recordChanges.canCreate("POST", "/api/factory/mix-batches");
+  // Topping up and undoing change an existing batch, which read-only roles never do.
+  const canSubmitMode = mode === "topup" ? recordChanges.allowed : canCreateBatch;
   const [targetBatchId, setTargetBatchId] = useState<string>("");
   const [selectedSources, setSelectedSources] = useState<SourceSelection[]>([]);
   const [addSourceType, setAddSourceType] = useState<SourceType>("supplier");
@@ -160,7 +169,7 @@ export function CreateMixBatchDialog({ open, onOpenChange, onCreated }: CreateMi
       toast({
         title: "Batch created",
         description: `${batchCode} created successfully`,
-        action: (
+        action: recordChanges.allowed ? (
           <ToastAction
             altText="Undo"
             onClick={async () => {
@@ -177,7 +186,7 @@ export function CreateMixBatchDialog({ open, onOpenChange, onCreated }: CreateMi
           >
             Undo
           </ToastAction>
-        ),
+        ) : undefined,
       });
     },
     onError: (error: Error) => {
@@ -188,6 +197,7 @@ export function CreateMixBatchDialog({ open, onOpenChange, onCreated }: CreateMi
 
   const topUpMutation = useMutation({
     mutationFn: async () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       if (!targetBatchId) throw new Error("Please select a batch to add to");
 
       // Never send costPerKg for supplier sources — the server always uses the
@@ -385,35 +395,47 @@ export function CreateMixBatchDialog({ open, onOpenChange, onCreated }: CreateMi
             >
               New Batch
             </Button>
-            <Button
-              type="button"
-              variant={mode === "topup" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setMode("topup")}
-              data-testid="button-mode-topup"
-            >
-              Add to Existing Batch
-            </Button>
+            {recordChanges.allowed && (
+              <Button
+                type="button"
+                variant={mode === "topup" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setMode("topup")}
+                data-testid="button-mode-topup"
+              >
+                Add to Existing Batch
+              </Button>
+            )}
           </div>
 
           {mode === "new" && (
             <div className="space-y-2" data-testid="mix-batch-production-target-selector">
               <div className="flex flex-wrap items-center gap-2">
                 <Label>{tierText("productionTarget")}</Label>
-                <span role="status" className="text-xs text-muted-foreground" data-testid="mix-batch-production-target-status">
+                <span
+                  role="status"
+                  className="text-xs text-muted-foreground"
+                  data-testid="mix-batch-production-target-status"
+                >
                   {totalWeight > 0
                     ? tierText("tierLabel", { kg: formatNumber(totalWeight), ton: automaticTargetTons })
                     : tierText("selectSources")}
                 </span>
               </div>
-              <div className="inline-flex max-w-full rounded-md border border-border bg-muted/40 p-1 gap-1" role="group" aria-label="Automatically selected production target">
+              <div
+                className="inline-flex max-w-full rounded-md border border-border bg-muted/40 p-1 gap-1"
+                role="group"
+                aria-label="Automatically selected production target"
+              >
                 {MIX_BATCH_TARGET_OPTIONS.map((tons) => (
                   <span
                     key={tons}
                     aria-current={automaticTargetTons === tons ? "true" : undefined}
-                    className={automaticTargetTons === tons
-                      ? "flex min-h-9 min-w-20 items-center justify-center rounded-md bg-primary px-3 text-sm font-semibold text-primary-foreground shadow-sm"
-                      : "flex min-h-9 min-w-20 items-center justify-center rounded-md px-3 text-sm font-semibold text-muted-foreground"}
+                    className={
+                      automaticTargetTons === tons
+                        ? "flex min-h-9 min-w-20 items-center justify-center rounded-md bg-primary px-3 text-sm font-semibold text-primary-foreground shadow-sm"
+                        : "flex min-h-9 min-w-20 items-center justify-center rounded-md px-3 text-sm font-semibold text-muted-foreground"
+                    }
                     data-testid={`mix-batch-target-${tons}`}
                   >
                     {tierText("tons", { ton: tons })}
@@ -676,19 +698,21 @@ export function CreateMixBatchDialog({ open, onOpenChange, onCreated }: CreateMi
             <Button type="button" variant="outline" onClick={handleClose} data-testid="button-cancel">
               Cancel
             </Button>
-            <Button
-              onClick={() => (mode === "topup" ? topUpMutation.mutate() : createMutation.mutate())}
-              disabled={isPending || !hasAnySources || (mode === "topup" && !targetBatchId)}
-              data-testid="button-submit"
-            >
-              {isPending
-                ? mode === "topup"
-                  ? "Adding..."
-                  : "Creating..."
-                : mode === "topup"
-                  ? "Add to Batch"
-                  : "Create Batch"}
-            </Button>
+            {canSubmitMode && (
+              <Button
+                onClick={() => (mode === "topup" ? topUpMutation.mutate() : createMutation.mutate())}
+                disabled={isPending || !hasAnySources || (mode === "topup" && !targetBatchId)}
+                data-testid="button-submit"
+              >
+                {isPending
+                  ? mode === "topup"
+                    ? "Adding..."
+                    : "Creating..."
+                  : mode === "topup"
+                    ? "Add to Batch"
+                    : "Create Batch"}
+              </Button>
+            )}
           </div>
         </div>
       </DialogContent>

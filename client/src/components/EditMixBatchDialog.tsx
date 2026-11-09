@@ -1,6 +1,7 @@
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { formatNumber } from "@/lib/formatNumber";
 import { Plus, Trash2, Layers, Package } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -66,11 +67,14 @@ export function EditMixBatchDialog({
   batch,
   open,
   onOpenChange,
-  readOnly = false,
+  readOnly: readOnlyProp = false,
   hideCosts = false,
   errorMessage,
 }: EditMixBatchDialogProps) {
   const { toast } = useToast();
+  // Read-only company roles always get the view-only form of this dialog.
+  const recordChanges = useExistingRecordChangeAccess();
+  const readOnly = readOnlyProp || !recordChanges.allowed;
   const [selectedSources, setSelectedSources] = useState<SourceSelection[]>([]);
   const [addSourceType, setAddSourceType] = useState<SourceType>("supplier");
   const [selectedSourceId, setSelectedSourceId] = useState<string>("");
@@ -209,6 +213,7 @@ export function EditMixBatchDialog({
 
   const saveMutation = useMutation({
     mutationFn: async () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       // Never send costPerKg for supplier sources — the server always applies the
       // supplier's locked rate and ignores any client-supplied cost.
       const supplierSourcesPayload = selectedSources

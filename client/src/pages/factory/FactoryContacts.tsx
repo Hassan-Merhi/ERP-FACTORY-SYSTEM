@@ -1,6 +1,7 @@
 import { searchAny } from "@shared/searchNormalization";
 import { useId, useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { getApiRequest } from "@/lib/factoryApi";
 import { PageHeader } from "@/components/PageHeader";
@@ -21,12 +22,29 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Plus, Phone, Pencil, Trash2, Copy, BookMarked, X, Check, UsersRound,
-  NotebookText, Tags, RefreshCw, Filter, ArrowUpDown, PhoneCall
+  Plus,
+  Phone,
+  Pencil,
+  Trash2,
+  Copy,
+  BookMarked,
+  X,
+  Check,
+  UsersRound,
+  NotebookText,
+  Tags,
+  RefreshCw,
+  Filter,
+  ArrowUpDown,
+  PhoneCall,
 } from "lucide-react";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuLabel,
-  DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
 interface PhoneEntry {
@@ -64,11 +82,16 @@ type ContactFilter = "all" | "has-phone" | "has-notes" | "missing-phone" | "miss
 
 function roleAccent(role: string): string {
   const value = role.toLowerCase();
-  if (/strapping|rolls/.test(value)) return "border-violet-300 bg-violet-100 text-violet-800 dark:border-violet-400/35 dark:bg-violet-500/15 dark:text-violet-200";
-  if (/forklift|electric|maintenance/.test(value)) return "border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-400/35 dark:bg-amber-500/15 dark:text-amber-200";
-  if (/bank|account/.test(value)) return "border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-400/35 dark:bg-emerald-500/15 dark:text-emerald-200";
-  if (/fire|extinguish/.test(value)) return "border-rose-300 bg-rose-100 text-rose-800 dark:border-rose-400/35 dark:bg-rose-500/15 dark:text-rose-200";
-  if (/attorney|legal/.test(value)) return "border-teal-300 bg-teal-100 text-teal-800 dark:border-teal-400/35 dark:bg-teal-500/15 dark:text-teal-200";
+  if (/strapping|rolls/.test(value))
+    return "border-violet-300 bg-violet-100 text-violet-800 dark:border-violet-400/35 dark:bg-violet-500/15 dark:text-violet-200";
+  if (/forklift|electric|maintenance/.test(value))
+    return "border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-400/35 dark:bg-amber-500/15 dark:text-amber-200";
+  if (/bank|account/.test(value))
+    return "border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-400/35 dark:bg-emerald-500/15 dark:text-emerald-200";
+  if (/fire|extinguish/.test(value))
+    return "border-rose-300 bg-rose-100 text-rose-800 dark:border-rose-400/35 dark:bg-rose-500/15 dark:text-rose-200";
+  if (/attorney|legal/.test(value))
+    return "border-teal-300 bg-teal-100 text-teal-800 dark:border-teal-400/35 dark:bg-teal-500/15 dark:text-teal-200";
   return "border-blue-300 bg-blue-100 text-blue-800 dark:border-blue-400/35 dark:bg-blue-500/15 dark:text-blue-200";
 }
 
@@ -95,6 +118,8 @@ function CopyButton({ text }: { text: string }) {
 
 export default function FactoryContacts() {
   const formId = useId();
+  const recordChanges = useExistingRecordChangeAccess();
+  const canCreateContact = recordChanges.canCreate("POST", "/api/factory/contacts");
   const appMode = useAppMode();
   const modeApiRequest = getApiRequest(appMode);
   const queryClient = useQueryClient();
@@ -186,6 +211,7 @@ export default function FactoryContacts() {
 
   const saveMutation = useMutation({
     mutationFn: async (data: typeof EMPTY_FORM) => {
+      if (editingContact && !recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const url = editingContact ? `/api/factory/contacts/${editingContact.id}` : "/api/factory/contacts";
       const method = editingContact ? "PATCH" : "POST";
       const res = await modeApiRequest(method, url, data);
@@ -207,6 +233,7 @@ export default function FactoryContacts() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await modeApiRequest("DELETE", `/api/factory/contacts/${id}`);
       if (!res.ok) throw new Error("Delete failed");
     },
@@ -269,7 +296,10 @@ export default function FactoryContacts() {
 
   return (
     <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-slate-50 text-slate-900 dark:bg-[#081426] dark:text-slate-100">
-      <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-72 bg-gradient-to-br from-indigo-100/75 via-blue-50/30 to-transparent dark:from-blue-700/15 dark:via-indigo-800/10 dark:to-transparent" />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-72 bg-gradient-to-br from-indigo-100/75 via-blue-50/30 to-transparent dark:from-blue-700/15 dark:via-indigo-800/10 dark:to-transparent"
+      />
       <div className="relative min-h-0 flex-1 overflow-y-auto">
         <div className="px-4 pt-5 sm:px-6">
           <PageHeader
@@ -278,23 +308,30 @@ export default function FactoryContacts() {
             icon={<UsersRound className="h-5 w-5 text-indigo-600 dark:text-violet-300" />}
             showBackButton
           >
-            <Button
-              size="sm"
-              onClick={openNew}
-              data-testid="button-add-contact"
-              className="gap-2 rounded-lg border border-indigo-500/40 bg-gradient-to-r from-indigo-600 to-violet-600 font-semibold text-white shadow-md shadow-indigo-600/20 hover:from-indigo-700 hover:to-violet-700 dark:border-violet-400/40"
-            >
-              <Plus className="h-4 w-4" />
-              Add Contact
-            </Button>
+            {canCreateContact && (
+              <Button
+                size="sm"
+                onClick={openNew}
+                data-testid="button-add-contact"
+                className="gap-2 rounded-lg border border-indigo-500/40 bg-gradient-to-r from-indigo-600 to-violet-600 font-semibold text-white shadow-md shadow-indigo-600/20 hover:from-indigo-700 hover:to-violet-700 dark:border-violet-400/40"
+              >
+                <Plus className="h-4 w-4" />
+                Add Contact
+              </Button>
+            )}
           </PageHeader>
         </div>
 
         <div className="space-y-5 px-4 pb-6 sm:px-6">
           <div className="grid grid-cols-2 gap-3 xl:grid-cols-4" aria-label="Contact overview">
             {summaryCards.map(({ label, value, icon: Icon, tone, iconTone }) => (
-              <div key={label} className={`flex min-w-0 items-center gap-3 rounded-2xl border p-3 shadow-sm sm:p-4 ${tone}`}>
-                <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl sm:h-12 sm:w-12 ${iconTone}`}>
+              <div
+                key={label}
+                className={`flex min-w-0 items-center gap-3 rounded-2xl border p-3 shadow-sm sm:p-4 ${tone}`}
+              >
+                <span
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl sm:h-12 sm:w-12 ${iconTone}`}
+                >
                   <Icon className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden="true" />
                 </span>
                 <div className="min-w-0">
@@ -319,7 +356,12 @@ export default function FactoryContacts() {
               <>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button type="button" size="sm" variant="outline" className="gap-2 rounded-lg dark:border-indigo-400/30 dark:bg-[#152747]">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="gap-2 rounded-lg dark:border-indigo-400/30 dark:bg-[#152747]"
+                    >
                       <Filter className="h-4 w-4" aria-hidden="true" />
                       Filters{contactFilter !== "all" ? " • 1" : ""}
                     </Button>
@@ -366,7 +408,10 @@ export default function FactoryContacts() {
           {isLoading ? (
             <div className="space-y-2" aria-label="Loading contacts">
               {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="h-12 animate-pulse rounded-xl border border-slate-200 bg-white/70 dark:border-indigo-400/15 dark:bg-[#13243e]" />
+                <div
+                  key={i}
+                  className="h-12 animate-pulse rounded-xl border border-slate-200 bg-white/70 dark:border-indigo-400/15 dark:bg-[#13243e]"
+                />
               ))}
             </div>
           ) : filtered.length === 0 ? (
@@ -378,15 +423,21 @@ export default function FactoryContacts() {
                   : "No contacts yet. Add one to get started."}
               </p>
               {!search && contactFilter === "all" ? (
-                <Button size="sm" className="mt-4" onClick={openNew}>
-                  <Plus className="me-1 h-4 w-4" /> Add Contact
-                </Button>
+                canCreateContact && (
+                  <Button size="sm" className="mt-4" onClick={openNew}>
+                    <Plus className="me-1 h-4 w-4" /> Add Contact
+                  </Button>
+                )
               ) : (
                 <Button
                   size="sm"
                   variant="outline"
                   className="mt-4"
-                  onClick={() => { setSearch(""); setContactFilter("all"); setPage(1); }}
+                  onClick={() => {
+                    setSearch("");
+                    setContactFilter("all");
+                    setPage(1);
+                  }}
                 >
                   Clear filters
                 </Button>
@@ -406,14 +457,19 @@ export default function FactoryContacts() {
                       <button
                         type="button"
                         className="inline-flex items-center gap-1.5 rounded-sm text-start hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:hover:text-white"
-                        onClick={() => { setPrefs({ sortDir: prefs.sortDir === "desc" ? "asc" : "desc" }); setPage(1); }}
+                        onClick={() => {
+                          setPrefs({ sortDir: prefs.sortDir === "desc" ? "asc" : "desc" });
+                          setPage(1);
+                        }}
                         aria-label={`Sort by name ${prefs.sortDir === "desc" ? "ascending" : "descending"}`}
                         title="Sort by name"
                       >
                         Name <ArrowUpDown className="h-3.5 w-3.5" aria-hidden="true" />
                       </button>
                     </TableHead>
-                    {show("role") && <TableHead className="w-[140px] text-indigo-900 dark:text-indigo-100">Role</TableHead>}
+                    {show("role") && (
+                      <TableHead className="w-[140px] text-indigo-900 dark:text-indigo-100">Role</TableHead>
+                    )}
                     <TableHead className="text-indigo-900 dark:text-indigo-100">Phone Numbers</TableHead>
                     {show("notes") && <TableHead className="text-indigo-900 dark:text-indigo-100">Notes</TableHead>}
                     <TableHead className="w-[95px] text-right text-indigo-900 dark:text-indigo-100">Actions</TableHead>
@@ -425,11 +481,15 @@ export default function FactoryContacts() {
                       key={c.id}
                       className="group border-slate-200/80 odd:bg-white even:bg-slate-50/80 hover:bg-indigo-50/70 dark:border-indigo-400/15 dark:odd:bg-[#0c1a32] dark:even:bg-[#11213d] dark:hover:bg-indigo-500/15"
                     >
-                      <TableCell className="align-top font-semibold text-slate-900 dark:text-slate-100">{c.name}</TableCell>
+                      <TableCell className="align-top font-semibold text-slate-900 dark:text-slate-100">
+                        {c.name}
+                      </TableCell>
                       {show("role") && (
                         <TableCell className="align-top">
                           {c.role ? (
-                            <span className={`inline-flex max-w-full items-center rounded-md border px-2 py-1 text-[11px] font-semibold leading-tight ${roleAccent(c.role)}`}>
+                            <span
+                              className={`inline-flex max-w-full items-center rounded-md border px-2 py-1 text-[11px] font-semibold leading-tight ${roleAccent(c.role)}`}
+                            >
                               {c.role}
                             </span>
                           ) : (
@@ -442,8 +502,13 @@ export default function FactoryContacts() {
                           <div className="space-y-0.5">
                             {c.numbers.map((n, i) => (
                               <div key={i} className="flex min-w-0 flex-wrap items-center gap-1.5 text-sm">
-                                <Phone className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
-                                <span className="font-mono font-medium text-slate-800 dark:text-slate-100">{n.number}</span>
+                                <Phone
+                                  className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400"
+                                  aria-hidden="true"
+                                />
+                                <span className="font-mono font-medium text-slate-800 dark:text-slate-100">
+                                  {n.number}
+                                </span>
                                 {n.label && <span className="text-xs text-muted-foreground">({n.label})</span>}
                                 <CopyButton text={n.number} />
                               </div>
@@ -456,35 +521,39 @@ export default function FactoryContacts() {
                       {show("notes") && (
                         <TableCell className="align-top sm:max-w-[260px]">
                           {c.notes ? (
-                            <p className="line-clamp-3 whitespace-pre-wrap text-xs leading-relaxed text-slate-600 dark:text-slate-300">{c.notes}</p>
+                            <p className="line-clamp-3 whitespace-pre-wrap text-xs leading-relaxed text-slate-600 dark:text-slate-300">
+                              {c.notes}
+                            </p>
                           ) : (
                             <span className="text-xs text-muted-foreground">—</span>
                           )}
                         </TableCell>
                       )}
                       <TableCell className="align-top text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8 rounded-lg text-indigo-600 hover:bg-indigo-100 hover:text-indigo-800 dark:text-blue-300 dark:hover:bg-blue-400/15"
-                            aria-label={`Edit ${c.name}`}
-                            data-testid={`button-edit-contact-${c.id}`}
-                            onClick={() => openEdit(c)}
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8 rounded-lg text-rose-600 hover:bg-rose-100 hover:text-rose-700 dark:text-rose-400 dark:hover:bg-rose-500/15"
-                            aria-label={`Delete ${c.name}`}
-                            data-testid={`button-delete-contact-${c.id}`}
-                            onClick={() => setDeleteTarget(c)}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
+                        {recordChanges.allowed && (
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8 rounded-lg text-indigo-600 hover:bg-indigo-100 hover:text-indigo-800 dark:text-blue-300 dark:hover:bg-blue-400/15"
+                              aria-label={`Edit ${c.name}`}
+                              data-testid={`button-edit-contact-${c.id}`}
+                              onClick={() => openEdit(c)}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8 rounded-lg text-rose-600 hover:bg-rose-100 hover:text-rose-700 dark:text-rose-400 dark:hover:bg-rose-500/15"
+                              aria-label={`Delete ${c.name}`}
+                              data-testid={`button-delete-contact-${c.id}`}
+                              onClick={() => setDeleteTarget(c)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}

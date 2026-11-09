@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { BaleHistoryStatusBadge, getBaleHistoryDisplayStatus } from "./BaleHistoryStatusBadge";
 import { useState } from "react";
 import { useEscapeToParent } from "@/hooks/use-escape-to-parent";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 
 import { BaleWeightEditDialog, type WeightEditBale } from "@/components/BaleWeightEditDialog";
 import type { BaleItem } from "./types";
@@ -22,6 +23,7 @@ export function FactoryBaleProductAllMonths() {
   const { formatDisplayDate } = useDateFormat();
   const { formatAmount } = useCurrencyContext();
   const queryClient = useQueryClient();
+  const recordChanges = useExistingRecordChangeAccess();
   useEscapeToParent();
 
   const productId = params.productId || "0";
@@ -174,20 +176,22 @@ export function FactoryBaleProductAllMonths() {
                     <TableCell className="text-right font-mono" data-testid={`text-weight-${bale.id}`}>
                       <span className="inline-flex items-center gap-1.5 group">
                         {formatNumber(Number(bale.weightKg))}
-                        <button
-                          className="opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity p-0.5 rounded-sm hover:bg-muted"
-                          onClick={() =>
-                            setWeightEditBale({
-                              id: bale.id,
-                              referenceNumber: bale.referenceNumber,
-                              weightKg: bale.weightKg,
-                            })
-                          }
-                          title="Correct weight"
-                          data-testid={`button-edit-weight-${bale.id}`}
-                        >
-                          <Pencil className="h-3 w-3 text-muted-foreground" />
-                        </button>
+                        {recordChanges.allowed && (
+                          <button
+                            className="opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity p-0.5 rounded-sm hover:bg-muted"
+                            onClick={() =>
+                              setWeightEditBale({
+                                id: bale.id,
+                                referenceNumber: bale.referenceNumber,
+                                weightKg: bale.weightKg,
+                              })
+                            }
+                            title="Correct weight"
+                            data-testid={`button-edit-weight-${bale.id}`}
+                          >
+                            <Pencil className="h-3 w-3 text-muted-foreground" />
+                          </button>
+                        )}
                       </span>
                     </TableCell>
                     {!hiddenCost.includes("bale_history_cost_per_kg") && (
@@ -253,20 +257,22 @@ export function FactoryBaleProductAllMonths() {
                   <div>
                     <div className="text-muted-foreground flex items-center gap-1">
                       Weight
-                      <button
-                        onClick={() =>
-                          setWeightEditBale({
-                            id: bale.id,
-                            referenceNumber: bale.referenceNumber,
-                            weightKg: bale.weightKg,
-                          })
-                        }
-                        className="p-0.5 rounded-sm hover:bg-muted"
-                        title="Correct weight"
-                        data-testid={`button-edit-weight-mobile-${bale.id}`}
-                      >
-                        <Pencil className="h-2.5 w-2.5 text-muted-foreground" />
-                      </button>
+                      {recordChanges.allowed && (
+                        <button
+                          onClick={() =>
+                            setWeightEditBale({
+                              id: bale.id,
+                              referenceNumber: bale.referenceNumber,
+                              weightKg: bale.weightKg,
+                            })
+                          }
+                          className="p-0.5 rounded-sm hover:bg-muted"
+                          title="Correct weight"
+                          data-testid={`button-edit-weight-mobile-${bale.id}`}
+                        >
+                          <Pencil className="h-2.5 w-2.5 text-muted-foreground" />
+                        </button>
+                      )}
                     </div>
                     <div className="font-mono">{formatNumber(Number(bale.weightKg))} KG</div>
                   </div>

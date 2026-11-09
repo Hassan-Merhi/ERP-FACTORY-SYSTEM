@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { Calculator, Download, Loader2, Lock, LockOpen, MessageCircle, RefreshCw, Save } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -77,6 +78,8 @@ export function FixedProductionPlannerDialog({
 }: FixedProductionPlannerDialogProps) {
   const { toast } = useToast();
   const { language } = useApplicationLanguage();
+  // Read-only roles can view, refresh and download the plan but never save, unlock or send it.
+  const recordChanges = useExistingRecordChangeAccess();
   const tr = (key: FixedProductionPlannerTranslationKey, params?: Record<string, string | number>) =>
     translateFixedProductionPlanner(key, language, params);
   const [inputs, setInputs] = useState<Record<string, string>>({});
@@ -184,6 +187,7 @@ export function FixedProductionPlannerDialog({
 
   const saveMutation = useMutation({
     mutationFn: async (allocations20t: Record<string, number>) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await apiRequest("POST", PLAN_KEY[0] + "/save", {
         allocations20t,
         expectedRevision: planQuery.data?.revision ?? 0,
@@ -208,6 +212,7 @@ export function FixedProductionPlannerDialog({
 
   const unlockMutation = useMutation({
     mutationFn: async () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await apiRequest("POST", PLAN_KEY[0] + "/unlock", {
         expectedRevision: planQuery.data?.revision,
       });
@@ -282,6 +287,7 @@ export function FixedProductionPlannerDialog({
 
   const whatsappMutation = useMutation({
     mutationFn: async () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const imageBase64 = await captureImage();
       const res = await apiRequest("POST", "/api/factory/send-mix-batch-image-whatsapp", {
         imageBase64,
@@ -410,21 +416,23 @@ export function FixedProductionPlannerDialog({
               >
                 <Download className="h-3.5 w-3.5" /> {tr("downloadPng")}
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-1.5"
-                disabled={!ready || !locked || reportRows.length === 0 || pending}
-                onClick={() => whatsappMutation.mutate()}
-                data-testid="button-fixed-production-send-whatsapp"
-              >
-                {whatsappMutation.isPending ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <MessageCircle className="h-3.5 w-3.5" />
-                )}
-                {whatsappMutation.isPending ? tr("sending") : tr("sendWhatsapp")}
-              </Button>
+              {recordChanges.allowed && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  disabled={!ready || !locked || reportRows.length === 0 || pending}
+                  onClick={() => whatsappMutation.mutate()}
+                  data-testid="button-fixed-production-send-whatsapp"
+                >
+                  {whatsappMutation.isPending ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <MessageCircle className="h-3.5 w-3.5" />
+                  )}
+                  {whatsappMutation.isPending ? tr("sending") : tr("sendWhatsapp")}
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="sm"
@@ -456,7 +464,7 @@ export function FixedProductionPlannerDialog({
               >
                 <RefreshCw className={`h-3.5 w-3.5 ${isManualRefreshing ? "animate-spin" : ""}`} /> {tr("refresh")}
               </Button>
-              {locked ? (
+              {!recordChanges.allowed ? null : locked ? (
                 <Button
                   size="sm"
                   variant="outline"
@@ -508,7 +516,7 @@ export function FixedProductionPlannerDialog({
                       <td className="bg-sky-500/5 px-3 py-2 text-right">{displayKg(row.allocation15)}</td>
                       <td className="bg-blue-500/5 px-3 py-2 text-right">{displayKg(row.allocation175)}</td>
                       <td className="bg-amber-500/5 px-3 py-1.5 text-right">
-                        {locked ? (
+                        {locked || !recordChanges.allowed ? (
                           <span className="font-semibold">{displayKg(row.allocation20)}</span>
                         ) : (
                           <Input

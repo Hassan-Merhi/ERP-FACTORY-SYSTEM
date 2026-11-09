@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { ShieldAlert } from "lucide-react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { AlertPanel } from "@/components/AlertPanel";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 
 interface AdminOverrideDialogProps {
   open: boolean;
@@ -24,6 +25,8 @@ export function AdminOverrideDialog({ open, actionLabel, onSuccess, onCancel }: 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
+  // The override only unlocks a change to an existing record, which read-only roles never make.
+  const recordChanges = useExistingRecordChangeAccess();
 
   useEffect(() => {
     if (!open) {
@@ -35,6 +38,7 @@ export function AdminOverrideDialog({ open, actionLabel, onSuccess, onCancel }: 
 
   const verifyMutation = useMutation({
     mutationFn: async () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await apiRequest("POST", "/api/factory/admin-verify", {
         username: username.trim(),
         password,
@@ -76,7 +80,7 @@ export function AdminOverrideDialog({ open, actionLabel, onSuccess, onCancel }: 
       icon={ShieldAlert}
       tone="warning"
       confirmText={verifyMutation.isPending ? "Verifying..." : "Confirm"}
-      confirmDisabled={!username.trim() || !password}
+      confirmDisabled={!recordChanges.allowed || !username.trim() || !password}
       loading={verifyMutation.isPending}
       onConfirm={handleConfirm}
       onCancel={onCancel}
@@ -108,6 +112,9 @@ export function AdminOverrideDialog({ open, actionLabel, onSuccess, onCancel }: 
             disabled={verifyMutation.isPending}
           />
         </div>
+        {recordChanges.reason && (
+          <AlertPanel tone="warning" description={recordChanges.reason} data-testid="text-admin-override-read-only" />
+        )}
         {errorMsg && <AlertPanel tone="destructive" description={errorMsg} data-testid="text-admin-override-error" />}
       </div>
     </ConfirmDialog>

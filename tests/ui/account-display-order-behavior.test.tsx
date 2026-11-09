@@ -13,7 +13,11 @@ import { installFakeApi, respond, type FakeApi } from "./fakeApi";
 
 const harness = vi.hoisted(() => ({ mode: "erp", toast: vi.fn() }));
 
-vi.mock("@/contexts/CompanyContext", () => ({ useCompany: () => ({ selectedCompany: { id: 4 } }) }));
+vi.mock("@/contexts/CompanyContext", () => ({
+  // No provider role: the shared change-access helper leaves controls as they are.
+  useOptionalCompany: () => null,
+  useCompany: () => ({ selectedCompany: { id: 4 } }),
+}));
 vi.mock("@/contexts/AppModeContext", () => ({ useAppMode: () => harness.mode }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: harness.toast }) }));
 

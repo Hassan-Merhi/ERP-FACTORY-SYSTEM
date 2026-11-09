@@ -10,9 +10,10 @@ Read-only roles are View Only and Create Only. The server refuses every write th
 | Routes catalogued | 216 |
 | Gated in page | 17 |
 | Read-only page (verified by import scan) | 9 |
+| Every write in the page gated (verified by import scan) | 24 |
 | Gated at route | 40 |
-| Admin/Owner/Developer only | 3 |
-| Server and request guard only (UI work remaining) | 25 |
+| Admin/Owner/Developer only | 4 |
+| Server and request guard only (UI work remaining) | 0 |
 | Audit failures | 0 |
 
 ## ERP
@@ -29,7 +30,7 @@ Read-only roles are View Only and Create Only. The server refuses every write th
 | Create master data | `/create` | view, create | opens | opens (verified create: suppliers) | Gated in page. Create Only sees only the supplier and stock item forms (verified creates). |
 | Customers and suppliers | `/parties` | view, create, edit, delete, export | opens | opens (verified create: customers) | Gated in page |
 | Edit supplier | `/suppliers/:id/edit` | view, edit | explained | explained | Gated at route |
-| Supplier proformas | `/suppliers/:supplierId/proformas` | view, create, edit, delete, export | opens | opens | Server and request guard only (UI work remaining) |
+| Supplier proformas | `/suppliers/:supplierId/proformas` | view, create, edit, delete, export | opens | opens | Every write in the page gated (verified by import scan) |
 | Purchase order import | `/po-import` | view, import | explained | explained | Gated at route |
 | Edit purchase order | `/purchase-orders/:id/edit` | view, edit, delete | explained | explained | Gated at route |
 | POS sale | `/pos` | view, create | opens | explained (create not verified) | Gated at route. POS sales were reviewed and kept denied for Create Only. |
@@ -37,9 +38,9 @@ Read-only roles are View Only and Create Only. The server refuses every write th
 | POS item replacement | `/pos-item-replacement` | view, edit | explained | explained | Gated at route |
 | POS import | `/pos-import` | view, import | explained | explained | Gated at route |
 | Sales reports | `/sales-report`<br>`/sales-report/detail`<br>`/sales-report/comparison`<br>`/stock-in-sales-report`<br>`/supplier-profit-reconciliation` | view, export | opens | opens | Read-only page (verified by import scan) |
-| Item market analysis and supplier profit check | `/item-market-analysis`<br>`/supplier-profit-check` | view, export | opens | opens | Server and request guard only (UI work remaining). Offers sale-price export and profit-check actions; the server refuses them for read-only roles. |
-| Sales tools (daybook, price list, transfers) | `/sales-tools` | view, create, edit, approve, export | opens | opens | Server and request guard only (UI work remaining) |
-| Inventory | `/inventory` | view, export | opens | opens | Server and request guard only (UI work remaining) |
+| Item market analysis and supplier profit check | `/item-market-analysis`<br>`/supplier-profit-check` | view, export | opens | opens | Every write in the page gated (verified by import scan) |
+| Sales tools (daybook, price list, transfers) | `/sales-tools` | view, create, edit, approve, export | opens | opens | Every write in the page gated (verified by import scan) |
+| Inventory | `/inventory` | view, export | opens | opens | Every write in the page gated (verified by import scan) |
 | Stock items | `/stock` | view, create, edit, delete, export | opens | opens (verified create: stockItems) | Gated in page |
 | Stock item detail and history | `/stock-query/:id`<br>`/stock-items/:id/history`<br>`/stock-items/:id/history/:year/:month`<br>`/stock-items/:stockItemId/monthly-summary`<br>`/locations/:locationId/stock-items/:stockItemId/history`<br>`/locations/:locationId/stock-items/:stockItemId/vouchers/:year/:month` | view, export | opens | opens | Read-only page (verified by import scan). Edit links resolve to the read-only voucher view for read-only roles. |
 | Import stock items | `/import-stock-items` | view, import | explained | explained | Gated at route |
@@ -48,7 +49,7 @@ Read-only roles are View Only and Create Only. The server refuses every write th
 | Barcode manager | `/barcode-manager` | view, edit | explained | explained | Gated at route |
 | Stock transfer order | `/stock-transfer-order` | view, create, approve | opens | explained (create not verified) | Gated at route |
 | Containers | `/containers` | view, create, edit, delete, approve, finalize, reverse, void, export | opens | opens | Gated in page. Container renaming and voucher re-sync are hidden for read-only roles. |
-| Container and offload detail | `/containers/:id`<br>`/offloads/:id` | view, create, edit, delete, approve, finalize, reverse, void, export | opens | opens | Server and request guard only (UI work remaining) |
+| Container and offload detail | `/containers/:id`<br>`/offloads/:id` | view, create, edit, delete, approve, finalize, reverse, void, export | opens | opens | Every write in the page gated (verified by import scan) |
 | Container verification | `/containers/:containerId/verification` | view, approve | explained | explained | Gated at route |
 | Goods in transit containers | `/git`<br>`/mock-git`<br>`/containers-otw`<br>`/mock-containers-otw` | view, create, edit, delete, export | opens | opens | Gated in page |
 | Daybook | `/daybook` | view, create, edit, delete, approve, finalize, reverse, void, export | opens | opens | Gated in page |
@@ -56,9 +57,9 @@ Read-only roles are View Only and Create Only. The server refuses every write th
 | Analytics | `/analytics` | view, export | opens | opens | Read-only page (verified by import scan) |
 | Financial overview | `/financial-overview` | view, export | explained | explained | Gated at route. Hidden for read-only roles since the Create Only activation change. |
 | Tracking hub and transporter statement | `/tracking` | view, create, edit, delete, export | opens | opens | Gated in page |
-| Payroll | `/payroll` | view, create, approve, export | opens | opens | Server and request guard only (UI work remaining). Bulk payroll was reviewed and kept denied for Create Only. |
+| Payroll | `/payroll` | view, create, approve, export | opens | opens | Every write in the page gated (verified by import scan). Bulk payroll was reviewed and kept denied for Create Only. |
 | ERP rentals | `/erp/rental/warehouses`<br>`/erp/rental/shops` | view, create, edit, delete, export | opens | opens (verified create: rentalUnits) | Gated in page |
-| ERP rental payments | `/erp/rental/payments` | view, create, reverse | opens | opens | Server and request guard only (UI work remaining). Rental payments were reviewed and kept denied for Create Only. |
+| ERP rental payments | `/erp/rental/payments` | view, create, reverse | opens | opens | Every write in the page gated (verified by import scan). Rental payments were reviewed and kept denied for Create Only. |
 | Offline conflict center | `/conflicts` | view, repair | explained | explained | Gated at route |
 | Settings and administration | `/settings`<br>`/intercompany-links`<br>`/chatbot-settings`<br>`/notification-settings`<br>`/account-groups` | view, manage_settings | explained | explained | Admin/Owner/Developer only |
 | Repair and maintenance | `/orphaned-records`<br>`/deleted-items`<br>`/import-cycle-diagnostics`<br>`/inventory-repair`<br>`/balance-repair`<br>`/convergence-reconciliation`<br>`/company-data-reset`<br>`/account-migration`<br>`/account-transfer`<br>`/company-transfer` | view, repair | explained | explained | Admin/Owner/Developer only |
@@ -67,40 +68,40 @@ Read-only roles are View Only and Create Only. The server refuses every write th
 
 | Page | Routes | Controlled actions | View Only | Create Only | In-page gating |
 |---|---|---|---|---|---|
-| Factory inventory | `/factory/raw-stock`<br>`/factory/raw-materials`<br>`/factory/location-inventory`<br>`/factory/stock-query`<br>`/factory/stock-query/:id`<br>`/factory/stock-otw` | view, create, edit, delete, export | opens | opens | Server and request guard only (UI work remaining) |
+| Factory inventory | `/factory/raw-stock`<br>`/factory/raw-materials`<br>`/factory/location-inventory`<br>`/factory/stock-query`<br>`/factory/stock-query/:id`<br>`/factory/stock-otw` | view, create, edit, delete, export | opens | opens | Every write in the page gated (verified by import scan) |
 | Edit raw-stock opening balance | `/factory/raw-stock/opening-balance/:id/edit` | view, edit | explained | explained | Gated at route |
 | Raw-stock recalculation | `/factory/raw-stock/recalculate` | view, repair | explained | explained | Gated at route |
 | Stock allocation | `/factory/stock-allocation`<br>`/factory/stock-allocation-v3`<br>`/factory/stock-allocation-v5` | view, create, edit, delete | explained | explained | Gated at route. Allocation edits existing proformas and allocations. |
 | New proforma | `/factory/stock-allocation-v5/proformas/new` | view, create | opens | explained (create not verified) | Gated at route |
 | Edit proforma | `/factory/stock-allocation-v5/proformas/:id/edit`<br>`/factory/invoicing/proformas/:id/edit`<br>`/factory/sales/proformas/:proformaId/add-line` | view, edit | explained | explained | Gated at route |
-| Invoicing | `/factory/invoicing`<br>`/factory/sales/invoices/:id`<br>`/factory/price-list` | view, create, edit, delete, approve, finalize, reverse, void, export | opens | opens | Server and request guard only (UI work remaining) |
+| Invoicing | `/factory/invoicing`<br>`/factory/sales/invoices/:id`<br>`/factory/price-list` | view, create, edit, delete, approve, finalize, reverse, void, export | opens | opens | Every write in the page gated (verified by import scan) |
 | New customer order | `/factory/sales/new` | view, create | opens | opens (verified create: factoryCustomerOrders) | Gated at route |
 | Verify pending invoice | `/factory/sales/pending-invoices/:id/verify` | view, approve, finalize | explained | explained | Gated at route |
-| Bale explorer, list, tracking and history | `/factory/bales-hub`<br>`/factory/stock-bale-list`<br>`/factory/bale-tracking`<br>`/factory/bales-history`<br>`/factory/bale-product-history/:productId/:locationId`<br>`/factory/bale-product-history/:productId/:locationId/:year/:month`<br>`/factory/bale-product-history/:productId/:locationId/:year/all`<br>`/factory/bale-ledger`<br>`/factory/reprint-labels`<br>`/factory/bale-products` | view, create, edit, delete, export | opens | opens | Server and request guard only (UI work remaining) |
+| Bale explorer, list, tracking and history | `/factory/bales-hub`<br>`/factory/stock-bale-list`<br>`/factory/bale-tracking`<br>`/factory/bales-history`<br>`/factory/bale-product-history/:productId/:locationId`<br>`/factory/bale-product-history/:productId/:locationId/:year/:month`<br>`/factory/bale-product-history/:productId/:locationId/:year/all`<br>`/factory/bale-ledger`<br>`/factory/reprint-labels`<br>`/factory/bale-products` | view, create, edit, delete, export | opens | opens | Every write in the page gated (verified by import scan) |
 | Bale relabeling and merging | `/factory/bale-relabeling`<br>`/factory/bale-relabeling/wipers-re-entry`<br>`/factory/merge-bale-products` | view, edit | explained | explained | Gated at route |
 | Bale production entry | `/factory/stock-entry` | view, create | opens | explained (create not verified) | Gated at route. Production positions were reviewed and kept denied for Create Only. |
 | Pressing and scanning | `/factory/pressing` | view, create, edit | opens | opens | Gated in page. The server's pressing access endpoint reports canScan=false for read-only roles. |
 | Finalize production | `/factory/finalize` | view, finalize | explained | explained | Gated at route |
-| Production reports | `/factory/production-report`<br>`/factory/production-summary`<br>`/factory/production-comparison`<br>`/factory/monthly-production-matrix`<br>`/factory/monthly-production-matrix/:productId/workers`<br>`/factory/monthly-production-matrix/:productId/bales/:workerId` | view, export | opens | opens | Server and request guard only (UI work remaining) |
-| Mixing and mix optimizer | `/factory/intelligence/mix-optimizer` | view, create, edit | opens | opens | Server and request guard only (UI work remaining). Mix batches were reviewed and kept denied for Create Only. |
+| Production reports | `/factory/production-report`<br>`/factory/production-summary`<br>`/factory/production-comparison`<br>`/factory/monthly-production-matrix`<br>`/factory/monthly-production-matrix/:productId/workers`<br>`/factory/monthly-production-matrix/:productId/bales/:workerId` | view, export | opens | opens | Every write in the page gated (verified by import scan) |
+| Mixing and mix optimizer | `/factory/intelligence/mix-optimizer` | view, create, edit | opens | opens | Every write in the page gated (verified by import scan). Mix batches were reviewed and kept denied for Create Only. |
 | Containers | `/factory/containers`<br>`/factory/containers-hub` | view, create, edit, delete, approve, finalize, reverse, void, export | opens | opens | Gated in page |
 | New container | `/factory/containers/new` | view, create | opens | explained (create not verified) | Gated at route. Factory containers were reviewed and kept denied for Create Only. |
-| Loading | `/factory/sales/loadings`<br>`/factory/sales/loading/pending`<br>`/factory/dispatch-batches`<br>`/factory/dispatch-batches/:id` | view, create, edit, finalize | opens | opens | Server and request guard only (UI work remaining) |
+| Loading | `/factory/sales/loadings`<br>`/factory/sales/loading/pending`<br>`/factory/dispatch-batches`<br>`/factory/dispatch-batches/:id` | view, create, edit, finalize | opens | opens | Every write in the page gated (verified by import scan) |
 | Loading scan | `/factory/sales/loading/new`<br>`/factory/invoices/:id/loading-scan`<br>`/factory/dispatch-batches/:batchId/rides/:rideId/scan` | view, create, edit | explained | explained | Gated at route |
-| Workers and employees | `/factory/employees`<br>`/factory/employees/:id`<br>`/factory/workers`<br>`/factory/workers/:id`<br>`/factory/insurance` | view, create, edit, delete, export | opens | opens | Server and request guard only (UI work remaining) |
-| Attendance, payroll, targets and bonuses | `/factory/payroll-hub`<br>`/factory/worker-payroll`<br>`/factory/payroll`<br>`/factory/production-bonuses` | view, create, edit, approve, export | opens | opens | Server and request guard only (UI work remaining). Bulk payroll was reviewed and kept denied for Create Only. |
-| Barcode lookup | `/factory/barcode-lookup` | view, export | opens | opens | Server and request guard only (UI work remaining) |
-| Factory accounts and ledger | `/factory/accounts`<br>`/factory/ledger-monthly/:accountId`<br>`/factory/ledger-vouchers/:accountId/:year/:month`<br>`/factory/contacts`<br>`/factory/parties`<br>`/factory/customers/:id`<br>`/factory/transporters` | view, create, edit, delete, export | opens | opens | Server and request guard only (UI work remaining) |
+| Workers and employees | `/factory/employees`<br>`/factory/employees/:id`<br>`/factory/workers`<br>`/factory/workers/:id`<br>`/factory/insurance` | view, create, edit, delete, export | opens | opens | Every write in the page gated (verified by import scan) |
+| Attendance, payroll, targets and bonuses | `/factory/payroll-hub`<br>`/factory/worker-payroll`<br>`/factory/payroll`<br>`/factory/production-bonuses` | view, create, edit, approve, export | opens | opens | Every write in the page gated (verified by import scan). Bulk payroll was reviewed and kept denied for Create Only. |
+| Barcode lookup | `/factory/barcode-lookup` | view, export | opens | opens | Every write in the page gated (verified by import scan) |
+| Factory accounts and ledger | `/factory/accounts`<br>`/factory/ledger-monthly/:accountId`<br>`/factory/ledger-vouchers/:accountId/:year/:month`<br>`/factory/contacts`<br>`/factory/parties`<br>`/factory/customers/:id`<br>`/factory/transporters` | view, create, edit, delete, export | opens | opens | Every write in the page gated (verified by import scan) |
 | Factory vouchers | `/factory/vouchers` | view, create, edit, delete, approve, finalize, reverse, void, export | opens | explained (create not verified) | Gated at route |
 | Edit factory voucher | `/factory/vouchers/:id/edit` | view, edit, delete, reverse | read view | read view | Gated at route |
 | Factory voucher detail | `/factory/voucher-detail/:voucherId` | view, export | opens | opens | Read-only page (verified by import scan) |
 | Factory create master data | `/factory/create` | view, create | opens | opens (verified create: suppliers) | Gated in page |
 | Factory daybook | `/factory/daybook` | view, create, edit, delete, approve, finalize, reverse, void, export | opens | opens | Gated in page |
-| Factory analytics and intelligence | `/factory/analytics`<br>`/factory/intelligence/dashboard`<br>`/factory/intelligence/kpis`<br>`/factory/intelligence/alerts`<br>`/factory/intelligence/supplier-hub`<br>`/factory/intelligence/financial-hub`<br>`/factory/intelligence/production-hub`<br>`/factory/net-position-details`<br>`/factory/financial-snapshot`<br>`/factory/broker-visual-statement` | view, export | opens | opens | Server and request guard only (UI work remaining) |
+| Factory analytics and intelligence | `/factory/analytics`<br>`/factory/intelligence/dashboard`<br>`/factory/intelligence/kpis`<br>`/factory/intelligence/alerts`<br>`/factory/intelligence/supplier-hub`<br>`/factory/intelligence/financial-hub`<br>`/factory/intelligence/production-hub`<br>`/factory/net-position-details`<br>`/factory/financial-snapshot`<br>`/factory/broker-visual-statement` | view, export | opens | opens | Every write in the page gated (verified by import scan) |
 | Factory POS | `/factory/pos` | view, create | opens | explained (create not verified) | Gated at route |
 | Factory import | `/factory/import` | view, import | explained | explained | Gated at route |
 | Factory rentals | `/factory/rental/warehouses`<br>`/factory/rental/shops` | view, create, edit, delete, export | opens | opens (verified create: rentalUnits) | Gated in page |
-| Factory rental payments | `/factory/rental/payments` | view, create, reverse | opens | opens | Server and request guard only (UI work remaining) |
+| Factory rental payments | `/factory/rental/payments` | view, create, reverse | opens | opens | Every write in the page gated (verified by import scan) |
 | Factory settings and catalogs | `/factory/settings`<br>`/factory/catalog-translations`<br>`/factory/bale-product-images`<br>`/factory/customer-logos`<br>`/factory/label-banners`<br>`/factory/intelligence/settings`<br>`/factory/users`<br>`/factory/account-groups`<br>`/factory/chatbot-settings` | view, manage_settings | explained | explained | Gated at route |
 | Factory repair and maintenance | `/factory/deleted-items`<br>`/factory/orphaned-records`<br>`/factory/inventory-repair`<br>`/factory/company-data-reset`<br>`/factory/import-cycle-diagnostics`<br>`/factory/balance-repair`<br>`/factory/conflicts` | view, repair | explained | explained | Gated at route |
 
@@ -111,17 +112,17 @@ Read-only roles are View Only and Create Only. The server refuses every write th
 | Retail POS | `/retail/pos` | view, create, void | opens | explained (create not verified) | Gated at route. Retail POS sales were reviewed and kept denied for Create Only. |
 | Retail products and inventory | `/retail`<br>`/retail/inventory`<br>`/retail/products/:id` | view, create, edit, delete, export | opens | opens (verified create: retailProducts) | Gated in page |
 | Retail stock count | `/retail/stock-count` | view, edit | explained | explained | Gated at route |
-| Retail sales history and reports | `/retail/history`<br>`/retail/reports` | view, void, export | opens | opens | Server and request guard only (UI work remaining) |
-| POS role workspace (daybook, pricing, discounts, refunds, transfers, payments) | `/pos-daybook`<br>`/pos-dashboard`<br>`/pos-customers`<br>`/pos-price-list`<br>`/pos-transfer-orders`<br>`/pos-settings`<br>`/pos-containers`<br>`/pos-containers/:id` | view, create, edit, void, approve, export | opens | opens | Server and request guard only (UI work remaining). Rendered only for the POS role; governed by pos_perm_* feature keys and the POS operational policy on the server. |
+| Retail sales history and reports | `/retail/history`<br>`/retail/reports` | view, void, export | opens | opens | Every write in the page gated (verified by import scan) |
+| POS role workspace (daybook, pricing, discounts, refunds, transfers, payments) | `/pos-daybook`<br>`/pos-dashboard`<br>`/pos-customers`<br>`/pos-price-list`<br>`/pos-transfer-orders`<br>`/pos-settings`<br>`/pos-containers`<br>`/pos-containers/:id` | view, create, edit, void, approve, export | opens | opens | Admin/Owner/Developer only. Rendered only for the POS role (PosRoutes); View Only and Create Only never reach it. POS controls follow the pos_perm_* keys and the server's POS operational policy. |
 
 ## Properties
 
 | Page | Routes | Controlled actions | View Only | Create Only | In-page gating |
 |---|---|---|---|---|---|
-| Properties dashboard and reports | `/properties/dashboard`<br>`/properties/analytics` | view, export | opens | opens | Server and request guard only (UI work remaining) |
+| Properties dashboard and reports | `/properties/dashboard`<br>`/properties/analytics` | view, export | opens | opens | Every write in the page gated (verified by import scan) |
 | Properties, units, tenants and contracts | `/properties/rentals` | view, create, edit, delete, export | opens | opens (verified create: rentalContracts) | Gated in page |
-| Properties accounts and ledger | `/properties/accounts`<br>`/properties/ledger-monthly/:accountId`<br>`/properties/ledger-vouchers/:accountId/:year/:month` | view, create, edit, delete, export | opens | opens | Server and request guard only (UI work remaining) |
-| Properties daybook | `/properties/daybook` | view, create, edit, delete, approve, finalize, reverse, void, export | opens | opens | Server and request guard only (UI work remaining) |
+| Properties accounts and ledger | `/properties/accounts`<br>`/properties/ledger-monthly/:accountId`<br>`/properties/ledger-vouchers/:accountId/:year/:month` | view, create, edit, delete, export | opens | opens | Every write in the page gated (verified by import scan) |
+| Properties daybook | `/properties/daybook` | view, create, edit, delete, approve, finalize, reverse, void, export | opens | opens | Every write in the page gated (verified by import scan) |
 | Properties vouchers and payments | `/properties/vouchers`<br>`/properties/create` | view, create, edit, delete, approve, finalize, reverse, void, export | opens | explained (create not verified) | Gated at route. Rental payments were reviewed and kept denied for Create Only. |
 | Edit properties voucher | `/properties/vouchers/:id/edit` | view, edit, delete, reverse | read view | read view | Gated at route |
 | Properties voucher detail | `/properties/voucher-detail/:voucherId` | view, export | opens | opens | Read-only page (verified by import scan) |
@@ -131,6 +132,6 @@ Read-only roles are View Only and Create Only. The server refuses every write th
 
 | Page | Routes | Controlled actions | View Only | Create Only | In-page gating |
 |---|---|---|---|---|---|
-| Supplier partner sales and reports | `/sp`<br>`/sp/golden-coast`<br>`/sp/reports` | view, create, export | opens | opens (verified create: spSales) | Server and request guard only (UI work remaining) |
+| Supplier partner sales and reports | `/sp`<br>`/sp/golden-coast`<br>`/sp/reports` | view, create, export | opens | opens (verified create: spSales) | Every write in the page gated (verified by import scan) |
 | Supplier partner setup | `/sp/opening-stock`<br>`/sp/aliases`<br>`/sp/setup` | view, manage_settings | explained | explained | Gated at route |
 

@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 
 interface MaterialRow {
   supplierId: string;
@@ -34,6 +35,8 @@ interface Supplier {
 }
 
 export default function FactoryMixOptimizer() {
+  // The server refuses this POST for read-only roles, so the button explains why instead of failing.
+  const recordChanges = useExistingRecordChangeAccess();
   const [targetProduct, setTargetProduct] = useState("");
   const [desiredMargin, setDesiredMargin] = useState(20);
   const [materials, setMaterials] = useState<MaterialRow[]>([{ supplierId: "", kgAvailable: 0, costPerKg: 0 }]);
@@ -48,6 +51,7 @@ export default function FactoryMixOptimizer() {
 
   const optimizeMutation = useMutation<OptimizeSuggestion[], Error>({
     mutationFn: async () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await factoryApiRequest("POST", "/api/factory/mix/optimize", {
         targetProduct,
         desiredMargin,
@@ -204,7 +208,8 @@ export default function FactoryMixOptimizer() {
 
           <Button
             onClick={handleOptimize}
-            disabled={optimizeMutation.isPending || !targetProduct}
+            disabled={optimizeMutation.isPending || !targetProduct || !recordChanges.allowed}
+            title={recordChanges.reason ?? undefined}
             data-testid="button-optimize"
           >
             {optimizeMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

@@ -5,6 +5,7 @@ import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { getApiRequest } from "@/lib/factoryApi";
 import { apiRequest } from "@/lib/queryClient";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { queryClient, keyStartsWith } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useReactToPrint } from "react-to-print";
@@ -43,6 +44,9 @@ export function useFactoryLocationInventory() {
   const { toast } = useToast();
   const appMode = useAppMode();
   const modeApiRequest = getApiRequest(appMode);
+  const recordChanges = useExistingRecordChangeAccess();
+  const canCreateCustomer = recordChanges.canCreate("POST", "/api/factory/customers");
+  const canCreateProforma = recordChanges.canCreate("POST", "/api/factory/customer-proformas/bulk");
 
   const [proformaMode, setProformaMode] = useState(false);
   const [showZeroStock, setShowZeroStock] = useState(false);
@@ -92,6 +96,7 @@ export function useFactoryLocationInventory() {
     openBrowserReprintLabels,
     handleReprintProduct,
     handleDoPrint,
+    canReprint,
   } = useFactoryLocationReprint(selectedLocation);
 
   const [editingProformaId, setEditingProformaId] = useState<number | null>(null);
@@ -264,6 +269,7 @@ export function useFactoryLocationInventory() {
 
   const replaceLinesMutation = useMutation({
     mutationFn: async (data: { id: number; lines: FactoryProformaLine[] }): Promise<ProformaMutationResult> => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await modeApiRequest("PUT", `/api/factory/customer-proformas/${data.id}/replace-lines`, {
         lines: data.lines,
       });
@@ -298,6 +304,7 @@ export function useFactoryLocationInventory() {
       supervisorPassword: string;
       reason: string;
     }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await modeApiRequest("POST", "/api/factory/stock-entry/remove-by-product", data);
       const json = await res.json();
       if (!res.ok) throw new Error(json.message || "Failed to remove bales");
@@ -325,6 +332,7 @@ export function useFactoryLocationInventory() {
 
   const renameLocationMutation = useMutation({
     mutationFn: async ({ id, name }: { id: number; name: string }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await apiRequest("PATCH", `/api/locations/${id}`, { name });
       return res.json();
     },
@@ -680,6 +688,7 @@ export function useFactoryLocationInventory() {
   };
 
   const doSaveProforma = () => {
+    if (editingProformaId ? !recordChanges.allowed : !canCreateProforma) return;
     const lines = selectedItems.map((item) => ({
       articleCode: item.articleCode,
       productName: item.productName,
@@ -783,6 +792,10 @@ export function useFactoryLocationInventory() {
   };
 
   return {
+    canChangeExistingRecords: recordChanges.allowed,
+    canCreateCustomer,
+    canCreateProforma,
+    canReprint,
     activeInventoryData,
     applyProductionPrices,
     applySellingPrices,

@@ -72,6 +72,8 @@ interface MixBatchListProps {
   reportAllocations: Record<string, number> | null;
   reportLoading: boolean;
   formatDisplayDate: (date: string) => string;
+  /** False for read-only company roles: edit, delete and WhatsApp send are not offered. */
+  canChange?: boolean;
 }
 
 export function MixBatchList({
@@ -82,6 +84,7 @@ export function MixBatchList({
   onViewDetail,
   onSendWhatsApp,
   isSendingWhatsApp,
+  canChange = true,
   mixBatchDate,
   setMixBatchDate,
   mixBatchesByDate,
@@ -111,8 +114,15 @@ export function MixBatchList({
       if (!response.ok) throw new Error("Could not load historical supplier costs. Please try again.");
       const supplierSources = (await response.json()) as import("./mixBatchCostExport").MixBatchCostSourceRow[];
       const { exportMixBatchCostAnalysis } = await import("./mixBatchCostExport");
-      await exportMixBatchCostAnalysis(mixBatches, exportPeriod === "all-time" ? "all-time" : exportMonth, supplierSources);
-      toast({ title: "Excel exported", description: "Supplier-by-day costs, daily totals, monthly averages and source details downloaded." });
+      await exportMixBatchCostAnalysis(
+        mixBatches,
+        exportPeriod === "all-time" ? "all-time" : exportMonth,
+        supplierSources
+      );
+      toast({
+        title: "Excel exported",
+        description: "Supplier-by-day costs, daily totals, monthly averages and source details downloaded.",
+      });
     } catch (error) {
       toast({
         title: "Excel export failed",
@@ -141,7 +151,10 @@ export function MixBatchList({
   const blendedCost = sumTotal > 0 ? weightedCost / sumTotal : 0;
 
   return (
-    <Card className="min-w-0 overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm" data-testid="mix-batch-list">
+    <Card
+      className="min-w-0 overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm"
+      data-testid="mix-batch-list"
+    >
       <CardHeader className="flex flex-col gap-4 border-b border-border/50 bg-linear-to-r from-amber-50/55 via-card to-card p-4 dark:from-amber-500/5 dark:via-card dark:to-card sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:p-5">
         <div className="min-w-0 space-y-1">
           <CardTitle className="flex items-center gap-2.5 text-lg font-bold tracking-tight sm:text-xl">
@@ -159,21 +172,25 @@ export function MixBatchList({
             className="min-h-11 min-w-0 w-full rounded-lg border border-input bg-background px-3 py-1 text-base font-semibold outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9 sm:w-auto sm:text-sm"
             data-testid="input-mix-batch-date"
           />
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onSendWhatsApp}
-            disabled={isSendingWhatsApp || reportLoading || reportAllocations === null || mixBatchesByDate.length === 0}
-            data-testid="button-send-mix-batch-whatsapp"
-            className="h-11 w-full gap-2 rounded-lg border-border/80 bg-card font-medium shadow-sm sm:h-9 sm:w-auto"
-          >
-            {isSendingWhatsApp ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <MessageCircle className="h-3.5 w-3.5" />
-            )}
-            Send WhatsApp
-          </Button>
+          {canChange && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onSendWhatsApp}
+              disabled={
+                isSendingWhatsApp || reportLoading || reportAllocations === null || mixBatchesByDate.length === 0
+              }
+              data-testid="button-send-mix-batch-whatsapp"
+              className="h-11 w-full gap-2 rounded-lg border-border/80 bg-card font-medium shadow-sm sm:h-9 sm:w-auto"
+            >
+              {isSendingWhatsApp ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <MessageCircle className="h-3.5 w-3.5" />
+              )}
+              Send WhatsApp
+            </Button>
+          )}
         </div>
 
         <div className="flex w-full flex-col gap-1.5 sm:w-auto">
@@ -202,16 +219,24 @@ export function MixBatchList({
               variant="outline"
               size="sm"
               onClick={handleExportExcel}
-              disabled={isLoading || isExportingExcel || mixBatches.length === 0 || (exportPeriod === "month" && !exportMonth)}
+              disabled={
+                isLoading || isExportingExcel || mixBatches.length === 0 || (exportPeriod === "month" && !exportMonth)
+              }
               className="h-10 gap-2 rounded-xl border-emerald-500/40 bg-emerald-500/5 font-bold text-emerald-700 shadow-sm hover:bg-emerald-500/10 dark:text-emerald-300"
               data-testid="button-export-mix-batch-cost-excel"
             >
-              {isExportingExcel ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
+              {isExportingExcel ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <FileSpreadsheet className="h-4 w-4" />
+              )}
               Export Cost Excel
             </Button>
           </div>
           <span className="text-[10px] text-muted-foreground">
-            {exportPeriod === "all-time" ? "All-time dashboard · all suppliers and production dates" : "Selected month dashboard · full historical supplier detail included"}
+            {exportPeriod === "all-time"
+              ? "All-time dashboard · all suppliers and production dates"
+              : "Selected month dashboard · full historical supplier detail included"}
           </span>
         </div>
 
@@ -284,26 +309,28 @@ export function MixBatchList({
                           {batch.batchDate ? formatDisplayDate(batch.batchDate) : formatDisplayDate(batch.createdAt)}
                         </div>
                       </button>
-                      <div className="flex shrink-0 items-center gap-1">
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => onEdit(batch)}
-                          aria-label={`Edit ${batch.batchCode}`}
-                          data-testid={`button-edit-mix-batch-mobile-${batch.id}`}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => onDelete(batch.id)}
-                          aria-label={`Delete ${batch.batchCode}`}
-                          data-testid={`button-delete-mix-batch-mobile-${batch.id}`}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
+                      {canChange && (
+                        <div className="flex shrink-0 items-center gap-1">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => onEdit(batch)}
+                            aria-label={`Edit ${batch.batchCode}`}
+                            data-testid={`button-edit-mix-batch-mobile-${batch.id}`}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => onDelete(batch.id)}
+                            aria-label={`Delete ${batch.batchCode}`}
+                            data-testid={`button-delete-mix-batch-mobile-${batch.id}`}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      )}
                     </div>
                     <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                       <div className="rounded-lg bg-muted/40 p-2">
@@ -358,7 +385,11 @@ export function MixBatchList({
                   {visibleMixBatches.map((batch) => {
                     const total = parseFloat(batch.totalWeightKg) || 0;
                     return (
-                      <TableRow key={batch.id} className="even:bg-muted/15 transition-colors hover:bg-blue-50/50 dark:hover:bg-blue-400/5" data-testid={`row-mix-batch-${batch.id}`}>
+                      <TableRow
+                        key={batch.id}
+                        className="even:bg-muted/15 transition-colors hover:bg-blue-50/50 dark:hover:bg-blue-400/5"
+                        data-testid={`row-mix-batch-${batch.id}`}
+                      >
                         <TableCell
                           className="font-mono font-medium text-sm cursor-pointer hover:underline text-primary"
                           onClick={() => onViewDetail(batch)}
@@ -380,24 +411,26 @@ export function MixBatchList({
                           ${parseFloat(batch.displayCostPerKg ?? batch.costPerKg ?? "0").toFixed(4)}/kg
                         </TableCell>
                         <TableCell onClick={(e) => e.stopPropagation()}>
-                          <div className="flex items-center gap-1">
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              onClick={() => onEdit(batch)}
-                              data-testid={`button-edit-mix-batch-${batch.id}`}
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              onClick={() => onDelete(batch.id)}
-                              data-testid={`button-delete-mix-batch-${batch.id}`}
-                            >
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          </div>
+                          {canChange && (
+                            <div className="flex items-center gap-1">
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => onEdit(batch)}
+                                data-testid={`button-edit-mix-batch-${batch.id}`}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => onDelete(batch.id)}
+                                data-testid={`button-delete-mix-batch-${batch.id}`}
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </div>
+                          )}
                         </TableCell>
                       </TableRow>
                     );

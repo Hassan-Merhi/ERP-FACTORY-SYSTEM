@@ -99,6 +99,8 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
     hideZeroAvailable,
     inventoryLoading,
     openRenameDialog,
+    canChangeExistingRecords,
+    canCreateProforma,
     printRef,
     prodSortDir,
     prodSortField,
@@ -176,15 +178,17 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
               >
                 {selectedLocation.name}
               </h1>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={(e) => openRenameDialog(selectedLocation, e)}
-                data-testid="button-rename-selected-location"
-                title="Rename location"
-              >
-                <Pencil className="h-4 w-4" />
-              </Button>
+              {canChangeExistingRecords && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={(e) => openRenameDialog(selectedLocation, e)}
+                  data-testid="button-rename-selected-location"
+                  title="Rename location"
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
+              )}
             </div>
             <div className="flex items-center gap-1.5 mt-1">
               <Badge variant="outline" className="text-xs font-medium no-default-active-elevate">
@@ -198,15 +202,17 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <Button
-            variant={proformaMode ? "destructive" : "outline"}
-            size="sm"
-            onClick={toggleProformaMode}
-            data-testid="button-toggle-proforma-mode"
-          >
-            <ClipboardList className="h-4 w-4 mr-1.5" />
-            {proformaMode ? "Exit Proforma" : "Proforma Mode"}
-          </Button>
+          {(proformaMode || canCreateProforma) && (
+            <Button
+              variant={proformaMode ? "destructive" : "outline"}
+              size="sm"
+              onClick={toggleProformaMode}
+              data-testid="button-toggle-proforma-mode"
+            >
+              <ClipboardList className="h-4 w-4 mr-1.5" />
+              {proformaMode ? "Exit Proforma" : "Proforma Mode"}
+            </Button>
+          )}
           <Button variant="outline" size="icon" onClick={() => handlePrint()} data-testid="button-print" title="Print">
             <Printer className="h-4 w-4" />
           </Button>

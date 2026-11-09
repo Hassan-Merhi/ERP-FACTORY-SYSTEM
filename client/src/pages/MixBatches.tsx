@@ -22,6 +22,7 @@ import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import type { FactoryMixBatch } from "@shared/schema";
 import { useEscapeBack } from "@/hooks/use-escape-back";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 
 const BatchDetail = lazy(() => import("./BatchDetail"));
 
@@ -35,6 +36,8 @@ interface UnlinkedBale {
 
 export default function MixBatches() {
   const { formatDisplayDate } = useDateFormat();
+  const recordChanges = useExistingRecordChangeAccess();
+  const canCreateBatch = recordChanges.canCreate("POST", "/api/factory/mix-batches");
   const { toast } = useToast();
   const [statusFilter, setStatusFilter] = useState<string>("ACTIVE");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -217,22 +220,26 @@ export default function MixBatches() {
             <BarChart2 className="h-4 w-4 mr-2" />
             Report
           </Button>
-          <Button
-            variant="outline"
-            onClick={() => {
-              setSourceBatchId("");
-              setSelectedBaleIds(new Set());
-              setAssignDialogOpen(true);
-            }}
-            data-testid="button-assign-to-bales"
-          >
-            <Link2 className="h-4 w-4 mr-2" />
-            Assign to Bales
-          </Button>
-          <Button onClick={() => setCreateDialogOpen(true)} data-testid="button-create-mix-batch">
-            <Plus className="h-4 w-4 mr-2" />
-            Create Batch
-          </Button>
+          {recordChanges.allowed && (
+            <Button
+              variant="outline"
+              onClick={() => {
+                setSourceBatchId("");
+                setSelectedBaleIds(new Set());
+                setAssignDialogOpen(true);
+              }}
+              data-testid="button-assign-to-bales"
+            >
+              <Link2 className="h-4 w-4 mr-2" />
+              Assign to Bales
+            </Button>
+          )}
+          {canCreateBatch && (
+            <Button onClick={() => setCreateDialogOpen(true)} data-testid="button-create-mix-batch">
+              <Plus className="h-4 w-4 mr-2" />
+              Create Batch
+            </Button>
+          )}
         </div>
       </div>
 
@@ -300,24 +307,26 @@ export default function MixBatches() {
                           {formatDisplayDate(batch.batchDate || batch.createdAt)}
                         </TableCell>
                         <TableCell onClick={(e) => e.stopPropagation()}>
-                          <div className="flex items-center gap-1">
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              onClick={() => setEditBatch(batch)}
-                              data-testid={`button-edit-batch-${batch.id}`}
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              onClick={() => setDeleteId(batch.id)}
-                              data-testid={`button-delete-batch-${batch.id}`}
-                            >
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          </div>
+                          {recordChanges.allowed && (
+                            <div className="flex items-center gap-1">
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => setEditBatch(batch)}
+                                data-testid={`button-edit-batch-${batch.id}`}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => setDeleteId(batch.id)}
+                                data-testid={`button-delete-batch-${batch.id}`}
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </div>
+                          )}
                         </TableCell>
                       </TableRow>
                     );
@@ -380,7 +389,7 @@ export default function MixBatches() {
                   ? "Create your first mix batch to get started"
                   : `No batches with status: ${statusFilter}`}
               </p>
-              {(statusFilter === "all" || statusFilter === "ACTIVE") && (
+              {canCreateBatch && (statusFilter === "all" || statusFilter === "ACTIVE") && (
                 <Button onClick={() => setCreateDialogOpen(true)}>
                   <Plus className="h-4 w-4 mr-2" />
                   Create First Batch

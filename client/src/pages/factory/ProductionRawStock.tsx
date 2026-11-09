@@ -31,6 +31,7 @@ import { DeductStockDialog, type DeductStockPayload } from "./production-raw-sto
 import { AddToBatchDialog, type AddToBatchSource } from "./production-raw-stock/AddToBatchDialog";
 import { CreateMixBatchDialog } from "@/components/CreateMixBatchDialog";
 import { EditMixBatchDialog } from "@/components/EditMixBatchDialog";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 
 interface AddToBatchPayload {
   batchId: number;
@@ -45,6 +46,9 @@ export default function ProductionRawStock() {
   const appMode = useAppMode();
   const { language } = useApplicationLanguage();
   const modeApiRequest = getApiRequest(appMode);
+  // Offload, adjust, deduct, top-up, delete and WhatsApp send all change existing stock or post for it.
+  const recordChanges = useExistingRecordChangeAccess();
+  const canCreateMixBatch = recordChanges.canCreate("POST", "/api/factory/mix-batches");
 
   const [offloadDialogOpen, setOffloadDialogOpen] = useState(false);
   const [fixedPlannerOpen, setFixedPlannerOpen] = useState(false);
@@ -63,7 +67,11 @@ export default function ProductionRawStock() {
 
   const mixBatchPrintRef = useRef<HTMLDivElement>(null);
 
-  const { data: rawStock, isFetching: rawStockLoading, isError: rawStockError } = useQuery<RawStockRow[]>({
+  const {
+    data: rawStock,
+    isFetching: rawStockLoading,
+    isError: rawStockError,
+  } = useQuery<RawStockRow[]>({
     queryKey: ["/api/factory/raw-stock"],
   });
 
@@ -71,7 +79,11 @@ export default function ProductionRawStock() {
     queryKey: ["/api/factory/mix-batches"],
   });
 
-  const { data: factorySuppliers = [], isFetching: suppliersLoading, isError: suppliersError } = useQuery<OffloadSupplierOption[]>({
+  const {
+    data: factorySuppliers = [],
+    isFetching: suppliersLoading,
+    isError: suppliersError,
+  } = useQuery<OffloadSupplierOption[]>({
     queryKey: ["/api/factory/suppliers"],
   });
 
@@ -91,12 +103,15 @@ export default function ProductionRawStock() {
     enabled: !!mixBatchDate,
   });
 
-  const { data: reportCategories = [], isLoading: reportCategoriesLoading, isError: reportCategoriesError } =
-    useQuery<MixBatchSupplierCategory[]>({
-      queryKey: ["/api/factory/supplier-categories"],
-      staleTime: 60_000,
-      refetchOnWindowFocus: false,
-    });
+  const {
+    data: reportCategories = [],
+    isLoading: reportCategoriesLoading,
+    isError: reportCategoriesError,
+  } = useQuery<MixBatchSupplierCategory[]>({
+    queryKey: ["/api/factory/supplier-categories"],
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+  });
 
   const {
     data: fixedProductionPlan,
@@ -107,13 +122,20 @@ export default function ProductionRawStock() {
     staleTime: 60_000,
     refetchOnWindowFocus: false,
   });
-  const reportAllocations = fixedProductionPlan && fixedProductionPlan.revision > 0
-    ? fixedProductionPlan.allocations20t : null;
-  const reportLoading = mixBatchesByDateLoading || reportCategoriesLoading || suppliersLoading ||
-    fixedProductionPlanLoading || reportCategoriesError || suppliersError || fixedProductionPlanError;
+  const reportAllocations =
+    fixedProductionPlan && fixedProductionPlan.revision > 0 ? fixedProductionPlan.allocations20t : null;
+  const reportLoading =
+    mixBatchesByDateLoading ||
+    reportCategoriesLoading ||
+    suppliersLoading ||
+    fixedProductionPlanLoading ||
+    reportCategoriesError ||
+    suppliersError ||
+    fixedProductionPlanError;
 
   const offloadMutation = useMutation({
     mutationFn: async (data: OffloadPayload) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await modeApiRequest("POST", "/api/factory/raw-stock/offload", data);
       if (!res.ok) throw new Error((await res.json()).message || "Failed to offload");
       return res.json();
@@ -136,6 +158,7 @@ export default function ProductionRawStock() {
 
   const createAdjustmentMutation = useMutation({
     mutationFn: async (payload: StockAdjustmentPayload) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await modeApiRequest("POST", "/api/factory/raw-stock/adjustment", payload);
       if (!res.ok) throw new Error((await res.json()).message || "Failed to save adjustment");
       return res.json();
@@ -149,6 +172,7 @@ export default function ProductionRawStock() {
 
   const deductReceivedMutation = useMutation({
     mutationFn: async (payload: DeductStockPayload) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await modeApiRequest("POST", "/api/factory/raw-stock/deduct-received", payload);
       if (!res.ok) throw new Error((await res.json()).message || "Failed to deduct");
       return res.json();
@@ -162,6 +186,7 @@ export default function ProductionRawStock() {
 
   const addToBatchMutation = useMutation({
     mutationFn: async (data: AddToBatchPayload) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await modeApiRequest("POST", `/api/factory/mix-batches/${data.batchId}/top-up`, {
         supplierSources: [{ supplierId: data.supplierId, weightKg: data.weightKg }],
       });
@@ -178,6 +203,7 @@ export default function ProductionRawStock() {
 
   const deleteMixBatchMutation = useMutation({
     mutationFn: async (id: number) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await modeApiRequest("DELETE", `/api/factory/mix-batches/${id}`);
       if (!res.ok) throw new Error((await res.json()).message || "Failed to delete batch");
       return res.json();
@@ -194,8 +220,10 @@ export default function ProductionRawStock() {
 
   const sendWhatsAppMutation = useMutation({
     mutationFn: async () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       if (!mixBatchPrintRef.current) throw new Error("Nothing to capture");
-      if (!reportAllocations || reportLoading) throw new Error("Save a Fixed Production Plan before sending a target comparison.");
+      if (!reportAllocations || reportLoading)
+        throw new Error("Save a Fixed Production Plan before sending a target comparison.");
       const html2canvas = (await import("html2canvas")).default;
       const canvas = await html2canvas(mixBatchPrintRef.current, { backgroundColor: "#111827", scale: 2 });
       const imageBase64 = canvas.toDataURL("image/png");
@@ -262,21 +290,25 @@ export default function ProductionRawStock() {
           >
             <Calculator className="h-4 w-4" /> {translateFixedProductionPlanner("title", language)}
           </Button>
-          <Button
-            onClick={() => setCreateMixBatchOpen(true)}
-            className="h-11 gap-2 rounded-xl bg-blue-600 px-3 text-xs font-bold text-white shadow-sm shadow-blue-500/20 transition-all hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-md dark:bg-blue-500 dark:text-white dark:hover:bg-blue-400 sm:h-10"
-            data-testid="button-create-mix-batch"
-          >
-            <Layers className="h-4 w-4" /> <span className="hidden sm:inline">New Mix Batch</span>
-            <span className="sm:hidden">New Batch</span>
-          </Button>
-          <Button
-            onClick={() => setOffloadDialogOpen(true)}
-            className="h-11 gap-2 rounded-xl bg-emerald-600 px-3 text-xs font-bold text-white shadow-sm shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700 hover:shadow-md dark:bg-emerald-500 dark:text-emerald-950 dark:hover:bg-emerald-400 sm:h-10"
-            data-testid="button-offload-container"
-          >
-            <ArrowDown className="h-4 w-4" /> Offload Container
-          </Button>
+          {canCreateMixBatch && (
+            <Button
+              onClick={() => setCreateMixBatchOpen(true)}
+              className="h-11 gap-2 rounded-xl bg-blue-600 px-3 text-xs font-bold text-white shadow-sm shadow-blue-500/20 transition-all hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-md dark:bg-blue-500 dark:text-white dark:hover:bg-blue-400 sm:h-10"
+              data-testid="button-create-mix-batch"
+            >
+              <Layers className="h-4 w-4" /> <span className="hidden sm:inline">New Mix Batch</span>
+              <span className="sm:hidden">New Batch</span>
+            </Button>
+          )}
+          {recordChanges.allowed && (
+            <Button
+              onClick={() => setOffloadDialogOpen(true)}
+              className="h-11 gap-2 rounded-xl bg-emerald-600 px-3 text-xs font-bold text-white shadow-sm shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700 hover:shadow-md dark:bg-emerald-500 dark:text-emerald-950 dark:hover:bg-emerald-400 sm:h-10"
+              data-testid="button-offload-container"
+            >
+              <ArrowDown className="h-4 w-4" /> Offload Container
+            </Button>
+          )}
           <Button
             variant="outline"
             onClick={() => setCategoriesDialogOpen(true)}
@@ -294,6 +326,7 @@ export default function ProductionRawStock() {
         <section className="min-w-0 space-y-4">
           <RawStockTable
             rawStock={rawStock || []}
+            canChange={recordChanges.allowed}
             onAdjust={(row) => {
               setAdjIsNewMaterial(false);
               setAdjustingRow(row);
@@ -330,6 +363,7 @@ export default function ProductionRawStock() {
             onViewDetail={(batch) => setEditBatch(batch as unknown as FactoryMixBatch)}
             onSendWhatsApp={() => sendWhatsAppMutation.mutate()}
             isSendingWhatsApp={sendWhatsAppMutation.isPending}
+            canChange={recordChanges.allowed}
             mixBatchDate={mixBatchDate}
             setMixBatchDate={setMixBatchDate}
             mixBatchesByDate={mixBatchesByDate}

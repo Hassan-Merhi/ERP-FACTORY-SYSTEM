@@ -29,7 +29,7 @@ The migration validation uses a **throwaway** cluster with the application's rea
 
 The live list, with evidence and the commit each gate refers to, is `config/permissions-v2-release-readiness.json`. As of 2026-11-07:
 
-1. **Frontend parity** — route-level gating, the read-only voucher redirect and in-page gating on the core pages are done ([page audit](permissions-v2-frontend-page-audit.md)); 25 pages still show some change controls that the server refuses.
+1. **Frontend parity** — every catalogued page is gated for View Only and Create Only and verified by the page audit's import scan ([page audit](permissions-v2-frontend-page-audit.md)); a walkthrough on a deployed staging build is still needed.
 2. **Staging migration, data integrity and rollback drill** — tooling and procedure ready ([staging certification](permissions-v2-staging-certification.md)); needs a staging database and written approval.
 3. **Cross-company matrix on staging** — all nine roles pass locally; the location and lifecycle matrix must be repeated on staging data.
 4. **Monitoring owner and alert destination** — monitoring is implemented; a named owner, escalation path and a confirmed test alert are needed.

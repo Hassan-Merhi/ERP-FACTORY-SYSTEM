@@ -19,12 +19,11 @@
       "id": "frontend-role-parity",
       "status": "blocked",
       "evidence": null,
-      "verification": "npx tsx scripts/permissions/audit-frontend-page-catalog.ts: 0 failures over 94 pages / 216 routes; 9 pages verified read-only by import-graph scan; tests/access-control-v2-frontend-page-catalog.test.ts, tests/ui/read-only-role-route-gate.test.tsx and client/src/lib/permissionRevalidation.test.ts pass.",
+      "verification": "npx tsx scripts/permissions/audit-frontend-page-catalog.ts: 0 failures over 94 pages / 216 routes. 9 pages verified read-only and 24 pages verified gated_graph by import-graph scan (every business write in the page graph reads the shared role helper or is a reviewed exception); 17 gated in page, 40 at route, 4 role-restricted, 0 relying on server refusal only. Typecheck, lint, Prettier and the i18n ratchet pass.",
       "commit": "2e2f098d82d9b1405a0d6aa73fa8f4f9ece06229",
-      "progress": "Shared page catalog (shared/permissionPageCatalog.ts) covers ERP, Factory, POS/Retail, Properties and Supplier Partner. Pages that change existing records are closed to View Only and Create Only with an explanation; voucher and POS edit links open the read-only voucher view; unverified create pages are closed to Create Only; Create Master Data offers Create Only only the verified supplier and stock item forms. In-page gating covers Accounts, Containers, Closing stock summary, Customers, Suppliers, Stock Items, Daybook, GIT containers, Factory containers and daybook, pressing, rentals and retail products. Access refreshes across tabs on any permission refusal. Report: docs/permissions-v2-frontend-page-audit.md.",
+      "progress": "Shared page catalog (shared/permissionPageCatalog.ts) covers ERP, Factory, POS/Retail, Properties and Supplier Partner. Pages that change existing records are closed to View Only and Create Only with an explanation; voucher and POS edit links open the read-only voucher view; unverified create pages are closed to Create Only; Create Master Data offers Create Only only the verified supplier and stock item forms. In-page gating covers Accounts, Containers, Closing stock summary, Customers, Suppliers, Stock Items, Daybook, GIT containers, Factory containers and daybook, pressing, rentals and retail products. Access refreshes across tabs on any permission refusal. Report: docs/permissions-v2-frontend-page-audit.md. On 2026-11-09 every remaining page was gated: edit, delete, approve, finalize, reverse, import, payment, transfer, reprint and settings controls are hidden or disabled for View Only and Create Only across ERP, Factory, POS/Retail, Properties and Supplier Partner, the matching mutations refuse for those roles, and create controls use canCreate so Create Only keeps only handler-verified creates.",
       "blockers": [
-        "25 catalogued pages still show some change controls to View Only/Create Only and rely on the server refusal plus the client request guard message (listed as 'Server and request guard only' in docs/permissions-v2-frontend-page-audit.md).",
-        "Browser verification on desktop and mobile, light and dark, English/Arabic/French for the new notice has not been run on a deployed build."
+        "A walkthrough as View Only and as Create Only on a deployed staging build (desktop and mobile, light and dark, English/Arabic/French) has not been performed; the gating is verified by source scan and unit/UI tests only."
       ],
       "required": "All role-sensitive controls integrated and verified against existing backend guards; Phase 6 incomplete"
     },
@@ -48,7 +47,9 @@
       "verification": "Local only: role matrix, Create Only and effective-permission HTTP suites assert unchanged business fingerprints for every refused write and exactly the expected tables for a verified create; the certification rehearsal snapshot diff is empty.",
       "commit": "20952ddd224cd14bac287e25f3a7a2347d9fac35",
       "progress": "The certification tool compares per-company row counts and md5 for vouchers, voucher entry totals, ledgers, stock, valuation movements, bales, containers, payroll, bonuses, attendance, rentals, closed periods and permission tables before and after the migration.",
-      "blockers": ["Staging before/after comparison not performed (needs the staging run above)."],
+      "blockers": [
+        "Staging before/after comparison not performed (needs the staging run above)."
+      ],
       "required": "Compare staging voucher/stock/container/payroll before-after snapshots and confirm zero unexpected differences"
     },
     {
@@ -70,7 +71,9 @@
       "verification": "Local only: tests/access-control-v2-effective-permissions-http.test.ts activates a company, enforces a deny, rolls back and confirms access returns with no deploy; the certification rehearsal ran the database rollback and restore drill on a disposable copy.",
       "commit": "2add5d3873fce87fc0492e4b48c45c0379ecf7c1",
       "progress": "Application rollback is PUT /api/permissions-v2/activation {mode: rolled_back} (no switch needed) or unsetting PERMISSIONS_V2_ENFORCEMENT; documented in the administrator guide section 8.",
-      "blockers": ["The drill must be performed and recorded on staging by an administrator (procedure step 7)."],
+      "blockers": [
+        "The drill must be performed and recorded on staging by an administrator (procedure step 7)."
+      ],
       "required": "Admin-led rollback simulation confirmed with audit history preserved and access restored"
     },
     {
@@ -79,7 +82,9 @@
       "evidence": null,
       "verification": "GitHub CI on PR #3033 at commit 69208a4a80ea6a4921e941128c45ffe974573064: all 31 checks green (backend, frontend, coverage, type-check, lint/format, repository audits, CodeQL, Semgrep, secret scan, fuzzing, RTL/accessibility, mobile). Local: full backend 9,615 pass / 0 fail / 23 pre-existing skips; full frontend 3,236 pass / 0 fail.",
       "commit": "69208a4a80ea6a4921e941128c45ffe974573064",
-      "blockers": ["Required CI must be green on the final release SHA chosen for production."],
+      "blockers": [
+        "Required CI must be green on the final release SHA chosen for production."
+      ],
       "required": "All required CI, UI, security, translations, TypeScript, lint and browser suites green on final SHA"
     },
     {
@@ -102,7 +107,9 @@
       "evidence": null,
       "verification": "Not applicable until the other gates are verified.",
       "commit": null,
-      "blockers": ["Pending explicit owner approval for merge, staging migration and each activation step."],
+      "blockers": [
+        "Pending explicit owner approval for merge, staging migration and each activation step."
+      ],
       "required": "Separate explicit production merge, activation and deployment approval"
     }
   ]

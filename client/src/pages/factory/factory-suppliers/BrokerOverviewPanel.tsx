@@ -57,6 +57,11 @@ interface BrokerOverviewPanelProps {
   onAddLinkedSupplier: () => void;
   /** Open the "Assign Containers" dialog targeting a specific linked supplier */
   onAssignContainersTo: (supplierId: number, supplierName: string) => void;
+  /** Read-only company roles get none of these actions (all default to true). */
+  canAddLinkedSupplier?: boolean;
+  canChangeExistingRecords?: boolean;
+  canRecordFxTransfer?: boolean;
+  canRecordPayment?: boolean;
 }
 
 export function BrokerOverviewPanel({
@@ -77,6 +82,10 @@ export function BrokerOverviewPanel({
   directContainersLoading,
   onAddLinkedSupplier,
   onAssignContainersTo,
+  canAddLinkedSupplier = true,
+  canChangeExistingRecords = true,
+  canRecordFxTransfer = true,
+  canRecordPayment = true,
 }: BrokerOverviewPanelProps) {
   const parentSup = allSuppliers.find((s) => s.id === parentViewSupplierId);
   const children = subAccountsByParent[parentViewSupplierId] || [];
@@ -137,10 +146,12 @@ export function BrokerOverviewPanel({
           <span className="text-xs font-normal text-muted-foreground">Include OTW containers</span>
         </label>
 
-        <Button variant="outline" size="sm" onClick={onAddLinkedSupplier} data-testid="button-add-linked-supplier">
-          <Plus className="h-3.5 w-3.5 mr-1.5" />
-          Add Linked Supplier
-        </Button>
+        {canAddLinkedSupplier && (
+          <Button variant="outline" size="sm" onClick={onAddLinkedSupplier} data-testid="button-add-linked-supplier">
+            <Plus className="h-3.5 w-3.5 mr-1.5" />
+            Add Linked Supplier
+          </Button>
+        )}
 
         {parentSup && (
           <Button
@@ -358,10 +369,12 @@ export function BrokerOverviewPanel({
             <div className="text-center py-10 text-muted-foreground">
               <Users className="h-10 w-10 mx-auto mb-2 opacity-40" />
               <p className="text-sm mb-3">No linked suppliers yet</p>
-              <Button variant="outline" size="sm" onClick={onAddLinkedSupplier}>
-                <Plus className="h-3.5 w-3.5 mr-1.5" />
-                Add Linked Supplier
-              </Button>
+              {canAddLinkedSupplier && (
+                <Button variant="outline" size="sm" onClick={onAddLinkedSupplier}>
+                  <Plus className="h-3.5 w-3.5 mr-1.5" />
+                  Add Linked Supplier
+                </Button>
+              )}
             </div>
           ) : (
             <div className="divide-y">
@@ -408,7 +421,7 @@ export function BrokerOverviewPanel({
                   </div>
                   <div className="flex items-center gap-1">
                     {/* Assign Containers button — only shown when broker has direct containers */}
-                    {directContainers.length > 0 && child.isActive && (
+                    {canChangeExistingRecords && directContainers.length > 0 && child.isActive && (
                       <Button
                         variant="outline"
                         size="sm"
@@ -421,7 +434,8 @@ export function BrokerOverviewPanel({
                         Assign Containers
                       </Button>
                     )}
-                    {child.isActive &&
+                    {canRecordFxTransfer &&
+                      child.isActive &&
                       (() => {
                         const childNonUsd = (child.currencyBalances || []).filter(
                           (c: CurrencyBalance) => c.currencyCode !== "USD" && c.balance > 0.005
@@ -439,7 +453,7 @@ export function BrokerOverviewPanel({
                           </Button>
                         ));
                       })()}
-                    {child.isActive && (
+                    {canRecordPayment && child.isActive && (
                       <Button
                         variant="ghost"
                         size="icon"

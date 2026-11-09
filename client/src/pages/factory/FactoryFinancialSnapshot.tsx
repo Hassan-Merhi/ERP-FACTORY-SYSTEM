@@ -34,6 +34,7 @@ export default function FactoryFinancialSnapshot() {
   const financialSnapshot = useFactoryFinancialSnapshotModel();
   const {
     addAccountMutation,
+    canChangeExistingRecords,
     advanceExpanded,
     agentExpanded,
     cardLabel,
@@ -303,18 +304,20 @@ export default function FactoryFinancialSnapshot() {
                           {advanceExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                         </div>
                       </button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="shrink-0 mt-0.5"
-                        onClick={() => {
-                          setPickerFor("advance");
-                          setPickerSearch("");
-                        }}
-                        data-testid="button-add-advance-account"
-                      >
-                        <Plus className="h-4 w-4" />
-                      </Button>
+                      {canChangeExistingRecords && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="shrink-0 mt-0.5"
+                          onClick={() => {
+                            setPickerFor("advance");
+                            setPickerSearch("");
+                          }}
+                          data-testid="button-add-advance-account"
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
                     {advanceExpanded && computed.advanceList.length > 0 && (
                       <div className="mt-3 pt-3 border-t space-y-1">
@@ -340,17 +343,19 @@ export default function FactoryFinancialSnapshot() {
                               <span className="text-sm font-mono font-medium text-amber-600 dark:text-amber-400">
                                 {usd(acct.signedBalance)}
                               </span>
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                className="h-6 w-6 opacity-0 group-hover:opacity-100 touch:opacity-100 focus-visible:opacity-100 transition-opacity"
-                                onClick={() =>
-                                  removeAccountMutation.mutate({ type: "advance", accountId: acct.compositeId })
-                                }
-                                data-testid={`button-remove-advance-${acct.id}`}
-                              >
-                                <X className="h-3 w-3" />
-                              </Button>
+                              {canChangeExistingRecords && (
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-6 w-6 opacity-0 group-hover:opacity-100 touch:opacity-100 focus-visible:opacity-100 transition-opacity"
+                                  onClick={() =>
+                                    removeAccountMutation.mutate({ type: "advance", accountId: acct.compositeId })
+                                  }
+                                  data-testid={`button-remove-advance-${acct.id}`}
+                                >
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              )}
                             </div>
                           </div>
                         ))}
@@ -412,18 +417,20 @@ export default function FactoryFinancialSnapshot() {
                           {cashBankExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                         </div>
                       </button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="shrink-0 mt-0.5"
-                        onClick={() => {
-                          setPickerFor("cashbank");
-                          setPickerSearch("");
-                        }}
-                        data-testid="button-add-cashbank-account"
-                      >
-                        <Plus className="h-4 w-4" />
-                      </Button>
+                      {canChangeExistingRecords && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="shrink-0 mt-0.5"
+                          onClick={() => {
+                            setPickerFor("cashbank");
+                            setPickerSearch("");
+                          }}
+                          data-testid="button-add-cashbank-account"
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
                     {cashBankExpanded && computed.cashBankList.length > 0 && (
                       <div className="mt-3 pt-3 border-t space-y-1">
@@ -451,17 +458,19 @@ export default function FactoryFinancialSnapshot() {
                               >
                                 {usd(acct.signedBalance)}
                               </span>
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                className="h-6 w-6 opacity-0 group-hover:opacity-100 touch:opacity-100 focus-visible:opacity-100 transition-opacity"
-                                onClick={() =>
-                                  removeAccountMutation.mutate({ type: "cashbank", accountId: acct.compositeId })
-                                }
-                                data-testid={`button-remove-cashbank-${acct.id}`}
-                              >
-                                <X className="h-3 w-3" />
-                              </Button>
+                              {canChangeExistingRecords && (
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-6 w-6 opacity-0 group-hover:opacity-100 touch:opacity-100 focus-visible:opacity-100 transition-opacity"
+                                  onClick={() =>
+                                    removeAccountMutation.mutate({ type: "cashbank", accountId: acct.compositeId })
+                                  }
+                                  data-testid={`button-remove-cashbank-${acct.id}`}
+                                >
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              )}
                             </div>
                           </div>
                         ))}
@@ -515,18 +524,20 @@ export default function FactoryFinancialSnapshot() {
                           {agentExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                         </div>
                       </button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="shrink-0 mt-0.5"
-                        onClick={() => {
-                          setPickerFor("agent");
-                          setPickerSearch("");
-                        }}
-                        data-testid="button-add-agent-account"
-                      >
-                        <Plus className="h-4 w-4" />
-                      </Button>
+                      {canChangeExistingRecords && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="shrink-0 mt-0.5"
+                          onClick={() => {
+                            setPickerFor("agent");
+                            setPickerSearch("");
+                          }}
+                          data-testid="button-add-agent-account"
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
                     {agentExpanded && computed.agentList.length > 0 && (
                       <div className="mt-3 pt-3 border-t space-y-1">
@@ -554,17 +565,19 @@ export default function FactoryFinancialSnapshot() {
                               >
                                 {usd(acct.signedBalance)}
                               </span>
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                className="h-6 w-6 opacity-0 group-hover:opacity-100 touch:opacity-100 focus-visible:opacity-100 transition-opacity"
-                                onClick={() =>
-                                  removeAccountMutation.mutate({ type: "agent", accountId: acct.compositeId })
-                                }
-                                data-testid={`button-remove-agent-${acct.id}`}
-                              >
-                                <X className="h-3 w-3" />
-                              </Button>
+                              {canChangeExistingRecords && (
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-6 w-6 opacity-0 group-hover:opacity-100 touch:opacity-100 focus-visible:opacity-100 transition-opacity"
+                                  onClick={() =>
+                                    removeAccountMutation.mutate({ type: "agent", accountId: acct.compositeId })
+                                  }
+                                  data-testid={`button-remove-agent-${acct.id}`}
+                                >
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              )}
                             </div>
                           </div>
                         ))}
@@ -618,18 +631,20 @@ export default function FactoryFinancialSnapshot() {
                           {freightExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                         </div>
                       </button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="shrink-0 mt-0.5"
-                        onClick={() => {
-                          setPickerFor("freight");
-                          setPickerSearch("");
-                        }}
-                        data-testid="button-add-freight-account"
-                      >
-                        <Plus className="h-4 w-4" />
-                      </Button>
+                      {canChangeExistingRecords && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="shrink-0 mt-0.5"
+                          onClick={() => {
+                            setPickerFor("freight");
+                            setPickerSearch("");
+                          }}
+                          data-testid="button-add-freight-account"
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
                     {freightExpanded && computed.freightList.length > 0 && (
                       <div className="mt-3 pt-3 border-t space-y-1">
@@ -657,17 +672,19 @@ export default function FactoryFinancialSnapshot() {
                               >
                                 {usd(acct.signedBalance)}
                               </span>
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                className="h-6 w-6 opacity-0 group-hover:opacity-100 touch:opacity-100 focus-visible:opacity-100 transition-opacity"
-                                onClick={() =>
-                                  removeAccountMutation.mutate({ type: "freight", accountId: acct.compositeId })
-                                }
-                                data-testid={`button-remove-freight-${acct.id}`}
-                              >
-                                <X className="h-3 w-3" />
-                              </Button>
+                              {canChangeExistingRecords && (
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-6 w-6 opacity-0 group-hover:opacity-100 touch:opacity-100 focus-visible:opacity-100 transition-opacity"
+                                  onClick={() =>
+                                    removeAccountMutation.mutate({ type: "freight", accountId: acct.compositeId })
+                                  }
+                                  data-testid={`button-remove-freight-${acct.id}`}
+                                >
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              )}
                             </div>
                           </div>
                         ))}
