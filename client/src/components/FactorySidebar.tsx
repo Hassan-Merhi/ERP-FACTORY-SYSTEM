@@ -66,6 +66,7 @@ import {
   hasFactoryPageKey,
   resolveFactoryPage,
 } from "@/app/factoryAccessRegistry";
+import { FACTORY_OTHERS_NAV_LINKS, FACTORY_SALES_DISPATCH_ROUTES, factoryHubTabHideKey } from "@/factory/config/navigationPresentation";
 
 interface FactoryNavItem extends NavItem {
   accessKey: string;
@@ -163,22 +164,10 @@ export const FACTORY_NAV_SECTIONS: FactoryNavSection[] = FACTORY_SIDEBAR_GROUP_O
     developerOnly: pages.length > 0 && pages.every((page) => page.accessLevel === "developer"),
     items: [
       ...(label === "Others"
-        ? [
-            {
-              title: "Comparison",
-              url: "/factory/others?tab=comparison",
-              icon: GitCompareArrows,
-              accessKey: "factory/production-report",
-              hideKey: "hide_tab_overview_comparison",
-            },
-            {
-              title: "Product Comparison",
-              url: "/factory/others?tab=product-comparison",
-              icon: BarChart3,
-              accessKey: "factory/production-report",
-              hideKey: "hide_tab_overview_product_comparison",
-            },
-          ]
+        ? FACTORY_OTHERS_NAV_LINKS.map(({ title, url, accessKey, hideKey, iconKey }) => ({
+            title, url, accessKey, hideKey,
+            icon: iconKey === "comparison" ? GitCompareArrows : BarChart3,
+          }))
         : []),
       ...orderedPages.map((page) => ({
         title:
@@ -209,7 +198,7 @@ export function collapseFactorySalesDispatchNav<T extends { accessKey: string }>
 ): T[] {
   if (!items.some((item) => item.accessKey === "factory/pos") ||
       !items.some((item) => item.accessKey === "factory/waste-dispatch")) return items;
-  const hide = location.startsWith("/factory/waste-dispatch") ? "factory/pos" : "factory/waste-dispatch";
+  const hide = location.startsWith(FACTORY_SALES_DISPATCH_ROUTES.wasteDispatch) ? "factory/pos" : "factory/waste-dispatch";
   return items.filter((item) => item.accessKey !== hide);
 }
 
@@ -285,41 +274,8 @@ export function useFactoryVisibleSections(user?: FactorySidebarUser): {
     const tab = params.get("tab");
     const section = params.get("section");
     const hidden = myAccess.hiddenCostFields ?? [];
-    const hiddenKeyByTab: Record<string, Record<string, string>> = {
-      "/factory/bales-hub": {
-        history: "hide_tab_bales_history",
-        barcode: "hide_tab_bales_barcode",
-        products: "hide_tab_bales_products",
-        "customer-loading": "hide_tab_bales_customer_loading",
-      },
-      "/factory/invoicing": {
-        proformas: "hide_invoicing_proformas_tab",
-        invoices: "hide_invoicing_invoices_tab",
-        loadings: "hide_invoicing_loadings_tab",
-        pending: "hide_tab_loadings_pending",
-        priority: "hide_tab_loadings_pending",
-      },
-      "/factory/sales/loadings": {
-        loadings: "hide_invoicing_loadings_tab",
-        pending: "hide_tab_loadings_pending",
-        priority: "hide_tab_loadings_pending",
-      },
-      "/factory/parties": {
-        customers: "hide_tab_parties_customers",
-        suppliers: "hide_tab_parties_suppliers",
-      },
-      "/factory/others": {
-        comparison: "hide_tab_overview_comparison",
-        "product-comparison": "hide_tab_overview_product_comparison",
-      },
-      "/factory/payroll-hub": {
-        workers: "hide_tab_payrollhub_workers",
-        employees: "hide_tab_payrollhub_employees",
-        insurance: "hide_tab_payrollhub_insurance",
-      },
-    };
     const value = tab ?? section;
-    const hideKey = value ? hiddenKeyByTab[pathname]?.[value] : undefined;
+    const hideKey = factoryHubTabHideKey(pathname, value);
     if (hideKey && hidden.includes(hideKey)) return false;
     if (
       pathname === "/factory/invoicing" &&
