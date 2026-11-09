@@ -18,6 +18,7 @@ import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/compon
 import { useCompany } from "@/contexts/CompanyContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { formatNumber } from "@/lib/formatNumber";
+import { erpCompanyDataKey } from "@/erp-core";
 
 import {
   StatusBadge,
@@ -99,7 +100,7 @@ export default function ItemMarketAnalysis() {
   }, [period, debouncedSearch, selectedStockGroupNames, selectedCompanyIds]);
 
   const { data, isLoading, isFetching, isError, error, refetch } = useQuery<MarketResponse, Error>({
-    queryKey: [queryUrl, selectedCompany?.id, selectedCompanyIds],
+    queryKey: erpCompanyDataKey(queryUrl, selectedCompany?.id, selectedCompanyIds),
     enabled: selectedCompany?.companyType === "erp" && selectedCompanyIds.length > 0,
     staleTime: 5 * 60_000,
     gcTime: 15 * 60_000,
@@ -126,7 +127,7 @@ export default function ItemMarketAnalysis() {
     totalSales: number;
     adjustedCostProfit: number;
   }>({
-    queryKey: ["/api/sales-report/cogs-reconciliation", selectedCompany?.id],
+    queryKey: erpCompanyDataKey("/api/sales-report/cogs-reconciliation", selectedCompany?.id),
     enabled: comparableToSalesReport,
     staleTime: 30_000,
     refetchOnWindowFocus: false,
