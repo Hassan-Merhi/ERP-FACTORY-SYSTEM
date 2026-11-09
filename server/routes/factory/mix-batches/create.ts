@@ -24,7 +24,7 @@ import {
 } from "../../../services/factory/baleCostBasis";
 import { recordFactoryStockValueEventTx } from "../../../services/factory/factoryStockValueEvents";
 import Decimal from "decimal.js";
-import { MoneyDecimal, parseMoneyInput, toMoney } from "../../../lib/money";
+import { MoneyDecimal, toMoney } from "../../../lib/money";
 import { MixRawStockShortageError, requireMixFifoFullyAllocated, requireMixRawStockCapacity, availableSupplierAddAllowance } from "../../../services/factory/mixRawStockQuantityGuard";
 import { mixKilograms, requireMixLifecycleAvailable } from "../../../services/factory/mixLifecyclePhase6";
 
