@@ -26,6 +26,7 @@ import { getAppDate } from "@/lib/queryClient";
 import { useCompany } from "@/contexts/CompanyContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
 import type { AccountItem, FactoryNetPositionData } from "./factorynetposition/detailsTypes";
+import { shiftDate, formatDateLabel } from "./factorynetposition/utils";
 import { CustomNetPositionView } from "./factorynetposition/components/DetailsCustomNetPositionView";
 
 function InsuranceSubGroup({
@@ -302,16 +303,6 @@ function CollapsibleSection({
       )}
     </Card>
   );
-}
-
-function shiftDate(date: string, days: number): string {
-  const d = new Date(date + "T12:00:00Z");
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-}
-function formatDateLabel(date: string): string {
-  const d = new Date(date + "T12:00:00Z");
-  return d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" });
 }
 
 export default function FactoryNetPositionDetails() {
