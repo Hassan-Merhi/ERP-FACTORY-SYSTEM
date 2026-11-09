@@ -9,7 +9,7 @@
 | 7 — Authorization and company scope | Implemented; automated execution not verified | Canonical company-context permissions for posted payment deletion, scheduled cancellation, and rental reconciliation. Focused tests added. |
 | 8 — Financial presentation | Implemented; automated execution not verified | USD-only overview/export safeguards, typed reporting basis, explicit current-vs-historical reconciliation labels, company-calendar date filtering, historical policy preservation, focused tests. |
 | 9 — Payment and rental UI cleanup | Implemented; automated execution not verified | Removed unreachable reconciliation selector and Factory/ERP dead JSX, shared deletion dialog, module-specific retirement explanations, timezone-neutral date labels and row editability policy; focused tests added. |
-| 10 — Legacy and navigation | Not started | Dashboard compatibility, route coverage, bookmarks. |
+| 10 — Legacy and navigation | Implemented; automated execution not verified | Preserved operational compatibility dashboard; centralized rental bookmark redirects, deep-link matcher, route-keyed sidebar icons and navigation regression tests. |
 | 11 — Regression verification | Not started | End-to-end tenant isolation, financial parity and navigation validation. |
 
 ## Phase 7 change register
@@ -87,3 +87,29 @@ The Phase 3 stable-ID assignment (company id 13, code HP, company type propertie
 - **Not executed:** Vitest, TypeScript checker, a running browser, production queries or CI. Phase 11 must execute comprehensive parity checks in a runnable checkout before merge/deployment.
 - **Recommended runnable checks:** `npx vitest run tests/properties-unification-phase9-ui.test.ts tests/properties-unification-phase8-presentation.test.ts tests/properties-payment-history-reconciliation.test.ts`, plus project typecheck, and manual smoke checks for Properties/Factory/ERP payment views and deletion confirmations.
 - **Status:** Phase 9 code-level implementation complete with runtime verification pending; Phase 10 remains next on this same branch.
+
+## Phase 10 change register (2026-11-09)
+
+1. `client/src/properties/config/propertiesNavigation.ts`: Added `findPropertiesNavigationEntry` with exact and full-segment dynamic URL matching, including selected rental tab query links. `canNavigateProperties` now handles actual voucher and ledger URLs instead of requiring literal route-pattern strings. This changes client-side discovery/navigation checks only, never server authorization.
+2. `client/src/app/PropertiesRoutes.tsx`: The three old rental aliases now register from the canonical redirect map with `<Redirect replace>`. The hidden legacy dashboard route is explicitly preserved because its cash/payable account CRUD functions still run through real APIs.
+3. `client/src/components/PropertiesSidebar.tsx`: Six pinned route icons are mapped by path identity rather than manifest array index; labels, order, persisted drag sorting and capability policy remain unchanged.
+4. `docs/properties-navigation-registry.md`: Updated legacy and current backend role-context notes, deep-link behavior and safe dashboard disposition.
+5. `tests/properties-unification-phase10-navigation.test.ts`: Added source and policy regression checks for direct dashboard access, bookmark redirects, three hub tabs, dynamic route matching, unknown paths, selected-company permission gates, and pinned icon contract.
+
+### Legacy dashboard decision
+
+`/properties/dashboard` remains a hidden but operational compatibility screen. It is **not** a dead route: the component still performs dashboard cash/payable account management, including real server writes. Removing it or forcibly redirecting every bookmark to another dashboard would silently remove those operations. Phase 10 retains the page and narrows its discoverability; actual migration or deletion requires a separately approved feature mapping and usage review.
+
+### Phase 10 invariants
+
+- No historical payment or accounting view, rental posting path, cashbook, ledger, voucher or migration changed.
+- `/properties/rental/warehouses`, `/properties/rental/shops` and `/properties/rental/payments` all continue to use replacement-history redirects to their canonical hub/tab.
+- The six pinned workspace pages, existing administrative role gates and fallback `/properties/daybook` are unchanged.
+- `/properties/dashboard` continues to work by direct URL and remains absent from pinned navigation.
+
+### Phase 10 verification
+
+- **Completed:** GitHub commits and source read-back, route-consumer and historical usage review, focused test authorship, navigation contract update.
+- **Not executed:** Vitest, TypeScript check, browser bookmarks and Back/Forward, role-switch testing, dashboard account CRUD in an isolated test environment, CI or deployment.
+- **Required before release:** Run `npx vitest run tests/properties-unification-phase10-navigation.test.ts tests/properties-unification-regression.test.ts` and project typecheck; manually verify legacy bookmarks, selected-company roles, account-management actions and unknown-route replacement behavior.
+- **Status:** Code-level Phase 10 is complete on the existing branch; Phase 11 end-to-end regression verification remains pending.
