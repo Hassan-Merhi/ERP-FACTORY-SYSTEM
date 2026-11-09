@@ -36,6 +36,7 @@ export function BatchRow({
   formatDisplayDate,
   condensed,
   isDeveloper,
+  canChangeExistingRecords,
 }: BatchRowProps) {
   const [bonusPayrollId, setBonusPayrollId] = useState<number | null>(null);
   const isExpanded = expanded.has(group.key);
@@ -57,14 +58,12 @@ export function BatchRow({
       >
         <div className="flex min-w-0 flex-1 items-center gap-3">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted/70 text-muted-foreground transition-colors group-hover:bg-blue-500/10 group-hover:text-blue-600 dark:group-hover:text-blue-400">
-            {isExpanded ? (
-              <ChevronDown className="h-4 w-4" />
-            ) : (
-              <ChevronRight className="h-4 w-4" />
-            )}
+            {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
           </span>
           <div className="min-w-0">
-            <p className={`flex flex-wrap items-center gap-2 font-semibold tracking-tight ${condensed ? "text-xs" : "text-sm"}`}>
+            <p
+              className={`flex flex-wrap items-center gap-2 font-semibold tracking-tight ${condensed ? "text-xs" : "text-sm"}`}
+            >
               <CalendarDays className="h-4 w-4 shrink-0 text-muted-foreground" />
               {fmtDate(group.periodStart, formatDisplayDate)} – {fmtDate(group.periodEnd, formatDisplayDate)}
             </p>
@@ -76,14 +75,20 @@ export function BatchRow({
         </div>
         <div className="flex shrink-0 items-center gap-2 sm:gap-3">
           <div className="text-right">
-            <p className={`font-mono font-bold tabular-nums ${condensed ? "text-xs" : "text-sm"}`}>${total.toFixed(2)}</p>
+            <p className={`font-mono font-bold tabular-nums ${condensed ? "text-xs" : "text-sm"}`}>
+              ${total.toFixed(2)}
+            </p>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              {paidCount > 0 && <span className="font-medium text-emerald-600 dark:text-emerald-400">{paidCount} paid</span>}
+              {paidCount > 0 && (
+                <span className="font-medium text-emerald-600 dark:text-emerald-400">{paidCount} paid</span>
+              )}
               {paidCount > 0 && unpaidCount > 0 && " · "}
-              {unpaidCount > 0 && <span className="font-medium text-amber-600 dark:text-amber-400">{unpaidCount} pending</span>}
+              {unpaidCount > 0 && (
+                <span className="font-medium text-amber-600 dark:text-amber-400">{unpaidCount} pending</span>
+              )}
             </p>
           </div>
-          {groupPayable.length > 0 && (
+          {canChangeExistingRecords && groupPayable.length > 0 && (
             <Checkbox
               checked={allGroupSelected}
               onCheckedChange={(checked) => {
@@ -98,19 +103,21 @@ export function BatchRow({
               aria-label="Select all payable workers in batch"
             />
           )}
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-9 w-9 rounded-lg text-muted-foreground hover:text-destructive"
-            onClick={(event) => {
-              event.stopPropagation();
-              setDeleteBatchGroup(group);
-            }}
-            data-testid={`button-delete-batch-${group.key}`}
-            title="Delete batch — reverses all payments and accounting entries"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          {canChangeExistingRecords && (
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-9 w-9 rounded-lg text-muted-foreground hover:text-destructive"
+              onClick={(event) => {
+                event.stopPropagation();
+                setDeleteBatchGroup(group);
+              }}
+              data-testid={`button-delete-batch-${group.key}`}
+              title="Delete batch — reverses all payments and accounting entries"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       </div>
 
@@ -144,9 +151,13 @@ export function BatchRow({
                   pendingBonus > 0 ||
                   Number(payroll.rejectedProductionBonus || 0) > 0;
                 return (
-                  <TableRow key={payroll.id} className="transition-colors hover:bg-muted/30" data-testid={`row-payroll-${payroll.id}`}>
+                  <TableRow
+                    key={payroll.id}
+                    className="transition-colors hover:bg-muted/30"
+                    data-testid={`row-payroll-${payroll.id}`}
+                  >
                     <TableCell className="pl-8">
-                      {canPay && (
+                      {canChangeExistingRecords && canPay && (
                         <Checkbox
                           checked={selectedIds.has(payroll.id)}
                           onCheckedChange={() =>
@@ -239,7 +250,7 @@ export function BatchRow({
                             />
                           </Button>
                         )}
-                        {canPay && (
+                        {canChangeExistingRecords && canPay && (
                           <Button
                             size="sm"
                             variant="outline"
@@ -253,7 +264,8 @@ export function BatchRow({
                             Pay
                           </Button>
                         )}
-                        {isDeveloper &&
+                        {canChangeExistingRecords &&
+                          isDeveloper &&
                           (payroll.status === "PAID" || payroll.status === "APPROVED") &&
                           !payroll.cashAccountId && (
                             <Button
@@ -270,25 +282,29 @@ export function BatchRow({
                               <Wrench className="h-4 w-4 text-amber-500" />
                             </Button>
                           )}
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => setUndoTargetId(payroll.id)}
-                          data-testid={`button-undo-payroll-${payroll.id}`}
-                          title="Undo — reverses all accounting entries"
-                        >
-                          <RotateCcw className="h-4 w-4 text-muted-foreground" />
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => setDeleteTargetId(payroll.id)}
-                          data-testid={`button-delete-payroll-${payroll.id}`}
-                          title="Delete payroll — reverse payment and journal entries, then remove the record"
-                          aria-label="Delete payroll and reverse accounting"
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
+                        {canChangeExistingRecords && (
+                          <>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => setUndoTargetId(payroll.id)}
+                              data-testid={`button-undo-payroll-${payroll.id}`}
+                              title="Undo — reverses all accounting entries"
+                            >
+                              <RotateCcw className="h-4 w-4 text-muted-foreground" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => setDeleteTargetId(payroll.id)}
+                              data-testid={`button-delete-payroll-${payroll.id}`}
+                              title="Delete payroll — reverse payment and journal entries, then remove the record"
+                              aria-label="Delete payroll and reverse accounting"
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>

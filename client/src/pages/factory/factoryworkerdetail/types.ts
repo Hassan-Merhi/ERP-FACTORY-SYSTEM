@@ -54,7 +54,8 @@ export interface AdvanceRowProps {
   isLoan: boolean;
   isExpanded: boolean;
   onToggleExpand: () => void;
-  onRepay: () => void;
+  /** Omitted for roles that cannot change existing records. */
+  onRepay?: () => void;
   formatDate: (d: string | null | undefined) => string;
   fmt: (v: string | number | null | undefined) => string;
 }

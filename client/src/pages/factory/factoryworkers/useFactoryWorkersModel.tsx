@@ -1,4 +1,5 @@
 import { searchAny } from "@shared/searchNormalization";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useState, useMemo, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
@@ -66,6 +67,7 @@ export function useFactoryWorkersModel() {
     settings?.workersTabCategoriesEnabled !== false && !hiddenTabs.includes("hide_tab_workers_categories");
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("Active");
@@ -194,11 +196,13 @@ export function useFactoryWorkersModel() {
   });
 
   const updateCatMutation = useMutation({
-    mutationFn: (data: { id: number; name: string; workerIds: number[] }) =>
-      factoryApiRequest("PATCH", `/api/factory/worker-categories/${data.id}`, {
+    mutationFn: (data: { id: number; name: string; workerIds: number[] }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
+      return factoryApiRequest("PATCH", `/api/factory/worker-categories/${data.id}`, {
         name: data.name,
         workerIds: data.workerIds,
-      }),
+      });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/factory/worker-categories"] });
       setCategoryDialogOpen(false);
@@ -208,7 +212,10 @@ export function useFactoryWorkersModel() {
   });
 
   const deleteCatMutation = useMutation({
-    mutationFn: (id: number) => factoryApiRequest("DELETE", `/api/factory/worker-categories/${id}`),
+    mutationFn: (id: number) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
+      return factoryApiRequest("DELETE", `/api/factory/worker-categories/${id}`);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/factory/worker-categories"] });
       toast({ title: "Category deleted" });
@@ -272,6 +279,7 @@ export function useFactoryWorkersModel() {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: typeof formData }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await factoryApiRequest("PATCH", `/api/factory/workers/${id}`, { ...data });
       if (!res.ok) {
         const err = await res.json();
@@ -293,6 +301,7 @@ export function useFactoryWorkersModel() {
 
   const reactivateMutation = useMutation({
     mutationFn: async (id: number) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await factoryApiRequest("POST", `/api/factory/workers/${id}/reactivate`, {});
       if (!res.ok) {
         const err = await res.json();
@@ -311,7 +320,7 @@ export function useFactoryWorkersModel() {
 
   const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || !recordChanges.allowed) return;
     e.target.value = "";
     setImportLoading(true);
     try {
@@ -439,7 +448,7 @@ export function useFactoryWorkersModel() {
   };
 
   const handleEndContract = async (payNow: boolean) => {
-    if (!endContractWorker) return;
+    if (!endContractWorker || !recordChanges.allowed) return;
     if (!navigator.onLine) {
       toast({
         title: "Not available offline",
@@ -615,7 +624,16 @@ export function useFactoryWorkersModel() {
       { key: "dueToday", width: 16 },
     ];
 
-    const headerRow = ws.addRow(["#", "Code", "Name", "Position", "Department", "Salary Type", "Base Salary", "Due Today"]);
+    const headerRow = ws.addRow([
+      "#",
+      "Code",
+      "Name",
+      "Position",
+      "Department",
+      "Salary Type",
+      "Base Salary",
+      "Due Today",
+    ]);
     headerRow.eachCell((cell) => {
       cell.font = { bold: true, size: 11 };
       cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1E40AF" } };
@@ -668,7 +686,16 @@ export function useFactoryWorkersModel() {
       }
     });
 
-    const totalRow = ws.addRow(["", "", `Total Workers: ${filteredWorkers.length}`, "", "", "TOTAL", totalSalary, totalDueToday]);
+    const totalRow = ws.addRow([
+      "",
+      "",
+      `Total Workers: ${filteredWorkers.length}`,
+      "",
+      "",
+      "TOTAL",
+      totalSalary,
+      totalDueToday,
+    ]);
     totalRow.getCell(6).alignment = { horizontal: "right" };
     for (const column of [7, 8]) {
       totalRow.getCell(column).numFmt = "#,##0.00";
@@ -704,6 +731,9 @@ export function useFactoryWorkersModel() {
   const totalRemainingToBePaid = totalDueToday;
 
   return {
+    canChangeExistingRecords: recordChanges.allowed,
+    canCreate: recordChanges.canCreate,
+    changeDisabledReason: recordChanges.reason,
     showWorkersList,
     showCategories,
     setLocation,

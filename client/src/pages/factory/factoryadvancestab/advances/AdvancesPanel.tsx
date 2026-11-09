@@ -118,6 +118,7 @@ export function AdvancesPanel({ model }: { model: ReturnType<typeof useAdvancesM
     filtered,
     stats,
     formatDate,
+    canChangeExistingRecords,
   } = model;
   return (
     <div className="space-y-5">
@@ -192,36 +193,46 @@ export function AdvancesPanel({ model }: { model: ReturnType<typeof useAdvancesM
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-52">
-              <DropdownMenuItem onClick={() => setRepayByMonthOpen(true)} data-testid="button-repay-by-month">
-                <CalendarDays className="h-4 w-4" />
-                Repay by Month
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setPostAccountingOpen(true)} data-testid="button-post-accounting">
-                <BookOpen className="h-4 w-4" />
-                Post Accounting
-              </DropdownMenuItem>
+              {canChangeExistingRecords && (
+                <DropdownMenuItem onClick={() => setRepayByMonthOpen(true)} data-testid="button-repay-by-month">
+                  <CalendarDays className="h-4 w-4" />
+                  Repay by Month
+                </DropdownMenuItem>
+              )}
+              {canChangeExistingRecords && (
+                <DropdownMenuItem onClick={() => setPostAccountingOpen(true)} data-testid="button-post-accounting">
+                  <BookOpen className="h-4 w-4" />
+                  Post Accounting
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem onClick={() => setRepayAuditOpen(true)} data-testid="button-repayment-audit">
                 <SearchCheck className="h-4 w-4" />
                 Repayment Audit
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setCashAdjOpen(true)} data-testid="button-cash-adjustment">
-                <SlidersHorizontal className="h-4 w-4" />
-                Cash Adjustment
-              </DropdownMenuItem>
+              {canChangeExistingRecords && (
+                <DropdownMenuItem onClick={() => setCashAdjOpen(true)} data-testid="button-cash-adjustment">
+                  <SlidersHorizontal className="h-4 w-4" />
+                  Cash Adjustment
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem onClick={() => setReconcileOpen(true)} data-testid="button-reconcile-advances">
                 <RotateCcw className="h-4 w-4" />
                 Reconcile Balances
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button variant="outline" onClick={() => setBulkOpen(true)} data-testid="button-bulk-advance">
-            <Users className="h-4 w-4 mr-2" />
-            Bulk Advance
-          </Button>
-          <Button onClick={() => setAddOpen(true)} data-testid="button-add-advance">
-            <Plus className="h-4 w-4 mr-2" />
-            Add Advance
-          </Button>
+          {canChangeExistingRecords && (
+            <>
+              <Button variant="outline" onClick={() => setBulkOpen(true)} data-testid="button-bulk-advance">
+                <Users className="h-4 w-4 mr-2" />
+                Bulk Advance
+              </Button>
+              <Button onClick={() => setAddOpen(true)} data-testid="button-add-advance">
+                <Plus className="h-4 w-4 mr-2" />
+                Add Advance
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
@@ -239,28 +250,30 @@ export function AdvancesPanel({ model }: { model: ReturnType<typeof useAdvancesM
           >
             Clear
           </Button>
-          <div className="flex items-center gap-2 ml-auto flex-wrap">
-            <Select value={bulkCashAccountId} onValueChange={setBulkCashAccountId}>
-              <SelectTrigger className="w-52" data-testid="select-bulk-cash-account">
-                <SelectValue placeholder="Select cash account…" />
-              </SelectTrigger>
-              <SelectContent>
-                {(cashAccounts || []).map((a) => (
-                  <SelectItem key={a.id} value={String(a.id)}>
-                    {a.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button
-              onClick={() => bulkUpdateCashAccountMutation.mutate()}
-              disabled={!bulkCashAccountId || bulkUpdateCashAccountMutation.isPending}
-              data-testid="button-bulk-update-cash-account"
-            >
-              {bulkUpdateCashAccountMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Update Cash Account
-            </Button>
-          </div>
+          {canChangeExistingRecords && (
+            <div className="flex items-center gap-2 ml-auto flex-wrap">
+              <Select value={bulkCashAccountId} onValueChange={setBulkCashAccountId}>
+                <SelectTrigger className="w-52" data-testid="select-bulk-cash-account">
+                  <SelectValue placeholder="Select cash account…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(cashAccounts || []).map((a) => (
+                    <SelectItem key={a.id} value={String(a.id)}>
+                      {a.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                onClick={() => bulkUpdateCashAccountMutation.mutate()}
+                disabled={!bulkCashAccountId || bulkUpdateCashAccountMutation.isPending}
+                data-testid="button-bulk-update-cash-account"
+              >
+                {bulkUpdateCashAccountMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Update Cash Account
+              </Button>
+            </div>
+          )}
         </div>
       )}
 
@@ -410,28 +423,30 @@ export function AdvancesPanel({ model }: { model: ReturnType<typeof useAdvancesM
                     {adv.notes || "\u2014"}
                   </TableCell>
                   <TableCell className="py-3">
-                    <div className="flex items-center gap-1">
-                      {adv.fullyPaid ? (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setReverseTarget(adv)}
-                          title="Reverse this advance"
-                          data-testid={`button-reverse-advance-${adv.id}`}
-                        >
-                          <RotateCcw className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setDeleteTarget(adv)}
-                          data-testid={`button-delete-advance-${adv.id}`}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      )}
-                    </div>
+                    {canChangeExistingRecords && (
+                      <div className="flex items-center gap-1">
+                        {adv.fullyPaid ? (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setReverseTarget(adv)}
+                            title="Reverse this advance"
+                            data-testid={`button-reverse-advance-${adv.id}`}
+                          >
+                            <RotateCcw className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setDeleteTarget(adv)}
+                            data-testid={`button-delete-advance-${adv.id}`}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        )}
+                      </div>
+                    )}
                   </TableCell>
                 </TableRow>
               ))

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Banknote, Download, Loader2, RotateCcw } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -60,6 +61,7 @@ const usd = (v: string | number) => Number(v).toLocaleString("en-US", { style: "
 /** Phase 15 financial surface: one immutable approved worker/week per cash payment. */
 export function ProductionTargetWeeklyBonusPaymentsPanel({ initialDate }: { initialDate: string }) {
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
   const monday = mondayOfProductionBonusWeek(initialDate) ?? initialDate;
   const [start, setStart] = useState(monday);
   const [end, setEnd] = useState(monday);
@@ -130,8 +132,9 @@ export function ProductionTargetWeeklyBonusPaymentsPanel({ initialDate }: { init
       }),
   });
   const payment = useMutation({
-    mutationFn: () =>
-      api<PostResult>("POST", base + "/post", {
+    mutationFn: () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
+      return api<PostResult>("POST", base + "/post", {
         confirm: true,
         currency: "USD",
         paymentDate,
@@ -141,7 +144,8 @@ export function ProductionTargetWeeklyBonusPaymentsPanel({ initialDate }: { init
           workerId: Number(r.workerId),
           expectedAmount: String(r.approvedAmount),
         })),
-      }),
+      });
+    },
     onSuccess: (result) => {
       toast({
         title: "Weekly flat bonus payments posted",
@@ -158,12 +162,14 @@ export function ProductionTargetWeeklyBonusPaymentsPanel({ initialDate }: { init
     },
   });
   const reversal = useMutation({
-    mutationFn: () =>
-      api("POST", base + "/" + reverseRow!.paymentId + "/reverse", {
+    mutationFn: () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
+      return api("POST", base + "/" + reverseRow!.paymentId + "/reverse", {
         confirm: true,
         reversalDate,
         reason: reason.trim(),
-      }),
+      });
+    },
     onSuccess: () => {
       toast({
         title: "Weekly bonus payment reversed",
@@ -304,9 +310,11 @@ export function ProductionTargetWeeklyBonusPaymentsPanel({ initialDate }: { init
           >
             {reconcile.isPending ? "Checking ledger…" : "Verify accounting"}
           </Button>
-          <Button type="button" disabled={!canPay || payment.isPending} onClick={() => setConfirmOpen(true)}>
-            Review and Post
-          </Button>
+          {recordChanges.allowed && (
+            <Button type="button" disabled={!canPay || payment.isPending} onClick={() => setConfirmOpen(true)}>
+              Review and Post
+            </Button>
+          )}
         </div>
         <div className="overflow-x-auto rounded-md border">
           <table className="w-full text-sm">
@@ -383,7 +391,7 @@ export function ProductionTargetWeeklyBonusPaymentsPanel({ initialDate }: { init
                       {r.voucherId && <p>Voucher #{r.voucherId}</p>}
                     </td>
                     <td className="px-3 py-2 text-right">
-                      {unpaid && (
+                      {recordChanges.allowed && unpaid && (
                         <Button
                           type="button"
                           size="sm"
@@ -396,7 +404,7 @@ export function ProductionTargetWeeklyBonusPaymentsPanel({ initialDate }: { init
                           <Banknote className="mr-1 h-3.5 w-3.5" /> Pay
                         </Button>
                       )}
-                      {r.paymentStatus === "POSTED" && (
+                      {recordChanges.allowed && r.paymentStatus === "POSTED" && (
                         <Button
                           type="button"
                           size="sm"

@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useRef } from "react";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,7 +22,10 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
-import { AttendanceReportRequestError, readAttendanceReportResponse } from "./factoryworkerattendancereport/reportResponse";
+import {
+  AttendanceReportRequestError,
+  readAttendanceReportResponse,
+} from "./factoryworkerattendancereport/reportResponse";
 import { validateAttendanceReportDateRange } from "@shared/attendanceReportDateRange";
 
 import type {
@@ -53,7 +57,10 @@ export default function FactoryWorkerAttendanceReport() {
   /* UI state */
   const [filter, setFilter] = useState<AttendanceFilter>("all");
   const [hideFullAbsent, setHideFullAbsent] = useState(false);
-  const [editMode, setEditMode] = useState(false);
+  const recordChanges = useExistingRecordChangeAccess();
+  const [editModeRequested, setEditMode] = useState(false);
+  // Read-only roles never enter edit mode, so attendance cells stay non-editable.
+  const editMode = recordChanges.allowed && editModeRequested;
 
   /* Pending optimistic edits: "workerId|date" → status */
   const [pending, setPending] = useState<Record<string, string | undefined>>({});
@@ -84,10 +91,7 @@ export default function FactoryWorkerAttendanceReport() {
     return { startDate: customStart, endDate: customEnd };
   }, [mode, customStart, customEnd]);
 
-  const dateRangeError = useMemo(
-    () => validateAttendanceReportDateRange(startDate, endDate),
-    [startDate, endDate]
-  );
+  const dateRangeError = useMemo(() => validateAttendanceReportDateRange(startDate, endDate), [startDate, endDate]);
   const queryKey = ["/api/factory/workers/attendance-report", startDate, endDate];
 
   const { data, isLoading, isError, error, refetch } = useQuery<AttendanceReportData>({
@@ -103,14 +107,14 @@ export default function FactoryWorkerAttendanceReport() {
     enabled: dateRangeError === null,
     // A proxy 502/503 can be transient. Do not retry denied, missing or malformed responses.
     retry: (failureCount, requestError) =>
-      failureCount < 2 &&
-      (!(requestError instanceof AttendanceReportRequestError) || requestError.retryable),
+      failureCount < 2 && (!(requestError instanceof AttendanceReportRequestError) || requestError.retryable),
     retryDelay: (failureCount) => Math.min(1000 * 2 ** failureCount, 3000),
   });
 
   /* Mutation: save single cell */
   const saveMutation = useMutation({
     mutationFn: async (records: Array<{ workerId: number; attendanceDate: string; status: string }>) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const validRecords = records.filter((r) => r.status !== "");
       const blankRecords = records.filter((r) => r.status === "");
       const promises = [];
@@ -446,28 +450,28 @@ export default function FactoryWorkerAttendanceReport() {
         )}
 
         {/* Edit mode toggle */}
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setEditMode((v) => !v)}
-          data-testid="toggle-edit-mode"
-          className={cn(
-            "h-9 gap-1.5 rounded-lg border-slate-200 px-3 text-xs font-semibold dark:border-blue-900/60 dark:bg-[#122037]",
-            editMode &&
-              "border-blue-400 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-500/15 dark:text-blue-300"
-          )}
-        >
-          <Pencil className="h-3.5 w-3.5" />
-          {editMode ? "Editing" : "Edit"}
-          {saveMutation.isPending && <Loader2 className="h-3 w-3 animate-spin ml-1" />}
-        </Button>
+        {recordChanges.allowed && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setEditMode((v) => !v)}
+            data-testid="toggle-edit-mode"
+            className={cn(
+              "h-9 gap-1.5 rounded-lg border-slate-200 px-3 text-xs font-semibold dark:border-blue-900/60 dark:bg-[#122037]",
+              editMode &&
+                "border-blue-400 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-500/15 dark:text-blue-300"
+            )}
+          >
+            <Pencil className="h-3.5 w-3.5" />
+            {editMode ? "Editing" : "Edit"}
+            {saveMutation.isPending && <Loader2 className="h-3 w-3 animate-spin ml-1" />}
+          </Button>
+        )}
       </div>
 
       {dateRangeError && (
         <Card>
-          <CardContent className="p-4 text-sm text-muted-foreground">
-            {dateRangeError}
-          </CardContent>
+          <CardContent className="p-4 text-sm text-muted-foreground">{dateRangeError}</CardContent>
         </Card>
       )}
 

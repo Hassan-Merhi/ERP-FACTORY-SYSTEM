@@ -49,15 +49,14 @@ export function PayrollOverview({ payroll }: { payroll: FactoryPayrollState }) {
     stats,
     activeGroups,
     completedGroups,
+    canChangeExistingRecords,
   } = payroll;
   return (
     <>
       {/* Presentation-only metrics: all values still come from the existing payroll model. */}
       <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5" data-testid="payroll-summary">
         {isLoading ? (
-          Array.from({ length: 5 }).map((_, index) => (
-            <Skeleton key={index} className="h-28 rounded-2xl" />
-          ))
+          Array.from({ length: 5 }).map((_, index) => <Skeleton key={index} className="h-28 rounded-2xl" />)
         ) : (
           <>
             <div className="flex min-h-28 min-w-0 items-center gap-3 rounded-2xl border border-indigo-200/60 bg-indigo-50/70 p-4 shadow-sm dark:border-indigo-400/20 dark:bg-gradient-to-br dark:from-indigo-500/20 dark:to-slate-950/60">
@@ -66,7 +65,9 @@ export function PayrollOverview({ payroll }: { payroll: FactoryPayrollState }) {
               </span>
               <div className="min-w-0">
                 <p className="text-xs font-medium text-muted-foreground">Workers on Payroll</p>
-                <p className="mt-1 text-2xl font-bold tracking-tight tabular-nums" data-testid="stat-workers">{stats.uniqueWorkers}</p>
+                <p className="mt-1 text-2xl font-bold tracking-tight tabular-nums" data-testid="stat-workers">
+                  {stats.uniqueWorkers}
+                </p>
               </div>
             </div>
 
@@ -86,7 +87,10 @@ export function PayrollOverview({ payroll }: { payroll: FactoryPayrollState }) {
               </span>
               <div className="min-w-0">
                 <p className="text-xs font-medium text-muted-foreground">Pending</p>
-                <p className="mt-1 font-mono text-xl font-bold tracking-tight tabular-nums text-amber-700 dark:text-amber-400" data-testid="stat-pending">
+                <p
+                  className="mt-1 font-mono text-xl font-bold tracking-tight tabular-nums text-amber-700 dark:text-amber-400"
+                  data-testid="stat-pending"
+                >
                   ${stats.pending.toFixed(2)}
                 </p>
               </div>
@@ -98,16 +102,25 @@ export function PayrollOverview({ payroll }: { payroll: FactoryPayrollState }) {
               </span>
               <div className="min-w-0">
                 <p className="text-xs font-medium text-muted-foreground">Total Paid</p>
-                <p className="mt-1 font-mono text-xl font-bold tracking-tight tabular-nums text-emerald-700 dark:text-emerald-400" data-testid="stat-paid">
+                <p
+                  className="mt-1 font-mono text-xl font-bold tracking-tight tabular-nums text-emerald-700 dark:text-emerald-400"
+                  data-testid="stat-paid"
+                >
                   ${stats.paid.toFixed(2)}
                 </p>
               </div>
             </div>
 
-            <div className="flex min-h-28 min-w-0 flex-col justify-center gap-2 rounded-2xl border border-border/70 bg-card/90 p-4 shadow-sm dark:border-blue-400/20 dark:bg-gradient-to-br dark:from-blue-500/10 dark:to-slate-900/80" data-testid="stat-projection">
+            <div
+              className="flex min-h-28 min-w-0 flex-col justify-center gap-2 rounded-2xl border border-border/70 bg-card/90 p-4 shadow-sm dark:border-blue-400/20 dark:bg-gradient-to-br dark:from-blue-500/10 dark:to-slate-900/80"
+              data-testid="stat-projection"
+            >
               <div className="flex min-w-0 items-center gap-2">
                 <CalendarDays className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
-                <Select value={projectionPeriod} onValueChange={(v) => setProjectionPeriod(v as typeof projectionPeriod)}>
+                <Select
+                  value={projectionPeriod}
+                  onValueChange={(v) => setProjectionPeriod(v as typeof projectionPeriod)}
+                >
                   <SelectTrigger
                     className="h-8 min-w-0 w-auto max-w-full gap-2 rounded-lg border-border/60 bg-background/70 px-2 text-xs font-semibold shadow-none focus:ring-1"
                     data-testid="select-projection-period"
@@ -146,13 +159,13 @@ export function PayrollOverview({ payroll }: { payroll: FactoryPayrollState }) {
           {payrollGroups.length !== 1 ? "es" : ""}
         </p>
         <div className="flex gap-2 flex-wrap">
-          {selectedIds.size > 0 && (
+          {canChangeExistingRecords && selectedIds.size > 0 && (
             <Button variant="outline" onClick={() => setBulkPayOpen(true)} data-testid="button-bulk-pay">
               <DollarSign className="h-4 w-4 mr-2" />
               Pay {selectedIds.size} Selected
             </Button>
           )}
-          {isDeveloper && (
+          {canChangeExistingRecords && isDeveloper && (
             <Button
               size="icon"
               variant="ghost"
@@ -166,10 +179,16 @@ export function PayrollOverview({ payroll }: { payroll: FactoryPayrollState }) {
               <ShieldCheck className="h-4 w-4 text-muted-foreground" />
             </Button>
           )}
-          <Button className="rounded-xl bg-blue-600 px-5 font-semibold shadow-sm shadow-blue-500/20 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500" onClick={() => setRunOpen(true)} data-testid="button-run-payroll">
-            <Play className="h-4 w-4 mr-2" />
-            Run Payroll
-          </Button>
+          {canChangeExistingRecords && (
+            <Button
+              className="rounded-xl bg-blue-600 px-5 font-semibold shadow-sm shadow-blue-500/20 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500"
+              onClick={() => setRunOpen(true)}
+              data-testid="button-run-payroll"
+            >
+              <Play className="h-4 w-4 mr-2" />
+              Run Payroll
+            </Button>
+          )}
         </div>
       </div>
 
@@ -217,6 +236,7 @@ export function PayrollOverview({ payroll }: { payroll: FactoryPayrollState }) {
                   setDeleteBatchGroup={setDeleteBatchGroup}
                   formatDisplayDate={formatDisplayDate}
                   isDeveloper={isDeveloper}
+                  canChangeExistingRecords={canChangeExistingRecords}
                 />
               ))}
             </div>
@@ -254,11 +274,12 @@ export function PayrollOverview({ payroll }: { payroll: FactoryPayrollState }) {
                         setFixAcctCashId={setFixAcctCashId}
                         setFixAcctOpen={setFixAcctOpen}
                         setUndoTargetId={setUndoTargetId}
-                  setDeleteTargetId={setDeleteTargetId}
+                        setDeleteTargetId={setDeleteTargetId}
                         setDeleteBatchGroup={setDeleteBatchGroup}
                         formatDisplayDate={formatDisplayDate}
                         condensed
                         isDeveloper={isDeveloper}
+                        canChangeExistingRecords={canChangeExistingRecords}
                       />
                     ))}
                   </div>

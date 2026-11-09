@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useAdminOverride } from "@/hooks/use-admin-override";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -38,6 +39,7 @@ export function useFactoryWorkerDetailModel() {
   const [, params] = useRoute("/factory/workers/:id");
   const workerId = params?.id ? parseInt(params.id) : null;
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const docInputRef = useRef<HTMLInputElement>(null);
   const [uploadingDoc, setUploadingDoc] = useState(false);
@@ -241,6 +243,7 @@ export function useFactoryWorkerDetailModel() {
       repaymentType: string;
       cashAccountId?: number;
     }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await apiRequest("POST", `/api/factory/workers/${workerId}/advances`, data);
       if (!res.ok) {
         const err = await res.json();
@@ -271,6 +274,7 @@ export function useFactoryWorkerDetailModel() {
       cashAccountId?: number;
       notes?: string;
     }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await apiRequest("POST", `/api/factory/advances/${data.advanceId}/repayments`, data);
       if (!res.ok) {
         const err = await res.json();
@@ -299,6 +303,7 @@ export function useFactoryWorkerDetailModel() {
       cashAccountId?: number;
       notes?: string;
     }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await apiRequest("POST", `/api/factory/workers/${workerId}/bulk-repay-advances`, data);
       if (!res.ok) {
         const err = await res.json();
@@ -324,6 +329,7 @@ export function useFactoryWorkerDetailModel() {
 
   const deleteAdvanceMutation = useMutation({
     mutationFn: async (advanceId: number) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await apiRequest("DELETE", `/api/factory/advances/${advanceId}`);
       if (!res.ok) {
         const err = await res.json();
@@ -343,6 +349,7 @@ export function useFactoryWorkerDetailModel() {
 
   const deleteDocMutation = useMutation({
     mutationFn: async (docId: number) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await apiRequest("DELETE", `/api/factory/workers/${workerId}/documents/${docId}`);
       if (!res.ok) {
         const err = await res.json();
@@ -362,7 +369,7 @@ export function useFactoryWorkerDetailModel() {
 
   const handleDocUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !workerId) return;
+    if (!file || !workerId || !recordChanges.allowed) return;
     if (docInputRef.current) docInputRef.current.value = "";
     setUploadingDoc(true);
     try {
@@ -388,6 +395,7 @@ export function useFactoryWorkerDetailModel() {
 
   const markPaidMutation = useMutation({
     mutationFn: async ({ id, cashId }: { id: number; cashId: string }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await apiRequest("PATCH", `/api/factory/payrolls/${id}/mark-paid`, {
         companyId: worker?.companyId,
         cashAccountId: cashId ? parseInt(cashId) : undefined,
@@ -413,6 +421,7 @@ export function useFactoryWorkerDetailModel() {
 
   const fixAcctMutation = useMutation({
     mutationFn: async ({ id, cashId }: { id: number; cashId: string }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await apiRequest("PATCH", `/api/factory/payrolls/${id}/fix-accounting`, {
         companyId: worker?.companyId,
         cashAccountId: parseInt(cashId),
@@ -436,6 +445,7 @@ export function useFactoryWorkerDetailModel() {
 
   const reactivateMutation = useMutation({
     mutationFn: async () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await factoryApiRequest("POST", `/api/factory/workers/${workerId}/reactivate`, {});
       if (!res.ok) {
         const err = await res.json();
@@ -456,7 +466,7 @@ export function useFactoryWorkerDetailModel() {
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !workerId) return;
+    if (!file || !workerId || !recordChanges.allowed) return;
     const fd = new FormData();
     fd.append("photo", file);
     try {
@@ -519,7 +529,7 @@ export function useFactoryWorkerDetailModel() {
   };
 
   const handleEndContract = async (payNow: boolean) => {
-    if (!worker) return;
+    if (!worker || !recordChanges.allowed) return;
     if (!navigator.onLine) {
       toast({
         title: "Not available offline",
@@ -555,7 +565,7 @@ export function useFactoryWorkerDetailModel() {
   };
 
   const handleSkipAndEnd = async () => {
-    if (!worker) return;
+    if (!worker || !recordChanges.allowed) return;
     if (!navigator.onLine) {
       toast({ title: "Not available offline", description: "Requires a connection", variant: "destructive" });
       return;
@@ -598,6 +608,9 @@ export function useFactoryWorkerDetailModel() {
   const netBalance = totalPaidSalary + totalPaidBonuses - advancesLeft;
 
   return {
+    canChangeExistingRecords: recordChanges.allowed,
+    canCreate: recordChanges.canCreate,
+    changeDisabledReason: recordChanges.reason,
     AdminDialog,
     advanceAmount,
     advanceCashAccountId,

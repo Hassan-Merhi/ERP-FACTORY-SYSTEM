@@ -100,4 +100,6 @@ export interface BatchRowProps {
   formatDisplayDate: (d: string | Date) => string;
   condensed?: boolean;
   isDeveloper?: boolean;
+  /** False for View Only and Create Only: pay, undo, delete and repair controls are hidden. */
+  canChangeExistingRecords: boolean;
 }

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useMutation } from "@tanstack/react-query";
 import { AlertTriangle, Loader2, Trash2 } from "lucide-react";
 import type { ClientErrorLike } from "@/lib/clientError";
@@ -20,6 +21,7 @@ interface InsuranceClearDialogProps {
 
 export function InsuranceClearDialog({ open, companyName, onClose }: InsuranceClearDialogProps) {
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
   const [confirmation, setConfirmation] = useState("");
 
   const close = () => {
@@ -30,6 +32,7 @@ export function InsuranceClearDialog({ open, companyName, onClose }: InsuranceCl
 
   const clearMutation = useMutation({
     mutationFn: async () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const response = await apiRequest("POST", "/api/insurance/admin/clear-all", { confirmation });
       return response.json();
     },
@@ -82,15 +85,17 @@ export function InsuranceClearDialog({ open, companyName, onClose }: InsuranceCl
           <Button variant="outline" onClick={close} disabled={clearMutation.isPending}>
             Cancel
           </Button>
-          <Button
-            variant="destructive"
-            onClick={() => clearMutation.mutate()}
-            disabled={confirmation !== CONFIRMATION || clearMutation.isPending}
-            data-testid="button-confirm-clear-insurance"
-          >
-            {clearMutation.isPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
-            Delete All Insurance Data
-          </Button>
+          {recordChanges.allowed && (
+            <Button
+              variant="destructive"
+              onClick={() => clearMutation.mutate()}
+              disabled={confirmation !== CONFIRMATION || clearMutation.isPending}
+              data-testid="button-confirm-clear-insurance"
+            >
+              {clearMutation.isPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
+              Delete All Insurance Data
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

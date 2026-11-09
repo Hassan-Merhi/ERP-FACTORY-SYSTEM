@@ -94,7 +94,7 @@ export function AdvanceRow({ adv, isLoan, isExpanded, onToggleExpand, onRepay, f
         </TableCell>
         <TableCell className="text-sm text-muted-foreground">{adv.notes || "\u2014"}</TableCell>
         <TableCell>
-          {isLoan && !adv.fullyPaid && (
+          {onRepay && isLoan && !adv.fullyPaid && (
             <Button size="sm" variant="outline" onClick={onRepay} data-testid={`button-repay-advance-${adv.id}`}>
               <RotateCcw className="h-3 w-3 mr-1" /> Repay
             </Button>
