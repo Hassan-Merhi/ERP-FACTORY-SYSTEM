@@ -150,6 +150,39 @@ describe("loading dispatch Phase 4 comparisons", () => {
     expect(result.unexpectedBales[0].reason).toBe("NOT_IN_TRIP_PLAN");
   });
 
+  it("detects wrong-truck scans in the overall comparison when exact allocations exist", () => {
+    const result = compare({
+      scans: [scan(1, 2)],
+      expectedBales: [planned(1, 1)],
+    });
+    expect(result.summary.crossTripMisplacedBales).toBe(1);
+    expect(result.summary.unexpectedBales).toBe(1);
+    expect(result.crossTripBales[0]).toMatchObject({
+      baleId: 1, expectedDispatchNumber: 1, dispatchNumber: 2,
+      reason: "SCANNED_DIFFERENT_TRIP",
+    });
+  });
+
+  it("calculates expected KG from a complete exact allocation even when article targets exist", () => {
+    const result = compare({
+      selectedDispatchId: "1", expectedBales: [planned(1), planned(2)],
+      expectedArticles: [target("A", 2)], scans: [scan(1)],
+    });
+    expect(result.summary.expectedWeightKg).toBe(80);
+    expect(result.summary.verifiedWeightKg).toBe(40);
+    expect(result.summary.weightDifferenceKg).toBe(40);
+    expect(result.articles.find((row) => row.articleCode === "A")?.expectedWeightKg).toBe(80);
+  });
+
+  it("leaves KG expectations unknown if only some exact bales are reserved", () => {
+    const result = compare({
+      selectedDispatchId: "1", expectedBales: [planned(1)],
+      expectedArticles: [target("A", 2)], scans: [],
+    });
+    expect(result.summary.expectedWeightKg).toBeNull();
+    expect(result.articles.find((row) => row.articleCode === "A")?.expectedWeightKg).toBeNull();
+  });
+
   it("surfaces anomalous double-verified active bale IDs instead of counting twice", () => {
     const result = compare({ scans: [scan(1, 1), scan(1, 2)] });
     expect(result.summary.verifiedBales).toBe(1);
