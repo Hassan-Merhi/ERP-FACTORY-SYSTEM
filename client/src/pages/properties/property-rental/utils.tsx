@@ -36,11 +36,7 @@ export function billingDayLabel(dateStr: string | null | undefined): string | nu
   }
 }
 
-export const fmtMoney = (v: string | number | null | undefined) => {
-  if (v === null || v === undefined || v === "") return "—";
-  const n = Number(v);
-  return n.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
-};
+export const fmtMoney = (v: string | number | null | undefined) => formatMoneyNumber(v);
 
 function clampPaymentAllocationPeriod(
   year: number,
