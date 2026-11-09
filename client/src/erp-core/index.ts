@@ -31,3 +31,15 @@ export {
 export { StatCard as ErpStatCard } from "@/components/StatCard";
 export { Card as ErpCard } from "@/components/ui/card";
 export { Badge as ErpBadge } from "@/components/ui/badge";
+
+export { ErpListTable } from "./ErpListTable";
+export type { ErpListTableProps } from "./ErpListTable";
+export { ErpListFilters } from "./ErpListFilters";
+export {
+  TableHeader as ErpTableHeader,
+  TableBody as ErpTableBody,
+  TableFooter as ErpTableFooter,
+  TableRow as ErpTableRow,
+  TableHead as ErpTableHead,
+  TableCell as ErpTableCell,
+} from "@/components/ui/table";
