@@ -262,7 +262,7 @@ export const applicationArabicTranslations = {
   "offline.legacy.reenterHelp": "أدخل هذا مجددًا من نموذجه المعتاد، ثم علّمه كمُعاد إدخاله.",
   "offline.legacy.markReentered": "تعليم كمُعاد إدخاله",
   "offline.legacy.notRecorded": "تعذر تسجيل اختيارك. لم يتغير شيء؛ أعد المحاولة عند الاتصال.",
-  "offline.coldStart.banner": "غير متصل بخادم المصنع: عرض فقط",
+  "offline.coldStart.banner": "غير متصل: تُحفظ القيود المتاحة دون اتصال على هذا الحاسوب وتُرسل عند عودة الاتصال",
   "offline.coldStart.until": "تبقى البيانات المخزنة قابلة للعرض حتى",
   "offline.coldStart.unlockTitle": "لا يوجد اتصال بالسحابة أو بخادم المصنع",
   "offline.coldStart.unlockBody":

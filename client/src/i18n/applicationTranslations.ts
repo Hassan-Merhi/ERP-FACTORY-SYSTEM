@@ -263,7 +263,7 @@ export const applicationEnglishTranslations = {
   "offline.legacy.reenterHelp": "Enter this again through its normal form, then mark it re-entered.",
   "offline.legacy.markReentered": "Mark re-entered",
   "offline.legacy.notRecorded": "Your choice could not be recorded. Nothing was changed; try again when connected.",
-  "offline.coldStart.banner": "Not connected to the factory server: view only",
+  "offline.coldStart.banner": "Offline: entries that work offline are saved on this laptop and sent when the connection is back",
   "offline.coldStart.until": "Cached data stays viewable until",
   "offline.coldStart.unlockTitle": "No connection to the cloud or the factory server",
   "offline.coldStart.unlockBody":

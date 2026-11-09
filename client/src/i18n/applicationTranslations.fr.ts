@@ -269,7 +269,7 @@ export const applicationFrenchTranslations = {
   "offline.legacy.markReentered": "Marquer comme ressaisi",
   "offline.legacy.notRecorded":
     "Votre choix n'a pas pu être enregistré. Rien n'a changé ; réessayez une fois connecté.",
-  "offline.coldStart.banner": "Non connecté au serveur de l'usine : consultation uniquement",
+  "offline.coldStart.banner": "Hors ligne : les saisies possibles hors ligne sont enregistrées sur cet ordinateur et envoyées au retour de la connexion",
   "offline.coldStart.until": "Les données en cache restent consultables jusqu'au",
   "offline.coldStart.unlockTitle": "Aucune connexion au cloud ni au serveur de l'usine",
   "offline.coldStart.unlockBody":

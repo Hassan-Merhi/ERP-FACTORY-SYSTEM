@@ -19,6 +19,7 @@ import { isAbortError } from "./abortError";
 import { getRealtimeClientId } from "./realtimeClientIdentity";
 import { factoryPageOwnsAccountsAllRead, factoryPageOwnsSharedAccountingRead } from "./factoryClientAccess";
 import { coldStartReadOnlyActive, coldStartReadOnlyResponse } from "./offline/coldStartState";
+import { isKnownOffline } from "./offline/connectivityState";
 
 /** Session writes a read-only cold-start viewer may still make (sign in / out). */
 const COLD_START_ALLOWED_WRITES = new Set(["/api/auth/login", "/api/auth/logout", "/api/csrf-token"]);
@@ -562,6 +563,27 @@ function assertCreateOnlyRequestAllowed(method: string, url: string): void {
   }
 }
 
+/**
+ * Who a write saved offline belongs to: the verified offline scope (online
+ * verification or the sealed read-only ticket), else the signed-in user and the
+ * selected company this tab already knows. The cloud re-checks the session
+ * before delivering anything, and never sends another user's records.
+ */
+async function offlineCaptureActor(): Promise<{ companyId: number; userId: string } | null> {
+  const { getVerifiedOfflineReadScope } = await import("./offline/offlineReadCache");
+  const scope = getVerifiedOfflineReadScope();
+  if (scope) return scope;
+  const user = queryClient.getQueryData<{ id?: string | number }>(["/api/auth/me"]);
+  let companyId = NaN;
+  try {
+    companyId = Number(localStorage.getItem("selectedCompanyId"));
+  } catch {
+    companyId = NaN;
+  }
+  if (!user?.id || !Number.isSafeInteger(companyId) || companyId <= 0) return null;
+  return { companyId, userId: String(user.id) };
+}
+
 export async function apiRequest(
   method: string,
   url: string,
@@ -581,6 +603,17 @@ export async function apiRequest(
     }
     const { submitDurableVoucherWithEntries } = await import("./offline/voucherCapture");
     return submitDurableVoucherWithEntries({ companyId, userId: String(user.id) }, data, getAppDate());
+  }
+  if (
+    OFFLINE_MODE_ENABLED &&
+    !["GET", "HEAD", "OPTIONS"].includes(method.toUpperCase()) &&
+    (isKnownOffline() || coldStartReadOnlyActive())
+  ) {
+    // Standalone offline mode: known to be offline BEFORE sending. Supported
+    // writes are saved on this device for later delivery to the cloud; every
+    // other write is refused with its reason. Never after a send was cut off.
+    const { captureOfflineWrite } = await import("./offline/browserCapture");
+    return captureOfflineWrite(await offlineCaptureActor(), method, url, data);
   }
   const prepared = await prepareApiRequest(method, url, data, timeoutMs);
 
