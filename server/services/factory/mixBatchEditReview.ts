@@ -172,9 +172,7 @@ export async function prepareMixSourceEditReview(
     let releasedKg = new MoneyDecimal(0);
     for (const old of oldBySupplier.get(supplierId) ?? []) {
       if (old.containerId === null) {
-        if (raw.rows.length) {
-          warnings.push(`Supplier #${supplierId} has legacy unallocated sources; historical allocation must be reviewed.`);
-        }
+        warnings.push(`Supplier #${supplierId} has unallocated legacy/manual sources; their original stock impact cannot be proven for automatic reversal.`);
         continue;
       }
       const row = rowByContainer.get(old.containerId);
