@@ -389,35 +389,46 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
                 old: toMoney(batchBefore.totalWeightKg).toFixed(3),
                 new: toMoney(edited.totalWeightKg).toFixed(3),
               },
+              totalCost: {
+                old: toMoney(batchBefore.totalCost).toFixed(7),
+                new: toMoney(edited.totalCost).toFixed(7),
+              },
+              sourceEdit: {
+                reason,
+                reviewHash: review.reviewHash,
+                originalSources: oldSources.map((s) => ({
+                  sourceId: s.id, supplierId: s.supplierId, containerId: s.containerId,
+                  sourceBatchId: s.sourceBatchId, weightKg: s.weightKg,
+                  costPerKg: s.costPerKg, totalCost: s.totalCost,
+                })),
+                newSupplierSources: sourceInputs.supplierSources,
+                newBatchSources: sourceInputs.batchSources,
+              },
             },
           },
           tx
         );
+        // Keep the existing daybook reference in the SAME transaction as
+        // source, quantity, valuation and audit updates. This does not create
+        // an extra accounting voucher; failure rolls back the whole edit.
+        await tx.delete(factoryDaybookEntries).where(and(
+          eq(factoryDaybookEntries.companyId, companyId),
+          eq(factoryDaybookEntries.txType, "MIX_BATCH_CREATED"),
+          eq(factoryDaybookEntries.referenceId, id),
+        ));
+        const mbTxDate = batchDate || edited.batchDate || getClientDate(req);
+        await writeDaybookEntry(tx, {
+          companyId,
+          txDate: mbTxDate,
+          txType: "MIX_BATCH_CREATED",
+          referenceId: edited.id,
+          referenceTable: "factory_mix_batches",
+          description: `Mix batch edited: ${edited.batchCode}${edited.name ? ` – ${edited.name}` : ""} (${toMoney(edited.totalWeightKg).toFixed(1)} kg)`,
+          amountCurrency: toMoney(edited.totalCost).toNumber(),
+          amountUsd: toMoney(edited.totalCost).toNumber(),
+        });
         return edited;
       });
-
-      // Update daybook entry
-      await db
-        .delete(factoryDaybookEntries)
-        .where(
-          and(
-            eq(factoryDaybookEntries.companyId, companyId),
-            eq(factoryDaybookEntries.txType, "MIX_BATCH_CREATED"),
-            eq(factoryDaybookEntries.referenceId, id)
-          )
-        );
-      const mbTxDate = batchDate || result.batchDate || getClientDate(req);
-      await writeDaybookEntry(db, {
-        companyId,
-        txDate: mbTxDate,
-        txType: "MIX_BATCH_CREATED",
-        referenceId: result.id,
-        referenceTable: "factory_mix_batches",
-        description: `Mix batch edited: ${result.batchCode}${result.name ? ` – ${result.name}` : ""} (${toMoney(result.totalWeightKg).toFixed(1)} kg)`,
-        amountCurrency: toMoney(result.totalCost).toNumber(),
-        amountUsd: toMoney(result.totalCost).toNumber(),
-      });
-
       res.json(result);
     } catch (error: unknown) {
       if (error instanceof MixEditRequestError) {
