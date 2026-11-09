@@ -26,7 +26,7 @@ export default function FactoryPayrollHub() {
   const { language } = useApplicationLanguage();
   const tr = (key: Parameters<typeof translateFactoryStaffTrackingText>[0]) =>
     translateFactoryStaffTrackingText(key, language);
-  const hidden = myAccess?.companyId === selectedCompany?.id && myAccess.hasFactoryAccess
+  const hidden = myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
     ? myAccess.hiddenCostFields
     : Object.values(HIDDEN_KEYS);
 
