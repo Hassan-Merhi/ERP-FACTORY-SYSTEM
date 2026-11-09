@@ -84,6 +84,36 @@ interface MixHistoricalAuditPreview {
   }>;
 }
 
+interface MixPhase4Audit {
+  readOnly: true;
+  generatedAt: string;
+  summary: {
+    rawStockRows: number;
+    rawStockOverdrawRows: number;
+    totalRawRowOverdrawKg: string;
+    supplierOverdrawReviewCount: number;
+    unbackedShortageSupplierCount: number;
+    ownershipSourceExceptions: number;
+    ownershipAffectedBatches: number;
+    unclassifiedValuedAdds: number;
+    unclassifiedNonUsdAdds: number;
+    supplierOnlySourceRows: number;
+  };
+  rawStockExceptions: Array<{
+    rawStockId: number; containerNumber: string | null;
+    excessUsedKg: string; supplierCoverage: string;
+  }>;
+  ownershipExceptions: Array<{
+    sourceId: number; batchCode: string; pricingSupplierId: number | null;
+    recordedInventorySupplierId: number | null;
+    currentContainerSupplierId: number | null;
+  }>;
+  adjustmentEvidence: Array<{
+    adjustmentId: number; supplierName: string | null; date: string;
+    kg: string; currency: string; classification: string;
+  }>;
+}
+
 interface MixBatchListProps {
   mixBatches: MixBatchRow[];
   isLoading: boolean;
@@ -131,6 +161,9 @@ export function MixBatchList({
   const [isAuditingMixes, setIsAuditingMixes] = useState(false);
   const [auditExportLevel, setAuditExportLevel] = useState<"batches" | "sources" | null>(null);
   const [historicalAudit, setHistoricalAudit] = useState<MixHistoricalAuditPreview | null>(null);
+  const [phase4Audit, setPhase4Audit] = useState<MixPhase4Audit | null>(null);
+  const [isAuditingProvenance, setIsAuditingProvenance] = useState(false);
+  const [provenanceExport, setProvenanceExport] = useState<"stock" | "ownership" | "adjustments" | null>(null);
   const [exportPeriod, setExportPeriod] = useState<"month" | "all-time">("month");
   const [exportMonth, setExportMonth] = useState(() => {
     const now = new Date();
@@ -209,6 +242,42 @@ export function MixBatchList({
     } finally {
       setAuditExportLevel(null);
     }
+  };
+
+  const handleRunProvenanceAudit = async () => {
+    setIsAuditingProvenance(true);
+    try {
+      const res = await fetch("/api/factory/mix-batches?profile=raw-provenance-audit", {
+        credentials: "same-origin", cache: "no-store",
+      });
+      if (!res.ok) throw new Error("Unable to load the raw-material provenance report.");
+      setPhase4Audit((await res.json()) as MixPhase4Audit);
+      toast({ title: "Raw stock and supplier audit ready", description: "No inventory, pricing or accounting values were changed." });
+    } catch (error) {
+      toast({ title: "Provenance audit failed", description: error instanceof Error ? error.message : "Please retry.", variant: "destructive" });
+    } finally { setIsAuditingProvenance(false); }
+  };
+
+  const handleDownloadProvenanceAudit = async (section: "stock" | "ownership" | "adjustments") => {
+    setProvenanceExport(section);
+    try {
+      const res = await fetch(
+        "/api/factory/mix-batches?profile=raw-provenance-audit&format=csv&section=" + section,
+        { credentials: "same-origin", cache: "no-store" }
+      );
+      if (!res.ok) throw new Error("Could not generate raw-material audit export.");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "factory-mix-" + section + "-audit.csv";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      toast({ title: "Export failed", description: error instanceof Error ? error.message : "Please retry.", variant: "destructive" });
+    } finally { setProvenanceExport(null); }
   };
 
   const BATCH_PREVIEW_COUNT = 15;
@@ -336,6 +405,30 @@ export function MixBatchList({
         </div>
         )}
 
+        {canAuditHistoricalMixes && (
+          <div className="flex w-full flex-col gap-2 rounded-xl border border-border/70 bg-muted/20 p-3 sm:flex-row sm:items-center sm:justify-between" data-testid="mix-phase4-audit-controls">
+            <div>
+              <p className="text-sm font-semibold">Raw Stock & Supplier Provenance</p>
+              <p className="text-xs text-muted-foreground">Checks container ownership, adjustment-backed usage and historical valuation evidence.</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="outline" size="sm" disabled={isAuditingProvenance}
+                onClick={handleRunProvenanceAudit} data-testid="button-audit-mix-raw-provenance">
+                {isAuditingProvenance ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
+                {isAuditingProvenance ? "Auditing…" : "Audit Raw Stock"}
+              </Button>
+              {(["stock", "ownership", "adjustments"] as const).map((section) => (
+                <Button key={section} type="button" variant="outline" size="sm"
+                  disabled={provenanceExport !== null}
+                  onClick={() => handleDownloadProvenanceAudit(section)}
+                  data-testid={`button-export-mix-${section}-audit`}>
+                  <Download className="mr-1 h-4 w-4" /> {section === "stock" ? "Stock CSV" : section === "ownership" ? "Owner CSV" : "Adjustments CSV"}
+                </Button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <MixBatchWhatsAppPreview
           reportRef={mixBatchPrintRef}
           date={mixBatchDate}
@@ -347,6 +440,36 @@ export function MixBatchList({
       </CardHeader>
 
       <CardContent className="min-w-0 p-4 sm:p-5">
+        {phase4Audit && (
+          <div className="mb-4 space-y-3 rounded-xl border border-border/70 p-4" data-testid="mix-phase4-audit-results">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-semibold">Phase 4 · Raw Material & Ownership Reconciliation</p>
+              <span className="text-xs text-muted-foreground">Read-only · {phase4Audit.generatedAt.slice(0, 10)}</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
+              <div><p className="text-xs text-muted-foreground">Receipt-row overdraws</p><p className="font-mono font-bold">{phase4Audit.summary.rawStockOverdrawRows}</p></div>
+              <div><p className="text-xs text-muted-foreground">Overdrawn kg</p><p className="font-mono font-bold">{formatNumber(Number(phase4Audit.summary.totalRawRowOverdrawKg))}</p></div>
+              <div><p className="text-xs text-muted-foreground">Source ownership reviews</p><p className="font-mono font-bold">{phase4Audit.summary.ownershipSourceExceptions}</p></div>
+              <div><p className="text-xs text-muted-foreground">Unclassified valued ADDs</p><p className="font-mono font-bold">{phase4Audit.summary.unclassifiedValuedAdds}</p></div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Receipt-row negative balances can be covered by recorded supplier ADD adjustments.
+              Historical ownership and currency corrections require original supporting evidence; no automatic changes are made.
+            </p>
+            {phase4Audit.rawStockExceptions.map((stock) => (
+              <p className="text-xs text-muted-foreground" key={stock.rawStockId}>
+                <span className="font-mono text-foreground">{stock.containerNumber ?? `Raw stock #${stock.rawStockId}`}</span>
+                {" · "}Excess {formatNumber(Number(stock.excessUsedKg))} kg
+                {" · "}{stock.supplierCoverage === "POTENTIALLY_ADJUSTMENT_BACKED" ? "Potentially ADD-backed" : "Supplier shortage review"}
+              </p>
+            ))}
+            <p className="text-xs text-muted-foreground">
+              {phase4Audit.summary.ownershipAffectedBatches} batches have ownership references to verify;
+              {phase4Audit.summary.unclassifiedNonUsdAdds > 0 ? ` ${phase4Audit.summary.unclassifiedNonUsdAdds} valued ADD requires non-USD FX evidence.` : ""}
+              {" "}Export the three CSV files for the full exception records.
+            </p>
+          </div>
+        )}
         {historicalAudit && (
           <div className="mb-4 space-y-3 rounded-xl border border-border/70 p-4" data-testid="mix-historical-audit-results">
             <div className="flex flex-wrap items-center justify-between gap-2">
