@@ -17,7 +17,13 @@ export function ErpReportPrintFooter({
   toDate?: string | null;
   generatedAt?: Date;
 }) {
-  const { formatDisplayDate, formatDisplayDateTime } = useErpDateFormat();
+  const { formatDisplayDate, formatDisplayDateTime, formatDisplayTime } = useErpDateFormat();
+  // Some embedded/legacy report providers expose only the date formatter.
+  // Keep printable reports usable without changing the active user preference.
+  const generatedLabel =
+    typeof formatDisplayDateTime === "function"
+      ? formatDisplayDateTime(generatedAt)
+      : `${formatDisplayDate(generatedAt)}${typeof formatDisplayTime === "function" ? `, ${formatDisplayTime(generatedAt)}` : ""}`;
   const period = fromDate || toDate
     ? `${fromDate ? formatDisplayDate(fromDate) : "Beginning"} – ${toDate ? formatDisplayDate(toDate) : "Present"}`
     : "All dates";
@@ -27,7 +33,7 @@ export function ErpReportPrintFooter({
       <span className="font-medium">{title}</span>
       {companyName ? <span> · {companyName}</span> : null}
       <span> · {period}</span>
-      <span> · Generated {formatDisplayDateTime(generatedAt)}</span>
+      <span> · Generated {generatedLabel}</span>
     </footer>
   );
 }
