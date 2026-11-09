@@ -23,6 +23,7 @@ import {
   type FactoryStaffTrackingTranslationKey,
 } from "@/i18n/factoryStaffTrackingTranslations";
 import { factoryApiRequest } from "@/lib/factoryApi";
+import { factoryActionCapabilities } from "@shared/factoryActionCapabilities";
 import { queryClient } from "@/lib/queryClient";
 import {
   addIsoDays,
@@ -63,7 +64,7 @@ export default function FactoryProductionTargets() {
   const [, navigate] = useLocation();
   const { data: session } = useQuery<AuthMe>({ queryKey: ["/api/auth/me"], staleTime: 60000 });
   const bonusRole = session?.currentRole ?? session?.role;
-  const canManageBonuses = bonusRole === "Admin" || bonusRole === "Owner";
+  const canManageBonuses = factoryActionCapabilities({ role: bonusRole })["production.manage-bonuses"];
   const { language } = useApplicationLanguage();
   const tr = (key: FactoryStaffTrackingTranslationKey) => translateFactoryStaffTrackingText(key, language);
   const [periodType, setPeriodType] = useState<PeriodType>("daily");
