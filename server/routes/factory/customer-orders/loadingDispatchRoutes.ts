@@ -82,6 +82,8 @@ export function registerFactoryLoadingDispatchRoutes(app: Express): void {
            AND d.order_id = ${scope.orderId}
          ORDER BY d.dispatch_number DESC
       `);
+      res.set("Cache-Control", "private, no-store");
+      res.set("X-Factory-Dispatch-API", "v1");
       res.json({
         orderId: scope.orderId,
         containerNumber: scope.order.containerNumber,
