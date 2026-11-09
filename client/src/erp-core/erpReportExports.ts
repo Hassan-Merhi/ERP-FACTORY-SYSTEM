@@ -1,7 +1,6 @@
 import { format } from "date-fns";
 
 import { downloadBlob } from "@/lib/downloadBlob";
-import { utils, writeFile } from "@/lib/excelHelper";
 
 export type ErpReportFileExtension = "xlsx" | "csv";
 
@@ -32,6 +31,8 @@ export async function exportErpReportRowsExcel<Row extends object>({
   sheetName: string;
   fileName: string;
 }): Promise<void> {
+  // ExcelJS is large; keep it out of the default ERP route bundles.
+  const { utils, writeFile } = await import("@/lib/excelHelper");
   const wb = utils.book_new();
   utils.book_append_sheet(wb, utils.json_to_sheet([...rows]), sheetName);
   await writeFile(wb, fileName);
