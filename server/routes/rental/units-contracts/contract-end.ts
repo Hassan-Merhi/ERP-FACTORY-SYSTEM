@@ -56,6 +56,8 @@ export function registerRentalContractEndRoutes(app: Express, ctx: RentalRoutesC
 
       const [unit] = await db.select().from(propertyUnits).where(eq(propertyUnits.id, contract.unitId));
       const unitLabel = unit ? `${unit.locationGroup}/${unit.unitNumber}` : `Unit#${contract.unitId}`;
+      const tenantSuffix = module === "PROPERTIES" && contract.tenantName.trim()
+        ? ` - Tenant: ${contract.tenantName.trim()}` : "";
       const tenantPays = module === "ERP" || module === "FACTORY";
 
       await db.transaction(async (tx) => {
@@ -82,8 +84,8 @@ export function registerRentalContractEndRoutes(app: Express, ctx: RentalRoutesC
           const amt = refundAmount;
           const dateStr = endDate;
           const narration = refundNotes
-            ? `Guarantee refund on departure - ${unitLabel} - ${refundNotes}`
-            : `Guarantee refund on departure - ${unitLabel}`;
+            ? `Guarantee refund on departure - ${unitLabel}${tenantSuffix} - ${refundNotes}`
+            : `Guarantee refund on departure - ${unitLabel}${tenantSuffix}`;
 
           if (refundCashAccountId) {
             // Tenant: the guarantee comes back — Dr Cash / Cr Security Deposits Paid.
