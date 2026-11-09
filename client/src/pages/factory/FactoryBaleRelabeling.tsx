@@ -67,7 +67,7 @@ export default function FactoryBaleRelabeling() {
     enabled: Boolean(selectedCompany?.id),
     staleTime: 5 * 60000,
   });
-  const hiddenTabs = myAccess?.companyId === selectedCompany?.id && myAccess.hasFactoryAccess
+  const hiddenTabs = myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
     ? myAccess.hiddenCostFields
     : ["hide_tab_relabeling_main", "hide_tab_relabeling_wipers"];
   const showRelabeling = !hiddenTabs.includes("hide_tab_relabeling_main");
