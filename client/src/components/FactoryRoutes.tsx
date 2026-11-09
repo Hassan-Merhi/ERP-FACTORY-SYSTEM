@@ -120,6 +120,7 @@ import {
   WipersReEntry,
 } from "@/lazyPages";
 
+const FactoryOthers = lazy(() => import("@/pages/factory/FactoryOthers"));
 const FactoryStockQueryWorkspace = lazy(() => import("@/pages/factory/FactoryStockQueryWorkspace"));
 const FactoryMonthlyProductionMatrix = lazy(() => import("@/pages/factory/FactoryMonthlyProductionMatrix"));
 const FactoryMonthlyProductionWorkers = lazy(() =>
@@ -366,7 +367,15 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
       </Route>
       <Route path="/factory/financial-snapshot" component={FactoryFinancialSnapshot} />
       <Route path="/factory/production-comparison" component={ProductionComparison} />
-      <Route path="/factory/production-report" component={DailyProductionReport} />
+      <Route path="/factory/others" component={FactoryOthers} />
+      <Route path="/factory/production-report">
+        {() => {
+          const legacyTab = new URLSearchParams(window.location.search).get("tab");
+          return legacyTab === "comparison" || legacyTab === "product-comparison"
+            ? <Redirect replace to={`/factory/others?tab=${legacyTab}`} />
+            : <DailyProductionReport />;
+        }}
+      </Route>
       <Route path="/factory/rental/warehouses" component={FactoryRentalWarehouses} />
       <Route path="/factory/rental/shops" component={FactoryRentalShops} />
       <Route path="/factory/rental/payments" component={FactoryRentalPayments} />
