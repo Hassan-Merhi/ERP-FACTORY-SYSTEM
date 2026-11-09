@@ -250,7 +250,7 @@ export async function persistMixMonitorSnapshot(snapshot: MixMonitorSnapshot): P
       await client.query(
         "UPDATE factory_alerts SET is_read=true WHERE company_id=$1 AND type=$2 " +
         "AND is_read=false AND left(message, length($3)) = $3",
-        [snapshot.companyId, MONITOR_ALERT_TYPE, "[" + key + "] %"],
+        [snapshot.companyId, MONITOR_ALERT_TYPE, "[" + key + "] "],
       );
     }
     const state: StoredMonitorState = {
