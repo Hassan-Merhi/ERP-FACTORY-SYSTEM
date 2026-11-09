@@ -17,10 +17,16 @@ export async function ensureFactoryLoadingDispatchSchema(pool: Pick<Pool, "query
   `);
 
   await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS factory_bales_id_company_dispatch_scope_uq
+      ON factory_bales (id, company_id)
+  `);
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS factory_loading_dispatches (
       id BIGSERIAL PRIMARY KEY,
       company_id INTEGER NOT NULL,
       order_id INTEGER NOT NULL,
+      container_number_snapshot VARCHAR(100),
       dispatch_number INTEGER NOT NULL CHECK (dispatch_number > 0),
       status TEXT NOT NULL DEFAULT 'OPEN'
         CHECK (status IN ('OPEN', 'CLOSED', 'CANCELLED')),
@@ -59,7 +65,10 @@ export async function ensureFactoryLoadingDispatchSchema(pool: Pick<Pool, "query
       company_id INTEGER NOT NULL,
       order_id INTEGER NOT NULL,
       dispatch_id BIGINT NOT NULL,
-      bale_id INTEGER NOT NULL REFERENCES factory_bales(id) ON DELETE RESTRICT,
+      bale_id INTEGER NOT NULL,
+      CONSTRAINT factory_loading_dispatch_expected_bale_scope_fk
+        FOREIGN KEY (bale_id, company_id)
+        REFERENCES factory_bales(id, company_id) ON DELETE RESTRICT,
       source TEXT NOT NULL DEFAULT 'PRIORITY',
       assigned_by_user_id TEXT,
       assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -82,6 +91,34 @@ export async function ensureFactoryLoadingDispatchSchema(pool: Pick<Pool, "query
       WHERE removed_at IS NULL
   `);
 
+  // Article-level trip targets for priority queues that allocate product
+  // quantities before exact bale references become known.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS factory_loading_dispatch_expected_articles (
+      id BIGSERIAL PRIMARY KEY,
+      company_id INTEGER NOT NULL,
+      order_id INTEGER NOT NULL,
+      dispatch_id BIGINT NOT NULL,
+      article_code TEXT NOT NULL,
+      product_name TEXT,
+      expected_qty INTEGER NOT NULL CHECK (expected_qty >= 0),
+      priority_rank INTEGER,
+      source TEXT NOT NULL DEFAULT 'PRIORITY',
+      assigned_by_user_id TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT factory_loading_dispatch_expected_article_parent_fk
+        FOREIGN KEY (dispatch_id, company_id, order_id)
+        REFERENCES factory_loading_dispatches(id, company_id, order_id) ON DELETE RESTRICT,
+      CONSTRAINT factory_loading_dispatch_expected_article_uq
+        UNIQUE (dispatch_id, article_code)
+    )
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS factory_loading_dispatch_expected_articles_order_idx
+      ON factory_loading_dispatch_expected_articles(company_id, order_id, dispatch_id)
+  `);
+
   // Snapshot every physical scan for an auditable truck manifest. These are
   // separate from the main loading scan and have no stock or ledger effects.
   await pool.query(`
@@ -90,7 +127,10 @@ export async function ensureFactoryLoadingDispatchSchema(pool: Pick<Pool, "query
       company_id INTEGER NOT NULL,
       order_id INTEGER NOT NULL,
       dispatch_id BIGINT NOT NULL,
-      bale_id INTEGER NOT NULL REFERENCES factory_bales(id) ON DELETE RESTRICT,
+      bale_id INTEGER NOT NULL,
+      CONSTRAINT factory_loading_dispatch_scan_bale_scope_fk
+        FOREIGN KEY (bale_id, company_id)
+        REFERENCES factory_bales(id, company_id) ON DELETE RESTRICT,
       bale_reference TEXT NOT NULL,
       article_code TEXT,
       product_name TEXT,
