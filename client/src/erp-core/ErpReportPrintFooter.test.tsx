@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("./erpDisplay", () => ({
@@ -29,7 +29,7 @@ describe("ERP print report footer", () => {
   });
 
   it("handles a report without a selected period", () => {
-    render(<ErpReportPrintFooter title="Account Summary" />);
-    expect(screen.getByText(/Account Summary/)).toHaveTextContent("All dates");
+    const { container } = render(<ErpReportPrintFooter title="Account Summary" />);
+    expect(container.querySelector("[data-erp-print-footer]")).toHaveTextContent("All dates");
   });
 });
