@@ -146,11 +146,13 @@ export default function FactoryLoadingDispatchScanner({
         setPendingCount(pendingRef.current.length + 1);
         try {
           const response = await apiRequest("POST", scansUrl, { scanCode: code });
-          const item: { baleReference?: string; articleCode?: string; weightKg?: string | number } = await response.json();
+          const item: { baleReference?: string; articleCode?: string; weightKg?: string | number;
+            status?: string; warningMessage?: string } = await response.json();
           setFeedback({
-            type: "success", referenceNumber: item.baleReference || code,
-            message: "Verified for this truck · " + (item.articleCode || "Bale") +
-              " · " + fmtKg(Number(item.weightKg ?? 0)) + " kg",
+            type: item.status === "REVIEW_REQUIRED" ? "warn" : "success",
+            referenceNumber: item.baleReference || code,
+            message: item.warningMessage || ("Verified for this truck · " + (item.articleCode || "Bale") +
+              " · " + fmtKg(Number(item.weightKg ?? 0)) + " kg"),
           });
           // Refetch the saved facts; we never count an unconfirmed scan.
           void queryClient.invalidateQueries({ queryKey: scanKey });
