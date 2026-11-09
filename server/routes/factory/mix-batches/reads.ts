@@ -17,12 +17,26 @@ import { getHistoricalMixBatchReconciliation, historicalMixAuditCsv } from "../.
 import { getPhase4MixProvenanceReport, phase4MixProvenanceCsv } from "../../../services/factory/mixPhase4ProvenanceAudit";
 import { getPhase5MixDownstreamReconciliation, phase5MixDownstreamCsv } from "../../../services/factory/mixPhase5DownstreamAudit";
 import { getPhase6MixLifecycleReport, phase6MixLifecycleCsv } from "../../../services/factory/mixPhase6LifecycleAudit";
+import { getMixMonitorStatus } from "../../../services/factory/mixPhase7IntegrityMonitor";
 
 export function registerFactoryMixBatchReadRoutes(app: Express) {
   app.get("/api/factory/mix-batches", requireAuth, async (req: Request, res: Response) => {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
+
+      // Phase 7: lightweight stored monitor status. This GET does not
+      // trigger a full scan or write any alert.
+      if (req.query.profile === "integrity-monitor") {
+        const role = String(req.session.currentRole || req.session.role || "").trim().toLowerCase();
+        if (!["admin", "owner", "developer", "dev"].includes(role)) {
+          return res.status(403).json({ message: "Factory mix monitoring requires Admin, Owner or Developer access." });
+        }
+        const report = await getMixMonitorStatus(companyId);
+        res.set("Cache-Control", "private, no-store");
+        res.set("X-ERP-Payload-Profile", "factory-mix-monitor-status");
+        return res.json(report);
+      }
 
       // Phase 6: historical status, used kg and carry-forward integrity.
       if (req.query.profile === "lifecycle-audit") {
