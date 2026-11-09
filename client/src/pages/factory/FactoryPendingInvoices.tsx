@@ -18,6 +18,8 @@ import { PageHeader } from "@/components/PageHeader";
 import { ErrorState } from "@/components/ui/page-state";
 import { InvoiceSummaryBar } from "@/components/InvoiceSummaryBar";
 import type { FactoryMyAccess } from "@shared/apiTypes";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 
 interface CustomerOrder {
   id: number;
@@ -39,6 +41,7 @@ interface CustomerOrder {
 }
 
 export default function FactoryPendingInvoices() {
+  const { selectedCompany } = useCompany();
   const [, navigate] = useLocation();
   const { formatDisplayDate } = useDateFormat();
   const appMode = useAppMode();
@@ -46,8 +49,8 @@ export default function FactoryPendingInvoices() {
   const [statusFilter, setStatusFilter] = useState<string>("PENDING_VERIFIED");
   const { toast } = useToast();
 
-  const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: ["/api/factory/my-access"], staleTime: 5 * 60000 });
-  const isAdmin = myAccess?.fullAccess === true;
+  const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id), enabled: Boolean(selectedCompany?.id), staleTime: 5 * 60000 });
+  const isAdmin = myAccess?.companyId === selectedCompany?.id && myAccess.hasFactoryAccess && myAccess.fullAccess === true;
 
   const {
     data: pendingOrders = [],
@@ -55,7 +58,8 @@ export default function FactoryPendingInvoices() {
     isError: pendingError,
     refetch: refetchPending,
   } = useQuery<CustomerOrder[]>({
-    queryKey: ["/api/factory/customer-orders?status=PENDING_VERIFICATION&profile=summary&pageSize=250"],
+    queryKey: companyQueryKey("/api/factory/customer-orders?status=PENDING_VERIFICATION&profile=summary&pageSize=250", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
   });
 
   const {
@@ -64,7 +68,8 @@ export default function FactoryPendingInvoices() {
     isError: verifiedError,
     refetch: refetchVerified,
   } = useQuery<CustomerOrder[]>({
-    queryKey: ["/api/factory/customer-orders?status=VERIFIED&profile=summary&pageSize=250"],
+    queryKey: companyQueryKey("/api/factory/customer-orders?status=VERIFIED&profile=summary&pageSize=250", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
   });
 
   const {
@@ -73,7 +78,8 @@ export default function FactoryPendingInvoices() {
     isError: finalizedError,
     refetch: refetchFinalized,
   } = useQuery<CustomerOrder[]>({
-    queryKey: ["/api/factory/customer-orders?status=FINALIZED&profile=summary&pageSize=250"],
+    queryKey: companyQueryKey("/api/factory/customer-orders?status=FINALIZED&profile=summary&pageSize=250", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
   });
 
   const deleteMutation = useMutation({
