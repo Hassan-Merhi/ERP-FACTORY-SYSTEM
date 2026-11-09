@@ -36,8 +36,8 @@ describe("sidebar navigation grouping", () => {
     expect(others?.items.map((item) => item.title)).toEqual([
       "Comparison",
       "Product Comparison",
-      "Ticket Management",
       "Stock Query",
+      "Ticket Management",
     ]);
     expect(groupFor(FACTORY_NAV_SECTIONS, "/factory/others?tab=comparison")).toBe("Others");
     expect(groupFor(FACTORY_NAV_SECTIONS, "/factory/others?tab=product-comparison")).toBe("Others");
