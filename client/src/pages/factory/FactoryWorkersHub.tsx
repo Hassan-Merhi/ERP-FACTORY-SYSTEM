@@ -9,6 +9,9 @@ import FactoryWorkerBonusesTab from "@/pages/factory/FactoryWorkerBonusesTab";
 import FactoryWorkerAttendanceReport from "@/pages/factory/FactoryWorkerAttendanceReport";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import type { FactoryMyAccess } from "@shared/apiTypes";
+import { FACTORY_WORKERS_HUB_TABS } from "@/factory/config/navigationPresentation";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 
 type TabValue = "workers" | "payroll" | "attendance" | "report" | "advances" | "bonuses";
 
@@ -19,47 +22,49 @@ const ALL_TAB_OPTIONS: {
   settingKey?: string;
   hiddenKey?: string;
 }[] = [
-  { value: "workers", label: "Workers", icon: HardHat, hiddenKey: "hide_tab_workers_workers" },
+  { value: "workers", label: "Workers", icon: HardHat, hiddenKey: FACTORY_WORKERS_HUB_TABS.workers },
   {
     value: "payroll",
     label: "Payroll",
     icon: DollarSign,
     settingKey: "workersTabPayrollEnabled",
-    hiddenKey: "hide_tab_workers_payroll",
+    hiddenKey: FACTORY_WORKERS_HUB_TABS.payroll,
   },
   {
     value: "attendance",
     label: "Attendance",
     icon: CalendarDays,
     settingKey: "workersTabAttendanceEnabled",
-    hiddenKey: "hide_tab_workers_attendance",
+    hiddenKey: FACTORY_WORKERS_HUB_TABS.attendance,
   },
   {
     value: "report",
     label: "Report",
     icon: BarChart3,
     settingKey: "workersTabReportEnabled",
-    hiddenKey: "hide_tab_workers_report",
+    hiddenKey: FACTORY_WORKERS_HUB_TABS.report,
   },
   {
     value: "advances",
     label: "Advances",
     icon: Banknote,
     settingKey: "workersTabAdvancesEnabled",
-    hiddenKey: "hide_tab_workers_advances",
+    hiddenKey: FACTORY_WORKERS_HUB_TABS.advances,
   },
   {
     value: "bonuses",
     label: "Bonuses",
     icon: Gift,
     settingKey: "workersTabBonusesEnabled",
-    hiddenKey: "hide_tab_workers_bonuses",
+    hiddenKey: FACTORY_WORKERS_HUB_TABS.bonuses,
   },
 ];
 
 export default function FactoryWorkersHub() {
+  const { selectedCompany } = useCompany();
   const { data: settings } = useQuery({
-    queryKey: ["/api/factory/settings"],
+    queryKey: companyQueryKey("/api/factory/settings", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const response = await fetch("/api/factory/settings");
       return response.ok ? response.json() : {};
@@ -67,8 +72,8 @@ export default function FactoryWorkersHub() {
     staleTime: 60000,
   });
 
-  const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: ["/api/factory/my-access"], staleTime: 5 * 60000 });
-  const hiddenTabs = myAccess?.hiddenCostFields ?? [];
+  const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id), enabled: Boolean(selectedCompany?.id), staleTime: 5 * 60000 });
+  const hiddenTabs = myAccess?.companyId === selectedCompany?.id ? myAccess.hiddenCostFields : Object.values(FACTORY_WORKERS_HUB_TABS);
 
   const visibleOptions = ALL_TAB_OPTIONS.filter(({ settingKey, hiddenKey }) => {
     if (hiddenKey && hiddenTabs.includes(hiddenKey)) return false;
