@@ -1,4 +1,4 @@
-# ERP Core UI — Phases 1–6
+# ERP Core UI — Phases 1–7
 
 Use `@/erp-core` for new ERP-mode page presentation. This folder is a **composition/adoption layer**, not a new visual framework.
 
@@ -43,7 +43,7 @@ import { ErpPage, ErpPageActions, ErpDataTableToolbar, ErpEmptyState } from "@/e
 ## Phase 3: common fields, validation, and actions
 
 - `ErpField` provides consistent labels, required indicators, description text, inline errors, and accessible `id` / `aria-describedby` / `aria-invalid` wiring for forms with caller-owned state. Use its render function for an existing `Input`, `Textarea`, `SelectTrigger`, or `ErpNativeSelect`; never duplicate model validation in this component.
-- React Hook Form screens **keep their form resolver and field state**. The barrel re-exports the existing `Form`, `FormField`, `FormControl`, `FormLabel`, `FormDescription`, `FormMessage`, `FormGrid`, and `FormSection` under `Erp*` names to give ERP pages one adoption surface without a second validation implementation.
+- React Hook Form screens **keep their form resolver and field state**. Import `Form`, `FormField`, `FormControl`, `FormLabel`, `FormMessage` and `FormDescription` directly from `@/components/ui/form`. Phase 7 removed their eager barrel re-exports to avoid loading React Hook Form on unrelated ERP pages and breaking isolated hook mocks. Use `ErpFormActions` and `ErpPendingButton` for the shared footer and save behavior.
 - `ErpFormActions` has `inline`, `dialog`, and `sticky` variants; `dialog` delegates to the existing responsive `DialogFooter`, retaining phone-sheet behavior, and `sticky` delegates to `FormActionBar`.
 - `ErpPendingButton` delegates to `Button.isLoading` for consistent pending text, spinner, disabled state and `aria-busy`. It defaults to `type="button"`; set `type="submit"` inside a real form.
 - `ErpRecordAction` is a non-submitting row action with optional caller-provided `permitted` and `deniedReason`. It never replaces backend authorization. Do not infer permission from role strings inside the UI component.
@@ -97,9 +97,25 @@ The report controls share one contract without centralizing any financial calcul
 
 Tests cover filename compatibility, multiline/quoted CSV, formula-safe labels, preserved negative numeric amounts, headerless financial CSV, export menu disabled/busy behavior and print footer identity.
 
+
+## Phase 7: deduplication and regression stabilization
+
+- Consolidated repeated `@/erp-core` imports in Customers, Suppliers, Stock & Sales and Market Analysis; preserved all other existing imports and page-specific behavior.
+- Removed the redundant eager React Hook Form export surface from `@/erp-core`. The canonical `@/components/ui/form` remains the single implementation; callers choose it directly. This prevents Daybook's isolated Vitest hook mocks from failing just by importing the generic ERP barrel.
+- Kept **company-scoped** access grants and supplier ledger query identities. Updated test fixtures to use the actual selected-company key rather than weakening production isolation. Isolated route tests supply a company context.
+- Hardened `ErpReportPrintFooter` for older embedded report tests that mock date-only preferences; the real date-format context retains full date/time formatting.
+- Removed the CSV filename sanitizer's ESLint control-regex warning while still replacing unsafe characters.
+- Added `erpUnificationContract.test.ts` to guard against reintroducing the eager form export, duplicated ERP imports, unscoped route grants, Stock Query's former 200-row cap, and loss of supplier/report export safeguards.
+
+### Validation and non-ERP blockers
+
+The baseline CI run on this branch had **344 frontend test files passing and 7 failing** (3,256 individual tests passing, 11 failing), including ERP-provider regressions corrected above. Build succeeded. The failing TypeScript, lint, repository-audit, security and UI-quality jobs also reported changes in separately developed Factory/Properties code, such as Factory Dispatch report typing, rental reconciliation nullability, documentation/script inventory and a POS Jnah voucher company-scope security finding. Do **not** "fix" these by relaxing permissions, bypassing the tests, or mutating accounting records.
+
+**Merge gate:** run CI on the final Phase 7 SHA. All new ERP UI tests and targeted route/report regressions must pass, then reconcile this long-running branch with current `main` (which has substantially advanced), resolve conflicts, and run the suite again. A Phase 7 code commit is *not* a claim that the combined PR is ready to merge; leave it as draft until verified.
+
 ## Rollout rules
 
 1. Phase 1 sets the stable API and migrates Opening/Closing Stock Summary as non-accounting pilot pages, retaining their existing shell spacing and header semantics.
-2. Phase 2 introduces the standard list table, shared filter toolbar, and pagination controls. Phase 3 standardizes controlled fields, async form actions, row buttons and confirmations; Phase 4 centralizes ERP route/navigation roles and company-scoped page grants; Phase 5 standardizes queries, server paging and number/date display; Phase 6 unifies reports/export controls; Phase 7 removes proven duplicates.
+2. Phase 2 introduces the standard list table, shared filter toolbar, and pagination controls. Phase 3 standardizes controlled fields, async form actions, row buttons and confirmations; Phase 4 centralizes ERP route/navigation roles and company-scoped page grants; Phase 5 standardizes queries, server paging and number/date display; Phase 6 unifies reports/export controls; Phase 7 removes proven duplicates and adds cross-phase regressions.
 3. Never move voucher posting, ledger calculations, stock valuation, payroll arithmetic, or company authorization into UI components. Server authorization remains definitive.
 4. Do not change data-testid, route URLs, stock balance calculations, or create/edit behavior as part of a presentational migration. Stock Query's former 200-result cap is separately replaced by explicit company-aware server pagination.
