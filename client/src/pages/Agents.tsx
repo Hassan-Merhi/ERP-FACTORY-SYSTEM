@@ -56,6 +56,10 @@ export default function Agents() {
     accountsLoading,
     agentAccountRows,
     agentsLoading,
+    accountsError,
+    agentsError,
+    retryAccounts,
+    retryAgents,
     transactions,
     transactionsLoading,
     prePeriodData,
@@ -147,6 +151,13 @@ export default function Agents() {
   };
 
   const listPanel = (
+    <div className="flex min-w-0 flex-col gap-2">
+    {(accountsError || agentsError) && (
+      <div role="alert" className="rounded-xl border border-destructive/40 bg-destructive/5 p-3 text-sm">
+        Unable to load some agent accounts. Check the connection and retry.
+        <button type="button" className="ml-2 font-semibold underline" onClick={() => { if (accountsError) void retryAccounts(); if (agentsError) void retryAgents(); }}>Retry</button>
+      </div>
+    )}
     <AgentListPanel
       agentAccounts={agentAccounts}
       hasAnyAgents={agentIds.size > 0}
@@ -163,6 +174,7 @@ export default function Agents() {
       }}
       phone={isPhone}
     />
+    </div>
   );
   const statementPanel = selectedAccount ? (
     <Suspense fallback={<div className="rounded-2xl border border-border bg-card p-6 text-sm text-muted-foreground" role="status">Opening agent statement…</div>}>
