@@ -10,16 +10,19 @@ const h = vi.hoisted(() => ({
   writes: [] as Array<[string, string, Record<string, unknown>]>,
   status: "OPEN" as string,
   existingSources: [] as Array<Record<string, unknown>>,
+  usedKg: "0",
+  linkedBales: false,
+  supplierStockRows: [
+    { id: 10, containerId: 30, receivedKg: 0.1, usedKg: 0 },
+    { id: 11, containerId: 31, receivedKg: 1, usedKg: 0 },
+  ],
 }));
 vi.mock("../server/auth", () => ({ requireAuth: () => undefined }));
 vi.mock("../server/routes/helpers/auditHelpers", () => ({ logAudit: async () => undefined }));
 vi.mock("../server/routes/factory/_helpers", () => ({ writeDaybookEntry: async () => undefined }));
 vi.mock("../server/services/factory/rawStockStableCost", () => ({
   getStableSupplierCost: async () => ({
-    rows: [
-      { id: 10, containerId: 30, receivedKg: 0.1, usedKg: 0 },
-      { id: 11, containerId: 31, receivedKg: 1, usedKg: 0 },
-    ],
+    rows: h.supplierStockRows,
   }),
 }));
 // Wave 11: the route prices sources through baleCostBasis (the supplier's
@@ -51,13 +54,15 @@ vi.mock("../server/db", async () => {
     return q;
   };
   const batch = {
-    id: 1, batchCode: "MB1", name: null, totalWeightKg: "0", totalCost: "0", usedKg: "0",
+    id: 1, batchCode: "MB1", name: null, totalWeightKg: "0", totalCost: "0",
+    get usedKg() { return h.usedKg; },
     get status() { return h.status; },
   };
   const db: Record<string, unknown> = {
     select: () => ({ from: (table: never) => chain(
       getTableName(table) === "factory_mix_batches" ? [batch]
-      : getTableName(table) === "factory_mix_batch_sources" ? h.existingSources : []
+      : getTableName(table) === "factory_mix_batch_sources" ? h.existingSources
+      : getTableName(table) === "factory_bales" && h.linkedBales ? [{ id: 700 }] : []
     ) }),
     update: (table: never) => ({
       set: (values: Record<string, unknown>) => {
@@ -108,6 +113,12 @@ describe("mix batch edit", () => {
     h.writes = [];
     h.status = "OPEN";
     h.existingSources = [];
+    h.usedKg = "0";
+    h.linkedBales = false;
+    h.supplierStockRows = [
+      { id: 10, containerId: 30, receivedKg: 0.1, usedKg: 0 },
+      { id: 11, containerId: 31, receivedKg: 1, usedKg: 0 },
+    ];
   });
 
   const proposal = {
@@ -210,6 +221,45 @@ describe("mix batch edit", () => {
     });
     expect(res.statusCode).toBe(400);
     expect(res.body).toMatchObject({ code: "MIX_EDIT_INVALID_SOURCES" });
+    expect(h.writes).toEqual([]);
+  });
+
+  it("refuses changes to a batch with recorded used kilograms", async () => {
+    h.usedKg = "0.2";
+    const res = await patch({ ...proposal, sourceEditPreview: true });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({ allowed: false, changed: true });
+    expect((res.body as { warnings: string[] }).warnings.join(" ")).toContain("recorded production/usage");
+    expect(h.writes).toEqual([]);
+  });
+
+  it("blocks edits when linked bales exist despite a zero used counter", async () => {
+    h.linkedBales = true;
+    const res = await patch({ ...proposal, sourceEditPreview: true });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({ allowed: false });
+    expect((res.body as { warnings: string[] }).warnings.join(" ")).toContain("bale, pressing or consumption");
+    expect(h.writes).toEqual([]);
+  });
+
+  it("refuses a source edit that would push raw stock negative", async () => {
+    h.supplierStockRows = [{ id: 10, containerId: 30, receivedKg: 0.1, usedKg: 0 }];
+    const res = await patch({ ...proposal, sourceEditPreview: true });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({ allowed: false });
+    expect((res.body as { warnings: string[] }).warnings.join(" ")).toContain("not have enough available kilograms");
+    expect(h.writes).toEqual([]);
+  });
+
+  it("refuses source reversals with ambiguous historical container ownership", async () => {
+    h.existingSources = [{
+      id: 99, mixBatchId: 1, supplierId: 2, sourceBatchId: null,
+      containerId: 999, weightKg: "0.200", costPerKg: "0.35", totalCost: "0.07",
+    }];
+    const res = await patch({ ...proposal, sourceEditPreview: true });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({ allowed: false });
+    expect((res.body as { warnings: string[] }).warnings.join(" ")).toContain("ownership mismatch");
     expect(h.writes).toEqual([]);
   });
 
