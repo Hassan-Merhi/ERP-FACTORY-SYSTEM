@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { formatNumber } from "@/lib/formatNumber";
+import { summarizeRecordedMixBatches, recordedMixBatchCost } from "@/lib/recordedMixBatchCost";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
@@ -141,14 +142,10 @@ export function MixBatchList({
   );
 
   const fmtKg = (n: number) => formatNumber(n, 3);
-  const sumTotal = mixBatches.reduce((sum, batch) => sum + (parseFloat(batch.totalWeightKg) || 0), 0);
+  const { totalWeightKg: sumTotal, costPerKg: blendedCost } = summarizeRecordedMixBatches(mixBatches);
   const sumUsed = mixBatches.reduce((sum, batch) => sum + (parseFloat(batch.usedKg) || 0), 0);
   const sumRemaining = mixBatches.reduce((sum, batch) => sum + (parseFloat(batch.remainingKg) || 0), 0);
-  const weightedCost = mixBatches.reduce(
-    (sum, batch) => sum + (parseFloat(batch.totalWeightKg) || 0) * (parseFloat(batch.costPerKg) || 0),
-    0
-  );
-  const blendedCost = sumTotal > 0 ? weightedCost / sumTotal : 0;
+
 
   return (
     <Card
@@ -283,7 +280,7 @@ export function MixBatchList({
                 const total = parseFloat(batch.totalWeightKg) || 0;
                 const used = parseFloat(batch.usedKg) || 0;
                 const remaining = parseFloat(batch.remainingKg) || 0;
-                const cost = parseFloat(batch.displayCostPerKg ?? batch.costPerKg ?? "0") || 0;
+                const cost = recordedMixBatchCost(batch).costPerKg;
                 return (
                   <div
                     key={`mobile-${batch.id}`}
@@ -406,7 +403,7 @@ export function MixBatchList({
                         </TableCell>
                         <TableCell className="text-right font-mono text-sm">{formatNumber(total)}</TableCell>
                         <TableCell className="text-right font-mono text-sm">
-                          ${parseFloat(batch.displayCostPerKg ?? batch.costPerKg ?? "0").toFixed(4)}/kg
+                          ${recordedMixBatchCost(batch).costPerKg.toFixed(4)}/kg
                         </TableCell>
                         <TableCell onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center gap-1">
