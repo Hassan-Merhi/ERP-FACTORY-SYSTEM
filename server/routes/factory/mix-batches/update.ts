@@ -335,7 +335,7 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
         const [updated] = await tx
           .update(factoryMixBatches)
           .set(batchUpdates)
-          .where(eq(factoryMixBatches.id, id))
+          .where(and(eq(factoryMixBatches.id, id), eq(factoryMixBatches.companyId, companyId)))
           .returning();
 
         // ── 6. Insert new source records ──
@@ -394,15 +394,17 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
                 new: toMoney(edited.totalCost).toFixed(7),
               },
               sourceEdit: {
-                reason,
-                reviewHash: review.reviewHash,
-                originalSources: oldSources.map((s) => ({
+                old: oldSources.map((s) => ({
                   sourceId: s.id, supplierId: s.supplierId, containerId: s.containerId,
                   sourceBatchId: s.sourceBatchId, weightKg: s.weightKg,
                   costPerKg: s.costPerKg, totalCost: s.totalCost,
                 })),
-                newSupplierSources: sourceInputs.supplierSources,
-                newBatchSources: sourceInputs.batchSources,
+                new: {
+                  reason,
+                  reviewHash: review.reviewHash,
+                  newSupplierSources: sourceInputs.supplierSources,
+                  newBatchSources: sourceInputs.batchSources,
+                },
               },
             },
           },
