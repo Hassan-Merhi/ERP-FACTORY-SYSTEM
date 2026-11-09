@@ -178,7 +178,8 @@ export default function RentalPaymentsLog({
             ? formatMoneyDisplay(reconciliation.reconciled / 100, { currency: "USD" })
             : "Verifying…"
           : formatMoneyDisplay(displayedFigure.amount, { currency: displayedFigure.currency });
-    const copyIsFull = noFilters;
+    // Full-history export is available only to the verified historical reporting company.
+    const copyIsFull = isFullHistory;
     const copyAllowed =
       !isLoading && !paymentsError && filtered.length > 0 && clipboardIsUsd && (!isFullHistory || (reconciliationReady && fullHistoryIsUsd));
     return (
