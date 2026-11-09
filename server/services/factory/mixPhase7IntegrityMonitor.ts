@@ -299,8 +299,8 @@ export async function getMixMonitorStatus(companyId: number): Promise<MixMonitor
     "WHERE company_id=$1 AND type=$2 AND entity_type=$3 AND entity_id=0 " +
     "ORDER BY id DESC LIMIT 1) AS message," +
     "(SELECT COUNT(*)::text FROM factory_alerts WHERE company_id=$1 " +
-    "AND type=$4 AND is_read=false) AS unread_alerts",
-    [companyId, MONITOR_STATE_TYPE, MONITOR_ENTITY_TYPE, MONITOR_ALERT_TYPE],
+    "AND type IN ($4,$5) AND is_read=false) AS unread_alerts",
+    [companyId, MONITOR_STATE_TYPE, MONITOR_ENTITY_TYPE, MONITOR_ALERT_TYPE, MONITOR_FAILURE_TYPE],
   );
   const baseline = parseState(r.rows[0]?.message ?? null);
   return {
