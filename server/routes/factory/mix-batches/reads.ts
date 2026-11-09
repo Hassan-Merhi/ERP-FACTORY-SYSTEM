@@ -66,7 +66,11 @@ export function registerFactoryMixBatchReadRoutes(app: Express) {
           remainingKg: total.minus(used).toFixed(3),
           displayTotalWeightKg: total.toFixed(3),
           displayTotalCost: toMoney(b.totalCost).toFixed(6),
-          displayCostPerKg: toMoney(b.costPerKg).toFixed(6),
+          // Historical USD value / historical batch kg, not today's supplier
+          // rate and not rounded per-source rates multiplied back out.
+          displayCostPerKg: total.gt(0)
+            ? toMoney(b.totalCost).div(total).toFixed(6)
+            : toMoney(b.costPerKg).toFixed(6),
         };
       });
 
