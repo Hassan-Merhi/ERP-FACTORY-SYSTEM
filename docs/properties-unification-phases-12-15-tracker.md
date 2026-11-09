@@ -9,7 +9,7 @@
 | --- | --- | --- |
 | 12 | Date boundaries and rental filter consistency | **Source implementation and focused tests committed; runtime execution pending** |
 | 13 | Parent-route and navigation registry convergence | **Source implementation and regression additions committed; runtime execution pending** |
-| 14 | Company-role and historical currency/financial parity | Not started |
+| 14 | Company-role and historical currency/financial parity | **Source implementation and parity tests committed; live finance/runtime verification pending** |
 | 15 | Integrated TypeScript, regression, browser/API and finance certification | Not started |
 
 ## Phase 12 — changes
@@ -79,3 +79,40 @@ npx vitest run --config vitest.config.frontend.ts tests/ui/parent-routes-behavio
 ### Integration notice (final Phase 13 comparison)
 
 At the final Phase 13 comparison, `properties-unification-phase12` was **13 commits ahead and 157 behind** `main`. This is a changing snapshot, not a merge readiness certification. Phase 14/15 must reconcile current main, inspect semantic conflicts and rerun all relevant regression tests. No merge, rebase, CI or deployment has been initiated.
+
+## Phase 14 — company-role and rental financial presentation parity (2026-11-09)
+
+### Implemented
+1. `client/src/properties/config/propertiesNavigation.ts`: fail-closed frontend visibility for a missing/non-Properties selected company or missing selected-company role, avoiding stale session-wide admin/developer visibility. Backend access decisions remain independently authoritative.
+2. `client/src/properties/config/rentalCurrencyBasis.ts`: explicit `USD`, `NON_USD`, `UNKNOWN` classification. No missing currency is silently assumed USD.
+3. `client/src/properties/config/rentalReportingPresentation.ts` and `client/src/pages/properties/property-rental/paymentsReceiptMath.ts`: USD-labelled totals and TSV exports now rely on the same verified-currency policy. Historical values and account reconciliation calculations are unchanged; unknown/foreign-currency exports are withheld rather than invented.
+4. `client/src/pages/properties/PropertyRentalPage.tsx`, `RentalPaymentsLog.tsx` and `PropertiesPaymentsPremium.tsx`: show an explicit unverified-currency state rather than a fallback USD symbol for missing payment currencies. Preserve recorded numeric values, module endpoints, and read-only source records.
+5. `tests/properties-unification-phase8-presentation.test.ts`: corrected legacy assumptions that a missing currency proves USD.
+6. `tests/properties-unification-phase14-parity.test.ts`: added selected-company role matrix; USD/non-USD/unknown classification; export guard; immutable historical company ID and cutoff; voucher-backed rent, guarantee overlap and ledger-account balance separation.
+7. `docs/properties-navigation-registry.md`: updated frontend permission contract to match the implementation.
+
+### Source acceptance
+- [x] No selected Properties company or assigned role means no Properties frontend visibility.
+- [x] Selected-company role overrides stale cross-company session role.
+- [x] Admin and Developer navigation remain distinct from ordinary user permissions.
+- [x] Both USD aggregate guards and USD export guards require explicit recorded USD currency.
+- [x] Unverified currency rows remain visible without falsely labelling them USD.
+- [x] No FX conversion, ledger posting, voucher, historical cutoff, cash-account or schema changes.
+- [x] Targeted parity tests committed.
+- [ ] Execute Vitest and TypeScript in a runnable checkout.
+- [ ] Validate historic missing-currency records against a read-only authoritative database extract and approve a specific migration/policy if needed.
+- [ ] Independently reconcile recorded rent receipts, account balances, tenant deposits, guarantees and cashbox against ledger vouchers.
+- [ ] Browser and authenticated API permission matrix across two selected companies, Admin/Developer/Manager/user/tester, revoked assignments.
+- [ ] Latest-main reconciliation and regression testing.
+
+### Release boundary
+Unknown-currency historical rows may now suppress USD-only aggregates and exports. This is an intentional conservative presentation safeguard, **not** a currency conversion or historical data correction. Before release, independently confirm historical row currency evidence and provide an approved remedy for any legitimate legacy USD records with blank currency fields. Frontend visibility does not replace server authorization. No live DB/accounting verification, browser tests, Vitest, TypeScript, CI, merge, or deployment was executed in this connected session.
+
+Suggested commands:
+```bash
+npm run check
+npx vitest run tests/properties-unification-phase14-parity.test.ts tests/properties-unification-phase8-presentation.test.ts tests/properties-unification-regression.test.ts tests/properties-payment-history-reconciliation.test.ts tests/properties-unification-phase7-permissions.test.ts
+npx vitest run --config vitest.config.frontend.ts tests/ui/properties-unification-phase12-filters.test.tsx
+```
+
+**Phase 14 disposition:** Targeted source work and regression artifacts complete. Runtime and independently reconciled financial parity are not certified; Phase 15 must perform release-level verification before main merge.
