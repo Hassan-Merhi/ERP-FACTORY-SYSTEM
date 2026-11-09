@@ -146,6 +146,25 @@ describe("Phase 7 Factory mix integrity classification", () => {
     expect(compareMixMonitorFindings([{ key: f.key, severity: f.severity }], [f]).newOrEscalated).toEqual([]);
   });
 
+  it("detects worsening kg and USD discrepancies even if issue code/severity stays the same", () => {
+    const old = [
+      { key: "raw:5:UNBACKED_SHORTAGE", severity: "critical" as const,
+        metric: { value: "100.000", unit: "kg" as const } },
+      { key: "mix:8:HEADER_SOURCE_COST_MISMATCH", severity: "critical" as const,
+        metric: { value: "30.00", unit: "usd" as const } },
+    ];
+    const increased = [
+      { ...finding("raw:5:UNBACKED_SHORTAGE", "critical"), metric: { value: "101.000", unit: "kg" as const } },
+      { ...finding("mix:8:HEADER_SOURCE_COST_MISMATCH", "critical"), metric: { value: "30.03", unit: "usd" as const } },
+    ];
+    expect(compareMixMonitorFindings(old, increased).newOrEscalated).toHaveLength(2);
+    const smaller = [
+      { ...increased[0], metric: { value: "100.0005", unit: "kg" as const } },
+      { ...increased[1], metric: { value: "29.99", unit: "usd" as const } },
+    ];
+    expect(compareMixMonitorFindings(old, smaller).newOrEscalated).toHaveLength(0);
+  });
+
   it("new and higher-severity issues alert; de-escalations do not", () => {
     const previous = [
       { key: "mix:17:RATE", severity: "warning" as const },
@@ -204,6 +223,20 @@ describe("Phase 7 durable monitor state and alert changes", () => {
     expect(status.unreadAlerts).toBe(1);
     expect(status.initialized).toBe(true);
     expect(status.summary?.total).toBe(2);
+  });
+
+  it("persists new alerts for materially worsening existing inventory overdraw", async () => {
+    const original = {
+      ...finding("raw:14:UNBACKED_SHORTAGE", "critical"),
+      metric: { value: "10.000", unit: "kg" as const },
+    };
+    await persistMixMonitorSnapshot(snapshot([original]));
+    const worse = { ...original, metric: { value: "13.000", unit: "kg" as const } };
+    const second = await persistMixMonitorSnapshot(snapshot([worse]));
+    expect(second.baseline).toBe(false);
+    expect(second.alertsCreated).toBe(1);
+    const third = await persistMixMonitorSnapshot(snapshot([worse]));
+    expect(third.alertsCreated).toBe(0);
   });
 
   it("clears only a resolved monitor alert, preserving unrelated alert types", async () => {
