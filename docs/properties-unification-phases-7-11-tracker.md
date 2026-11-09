@@ -113,3 +113,7 @@ The Phase 3 stable-ID assignment (company id 13, code HP, company type propertie
 - **Not executed:** Vitest, TypeScript check, browser bookmarks and Back/Forward, role-switch testing, dashboard account CRUD in an isolated test environment, CI or deployment.
 - **Required before release:** Run `npx vitest run tests/properties-unification-phase10-navigation.test.ts tests/properties-unification-regression.test.ts` and project typecheck; manually verify legacy bookmarks, selected-company roles, account-management actions and unknown-route replacement behavior.
 - **Status:** Code-level Phase 10 is complete on the existing branch; Phase 11 end-to-end regression verification remains pending.
+
+### Branch-divergence notice after Phase 10
+
+At the final Phase 10 comparison on 2026-11-09, GitHub reported `properties-unification-phases-7-11` **43 commits ahead and 149 commits behind `main`**. This is a snapshot, not a permanent branch state; `main` may continue moving. Do not assume the branch can be merged conflict-free. Phase 11/integration must review the full upstream diff and any conflicts, preserve the implemented financial safeguards and compatibility routes, and retest the reconciled result. No rebase, merge, cherry-pick, change to `main`, or CI action was performed as part of Phase 10.
