@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import {
   useRentalReconciliation,
   type ReconciliationSnapshot,
@@ -23,9 +23,12 @@ export function PaymentsReconciliation({
   onReconciliationChange?: (snapshot: ReconciliationSnapshot) => void;
 }) {
   const snapshot = useRentalReconciliation({ payments, companyId, isLoading, isError });
+  // Notify only when a reported field changes, always with this render's snapshot.
+  const latestSnapshot = useRef(snapshot);
+  latestSnapshot.current = snapshot;
 
   useEffect(() => {
-    onReconciliationChange?.(snapshot);
+    onReconciliationChange?.(latestSnapshot.current);
   }, [
     onReconciliationChange,
     snapshot.companyId,
