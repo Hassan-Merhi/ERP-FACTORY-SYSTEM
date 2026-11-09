@@ -247,7 +247,7 @@ export default function BatchDetail({ batchId, onBack, onDeleted }: BatchDetailP
               </p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Cost/kg</p>
+              <p className="text-xs text-muted-foreground">Recorded cost/kg</p>
               <p className="text-lg font-mono font-semibold" data-testid="text-cost-per-kg">
                 ${costPerKg.toFixed(4)}
               </p>
