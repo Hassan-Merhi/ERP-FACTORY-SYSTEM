@@ -31,7 +31,8 @@ import {
   reconciledHistoryTsv,
   receiptTotals,
 } from "./property-rental/paymentsReceiptMath";
-import { HISTORICAL_RENT_COMPANY, belongsToHistoricalRentSnapshot } from "./property-rental/historicalRentSnapshot";
+import { belongsToHistoricalRentSnapshot } from "./property-rental/historicalRentSnapshot";
+import { hasHassanPropertiesHistoricalReportingPolicy } from "@/properties/config/historicalRentReportingPolicy";
 
 const MONTH_NAMES = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const RECONCILIATION_VIEWS = [
@@ -98,7 +99,7 @@ export default function RentalPaymentsLog({
 
   // Both pages use the same voucher-backed dated rent snapshot. No payment is created.
   const isPropertiesPayments = rentalPolicy.usesPropertiesReconciliation;
-  const isHassanProperties = isPropertiesPayments && selectedCompany?.name === HISTORICAL_RENT_COMPANY;
+  const isHassanProperties = isPropertiesPayments && hasHassanPropertiesHistoricalReportingPolicy(selectedCompany);
   // In HASSAN PROPERTIES the only visible rental payment history is All Records.
   // Other company/module views retain their existing tabs.
   // Widened to the full view union: Properties payments now show only All
