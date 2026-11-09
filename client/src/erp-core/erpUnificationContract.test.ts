@@ -9,6 +9,8 @@ describe("ERP unification final regression contracts", () => {
     const customers = source("client/src/pages/Customers.tsx");
     expect(barrel).not.toContain('from "@/components/ui/form"');
     expect(customers).toContain('from "@/components/ui/form"');
+    expect(barrel).not.toContain('from "./erpData"');
+    expect(customers).toContain('from "@/erp-core/erpData"');
     expect(barrel).toContain('export { ErpFormActions, ErpPendingButton }');
   });
 
