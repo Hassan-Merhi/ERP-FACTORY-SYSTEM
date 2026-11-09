@@ -148,6 +148,7 @@ export default function StockQuery() {
           <ErpListTable
             pageKey="stock-query"
             companyId={selectedCompany?.id}
+            showDensityControl={!isFactory}
             scrollLabel="Stock query results"
             wrapperClassName="hidden md:block phone-land:hidden rounded-xl"
           >
