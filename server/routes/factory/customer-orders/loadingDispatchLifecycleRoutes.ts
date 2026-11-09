@@ -7,6 +7,7 @@
 import { createHash } from "node:crypto";
 import type { Express, Request, Response } from "express";
 import { sql } from "drizzle-orm";
+import { factoryActionCapabilities } from "@shared/factoryActionCapabilities";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { getFactoryAccessState, requireFactoryTabAccess } from "../../../lib/factoryAccessControl";
@@ -29,10 +30,10 @@ function refusal(statusCode: number, code: string, message: string): never {
   throw new LifecycleError(statusCode, code, message);
 }
 function supervisor(role: string) {
-  return ["owner", "admin", "developer"].includes(role.trim().toLowerCase());
+  return factoryActionCapabilities({ role })["dispatch.approve-discrepancy"];
 }
 function writable(role: string) {
-  return !["view only", "create only"].includes(role.trim().toLowerCase());
+  return factoryActionCapabilities({ role })["dispatch.close"];
 }
 function rows(result: unknown): Raw[] { return resultRows(result); }
 function reason(raw: unknown, min: number): string | null {
