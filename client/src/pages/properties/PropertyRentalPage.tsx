@@ -39,7 +39,10 @@ import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
 import { authenticatedUserQueryOptions } from "@/contracts/sessionQueryContracts";
 import "./property-rental/propertiesRentalsPremium.css";
 
-import type { CashAccount, Props, Unit } from "./property-rental/types";
+import type { Props, Unit } from "./property-rental/types";
+import { useRentalUnits, useRentalCashAccounts } from "@/properties/hooks/useRentalUnits";
+import { useRentalReconciliationPayments } from "@/properties/hooks/useRentalPayments";
+import { useRentalOverview, useGroupedRentalUnits } from "@/properties/hooks/useRentalOverview";
 import { getRentalModulePolicy } from "@/properties/config/rentalModulePolicy";
 import { fmtMoneyCurrency } from "./property-rental/utils";
 import { formatMoneyDisplay } from "@/lib/moneyDisplay";
@@ -78,15 +81,7 @@ export default function PropertyRentalPage({
   const [newGroupName, setNewGroupName] = useState("");
   const [historyReconciliation, setHistoryReconciliation] = useState<ReconciliationSnapshot | null>(null);
 
-  const { data: units = [], isLoading } = useQuery<Unit[]>({
-    queryKey: [apiBase + "/units", { unitType, companyId: selectedCompany?.id }],
-    queryFn: async () => {
-      const res = await fetch(`${apiBase}/units?unitType=${unitType}`, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to load units");
-      return res.json();
-    },
-    enabled: !!selectedCompany,
-  });
+  const { data: units = [], isLoading } = useRentalUnits(apiBase, selectedCompany?.id, unitType);
 
   // Read-only accounting presentation shared with the Payments Log.
   // The historical cutoff alone excludes the later ALI cash ledger balance.
@@ -98,60 +93,12 @@ export default function PropertyRentalPage({
     data: historicalPayments = [],
     isLoading: historicalLoading,
     isError: historicalError,
-  } = useQuery<ReconciliationPayment[]>({
-    queryKey: [apiBase + "/payments", { companyId: selectedCompany?.id, view: "warehouse-reconciliation" }],
-    queryFn: async () => {
-      const res = await fetch(`${apiBase}/payments?view=warehouse-reconciliation`, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to load historical warehouse rent");
-      return res.json();
-    },
-    enabled: !!selectedCompany && showHistoricalPaid,
-  });
+  } = useRentalReconciliationPayments(apiBase, selectedCompany?.id, showHistoricalPaid);
 
-  const { data: cashAccounts = [] } = useQuery<CashAccount[]>({
-    queryKey: [apiBase + "/cash-accounts", selectedCompany?.id],
-    queryFn: async () => {
-      const res = await fetch(`${apiBase}/cash-accounts`, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to load cash accounts");
-      return res.json();
-    },
-    enabled: !!selectedCompany,
-  });
+  const { data: cashAccounts = [] } = useRentalCashAccounts(apiBase, selectedCompany?.id);
 
-  const grouped = useMemo(() => {
-    const groups = new Map<string, Unit[]>();
-    units.forEach((u) => {
-      if (!groups.has(u.locationGroup)) groups.set(u.locationGroup, []);
-      groups.get(u.locationGroup)!.push(u);
-    });
-    const naturalCmp = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
-    return Array.from(groups.entries())
-      .sort(([a], [b]) => naturalCmp(a, b))
-      .map(([grp, us]) => [grp, [...us].sort((a, b) => naturalCmp(a.unitNumber, b.unitNumber))] as [string, Unit[]]);
-  }, [units]);
-
-  const totals = useMemo(() => {
-    let totalGuarantee = 0,
-      totalOwed = 0,
-      totalCredit = 0,
-      totalPaid = 0,
-      totalMonthlyRent = 0;
-    units.forEach((u) => {
-      // Factory projections are references, not Properties receivables or deposits.
-      if (u.isInternalLeaseProjection) return;
-      if (u.contract) {
-        totalGuarantee += Number((u.guaranteeRemaining ?? u.contract.guaranteeAmount) || 0);
-        const outstanding = u.outstanding ?? 0;
-        if (outstanding > 0) totalOwed += outstanding;
-        totalCredit += u.prepaidCredit ?? 0;
-        totalPaid += u.totalPaid ?? 0;
-        if (u.contract.status === "ACTIVE" || !u.contract.status) {
-          totalMonthlyRent += Number(u.contract.rentalAmount || 0);
-        }
-      }
-    });
-    return { totalGuarantee, totalOwed, totalCredit, totalPaid, totalMonthlyRent };
-  }, [units]);
+  const grouped = useGroupedRentalUnits(units);
+  const totals = useRentalOverview(units);
 
   const reconciledAccountTotalsReady =
     showHistoricalPaid &&
