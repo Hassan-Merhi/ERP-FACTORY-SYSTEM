@@ -41,8 +41,8 @@ export function evaluatePhase5ReplaySafety(input: {
   const blockers: string[] = [];
   if (missingLineageBatchIds.length) {
     blockers.push(
-      `${missingLineageBatchIds.length} consumed mix batch(es) have no linked bale, pressing or daily usage records. ` +
-      "Recorded production/output provenance must be reconciled before changing historical cost."
+      `${missingLineageBatchIds.length} consumed mix batch(es) have no directly linked bale output. ` +
+      "Pressing or daily usage alone does not prove which bales carry the historical mix cost."
     );
   }
   if (finalizedBaleIds.length || protectedBaleIds.length) {
@@ -85,14 +85,6 @@ export async function inspectPhase5ReplayScopeSafety(
             SELECT 1 FROM factory_bales b WHERE b.company_id=m.company_id
               AND b.mix_batch_id=m.id AND b.deleted_at IS NULL
               AND b.status NOT IN ('DELETED','REMOVED')
-          )
-          AND NOT EXISTS (
-            SELECT 1 FROM factory_pressing_batches p WHERE p.company_id=m.company_id
-              AND p.mix_batch_id=m.id
-          )
-          AND NOT EXISTS (
-            SELECT 1 FROM factory_daily_usages d WHERE d.company_id=m.company_id
-              AND d.mix_batch_id=m.id
           )
         ORDER BY m.id`, [companyId, ids],
     ) : Promise.resolve({ rows: [] as Array<{id:number}> }),
