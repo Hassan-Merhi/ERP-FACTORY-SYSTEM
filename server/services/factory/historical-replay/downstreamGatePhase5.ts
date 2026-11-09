@@ -41,7 +41,7 @@ export function evaluatePhase5ReplaySafety(input: {
   const blockers: string[] = [];
   if (missingLineageBatchIds.length) {
     blockers.push(
-      \`\${missingLineageBatchIds.length} consumed mix batch(es) have no linked bale, pressing or daily usage records. \` +
+      `${missingLineageBatchIds.length} consumed mix batch(es) have no linked bale, pressing or daily usage records. ` +
       "Recorded production/output provenance must be reconciled before changing historical cost."
     );
   }
@@ -77,7 +77,7 @@ export async function inspectPhase5ReplayScopeSafety(
   const baleIds = [...new Set(scope.availableBaleIdsToUpdate)];
   const [mixRows, saleRows, cutover] = await Promise.all([
     ids.length ? executor.query<{ id: number }>(
-      \`SELECT m.id
+      `SELECT m.id
          FROM factory_mix_batches m
         WHERE m.company_id=$1 AND m.deleted_at IS NULL AND m.id=ANY($2)
           AND m.used_kg>0
@@ -94,10 +94,10 @@ export async function inspectPhase5ReplayScopeSafety(
             SELECT 1 FROM factory_daily_usages d WHERE d.company_id=m.company_id
               AND d.mix_batch_id=m.id
           )
-        ORDER BY m.id\`, [companyId, ids],
+        ORDER BY m.id`, [companyId, ids],
     ) : Promise.resolve({ rows: [] as Array<{id:number}> }),
     baleIds.length ? executor.query<{ id: number }>(
-      \`SELECT b.id
+      `SELECT b.id
          FROM factory_bales b
         WHERE b.company_id=$1 AND b.id=ANY($2)
           AND (b.deleted_at IS NOT NULL
@@ -129,14 +129,14 @@ export async function inspectPhase5ReplayScopeSafety(
                    ))
            )
           )
-        ORDER BY b.id\`, [companyId, baleIds],
+        ORDER BY b.id`, [companyId, baleIds],
     ) : Promise.resolve({ rows: [] as Array<{id:number}> }),
     executor.query<{ active: boolean }>(
-      \`SELECT EXISTS (
+      `SELECT EXISTS (
          SELECT 1 FROM gl_inventory_cutovers
           WHERE company_id=$1 AND status='ACTIVE'
             AND effective_from <= CURRENT_DATE
-       ) AS active\`, [companyId],
+       ) AS active`, [companyId],
     ),
   ]);
   const proposedValueRows =
