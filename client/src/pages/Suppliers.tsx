@@ -1,9 +1,12 @@
-import { searchIncludes } from "@shared/searchNormalization";
+import {
+  searchIncludes } from "@shared/searchNormalization";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery,
+  useMutation } from "@tanstack/react-query";
 import { useDebounce } from "@/hooks/use-debounce";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient,
+  apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import { PageHeader } from "@/components/PageHeader";
 import {
@@ -14,15 +17,26 @@ import {
   invalidateErpDataFamilies,
   erpReportFileName,
   exportErpReportRowsExcel,
-} from "@/erp-core";
-import { Button } from "@/components/ui/button";
+  Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Edit, Eye, EyeOff, FileText, Search, Truck, Users, Container, DollarSign } from "lucide-react";
+import { Edit,
+  Eye,
+  EyeOff,
+  FileText,
+  Search,
+  Truck,
+  Users,
+  Container,
+  DollarSign } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useCompany } from "@/contexts/CompanyContext";
-import { useErpCan as useCan, erpCanDenialMessage as canDenialMessage } from "@/erp-core";
-import { useErpRecordChangeAccess as useExistingRecordChangeAccess } from "@/erp-core";
+import { useErpCan as useCan,
+  erpCanDenialMessage as canDenialMessage,
+  useErpRecordChangeAccess as useExistingRecordChangeAccess,
+} from "@/erp-core";
+
+
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { suppliersApi } from "@/api/suppliersApi";
 import { useEscapeBack } from "@/hooks/use-escape-back";
