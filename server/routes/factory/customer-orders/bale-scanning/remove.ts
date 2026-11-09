@@ -213,12 +213,13 @@ export function registerOrderBaleRemovalRoutes(app: Express) {
             throw new DispatchReconciliationRefusal(409, "Only active Pending Loading orders can be reconciled");
           }
           const tripRows = await tx.execute(sql`
-            SELECT id, status FROM factory_loading_dispatches
+            SELECT COUNT(*)::integer AS "totalTrips",
+                   COUNT(*) FILTER (WHERE status = 'OPEN')::integer AS "openTrips"
+              FROM factory_loading_dispatches
              WHERE company_id = ${companyId} AND order_id = ${orderId}
-             LIMIT 10000
           `);
-          const tripStatuses = resultRows(tripRows);
-          if (!tripStatuses.length || tripStatuses.some((trip) => trip.status === "OPEN")) {
+          const tripCounts = resultRows(tripRows)[0];
+          if (Number(tripCounts?.totalTrips ?? 0) === 0 || Number(tripCounts?.openTrips ?? 0) > 0) {
             throw new DispatchReconciliationRefusal(409, "Finish all dispatch trips before removing missing bales");
           }
         }
