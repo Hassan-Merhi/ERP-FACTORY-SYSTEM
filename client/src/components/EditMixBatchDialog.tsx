@@ -383,8 +383,15 @@ export function EditMixBatchDialog({
       const stock = supplierStock?.find((s) => s.supplierId?.toString() === selectedSourceId);
       if (!stock || !stock.supplierId) return;
       const available = parseFloat(stock.remainingKg);
-      // Over-use allowed: no guard on weight > available
-      // Always the current locked rate — never editable, never sent to the server.
+      if (weight > available + 0.001) {
+        toast({
+          title: "Insufficient raw stock",
+          description: "This edit would make raw-material inventory negative.",
+          variant: "destructive",
+        });
+        return;
+      }
+      // Current locked USD rate is advisory until the server confirms the review.
       const costPerKg = parseFloat(stock.costPerKgUsd || stock.costPerKg || "0");
       setSelectedSources((prev) => [
         ...prev,
@@ -424,13 +431,17 @@ export function EditMixBatchDialog({
         },
       ]);
     }
+    setSourceTouched(true);
+    setSourceReview(null);
     setSelectedSourceId("");
     setWeightInput("");
   };
 
   const handleUpdateSourceWeight = (type: string, sourceId: number, newWeight: string) => {
-    const weight = parseFloat(newWeight);
-    if (isNaN(weight) || weight <= 0) return;
+    const weight = Number(newWeight);
+    if (!/^\\d{1,12}(?:\\.\\d{1,3})?$/.test(newWeight) || !Number.isFinite(weight) || weight <= 0) return;
+    setSourceTouched(true);
+    setSourceReview(null);
     setSelectedSources((prev) =>
       prev.map((s) => {
         if (s.type === type && s.sourceId === sourceId) {
@@ -441,23 +452,11 @@ export function EditMixBatchDialog({
     );
   };
 
-  // Supplier-source cost/kg is never user-editable — it's always the server's locked
-  // rate. Only batch sources (using their own historical stored cost) can be edited here.
-  const handleUpdateSourceCost = (type: string, sourceId: number, newCostPerKg: string) => {
-    if (type !== "batch") return;
-    const costPerKg = parseFloat(newCostPerKg);
-    if (isNaN(costPerKg) || costPerKg < 0) return;
-    setSelectedSources((prev) =>
-      prev.map((s) => {
-        if (s.type === type && s.sourceId === sourceId) {
-          return { ...s, costPerKg, totalCost: s.weightKg * costPerKg };
-        }
-        return s;
-      })
-    );
-  };
-
+  // Rates are server-authoritative. Source edits change quantities/identity
+  // only; no client-side cost override can silently alter a historical value.
   const handleRemoveSource = (type: string, sourceId: number) => {
+    setSourceTouched(true);
+    setSourceReview(null);
     setSelectedSources((prev) => prev.filter((s) => !(s.type === type && s.sourceId === sourceId)));
   };
 
@@ -698,8 +697,8 @@ export function EditMixBatchDialog({
               <h3 className="font-medium">Sources</h3>
               {historicalSourcesLocked && (
                 <p role="status" className="text-xs text-amber-600 dark:text-amber-400" data-testid="mix-batch-completed-source-lock">
-                  Completed batch: historical sources and weights are locked to prevent automatic repricing.
-                  Name, date, and notes can still be updated. Reviewed source edits will be added in Phase 2.
+                  Completed batch: source quantities are review-only until historical output and
+                  accounting reconciliation (Phases 3–5). Name, date and notes remain editable.
                 </p>
               )}
               <div className="flex gap-2 flex-wrap">
@@ -850,21 +849,13 @@ export function EditMixBatchDialog({
                               )}
                             </div>
                           ) : (
-                            <div className="relative ml-auto w-28">
-                              <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
-                                $
-                              </span>
-                              <Input
-                                type="number"
-                                className="h-7 w-28 pl-4 text-right font-mono text-xs"
-                                value={sel.costPerKg.toFixed(4)}
-                                step="0.0001"
-                                min="0"
-                                onChange={(e) => handleUpdateSourceCost(sel.type, sel.sourceId, e.target.value)}
-                                disabled={historicalSourcesLocked}
-                                data-testid={`input-cost-per-kg-${sel.type}-${sel.sourceId}`}
-                              />
-                            </div>
+                            <span
+                              className="font-mono text-xs text-muted-foreground"
+                              title="Recorded cost of the upstream batch. Only its source/weight can be changed."
+                              data-testid={`text-cost-per-kg-${sel.type}-${sel.sourceId}`}
+                            >
+                              ${sel.costPerKg.toFixed(4)}
+                            </span>
                           )}
                         </TableCell>
                         <TableCell className="text-right font-mono text-sm">
@@ -918,8 +909,9 @@ export function EditMixBatchDialog({
             )}
             <p className="text-xs text-muted-foreground" data-testid="mix-batch-cost-basis-notice">
               The estimate uses current supplier rates for proposed source edits. It is not a correction to
-              recorded historical costs. Metadata-only saves preserve existing costs; source edits to
-              completed batches are blocked until the reviewed edit workflow is available in Phase 2.
+              recorded historical costs. Metadata-only saves do not touch consumption. Source
+              changes require a fresh server review, a reason and explicit approval;
+              completed/used batches stay protected pending the historical reconciliation.
             </p>
 
             {/* Notes */}
