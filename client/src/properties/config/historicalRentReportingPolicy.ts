@@ -1,29 +1,26 @@
 import type { Company } from "@/contexts/CompanyContext";
 
 /**
- * Read-only reporting exception. The immutable company ID must be provisioned
- * from verified company data, never inferred from the mutable display name.
+ * Read-only historical reporting assignment, verified via the primary Render
+ * production database public.companies table on 2026-11-09:
+ * id=13, code=HP, company_type=properties, name=HASSAN PROPERTIES.
  *
- * The identifier is intentionally not guessed here: the source audit does not
- * establish Hassan Properties' actual company ID. Until configured, the special
- * historical view remains disabled rather than being assigned to the wrong
- * company's ledger. See the Phase 3 execution tracker for rollout verification.
+ * Match stable identity fields; the company display name is deliberately not
+ * used. Both ID and code must match so an unrelated company with a reused ID
+ * in another environment cannot silently receive this special view.
+ *
+ * This does NOT authorize any requests or financial writes. Server company
+ * scope, ledger access and all voucher posting rules remain authoritative.
  */
-const configuredId = import.meta.env.VITE_HASSAN_PROPERTIES_REPORTING_COMPANY_ID;
-
-export const HASSAN_PROPERTIES_REPORTING_COMPANY_ID: number | null =
-  typeof configuredId === "string" &&
-  /^[1-9]\d*$/.test(configuredId.trim()) &&
-  Number.isSafeInteger(Number(configuredId.trim()))
-    ? Number(configuredId.trim())
-    : null;
+export const HASSAN_PROPERTIES_REPORTING_COMPANY_ID = 13;
+export const HASSAN_PROPERTIES_REPORTING_COMPANY_CODE = "HP";
 
 export function hasHassanPropertiesHistoricalReportingPolicy(
-  company: Pick<Company, "id" | "companyType"> | null | undefined,
+  company: Pick<Company, "id" | "code" | "companyType"> | null | undefined,
 ): boolean {
   return (
-    HASSAN_PROPERTIES_REPORTING_COMPANY_ID !== null &&
     company?.companyType === "properties" &&
-    company.id === HASSAN_PROPERTIES_REPORTING_COMPANY_ID
+    company.id === HASSAN_PROPERTIES_REPORTING_COMPANY_ID &&
+    company.code === HASSAN_PROPERTIES_REPORTING_COMPANY_CODE
   );
 }
