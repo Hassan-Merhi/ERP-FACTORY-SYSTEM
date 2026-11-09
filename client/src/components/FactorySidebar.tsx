@@ -350,7 +350,7 @@ export function useFactoryVisibleSections(user?: FactorySidebarUser): {
         // Preserve all authorized pages in the sidebar, including those accessible
         // from a parent hub. Visibility remains controlled by the access registry.
         return true;
-      }).filter((item) => item.accessKey !== "factory/production-report" || !item.hideKey || !myAccess?.hiddenCostFields?.includes(item.hideKey)),
+      }),
     })).map((s) => ({
       ...s,
       items: s.label === "Sales & Loading" ? collapseFactorySalesDispatchNav(s.items, currentLocation) : s.items,
