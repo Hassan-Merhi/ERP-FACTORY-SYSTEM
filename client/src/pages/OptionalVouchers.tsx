@@ -1,13 +1,5 @@
-import {
-  ErpListFilters,
-  ErpListTable,
-  ErpConfirmDialog,
-  ErpRecordAction,
-  erpCompanyDataKey,
-  erpRequestUrl,
-  invalidateErpDataFamilies,
-  useErpDateFormat,
-} from "@/erp-core";
+import { ErpListFilters, ErpListTable, ErpConfirmDialog, ErpRecordAction, useErpDateFormat } from "@/erp-core";
+import { erpCompanyDataKey, erpRequestUrl, invalidateErpDataFamilies } from "@/erp-core/erpData";
 import { TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useCompany } from "@/contexts/CompanyContext";
 import type { ClientErrorLike } from "@/lib/clientError";
