@@ -11,6 +11,24 @@ function groupFor(
 }
 
 describe("sidebar navigation grouping", () => {
+  it("moves five ERP tools into the final Others section without duplicates", () => {
+    const others = ERP_NAV_SECTIONS.at(-1);
+    expect(others?.label).toBe("Others");
+    const expectedItems = [
+      ["Ticket Management", "/tickets"],
+      ["Supplier Profit Review", "/supplier-profit-reconciliation"],
+      ["Stock & Sales Report", "/stock-in-sales-report"],
+      ["Market Price Analysis", "/item-market-analysis"],
+      ["POS Item Replacement", "/pos-item-replacement"],
+    ];
+    expect(others?.items.map(({ title, url }) => [title, url])).toEqual(expectedItems);
+    for (const [, url] of expectedItems) {
+      expect(groupFor(ERP_NAV_SECTIONS, url)).toBe("Others");
+      expect(ERP_NAV_SECTIONS.flatMap((section) => section.items).filter((item) => item.url === url))
+        .toHaveLength(1);
+    }
+  });
+
   it("shows optional vouchers and profit check within ERP Inventory only", () => {
     expect(groupFor(ERP_NAV_SECTIONS, "/optional-vouchers")).toBe("Inventory");
     expect(groupFor(ERP_NAV_SECTIONS, "/supplier-profit-check")).toBe("Inventory");
