@@ -19,6 +19,8 @@ import { useToast } from "@/hooks/use-toast";
 import { PageHeader } from "@/components/PageHeader";
 import * as XLSX from "xlsx-js-style";
 import type { FactoryMyAccess } from "@shared/apiTypes";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import {
   type LedgerSplitFields,
   type NotInLedgerRowFields,
@@ -107,6 +109,7 @@ function fmtNum(value: number | null | undefined): string {
 }
 
 export default function FactoryCustomerStatement() {
+  const { selectedCompany } = useCompany();
   const { formatDisplayDate } = useDateFormat();
   const { toast } = useToast();
   const [, navigate] = useLocation();
@@ -114,10 +117,13 @@ export default function FactoryCustomerStatement() {
   const params = useParams<{ id: string }>();
   const customerId = params.id;
   const { data: myAccess } = useQuery<FactoryMyAccess>({
-    queryKey: ["/api/factory/my-access"],
+    queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     staleTime: 5 * 60000,
   });
-  const hiddenTabs = myAccess?.hiddenCostFields ?? [];
+  const hiddenTabs = myAccess?.companyId === selectedCompany?.id && myAccess.hasFactoryAccess
+    ? myAccess.hiddenCostFields
+    : ["hide_tab_customer_statement", "hide_tab_customer_pricelist"];
   const showStatementTab = !hiddenTabs.includes("hide_tab_customer_statement");
   const showPriceListTab = !hiddenTabs.includes("hide_tab_customer_pricelist");
   const visibleCustomerTabs = [showStatementTab ? "statement" : null, showPriceListTab ? "pricelist" : null].filter(
@@ -151,7 +157,7 @@ export default function FactoryCustomerStatement() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: statement, isLoading } = useQuery<StatementData>({
-    queryKey: ["/api/factory/customers", customerId, "statement", filterDateFrom, filterDateTo],
+    queryKey: companyQueryKey("/api/factory/customers", selectedCompany?.id, customerId, "statement", filterDateFrom, filterDateTo),
     queryFn: async () => {
       // Re-group at each date boundary: a late charge must never shift into
       // a different accounting period when filtering the statement.
@@ -165,12 +171,12 @@ export default function FactoryCustomerStatement() {
       if (!res.ok) throw new Error((await res.json()).message || "Failed to fetch statement");
       return res.json();
     },
-    enabled: !!customerId,
+    enabled: !!customerId && Boolean(selectedCompany?.id),
   });
 
   const priceDestinationsQuery = useQuery<string[]>({
-    queryKey: ["/api/factory/customer-price-lists", customerId, "destinations"],
-    enabled: !!customerId && showPriceListTab,
+    queryKey: companyQueryKey("/api/factory/customer-price-lists", selectedCompany?.id, customerId, "destinations"),
+    enabled: !!customerId && showPriceListTab && Boolean(selectedCompany?.id),
     queryFn: async () => {
       const res = await fetch(`/api/factory/customer-price-lists/${customerId}/destinations`, {
         credentials: "include",
@@ -181,8 +187,8 @@ export default function FactoryCustomerStatement() {
   });
 
   const priceListQuery = useQuery<PriceListEntry[]>({
-    queryKey: ["/api/factory/customer-price-lists", customerId, priceDestination],
-    enabled: !!customerId && !!priceDestination && showPriceListTab,
+    queryKey: companyQueryKey("/api/factory/customer-price-lists", selectedCompany?.id, customerId, priceDestination),
+    enabled: !!customerId && !!priceDestination && showPriceListTab && Boolean(selectedCompany?.id),
     queryFn: async () => {
       const res = await fetch(priceListUrl(customerId, priceDestination), { credentials: "include" });
       if (!res.ok) throw new Error("Failed to load destination agreed prices");
