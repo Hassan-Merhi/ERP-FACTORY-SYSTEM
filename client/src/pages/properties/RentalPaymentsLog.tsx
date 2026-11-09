@@ -27,7 +27,6 @@ import {
 } from "./property-rental/components/PaymentsReconciliation";
 import {
   cashCents,
-  nonCashCents,
   paymentHistoryTsv,
   reconciledHistoryTsv,
   receiptTotals,
@@ -298,11 +297,7 @@ export default function RentalPaymentsLog({
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-xs text-muted-foreground font-normal">
-              {isFullHistory
-                ? "TOTAL AMOUNT RECORDED"
-                : isHassanProperties
-                  ? "CASH RECEIVED (VOUCHER-BACKED)"
-                  : "TOTAL AMOUNT RECEIVED"}
+              TOTAL AMOUNT RECEIVED
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -310,13 +305,7 @@ export default function RentalPaymentsLog({
               className="text-2xl font-bold text-green-600 dark:text-green-400"
               data-testid={`stat-${testIdPrefix}-total-amount`}
             >
-              {paymentsError
-                ? "Unavailable"
-                : isFullHistory
-                  ? reconciliationReady && reconciliation?.reconciled != null
-                    ? formatMoneyNumber(reconciliation.reconciled / 100)
-                    : "Verifying…"
-                  : formatMoneyNumber(total)}
+              {paymentsError ? "Unavailable" : formatMoneyNumber(total)}
             </div>
           </CardContent>
         </Card>
@@ -342,7 +331,7 @@ export default function RentalPaymentsLog({
               <div className="p-8 text-center text-destructive">Payment history could not be loaded. Please retry.</div>
             ) : filtered.length === 0 ? (
               <div className="p-8 text-center text-muted-foreground">
-                {payments.length === 0 ? "No payments recorded yet." : "No payments match the selected type or search."}
+                {payments.length === 0 ? "No payments recorded yet." : "No payments match the search."}
               </div>
             ) : (
               <table className="w-full text-sm" {...cardTableProps} data-testid={`table-${testIdPrefix}-payments`}>
@@ -352,9 +341,9 @@ export default function RentalPaymentsLog({
                     <th className="text-left px-3 py-2 font-semibold">Client Name</th>
                     <th className="text-left px-3 py-2 font-semibold">Unit</th>
                     <th className="text-right px-3 py-2 font-semibold">
-                      {isHassanProperties ? "Cash Received" : "Amount"}
+                      Amount
                     </th>
-                    {isHassanProperties && <th className="text-right px-3 py-2 font-semibold">Non-cash Adjustment</th>}
+}
                     <th className="text-left px-3 py-2 font-semibold">For Month</th>
                     <th className="text-left px-3 py-2 font-semibold">Notes</th>
                     <th className="text-left px-3 py-2 font-semibold">Daybook</th>
@@ -381,32 +370,13 @@ export default function RentalPaymentsLog({
                         )}
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums font-semibold text-green-700 dark:text-green-400">
-                        {!isHassanProperties ? (
-                          <MoneyAmount amount={p.amount} currency={p.currency ?? "USD"} />
-                        ) : cashCents(p) !== 0 ? (
-                          <MoneyAmount amount={cashCents(p) / 100} currency={p.currency ?? "USD"} />
-                        ) : (
-                          "—"
-                        )}
+                        <MoneyAmount amount={p.amount} currency={p.currency ?? "USD"} />
                       </td>
-                      {isHassanProperties && (
-                        <td className="px-3 py-2 text-right tabular-nums text-amber-600 dark:text-amber-400">
-                          {nonCashCents(p) !== 0 ? (
-                            <MoneyAmount amount={nonCashCents(p) / 100} currency={p.currency ?? "USD"} />
-                          ) : (
-                            "—"
-                          )}
-                        </td>
-                      )}
+
                       <td className="px-3 py-2 text-xs text-muted-foreground">
                         {MONTH_NAMES[p.forMonth]} {p.forYear}
                       </td>
                       <td className="px-3 py-2 text-xs text-muted-foreground">
-                        {isPropertiesPayments && p.sourceModule === "ERP" && (
-                          <Badge variant="outline" className="mr-2 text-[10px]">
-                            ERP source
-                          </Badge>
-                        )}
                         {p.readOnly && (
                           <Badge variant="outline" className="mr-2 text-[10px]">
                             Voucher-only guarantee receipt
@@ -435,13 +405,6 @@ export default function RentalPaymentsLog({
                           >
                             Read-only
                           </span>
-                        ) : isPropertiesPayments && p.sourceModule !== "PROPERTIES" ? (
-                          <span
-                            className="text-xs text-muted-foreground"
-                            title="Manage this payment from its original ERP rental module"
-                          >
-                            ERP source
-                          </span>
                         ) : (
                           <Button
                             size="icon"
@@ -464,15 +427,11 @@ export default function RentalPaymentsLog({
                     </td>
                     <td
                       className="px-3 py-2 text-right tabular-nums font-bold text-green-700 dark:text-green-400"
-                      data-testid="properties-history-reconciled-footer"
+                      data-testid={`footer-${testIdPrefix}-total-amount`}
                     >
-                      {isFullHistory
-                        ? reconciliationReady && reconciliation?.reconciled != null
-                          ? formatMoneyNumber(reconciliation.reconciled / 100)
-                          : "Verifying…"
-                        : formatMoneyNumber(total)}
+                      {formatMoneyNumber(total)}
                     </td>
-                    <td colSpan={isHassanProperties ? 5 : 4}></td>
+                    <td colSpan={4}></td>
                   </tr>
                 </tfoot>
               </table>
