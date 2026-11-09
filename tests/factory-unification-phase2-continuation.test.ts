@@ -45,6 +45,24 @@ describe("Factory Phase 2 continuation: selected-company source invariants", () 
     );
   });
 
+  it("scopes worker pay, advances-sensitive account and bonus reads", () => {
+    const worker = source("client/src/pages/factory/factoryworkers/useFactoryWorkersModel.tsx");
+    const bonus = source("client/src/pages/factory/FactoryWorkerBonusesTab.tsx");
+    for (const endpoint of [
+      "/api/factory/workers/amount-due",
+      "/api/factory/cash-accounts",
+      "/api/factory/worker-categories",
+      "/api/factory/workers/document-counts",
+    ]) {
+      expect(worker, endpoint).toContain(`companyQueryKey("${endpoint}", selectedCompany?.id)`);
+    }
+    expect(bonus).toContain('companyQueryKey("/api/factory/worker-bonuses", selectedCompany?.id');
+    expect(worker).toContain("myAccess.hasFactoryAccess");
+    expect(companyQueryKey("/api/factory/workers/amount-due", 1)).not.toEqual(
+      companyQueryKey("/api/factory/workers/amount-due", 2),
+    );
+  });
+
   it("pins company-matched authorization for visible nested hub tabs", () => {
     for (const path of [
       "client/src/pages/factory/FactoryInvoicing.tsx",
