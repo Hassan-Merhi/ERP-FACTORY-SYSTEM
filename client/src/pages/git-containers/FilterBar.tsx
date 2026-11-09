@@ -195,8 +195,7 @@ export function FilterBar({
           </div>
         )}
         <div className={cn("min-w-0", inSheet ? "py-1" : "p-4 sm:p-5")}>
-            <div className={cn("grid min-w-0 gap-x-4 gap-y-4", inSheet ? "grid-cols-1 min-[420px]:grid-cols-2" : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4")}>
-              <>
+          <div className={cn("grid min-w-0 gap-x-4 gap-y-4", inSheet ? "grid-cols-1 min-[420px]:grid-cols-2" : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4")}>
                 <Col label="Company" className="w-full">
             <Select value={companyFilter} onValueChange={setCompanyFilter}>
               <SelectTrigger className={sx} data-testid="select-filter-company">
@@ -231,8 +230,6 @@ export function FilterBar({
               testId="multi-filter-supplier"
             />
           </Col>
-              </>
-              <>
                 <Col label="Transporter" className="w-full">
             <MultiFilterSelect
               allLabel="All Transporters"
@@ -287,8 +284,6 @@ export function FilterBar({
               testId="multi-filter-location"
             />
           </Col>
-              </>
-              <>
                 <Col label="Docs" className="w-full">
             <Select value={docsFilter} onValueChange={setDocsFilter}>
               <SelectTrigger className={sx} data-testid="select-filter-docs">
@@ -335,8 +330,6 @@ export function FilterBar({
               testId="select-filter-eta"
             />
           </Col>
-              </>
-              <>
                 <Col label="Notes" className="w-full">
             <Select value={notesFilter} onValueChange={setNotesFilter}>
               <SelectTrigger className={sx} data-testid="select-filter-notes">
@@ -361,7 +354,6 @@ export function FilterBar({
               </SelectContent>
             </Select>
           </Col>
-              </>
             </div>
         </div>
         {!inSheet && (
