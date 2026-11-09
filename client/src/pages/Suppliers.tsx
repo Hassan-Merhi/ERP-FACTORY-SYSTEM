@@ -6,7 +6,13 @@ import { useDebounce } from "@/hooks/use-debounce";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import { PageHeader } from "@/components/PageHeader";
-import { ErpListFilters, ErpConfirmDialog, ErpRecordAction } from "@/erp-core";
+import {
+  ErpListFilters,
+  ErpConfirmDialog,
+  ErpRecordAction,
+  erpCompanyDataKey,
+  invalidateErpDataFamilies,
+} from "@/erp-core";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -16,7 +22,6 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { useErpCan as useCan, erpCanDenialMessage as canDenialMessage } from "@/erp-core";
 import { useErpRecordChangeAccess as useExistingRecordChangeAccess } from "@/erp-core";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
-import { companyDataKey } from "@/lib/frontendDataArchitecture";
 import { suppliersApi } from "@/api/suppliersApi";
 import { format } from "date-fns";
 import { utils, writeFile } from "@/lib/excelHelper";
@@ -63,8 +68,7 @@ export default function Suppliers() {
       return suppliersApi.delete(id);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/suppliers"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/suppliers/stats"] });
+      void invalidateErpDataFamilies(queryClient, ["/api/suppliers"]);
       toast({ title: "Supplier deleted" });
       setSupplierToDelete(null);
     },
@@ -91,7 +95,8 @@ export default function Suppliers() {
   };
 
   const { data: suppliers = [], isLoading } = useQuery<SupplierWithStats[]>({
-    queryKey: companyDataKey("/api/suppliers/stats", selectedCompany?.id),
+    queryKey: erpCompanyDataKey("/api/suppliers/stats", selectedCompany?.id),
+    enabled: selectedCompany?.id != null,
   });
 
   const { data: companies = [] } = useQuery<Company[]>({
@@ -104,8 +109,8 @@ export default function Suppliers() {
       : `/api/suppliers/${selectedSupplier?.id}/unified-ledger`;
 
   const { data: unifiedLedger = [], isLoading: ledgerLoading } = useQuery<SupplierLedgerRow[]>({
-    queryKey: [unifiedLedgerUrl],
-    enabled: !!selectedSupplier,
+    queryKey: erpCompanyDataKey(unifiedLedgerUrl, selectedCompany?.id),
+    enabled: !!selectedSupplier && selectedCompany?.id != null,
   });
 
   const purchaseOrdersUrl =
@@ -114,8 +119,8 @@ export default function Suppliers() {
       : `/api/suppliers/${selectedSupplier?.id}/purchase-orders`;
 
   const { data: purchaseOrders = [], isLoading: posLoading } = useQuery<SupplierPurchaseOrder[]>({
-    queryKey: [purchaseOrdersUrl],
-    enabled: !!selectedSupplier,
+    queryKey: erpCompanyDataKey(purchaseOrdersUrl, selectedCompany?.id),
+    enabled: !!selectedSupplier && selectedCompany?.id != null,
   });
 
   const activeSuppliers = suppliers.filter((s) => s.active);
