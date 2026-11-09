@@ -94,6 +94,11 @@ interface PreparedOperation {
   };
 }
 
+function refusalFrom(error: unknown): BrowserOperationRefusal {
+  if (error instanceof Error && error.message) return new BrowserOperationRefusal(error.message);
+  return new BrowserOperationRefusal("OFFLINE_BROWSER_INPUT_INVALID");
+}
+
 /** Build and validate the evidence envelope; refusals are the browser's input being wrong. */
 export function prepareBrowserOperation(actor: BrowserActor, request: BrowserOperationRequest): PreparedOperation {
   if (
@@ -128,9 +133,7 @@ export function prepareBrowserOperation(actor: BrowserActor, request: BrowserOpe
   } catch (error) {
     if (error instanceof BrowserOperationRefusal) throw error;
     // The envelope builders refuse malformed evidence with their own codes.
-    throw new BrowserOperationRefusal(
-      error instanceof Error && error.message ? error.message : "OFFLINE_BROWSER_INPUT_INVALID"
-    );
+    throw refusalFrom(error);
   }
   const event = {
     sequence: "1",
@@ -145,7 +148,7 @@ export function prepareBrowserOperation(actor: BrowserActor, request: BrowserOpe
   try {
     validatePhase9Event(kind.stream, event);
   } catch (error) {
-    throw new BrowserOperationRefusal(error instanceof Error ? error.message : "OFFLINE_BROWSER_INPUT_INVALID");
+    throw refusalFrom(error);
   }
   return { stream: kind.stream, event };
 }

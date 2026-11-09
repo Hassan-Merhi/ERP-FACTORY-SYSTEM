@@ -574,7 +574,7 @@ async function offlineCaptureActor(): Promise<{ companyId: number; userId: strin
   const scope = getVerifiedOfflineReadScope();
   if (scope) return scope;
   const user = queryClient.getQueryData<{ id?: string | number }>(["/api/auth/me"]);
-  let companyId = NaN;
+  let companyId: number;
   try {
     companyId = Number(localStorage.getItem("selectedCompanyId"));
   } catch {

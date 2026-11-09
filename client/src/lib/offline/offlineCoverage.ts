@@ -158,6 +158,18 @@ const UNAVAILABLE_RULES: readonly UnavailableRule[] = Object.freeze([
   },
 ]);
 
+/** Every category of write that needs a connection, in the order shown to the user. */
+export const OFFLINE_UNAVAILABLE_CATEGORIES: readonly OfflineUnavailableCategory[] = Object.freeze([
+  "existing-record",
+  "pressing",
+  "files",
+  "back-office",
+  "administration",
+  "integration",
+  "credentials",
+  "not-reviewed",
+]);
+
 export interface OfflineAvailability {
   available: boolean;
   category: OfflineUnavailableCategory | null;

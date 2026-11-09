@@ -1,4 +1,6 @@
 import { OfflinePrepPanel } from "@/components/OfflinePrepPanel";
+import { OfflineModePanel } from "@/components/OfflineModePanel";
+import { OFFLINE_MODE_ENABLED } from "@/lib/featureFlags";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -655,6 +657,7 @@ export function FactorySettingsView({ model }: Props) {
         </CardHeader>
         <CardContent>
           <OfflinePrepPanel />
+          {OFFLINE_MODE_ENABLED && <OfflineModePanel />}
         </CardContent>
       </Card>
 

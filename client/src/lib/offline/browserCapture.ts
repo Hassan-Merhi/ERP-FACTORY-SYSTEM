@@ -39,7 +39,10 @@ export function pathOf(url: string): string {
 
 export function offlineUnavailableError(method: string, url: string): OfflineUnavailableError {
   const availability = offlineAvailability(method, pathOf(url));
-  const error = new Error(`Not available offline. ${availability.reason ?? ""}`.trim()) as OfflineUnavailableError;
+  // The reason is the user-facing text (offlineCoverage.ts); the panel shows it translated.
+  const error = new Error(
+    availability.reason ?? offlineError("OFFLINE_WRITE_NOT_AVAILABLE").message
+  ) as OfflineUnavailableError;
   error.name = "OfflineUnavailable";
   error.reason = availability.reason ?? "";
   return error;
