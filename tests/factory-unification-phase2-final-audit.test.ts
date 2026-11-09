@@ -68,6 +68,31 @@ describe("Factory Phase 2 further source coverage", () => {
     expect(factoryActionCapabilities({ role: "Developer", hasFactoryAccess: true })["production.manage-bonuses"]).toBe(false);
   });
 
+  it("keeps detail mutation refreshes compatible with company-keyed reads", () => {
+    const worker = code("client/src/pages/factory/factoryworkerdetail/useFactoryWorkerDetailModel.tsx");
+    const invoice = code("client/src/pages/factory/factoryinvoicedetail/useFactoryInvoiceDetailModel.tsx");
+    const customer = code("client/src/pages/factory/FactoryCustomerStatement.tsx");
+    expect(worker).toContain('companyQueryKey("/api/factory/workers", selectedCompany?.id');
+    expect(worker).toContain('invalidateQueries({ queryKey: ["/api/factory/workers"] })');
+    expect(invoice).toContain('companyQueryKey("/api/factory/customer-orders", selectedCompany?.id, orderId)');
+    expect(invoice).toContain('invalidateQueries({ queryKey: ["/api/factory/customer-orders"] })');
+    expect(customer).toContain('invalidateQueries({ queryKey: ["/api/factory/customer-price-lists"] })');
+  });
+
+  it("guards against missing company and missing permission payload simultaneously", () => {
+    for (const file of [
+      "FactoryBalesHub.tsx", "FactoryPayrollHub.tsx", "FactoryInvoicing.tsx",
+      "FactorySheetsAndSacks.tsx", "FactoryKpis.tsx",
+    ]) {
+      const src = code("client/src/pages/factory/" + file);
+      expect(src).not.toContain("&& myAccess.hasFactoryAccess");
+      expect(src).toContain("myAccess?.hasFactoryAccess === true");
+    }
+    const staff = code("client/src/pages/factory/FactoryProductionTargets.tsx");
+    expect(staff).not.toContain("&& access.hasFactoryAccess");
+    expect(staff).toContain("access?.hasFactoryAccess === true");
+  });
+
   it("maintains a read-only inventory tool for unresolved cache and permission patterns", () => {
     const src = code("scripts/audit-factory-phase2.mjs");
     expect(src).toContain("--strict");
