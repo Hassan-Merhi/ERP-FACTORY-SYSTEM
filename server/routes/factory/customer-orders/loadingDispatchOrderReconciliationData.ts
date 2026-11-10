@@ -4,6 +4,7 @@
  * This never reads another company's Normal ERP receipts (RLS isolation).
  */
 import { sql } from "drizzle-orm";
+import { MoneyDecimal } from "../../../lib/money";
 import type { DbTransaction } from "../../../db";
 import { resultRows } from "../../../lib/queryResult";
 import { loadFactoryLoadingDispatchComparisonSnapshot } from "./loadingDispatchComparisonRoutes";
@@ -86,6 +87,9 @@ export async function loadOrderDispatchReconciliationTx(
            f.discount_total::text AS "discountTotal",
            f.customer_total::text AS "customerTotal",
            p.id::text AS "postingId",
+           p.source_fingerprint AS "postedFingerprint",
+           p.amount::text AS "postedAmount",
+           p.voucher_ids AS "voucherIds",
            e.po_number AS "exportedPoNumber",
            e.exported_at AS "exportedAt"
       FROM factory_dispatch_trip_financials f
@@ -105,6 +109,7 @@ export async function loadOrderDispatchReconciliationTx(
     revision:Number(row.revision??0),
     financialId:str(row.financialId),
     postingId:row.postingId==null?null:str(row.postingId),
+    postingVerified:false,
     sourceFingerprint:row.sourceFingerprint==null?null:str(row.sourceFingerprint),
     goodsSubtotal:str(row.goodsSubtotal),billableChargesTotal:str(row.billableChargesTotal),
     discountTotal:str(row.discountTotal),customerTotal:str(row.customerTotal),
@@ -112,6 +117,32 @@ export async function loadOrderDispatchReconciliationTx(
     exportedAt:row.exportedAt==null?null:str(row.exportedAt),
     financialBales:[],
   }));
+  // Verify every original POST record references live, non-optional
+  // vouchers in the same Factory company. Never count a reversed, deleted or
+  // unlinked voucher simply because the control row still says POSTED.
+  for(let index=0;index<mapped.length;index++){
+    const source=financialRows[index],financial=mapped[index];
+    if(!["POSTED","CONSOLIDATED"].includes(financial.status)) continue;
+    const vouchers=Array.isArray(source.voucherIds)?source.voucherIds.map(id):[];
+    const countGoodIds=vouchers.length===new Set(vouchers).size;
+    const sameSource=str(source.postedFingerprint)===financial.sourceFingerprint;
+    const sameAmount=/^(?:0|[1-9][0-9]*)(?:\\.[0-9]{1,2})?$/.test(str(source.postedAmount)) &&
+      new MoneyDecimal(str(source.postedAmount)).eq(new MoneyDecimal(financial.customerTotal));
+    if(!source.postingId || !countGoodIds || !sameSource || !sameAmount ||
+       (Number(financial.customerTotal)>0 && !vouchers.length)) continue;
+    let liveCount=0;
+    if(vouchers.length){
+      const [row]=await query(tx,sql`
+        SELECT COUNT(*)::integer AS count FROM vouchers
+         WHERE company_id=${scope.companyId}
+           AND id IN (${sql.join(vouchers.map(v=>sql`${v}`),sql`,`)})
+           AND deleted_at IS NULL AND COALESCE(optional,FALSE)=FALSE
+      `);
+      liveCount=Number(row?.count??0);
+    }
+    financial.postingVerified=liveCount===vouchers.length;
+  }
+
   if(mapped.length){
     const baleRows=await query(tx,sql`
       SELECT f.id::text AS "financialId",b.bale_id AS "baleId",
