@@ -84,6 +84,7 @@ vi.mock("@/contexts/AppModeContext", () => ({
 }));
 
 vi.mock("@/contexts/CompanyContext", () => ({
+  useOptionalCompany: () => ({ selectedCompany: { id: 1, name: "Test Co", companyType: "factory" } }),
   useCompany: () => ({
     selectedCompany: { id: 1, name: "Test Co", code: "TC", active: true, companyType: "factory" as const },
     companies: [],
