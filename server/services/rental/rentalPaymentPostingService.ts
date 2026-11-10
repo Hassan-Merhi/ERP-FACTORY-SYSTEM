@@ -26,6 +26,7 @@ import { shouldRunRentalAutoTransfer } from "./rentalCashboxPolicy";
 import { appendRentalTenantName } from "./rentalVoucherTenantDescription";
 import { shouldSettleAccruedRentPayable, isValidRentalBusinessDate } from "./rentalPaymentClassification";
 import { isRentRecognitionHeld } from "./rentRecognitionHold";
+import { postAccrualPassTx } from "../../routes/rental/shared/accrual-posting";
 
 export { buildAllocationsForPayment, findEarliestOutstandingMonth } from "./rentalPaymentAllocationService";
 
@@ -253,6 +254,64 @@ async function postGroupCore(
             creditedAccruedPayable: evidence[0].credited_payable,
             recognitionHold: isRentRecognitionHeld(evidence[0].notes),
           });
+          if (!wasAccrued && evidence[0].used_prepaid_account &&
+              evidence[0].accrual_voucher_id === null &&
+              !isRentRecognitionHeld(evidence[0].notes) &&
+              toMoney(evidence[0].paid_amount).gt("0.005")) {
+            // Prepaid month becomes due while another payment is being made.
+            // Recognize only the original, live PRE-BILLING payment into
+            // expense; establish AP for the remaining rent, then settle the
+            // new payment against AP in THIS transaction. No unrelated rent
+            // months are accrued, and no existing voucher is modified.
+            const prior = toMoney(evidence[0].paid_amount).toDecimalPlaces(2);
+            const expected = toMoney(evidence[0].expected_amount).toDecimalPlaces(2);
+            const dueDate = getRentalPeriodDueDate(alloc.forYear, alloc.forMonth, billingDay);
+            const paidBeforeBilling = (await tx.execute(sql`
+              SELECT COALESCE(SUM(p.amount::numeric),0) AS amount
+              FROM property_payments p
+              JOIN vouchers v ON v.id=p.voucher_id AND v.company_id=p.company_id
+                AND v.deleted_at IS NULL AND v.optional=FALSE
+              WHERE p.ledger_row_id=${alloc.ledgerRowId} AND p.company_id=${companyId}
+                AND p.posting_status='POSTED'
+                AND p.payment_date < ${dueDate}::date
+            `)).rows as Array<{ amount: string }>;
+            const actualPrepaid = toMoney(paidBeforeBilling[0]?.amount ?? 0).toDecimalPlaces(2);
+            const remainingPayable = expected.minus(actualPrepaid);
+            if (!actualPrepaid.eq(prior) || remainingPayable.lt(chunk) ||
+                !remainingPayable.gt("0.005")) {
+              const error: RentalPostingError = new Error(
+                "RENTAL_PREPAID_SOURCE_REQUIRES_REVIEW: posted prepaid vouchers and monthly rent do not agree"
+              );
+              error.status = 409;
+              throw error;
+            }
+            const expenseId = await findOrCreateLedgerAccount(
+              tx, companyId, shopExpenseAccountName, "Indirect Expense", "SHOP-RENT-EXP"
+            );
+            const prepaidId = await findOrCreateLedgerAccount(
+              tx, companyId, "Prepaid Rent", "Asset", "PREP-RENT"
+            );
+            const payableId = await findOrCreateLedgerAccount(
+              tx, companyId, "Accrued Rent Payable", "Liability", "ACCR-RENT-PAY"
+            );
+            const desc = `Prepaid rent recognized - ${companyId} - ${String(alloc.forMonth).padStart(2,"0")}/${alloc.forYear}`;
+            await postAccrualPassTx(tx, {
+              companyId,
+              module: mod,
+              pass: "prepaid-recognition",
+              voucherDate: paymentDate,
+              description: desc,
+              currency,
+              lines: [
+                { ledgerAccountId: expenseId, debit: expected, narration: desc },
+                { ledgerAccountId: prepaidId, credit: actualPrepaid, narration: desc },
+                { ledgerAccountId: payableId, credit: remainingPayable, narration: desc },
+              ],
+              ledgerRowIds: [alloc.ledgerRowId],
+              options: { trigger: "route" },
+            });
+            wasAccrued = true;
+          }
           if (!wasAccrued) {
             // Do not silently treat deleted accruals, historical holds, or
             // previously paid prepaid/advance months as new rent. They need
