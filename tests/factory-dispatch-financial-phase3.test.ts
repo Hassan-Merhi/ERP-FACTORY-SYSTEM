@@ -43,6 +43,7 @@ describe("Factory financial trip charge previews", () => {
     expect(accountAcceptsCharge("BILLABLE", "Liability")).toBe(false);
     expect(accountAcceptsCharge("INTERNAL", "Expense")).toBe(true);
     expect(accountAcceptsOffset("Liability")).toBe(true);
+    expect(accountAcceptsOffset("Bank")).toBe(false);
   });
 
   it("maps only recognized ERP PO charge types, never internal expenses", () => {
