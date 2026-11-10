@@ -213,6 +213,29 @@ export default function FactoryDispatchOrderDashboard({
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600"/>{note}
             </p>
           ))}
+          {value.invoice&&(
+            <div className="flex flex-wrap justify-between gap-3 rounded-xl border border-border bg-muted/20 p-3 text-xs"
+              data-testid="dispatch-combined-invoice-evidence">
+              <div className="space-y-1">
+                <p className="font-semibold">
+                  {value.summary.finalized?"Final consolidated invoice":"Order-wide reconciliation"}
+                  {value.invoice.invoiceNumber?" · "+value.invoice.invoiceNumber:""}
+                </p>
+                <p className="text-muted-foreground">
+                  Signed: {date(value.invoice.signedAt)}
+                  {value.invoice.signedBy?" · User "+value.invoice.signedBy:""}
+                </p>
+                <p className="text-muted-foreground">
+                  Finalized: {date(value.invoice.finalizedAt)} ·
+                  Original truck postings: {value.invoice.includedPostingIds.length}
+                  {" "}· Final invoice vouchers: {value.invoice.finalizationVoucherIds.length}
+                </p>
+              </div>
+              <Badge variant="outline" className="h-fit">
+                {value.summary.finalized?"One invoice finalized":value.summary.signed?"Signed, awaiting invoice":"Not yet signed"}
+              </Badge>
+            </div>
+          )}
           <div className="flex flex-wrap gap-1.5 border-b border-border pb-3" role="tablist" aria-label="Dispatch order financial reports">
             {sectionItems.map(item=>(
               <button type="button" key={item.id} role="tab" aria-selected={section===item.id}
