@@ -1,4 +1,4 @@
-import { Fragment } from "react";
+import { Fragment, type ReactNode } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FileText, ChevronRight, ChevronDown } from "lucide-react";
@@ -149,7 +149,7 @@ export function useAccountRenderers(deps: {
       return children.some((child) => hasVisibleBalance(child, path));
     };
 
-    const renderRow = (account: Account, depth: number, ancestors: Set<number>): React.ReactNode => {
+    const renderRow = (account: Account, depth: number, ancestors: Set<number>): ReactNode => {
       if (ancestors.has(account.accountId) && account.type === "ledger") return null;
       const children = account.type === "ledger" ? (accountMap.get(account.accountId) ?? []) : [];
       const hasChildren = children.length > 0;
