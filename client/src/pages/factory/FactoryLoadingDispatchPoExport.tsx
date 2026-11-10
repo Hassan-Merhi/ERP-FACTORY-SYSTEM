@@ -141,7 +141,9 @@ export default function FactoryLoadingDispatchPoExport({ orderId, dispatchId, co
     setRatesReviewed(false);
     setChargesReviewed(false);
     setPreviewResult(null);
-  }, [source?.sourceFingerprint, source?.revision, source?.previousExport?.exportFingerprint]);
+    // Reset only when the frozen source or prior export changes identity,
+    // not on every refetch that returns an equal object.
+  }, [source?.sourceFingerprint, source?.revision, source?.previousExport?.exportFingerprint]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const choice = () => ({
     supplierCode: supplierCode.trim(),
