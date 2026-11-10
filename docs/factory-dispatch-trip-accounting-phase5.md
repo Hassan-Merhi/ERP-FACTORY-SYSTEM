@@ -22,7 +22,7 @@
    - Internal Factory-only expenses are **excluded** from the ERP supplier invoice.
 7. Use **Preview ERP PO totals** to obtain the server's exact cents amounts and file fingerprint.
 8. Confirm that the supplier, purchase rates, and PO charges were independently reviewed. Click **Export ERP PO Excel (.xlsx)**.
-9. In **Normal ERP → PO Import**, upload the downloaded Excel, validate that each article code/alias and supplier matches the ERP master data, then manually import. **No API action on Factory automatically creates an ERP PO, supplier payable, stock receipt, voucher or ledger entry.**
+9. In **Normal ERP → PO Import**, upload the downloaded Excel, validate that each article code/alias and supplier matches the ERP master data, then manually import. **ERP's stock-item code/alias lookup is case-sensitive** (`getStockItemByCodeOrAlias` uses exact equality); the importer can fall back to a name match, so verify the exact destination ERP item ID/code rather than accepting a similar product name. Phase 6 will tighten these destination checks. **No API action on Factory automatically creates an ERP PO, supplier payable, stock receipt, voucher or ledger entry.**
 
 ## Exact PO Import workbook schema
 
