@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { factoryApiRequest } from "@/lib/factoryApi";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -40,6 +40,10 @@ export default function FactoryMixOptimizer() {
   const [targetProduct, setTargetProduct] = useState("");
   const [desiredMargin, setDesiredMargin] = useState(20);
   const [materials, setMaterials] = useState<MaterialRow[]>([{ supplierId: "", kgAvailable: 0, costPerKg: 0 }]);
+  useEffect(() => {
+    setTargetProduct("");
+    setMaterials([{ supplierId: "", kgAvailable: 0, costPerKg: 0 }]);
+  }, [selectedCompany?.id]);
 
   const productsQuery = useQuery<BaleProduct[]>({
     queryKey: companyQueryKey("/api/factory/bale-products?profile=picker", selectedCompany?.id),
