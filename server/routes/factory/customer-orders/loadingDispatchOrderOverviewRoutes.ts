@@ -11,6 +11,7 @@ import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { getFactoryAccessState,requireFactoryTabAccess } from "../../../lib/factoryAccessControl";
 import { parseId } from "../../../lib/parseId";
+import { resultRows } from "../../../lib/queryResult";
 import { buildSafeFilename } from "../../../lib/contentDisposition";
 import { writeWorkbookToResponse } from "../../../excelHelper";
 import { logger } from "../../../lib/logger";
@@ -90,9 +91,9 @@ export function registerFactoryDispatchOrderOverviewRoutes(app:Express):void{
       const s=await scope(req);const opts=parseHistory(req);
       const result=await db.transaction(async tx=>{
         await tx.execute(sql`SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY`);
-        const [found]=await tx.execute(sql`
+        const [found]=resultRows(await tx.execute(sql`
           SELECT id FROM customer_orders WHERE company_id=${s.companyId} AND id=${s.orderId}
-        `).then(x=>x.rows);
+        `));
         if(!found)throw new OverviewError(404,"FACTORY_ORDER_NOT_FOUND","Loading order not found");
         return loadDispatchOrderHistoryPageTx(tx,{...s,...opts});
       });
