@@ -204,6 +204,13 @@ export function registerFactoryDispatchOrderReconciliationRoutes(app:Express):vo
           .where(and(eq(factoryBales.companyId,s.companyId),inArray(factoryBales.id,physicalIds)))
           .for("update");
         if(bales.length!==physicalIds.length) refusal("RECONCILIATION_BALE_STOCK_MISSING","One selected physical bale is missing or no longer in this Factory company");
+        // An unscanned bale may not be silently revived from SOLD/DELETED or
+        // someone else's reservation. Only the original loading's own stock
+        // reservation may be released back to IN_STOCK.
+        if(bales.some(b=>b.status!=="RESERVED_FOR_ORDER")){
+          refusal("RECONCILIATION_STOCK_OWNERSHIP_CHANGED",
+            "A selected bale is no longer reserved for this loading; inspect inventory before returning it to stock");
+        }
         const removed=await tx.delete(customerOrderBales)
           .where(and(eq(customerOrderBales.orderId,s.orderId),inArray(customerOrderBales.id,ids)))
           .returning({id:customerOrderBales.id,baleId:customerOrderBales.baleId});
@@ -287,7 +294,7 @@ export function registerFactoryDispatchOrderReconciliationRoutes(app:Express):vo
           orderChargesExcludedFromPostedTrips:evaluated.summary.existingOrderChargeTotal,
           notes:evaluated.warnings,
         };
-        await tx.execute(sql`
+        const signedRows=read(await tx.execute(sql`
           INSERT INTO factory_dispatch_order_consolidations
             (company_id,order_id,status,reconciliation_fingerprint,
              reconciliation_snapshot,reconciled_at,reconciled_by_user_id,
@@ -312,7 +319,11 @@ export function registerFactoryDispatchOrderReconciliationRoutes(app:Express):vo
            WHERE factory_dispatch_order_consolidations.status='DRAFT'
              AND factory_dispatch_order_consolidations.reconciled_at IS NULL
           RETURNING id
-        `);
+        `));
+        if(signedRows.length!==1){
+          refusal("RECONCILIATION_SIGNOFF_CONFLICT",
+            "This loading has already been signed or its consolidation changed; no approval was committed");
+        }
         await writeEvent(tx,s,"ORDER_DISPATCH_RECONCILIATION_APPROVED",why,{
           fingerprint:fp,summary:evaluated.summary,
           includedPostingIds:evaluated.includedPostingIds,
