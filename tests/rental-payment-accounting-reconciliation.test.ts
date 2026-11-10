@@ -118,6 +118,88 @@ describe("Rental payment accounting and reconciliation", () => {
     expect(payment.voucher_id).toBeTruthy();
   });
 
+  it("recognizes full due rent on the first partial payment and clears its AP with the second", async () => {
+    // A partial $200 receipt against $500 due rent must recognize the full
+    // $500 once, create a $300 payable, and later settle that payable without
+    // adding a second rent expense.
+    const first = await createPayment({ amount: "200" });
+    expect(first.status).toBe(200);
+
+    const firstMonth = await q(
+      `SELECT id, expected_amount, paid_amount, accrual_voucher_id
+       FROM property_monthly_ledger WHERE company_id=$1 AND contract_id=$2
+       ORDER BY year,month LIMIT 1`,
+      [ctx.companyId, testContractId]
+    );
+    expect(firstMonth).toHaveLength(1);
+    expect(Number(firstMonth[0].expected_amount)).toBe(500);
+    expect(Number(firstMonth[0].paid_amount)).toBe(200);
+    expect(firstMonth[0].accrual_voucher_id).toBeTruthy();
+
+    const recognized = await q(
+      `SELECT la.name,ve.debit_amount,ve.credit_amount
+       FROM voucher_entries ve
+       JOIN ledger_accounts la ON la.id=ve.ledger_account_id
+       WHERE ve.voucher_id=$1 ORDER BY ve.id`,
+      [firstMonth[0].accrual_voucher_id]
+    );
+    const initialExpense = recognized.filter((x: any) => x.name.includes("Rent Expense"))
+      .reduce((sum: number, x: any) => sum + Number(x.debit_amount), 0);
+    const initialPayable = recognized.filter((x: any) => x.name === "Accrued Rent Payable")
+      .reduce((sum: number, x: any) => sum + Number(x.credit_amount), 0);
+    expect(initialExpense).toBe(500);
+    expect(initialPayable).toBe(300);
+
+    const interim = await runRentalReconciliation(ctx.companyId, "ERP", todayStr());
+    expect(interim.balances.tenantRentPayable).toBe(300);
+    expect(interim.balances.totalAccrualPayablePosted).toBe(300);
+    expect(interim.counts.H_unsettledAccrualPayment).toBe(0);
+
+    const second = await createPayment({ amount: "300" });
+    expect(second.status).toBe(200);
+    const finalMonth = await q(
+      `SELECT paid_amount,accrual_voucher_id FROM property_monthly_ledger
+       WHERE company_id=$1 AND contract_id=$2 ORDER BY year,month LIMIT 1`,
+      [ctx.companyId, testContractId]
+    );
+    expect(Number(finalMonth[0].paid_amount)).toBe(500);
+    expect(finalMonth[0].accrual_voucher_id).toBe(firstMonth[0].accrual_voucher_id);
+    const postedVoucher = await q(
+      `SELECT voucher_id FROM property_payments WHERE contract_id=$1
+       AND amount::numeric=300 AND posting_status='POSTED' LIMIT 1`,
+      [testContractId]
+    );
+    const settlement = await q(
+      `SELECT la.name,ve.debit_amount FROM voucher_entries ve
+       JOIN ledger_accounts la ON la.id=ve.ledger_account_id
+       WHERE ve.voucher_id=$1 AND ve.debit_amount::numeric>0`,
+      [postedVoucher[0].voucher_id]
+    );
+    expect(settlement.some((x: any) => x.name === "Accrued Rent Payable" &&
+      Number(x.debit_amount) === 300)).toBe(true);
+
+    const result = await runRentalReconciliation(ctx.companyId, "ERP", todayStr());
+    expect(result.balances.tenantRentPayable).toBe(0);
+    expect(result.balances.netOutstanding).toBe(0);
+    expect(result.balances.totalAccrualPayablePosted).toBe(0);
+    expect(result.counts.H_unsettledAccrualPayment).toBe(0);
+  });
+
+  it("never treats a missing-voucher POSTED payment as actual booked settlement", async () => {
+    const paymentDate = todayStr();
+    const res = await createPayment({ amount: "200" });
+    expect(res.status).toBe(200);
+    await q(
+      `UPDATE property_payments SET voucher_id=NULL
+       WHERE contract_id=$1 AND amount::numeric=200 AND posting_status='POSTED'`,
+      [testContractId]
+    );
+    const report = await runRentalReconciliation(ctx.companyId, "ERP", paymentDate);
+    expect(report.counts.G_missingPostedVoucher).toBeGreaterThan(0);
+    expect(report.balances.tenantRentPayable).toBe(500);
+    // No automatic correction, no new voucher and no cash mutation.
+  });
+
   it("keeps an approved future payment scheduled without a voucher", async () => {
     const res = await createPayment({
       paymentDate: futureDateStr(10),
