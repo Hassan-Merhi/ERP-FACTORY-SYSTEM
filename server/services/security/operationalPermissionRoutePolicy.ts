@@ -305,6 +305,10 @@ export const OPERATIONAL_ROUTE_PERMISSIONS: Readonly<Record<OperationalPermissio
     // Loading-dispatch reconciliation and per-trip manifest workbooks (Dispatch Management Phase 7).
     "GET /api/factory/customer-orders/:id/loading-dispatches/reports/overall.xlsx",
     "GET /api/factory/customer-orders/:id/loading-dispatches/:dispatchId/reports/manifest.xlsx",
+    // Phase 5: manual ERP PO setup/preview/download (never an ERP import).
+    "GET /api/factory/customer-orders/:id/loading-dispatches/:dispatchId/po-export/setup",
+    "POST /api/factory/customer-orders/:id/loading-dispatches/:dispatchId/po-export/preview",
+    "POST /api/factory/customer-orders/:id/loading-dispatches/:dispatchId/po-export/download",
     "GET /api/factory/bale-products/arabic-import/capabilities/export",
     "GET /api/factory/bale-products/arabic-template",
     "GET /api/factory/daily-report/export",
