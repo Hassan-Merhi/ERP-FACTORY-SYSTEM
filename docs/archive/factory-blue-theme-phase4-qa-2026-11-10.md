@@ -165,3 +165,37 @@ The same sandbox earlier verified the focused Factory theme Vitest suite at **8/
 A further saved-browser attempt still reached `/login`. The authenticated live Factory route × dark mode × viewport screenshot matrix therefore **remains incomplete** even though the isolated CSS fixture passed all 6 combinations. Production deployment of this revision is separately unverified; do not claim it is live.
 
 **Closing decision:** All accessible Phase 4 source/build/theme-fixture checks completed and passing. Final real-app visual certification remains open until a persistent authorized browser session provides authenticated screenshots at target widths/modes.
+
+## Authenticated dark-mode verification after reauthorization (2026-11-10)
+
+The user reauthorized the saved web browser session. Multiple read-only browser visits confirmed authentication as an Admin in **HMD INT GROUP - BEIRUT**, with actual Factory routes rendered rather than ERP pages.
+
+### Focused toggle diagnosis
+
+- On `/factory/production-report?tab=production`, the real `data-testid="button-theme-toggle"` was clicked successfully.
+- The HTML root changed from `class="light"` to `class="dark"`; the workspace/sidebar/topbar changed to their dark visual surfaces. The earlier broad-run toggle failure was not reproducible in this focused check.
+- One browser run's restoration report was internally inconsistent about the post-restoration mode; do not assert the user's final preference based on that report. A subsequent route run explicitly confirmed `html.dark`.
+
+### Authenticated Factory dark-mode smoke matrix
+
+| Route | Result in live dark-mode browser | Qualification |
+| --- | --- | --- |
+| `/factory/location-inventory` | Rendered; navy/dark-blue cards, readable text, no visible clipping | Browser reported purple-looking sidebar/nav glow, despite blue-themed CSS source; investigate separately if this remains in a newer deployed revision |
+| `/factory/invoicing` | Rendered; dark blue/gray surfaces, no visible clipping | No exact mobile/tablet width check |
+| `/factory/suppliers` → `/factory/parties?tab=suppliers` | Rendered; dark-blue cards and intentionally different green/amber semantic supplier indicators | No exact mobile/tablet width check |
+| `/factory/production-report` | Rendered; production charts, metrics and readable dark surfaces | No exact mobile/tablet width check |
+| `/factory/containers-hub` | Rendered; navy cards and white/light-gray text, blue active accents, no visible overflow | Full page inspected in separate targeted run |
+| `/factory/payroll-hub?section=workers&tab=workers` | Rendered 87-row worker table in dark mode; text and borders readable; vertical scrolling expected, no visible horizontal overflow | Full workers view inspected in separate targeted run |
+
+The earlier multi-route browser run reported a **measured 1069×975 viewport**. A subsequent focused run described desktop width as approximately 1440px without showing an exact measured dimension; do not use that approximation as exact acceptance evidence.
+
+No business records were edited. The inspector reported no major dark-mode card/text contrast failures across these sampled routes. One report described a purple-looking active-navigation glow while the source theme aliases purple/violet utility colors to `--factory-hue`; no hardcoded culprit has been confirmed from that visual description alone.
+
+### Remaining acceptance limits
+
+- The current browser tool does not provide explicit resize to 390px or 768px while preserving the authenticated session; **actual logged-in Factory mobile/tablet route screenshots remain unverified**.
+- Six isolated Chromium tests at 390/768/1440 in light/dark verified only the Factory CSS fixture, not actual authenticated page content.
+- The focused Factory Vitest suite previously passed 8/8 and `npm run build` succeeded. The separate whole-project TypeScript attempt exited 137 (memory); it was not certified as passed.
+- The Render live revision and `main` were not asserted equal; this run does not certify production deployment of the newest source changes.
+
+**Phase 4 disposition:** Source and build verification complete; representative live Factory **desktop dark-mode smoke checks complete**. Exact authenticated mobile/tablet route matrix and full screenshot evidence remain an open acceptance gate. Do not mark Phase 4 fully certified until those checks are performed.
