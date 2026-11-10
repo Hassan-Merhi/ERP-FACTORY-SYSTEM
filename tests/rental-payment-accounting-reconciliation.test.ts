@@ -277,7 +277,29 @@ describe("Rental payment accounting and reconciliation", () => {
     const report = await runRentalReconciliation(ctx.companyId, "ERP", paymentDate);
     expect(report.counts.G_missingPostedVoucher).toBeGreaterThan(0);
     expect(report.balances.tenantRentPayable).toBe(500);
+    const repeated = await createPayment({ amount: "100" });
+    expect(repeated.status).toBe(409);
     // No automatic correction, no new voucher and no cash mutation.
+  });
+
+  it("refuses a rental payment with no cash/bank ledger instead of marking it POSTED", async () => {
+    const res = await agent.post("/api/erp/rental/payments").send({
+      contractId: testContractId,
+      amount: "500",
+      paymentDate: todayStr(),
+      currency: "USD",
+      cashAccountId: null,
+    });
+    expect(res.status).toBe(400);
+    const rows = await q("SELECT id FROM property_payments WHERE contract_id=$1", [testContractId]);
+    expect(rows).toHaveLength(0);
+  });
+
+  it("refuses invalid business dates before creating any rent voucher", async () => {
+    const res = await createPayment({ paymentDate: "2026-02-30" });
+    expect(res.status).toBe(400);
+    const rows = await q("SELECT id FROM property_payments WHERE contract_id=$1", [testContractId]);
+    expect(rows).toHaveLength(0);
   });
 
   it("keeps an approved future payment scheduled without a voucher", async () => {
