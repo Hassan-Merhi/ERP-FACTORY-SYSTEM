@@ -11,7 +11,7 @@ describe("ERP unification final regression contracts", () => {
     expect(customers).toContain('from "@/components/ui/form"');
     expect(barrel).not.toContain('from "./erpData"');
     expect(customers).toContain('from "@/erp-core/erpData"');
-    expect(barrel).toContain('export { ErpFormActions, ErpPendingButton }');
+    expect(barrel).toContain("export { ErpFormActions, ErpPendingButton }");
   });
 
   it("uses the same company-aware access identity for routes, sidebar and boundary", () => {
@@ -76,5 +76,4 @@ describe("ERP unification final regression contracts", () => {
     expect(boundary).not.toContain("LEGACY_ERP_PAGE_ACCESS_QUERY_KEY");
     expect(boundary).not.toContain("setQueryData(");
   });
-
 });

@@ -532,7 +532,11 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
       className={`space-y-4 md:space-y-5 ${isPOS ? "pos-stock-transfer-page" : ""} ${!isPOS && (activeTab === "payment" || activeTab === "receipt" || activeTab === "journal") ? `voucher-workspace voucher-workspace--${activeTab}` : ""}`}
     >
       {isPOS ? (
-        <PageHeader title="Stock Transfer" subtitle="Transfer stock between locations" icon={<ArrowRightLeft className="h-6 w-6" aria-hidden="true" />} />
+        <PageHeader
+          title="Stock Transfer"
+          subtitle="Transfer stock between locations"
+          icon={<ArrowRightLeft className="h-6 w-6" aria-hidden="true" />}
+        />
       ) : !isFactoryMode ? (
         <PageHeader title="Vouchers" subtitle="Create and manage payment, receipt, and journal entries">
           {showOptionalDrafts && (

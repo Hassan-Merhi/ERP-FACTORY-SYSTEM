@@ -552,8 +552,8 @@ export function useAccountsLegacyModel() {
         debitAmount: row.debitAmount,
         creditAmount: row.creditAmount,
       }));
-    return [...posted, ...historical].sort((a, b) =>
-      a.voucherDate.localeCompare(b.voucherDate) || a.entryId - b.entryId
+    return [...posted, ...historical].sort(
+      (a, b) => a.voucherDate.localeCompare(b.voucherDate) || a.entryId - b.entryId
     );
   }, [rawTransactionData]);
 
@@ -562,8 +562,10 @@ export function useAccountsLegacyModel() {
   // reliably identify it. Passing this value as a prop avoids reading a
   // non-subscribed query-cache snapshot in AccountStatementView.
   const statementCustomerId: number | null =
-    rawTransactionData && !Array.isArray(rawTransactionData) &&
-    Number.isSafeInteger(rawTransactionData.customerId) && rawTransactionData.customerId > 0
+    rawTransactionData &&
+    !Array.isArray(rawTransactionData) &&
+    Number.isSafeInteger(rawTransactionData.customerId) &&
+    rawTransactionData.customerId > 0
       ? rawTransactionData.customerId
       : null;
 
@@ -593,16 +595,21 @@ export function useAccountsLegacyModel() {
     });
   }, [transactions, broughtForwardBalance]);
 
-  const vouchersWithBalance = useMemo(() => allVouchersWithBalance.filter((row) =>
-    !isInternalHistoricalSupplierRoutineRow({
-      companyId: row.companyId ?? selectedCompany?.id,
-      voucherId: row.voucherId,
-      voucherDate: row.voucherDate,
-      voucherNumber: row.voucherNumber,
-      voucherDescription: row.voucherDescription,
-      createdAt: row.createdAt,
-    })
-  ), [allVouchersWithBalance, selectedCompany?.id]);
+  const vouchersWithBalance = useMemo(
+    () =>
+      allVouchersWithBalance.filter(
+        (row) =>
+          !isInternalHistoricalSupplierRoutineRow({
+            companyId: row.companyId ?? selectedCompany?.id,
+            voucherId: row.voucherId,
+            voucherDate: row.voucherDate,
+            voucherNumber: row.voucherNumber,
+            voucherDescription: row.voucherDescription,
+            createdAt: row.createdAt,
+          })
+      ),
+    [allVouchersWithBalance, selectedCompany?.id]
+  );
 
   const closingBalance = useMemo(() => {
     if (allVouchersWithBalance.length > 0) {

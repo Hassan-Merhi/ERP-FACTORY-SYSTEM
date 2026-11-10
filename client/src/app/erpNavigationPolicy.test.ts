@@ -54,7 +54,9 @@ describe("ERP role and navigation policy", () => {
     expect(isErpNavigationItemVisible({ role: "Create Only", path: "/financial-overview" })).toBe(false);
     expect(isErpRouteRoleAllowed("/transaction-journal", "ERP Tester")).toBe(false);
     expect(isErpRouteRoleAllowed("/my-settings", "ERP Tester")).toBe(false);
-    expect(isErpNavigationItemVisible({ role: "POS", path: "/pos-item-replacement", access: ordinary.access })).toBe(false);
+    expect(isErpNavigationItemVisible({ role: "POS", path: "/pos-item-replacement", access: ordinary.access })).toBe(
+      false
+    );
     expect(isErpNavigationItemVisible({ role: "POS", path: "/pos" })).toBe(true);
     expect(isErpNavigationItemVisible({ role: "POS", path: "/pos-import" })).toBe(false);
     expect(isErpNavigationItemVisible({ role: "POS", path: "/pos-import", posExcelImportEnabled: true })).toBe(true);
@@ -63,10 +65,36 @@ describe("ERP role and navigation policy", () => {
   it("keeps retail menu exclusions and company feature grants", () => {
     expect(ERP_RETAIL_HIDDEN_ROUTES.has("/stock")).toBe(true);
     expect(isErpNavigationItemVisible({ role: "Admin", companyType: "retail", path: "/stock" })).toBe(false);
-    expect(isErpNavigationItemVisible({ role: "Normal User", companyType: "erp", path: "/item-market-analysis", access: { fullAccess: false, pageKeys: ["sales_report"] } })).toBe(true);
-    expect(isErpNavigationItemVisible({ role: "Normal User", companyType: "factory", path: "/item-market-analysis", access: { fullAccess: false, pageKeys: ["sales_report"] } })).toBe(false);
-    expect(isErpNavigationItemVisible({ role: "Normal User", path: "/inventory", access: { fullAccess: false, pageKeys: ["containers"] } })).toBe(true);
-    expect(isErpNavigationItemVisible({ role: "Normal User", path: "/inventory", access: { fullAccess: false, pageKeys: [] } })).toBe(false);
+    expect(
+      isErpNavigationItemVisible({
+        role: "Normal User",
+        companyType: "erp",
+        path: "/item-market-analysis",
+        access: { fullAccess: false, pageKeys: ["sales_report"] },
+      })
+    ).toBe(true);
+    expect(
+      isErpNavigationItemVisible({
+        role: "Normal User",
+        companyType: "factory",
+        path: "/item-market-analysis",
+        access: { fullAccess: false, pageKeys: ["sales_report"] },
+      })
+    ).toBe(false);
+    expect(
+      isErpNavigationItemVisible({
+        role: "Normal User",
+        path: "/inventory",
+        access: { fullAccess: false, pageKeys: ["containers"] },
+      })
+    ).toBe(true);
+    expect(
+      isErpNavigationItemVisible({
+        role: "Normal User",
+        path: "/inventory",
+        access: { fullAccess: false, pageKeys: [] },
+      })
+    ).toBe(false);
   });
 
   it("builds mobile destinations only from registered desktop ERP navigation metadata", () => {
@@ -102,5 +130,4 @@ describe("ERP role and navigation policy", () => {
     expect(client.getQueryData(["/api/my-erp-pages"])).toBeUndefined();
     client.clear();
   });
-
 });

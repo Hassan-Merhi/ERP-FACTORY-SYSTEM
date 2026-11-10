@@ -517,8 +517,7 @@ export function useAnalyticsLegacy() {
   } = useQuery<ExpensePeriodResponse>({
     queryKey: ["analytics-period-expenses", appMode, selectedCompany?.id, plStartDate, plEndDate],
     queryFn: async () => {
-      const base =
-        appMode === "factory" ? "/api/factory/analytics" : "/api/reports/net-profit-statement";
+      const base = appMode === "factory" ? "/api/factory/analytics" : "/api/reports/net-profit-statement";
       const params = new URLSearchParams();
       if (plStartDate) params.set("startDate", plStartDate);
       if (plEndDate) params.set("endDate", plEndDate);

@@ -99,7 +99,9 @@ export function DaybookFilters({
       >
         {(layout) => (
           <CoreErpFilterGrid
-            className={layout === "sheet" ? "gap-3 border-0 bg-transparent p-0" : "daybook-filter-grid gap-2 p-2 sm:p-3"}
+            className={
+              layout === "sheet" ? "gap-3 border-0 bg-transparent p-0" : "daybook-filter-grid gap-2 p-2 sm:p-3"
+            }
             label="Daybook filters"
           >
             {layout === "inline" && (
@@ -110,7 +112,11 @@ export function DaybookFilters({
               value={filters.voucherType}
               onValueChange={(value) => setFilters({ ...filters, voucherType: value })}
             >
-              <SelectTrigger id="voucher-type" data-testid="select-voucher-type" className="daybook-filter-control w-full">
+              <SelectTrigger
+                id="voucher-type"
+                data-testid="select-voucher-type"
+                className="daybook-filter-control w-full"
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -131,7 +137,11 @@ export function DaybookFilters({
                 setFilters({ ...filters, statusFilter: value as "all" | "active" | "optional" })
               }
             >
-              <SelectTrigger id="status-filter" data-testid="select-status-filter" className="daybook-filter-control w-full">
+              <SelectTrigger
+                id="status-filter"
+                data-testid="select-status-filter"
+                className="daybook-filter-control w-full"
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -146,7 +156,11 @@ export function DaybookFilters({
                 value={filters.costCenterId || "all"}
                 onValueChange={(value) => setFilters({ ...filters, costCenterId: value })}
               >
-                <SelectTrigger id="cost-center-filter" data-testid="select-daybook-cost-center" className="daybook-filter-control w-full">
+                <SelectTrigger
+                  id="cost-center-filter"
+                  data-testid="select-daybook-cost-center"
+                  className="daybook-filter-control w-full"
+                >
                   <SelectValue placeholder="All Cost Centers" />
                 </SelectTrigger>
                 <SelectContent>
