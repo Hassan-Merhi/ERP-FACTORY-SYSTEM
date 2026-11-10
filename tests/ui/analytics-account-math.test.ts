@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  accountDisplayBalance,
   calculateAbsoluteTotal,
   calculateCashTotal,
+  calculateNetAccountTotal,
+  debitSignedBalance,
   calculatePLTotal,
   cashSignedBalance,
   calculateTotal,
@@ -25,6 +28,7 @@ import type { Account } from "@/pages/analyticslegacy/types";
 const account = (over: Partial<Account> & Pick<Account, "accountId">): Account =>
   ({
     name: `Account ${over.accountId}`,
+    type: "ledger",
     balance: 0,
     balanceSide: "Dr",
     parentId: null,
@@ -92,6 +96,56 @@ describe("analytics account math", () => {
     expect(calculateCashTotal(accounts)).toBe(-243080);
     expect(calculateAbsoluteTotal(accounts)).toBe(333710); // Other legacy panels remain unchanged
     expect(formatSignedSmartCurrency(calculateCashTotal(accounts))).toBe("-$243,080");
+  });
+
+  it("nets liabilities, assets, and loans/banks using debit-positive credit-negative signs", () => {
+    const liabilities = [
+      account({ accountId: 1, name: "Accrued Rent Payable", balance: "22200" as unknown as number, balanceSide: "Cr" }),
+      account({ accountId: 2, balance: 1250, balanceSide: "Dr" }),
+      account({ accountId: 3, name: "BANK LOAN", balance: 8230718.81, balanceSide: "Cr" }),
+      account({ accountId: 4, balance: 112000, balanceSide: "Dr" }),
+      account({ accountId: 5, balance: 540582.77, balanceSide: "Dr" }),
+      account({ accountId: 6, balance: 7330, balanceSide: "Cr" }),
+      account({ accountId: 7, balance: 15977.46, balanceSide: "Cr" }),
+      account({ accountId: 8, balance: 416283.59, balanceSide: "Dr" }),
+    ];
+    expect(calculateAbsoluteTotal(liabilities)).toBeCloseTo(9346342.63, 2);
+    expect(calculateNetAccountTotal(liabilities)).toBeCloseTo(-7206109.91, 2);
+    expect(formatSignedSmartCurrency(calculateNetAccountTotal(liabilities))).toBe("-$7,206,109.91");
+
+    const assets = [
+      account({ accountId: 9, balance: 100, balanceSide: "Dr" }),
+      account({ accountId: 10, balance: 20, balanceSide: "CR" }),
+    ];
+    expect(debitSignedBalance(assets[1])).toBe(-20);
+    expect(calculateNetAccountTotal(assets)).toBe(80);
+    expect(calculateNetAccountTotal([account({ accountId: 11, type: "bank", balance: 50, balanceSide: "Cr" })])).toBe(-50);
+  });
+
+  it("never confuses bank and fixed-asset IDs with ledger group IDs", () => {
+    const accounts = [
+      account({ accountId: 11, type: "ledger", balance: 999, balanceSide: "Dr" }),
+      account({ accountId: 12, type: "ledger", parentId: 11, balance: 100, balanceSide: "Cr" }),
+      account({ accountId: 11, type: "bank", balance: 15, balanceSide: "Dr", parentId: undefined }),
+      account({ accountId: 12, type: "fixedAsset", balance: 20, balanceSide: "Dr", parentId: undefined }),
+    ];
+    const { parentAccounts, accountMap } = groupAccountsByParent(accounts);
+    expect(parentAccounts).toHaveLength(3);
+    expect(accountMap.get(11)).toHaveLength(1);
+    expect(calculateNetAccountTotal(accounts)).toBe(-65);
+  });
+
+  it("nets nested ledger groups without adding intermediate subtotals again", () => {
+    const accounts = [
+      account({ accountId: 1, balance: 999, balanceSide: "Cr" }),
+      account({ accountId: 2, parentId: 1, balance: 888, balanceSide: "Cr" }),
+      account({ accountId: 3, parentId: 2, balance: 100, balanceSide: "Dr" }),
+      account({ accountId: 4, parentId: 2, balance: 25, balanceSide: "Cr" }),
+      account({ accountId: 5, balance: 20, balanceSide: "Dr" }),
+    ];
+    const { parentAccounts, accountMap } = groupAccountsByParent(accounts);
+    expect(accountDisplayBalance(parentAccounts[0], accountMap)).toBe(75);
+    expect(calculateNetAccountTotal(accounts)).toBe(95);
   });
 
   it("hides only Inventory and SP profit correction suspense from the Assets view and total", () => {

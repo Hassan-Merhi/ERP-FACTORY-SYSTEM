@@ -3,7 +3,7 @@ import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, Table
 import { Skeleton } from "@/components/ui/skeleton";
 import { TrendingDown, DollarSign, FileText } from "lucide-react";
 
-import { formatSmartCurrency } from "../accountMath";
+import { formatSignedSmartCurrency } from "../accountMath";
 import type { AnalyticsLegacyState } from "../useAnalyticsLegacy";
 
 export function ExpenseSectionsPanel({ analytics }: { analytics: AnalyticsLegacyState }) {
@@ -52,8 +52,8 @@ export function ExpenseSectionsPanel({ analytics }: { analytics: AnalyticsLegacy
         </div>
         <div className="text-right">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Total</p>
-          <p className="text-2xl font-bold font-mono tabular-nums" data-testid="analytics-expense-period-total">
-            {report ? formatSmartCurrency(report.total) : "—"}
+          <p className={`text-2xl font-bold font-mono tabular-nums ${report && report.total < 0 ? "text-red-500 dark:text-red-400" : ""}`} data-testid="analytics-expense-period-total">
+            {report ? formatSignedSmartCurrency(report.total) : "—"}
           </p>
         </div>
       </div>
@@ -78,8 +78,8 @@ export function ExpenseSectionsPanel({ analytics }: { analytics: AnalyticsLegacy
             <TableFooter>
               <TableRow>
                 <TableCell className="font-semibold">Total</TableCell>
-                <TableCell className="text-right font-bold font-mono">
-                  {formatSmartCurrency(report.total)}
+                <TableCell className={`text-right font-bold font-mono ${report.total < 0 ? "text-red-500 dark:text-red-400" : ""}`}>
+                  {formatSignedSmartCurrency(report.total)}
                 </TableCell>
               </TableRow>
             </TableFooter>
