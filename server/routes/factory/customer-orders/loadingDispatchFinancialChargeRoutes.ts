@@ -135,7 +135,7 @@ async function loadAccounts(tx: DbTransaction, companyId: number): Promise<Accou
       FROM ledger_accounts
      WHERE company_id = ${companyId} AND active = TRUE
        AND deleted_at IS NULL AND is_hidden = FALSE
-     ORDER BY name, id LIMIT 2000
+     ORDER BY code, name, id
   `));
   return rows.map(a => ({
     id: safeId(a.id), code: text(a.code), name: text(a.name),
@@ -147,7 +147,7 @@ function validateAccounts(
 ): void {
   const own = accounts.find(a => a.id === input.ledgerAccountId);
   if (!own || !accountAcceptsCharge(input.kind, own.accountType)) {
-    fail(400, "LEDGER_ACCOUNT_INVALID", "Select an active company-owned account appropriate to this charge category");
+    fail(400, "LEDGER_ACCOUNT_INVALID", "Select an active, visible ledger account from this Factory company");
   }
   if (input.offsetLedgerAccountId !== null) {
     const offset = accounts.find(a => a.id === input.offsetLedgerAccountId);

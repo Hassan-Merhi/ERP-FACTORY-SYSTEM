@@ -88,12 +88,6 @@ const money = (value: string | undefined) => {
     : "—";
 };
 const roleCanManage = (role: string) => ["admin", "owner", "developer"].includes(role.trim().toLowerCase());
-const accepts = (kind: Kind, accountType: string): boolean => {
-  const t = accountType.toLowerCase();
-  return kind === "BILLABLE" ? /income|revenue|sales/.test(t)
-    : kind === "DISCOUNT" ? /income|revenue|sales|expense|discount/.test(t)
-      : /expense|cost|inventory|asset/.test(t);
-};
 const acceptsOffset = (type: string) => /liability|payable|accrual|clearing/i.test(type);
 async function readJson<T>(url: string): Promise<T> {
   const response = await fetch(url, { credentials: "include", cache: "no-store", headers: { Accept: "application/json" } });
@@ -120,7 +114,10 @@ export default function FactoryLoadingDispatchFinance({ orderId, dispatchId, com
   });
   const data = preview.data;
   const canEdit = enabled && Boolean(data?.canEdit) && data?.status !== "POSTED" && data?.status !== "CONSOLIDATED";
-  const mainAccounts = (data?.accounts ?? []).filter(a => accepts(form.kind, a.accountType));
+  // The API already scopes these to active, visible accounts in the selected
+  // Factory company. Let the operator select any ledger account type instead
+  // of silently restricting customer charges to income accounts.
+  const mainAccounts = data?.accounts ?? [];
   const offsetAccounts = (data?.accounts ?? []).filter(a => acceptsOffset(a.accountType));
   const validForm = form.name.trim().length > 0 && form.name.trim().length <= 160 &&
     /^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,2})?$/.test(form.amount.trim()) &&
@@ -327,8 +324,13 @@ export default function FactoryLoadingDispatchFinance({ orderId, dispatchId, com
                   <select id="dispatch-charge-account" required className="h-9 w-full rounded-md border bg-background px-2 text-sm"
                     value={form.ledgerAccountId} onChange={e => setForm({ ...form, ledgerAccountId: e.target.value })}>
                     <option value="">Select account</option>
-                    {mainAccounts.map(a => <option key={a.id} value={a.id}>{a.code} — {a.name}</option>)}
+                    {mainAccounts.map(a => <option key={a.id} value={a.id}>{a.code} — {a.name} ({a.accountType})</option>)}
                   </select>
+                  <p className="text-[11px] text-muted-foreground">
+                    All active ledger account types are available. Billable charges credit this account,
+                    discounts debit it, and internal expenses debit it.
+                    Confirm the intended accounting treatment before posting.
+                  </p>
                 </div>
                 {form.kind === "INTERNAL" && (
                   <div className="space-y-1">
