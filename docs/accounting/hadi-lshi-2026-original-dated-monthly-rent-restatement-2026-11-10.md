@@ -116,3 +116,26 @@ Owner requested that the existing Rent Expense monthly summary show the **net re
 - Existing monthly API consumers continue receiving actual gross journal amounts; this client-only display mode cannot cause a false voucher accounting report outside the requested monthly summary.
 - **No new SQL or new vouchers required.** The PR remains unmerged/undeployed; the visible production screenshot will remain gross until deployed.
 
+
+## January 2026 original-voucher correction — prepared, **not executed** (Nov 10, 2026)
+
+User rejected any net-debit display-only masking: correct underlying historical voucher entries *month by month*. The previously added UI net-presentation helper was **reverted**, and no new reconciliation section is added.
+
+The first source audit (live read-only preflight **16:52:07 UTC**) found:
+- Original six January Payment vouchers **#6479, #6481, #6483, #6486, #6493 and #6497** total $86,600: $15,700 actual January rent expense and $70,900 paid in advance for February–December; individual future amounts $4,500/$4,500/$6,000/$9,000/$8,400/$38,500, respectively.
+- January #6487 STAFF HOUSE $2,000 expense remains entirely untouched.
+- Exactly **24** January 1 prepaid reclassification Journals totaling **$70,900** (23 historical original corrections plus original dated repair #17510 $7,000), each existing with **two** rows Dr Prepaid #1022 / Cr Expense #1007. No linked rental-month accrual or rental payment records or cost-center allocations refer to these reclassification vouchers.
+- Historical June #8787 currently Dr #1007 $227,750 / Cr #881 $227,750. On reclassifying the six original January payments directly into prepaid, this transfer must be reduced by precisely $70,900 to **$156,850 on the same two original rows**, so archived ledger #881 retains a **zero closing balance** and active #1007 also remains unchanged.
+- Expected actual January gross real GL after this distinct correction: **Dr $32,700 / Cr $0**. January net and the other ten verified monthly net movements remain unchanged; closing #1007 $434,350 Dr, #1022 $7,000 Dr, #1021 $18,000 Cr, old #881 $0.
+- Original **credit counterpart lines** on all six January Payment vouchers stay completely unchanged (cash, SAFE, and legacy credit #276), and **original payment voucher dates and totals are unchanged**. Each original payment retains its receipt and gets a *new prepaid debit* as its existing expense debit is reduced to the true January portion. These are edits to the **original voucher classifications**, not new payment vouchers.
+- The **24 now-redundant reclassification Journal headers** are marked `deleted_at` / superseded, **not physically deleted**: all original voucher entry rows and voucher IDs stay available in history and special `audit_log` records explain every action. They are excluded from the posted GL so the original payment debits recognize prepaid directly instead of twice.
+- Month voucher #8787 (a noncash legacy expense consolidation) is adjusted in place as above. No new accounting vouchers or general ledger accounts are created.
+- Cash-counterpart fingerprints are compared before and after; all six Payment vouchers must balance to their original totals with 3 lines; no fiscal year can be closed.
+- All 11 **actual posted** month totals must pass, alongside zero archived-account balance and protected expense, payable, prepaid closing invariants. The repair refuses a rerun if prior state has changed.
+
+**Delivery:** January-only TablePlus script is provided as `HADI_JANUARY_ORIGINAL_VOUCHERS_TABLEPLUS.sql` in the same conversation. It uses one serializable transaction and standard single-quoted `DO '...' LANGUAGE plpgsql` rather than the prior dollar-quote syntax that TablePlus split. **It is not run yet; running it requires the owner's authorized TablePlus session and a production backup.** This script is January ONLY. February through November may still have gross debit and credit turnover in the true books; deal with these in individually reviewed subsequent passes, never by blindly hiding credits.
+
+### UI status
+
+The client-side net-only expense presentation commits from 2026-11-10 were explicitly **reverted**. The server-side #881 historical account inclusion in the existing original monthly ledger and voucher drilldown remains. On `main`, that source change still requires a merged PR and deployment to show all the real original #881 transactions.
+
