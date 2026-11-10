@@ -216,14 +216,20 @@ export async function buildLiveCanonicalInvoiceDocument(
     `));
     if (tableExists?.present) {
       const [consolidated] = resultRows<{
-        status: string; reconciliation_snapshot: unknown; goods_subtotal: string;
+        status: string; goods_subtotal: string;
       }>(await db.execute(sql`
-        SELECT status,reconciliation_snapshot,goods_subtotal::text
+        SELECT status,goods_subtotal::text
         FROM factory_dispatch_order_consolidations
         WHERE company_id=${companyId} AND order_id=${orderId} LIMIT 1
       `));
       if (consolidated?.status==="FINALIZED") {
-        const snapshot=consolidated.reconciliation_snapshot as
+        // The signed Phase 7 field is accessed only for actual consolidated
+        // orders; legacy invoice exports do not depend on deferred migrations.
+        const [signed]=resultRows<{reconciliation_snapshot:unknown}>(await db.execute(sql`
+          SELECT reconciliation_snapshot FROM factory_dispatch_order_consolidations
+          WHERE company_id=${companyId} AND order_id=${orderId}
+        `));
+        const snapshot=signed?.reconciliation_snapshot as
           { trips?: Array<{dispatchId?:unknown;dispatchNumber?:unknown;postedBales?:unknown;customerTotal?:unknown}> }|null;
         dispatchTrips=Array.isArray(snapshot?.trips)
           ? snapshot.trips.map(t=>({
