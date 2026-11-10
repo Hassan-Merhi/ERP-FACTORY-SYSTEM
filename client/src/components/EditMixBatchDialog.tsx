@@ -16,108 +16,16 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import type { FactoryMixBatch } from "@shared/schema";
-
-interface SupplierRawStock {
-  supplierName: string;
-  supplierId: number | null;
-  receivedKg: string;
-  usedKg: string;
-  remainingKg: string;
-  costPerKg: string;
-  costPerKgUsd?: string;
-  valueRemaining: string;
-  lastOffloaded: string;
-}
-
-type SourceType = "supplier" | "batch";
-
-interface SourceSelection {
-  type: SourceType;
-  sourceId: number;
-  label: string;
-  weightKg: number;
-  costPerKg: number;
-  totalCost: number;
-  availableKg: number;
-}
-
-interface EditMixBatchDialogProps {
-  batch: FactoryMixBatch | null;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  /** The Production Overview should display recorded sources without permitting edits. */
-  readOnly?: boolean;
-  hideCosts?: boolean;
-  errorMessage?: string | null;
-}
-
-interface StoredMixBatchSource {
-  id: number;
-  sourceBatchId: number | null;
-  sourceBatchCode: string | null;
-  supplierId: number | null;
-  supplierName: string | null;
-  containerNumber: string | null;
-  weightKg: string;
-  costPerKg: string;
-  totalCost: string;
-  recordedUnvalued?: boolean;
-}
-
-/**
- * Compare submitted source identities and quantities with the recorded sources.
- * Metadata-only edits must not send source arrays: doing so would reprice the
- * old batch using today's locked supplier rates.
- */
-function hasChangedSourceWeights(
-  selections: readonly SourceSelection[],
-  sources: readonly StoredMixBatchSource[] | undefined
-): boolean {
-  if (!sources) return true;
-  const original = new Map<string, number>();
-  const proposed = new Map<string, number>();
-  for (const source of sources) {
-    const key =
-      source.sourceBatchId != null
-        ? `batch-${source.sourceBatchId}`
-        : source.supplierId != null
-          ? `supplier-${source.supplierId}`
-          : null;
-    if (key === null) return true; // An unmapped historical source cannot be silently dropped.
-    original.set(key, (original.get(key) ?? 0) + Number(source.weightKg));
-  }
-  for (const source of selections) {
-    const key = `${source.type}-${source.sourceId}`;
-    proposed.set(key, (proposed.get(key) ?? 0) + source.weightKg);
-  }
-  if (original.size !== proposed.size) return true;
-  for (const [key, oldKg] of original) {
-    const nextKg = proposed.get(key);
-    if (
-      nextKg === undefined ||
-      !Number.isFinite(oldKg) ||
-      !Number.isFinite(nextKg) ||
-      Math.abs(oldKg - nextKg) > 0.0005
-    ) {
-      return true;
-    }
-  }
-  return false;
-}
-
-interface SourceEditReview {
-  changed: boolean;
-  allowed: boolean;
-  reviewHash: string | null;
-  recordedWeightKg: string;
-  proposedWeightKg: string;
-  recordedTotalCost: string;
-  estimatedTotalCost: string | null;
-  estimatedCostPerKg: string | null;
-  estimatedDeltaUsd: string | null;
-  warnings: string[];
-  previewOnly: boolean;
-}
+import { MixBatchRecordedDetailsDialog } from "./MixBatchRecordedDetailsDialog";
+import {
+  hasChangedSourceWeights,
+  type SupplierRawStock,
+  type SourceType,
+  type SourceSelection,
+  type EditMixBatchDialogProps,
+  type StoredMixBatchSource,
+  type SourceEditReview,
+} from "./editMixBatchSources";
 
 export function EditMixBatchDialog({
   batch,
@@ -522,128 +430,17 @@ export function EditMixBatchDialog({
   // supplier cost/kg can legitimately change after the original mix.
   if (readOnly) {
     return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" data-testid="mix-batch-details-dialog">
-          <DialogHeader>
-            <DialogTitle>Mix Batch Details — {batch?.batchCode || "Loading…"}</DialogTitle>
-            <DialogDescription>
-              Recorded historical raw materials and costs, not current supplier prices.
-            </DialogDescription>
-          </DialogHeader>
-          {!batch && !errorMessage ? (
-            <div className="space-y-3 py-4">
-              <Skeleton className="h-8 w-full" />
-              <Skeleton className="h-24 w-full" />
-            </div>
-          ) : errorMessage || sourcesError ? (
-            <p role="alert" className="py-4 text-sm text-destructive">
-              {errorMessage || "Unable to load the recorded sources for this mix batch."}
-            </p>
-          ) : (
-            <div className="space-y-5">
-              <div className="flex flex-wrap items-center gap-3 text-sm">
-                <Badge variant="outline">View only</Badge>
-                <span className="font-medium">{batch?.name || "Unnamed batch"}</span>
-                <span className="text-muted-foreground">{batch?.batchDate || "No batch date"}</span>
-              </div>
-              {sourcesLoading ? (
-                <div className="space-y-3 py-4">
-                  <Skeleton className="h-8 w-full" />
-                  <Skeleton className="h-24 w-full" />
-                </div>
-              ) : !currentSources?.length ? (
-                <p className="py-4 text-sm text-muted-foreground">No recorded source materials found for this batch.</p>
-              ) : (
-                <div className="overflow-x-auto rounded-md border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Type</TableHead>
-                        <TableHead>Source / Container</TableHead>
-                        <TableHead className="text-right">Weight (kg)</TableHead>
-                        {!hideCosts && <TableHead className="text-right">Cost/kg</TableHead>}
-                        {!hideCosts && <TableHead className="text-right">Total Cost</TableHead>}
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {currentSources.map((source) => (
-                        <TableRow key={source.id} data-testid={`mix-batch-source-${source.id}`}>
-                          <TableCell>
-                            <Badge variant={source.sourceBatchId ? "secondary" : "outline"}>
-                              {source.sourceBatchId ? "Batch" : "Supplier"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="font-medium">
-                              {source.sourceBatchId
-                                ? source.sourceBatchCode || `Batch #${source.sourceBatchId}`
-                                : source.supplierName ||
-                                  (source.supplierId ? `Supplier #${source.supplierId}` : "Raw material")}
-                            </div>
-                            {source.containerNumber && (
-                              <div className="text-xs text-muted-foreground">Container: {source.containerNumber}</div>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right font-mono text-sm">
-                            {formatNumber(parseFloat(source.weightKg) || 0, 3)}
-                          </TableCell>
-                          {!hideCosts && (
-                            <TableCell className="text-right font-mono text-sm">
-                              ${formatNumber(parseFloat(source.costPerKg) || 0, 4)}
-                            </TableCell>
-                          )}
-                          {!hideCosts && (
-                            <TableCell className="text-right font-mono text-sm">
-                              ${formatNumber(parseFloat(source.totalCost) || 0, 4)}
-                            </TableCell>
-                          )}
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-              <div
-                className={`grid gap-3 rounded-md bg-muted p-4 ${hideCosts ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-3"}`}
-              >
-                <div>
-                  <p className="text-sm text-muted-foreground">Total Weight</p>
-                  <p className="text-lg font-semibold font-mono">
-                    {formatNumber(parseFloat(batch?.totalWeightKg || "0"), 3)} kg
-                  </p>
-                </div>
-                {!hideCosts && (
-                  <>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Recorded Total Cost</p>
-                      <p className="text-lg font-semibold font-mono">
-                        ${formatNumber(parseFloat(batch?.totalCost || "0"), 4)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Recorded Blended Cost/kg</p>
-                      <p className="text-lg font-semibold font-mono" data-testid="text-recorded-blended-cost">
-                        ${formatNumber(recordedBatchCost.costPerKg, 4)}
-                      </p>
-                    </div>
-                  </>
-                )}
-              </div>
-              {batch?.notes && (
-                <div className="space-y-1">
-                  <Label>Notes</Label>
-                  <p className="whitespace-pre-wrap text-sm text-muted-foreground">{batch.notes}</p>
-                </div>
-              )}
-              <div className="flex justify-end">
-                <Button variant="outline" onClick={() => onOpenChange(false)}>
-                  Close
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      <MixBatchRecordedDetailsDialog
+        batch={batch}
+        open={open}
+        onOpenChange={onOpenChange}
+        hideCosts={hideCosts}
+        errorMessage={errorMessage}
+        currentSources={currentSources}
+        sourcesLoading={sourcesLoading}
+        sourcesError={sourcesError}
+        recordedBatchCost={recordedBatchCost}
+      />
     );
   }
 
