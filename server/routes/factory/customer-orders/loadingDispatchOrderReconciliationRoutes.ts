@@ -209,12 +209,25 @@ export function registerFactoryDispatchOrderReconciliationRoutes(app:Express):vo
           .where(and(eq(factoryBales.companyId,s.companyId),inArray(factoryBales.id,physicalIds)))
           .for("update");
         if(bales.length!==physicalIds.length) refusal("RECONCILIATION_BALE_STOCK_MISSING","One selected physical bale is missing or no longer in this Factory company");
-        // An unscanned bale may not be silently revived from SOLD/DELETED or
-        // someone else's reservation. Only the original loading's own stock
-        // reservation may be released back to IN_STOCK.
-        if(bales.some(b=>b.status!=="RESERVED_FOR_ORDER")){
+        // Legacy loadings reserve their linked bales as RESERVED_FOR_ORDER,
+        // but V5 deliberately leaves linked bales as IN_STOCK. Both are valid
+        // for a currently linked, physically UNLOADED bale. Never revive a
+        // SOLD/DELETED/other state or free a bale shared by an active loading.
+        if(bales.some(b=>!["RESERVED_FOR_ORDER","IN_STOCK"].includes(b.status))){
           refusal("RECONCILIATION_STOCK_OWNERSHIP_CHANGED",
-            "A selected bale is no longer reserved for this loading; inspect inventory before returning it to stock");
+            "An unshipped bale has an unexpected stock status; inspect its original loading and inventory");
+        }
+        const [otherOwner]=read(await tx.execute(sql`
+          SELECT 1 FROM customer_order_bales cob
+          JOIN customer_orders co ON co.id=cob.order_id AND co.company_id=${s.companyId}
+          WHERE cob.bale_id IN (${sql.join(physicalIds.map(n=>sql`${n}`),sql`,`)})
+            AND cob.order_id<>${s.orderId}
+            AND co.deleted_at IS NULL AND co.status NOT IN ('CANCELLED')
+          LIMIT 1
+        `));
+        if(otherOwner){
+          refusal("RECONCILIATION_BALE_SHARED_WITH_OTHER_LOADING",
+            "The selected bale also belongs to another active loading; release requires inventory reconciliation");
         }
         const removed=await tx.delete(customerOrderBales)
           .where(and(eq(customerOrderBales.orderId,s.orderId),inArray(customerOrderBales.id,ids)))
