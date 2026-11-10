@@ -173,8 +173,8 @@ export default function PressingHistoryReport({ active, companyId, userId, simpl
         {workers.map((worker, index) => {
           const selected = !!worker.userId && filters.userId === worker.userId;
           const theme = [
-            { card: "border-sky-500/35 bg-gradient-to-br from-sky-500/15 via-card to-card shadow-[0_12px_30px_-22px_rgba(14,165,233,0.5)]", tag: "bg-sky-500/15 text-sky-600 dark:text-sky-300", icon: "text-sky-500" },
-            { card: "border-violet-500/30 bg-gradient-to-br from-violet-500/15 via-card to-card shadow-[0_12px_30px_-22px_rgba(168,85,247,0.5)]", tag: "bg-violet-500/15 text-violet-600 dark:text-violet-300", icon: "text-violet-500" },
+            { card: "border-sky-500/35 bg-gradient-to-br from-sky-500/15 via-card to-card shadow-[0_12px_30px_-22px_hsl(var(--factory-hue)_89%_48%_/_0.5)]", tag: "bg-sky-500/15 text-sky-600 dark:text-sky-300", icon: "text-sky-500" },
+            { card: "border-violet-500/30 bg-gradient-to-br from-violet-500/15 via-card to-card shadow-[0_12px_30px_-22px_hsl(var(--factory-hue)_91%_65%_/_0.5)]", tag: "bg-violet-500/15 text-violet-600 dark:text-violet-300", icon: "text-violet-500" },
             { card: "border-amber-500/30 bg-gradient-to-br from-amber-500/15 via-card to-card shadow-[0_12px_30px_-22px_rgba(245,158,11,0.45)]", tag: "bg-amber-500/15 text-amber-700 dark:text-amber-300", icon: "text-amber-500" },
           ][index] || { card: "border-border bg-card", tag: "bg-muted text-foreground", icon: "text-muted-foreground" };
           return (

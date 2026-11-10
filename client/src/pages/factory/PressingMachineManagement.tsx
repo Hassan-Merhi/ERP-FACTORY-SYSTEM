@@ -165,7 +165,7 @@ export default function PressingMachineManagement({ active }: { active: boolean 
         </div>
       )}
 
-      {canScan && <div className="space-y-3 rounded-2xl border border-border/70 bg-gradient-to-br from-card via-card to-sky-500/[0.045] p-3 shadow-[0_14px_38px_-28px_rgba(14,165,233,0.55)] sm:p-4">
+      {canScan && <div className="space-y-3 rounded-2xl border border-border/70 bg-gradient-to-br from-card via-card to-sky-500/[0.045] p-3 shadow-[0_14px_38px_-28px_hsl(var(--factory-hue)_89%_48%_/_0.55)] sm:p-4">
         {fullControls && (
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="inline-flex rounded-xl border border-border/70 bg-background/45 p-1">

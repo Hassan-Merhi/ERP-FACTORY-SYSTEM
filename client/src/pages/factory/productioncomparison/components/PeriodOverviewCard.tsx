@@ -83,7 +83,7 @@ export function PeriodOverviewCard({ label, range, bales, kilograms, products, t
                     key={product.articleCode + "-" + index}
                     title={(product.productName || product.articleCode) + ": " + fmtNum(product.qty) + " bales"}
                     className={cn(
-                      "min-w-0 flex-1 rounded-t-[3px] shadow-[0_0_12px_rgba(59,130,246,0.1)]",
+                      "min-w-0 flex-1 rounded-t-[3px] shadow-[0_0_12px_hsl(var(--factory-hue)_91%_60%_/_0.1)]",
                       blue
                         ? "bg-gradient-to-t from-blue-700 to-sky-400"
                         : "bg-gradient-to-t from-violet-700 to-fuchsia-400"

@@ -222,7 +222,7 @@ export default function PressingHourlyTargets({ active, companyId, serverToday, 
   }
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-border/70 bg-gradient-to-br from-card via-card to-sky-500/[0.035] shadow-[0_12px_38px_-22px_rgba(14,165,233,0.25)]"
+    <section className="overflow-hidden rounded-2xl border border-border/70 bg-gradient-to-br from-card via-card to-sky-500/[0.035] shadow-[0_12px_38px_-22px_hsl(var(--factory-hue)_89%_48%_/_0.25)]"
       data-testid="pressing-hourly-targets">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 p-4 sm:px-5">
         <div className="flex items-start gap-3">

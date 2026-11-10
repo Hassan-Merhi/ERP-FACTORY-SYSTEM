@@ -358,7 +358,7 @@ export default function FactoryWorkerAttendanceReport() {
             size="default"
             onClick={() => window.print()}
             data-testid="button-print-report"
-            className="gap-2 rounded-lg border border-blue-500 bg-blue-600 px-5 font-semibold text-white shadow-[0_5px_15px_rgba(37,99,235,0.25)] hover:bg-blue-700 hover:text-white dark:border-blue-400 dark:bg-blue-600 dark:hover:bg-blue-500 print:hidden"
+            className="gap-2 rounded-lg border border-blue-500 bg-blue-600 px-5 font-semibold text-white shadow-[0_5px_15px_hsl(var(--factory-hue)_83%_53%_/_0.25)] hover:bg-blue-700 hover:text-white dark:border-blue-400 dark:bg-blue-600 dark:hover:bg-blue-500 print:hidden"
           >
             <Printer className="h-4 w-4 mr-2" />
             Print
@@ -386,7 +386,7 @@ export default function FactoryWorkerAttendanceReport() {
               className={cn(
                 "h-8 rounded-lg px-4 text-xs font-semibold transition-colors",
                 mode === m
-                  ? "bg-blue-600 text-white shadow-[0_2px_10px_rgba(37,99,235,0.35)] hover:bg-blue-700 hover:text-white dark:bg-blue-600 dark:hover:bg-blue-500"
+                  ? "bg-blue-600 text-white shadow-[0_2px_10px_hsl(var(--factory-hue)_83%_53%_/_0.35)] hover:bg-blue-700 hover:text-white dark:bg-blue-600 dark:hover:bg-blue-500"
                   : "text-muted-foreground hover:bg-slate-100 dark:hover:bg-blue-950/70"
               )}
             >

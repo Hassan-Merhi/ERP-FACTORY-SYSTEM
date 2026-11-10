@@ -56,7 +56,7 @@ export default function FactoryDaybook() {
     <div className="space-y-5 pb-6">
       {/* Visual-only header: accounting, permissions and exports remain owned by the existing model. */}
       <div className="relative isolate overflow-hidden rounded-2xl border border-sky-200/70 bg-gradient-to-br from-white via-slate-50 to-sky-50/80 p-4 shadow-sm dark:border-blue-500/20 dark:from-slate-950 dark:via-slate-900 dark:to-blue-950/50 sm:p-6">
-        <div aria-hidden="true" className="pointer-events-none absolute right-0 top-0 h-full w-1/2 bg-[radial-gradient(ellipse_at_top_right,rgba(37,99,235,0.14),transparent_75%)] dark:bg-[radial-gradient(ellipse_at_top_right,rgba(37,99,235,0.22),transparent_75%)]" />
+        <div aria-hidden="true" className="pointer-events-none absolute right-0 top-0 h-full w-1/2 bg-[radial-gradient(ellipse_at_top_right,hsl(var(--factory-hue)_83%_53%_/_0.14),transparent_75%)] dark:bg-[radial-gradient(ellipse_at_top_right,hsl(var(--factory-hue)_83%_53%_/_0.22),transparent_75%)]" />
         <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <PageHeader title="Factory Daybook" subtitle="All factory transactions in one view" icon={<BookOpen className="h-5 w-5 text-blue-600 dark:text-sky-400" />} />
