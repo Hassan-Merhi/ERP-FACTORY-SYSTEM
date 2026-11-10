@@ -51,7 +51,7 @@ jobs:
       - name: Build server and initialize disposable schema
         run: |
           set -euo pipefail
-          node build.mjs
+          npm run build
           node node_modules/drizzle-kit/bin.cjs push --force
       - name: Start app once for required runtime schema bridges
         shell: bash
