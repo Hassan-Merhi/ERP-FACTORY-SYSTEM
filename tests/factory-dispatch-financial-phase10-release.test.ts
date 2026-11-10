@@ -76,7 +76,8 @@ describe("Phase 10 Factory dispatch accounting safety / release contract",()=>{
   it("forces one all-or-nothing correction of ONLY physically unshipped, reserved bales",()=>{
     expect(approvals).toContain("await db.transaction(async tx=>");
     expect(approvals).toContain("RECONCILIATION_STOCK_OWNERSHIP_CHANGED");
-    expect(approvals).toContain('b.status!=="RESERVED_FOR_ORDER"');
+    expect(approvals).toContain('["RESERVED_FOR_ORDER","IN_STOCK"].includes(b.status)');
+    expect(approvals).toContain("RECONCILIATION_BALE_SHARED_WITH_OTHER_LOADING");
     expect(approvals).toContain("ORDER_UNSHIPPED_BALES_REMOVED");
     expect(approvals).toContain("expectedFingerprint");
   });
