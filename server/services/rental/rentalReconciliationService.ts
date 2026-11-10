@@ -277,7 +277,8 @@ export async function runRentalReconciliation(
        AND payment.company_id=p.company_id
        AND payment.deleted_at IS NULL AND payment.optional=FALSE
      WHERE p.company_id=$1 AND p.module=$2
-       AND p.posting_status='POSTED' AND p.payment_date >= accrual.voucher_date
+       AND p.posting_status='POSTED'
+       AND p.payment_date >= COALESCE(accrual.effective_date,accrual.voucher_date)
        -- The very first partial due payment legitimately debits Advance Paid;
        -- its SAME-GROUP ADV-REC voucher establishes the residual AP.
        AND NOT (
@@ -428,7 +429,7 @@ export async function runRentalReconciliation(
      FROM voucher_entries ve
      JOIN vouchers v ON v.id=ve.voucher_id AND v.company_id=ve.company_id
        AND v.deleted_at IS NULL AND v.optional=FALSE
-       AND v.voucher_date<=$3::date
+       AND COALESCE(v.effective_date,v.voucher_date)<=$3::date
      JOIN ledger_accounts la ON la.id=ve.ledger_account_id
        AND la.company_id=ve.company_id AND la.deleted_at IS NULL
      WHERE ve.company_id=$1
