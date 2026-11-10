@@ -3,6 +3,7 @@ import {
   HADI_HISTORICAL_ACCRUAL_GUARD,
   classifyHadiRentDifference,
   isHadiHistoricAccrualRepair,
+  isHadiProtectedRentMonth,
   positiveRentalDue,
 } from "../server/services/rental/hadiRentLedgerPolicy";
 import {
@@ -14,6 +15,9 @@ describe("HADI L'SHI Phase 3: protect verified historic rent", () => {
     expect(isHadiHistoricAccrualRepair(1, "ERP")).toBe(true);
     expect(isHadiHistoricAccrualRepair(1, "PROPERTIES")).toBe(false);
     expect(isHadiHistoricAccrualRepair(8, "ERP")).toBe(false);
+    expect(isHadiProtectedRentMonth(1, "ERP", 2026, 11)).toBe(true);
+    expect(isHadiProtectedRentMonth(1, "ERP", 2026, 12)).toBe(false);
+    expect(isHadiProtectedRentMonth(8, "ERP", 2026, 7)).toBe(false);
     expect(HADI_HISTORICAL_ACCRUAL_GUARD.code).toBe("HADI_RENT_HISTORICAL_REPAIR_LOCKED");
   });
 
