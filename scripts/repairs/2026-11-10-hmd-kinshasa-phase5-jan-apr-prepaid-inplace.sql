@@ -353,6 +353,8 @@ BEGIN
       v_877_before,v_877_after,v_1401_before,v_1401_after; END IF;
 
   -- Prepaid Rent: +40680 in Jan, -13560 in each Feb-Apr, zero overall.
+  -- Group first, then validate each grouped month. PostgreSQL cannot refer
+  -- to the ungrouped voucher_date in HAVING when GROUP BY targets its month.
   SELECT COUNT(*) INTO v_count FROM (
     SELECT EXTRACT(MONTH FROM v.voucher_date)::integer AS m,
       SUM(e.debit_amount-e.credit_amount) AS net
@@ -360,10 +362,9 @@ BEGIN
     WHERE e.company_id=8 AND e.ledger_account_id=v_prepaid_id
       AND v.deleted_at IS NULL AND v.optional=FALSE
     GROUP BY 1
-    HAVING (EXTRACT(MONTH FROM v.voucher_date)=1 AND SUM(e.debit_amount-e.credit_amount)=40680)
-        OR (EXTRACT(MONTH FROM v.voucher_date) BETWEEN 2 AND 4
-            AND SUM(e.debit_amount-e.credit_amount)=-13560)
-  ) months;
+  ) months
+  WHERE (m=1 AND net=40680)
+     OR (m BETWEEN 2 AND 4 AND net=-13560);
   IF v_count<>4 THEN RAISE EXCEPTION 'KIN_RENT_JAN_APR_PREPAID_RECOGNITION_INCORRECT'; END IF;
   IF EXISTS (
     SELECT 1 FROM voucher_entries e JOIN vouchers v ON v.id=e.voucher_id AND v.company_id=e.company_id
