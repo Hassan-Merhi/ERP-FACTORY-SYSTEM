@@ -2,7 +2,7 @@
 
 **Branch:** `fix/hmd-kinshasa-rent-historical-ledger-20261110`  
 **Date:** 2026-11-10  
-**Production status:** **NOT APPLIED** as of the last read-only verification on 2026-11-10. The available Render Postgres connector permits read-only queries only. Committing the SQL on this branch does **not** execute it and does **not** affect production.
+**Production status:** **APPLIED by the owner in TablePlus at 2026-11-10 11:08:50 UTC and independently verified read-only against Render production on November 10, 2026.** No new vouchers, journals or cash changes. The available Render connector was only used for read-only verification; the owner executed the provided SQL.
 
 ## Phase 2 deliverables
 
@@ -41,3 +41,31 @@ After the script commits, run the read-only verification file against the same c
 The correction script is idempotent: a second run with all three entries already corrected and expected post-balances will exit without altering anything. Partial modifications or unexpected data refuse to proceed.
 
 **Phase 2 source implementation committed and read-only preflight checked. Production execution remains required for the live accounting repair to be complete.** No merge or deployment has been performed.
+
+## Verified production result — 2026-11-10
+
+The owner executed the full guarded SQL and reported:
+
+`NOTICE: HMD KINSHASA July rent corrected in place: entries 37980,37982,37984; expense=149160.00, payable=0.00; CASH unchanged. No new vouchers.`
+
+Independent read-only verification using the Render production Postgres connector confirmed the persisted committed state:
+
+| Check | Verified production result |
+|---|---|
+| Rent Expense #877 | Dr **$158,320** / Cr **$9,160** = **$149,160 Dr** net |
+| Accrued Rent Payable #1401 | Dr **$67,800** / Cr **$67,800** = **$0** net |
+| Entry #37980 / voucher #10579 | Dr **$4,400**, account **1401** |
+| Entry #37982 / voucher #10580 | Dr **$6,660**, account **1401** |
+| Entry #37984 / voucher #10581 | Dr **$2,500**, account **1401** |
+| Cash entries #37981, #37983, #37985 | Retained original **account 352**, cash credit $4,400/$6,660/$2,500 |
+| July accrual #9960 | Still live and unchanged, July 2, 2026, **$13,560** |
+| Original payment vouchers | #10579, #10580, #10581 still live, non-optional, dated July 13, 2026 |
+| July payment allocations | Payment IDs 303,304,305 still POSTED; same amounts and original voucher links |
+| Rental-month references | July rows 637546,113144,637539 still paid and linked to accrual #9960 |
+| Guarantees | Contract 15 $26,400, contract 16 $39,600, contract 17 $7,500; unchanged from Phase 1 |
+| Explicit audit records | #88581, #88582, #88583 each action `repair` |
+| Database-triggered audit records | #88578, #88579, #88580 each action `row_update` |
+
+Audit timestamp: **2026-11-10 11:08:50 UTC**. All six audit rows belong to company 8 and reference the original three voucher entry IDs. No new repair vouchers were generated.
+
+**Phase 2 is completed in production.** The January–May dangling historical link and legacy June account 918 questions remain separately scoped Phase 3 diagnostics, not reasons to undo the July repair.
