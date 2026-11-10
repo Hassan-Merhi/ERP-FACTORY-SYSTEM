@@ -114,7 +114,7 @@ describe("Factory unified blue theme", () => {
     expect(financial).toContain('color="var(--factory-color-500)"');
     expect(pressing).toContain("shadow-[0_12px_30px_-22px_hsl(var(--factory-hue)_");
     expect(theme).toContain(':root[data-app-shell="factory"] .factory-container-stripes');
-    expect(theme).toContain("background-image: repeating-linear-gradient(90deg, hsl(var(--factory-hue)");
+    expect(theme).toMatch(/background-image:\s*repeating-linear-gradient\(\s*90deg,\s*hsl\(var\(--factory-hue\)/);
     expect(targets).toContain("color: var(--factory-color-400);");
     expect(targets).not.toContain("#ff68b0");
   });
