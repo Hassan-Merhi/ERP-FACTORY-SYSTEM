@@ -14,6 +14,7 @@ import { getFactoryAccessState, requireFactoryTabAccess } from "../../../lib/fac
 import { parseId } from "../../../lib/parseId";
 import { resultRows } from "../../../lib/queryResult";
 import { logger } from "../../../lib/logger";
+import { hasLiveFinancialTripTx } from "../../../services/factory/dispatchTripFinancialGuards";
 import { compareFactoryLoadingDispatch } from "./loadingDispatchComparison";
 import { assessFactoryLoadingDispatchClose } from "./loadingDispatchClosePolicy";
 import { loadFactoryLoadingDispatchComparisonSnapshot } from "./loadingDispatchComparisonRoutes";
@@ -311,6 +312,12 @@ export function registerFactoryLoadingDispatchLifecycleRoutes(app: Express): voi
         `))[0];
         if (!trip) refusal(404, "DISPATCH_NOT_FOUND", "Dispatch not found");
         if (trip.status !== "CLOSED") refusal(409, "NOT_CLOSED", "Only completed dispatches can be reopened");
+        // A signed trip with a live customer receivable cannot be physically
+        // reopened or rescanned without an approved financial reversal first.
+        if (await hasLiveFinancialTripTx(tx, scope.companyId, scope.orderId, scope.dispatchId)) {
+          refusal(409, "TRIP_FINANCIALLY_POSTED",
+            "Reverse this trip's financial posting before reopening its barcode scans");
+        }
 
         const record = rows(await tx.execute(sql`
           SELECT id, revision FROM factory_loading_dispatch_closure_history
