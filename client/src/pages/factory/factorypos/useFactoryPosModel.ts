@@ -124,9 +124,19 @@ export function useFactoryPosModel() {
   });
   const cashAccounts = (ledgerAccounts || []).filter((a) => a.accountType === "Cash");
 
-  // A previous company's cash account must never carry into a new company's sale.
+  // Company changes invalidate every local draft selection, not just the cash account.
+  // Never allow a previous company's unsaved POS rows or edit hydration to survive.
   useEffect(() => {
     setCashAccountId("");
+    setLocationId("");
+    setSelectedCustomerId("");
+    setCustomerName("");
+    setRows([emptyRow("1")]);
+    setExpenseRows([]);
+    setSavedSale(null);
+    setVoidId(null);
+    setEditLoaded(false);
+    setShowPrintDialog(false);
   }, [selectedCompany?.id]);
   const { data: sales, isLoading: salesLoading } = useQuery<PosSale[]>({
     queryKey: companyQueryKey("/api/factory/pos/sales", selectedCompany?.id),
