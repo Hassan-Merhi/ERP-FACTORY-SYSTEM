@@ -59,6 +59,18 @@ export default function FactoryStatusBuilder() {
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const silentSaveRef = useRef(false);
+  const priorCompanyRef = useRef(selectedCompany?.id);
+  useEffect(() => {
+    if (priorCompanyRef.current === selectedCompany?.id) return;
+    priorCompanyRef.current = selectedCompany?.id;
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    autosaveTimerRef.current = null;
+    silentSaveRef.current = false;
+    setLocalSheets([]);
+    setInitialised(false);
+    setActiveIdx(0);
+    setSavedAt(null);
+  }, [selectedCompany?.id]);
 
   const [linkDialog, setLinkDialog] = useState<LinkDialogState>({
     open: false,
