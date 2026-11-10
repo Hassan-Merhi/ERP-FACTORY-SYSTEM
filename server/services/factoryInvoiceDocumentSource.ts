@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { db } from "../db";
+import { MoneyDecimal, sumMoney } from "../lib/money";
 import {
   normalizePricingMode,
   resultRows,
@@ -267,6 +268,17 @@ export async function buildLiveCanonicalInvoiceDocument(
           });
         }
       }
+    }
+  }
+
+  if(dispatchTrips) {
+    // Fail closed: the PDF/Excel commercial document must reconcile to
+    // the signed, already-posted customer totals, including billable trip fees,
+    // discounts and original order charges. Never emit a misleading invoice.
+    const renderedTotal=new MoneyDecimal(String(signedGoods ?? 0))
+      .plus(sumMoney(charges.map(x=>String(x.amount))));
+    if(!renderedTotal.toDecimalPlaces(2).eq(new MoneyDecimal(String(header.grand_total??"0")))){
+      throw new Error("COMBINED_INVOICE_DOCUMENT_TOTAL_MISMATCH: Signed goods and itemized charges do not equal the finalized invoice total");
     }
   }
 
