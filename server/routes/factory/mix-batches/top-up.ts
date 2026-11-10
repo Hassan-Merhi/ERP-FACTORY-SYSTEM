@@ -38,7 +38,11 @@ import {
   requireMixRawStockCapacity,
   availableSupplierAddAllowance,
 } from "../../../services/factory/mixRawStockQuantityGuard";
-import { mixKilograms, requireMixLifecycleAvailable } from "../../../services/factory/mixLifecyclePhase6";
+import {
+  MixLifecycleRefusal,
+  mixKilograms,
+  requireMixLifecycleAvailable,
+} from "../../../services/factory/mixLifecyclePhase6";
 
 export function registerFactoryMixBatchTopUpRoutes(app: Express) {
   // Top-up an existing mix batch with additional sources
@@ -395,6 +399,9 @@ export function registerFactoryMixBatchTopUpRoutes(app: Express) {
     } catch (error: unknown) {
       if (error instanceof MixRawStockShortageError) {
         return res.status(error.status).json({ code: error.code, message: error.message });
+      }
+      if (error instanceof MixLifecycleRefusal) {
+        return res.status(error.statusCode).json({ code: error.code, message: error.message });
       }
       if (sendFactoryCostBasisRefusal(res, error)) return;
       logger.error("Error topping up mix batch:", { error: error });
