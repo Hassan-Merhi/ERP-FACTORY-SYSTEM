@@ -1,0 +1,62 @@
+name: ERP Phase 9 scoped format correction
+on:
+  push:
+    branches:
+      - feature/erp-phase9-company-scoped-permissions-20261110
+permissions: {}
+jobs:
+  format-once:
+    if: github.event.head_commit.message == 'chore(erp): request one-time format check correction'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout exact branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: feature/erp-phase9-company-scoped-permissions-20261110
+          persist-credentials: true
+      - name: Set up pinned Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24.22.2"
+      - name: Install pinned dependencies
+        run: npm ci --ignore-scripts --no-audit --bin-links=true
+      - name: Apply repository prettier to only flagged changed files
+        shell: bash
+        run: |
+          set -euo pipefail
+          node node_modules/prettier/bin/prettier.cjs --write \
+            client/src/app/erpNavigationPolicy.test.ts \
+            client/src/erp-core/erpUnificationContract.test.ts \
+            client/src/pages/Daybook.tsx \
+            client/src/pages/Vouchers.tsx \
+            client/src/pages/accountslegacy/useAccountsLegacyModel.ts \
+            client/src/pages/analyticslegacy/useAnalyticsLegacy.tsx \
+            client/src/pages/daybook/DaybookFilters.tsx
+          node node_modules/prettier/bin/prettier.cjs --check \
+            client/src/app/erpNavigationPolicy.test.ts \
+            client/src/erp-core/erpUnificationContract.test.ts \
+            client/src/pages/Daybook.tsx \
+            client/src/pages/Vouchers.tsx \
+            client/src/pages/accountslegacy/useAccountsLegacyModel.ts \
+            client/src/pages/analyticslegacy/useAnalyticsLegacy.tsx \
+            client/src/pages/daybook/DaybookFilters.tsx
+      - name: Commit only formatting changes to this feature branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'erp-phase9-format[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- \
+            client/src/app/erpNavigationPolicy.test.ts \
+            client/src/erp-core/erpUnificationContract.test.ts \
+            client/src/pages/Daybook.tsx \
+            client/src/pages/Vouchers.tsx \
+            client/src/pages/accountslegacy/useAccountsLegacyModel.ts \
+            client/src/pages/analyticslegacy/useAnalyticsLegacy.tsx \
+            client/src/pages/daybook/DaybookFilters.tsx
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'style(erp): apply pinned formatting to Phase 9 files'
+          git push origin HEAD:feature/erp-phase9-company-scoped-permissions-20261110
