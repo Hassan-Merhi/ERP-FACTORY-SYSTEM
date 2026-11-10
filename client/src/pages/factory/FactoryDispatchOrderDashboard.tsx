@@ -51,6 +51,10 @@ interface Overview {
     includedPostingIds:string[];finalizationVoucherIds:string[]};
   trips:Trip[];charges:Charge[];notices:string[];
 }
+interface ReleaseGate {
+  reconciliation:{ready:boolean;missing:string[];checkedAt:string};
+  invoice:{ready:boolean;missing:string[];checkedAt:string};
+}
 interface HistoryEntry {
   source:"PHYSICAL"|"FINANCIAL"|"CLOSURE";id:string;
   dispatchId:string|null;eventType:string;actorUsername:string;
@@ -105,6 +109,12 @@ export default function FactoryDispatchOrderDashboard({
     queryFn:()=>json<Overview>(base),
     enabled:Boolean(companyId)&&Number.isSafeInteger(orderId)&&orderId>0,
     refetchInterval:20000,
+  });
+  const gate=useQuery<ReleaseGate>({
+    queryKey:companyQueryKey(base.replace("/order-overview","/release-readiness"),companyId),
+    queryFn:()=>json<ReleaseGate>(base.replace("/order-overview","/release-readiness")),
+    enabled:Boolean(companyId) && Number.isSafeInteger(orderId) && orderId>0,
+    staleTime:30000,refetchInterval:60000,
   });
   const value=info.data;
   const history=useInfiniteQuery<HistoryPage,Error>({
@@ -200,6 +210,41 @@ export default function FactoryDispatchOrderDashboard({
                   <p className="mt-1 break-words font-mono text-sm font-semibold">{number}</p></div>
               </div>
             ))}
+          </div>
+          <div className="flex flex-wrap items-start justify-between gap-2 rounded-xl border border-border bg-muted/25 p-3 text-xs"
+            data-testid="factory-dispatch-release-readiness">
+            <div className="flex items-start gap-2">
+              <ShieldCheck className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-300"/>
+              <div className="space-y-1">
+                <p className="font-semibold">TablePlus accounting safeguards</p>
+                {gate.isPending&&<p className="text-muted-foreground">Checking installed database protections…</p>}
+                {gate.isError&&<p className="text-destructive">
+                  Could not verify safeguards; accounting approval must remain disabled.
+                </p>}
+                {gate.data&&(
+                  <>
+                    <p className="text-muted-foreground">
+                      Reconciliation: {gate.data.reconciliation.ready?"Ready":"SQL / guards pending"} ·
+                      One invoice: {gate.data.invoice.ready?"Ready":"SQL / guards pending"}
+                    </p>
+                    {!gate.data.invoice.ready&&(
+                      <details className="max-w-2xl">
+                        <summary className="cursor-pointer font-medium">
+                          View {gate.data.invoice.missing.length} missing safeguard(s)
+                        </summary>
+                        <div className="mt-1 max-h-40 overflow-auto rounded-md bg-background/80 p-2 font-mono text-[11px]">
+                          {gate.data.invoice.missing.join("\n")}
+                        </div>
+                      </details>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+            <Button size="sm" variant="outline" onClick={()=>void gate.refetch()}
+              disabled={gate.isFetching}>
+              <RefreshCw className="mr-1.5 h-3.5 w-3.5"/> Check
+            </Button>
           </div>
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-muted/40 px-3 py-2 text-xs">
             <span className="text-muted-foreground">
