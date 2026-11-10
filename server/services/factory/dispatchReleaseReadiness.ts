@@ -62,7 +62,6 @@ const signedConstraints=[
 ];
 const finalConstraints=["factory_dispatch_order_consolidations_final_invoice_ck"];
 const mustExist=(r:Record<string,unknown>)=>r.present===true;
-const quote=(s:string)=>"'"+s.replaceAll("'","''")+"'";
 export async function factoryDispatchReleaseReadinessTx(
   tx:DbTransaction,stage:DispatchReleaseStage
 ):Promise<DispatchReleaseReadiness>{
