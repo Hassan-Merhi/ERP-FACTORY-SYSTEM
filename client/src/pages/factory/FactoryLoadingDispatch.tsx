@@ -49,6 +49,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import FactoryLoadingDispatchScanner from "./FactoryLoadingDispatchScanner";
 import FactoryLoadingDispatchLifecycle from "./FactoryLoadingDispatchLifecycle";
 import FactoryLoadingDispatchFinance from "./FactoryLoadingDispatchFinance";
+import FactoryLoadingDispatchPostingPanel from "./FactoryLoadingDispatchPostingPanel";
 
 interface OrderBale {
   id: number;
@@ -745,6 +746,16 @@ export default function FactoryLoadingDispatch() {
                   </ErrorBoundary>
                   <ErrorBoundary resetKey={"dispatch-finance-" + dispatchId}>
                     <FactoryLoadingDispatchFinance
+                      key={dispatchId}
+                      orderId={orderId}
+                      dispatchId={dispatchId}
+                      companyId={companyId}
+                      status={selectedTrip.status}
+                      role={user?.currentRole ?? user?.role ?? ""}
+                    />
+                  </ErrorBoundary>
+                  <ErrorBoundary resetKey={"dispatch-posting-" + dispatchId}>
+                    <FactoryLoadingDispatchPostingPanel
                       key={dispatchId}
                       orderId={orderId}
                       dispatchId={dispatchId}
