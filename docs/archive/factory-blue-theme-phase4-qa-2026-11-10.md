@@ -82,3 +82,37 @@ In the observed Factory pages, primary navigation and decorative accents were bl
 - Latest `main` changes were not deployed or runtime-tested. Do not claim deployment.
 
 **Disposition:** Partial live QA completed, no confirmed broad blue/purple regression in sampled Factory routes; Phase 4 final certification still depends on tests and full responsive/dark-mode coverage.
+
+## Follow-up verification of remaining QA gates (2026-11-10)
+
+### Executed source assertions — 9/9 passed
+
+An independent in-session JavaScript assertion pass read current `main` copies of all three mode shells, all three unified theme stylesheets, Factory Location Inventory CSS, and the Phase 4 test source directly from GitHub. The following nine focused assertions passed:
+
+1. Factory shell/theme isolation and blue hue.
+2. Properties shell/theme isolation and blue hue.
+3. ERP shell/theme isolation and blue hue.
+4. Presence of Factory light/dark semantic theme blocks.
+5. Light-theme background/sidebar/border/focus tokens derive from Factory hue.
+6. Dark-theme background/sidebar/border/focus tokens derive from Factory hue.
+7. Factory workspace reads the semantic background variable.
+8. Factory shell includes phone-sheet/viewport and mobile control-size hooks.
+9. Location Inventory uses hue-derived styling, dark styling and no fixed six-digit hex colors.
+
+**Important:** These were source assertions executed in the connector orchestration runtime, **not** the Vitest suite, frontend build, or browser rendering tests. No full project checkout or npm dependencies were available in the local runtime; GitHub commit status returned a Vercel success context but no captured test-suite result for the current documentation commit. Therefore the Vitest acceptance requirement remains open.
+
+### Dark-mode and viewport attempt
+
+An additional authenticated browser automation was launched to visit the six Factory routes in dark mode. That run redirected to `/login` and could not reuse the previously successful authentication context. No dark-mode route images or QA measurements were obtained in that attempt. The earlier successful run established that the Factory light/dark toggle works on Location Inventory, but it did not certify all routes in dark mode.
+
+The connected browser automation does not expose explicit 390px/768px/1440px viewport resizing. **Mobile/tablet visual acceptance and screenshot artifacts remain unverified.** Avoid treating responsive class names as visual evidence.
+
+### Updated Phase 4 status
+
+- [x] Independently executed 9 focused source checks against the current `main` files (all passed).
+- [x] Browser smoke-tested selected Factory routes in light mode and toggled Location Inventory light/dark.
+- [ ] Execute and capture a passing Vitest log for the checked-in Phase 4 and prior Factory theme test files.
+- [ ] Complete authenticated multi-route dark-mode screenshot testing.
+- [ ] Complete actual 390px/768px/1440px mobile/tablet/desktop screenshot acceptance matrix.
+
+Phase 4 **is not fully certified** on this evidence. Do not change the checklist to completed without actual test and browser artifacts.
