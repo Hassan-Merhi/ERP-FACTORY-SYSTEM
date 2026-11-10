@@ -23,7 +23,6 @@ import {
 
 const loadingsAccess = requireFactoryTabAccess("factory/invoicing", "hide_invoicing_loadings_tab");
 const BASE = "/api/factory/customer-orders/:id/loading-dispatches/:dispatchId";
-type Raw = Record<string, unknown>;
 
 class FinancialChargeHttpError extends Error {
   constructor(readonly status: number, readonly code: string, message: string) {
