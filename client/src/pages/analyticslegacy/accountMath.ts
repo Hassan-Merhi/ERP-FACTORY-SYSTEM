@@ -45,9 +45,21 @@ export function signedBalance(acc: Account): number {
   return acc.balanceSide === "Cr" ? parseBalance(acc.balance) : -parseBalance(acc.balance);
 }
 
-/** Cash is an asset: a debit adds cash and a credit reduces it. */
+/**
+ * The accounts API returns a magnitude plus a Dr/Cr side. All Analytics
+ * account-balance panels display net Dr minus Cr, irrespective of account type.
+ * Use the sign of the raw value only when the API has no side at all.
+ */
+export function debitSignedBalance(acc: Account): number {
+  const balance = parseBalance(acc.balance);
+  if (acc.balanceSide?.toUpperCase() === "CR") return -Math.abs(balance);
+  if (acc.balanceSide?.toUpperCase() === "DR") return Math.abs(balance);
+  return balance;
+}
+
+/** Compatibility alias for the Cash panel's previously added helper. */
 export function cashSignedBalance(acc: Account): number {
-  return -signedBalance(acc);
+  return debitSignedBalance(acc);
 }
 
 /**
@@ -59,12 +71,14 @@ export function groupAccountsByParent(accountList: Account[]): {
   parentAccounts: Account[];
   accountMap: Map<number, Account[]>;
 } {
-  const accountIdsInList = new Set(accountList.map((acc) => acc.accountId));
+  // Only ledger accounts can own ledger children. Bank/fixed-asset IDs live
+  // in different tables and may happen to equal a ledger account's ID.
+  const ledgerIds = new Set(accountList.filter((acc) => acc.type === "ledger").map((acc) => acc.accountId));
   const parentAccounts: Account[] = [];
   const childAccounts: Account[] = [];
 
   accountList.forEach((acc) => {
-    if (!acc.parentId || !accountIdsInList.has(acc.parentId)) {
+    if (acc.type !== "ledger" || !acc.parentId || acc.parentId === acc.accountId || !ledgerIds.has(acc.parentId)) {
       parentAccounts.push(acc);
     } else {
       childAccounts.push(acc);
@@ -113,15 +127,40 @@ export function calculateTotal(accountList: Account[]): number {
   return total;
 }
 
-/** Net cash debit-minus-credit, using the same parent/child deduplication as calculateTotal. */
+/**
+ * The visible balance of a ledger group is the net of its descendants.
+ * Its stored aggregate is not counted alongside those descendants.
+ * Supports more than two levels without double counting or infinite cycles.
+ */
+export function accountDisplayBalance(
+  account: Account,
+  accountMap: Map<number, Account[]>,
+  visited: Set<number> = new Set()
+): number {
+  if (account.type !== "ledger" || visited.has(account.accountId)) return debitSignedBalance(account);
+  const children = accountMap.get(account.accountId) ?? [];
+  if (children.length === 0) return debitSignedBalance(account);
+
+  const path = new Set(visited);
+  path.add(account.accountId);
+  return children.reduce((total, child) => total + (path.has(child.accountId) ? 0 : accountDisplayBalance(child, accountMap, path)), 0);
+}
+
+/** Header/footer total equals the sum of the root rows and includes each ledger leaf once. */
+export function calculateNetAccountTotal(accountList: Account[]): number {
+  const { parentAccounts, accountMap } = groupAccountsByParent(accountList);
+  return parentAccounts.reduce((sum, account) => sum + accountDisplayBalance(account, accountMap), 0);
+}
+
+/** Retained Cash API name; all account-balance panels now use the same sign rules. */
 export function calculateCashTotal(accountList: Account[]): number {
-  return -calculateTotal(accountList);
+  return calculateNetAccountTotal(accountList);
 }
 
 /**
  * Same deduplication as calculateTotal but over displayed (absolute) balances.
- * Used for the Cash, Loans/Banks, Assets and Liabilities sections so the footer
- * total always equals the sum of the rows shown above it.
+ * Kept for compatibility with legacy magnitude-only reports; Analytics account
+ * panels now use calculateNetAccountTotal and never discard Dr/Cr direction.
  */
 export function calculateAbsoluteTotal(accountList: Account[]): number {
   const accountIds = new Set(accountList.map((acc) => acc.accountId));
