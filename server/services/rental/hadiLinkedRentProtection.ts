@@ -6,6 +6,7 @@
  * needs original-voucher review — never an automatic Dr Expense / Cr owner credit.
  */
 import { and, eq, inArray, isNull, lte, sql } from "drizzle-orm";
+import type Decimal from "decimal.js";
 import { ledgerAccounts, propertyContracts, propertyMonthlyLedger, propertyPayments, propertyUnits, vouchers } from "@shared/schema";
 import { db } from "../../db";
 import { MoneyDecimal, toMoney } from "../../lib/money";
@@ -152,14 +153,14 @@ export async function getHadiLinkedRentControl(companyId: number, asOf: string):
       : [];
     const unmatchedPostedPayments = allPosted.filter(p => !p.voucherCompanyId).length;
 
-    const postedByMonth = new Map<number, MoneyDecimal>();
+    const postedByMonth = new Map<number, Decimal>();
     for (const p of posted) {
       if (p.ledgerRowId === null) continue;
       postedByMonth.set(p.ledgerRowId,
         (postedByMonth.get(p.ledgerRowId) ?? new MoneyDecimal(0)).plus(toMoney(p.amount)));
     }
 
-    const byContract = new Map<number, { expected: MoneyDecimal; paid: MoneyDecimal; due: MoneyDecimal }>();
+    const byContract = new Map<number, { expected: Decimal; paid: Decimal; due: Decimal }>();
     let linkedOutstanding = new MoneyDecimal(0);
     let ownedOutstanding = new MoneyDecimal(0);
     for (const row of dueRows) {
