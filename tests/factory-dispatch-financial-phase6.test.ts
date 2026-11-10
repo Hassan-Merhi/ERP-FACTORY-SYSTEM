@@ -24,9 +24,9 @@ function preview(): PoImportPreviewContainer {
     containerNumber: "FD-4-123-5", supplierCode: "SUP-01", itemsCount: 2,
     itemsTotal: 14.5, chargesTotal: 10.5, grandTotal: 25,
     items: [
-      { poNumber: "FDPO-4-123-5", barcode: "A100", itemName: "T-Shirts",
+      { poNumber: "FDPO-4-123-5", supplierCode: "SUP-01", barcode: "A100", itemName: "T-Shirts",
         quantity: 2, rate: 6, lineTotal: 12, currency: "USD", stockItemId: null },
-      { poNumber: "FDPO-4-123-5", barcode: "B200", itemName: "Jeans",
+      { poNumber: "FDPO-4-123-5", supplierCode: "SUP-01", barcode: "B200", itemName: "Jeans",
         quantity: 1, rate: 2.5, lineTotal: 2.5, currency: "USD", stockItemId: null },
     ],
     charges: { freight: 10, surcharge: 1, fumigation: 0, documentCharges: 0, discount: 0.5 },
@@ -67,6 +67,10 @@ describe("Factory dispatch → Normal ERP PO import compatibility", () => {
     const src = preview();
     const badSupplier = await validateFactoryDispatchPoImport(71, src, { ...fakeSupplier, code: "OTHER" } as any, [fakeStock] as any);
     expect(badSupplier.errors.some(x => x.includes("Supplier_Code"))).toBe(true);
+    const mixedSupplier = preview();
+    mixedSupplier.items[1].supplierCode = "DIFFERENT";
+    expect((await validateFactoryDispatchPoImport(71, mixedSupplier, fakeSupplier as any, [fakeStock] as any))
+      .errors.some(x => x.includes("Supplier_Code differs"))).toBe(true);
     const dup = preview();
     dup.items[1].barcode = "A100";
     expect((await validateFactoryDispatchPoImport(71, dup, fakeSupplier as any, [fakeStock] as any))
