@@ -45,7 +45,6 @@ const numberId = (value: unknown): number => {
   return n;
 };
 const money = (value: string) => new MoneyDecimal(value);
-const zero = new MoneyDecimal(0);
 const keyOf = (companyId: number, dispatchId: number, revision: number, part: string) =>
   `factory-dispatch:${companyId}:${dispatchId}:${revision}:${part}`;
 
