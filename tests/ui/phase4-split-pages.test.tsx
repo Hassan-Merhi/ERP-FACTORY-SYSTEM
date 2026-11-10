@@ -90,6 +90,11 @@ vi.mock("@/contexts/CompanyContext", () => ({
     isLoading: false,
     selectCompany: vi.fn(),
   }),
+  useOptionalCompany: () => ({
+    selectedCompany: { id: 1, name: "Test Co", code: "TC", active: true, companyType: "factory" as const },
+    companies: [],
+    isLoading: false,
+  }),
   CompanyProvider: ({ children }: any) => <>{children}</>,
 }));
 
@@ -277,7 +282,10 @@ describe("Phase 4 extracted dialogs open from their real triggers", () => {
         renderWithData(<Page />);
 
         const user = userEvent.setup();
-        fireEvent.pointerDown(await screen.findByTestId(`button-proforma-menu-${proforma.id}`), { button: 0, ctrlKey: false });
+        fireEvent.pointerDown(await screen.findByTestId(`button-proforma-menu-${proforma.id}`), {
+          button: 0,
+          ctrlKey: false,
+        });
         await user.click(await screen.findByTestId(`button-rename-proforma-${proforma.id}`));
 
         const dialog = await screen.findByRole("dialog");
@@ -289,7 +297,10 @@ describe("Phase 4 extracted dialogs open from their real triggers", () => {
         renderWithData(<Page />);
 
         const user = userEvent.setup();
-        fireEvent.pointerDown(await screen.findByTestId(`button-proforma-menu-${proforma.id}`), { button: 0, ctrlKey: false });
+        fireEvent.pointerDown(await screen.findByTestId(`button-proforma-menu-${proforma.id}`), {
+          button: 0,
+          ctrlKey: false,
+        });
         await user.click(await screen.findByTestId(`button-transfer-proforma-${proforma.id}`));
 
         const dialog = await screen.findByRole("dialog");
@@ -351,7 +362,8 @@ describe("AdvancesView extracted dialogs open from their real triggers", () => {
       // Radix dropdowns open on pointerdown, not click, so userEvent is what
       // actually reveals the triggers that live behind the ⋯ menu.
       const user = userEvent.setup();
-      if (viaMenu) fireEvent.pointerDown(await screen.findByTestId("button-advances-actions"), { button: 0, ctrlKey: false });
+      if (viaMenu)
+        fireEvent.pointerDown(await screen.findByTestId("button-advances-actions"), { button: 0, ctrlKey: false });
       await user.click(await screen.findByTestId(testId));
 
       // Several triggers carry the same label as the dialog they open, and some

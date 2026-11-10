@@ -158,8 +158,7 @@ export default function FactoryCustomers() {
 
   const { data: deletedCustomers = [] } = useQuery<Customer[]>({
     queryKey: companyQueryKey("/api/factory/customers/deleted", selectedCompany?.id),
-    enabled: Boolean(selectedCompany?.id),
-    enabled: showDeleted,
+    enabled: Boolean(selectedCompany?.id) && showDeleted,
   });
 
   const restoreMutation = useMutation({

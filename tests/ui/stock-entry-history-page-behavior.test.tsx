@@ -42,6 +42,15 @@ const group = {
   bales: [bale],
 };
 
+vi.mock("@/contexts/CompanyContext", () => {
+  const company = {
+    selectedCompany: { id: 1, code: "PHASE9-FACTORY", name: "Factory Test", active: true, companyType: "factory" },
+    companies: [],
+    isLoading: false,
+  };
+  return { useCompany: () => company, useOptionalCompany: () => company };
+});
+
 vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => ({
     invalidateQueries: harness.invalidateQueries,
@@ -49,8 +58,8 @@ vi.mock("@tanstack/react-query", () => ({
   }),
   useQueries: () => [],
   useInfiniteQuery: ({ queryKey, enabled }: any) => {
-    harness.historyQueries.push(queryKey[1]);
-    const params = new URLSearchParams(queryKey[1]);
+    harness.historyQueries.push(queryKey[2]);
+    const params = new URLSearchParams(queryKey[2]);
     const selectedWorker = params.get("workerId");
     const secondWorker = {
       ...group,
@@ -235,6 +244,7 @@ describe("stock entry history page behavior", () => {
 
   it("loads worker choices for a history-only user without Payroll Hub access", () => {
     harness.accessValue = {
+      companyId: 1,
       fullAccess: false,
       hasFactoryAccess: true,
       pageKeys: ["factory/stock-entry"],
