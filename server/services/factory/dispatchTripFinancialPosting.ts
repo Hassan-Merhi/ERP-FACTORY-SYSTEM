@@ -142,12 +142,19 @@ async function assertChargeAccounts(tx: DbTransaction, companyId: number, charge
 }
 async function lockTripOrder(tx: DbTransaction, scope: DispatchPostingScope) {
   const [o] = await rows(tx, sql`
-    SELECT id, status, deleted_at AS "deletedAt"
-      FROM customer_orders
-     WHERE company_id = ${scope.companyId} AND id = ${scope.orderId} FOR UPDATE
+    SELECT o.id, o.status, o.deleted_at AS "deletedAt",
+           COALESCE(b.currency, 'USD') AS currency
+      FROM customer_orders o
+      LEFT JOIN customer_dispatch_batches b
+        ON b.id=o.dispatch_batch_id AND b.company_id=o.company_id
+     WHERE o.company_id = ${scope.companyId} AND o.id = ${scope.orderId}
+     FOR UPDATE OF o
   `);
   if (!o || o.deletedAt || !["LOADING", "PENDING_VERIFICATION", "VERIFIED"].includes(String(o.status))) {
     refuse("TRIP_LOADING_INACTIVE", "Only an active unfinalized loading can financially finalize a truck");
+  }
+  if (String(o.currency || "USD").trim().toUpperCase() !== "USD") {
+    refuse("TRIP_CURRENCY_UNSUPPORTED", "Multi-currency dispatch financial posting is not yet supported. No USD-only journal will be created for this order.");
   }
   const [trip] = await rows(tx, sql`
     SELECT id, status FROM factory_loading_dispatches
@@ -288,6 +295,15 @@ export async function postDispatchTripFinancialTx(
   const clearingId = await ledgerAccountByCodeTx(
     tx, scope.companyId, "FACTORY_DISPATCH_CLEARING", "Factory Dispatch Clearing", "Liability"
   );
+  const [clearing] = await rows(tx, sql`
+    SELECT account_type AS "accountType",active,is_hidden AS "hidden",deleted_at AS "deletedAt"
+      FROM ledger_accounts WHERE id=${clearingId} AND company_id=${scope.companyId}
+  `);
+  if (!clearing || !clearing.active || clearing.hidden || clearing.deletedAt ||
+      !/liability|clearing/i.test(String(clearing.accountType))) {
+    refuse("TRIP_CLEARING_ACCOUNT_INVALID",
+      "Factory Dispatch Clearing must be an active company-owned liability/clearing account");
+  }
   const customerTotal = money(totals.customerTotal);
   const goods = money(source.goodsSubtotal);
   const positive = (v: Decimal) => v.gt(0);
