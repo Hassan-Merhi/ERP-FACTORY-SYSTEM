@@ -185,6 +185,86 @@ describe("Rental payment accounting and reconciliation", () => {
     expect(result.counts.H_unsettledAccrualPayment).toBe(0);
   });
 
+  it("recognizes a partially prepaid month atomically when an additional due payment arrives", async () => {
+    const { createRentalPaymentGroup } = await import("../server/services/rental/rentalPaymentPostingService");
+    const [contract] = await q(
+      "SELECT start_date::text,rental_amount FROM property_contracts WHERE id=$1",
+      [testContractId]
+    );
+    const base = {
+      companyId: ctx.companyId,
+      contractCompanyId: ctx.companyId,
+      module: "ERP" as const,
+      contract: {
+        id: testContractId,
+        companyId: ctx.companyId,
+        unitId: testUnitId,
+        rentalAmount: String(contract.rental_amount),
+        startDate: String(contract.start_date),
+      },
+      unit: { unitNumber: "T-101", unitType: "SHOP", locationGroup: "Test Group" },
+      cashAccountId: ctx.cashAccountId,
+      currency: "USD",
+      exchangeRate: "1",
+      notes: null,
+      shopExpenseAccountName: "Rent Expense - ERP Shops",
+      incomeAccountName: "Rental Income - ERP",
+      scheduleFuturePayment: false,
+    };
+    // Current month $500 due; another $200 goes to next month's prepaid asset.
+    const first = await createRentalPaymentGroup({
+      ...base, amount: "700", paymentDate: todayStr(), clientDate: todayStr(),
+    });
+    expect(first.scheduled).toBe(false);
+
+    const next = new Date(todayStr() + "T00:00:00Z");
+    next.setUTCMonth(next.getUTCMonth() + 1, 2);
+    const nextDay = next.toISOString().slice(0, 10);
+    const nextYear = next.getUTCFullYear();
+    const nextMonth = next.getUTCMonth() + 1;
+    const before = await q(
+      `SELECT expected_amount,paid_amount,used_prepaid_account,accrual_voucher_id
+       FROM property_monthly_ledger
+       WHERE company_id=$1 AND contract_id=$2 AND year=$3 AND month=$4`,
+      [ctx.companyId, testContractId, nextYear, nextMonth]
+    );
+    expect(before).toHaveLength(1);
+    expect(Number(before[0].paid_amount)).toBe(200);
+    expect(before[0].used_prepaid_account).toBe(true);
+    expect(before[0].accrual_voucher_id).toBeNull();
+
+    // Simulate the company's next business date in the direct posting service;
+    // no scheduler needs to run first, and nothing is posted twice.
+    const nextPayment = await createRentalPaymentGroup({
+      ...base, amount: "300", paymentDate: nextDay, clientDate: nextDay,
+    });
+    expect(nextPayment.scheduled).toBe(false);
+
+    const after = await q(
+      `SELECT paid_amount,accrual_voucher_id FROM property_monthly_ledger
+       WHERE company_id=$1 AND contract_id=$2 AND year=$3 AND month=$4`,
+      [ctx.companyId, testContractId, nextYear, nextMonth]
+    );
+    expect(Number(after[0].paid_amount)).toBe(500);
+    const postings = await q(
+      `SELECT la.name,ve.debit_amount,ve.credit_amount FROM voucher_entries ve
+       JOIN ledger_accounts la ON la.id=ve.ledger_account_id
+       WHERE ve.voucher_id=$1`,
+      [after[0].accrual_voucher_id]
+    );
+    expect(postings.filter((x: any) => x.name.includes("Rent Expense"))
+      .reduce((a: number, x: any) => a + Number(x.debit_amount), 0)).toBe(500);
+    expect(postings.filter((x: any) => x.name === "Prepaid Rent")
+      .reduce((a: number, x: any) => a + Number(x.credit_amount), 0)).toBe(200);
+    expect(postings.filter((x: any) => x.name === "Accrued Rent Payable")
+      .reduce((a: number, x: any) => a + Number(x.credit_amount), 0)).toBe(300);
+
+    const report = await runRentalReconciliation(ctx.companyId, "ERP", nextDay);
+    expect(report.balances.netOutstanding).toBe(0);
+    expect(report.balances.totalAccrualPayablePosted).toBe(0);
+    expect(report.counts.H_unsettledAccrualPayment).toBe(0);
+  });
+
   it("never treats a missing-voucher POSTED payment as actual booked settlement", async () => {
     const paymentDate = todayStr();
     const res = await createPayment({ amount: "200" });
