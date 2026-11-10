@@ -444,7 +444,16 @@ export async function finalizeCombinedInvoiceTx(
   }
   // Original charges may already be posted as pre-invoice charges; do not post
   // them again. Missing ones get exactly one engine source identity per charge.
-  const originalChargesVoucherIds:number[]=[];
+  // The final invoice must preserve ALL original charge voucher identities,
+  // not only vouchers created during Phase 8. Pre-posted charge vouchers are
+  // part of the same immutable combined invoice and must be guarded too.
+  const originalChargesVoucherIds:number[]=plan.originalCharges
+    .filter(c=>money(c.amount).gt(0) && c.alreadyPosted && c.voucherId!==null)
+    .map(c=>c.voucherId!);
+  if(new Set(originalChargesVoucherIds).size!==originalChargesVoucherIds.length){
+    raise("COMBINED_INVOICE_DUPLICATE_ORIGINAL_CHARGE_VOUCHER",
+      "Multiple original loading charges reference the same existing voucher; manual accounting reconciliation required");
+  }
   if(plan.originalCharges.some(c=>money(c.amount).gt(0) && !c.alreadyPosted)){
     const customerLedger=await customerLedgerAccountTx(tx,s.companyId,customerId);
     for(const c of plan.originalCharges){
