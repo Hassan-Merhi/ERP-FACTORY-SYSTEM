@@ -18,6 +18,9 @@ const legacyRevert = file("server/routes/factory/customer-orders/finalize-loadin
 const lifecycle = file("server/routes/factory/customer-orders/loadingDispatchLifecycleRoutes.ts");
 const baleRemoval = file("server/routes/factory/customer-orders/bale-scanning/remove.ts");
 const manualGuards = file("docs/sql/manual/2026-11-10-factory-dispatch-trip-financial-phase4-guards.sql");
+const voucherCorrection = file("server/services/accounting/voucherCorrection.ts");
+const voucherRetirement = file("server/services/accounting/voucherRetirement.ts");
+const voucherOwnership = file("server/services/factory/dispatchTripFinancialGuards.ts");
 
 const charge = (id: number, kind: TripChargeRow["kind"], amount: string): TripChargeRow => ({
   id, name: "charge" + id, kind, amount, currency: "USD", revision: 1,
@@ -86,6 +89,16 @@ describe("Factory trip financial finalization accounting contracts", () => {
     expect(posting).toContain("TRIP_CUSTOMER_CREDIT_RECONCILIATION_REQUIRED");
     expect(posting).toContain('"TRIP_POSTING_REVERSED"');
     expect(posting).toContain("mirroredUsdLines");
+  });
+
+  it("blocks generic voucher edits, reversals and retirement of finalized-truck vouchers", () => {
+    expect(voucherOwnership).toContain("isDispatchFinancialVoucherTx");
+    expect(voucherCorrection).toContain("DISPATCH_TRIP_VOUCHER_LOCKED");
+    expect(voucherRetirement).toContain("DISPATCH_TRIP_VOUCHER_LOCKED");
+    expect(manualGuards).toContain("factory_dispatch_source_voucher_guard");
+    expect(manualGuards).toContain("factory_dispatch_source_voucher_entries_guard");
+    expect(manualGuards).toContain("factory_dispatch_source_posting_identity_guard");
+    expect(posting).toContain("assertHardenedFinancialSchemaTx(tx)");
   });
 
   it("keeps all new financial tables under explicit company RLS", () => {
