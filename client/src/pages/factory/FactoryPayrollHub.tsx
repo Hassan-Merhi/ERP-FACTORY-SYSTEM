@@ -52,7 +52,7 @@ export default function FactoryPayrollHub() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="relative shrink-0 overflow-hidden border-b border-blue-500/15 bg-gradient-to-br from-blue-500/10 via-background to-background dark:border-slate-700/70 dark:from-[#111f3a] dark:via-[#0c1527] dark:to-background">
+      <div className="relative shrink-0 overflow-hidden border-b border-blue-500/15 bg-gradient-to-br from-blue-500/10 via-background to-background dark:border-slate-700/70 dark:from-[hsl(var(--factory-hue)_55%_15%)] dark:via-[hsl(var(--factory-hue)_53%_10%)] dark:to-background">
         <div aria-hidden="true" className="pointer-events-none absolute -right-20 -top-32 h-72 w-[50rem] rounded-full bg-blue-500/10 blur-3xl dark:bg-blue-600/20" />
         <div aria-hidden="true" className="pointer-events-none absolute right-0 top-12 h-px w-1/2 -rotate-12 bg-gradient-to-l from-blue-400/40 via-blue-400/10 to-transparent" />
         {/* Shared page-header grammar (accent bar, icon, subtitle) like the ERP and Properties pages. */}

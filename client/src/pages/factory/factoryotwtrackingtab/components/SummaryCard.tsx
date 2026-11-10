@@ -16,7 +16,7 @@ export function SummaryCard({
   helper?: string;
 }) {
   return (
-    <div className="group flex min-w-0 flex-col justify-between gap-3 overflow-hidden rounded-2xl border border-border/70 bg-card p-3.5 shadow-sm transition-colors hover:border-blue-500/25 dark:bg-[#101b2b] sm:p-4">
+    <div className="group flex min-w-0 flex-col justify-between gap-3 overflow-hidden rounded-2xl border border-border/70 bg-card p-3.5 shadow-sm transition-colors hover:border-blue-500/25 dark:bg-[hsl(var(--factory-hue)_46%_12%)] sm:p-4">
       <div className="flex items-start gap-3">
         <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl", accent ?? "bg-muted")}>
           {icon}

@@ -45,7 +45,7 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
     supplier.name.toLocaleLowerCase().includes(searchQuery)
   );
   return (
-    <div data-testid="factory-suppliers-directory" className="relative isolate space-y-5 rounded-3xl border border-slate-200/80 bg-gradient-to-br from-slate-50 via-white to-blue-50/50 p-4 shadow-sm sm:p-6 dark:border-[#1c3655] dark:from-[#07182c] dark:via-[#091729] dark:to-[#061322] dark:shadow-[0_18px_48px_rgba(0,0,0,0.22)]">
+    <div data-testid="factory-suppliers-directory" className="relative isolate space-y-5 rounded-3xl border border-slate-200/80 bg-gradient-to-br from-slate-50 via-white to-blue-50/50 p-4 shadow-sm sm:p-6 dark:border-[hsl(var(--factory-hue)_50%_22%)] dark:from-[hsl(var(--factory-hue)_73%_10%)] dark:via-[hsl(var(--factory-hue)_64%_10%)] dark:to-[hsl(var(--factory-hue)_70%_8%)] dark:shadow-[0_18px_48px_rgba(0,0,0,0.22)]">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center gap-3.5">
           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-blue-400/25 bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-[0_8px_24px_rgba(37,99,235,0.20)]">
@@ -67,7 +67,7 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
               placeholder="Search suppliers..."
               aria-label="Search suppliers"
               data-testid="input-search-suppliers"
-              className="h-10 w-full rounded-xl border-slate-200 bg-white pl-10 text-slate-900 placeholder:text-slate-400 dark:border-[#365171] dark:bg-[#0d2139] dark:text-white dark:placeholder:text-slate-400"
+              className="h-10 w-full rounded-xl border-slate-200 bg-white pl-10 text-slate-900 placeholder:text-slate-400 dark:border-[hsl(var(--factory-hue)_35%_33%)] dark:bg-[hsl(var(--factory-hue)_63%_14%)] dark:text-white dark:placeholder:text-slate-400"
             />
           </div>
           <Button
@@ -118,7 +118,7 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
 
       <div className="flex flex-wrap items-center gap-3">
         <Select value={model.activeFilter} onValueChange={(value) => model.setActiveFilter(value as SupplierFilter)}>
-          <SelectTrigger className="h-10 w-44 rounded-xl border-slate-200 bg-white dark:border-[#365171] dark:bg-[#0d2139]" data-testid="select-supplier-filter">
+          <SelectTrigger className="h-10 w-44 rounded-xl border-slate-200 bg-white dark:border-[hsl(var(--factory-hue)_35%_33%)] dark:bg-[hsl(var(--factory-hue)_63%_14%)]" data-testid="select-supplier-filter">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -130,7 +130,7 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
             <SelectItem value="has-foreign">Has Foreign Currency</SelectItem>
           </SelectContent>
         </Select>
-        <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 dark:border-[#365171] dark:bg-[#0d2139]">
+        <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 dark:border-[hsl(var(--factory-hue)_35%_33%)] dark:bg-[hsl(var(--factory-hue)_63%_14%)]">
           <Switch
             checked={model.listIncludeOtw}
             onCheckedChange={model.setListIncludeOtw}
@@ -192,7 +192,7 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
           return (
             <div
               key={supplier.id}
-              className="relative flex flex-col gap-3 overflow-hidden rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-sm transition-colors hover:border-blue-300 hover:bg-blue-50/50 lg:flex-row lg:items-center lg:gap-4 dark:border-[#28435f] dark:bg-[#101f33]/90 dark:hover:border-blue-500/50 dark:hover:bg-[#142b46]"
+              className="relative flex flex-col gap-3 overflow-hidden rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-sm transition-colors hover:border-blue-300 hover:bg-blue-50/50 lg:flex-row lg:items-center lg:gap-4 dark:border-[hsl(var(--factory-hue)_41%_26%)] dark:bg-[hsl(var(--factory-hue)_52%_13%)]/90 dark:hover:border-blue-500/50 dark:hover:bg-[hsl(var(--factory-hue)_56%_18%)]"
             >
               <div className={isBroker ? "absolute inset-y-3 left-0 w-1 rounded-r-full bg-emerald-500" : "absolute inset-y-3 left-0 w-1 rounded-r-full bg-blue-500"} aria-hidden="true" />
               <div className="flex min-w-0 flex-1 items-center gap-3 pl-1.5">
@@ -207,7 +207,7 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2 font-semibold text-slate-900 dark:text-white">
                     <span className="break-words">{supplier.name}</span>
-                    {isBroker && <Badge variant="secondary" className="border border-slate-200 bg-slate-100 text-slate-700 dark:border-[#456180] dark:bg-[#273b56] dark:text-slate-100">Broker</Badge>}
+                    {isBroker && <Badge variant="secondary" className="border border-slate-200 bg-slate-100 text-slate-700 dark:border-[hsl(var(--factory-hue)_30%_39%)] dark:bg-[hsl(var(--factory-hue)_38%_25%)] dark:text-slate-100">Broker</Badge>}
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 sm:text-sm dark:text-slate-300">
                     <span className="flex items-center gap-1">
@@ -425,9 +425,9 @@ function Metric({
   tone: "blue" | "emerald" | "violet";
 }) {
   const styles = {
-    blue: "border-blue-200 from-blue-50 to-white dark:border-blue-500/50 dark:from-[#10365a] dark:to-[#09263e]",
-    emerald: "border-emerald-200 from-emerald-50 to-white dark:border-emerald-500/50 dark:from-[#0b3939] dark:to-[#0b292e]",
-    violet: "border-violet-200 from-violet-50 to-white dark:border-violet-500/50 dark:from-[#342051] dark:to-[#201b43]",
+    blue: "border-blue-200 from-blue-50 to-white dark:border-blue-500/50 dark:from-[hsl(var(--factory-hue)_70%_21%)] dark:to-[hsl(var(--factory-hue)_75%_14%)]",
+    emerald: "border-emerald-200 from-emerald-50 to-white dark:border-emerald-500/50 dark:from-[#0b3939] dark:to-[hsl(var(--factory-hue)_61%_11%)]",
+    violet: "border-violet-200 from-violet-50 to-white dark:border-violet-500/50 dark:from-[hsl(var(--factory-hue)_43%_22%)] dark:to-[hsl(var(--factory-hue)_43%_18%)]",
   };
   const iconStyles = {
     blue: "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300",

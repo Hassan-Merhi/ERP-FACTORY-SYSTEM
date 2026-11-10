@@ -366,7 +366,7 @@ export default function ProductionComparison() {
   return (
     <div className="flex min-w-0 flex-col gap-4 p-3 sm:p-4 lg:p-5" data-testid="production-comparison-dashboard">
       {/* Header + preset buttons */}
-      <div className="relative overflow-hidden rounded-2xl border border-blue-500/20 bg-gradient-to-r from-blue-50 via-slate-50 to-indigo-50 p-4 dark:from-[#101d31] dark:via-[#111b2c] dark:to-[#161c35] sm:p-5">
+      <div className="relative overflow-hidden rounded-2xl border border-blue-500/20 bg-gradient-to-r from-blue-50 via-slate-50 to-indigo-50 p-4 dark:from-[hsl(var(--factory-hue)_51%_13%)] dark:via-[hsl(var(--factory-hue)_44%_12%)] dark:to-[hsl(var(--factory-hue)_41%_15%)] sm:p-5">
         <div className="pointer-events-none absolute -right-10 -top-16 h-48 w-72 rounded-full bg-blue-400/10 blur-3xl" />
         <div className="relative flex min-w-0 items-center gap-3 [&_[data-testid=page-header]]:mb-0 [&_[data-testid=page-header]]:w-full [&_[data-testid=page-header]]:border-none [&_[data-testid=page-header]]:pb-0">
           <PageHeader
@@ -528,7 +528,7 @@ export default function ProductionComparison() {
 
           {/* ── Mix by Supplier ── */}
           {(supplierBreakdownA.length > 0 || supplierBreakdownB.length > 0) && (
-            <div className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm dark:bg-[#101a29]">
+            <div className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm dark:bg-[hsl(var(--factory-hue)_44%_11%)]">
               {/* Supplier comparison; all financial fields obey cost visibility. */}
               <div className="flex flex-col gap-3 border-b border-border/70 bg-gradient-to-r from-blue-500/[0.05] to-violet-500/[0.04] px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex min-w-0 items-center gap-3">
@@ -570,7 +570,7 @@ export default function ProductionComparison() {
 
               <Table mobileLayout="cards" className="text-xs" wrapperClassName="overflow-x-auto">
                 <TableHeader>
-                  <TableRow className="bg-slate-100/80 hover:bg-slate-100/80 dark:bg-[#18283e] dark:hover:bg-[#18283e]">
+                  <TableRow className="bg-slate-100/80 hover:bg-slate-100/80 dark:bg-[hsl(var(--factory-hue)_44%_17%)] dark:hover:bg-[hsl(var(--factory-hue)_44%_17%)]">
                     <TableHead className="w-9">#</TableHead>
                     <TableHead className="min-w-[150px] font-semibold">Supplier</TableHead>
                     <TableHead className="min-w-[105px] text-right font-semibold text-blue-700 dark:text-sky-300">{labelA} · KG</TableHead>
@@ -745,7 +745,7 @@ export default function ProductionComparison() {
                   >
                     <thead>
                       {/* Group row */}
-                      <tr className="border-b border-border bg-blue-500/[0.055] dark:bg-[#15263b]">
+                      <tr className="border-b border-border bg-blue-500/[0.055] dark:bg-[hsl(var(--factory-hue)_48%_16%)]">
                         <th
                           rowSpan={2}
                           className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-muted-foreground min-w-[200px] border-r border-border/50 align-bottom"
@@ -790,7 +790,7 @@ export default function ProductionComparison() {
                         </th>
                       </tr>
                       {/* Sub-header row */}
-                      <tr className="border-b border-border bg-violet-500/[0.035] dark:bg-[#142238]">
+                      <tr className="border-b border-border bg-violet-500/[0.035] dark:bg-[hsl(var(--factory-hue)_47%_15%)]">
                         <th className="px-4 py-2 text-right text-xs font-semibold text-foreground whitespace-nowrap">
                           {labelA}
                         </th>

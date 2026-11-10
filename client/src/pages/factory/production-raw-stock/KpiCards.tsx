@@ -26,7 +26,7 @@ export function KpiCards({
 
   return (
     <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-3 lg:gap-4" data-testid="raw-production-kpis">
-      <div className="relative isolate min-w-0 overflow-hidden rounded-2xl border border-blue-200/80 bg-linear-to-br from-blue-50 via-card to-slate-50 p-4 shadow-sm transition-shadow hover:shadow-md dark:border-blue-400/20 dark:from-[#162433] dark:via-[#161e27] dark:to-[#182f47] sm:p-5">
+      <div className="relative isolate min-w-0 overflow-hidden rounded-2xl border border-blue-200/80 bg-linear-to-br from-blue-50 via-card to-slate-50 p-4 shadow-sm transition-shadow hover:shadow-md dark:border-blue-400/20 dark:from-[hsl(var(--factory-hue)_40%_14%)] dark:via-[hsl(var(--factory-hue)_28%_12%)] dark:to-[hsl(var(--factory-hue)_49%_19%)] sm:p-5">
         <div aria-hidden="true" className="pointer-events-none absolute -bottom-16 -right-14 -z-10 h-40 w-56 rounded-full bg-blue-400/10 blur-3xl dark:bg-blue-400/15" />
         <div className="flex min-w-0 items-start gap-3.5">
           <div className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-blue-300/60 bg-blue-500/10 shadow-sm dark:border-blue-400/20 dark:bg-blue-400/15">

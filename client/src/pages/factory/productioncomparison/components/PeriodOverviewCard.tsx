@@ -31,8 +31,8 @@ export function PeriodOverviewCard({ label, range, bales, kilograms, products, t
       className={cn(
         "relative isolate min-w-0 overflow-hidden rounded-2xl border p-4 shadow-sm sm:p-5",
         blue
-          ? "border-blue-500/25 bg-gradient-to-br from-blue-50 via-sky-50/60 to-blue-100/50 dark:from-[#10253d] dark:via-[#102039] dark:to-[#0e2d51]"
-          : "border-violet-500/25 bg-gradient-to-br from-violet-50 via-purple-50/50 to-violet-100/60 dark:from-[#231b3e] dark:via-[#1e1b34] dark:to-[#2b1a48]"
+          ? "border-blue-500/25 bg-gradient-to-br from-blue-50 via-sky-50/60 to-blue-100/50 dark:from-[hsl(var(--factory-hue)_58%_15%)] dark:via-[hsl(var(--factory-hue)_56%_14%)] dark:to-[hsl(var(--factory-hue)_71%_19%)]"
+          : "border-violet-500/25 bg-gradient-to-br from-violet-50 via-purple-50/50 to-violet-100/60 dark:from-[hsl(var(--factory-hue)_39%_17%)] dark:via-[hsl(var(--factory-hue)_32%_15%)] dark:to-[hsl(var(--factory-hue)_47%_19%)]"
       )}
     >
       <div className={cn("pointer-events-none absolute -right-10 -top-10 h-36 w-36 rounded-full blur-3xl", blue ? "bg-blue-400/15" : "bg-violet-400/15")} />

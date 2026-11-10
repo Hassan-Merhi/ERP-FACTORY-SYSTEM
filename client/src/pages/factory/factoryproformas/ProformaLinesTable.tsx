@@ -101,7 +101,7 @@ export function ProformaLinesTable({
   return (
     <div className="bg-card">
       <Table mobileLayout="cards" wrapperClassName="max-h-[440px] overflow-auto">
-        <TableHeader className="sticky top-0 z-30 bg-violet-50 dark:bg-[#241c3d]">
+        <TableHeader className="sticky top-0 z-30 bg-violet-50 dark:bg-[hsl(var(--factory-hue)_37%_17%)]">
           <TableRow className="border-b border-violet-500/20">
             <TableHead className="text-[11px] uppercase tracking-wider text-violet-800 dark:text-violet-200 font-bold">
               Article Code

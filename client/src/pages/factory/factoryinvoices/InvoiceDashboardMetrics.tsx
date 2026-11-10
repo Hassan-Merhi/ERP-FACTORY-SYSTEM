@@ -20,11 +20,11 @@ function Card({
   tone: "blue" | "green" | "amber" | "violet" | "cyan";
 }) {
   const styles = {
-    blue: ["border-blue-500/30 dark:from-[#102847] dark:to-[#12233e]", "bg-blue-500/15 text-blue-700 dark:text-blue-300"],
+    blue: ["border-blue-500/30 dark:from-[hsl(var(--factory-hue)_63%_17%)] dark:to-[hsl(var(--factory-hue)_55%_16%)]", "bg-blue-500/15 text-blue-700 dark:text-blue-300"],
     green: ["border-emerald-500/30 dark:from-[#10352d] dark:to-[#132b2d]", "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"],
     amber: ["border-amber-500/30 dark:from-[#382b19] dark:to-[#262622]", "bg-amber-500/15 text-amber-700 dark:text-amber-300"],
-    violet: ["border-violet-500/30 dark:from-[#2c1b42] dark:to-[#221b36]", "bg-violet-500/15 text-violet-700 dark:text-violet-300"],
-    cyan: ["border-cyan-500/30 dark:from-[#122d45] dark:to-[#17253d]", "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300"],
+    violet: ["border-violet-500/30 dark:from-[hsl(var(--factory-hue)_42%_18%)] dark:to-[hsl(var(--factory-hue)_33%_16%)]", "bg-violet-500/15 text-violet-700 dark:text-violet-300"],
+    cyan: ["border-cyan-500/30 dark:from-[hsl(var(--factory-hue)_59%_17%)] dark:to-[hsl(var(--factory-hue)_45%_16%)]", "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300"],
   } as const;
   const [border, iconClass] = styles[tone];
   return (

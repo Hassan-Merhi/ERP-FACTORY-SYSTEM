@@ -48,7 +48,7 @@ function Metric({
   return (
     <div
       className={
-        "relative min-w-0 overflow-hidden rounded-xl border bg-card px-3 py-3 shadow-sm dark:bg-[#102036] " + border
+        "relative min-w-0 overflow-hidden rounded-xl border bg-card px-3 py-3 shadow-sm dark:bg-[hsl(var(--factory-hue)_54%_14%)] " + border
       }
     >
       <div className="flex min-w-0 items-center gap-2.5">
@@ -95,7 +95,7 @@ export function ShippingDashboardOverview({
 
   return (
     <div className="space-y-3">
-      <div className="relative overflow-hidden rounded-2xl border border-blue-500/20 bg-gradient-to-r from-blue-50 via-slate-50 to-violet-50 p-3.5 dark:from-[#0d2039] dark:via-[#101c34] dark:to-[#1a1640] sm:p-4">
+      <div className="relative overflow-hidden rounded-2xl border border-blue-500/20 bg-gradient-to-r from-blue-50 via-slate-50 to-violet-50 p-3.5 dark:from-[hsl(var(--factory-hue)_63%_14%)] dark:via-[hsl(var(--factory-hue)_53%_13%)] dark:to-[hsl(var(--factory-hue)_49%_17%)] sm:p-4">
         <div className="pointer-events-none absolute -right-6 -top-10 h-28 w-64 rounded-full bg-blue-500/10 blur-2xl" />
         <div className="relative flex flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">

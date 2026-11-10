@@ -28,7 +28,7 @@ export function CustomerLoadingColumnsDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md overflow-hidden rounded-2xl border-slate-200 p-0 dark:border-slate-700">
-        <DialogHeader className="border-b bg-gradient-to-r from-indigo-50 to-violet-50 px-5 py-4 dark:border-slate-700 dark:from-[#1a2e50] dark:to-[#27264b]">
+        <DialogHeader className="border-b bg-gradient-to-r from-indigo-50 to-violet-50 px-5 py-4 dark:border-slate-700 dark:from-[hsl(var(--factory-hue)_51%_21%)] dark:to-[hsl(var(--factory-hue)_33%_22%)]">
           <DialogTitle className="text-lg font-bold">Visible Columns</DialogTitle>
           <DialogDescription>Choose which columns to show. Your preferences are saved in this browser.</DialogDescription>
         </DialogHeader>

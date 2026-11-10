@@ -74,18 +74,18 @@ export default function FactoryInvoicing() {
       <div
         className={
           activeTab === "pending"
-            ? "shrink-0 border-b border-sky-200/60 bg-gradient-to-r from-slate-50 via-blue-50/80 to-violet-50/70 dark:border-sky-800/50 dark:from-[#0b1930] dark:via-[#0d2341] dark:to-[#241c48]"
+            ? "shrink-0 border-b border-sky-200/60 bg-gradient-to-r from-slate-50 via-blue-50/80 to-violet-50/70 dark:border-sky-800/50 dark:from-[hsl(var(--factory-hue)_63%_12%)] dark:via-[hsl(var(--factory-hue)_67%_15%)] dark:to-[hsl(var(--factory-hue)_44%_20%)]"
             : "shrink-0 border-b border-border/70 bg-background"
         }
       >
         <div
           className={
             activeTab === "invoices"
-              ? "mx-3 mt-2 rounded-2xl border border-blue-500/20 bg-gradient-to-r from-emerald-500/[0.08] via-blue-500/[0.07] to-violet-500/[0.08] px-3 pt-3 dark:from-[#0b2b32] dark:via-[#0d2038] dark:to-[#1b1c39] sm:mx-4 sm:px-4"
+              ? "mx-3 mt-2 rounded-2xl border border-blue-500/20 bg-gradient-to-r from-emerald-500/[0.08] via-blue-500/[0.07] to-violet-500/[0.08] px-3 pt-3 dark:from-[hsl(var(--factory-hue)_64%_12%)] dark:via-[hsl(var(--factory-hue)_62%_14%)] dark:to-[hsl(var(--factory-hue)_36%_16%)] sm:mx-4 sm:px-4"
               : activeTab === "proformas"
-                ? "mx-3 mt-2 rounded-2xl border border-violet-500/20 bg-gradient-to-r from-violet-500/[0.09] via-indigo-500/[0.06] to-fuchsia-500/[0.08] px-3 pt-3 dark:from-[#1a1535] dark:via-[#101b35] dark:to-[#22143d] sm:mx-4 sm:px-4"
+                ? "mx-3 mt-2 rounded-2xl border border-violet-500/20 bg-gradient-to-r from-violet-500/[0.09] via-indigo-500/[0.06] to-fuchsia-500/[0.08] px-3 pt-3 dark:from-[hsl(var(--factory-hue)_43%_15%)] dark:via-[hsl(var(--factory-hue)_54%_14%)] dark:to-[hsl(var(--factory-hue)_51%_16%)] sm:mx-4 sm:px-4"
                 : activeTab === "pending"
-                  ? "mx-3 mt-2 rounded-2xl border border-blue-500/20 bg-gradient-to-r from-sky-500/[0.08] via-blue-500/[0.08] to-violet-500/[0.08] px-3 pt-3 dark:from-[#0b2e50] dark:via-[#0c2442] dark:to-[#29204c] sm:mx-4 sm:px-4"
+                  ? "mx-3 mt-2 rounded-2xl border border-blue-500/20 bg-gradient-to-r from-sky-500/[0.08] via-blue-500/[0.08] to-violet-500/[0.08] px-3 pt-3 dark:from-[hsl(var(--factory-hue)_76%_18%)] dark:via-[hsl(var(--factory-hue)_69%_15%)] dark:to-[hsl(var(--factory-hue)_41%_21%)] sm:mx-4 sm:px-4"
                   : "px-4 pt-3"
           }
         >

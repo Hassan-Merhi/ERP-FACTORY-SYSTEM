@@ -140,7 +140,7 @@ export function Metric({
   emphasis?: "default" | "good" | "warning";
 }) {
   return (
-    <Card className="border-slate-200 bg-white/95 dark:border-blue-500/20 dark:bg-[#101c34]">
+    <Card className="border-slate-200 bg-white/95 dark:border-blue-500/20 dark:bg-[hsl(var(--factory-hue)_53%_13%)]">
       <CardContent className="flex items-center justify-between gap-2 p-3 sm:p-4">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
@@ -213,7 +213,7 @@ export function Findings({
     );
 
   return (
-    <Card className="min-w-0 border-slate-200 dark:border-blue-500/20 dark:bg-[#101c34]">
+    <Card className="min-w-0 border-slate-200 dark:border-blue-500/20 dark:bg-[hsl(var(--factory-hue)_53%_13%)]">
       <CardContent className="space-y-3 p-4">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="flex min-w-0 items-start gap-2">
@@ -226,7 +226,7 @@ export function Findings({
           <Badge variant="secondary">{printNumber(items.length)}</Badge>
         </div>
         {items.length === 0 ? (
-          <div className="rounded-lg bg-slate-50 p-4 text-sm text-muted-foreground dark:bg-[#0b162a]">
+          <div className="rounded-lg bg-slate-50 p-4 text-sm text-muted-foreground dark:bg-[hsl(var(--factory-hue)_58%_10%)]">
             No{" "}
             {kind === "missing"
               ? "missing references"
@@ -241,7 +241,7 @@ export function Findings({
           <>
             <div className="max-h-[420px] overflow-x-auto overflow-y-auto rounded-lg border dark:border-slate-700">
               <table className="w-full min-w-[480px] text-left text-xs">
-                <thead className="sticky top-0 bg-slate-100 text-muted-foreground dark:bg-[#0b162a]">
+                <thead className="sticky top-0 bg-slate-100 text-muted-foreground dark:bg-[hsl(var(--factory-hue)_58%_10%)]">
                   <tr>
                     <th className="px-3 py-2">Bale reference</th>
                     <th className="px-3 py-2">Difference</th>

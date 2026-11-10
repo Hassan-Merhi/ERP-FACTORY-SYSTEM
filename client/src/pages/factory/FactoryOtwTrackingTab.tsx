@@ -257,7 +257,7 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
 
   return (
     <div className="flex min-w-0 flex-col gap-4 pb-6">
-      <header className="relative isolate overflow-hidden rounded-2xl border border-blue-200/50 bg-gradient-to-r from-slate-50 via-blue-50/70 to-sky-100/60 p-5 shadow-sm dark:border-blue-400/15 dark:from-[#0c192d] dark:via-[#0e2037] dark:to-[#0b2641] sm:p-6">
+      <header className="relative isolate overflow-hidden rounded-2xl border border-blue-200/50 bg-gradient-to-r from-slate-50 via-blue-50/70 to-sky-100/60 p-5 shadow-sm dark:border-blue-400/15 dark:from-[hsl(var(--factory-hue)_58%_11%)] dark:via-[hsl(var(--factory-hue)_59%_14%)] dark:to-[hsl(var(--factory-hue)_71%_15%)] sm:p-6">
         <div className="pointer-events-none absolute -right-12 -top-12 h-52 w-72 rounded-full bg-blue-500/15 blur-3xl" />
         <Ship className="pointer-events-none absolute -bottom-4 right-10 hidden h-36 w-36 text-blue-500/10 lg:block" strokeWidth={1} />
         <div className="relative flex flex-wrap items-center justify-between gap-4">
@@ -405,7 +405,7 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
         ) : (
           <Table mobileLayout="cards" className="text-xs whitespace-nowrap" wrapperClassName="overflow-x-auto">
             <TableHeader className="sticky top-0 z-10">
-              <TableRow className="bg-slate-100/90 hover:bg-slate-100/90 dark:bg-[#15273e] dark:hover:bg-[#15273e]">
+              <TableRow className="bg-slate-100/90 hover:bg-slate-100/90 dark:bg-[hsl(var(--factory-hue)_49%_16%)] dark:hover:bg-[hsl(var(--factory-hue)_49%_16%)]">
                 <TableHead className="w-10 font-semibold">#</TableHead>
                 <TableHead className="font-semibold">Container #</TableHead>
                 <TableHead className="font-semibold">Supplier</TableHead>

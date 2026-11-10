@@ -57,7 +57,7 @@ function ScanControls({ model }: { model: FactoryContainerLoadingScanModel }) {
   if (!model.orderId) return null;
 
   return (
-    <div className="mb-4 rounded-2xl border border-blue-100/80 bg-blue-50/40 p-3 dark:border-blue-500/20 dark:bg-[#0b1a31]/70 sm:p-4" data-testid="container-loading-scan-controls">
+    <div className="mb-4 rounded-2xl border border-blue-100/80 bg-blue-50/40 p-3 dark:border-blue-500/20 dark:bg-[hsl(var(--factory-hue)_63%_12%)]/70 sm:p-4" data-testid="container-loading-scan-controls">
       <div className="mb-3 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex items-center gap-2 text-sm font-semibold">
@@ -136,7 +136,7 @@ function ScanControls({ model }: { model: FactoryContainerLoadingScanModel }) {
           disabled={
             !model.orderId || !model.orderDetail || !model.selectedLocationId || model.addBaleMutation.isPending
           }
-          className={`h-14 min-w-0 rounded-xl border-blue-200/80 bg-white pl-12 font-mono text-base shadow-sm transition-all focus-visible:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500/30 dark:border-blue-500/25 dark:bg-[#0c172b] sm:text-lg ${model.scanInputClass}`}
+          className={`h-14 min-w-0 rounded-xl border-blue-200/80 bg-white pl-12 font-mono text-base shadow-sm transition-all focus-visible:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500/30 dark:border-blue-500/25 dark:bg-[hsl(var(--factory-hue)_56%_11%)] sm:text-lg ${model.scanInputClass}`}
           autoFocus
           data-testid="input-scan-code"
         />
@@ -162,7 +162,7 @@ function BaleGroups({
   if (model.orderedGroups.length === 0) {
     return (
       <div
-        className="relative flex min-h-[280px] flex-col items-center justify-center overflow-hidden rounded-[22px] border border-dashed border-blue-200 bg-gradient-to-b from-blue-50/80 to-white px-4 py-12 text-center text-muted-foreground dark:border-blue-500/35 dark:from-[#0d2447] dark:via-[#0b1c37] dark:to-[#0a1528]"
+        className="relative flex min-h-[280px] flex-col items-center justify-center overflow-hidden rounded-[22px] border border-dashed border-blue-200 bg-gradient-to-b from-blue-50/80 to-white px-4 py-12 text-center text-muted-foreground dark:border-blue-500/35 dark:from-[hsl(var(--factory-hue)_69%_16%)] dark:via-[hsl(var(--factory-hue)_67%_13%)] dark:to-[hsl(var(--factory-hue)_60%_10%)]"
         data-testid="text-no-bales"
       >
         <div aria-hidden="true" className="pointer-events-none absolute left-1/2 top-1/2 h-44 w-44 -translate-x-1/2 -translate-y-[70%] rounded-full bg-blue-400/10 blur-3xl dark:bg-blue-500/20" />
@@ -186,7 +186,7 @@ function BaleGroups({
       {model.orderedGroups.map((group) => (
         <div
           key={group.articleCode}
-          className="overflow-hidden rounded-xl border border-blue-100/80 bg-white/75 shadow-sm dark:border-blue-500/15 dark:bg-[#0e1b32]/80"
+          className="overflow-hidden rounded-xl border border-blue-100/80 bg-white/75 shadow-sm dark:border-blue-500/15 dark:bg-[hsl(var(--factory-hue)_56%_13%)]/80"
           data-testid={`group-article-${group.articleCode}`}
         >
           <button
@@ -285,7 +285,7 @@ function RemovalLog({ model }: { model: FactoryContainerLoadingScanModel }) {
   if (!orderId || baleRemovals.length === 0) return null;
 
   return (
-    <div className="mt-3 overflow-hidden rounded-2xl border border-blue-100/80 bg-white/90 dark:border-blue-500/20 dark:bg-[#101d34]/90">
+    <div className="mt-3 overflow-hidden rounded-2xl border border-blue-100/80 bg-white/90 dark:border-blue-500/20 dark:bg-[hsl(var(--factory-hue)_53%_13%)]/90">
       <button
         className="flex w-full items-center justify-between gap-2 px-4 py-3 text-sm font-medium transition-colors hover:bg-muted/30"
         onClick={() => model.setShowRemovalLog((v) => !v)}
@@ -385,7 +385,7 @@ export function ScannedBalesPanel({ model }: { model: FactoryContainerLoadingSca
   return (
     <div className="flex min-h-0 min-w-0 flex-col xl:w-[60%]">
       <div
-        className={`flex min-h-0 flex-1 flex-col overflow-hidden rounded-[22px] border border-blue-100/90 bg-white shadow-[0_18px_48px_-40px_rgba(30,64,175,0.75)] transition-all duration-300 dark:border-blue-500/25 dark:bg-[#101b30] ${
+        className={`flex min-h-0 flex-1 flex-col overflow-hidden rounded-[22px] border border-blue-100/90 bg-white shadow-[0_18px_48px_-40px_rgba(30,64,175,0.75)] transition-all duration-300 dark:border-blue-500/25 dark:bg-[hsl(var(--factory-hue)_50%_13%)] ${
           scanFlash === "success" ? "ring-2 ring-green-500/80" : scanFlash === "error" ? "ring-2 ring-red-500/80" : ""
         }`}
       >
@@ -395,7 +395,7 @@ export function ScannedBalesPanel({ model }: { model: FactoryContainerLoadingSca
               ? "bg-green-50 dark:bg-green-950/40"
               : scanFlash === "error"
                 ? "bg-red-50 dark:bg-red-950/30"
-                : "bg-gradient-to-r from-blue-50/90 via-white to-white dark:from-[#132848] dark:via-[#10213b] dark:to-[#101b30]"
+                : "bg-gradient-to-r from-blue-50/90 via-white to-white dark:from-[hsl(var(--factory-hue)_58%_18%)] dark:via-[hsl(var(--factory-hue)_57%_15%)] dark:to-[hsl(var(--factory-hue)_50%_13%)]"
           }`}
         >
           <div className="flex min-w-0 items-center gap-3">
@@ -466,7 +466,7 @@ export function ScannedBalesPanel({ model }: { model: FactoryContainerLoadingSca
           </div>
         </div>
 
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-gradient-to-b from-white to-slate-50/40 p-3 dark:from-[#0e1a30] dark:to-[#0b1528] sm:p-4">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-gradient-to-b from-white to-slate-50/40 p-3 dark:from-[hsl(var(--factory-hue)_55%_12%)] dark:to-[hsl(var(--factory-hue)_57%_10%)] sm:p-4">
           <ScanControls model={model} />
 
           {viewMode === "detailed" && lastScannedRef && (
