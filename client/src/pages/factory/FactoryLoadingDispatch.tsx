@@ -48,6 +48,7 @@ import { FACTORY_DISPATCH_TRIP_STATUS_LABELS, type FactoryDispatchTripStatus } f
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import FactoryLoadingDispatchScanner from "./FactoryLoadingDispatchScanner";
 import FactoryLoadingDispatchLifecycle from "./FactoryLoadingDispatchLifecycle";
+import FactoryLoadingDispatchFinance from "./FactoryLoadingDispatchFinance";
 
 interface OrderBale {
   id: number;
@@ -742,6 +743,16 @@ export default function FactoryLoadingDispatch() {
                       }}
                     />
                   </ErrorBoundary>
+                  <ErrorBoundary resetKey={"dispatch-finance-" + dispatchId}>
+                    <FactoryLoadingDispatchFinance
+                      key={dispatchId}
+                      orderId={orderId}
+                      dispatchId={dispatchId}
+                      companyId={companyId}
+                      status={selectedTrip.status}
+                      role={user?.currentRole ?? user?.role ?? ""}
+                    />
+                  </ErrorBoundary>
                 </div>
                 <div className="xl:col-span-2">
                   <FactoryLoadingDispatchScanner
@@ -764,7 +775,7 @@ export default function FactoryLoadingDispatch() {
         )}
 
         <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 pt-4 text-xs text-muted-foreground dark:border-slate-700">
-          <ShieldCheck className="h-4 w-4" /> Separate truck records · Same loading order · No stock or accounting
+          <ShieldCheck className="h-4 w-4" /> Separate truck records · Same loading order · Draft charge previews do not post stock or accounting
           changes
         </div>
       </div>
