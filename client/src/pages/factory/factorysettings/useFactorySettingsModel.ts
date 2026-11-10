@@ -264,7 +264,7 @@ export function useFactorySettingsModel() {
     },
   });
 
-  const { data: locations } = useQuery<Location[]>({ queryKey: ["/api/locations"] });
+  const { data: locations } = useQuery<Location[]>({ queryKey: companyQueryKey("/api/locations", selectedCompany?.id), enabled: Boolean(selectedCompany?.id) });
   const { data, isLoading } = useQuery<FactorySettingsData & FactoryCompanyUiSettings>({ queryKey: companyQueryKey("/api/factory/settings", selectedCompany?.id), enabled: Boolean(selectedCompany?.id) });
 
   useEffect(() => {
@@ -297,31 +297,32 @@ export function useFactorySettingsModel() {
   }, [data]);
 
   const { data: waChats = [], isLoading: waChatsLoading } = useQuery<WaChat[]>({
-    queryKey: ["/api/whatsapp/chats/pos"],
+    queryKey: companyQueryKey("/api/whatsapp/chats/pos", selectedCompany?.id),
     queryFn: async () => {
       const res = await factoryApiRequest("GET", "/api/whatsapp/chats/pos");
       if (!res.ok) throw new Error("Failed to load chats");
       return res.json();
     },
-    enabled: prodWaPickerOpen,
+    enabled: prodWaPickerOpen && Boolean(selectedCompany?.id),
     staleTime: 60_000,
     retry: false,
   });
 
   const { data: weeklyWaChats = [], isLoading: weeklyWaChatsLoading } = useQuery<WaChat[]>({
-    queryKey: ["/api/whatsapp/chats"],
+    queryKey: companyQueryKey("/api/whatsapp/chats", selectedCompany?.id),
     queryFn: async () => {
       const res = await factoryApiRequest("GET", "/api/whatsapp/chats");
       if (!res.ok) throw new Error("Failed to load chats");
       return res.json();
     },
-    enabled: weeklyWaPickerOpen,
+    enabled: weeklyWaPickerOpen && Boolean(selectedCompany?.id),
     staleTime: 60_000,
     retry: false,
   });
 
   const { data: attendanceWaSettings } = useQuery<{ attendanceWhatsappGroupId?: string | null }>({
-    queryKey: ["/api/factory/settings?scope=attendance"],
+    queryKey: companyQueryKey("/api/factory/settings?scope=attendance", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const res = await factoryApiRequest("GET", "/api/factory/settings?scope=attendance");
       if (!res.ok) throw new Error("Failed to load Attendance WhatsApp settings");
@@ -331,19 +332,20 @@ export function useFactorySettingsModel() {
   });
 
   const { data: attendanceWaChats = [], isLoading: attendanceWaChatsLoading } = useQuery<WaChat[]>({
-    queryKey: ["/api/whatsapp/chats"],
+    queryKey: companyQueryKey("/api/whatsapp/chats", selectedCompany?.id),
     queryFn: async () => {
       const res = await factoryApiRequest("GET", "/api/whatsapp/chats");
       if (!res.ok) throw new Error("Failed to load chats");
       return res.json();
     },
-    enabled: attendanceWaPickerOpen,
+    enabled: attendanceWaPickerOpen && Boolean(selectedCompany?.id),
     staleTime: 60_000,
     retry: false,
   });
 
   const { data: weeklyWaSettings } = useQuery<{ groupChatId: string; hasCredentials: boolean }>({
-    queryKey: ["/api/factory/weekly-report-wa-settings"],
+    queryKey: companyQueryKey("/api/factory/weekly-report-wa-settings", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
   });
 
   useEffect(() => {

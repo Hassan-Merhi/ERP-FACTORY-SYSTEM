@@ -1,5 +1,7 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import { factoryApiRequest } from "@/lib/factoryApi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -24,8 +26,10 @@ function getSeverityBadge(severity: string) {
 }
 
 export default function FactoryAlerts() {
+  const { selectedCompany } = useCompany();
   const alertsQuery = useQuery<Alert[]>({
-    queryKey: ["/api/factory/alerts"],
+    queryKey: companyQueryKey("/api/factory/alerts", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
   });
 
   const generateMutation = useMutation({

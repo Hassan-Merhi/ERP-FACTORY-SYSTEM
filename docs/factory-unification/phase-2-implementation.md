@@ -90,3 +90,21 @@ Additional source-level changes landed on the same branch:
 - `tests/factory-unification-phase2-employee-scoping.test.ts` added as a **source characterization test only; not executed**.
 
 **Validation actually performed:** GitHub post-write source fetches verified scoped query expressions and imports. Git transport and a runnable checkout were unavailable; TypeScript, Vitest, the repo-wide audit tool, browser, API and real-role checks **were not executed**. This is not an exhaustive audit. Other Factory and shared-domain modules still require review, and the A→B→A delayed-query/active-edit acceptance test remains open. **Phase 2 remains IN PROGRESS / NOT FULLY VERIFIED**. No CI or merge.
+
+
+## 2026-11-10 — merged-main cache hardening continuation
+
+After Factory Unification PR #3078 merged, additional targeted Phase 2 source repairs were committed **directly to `main`**:
+
+- Company-aware reads and disabled no-company queries in Factory Alerts, Waste, Price List, Customer Logos, Contacts, Customers, Production Summary, and shared Bale Products.
+- Stock Entry History now scopes access response to the selected company before permission decisions; its paginated history, worker picker, staff targets, group details, and imperative group cache lookup use selected-company keys.
+- Bale-products financial display now fails closed when permission access is missing/mismatched, including explicit `hideAllCosts`; this is UI defense-in-depth and not server security.
+- The V2 and V3 fallback stock-allocation screens now use selected-company cache keys and disabled no-company reads; they remain available for compatibility.
+- Factory Settings uses company-scoped location/attendance/weekly-report/WhatsApp chat reads; existing setting mutation endpoints unchanged.
+- Factory Invoice Create and Factory POS read caches for customer orders, customers, stock/location, proformas, ledger accounts and sales are company-scoped; POS clears unsaved local cart/account/location/edit state when company changes.
+- Shared label-design palette reads use company-scoped keys. Waste and Customer Logos cache invalidations were adjusted to match the new keys, preserving URL-first semantics for legacy prefix invalidators.
+- Source characterization test `tests/factory-unification-phase2-main-hardening.test.ts` was authored and expanded; **not run**.
+
+**Validation performed:** GitHub source-file reads and successful authenticated write commits only. **Not performed:** local checkout, static analyzer execution, TypeScript, Vitest, browser, actual A→B→A transitions, delayed response race, live 200/403 matrix, or backend security test. Additional URL-only Factory keys still appear in GitHub source searches (e.g. Mix Batches, raw-stock dialogs, legacy/location modules). A runtime environment with company-role fixtures is necessary for certification. Prior work should not be represented as formally tested. The requirement to keep CI disabled was respected in this execution; no CI workflow was manually started.
+
+**Phase 2 status: NOT FULLY DONE — repository-wide audit and runtime/security gates remain open.**

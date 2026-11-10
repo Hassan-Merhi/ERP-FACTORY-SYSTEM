@@ -272,7 +272,7 @@ export default function FactoryLoadingDispatchLifecycle({
   return (
     <>
       <Card
-        className="border-blue-200 bg-white dark:border-blue-500/30 dark:bg-[#101c34]"
+        className="border-blue-200 bg-white dark:border-blue-500/30 dark:bg-[hsl(var(--factory-hue)_53%_13%)]"
         data-testid="dispatch-lifecycle"
       >
         <CardContent className="space-y-3 p-4">
@@ -431,7 +431,7 @@ export default function FactoryLoadingDispatchLifecycle({
                     {history.data?.events?.slice(0, 40).map((event) => (
                       <div
                         key={String(event.id)}
-                        className="flex flex-wrap justify-between gap-2 rounded-lg bg-slate-50 p-2 text-xs dark:bg-[#0a172c]"
+                        className="flex flex-wrap justify-between gap-2 rounded-lg bg-slate-50 p-2 text-xs dark:bg-[hsl(var(--factory-hue)_63%_11%)]"
                       >
                         <span className="font-medium">{event.eventType.replace(/_/g, " ")}</span>
                         <span className="text-muted-foreground">
@@ -490,7 +490,7 @@ export default function FactoryLoadingDispatchLifecycle({
                     ["Unexpected", fmt(s?.unexpectedBales)],
                   ] as const
                 ).map(([name, value]) => (
-                  <div className="rounded-lg bg-slate-50 p-2.5 dark:bg-[#0b162a]" key={name}>
+                  <div className="rounded-lg bg-slate-50 p-2.5 dark:bg-[hsl(var(--factory-hue)_58%_10%)]" key={name}>
                     <p className="text-[11px] text-muted-foreground">{name}</p>
                     <p className="mt-1 font-mono text-lg font-bold">{value}</p>
                   </div>

@@ -2,6 +2,8 @@ import { TabsList, PillTabButton } from "@/components/ui/tabs";
 import type { ClientErrorLike } from "@/lib/clientError";
 // LEGACY — Stock Allocation V3. Superseded by FactoryStockAllocationV5. Kept as fallback only. Route: /factory/stock-allocation-v3 (not in sidebar).
 import { useState } from "react";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +32,7 @@ import { CreateLoadDialog } from "./factorystockallocationv3/components/CreateLo
 // ─────────────────────── Types ───────────────────────
 
 export default function FactoryStockAllocationV3() {
+  const { selectedCompany } = useCompany();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<Tab>("overview");
   const [scanningLoad, setScanningLoad] = useState<V3Load | null>(null);
@@ -38,27 +41,32 @@ export default function FactoryStockAllocationV3() {
 
   // Queries
   const { data: stockRows = [], isLoading: stockLoading } = useQuery<StockRow[]>({
-    queryKey: ["/api/factory/v3/stock-overview"],
+    queryKey: companyQueryKey("/api/factory/v3/stock-overview", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
   });
 
   const { data: expectedLoads = [] } = useQuery<V3Load[]>({
-    queryKey: ["/api/factory/v3/loads", "expected_to_load"],
+    queryKey: companyQueryKey("/api/factory/v3/loads", selectedCompany?.id, "expected_to_load"),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: () =>
       fetch("/api/factory/v3/loads?status=expected_to_load", { credentials: "include" }).then((r) => r.json()),
   });
 
   const { data: loadingLoads = [] } = useQuery<V3Load[]>({
-    queryKey: ["/api/factory/v3/loads", "loading"],
+    queryKey: companyQueryKey("/api/factory/v3/loads", selectedCompany?.id, "loading"),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: () => fetch("/api/factory/v3/loads?status=loading", { credentials: "include" }).then((r) => r.json()),
   });
 
   const { data: finalizedLoads = [] } = useQuery<V3Load[]>({
-    queryKey: ["/api/factory/v3/loads", "finalized"],
+    queryKey: companyQueryKey("/api/factory/v3/loads", selectedCompany?.id, "finalized"),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: () => fetch("/api/factory/v3/loads?status=finalized", { credentials: "include" }).then((r) => r.json()),
   });
 
   const { data: proformas = [] } = useQuery<Proforma[]>({
-    queryKey: ["/api/factory/v3/proformas"],
+    queryKey: companyQueryKey("/api/factory/v3/proformas", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
   });
 
   // KPI totals

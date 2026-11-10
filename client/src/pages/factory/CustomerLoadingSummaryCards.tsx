@@ -22,7 +22,9 @@ export function CustomerLoadingSummaryCards({ summary, formatNumber }: CustomerL
 
   return (
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5" data-testid="customer-loading-summary">
-      <div className={`${cardBase} border-blue-200 bg-gradient-to-br from-blue-50 via-white to-blue-100/80 dark:border-blue-500/50 dark:from-[#183862] dark:via-[#142d50] dark:to-[#0f223d]`}>
+      <div
+        className={`${cardBase} border-blue-200 bg-gradient-to-br from-blue-50 via-white to-blue-100/80 dark:border-blue-500/50 dark:from-[hsl(var(--factory-hue)_61%_24%)] dark:via-[hsl(var(--factory-hue)_60%_20%)] dark:to-[hsl(var(--factory-hue)_61%_15%)]`}
+      >
         <div className="absolute -bottom-6 -right-4 opacity-[0.09] dark:opacity-20" aria-hidden="true">
           <Package className="h-28 w-28 text-blue-600 dark:text-blue-300" />
         </div>
@@ -38,7 +40,9 @@ export function CustomerLoadingSummaryCards({ summary, formatNumber }: CustomerL
         <div className="relative mt-1 text-xs text-blue-800/75 dark:text-blue-100/70">Products in catalog</div>
       </div>
 
-      <div className={`${cardBase} border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-emerald-100/80 dark:border-emerald-500/50 dark:from-[#104b39] dark:via-[#103c31] dark:to-[#0d2926]`}>
+      <div
+        className={`${cardBase} border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-emerald-100/80 dark:border-emerald-500/50 dark:from-[#104b39] dark:via-[#103c31] dark:to-[#0d2926]`}
+      >
         <div className="absolute -bottom-6 -right-4 opacity-[0.09] dark:opacity-20" aria-hidden="true">
           <PackageCheck className="h-28 w-28 text-emerald-600 dark:text-emerald-300" />
         </div>
@@ -54,7 +58,9 @@ export function CustomerLoadingSummaryCards({ summary, formatNumber }: CustomerL
         <div className="relative mt-1 text-xs text-emerald-800/75 dark:text-emerald-100/70">Previously loaded</div>
       </div>
 
-      <div className={`${cardBase} border-amber-200 bg-gradient-to-br from-amber-50 via-white to-orange-100/80 dark:border-amber-500/50 dark:from-[#60401f] dark:via-[#49311f] dark:to-[#30241e]`}>
+      <div
+        className={`${cardBase} border-amber-200 bg-gradient-to-br from-amber-50 via-white to-orange-100/80 dark:border-amber-500/50 dark:from-[#60401f] dark:via-[#49311f] dark:to-[#30241e]`}
+      >
         <div className="absolute -bottom-6 -right-4 opacity-[0.09] dark:opacity-20" aria-hidden="true">
           <PackageX className="h-28 w-28 text-amber-600 dark:text-amber-300" />
         </div>
@@ -70,7 +76,9 @@ export function CustomerLoadingSummaryCards({ summary, formatNumber }: CustomerL
         <div className="relative mt-1 text-xs text-amber-900/70 dark:text-amber-100/70">Not yet loaded</div>
       </div>
 
-      <div className={`${cardBase} border-violet-200 bg-gradient-to-br from-violet-50 via-white to-fuchsia-100/80 dark:border-violet-500/50 dark:from-[#432a70] dark:via-[#352452] dark:to-[#251c3e]`}>
+      <div
+        className={`${cardBase} border-violet-200 bg-gradient-to-br from-violet-50 via-white to-fuchsia-100/80 dark:border-violet-500/50 dark:from-[hsl(var(--factory-hue)_45%_30%)] dark:via-[hsl(var(--factory-hue)_39%_23%)] dark:to-[hsl(var(--factory-hue)_38%_18%)]`}
+      >
         <div className="relative flex items-start justify-between gap-2">
           <span className="text-sm font-medium text-violet-950 dark:text-violet-100">Product Coverage</span>
           <div className="rounded-xl bg-violet-100 p-2.5 text-violet-700 dark:bg-violet-400/20 dark:text-violet-200">
@@ -95,7 +103,9 @@ export function CustomerLoadingSummaryCards({ summary, formatNumber }: CustomerL
         </div>
       </div>
 
-      <div className={`${cardBase} border-cyan-200 bg-gradient-to-br from-cyan-50 via-white to-sky-100/80 dark:border-cyan-500/50 dark:from-[#124a5d] dark:via-[#103948] dark:to-[#102a38]`}>
+      <div
+        className={`${cardBase} border-cyan-200 bg-gradient-to-br from-cyan-50 via-white to-sky-100/80 dark:border-cyan-500/50 dark:from-[hsl(var(--factory-hue)_68%_22%)] dark:via-[hsl(var(--factory-hue)_64%_17%)] dark:to-[hsl(var(--factory-hue)_56%_14%)]`}
+      >
         <div className="absolute -bottom-6 -right-4 opacity-[0.09] dark:opacity-20" aria-hidden="true">
           <Truck className="h-28 w-28 text-cyan-600 dark:text-cyan-300" />
         </div>
