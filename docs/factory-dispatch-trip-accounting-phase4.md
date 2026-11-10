@@ -47,6 +47,8 @@ The original order's `customer_orders.invoice_number` remains **NULL** until Pha
 - Legacy `/unfinalize` refuses to revert an invoice with live posted dispatches.
 - **`syncFactoryInvoiceTx` itself** refuses the legacy full-invoice journal path for orders with posted trip financials, preventing bypass through other Factory services. Phase 8 must explicitly implement the one-invoice clearing path.
 - The final TablePlus SQL addendum adds DB-level guards for physical/closure scan changes, posted order bale mutation, and FORCE ROW LEVEL SECURITY for all 7 new financial tables.
+- Posted or reversed trip voucher headers, voucher entries and posting identities are protected against ordinary editing, retirement and generic voucher reversal. The shared `voucherCorrection` and `voucherRetirement` paths reject such mutations; final TablePlus SQL adds independent database triggers. This prevents a voucher editor from silently changing a trip that is still marked financially posted.
+- Posting and reversing **fail closed with HTTP 503** unless the actual TablePlus database has both RLS and the physical, bale and voucher/entry/identity protection triggers installed.
 
 ## Core files
 
@@ -58,6 +60,7 @@ The original order's `customer_orders.invoice_number` remains **NULL** until Pha
 - `server/routes/factory/customer-orders/loadingDispatchFinancialChargeModel.ts` — internal cost offset restricted to liability/payable/accrual rather than an unconfirmed cash payment.
 - `server/routes/factory/customer-orders/loadingDispatchFinancialChargeRoutes.ts` — updated account validation message.
 - `server/services/accounting/perpetualInventory/factoryInvoice.ts` — source-of-truth double-post safeguard.
+- `server/services/accounting/voucherCorrection.ts` and `voucherRetirement.ts` — prevent modifying or generic-reversing immutable trip-owned vouchers.
 - `server/routes/factory/customer-orders/finalize-loading/finalize.ts`, `unfinalize.ts`, `loadingDispatchLifecycleRoutes.ts`, `bale-scanning/remove.ts`, `server/routes/factoryRoutes.ts` — existing route safeguards.
 - `config/route-manifest.json` — registered the three additional Phase 4 endpoints.
 
