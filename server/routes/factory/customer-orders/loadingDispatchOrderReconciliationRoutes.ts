@@ -19,6 +19,7 @@ import {
   customerOrderBales, customerOrderBaleRemovals, factoryBales,
 } from "@shared/schema";
 import { isPostedDispatchBaleTx } from "../../../services/factory/dispatchTripFinancialGuards";
+import { assertFactoryDispatchReleaseReadyTx, DispatchReleaseNotReadyError } from "../../../services/factory/dispatchReleaseReadiness";
 import {
   OrderReconciliationError,
 } from "./loadingDispatchOrderReconciliationModel";
@@ -102,6 +103,9 @@ async function writeEvent(
   `);
 }
 function handle(res:Response,error:unknown) {
+  if(error instanceof DispatchReleaseNotReadyError){
+    return res.status(error.status).json({code:error.code,message:error.message,missing:error.report.missing});
+  }
   if(error instanceof OrderReconciliationError){
     return res.status(error.status).json({code:error.code,message:error.message});
   }
@@ -169,6 +173,7 @@ export function registerFactoryDispatchOrderReconciliationRoutes(app:Express):vo
         refusal("RECONCILIATION_SELECTION_INVALID","Duplicate or invalid bale links were selected",400);
       }
       const output=await db.transaction(async tx=>{
+        await assertFactoryDispatchReleaseReadyTx(tx,"RECONCILIATION");
         await locks(tx,s);
         if(await readOrderDispatchApprovalTx(tx,s)){
           refusal("RECONCILIATION_ALREADY_SIGNED","This order was already signed. A new reconciliation requires an authorized reversal.");
@@ -260,6 +265,7 @@ export function registerFactoryDispatchOrderReconciliationRoutes(app:Express):vo
         refusal("RECONCILIATION_CONFIRM_REQUIRED","Confirm all signed trip totals and scanned barcodes before approval",400);
       }
       const result=await db.transaction(async tx=>{
+        await assertFactoryDispatchReleaseReadyTx(tx,"RECONCILIATION");
         await locks(tx,s);
         const existing=await readOrderDispatchApprovalTx(tx,s,true);
         const evaluated=(await loadOrderDispatchReconciliationTx(tx,s)).result;
