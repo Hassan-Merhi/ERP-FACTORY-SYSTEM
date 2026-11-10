@@ -134,10 +134,13 @@ export async function getHadiLinkedRentControl(companyId: number, asOf: string):
         }).from(propertyMonthlyLedger).where(inArray(propertyMonthlyLedger.contractId, contractIds))
       : [];
 
-    const contractInfo = new Map([
-      ...linked.map(c => [c.id, { ...c, companyId: HADI_LINKED_RENT.propertiesCompanyId }]),
-      ...owned.map(c => [c.id, { ...c, tenantName: "", companyId }]),
-    ]);
+    const contractInfo = new Map<number, { companyId: number; startDate: string | Date }>();
+    for (const c of linked) {
+      contractInfo.set(c.id, { companyId: HADI_LINKED_RENT.propertiesCompanyId, startDate: c.startDate });
+    }
+    for (const c of owned) {
+      contractInfo.set(c.id, { companyId, startDate: c.startDate });
+    }
     const dueRows = monthly.filter(row => {
       const contract = contractInfo.get(row.contractId);
       return contract !== undefined
