@@ -6,6 +6,7 @@
  * ERP stock code/alias. Never resolve a Factory article by product name.
  */
 import { MoneyDecimal, sumMoney } from "../../lib/money";
+import type Decimal from "decimal.js";
 import { storage } from "../../storage";
 import type { StockItem, Supplier } from "@shared/schema";
 import type { PoImportPreviewContainer, PoImportPreviewItem } from "./po-import-preview";
@@ -62,7 +63,7 @@ export function parseFactoryTripPoIdentity(
     errors,
   };
 }
-function numericMoney(input: unknown): MoneyDecimal | null {
+function numericMoney(input: unknown): Decimal | null {
   if ((typeof input !== "number" && typeof input !== "string") ||
       !MONEY.test(String(input).trim())) return null;
   const value = new MoneyDecimal(String(input).trim());
@@ -124,16 +125,26 @@ export async function validateFactoryDispatchPoImport(
   }
   const amounts = container.charges;
   const chargeFields = ["freight", "surcharge", "fumigation", "discount", "documentCharges"] as const;
-  const checked: Record<string, MoneyDecimal> = {};
+  const checked: Record<string, Decimal> = {};
   for (const key of chargeFields) {
     const value = numericMoney(amounts[key] ?? 0);
     if (!value) errors.push(`ERP invoice ${key} must be a nonnegative two-decimal USD amount.`);
     else checked[key] = value;
   }
   const itemTotal = sumMoney(values);
-  const declaredGoods = numericMoney(container.itemsTotal);
-  const declaredCharges = numericMoney(container.chargesTotal);
-  const declaredTotal = numericMoney(container.grandTotal);
+  // The existing ERP parser sums numeric cells using JS numbers, so a sum
+  // such as 0.1 + 0.2 can be 0.30000000000000004. Round these computed
+  // totals to cents, while strictly validating the source line rates.
+  const roundedDeclared = (raw: unknown): Decimal | null => {
+    if ((typeof raw !== "number" && typeof raw !== "string") ||
+        !Number.isFinite(Number(raw))) return null;
+    const value = new MoneyDecimal(String(raw));
+    const rounded = value.toDecimalPlaces(2);
+    return value.minus(rounded).abs().lte("0.005") ? rounded : null;
+  };
+  const declaredGoods = roundedDeclared(container.itemsTotal);
+  const declaredCharges = roundedDeclared(container.chargesTotal);
+  const declaredTotal = roundedDeclared(container.grandTotal);
   const chargesTotal = checked.freight && checked.surcharge && checked.fumigation &&
     checked.discount && checked.documentCharges
     ? checked.freight.plus(checked.surcharge).plus(checked.fumigation)
@@ -141,15 +152,14 @@ export async function validateFactoryDispatchPoImport(
     : null;
   // chargesTotal can legitimately be negative for supplier discounts. It is
   // never the cost of a single article, just a container-level net adjustment.
-  const declaredNetCharges = new MoneyDecimal(String(container.chargesTotal));
+  const declaredNetCharges = declaredCharges;
   const computed = chargesTotal ? itemTotal.plus(chargesTotal) : null;
   if (!declaredGoods || !itemTotal.eq(declaredGoods)) errors.push("ERP PO item total does not match article quantities and purchase rates.");
-  if (!chargesTotal || !chargesTotal.eq(declaredNetCharges)) errors.push("ERP PO invoice charges do not reconcile.");
+  if (!chargesTotal || !declaredNetCharges || !chargesTotal.eq(declaredNetCharges)) errors.push("ERP PO invoice charges do not reconcile.");
   if (!declaredTotal || !computed || !computed.eq(declaredTotal) || !computed.gt(0)) {
     errors.push("ERP supplier invoice grand total is invalid or inconsistent.");
   }
   if ((amounts.otherCharges ?? 0) !== 0) errors.push("Factory dispatch PO files do not support Other Charges.");
-  if (declaredCharges === null && declaredNetCharges.gte(0)) errors.push("ERP PO net charge total is not valid.");
   return {
     identity: parsed.identity, errors, resolvedItems,
     goodsTotal: errors.length ? null : itemTotal.toFixed(2),
