@@ -21,6 +21,13 @@
 - No authorized authenticated running-app/browser session or screenshot evidence was available here. Do **not** mark light/dark/mobile visual QA as passed based on static assertions.
 - No CI workflow runs were returned for the newly committed change when checked.
 
+## Live deployment inspection (2026-11-10)
+
+- Render service `system` (`https://erp-pos-system-copy.onrender.com`) was live at commit `a38227c178b849c5a99b5b277024e8ab9e3cb4ef`, older than the Phase 4 commits. Its deployment is manually triggered; new Phase 4 code was **not** certified as deployed.
+- A read-only browser visit to that service redirected to `/login`. The visible username/password login screen gated Factory production, inventory and all internal routes.
+- No authorized signed-in browser context was available. Accordingly the Phase 4 cross-device visual matrix could not be executed. Do not treat viewing the login screen as successful Factory UI testing.
+- Tests remain committed but not executed with a captured test log in this session.
+
 ## Required browser acceptance matrix
 
 For each row, verify at **mobile 390px**, **tablet 768px**, and **desktop 1440px** in **light and dark mode**, including any open dialog/dropdown.
