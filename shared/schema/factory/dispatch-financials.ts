@@ -160,6 +160,7 @@ export const factoryDispatchTripExports = pgTable("factory_dispatch_trip_exports
   exportedAt: utcTime("exported_at").notNull().defaultNow(),
 }, (t) => ({
   exportUnique: uniqueIndex("factory_dispatch_trip_exports_content_uq").on(t.financialId, t.exportFingerprint),
+  financialOnce: uniqueIndex("factory_dispatch_trip_exports_financial_once_uq").on(t.financialId),
   containerUnique: uniqueIndex("factory_dispatch_trip_exports_container_uq").on(t.companyId, t.erpContainerNumber),
   orderIdx: index("factory_dispatch_trip_exports_order_idx").on(t.companyId, t.orderId),
   revisionValid: check("factory_dispatch_trip_exports_revision_ck", sql`${t.snapshotRevision} > 0`),
