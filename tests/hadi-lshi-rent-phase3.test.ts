@@ -4,6 +4,7 @@ import {
   classifyHadiRentDifference,
   isHadiHistoricAccrualRepair,
   isHadiProtectedRentMonth,
+  isFutureHadiLinkedRentMonth,
   positiveRentalDue,
 } from "../server/services/rental/hadiRentLedgerPolicy";
 import {
@@ -24,6 +25,16 @@ describe("HADI L'SHI Phase 3: protect verified historic rent", () => {
   it("matches HADI's verified $18,000 accrued liability to its $18,000 linked rent", () => {
     expect(classifyHadiRentDifference("18000", "18000", "0", 0))
       .toEqual({ difference: "0.00", status: "MATCH" });
+  });
+
+  it("protects the old months and enables only future HADI linked rent accrual", () => {
+    expect(isFutureHadiLinkedRentMonth(1, "ERP", true, 2026, 11)).toBe(false);
+    expect(isFutureHadiLinkedRentMonth(1, "ERP", true, 2026, 12)).toBe(true);
+    expect(isFutureHadiLinkedRentMonth(1, "ERP", true, 2027, 1)).toBe(true);
+    expect(isFutureHadiLinkedRentMonth(1, "ERP", false, 2026, 12)).toBe(false);
+    expect(isFutureHadiLinkedRentMonth(13, "PROPERTIES", true, 2026, 12)).toBe(false);
+    expect(isFutureHadiLinkedRentMonth(8, "ERP", true, 2026, 12)).toBe(false);
+    expect(isFutureHadiLinkedRentMonth(1, "ERP", true, 2026, 0)).toBe(false);
   });
 
   it("flags a linked Properties rent receipt that was not cleared from HADI payable", () => {
