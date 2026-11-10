@@ -103,7 +103,9 @@ export function accountAcceptsCharge(kind: TripChargeKind, accountType: string):
 
 export function accountAcceptsOffset(accountType: string): boolean {
   const type = accountType.trim().toLowerCase().replace(/[_-]/g, " ");
-  return /liability|payable|cash|bank|asset/.test(type);
+  // A draft internal expense is an accrued payable, not evidence that cash
+  // was paid. Explicit paid-expense settlement belongs to a later workflow.
+  return /liability|payable|accrual|clearing/.test(type);
 }
 
 /**
