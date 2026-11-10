@@ -81,6 +81,70 @@ CREATE UNIQUE INDEX IF NOT EXISTS factory_dispatch_final_invoice_number_uq
   ON public.factory_dispatch_order_consolidations (company_id,invoice_number)
   WHERE invoice_number IS NOT NULL;
 
+-- A signed final invoice has its own new clearing / COGS / original-charge
+-- voucher IDs. Unlike original FDTR truck vouchers (covered by Phase 4),
+-- these are only referenced by finalization_details and MUST also be locked.
+-- Otherwise a generic voucher editor could rewrite sales after the customer
+-- invoice is final without changing the immutable invoice receipt.
+CREATE OR REPLACE FUNCTION public.factory_dispatch_guard_final_vouchers()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+DECLARE
+  protected_old INTEGER;
+  protected_new INTEGER;
+  old_company INTEGER;
+  new_company INTEGER;
+BEGIN
+  IF TG_TABLE_NAME='voucher_entries' THEN
+    IF TG_OP<>'INSERT' THEN protected_old:=OLD.voucher_id; END IF;
+    IF TG_OP<>'DELETE' THEN protected_new:=NEW.voucher_id; END IF;
+  ELSIF TG_TABLE_NAME='accounting_posting_requests' THEN
+    IF TG_OP<>'INSERT' THEN protected_old:=OLD.voucher_id; END IF;
+    IF TG_OP<>'DELETE' THEN protected_new:=NEW.voucher_id; END IF;
+  ELSE
+    IF TG_OP<>'INSERT' THEN protected_old:=OLD.id; END IF;
+    IF TG_OP<>'DELETE' THEN protected_new:=NEW.id; END IF;
+  END IF;
+
+  IF protected_old IS NOT NULL THEN
+    SELECT company_id INTO old_company FROM vouchers WHERE id=protected_old;
+    IF old_company IS NOT NULL AND EXISTS (
+      SELECT 1 FROM public.factory_dispatch_order_consolidations c
+       WHERE c.company_id=old_company AND c.status='FINALIZED'
+         AND c.finalization_details->'voucherIds' @> jsonb_build_array(protected_old)
+    ) THEN
+      RAISE EXCEPTION 'Finalized Factory combined-invoice source voucher is immutable';
+    END IF;
+  END IF;
+  -- Also reject inserting/moving entries into a protected voucher.
+  IF protected_new IS NOT NULL AND protected_new IS DISTINCT FROM protected_old THEN
+    SELECT company_id INTO new_company FROM vouchers WHERE id=protected_new;
+    IF new_company IS NOT NULL AND EXISTS (
+      SELECT 1 FROM public.factory_dispatch_order_consolidations c
+       WHERE c.company_id=new_company AND c.status='FINALIZED'
+         AND c.finalization_details->'voucherIds' @> jsonb_build_array(protected_new)
+    ) THEN
+      RAISE EXCEPTION 'Cannot insert entries into an immutable Factory combined-invoice voucher';
+    END IF;
+  END IF;
+  IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+  RETURN NEW;
+END; $$;
+
+DROP TRIGGER IF EXISTS factory_dispatch_final_voucher_guard ON public.vouchers;
+CREATE TRIGGER factory_dispatch_final_voucher_guard
+  BEFORE UPDATE OR DELETE ON public.vouchers
+  FOR EACH ROW EXECUTE FUNCTION public.factory_dispatch_guard_final_vouchers();
+
+DROP TRIGGER IF EXISTS factory_dispatch_final_voucher_entries_guard ON public.voucher_entries;
+CREATE TRIGGER factory_dispatch_final_voucher_entries_guard
+  BEFORE INSERT OR UPDATE OR DELETE ON public.voucher_entries
+  FOR EACH ROW EXECUTE FUNCTION public.factory_dispatch_guard_final_vouchers();
+
+DROP TRIGGER IF EXISTS factory_dispatch_final_posting_identity_guard ON public.accounting_posting_requests;
+CREATE TRIGGER factory_dispatch_final_posting_identity_guard
+  BEFORE UPDATE OR DELETE ON public.accounting_posting_requests
+  FOR EACH ROW EXECUTE FUNCTION public.factory_dispatch_guard_final_vouchers();
+
 COMMIT;
 
 -- After applying, verify:
