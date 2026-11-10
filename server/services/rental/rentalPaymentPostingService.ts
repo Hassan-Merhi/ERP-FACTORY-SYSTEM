@@ -191,6 +191,9 @@ async function postGroupCore(
 
     let accrualAmt = new Decimal(0);
     let advanceAmt = new Decimal(0);
+    // A new due month is fully recognized at first partial payment, with the
+    // unpaid balance posted to AP; not just the small cash amount received.
+    let advanceExpectedAmt = new Decimal(0);
     let prepaidAmt = new Decimal(0);
 
     const accrualLedgerIds: number[] = [];
@@ -210,7 +213,9 @@ async function postGroupCore(
         let wasAccrued = false;
         if (alloc.ledgerRowId) {
           const evidence = (await tx.execute(sql`
-            SELECT ml.id, ml.notes, v.id IS NOT NULL AS accrual_live,
+            SELECT ml.id, ml.notes, ml.expected_amount, ml.paid_amount,
+              ml.used_prepaid_account, ml.used_advance_account, ml.accrual_voucher_id,
+              v.id IS NOT NULL AS accrual_live,
               EXISTS (
                 SELECT 1 FROM voucher_entries ve
                 JOIN ledger_accounts la ON la.id=ve.ledger_account_id
@@ -233,7 +238,12 @@ async function postGroupCore(
               AND ml.contract_id=${contract.id}
               AND ml.year=${alloc.forYear} AND ml.month=${alloc.forMonth}
             LIMIT 1
-          `)).rows as Array<{ id: number; notes: string | null; accrual_live: boolean; credited_payable: boolean }>;
+          `)).rows as Array<{
+            id: number; notes: string | null; accrual_live: boolean;
+            credited_payable: boolean; expected_amount: string; paid_amount: string;
+            used_prepaid_account: boolean; used_advance_account: boolean;
+            accrual_voucher_id: number | null;
+          }>;
           if (evidence.length !== 1) {
             throw new Error("RENTAL_PAYMENT_MONTH_LINK_CHANGED");
           }
@@ -243,6 +253,24 @@ async function postGroupCore(
             creditedAccruedPayable: evidence[0].credited_payable,
             recognitionHold: isRentRecognitionHeld(evidence[0].notes),
           });
+          if (!wasAccrued) {
+            // Do not silently treat deleted accruals, historical holds, or
+            // previously paid prepaid/advance months as new rent. They need
+            // existing-voucher review or normal scheduled recognition FIRST.
+            const lr = evidence[0];
+            if (isRentRecognitionHeld(lr.notes) ||
+                lr.accrual_voucher_id !== null ||
+                lr.used_prepaid_account || lr.used_advance_account ||
+                toMoney(lr.paid_amount).gt("0.005") ||
+                toMoney(lr.expected_amount).lt(chunk)) {
+              const error: RentalPostingError = new Error(
+                "RENTAL_MONTH_RECOGNITION_REQUIRES_REVIEW: cannot settle or re-accrue this existing month until its posted voucher is reconciled"
+              );
+              error.status = 409;
+              throw error;
+            }
+            advanceExpectedAmt = advanceExpectedAmt.plus(toMoney(lr.expected_amount));
+          }
         }
         if (wasAccrued) {
           accrualAmt = accrualAmt.plus(chunk);
@@ -258,11 +286,10 @@ async function postGroupCore(
     }
 
     const sumCheck = accrualAmt.plus(advanceAmt).plus(prepaidAmt);
-    if (sumCheck.lt(0.005) && new Decimal(totalAmountStr).gt(0.005)) {
-      advanceAmt = new Decimal(totalAmountStr);
-      for (const alloc of allocs) {
-        if (alloc.ledgerRowId) advanceLedgerIds.push(alloc.ledgerRowId);
-      }
+    if (sumCheck.minus(toMoney(totalAmountStr)).abs().gt("0.005")) {
+      const error: RentalPostingError = new Error("RENTAL_PAYMENT_CLASSIFICATION_AMOUNT_MISMATCH");
+      error.status = 409;
+      throw error;
     }
 
     // RENT- / ADV-REC- numbers are kept (deterministic, read by the payment
@@ -312,8 +339,19 @@ async function postGroupCore(
         description: recNarr,
         phase: "advance-recognition",
         lines: [
-          line(expId, "debit", advanceAmt.toFixed(2), recNarr),
+          // Recognize ALL due rent once, including the yet-unpaid portion.
+          // The new payment clears the advance asset. A later payment debits
+          // the credited AP rather than generating another expense voucher.
+          line(expId, "debit", advanceExpectedAmt.toFixed(2), recNarr),
           line(advId, "credit", advanceAmt.toFixed(2), recNarr),
+          ...(advanceExpectedAmt.minus(advanceAmt).gt("0.005")
+            ? [line(
+                await findOrCreateLedgerAccount(tx, companyId, "Accrued Rent Payable", "Liability", "ACCR-RENT-PAY"),
+                "credit",
+                advanceExpectedAmt.minus(advanceAmt).toFixed(2),
+                recNarr
+              )]
+            : []),
         ],
       });
       recognitionVoucherId = rv.id;
