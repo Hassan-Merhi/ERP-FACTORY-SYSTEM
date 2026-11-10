@@ -169,7 +169,6 @@ BEGIN
        OR NEW.grand_total IS DISTINCT FROM OLD.grand_total
        OR NEW.freight_amount IS DISTINCT FROM OLD.freight_amount
        OR NEW.other_charges_total IS DISTINCT FROM OLD.other_charges_total
-       OR NEW.base_currency IS DISTINCT FROM OLD.base_currency
        OR NEW.order_date IS DISTINCT FROM OLD.order_date
        OR NEW.total_qty_bales IS DISTINCT FROM OLD.total_qty_bales
        OR NEW.deleted_at IS DISTINCT FROM OLD.deleted_at
