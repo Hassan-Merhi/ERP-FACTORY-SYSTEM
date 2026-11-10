@@ -133,9 +133,9 @@ export default function FactoryLoadingDispatchCompare() {
     Boolean(financialReconciliation.data) &&
     !financialReconciliation.data?.approval &&
     financialReconciliation.data?.fingerprint !== undefined &&
-    financialReconciliation.data.summary.unshippedBales > 0 &&
-    financialReconciliation.data.summary.duplicateScans === 0 &&
-    financialReconciliation.data.summary.unexpectedScans === 0;
+    (financialReconciliation.data?.summary.unshippedBales ?? 0) > 0 &&
+    financialReconciliation.data?.summary.duplicateScans === 0 &&
+    financialReconciliation.data?.summary.unexpectedScans === 0;
   const selectedCurrent = selectedMissing.filter((id) => missingFromLoading.some((bale) => bale.orderBaleId === id));
   const selectedBales = missingFromLoading.filter((bale) => selectedCurrent.includes(bale.orderBaleId!));
   const selectedKg = selectedBales.reduce((sum, bale) => sum + (Number(bale.weightKg) || 0), 0);
@@ -444,8 +444,9 @@ export default function FactoryLoadingDispatchCompare() {
                     </>
                   )}
                   <p className="text-[11px] text-muted-foreground">
-                    Removal is restricted to Admin, Owner and Developer, and only for unscanned bales in active loading
-                    orders. It uses the regular audited loading correction and returns the removed bales to stock.
+                    Removal is restricted to Admin, Owner and Developer, requires an approval reason,
+                    and returns only unshipped bales to stock in one atomic transaction. No scanned/posted bale can be removed.
+                    After signing the final order reconciliation, all further removals are locked.
                   </p>
                 </CardContent>
               </Card>
