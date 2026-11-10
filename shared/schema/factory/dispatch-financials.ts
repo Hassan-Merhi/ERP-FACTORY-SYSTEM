@@ -87,6 +87,7 @@ export const factoryDispatchTripCharges = pgTable("factory_dispatch_trip_charges
   companyId: integer("company_id").notNull(),
   orderId: integer("order_id").notNull(),
   dispatchId: id("dispatch_id").notNull(),
+  revision: integer("revision").notNull().default(1),
   name: text("name").notNull(),
   kind: varchar("kind", { length: 16 }).notNull(),
   amount: money("amount").notNull(),
@@ -96,11 +97,13 @@ export const factoryDispatchTripCharges = pgTable("factory_dispatch_trip_charges
   erpChargeType: varchar("erp_charge_type", { length: 32 }),
   notes: text("notes"),
   postedVoucherId: integer("posted_voucher_id"),
+  lockedAt: utcTime("locked_at"),
   createdAt: utcTime("created_at").notNull().defaultNow(),
   updatedAt: utcTime("updated_at").notNull().defaultNow(),
 }, (t) => ({
   tripIdx: index("factory_dispatch_trip_charges_trip_idx").on(t.companyId, t.orderId, t.dispatchId),
   chargeKind: check("factory_dispatch_trip_charges_kind_ck", sql`${t.kind} IN ('BILLABLE', 'INTERNAL', 'DISCOUNT')`),
+  revisionValid: check("factory_dispatch_trip_charges_revision_ck", sql`${t.revision} > 0`),
   amountValid: check("factory_dispatch_trip_charges_amount_ck", sql`${t.amount} >= 0`),
 }));
 
