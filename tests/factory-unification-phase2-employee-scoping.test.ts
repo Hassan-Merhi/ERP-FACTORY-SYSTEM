@@ -3,8 +3,12 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { companyQueryKey } from "../client/src/lib/companyQueryScope";
 
+// Read with call arguments joined onto one line, so the assertions hold however
+// the formatter wraps a long companyQueryKey(...) call.
 const src = (name: string) =>
-  readFileSync(resolve(process.cwd(), "client/src/pages/factory", name), "utf8");
+  readFileSync(resolve(process.cwd(), "client/src/pages/factory", name), "utf8")
+    .replace(/\(\s*\n\s*/g, "(")
+    .replace(/,\s*\n\s*(?=\S)/g, ", ");
 
 describe("Factory Phase 2 employee company-scoped reads", () => {
   it("isolates employee attendance daily, employee, and picker records", () => {
