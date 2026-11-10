@@ -240,88 +240,126 @@ export default function FactoryInsurance() {
 
   return (
     <div className="space-y-5 px-3 pb-6 pt-3 sm:px-6 sm:pt-5">
-      <section className="relative overflow-hidden rounded-[26px] border border-blue-200/70 bg-gradient-to-br from-white via-blue-50/80 to-slate-50 shadow-sm dark:border-blue-500/25 dark:from-[#101f39] dark:via-[#10264a] dark:to-[#071427]">
-        <div aria-hidden="true" className="pointer-events-none absolute -right-24 -top-32 h-80 w-96 rounded-full bg-blue-400/15 blur-3xl dark:bg-blue-500/25" />
-        <div aria-hidden="true" className="pointer-events-none absolute bottom-0 right-0 h-px w-3/4 bg-gradient-to-l from-sky-400/70 via-blue-400/20 to-transparent" />
+      <section className="relative overflow-hidden rounded-[26px] border border-blue-200/70 bg-gradient-to-br from-white via-blue-50/80 to-slate-50 shadow-sm dark:border-blue-500/25 dark:from-[hsl(var(--factory-hue)_56%_14%)] dark:via-[hsl(var(--factory-hue)_64%_18%)] dark:to-[hsl(var(--factory-hue)_70%_9%)]">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -right-24 -top-32 h-80 w-96 rounded-full bg-blue-400/15 blur-3xl dark:bg-blue-500/25"
+        />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute bottom-0 right-0 h-px w-3/4 bg-gradient-to-l from-sky-400/70 via-blue-400/20 to-transparent"
+        />
         <div className="relative space-y-5 p-4 sm:p-6">
           <div className="flex items-center gap-4">
             <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-blue-400/30 bg-gradient-to-br from-sky-400 to-blue-700 text-white shadow-lg shadow-blue-600/20">
               <Shield className="h-7 w-7" aria-hidden="true" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-2xl font-bold tracking-tight text-slate-950 dark:text-white sm:text-3xl">Insurance</h2>
-              <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Manage insurance members and generate monthly entries</p>
+              <h2 className="text-2xl font-bold tracking-tight text-slate-950 dark:text-white sm:text-3xl">
+                Insurance
+              </h2>
+              <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+                Manage insurance members and generate monthly entries
+              </p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-          {canClearInsurance && (
+            {canClearInsurance && (
+              <Button
+                variant="destructive"
+                className="rounded-xl border border-red-400/30 bg-red-600 text-white shadow-sm shadow-red-700/15 hover:bg-red-700"
+                onClick={() => setShowClearDialog(true)}
+                data-testid="button-clear-all-insurance"
+              >
+                <Trash2 className="h-4 w-4 mr-1" />
+                Clear All
+              </Button>
+            )}
             <Button
-              variant="destructive"
-              className="rounded-xl border border-red-400/30 bg-red-600 text-white shadow-sm shadow-red-700/15 hover:bg-red-700"
-              onClick={() => setShowClearDialog(true)}
-              data-testid="button-clear-all-insurance"
+              variant="outline"
+              className="rounded-xl border-slate-300/80 bg-white/75 text-slate-800 shadow-sm hover:bg-blue-50 dark:border-slate-600/80 dark:bg-slate-900/70 dark:text-slate-100 dark:hover:bg-blue-950/80"
+              onClick={() => setShowImportDialog(true)}
+              data-testid="button-import-insurance"
             >
-              <Trash2 className="h-4 w-4 mr-1" />
-              Clear All
+              <FileSpreadsheet className="h-4 w-4 mr-1" />
+              Import Excel
             </Button>
-          )}
-          <Button variant="outline" className="rounded-xl border-slate-300/80 bg-white/75 text-slate-800 shadow-sm hover:bg-blue-50 dark:border-slate-600/80 dark:bg-slate-900/70 dark:text-slate-100 dark:hover:bg-blue-950/80" onClick={() => setShowImportDialog(true)} data-testid="button-import-insurance">
-            <FileSpreadsheet className="h-4 w-4 mr-1" />
-            Import Excel
-          </Button>
-          <Button variant="outline" className="rounded-xl border-slate-300/80 bg-white/75 text-slate-800 shadow-sm hover:bg-blue-50 dark:border-slate-600/80 dark:bg-slate-900/70 dark:text-slate-100 dark:hover:bg-blue-950/80" onClick={() => setShowExtraCharges(true)} data-testid="button-extra-charges">
-            <Receipt className="h-4 w-4 mr-1" />
-            Add Extra Charges
-          </Button>
-          <Button className="rounded-xl bg-gradient-to-r from-blue-700 to-blue-500 text-white shadow-md shadow-blue-700/20 hover:from-blue-800 hover:to-blue-600" onClick={() => setShowGenDialog(true)} data-testid="button-generate-entries">
-            <DollarSign className="h-4 w-4 mr-1" />
-            Generate Entries
-          </Button>
-          <Button variant="outline" className="rounded-xl border-blue-300 bg-blue-50 text-blue-900 shadow-sm hover:bg-blue-100 dark:border-blue-500/40 dark:bg-blue-500/15 dark:text-blue-100 dark:hover:bg-blue-500/25" onClick={() => setShowAddDialog(true)} data-testid="button-add-member">
-            <Plus className="h-4 w-4 mr-1" />
-            Add Member
-          </Button>
+            <Button
+              variant="outline"
+              className="rounded-xl border-slate-300/80 bg-white/75 text-slate-800 shadow-sm hover:bg-blue-50 dark:border-slate-600/80 dark:bg-slate-900/70 dark:text-slate-100 dark:hover:bg-blue-950/80"
+              onClick={() => setShowExtraCharges(true)}
+              data-testid="button-extra-charges"
+            >
+              <Receipt className="h-4 w-4 mr-1" />
+              Add Extra Charges
+            </Button>
+            <Button
+              className="rounded-xl bg-gradient-to-r from-blue-700 to-blue-500 text-white shadow-md shadow-blue-700/20 hover:from-blue-800 hover:to-blue-600"
+              onClick={() => setShowGenDialog(true)}
+              data-testid="button-generate-entries"
+            >
+              <DollarSign className="h-4 w-4 mr-1" />
+              Generate Entries
+            </Button>
+            <Button
+              variant="outline"
+              className="rounded-xl border-blue-300 bg-blue-50 text-blue-900 shadow-sm hover:bg-blue-100 dark:border-blue-500/40 dark:bg-blue-500/15 dark:text-blue-100 dark:hover:bg-blue-500/25"
+              onClick={() => setShowAddDialog(true)}
+              data-testid="button-add-member"
+            >
+              <Plus className="h-4 w-4 mr-1" />
+              Add Member
+            </Button>
           </div>
         </div>
       </section>
 
       {/* Stats */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Card className="relative overflow-hidden rounded-2xl border-blue-200 bg-gradient-to-br from-blue-50 via-white to-blue-100/70 shadow-sm dark:border-blue-500/40 dark:from-[#133861] dark:via-[#0e2b4e] dark:to-[#0b1e38]">
+        <Card className="relative overflow-hidden rounded-2xl border-blue-200 bg-gradient-to-br from-blue-50 via-white to-blue-100/70 shadow-sm dark:border-blue-500/40 dark:from-[hsl(var(--factory-hue)_67%_23%)] dark:via-[hsl(var(--factory-hue)_70%_18%)] dark:to-[hsl(var(--factory-hue)_67%_13%)]">
           <CardContent className="p-5">
             <div className="flex items-center gap-3">
               <Users className="h-10 w-10 shrink-0 rounded-xl bg-blue-500/15 p-2 text-blue-600 dark:bg-blue-400/20 dark:text-sky-300" />
               <span className="text-sm font-medium text-slate-600 dark:text-slate-200">Total Members</span>
             </div>
-            <div className="mt-2 text-3xl font-bold tracking-tight text-blue-900 dark:text-sky-100" data-testid="stat-total">
+            <div
+              className="mt-2 text-3xl font-bold tracking-tight text-blue-900 dark:text-sky-100"
+              data-testid="stat-total"
+            >
               {stats.total}
             </div>
           </CardContent>
         </Card>
-        <Card className="relative overflow-hidden rounded-2xl border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-emerald-100/70 shadow-sm dark:border-emerald-500/40 dark:from-[#0e443f] dark:via-[#0c3335] dark:to-[#0b242f]">
+        <Card className="relative overflow-hidden rounded-2xl border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-emerald-100/70 shadow-sm dark:border-emerald-500/40 dark:from-[#0e443f] dark:via-[#0c3335] dark:to-[hsl(var(--factory-hue)_62%_11%)]">
           <CardContent className="p-5">
             <div className="flex items-center gap-3">
               <UserCheck className="h-10 w-10 shrink-0 rounded-xl bg-emerald-500/15 p-2 text-emerald-600 dark:bg-emerald-400/20 dark:text-emerald-300" />
               <span className="text-sm font-medium text-slate-600 dark:text-slate-200">Active</span>
             </div>
-            <div className="mt-2 text-3xl font-bold tracking-tight text-emerald-700 dark:text-emerald-300" data-testid="stat-active">
+            <div
+              className="mt-2 text-3xl font-bold tracking-tight text-emerald-700 dark:text-emerald-300"
+              data-testid="stat-active"
+            >
               {stats.active}
             </div>
           </CardContent>
         </Card>
-        <Card className="relative overflow-hidden rounded-2xl border-violet-200 bg-gradient-to-br from-violet-50 via-white to-violet-100/70 shadow-sm dark:border-violet-500/40 dark:from-[#3b265e] dark:via-[#2b204c] dark:to-[#171d3b]">
+        <Card className="relative overflow-hidden rounded-2xl border-violet-200 bg-gradient-to-br from-violet-50 via-white to-violet-100/70 shadow-sm dark:border-violet-500/40 dark:from-[hsl(var(--factory-hue)_42%_26%)] dark:via-[hsl(var(--factory-hue)_41%_21%)] dark:to-[hsl(var(--factory-hue)_44%_16%)]">
           <CardContent className="p-5">
             <div className="flex items-center gap-3">
               <DollarSign className="h-10 w-10 shrink-0 rounded-xl bg-violet-500/15 p-2 text-violet-600 dark:bg-violet-400/20 dark:text-violet-300" />
               <span className="text-sm font-medium text-slate-600 dark:text-slate-200">Monthly Total</span>
             </div>
-            <div className="mt-2 text-3xl font-bold tracking-tight text-violet-900 dark:text-violet-100" data-testid="stat-amount">
+            <div
+              className="mt-2 text-3xl font-bold tracking-tight text-violet-900 dark:text-violet-100"
+              data-testid="stat-amount"
+            >
               ${stats.totalAmount % 1 === 0 ? stats.totalAmount.toFixed(0) : stats.totalAmount.toFixed(2)}
             </div>
           </CardContent>
         </Card>
         <Card
-          className={`relative overflow-hidden rounded-2xl border-amber-200 bg-gradient-to-br from-amber-50 via-white to-amber-100/70 shadow-sm dark:border-amber-500/40 dark:from-[#573b1d] dark:via-[#3a2b24] dark:to-[#222433] ${insuranceExpenseAccount ? "cursor-pointer transition-all hover:ring-2 hover:ring-amber-500/30" : ""}`}
+          className={`relative overflow-hidden rounded-2xl border-amber-200 bg-gradient-to-br from-amber-50 via-white to-amber-100/70 shadow-sm dark:border-amber-500/40 dark:from-[#573b1d] dark:via-[#3a2b24] dark:to-[hsl(var(--factory-hue)_20%_17%)] ${insuranceExpenseAccount ? "cursor-pointer transition-all hover:ring-2 hover:ring-amber-500/30" : ""}`}
           onClick={() =>
             insuranceExpenseAccount &&
             window.open(`/factory/accounts?accountId=${insuranceExpenseAccount.id}&accountType=ledger`, "_blank")
@@ -332,7 +370,10 @@ export default function FactoryInsurance() {
               <BookOpen className="h-10 w-10 shrink-0 rounded-xl bg-amber-500/15 p-2 text-amber-600 dark:bg-amber-400/20 dark:text-amber-300" />
               <span className="text-sm font-medium text-slate-600 dark:text-slate-200">Insurance Expense</span>
             </div>
-            <div className="mt-2 font-mono text-3xl font-bold tracking-tight text-amber-900 dark:text-amber-100" data-testid="stat-expense-balance">
+            <div
+              className="mt-2 font-mono text-3xl font-bold tracking-tight text-amber-900 dark:text-amber-100"
+              data-testid="stat-expense-balance"
+            >
               {insExpenseBalance != null
                 ? (() => {
                     const v = Math.abs(insExpenseBalance.balance);
@@ -350,9 +391,12 @@ export default function FactoryInsurance() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white/80 p-3 shadow-sm dark:border-slate-700/70 dark:bg-[#0e1c31]/85">
+      <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white/80 p-3 shadow-sm dark:border-slate-700/70 dark:bg-[hsl(var(--factory-hue)_56%_12%)]/85">
         <div className="relative min-w-[220px] flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+            aria-hidden="true"
+          />
           <Input
             placeholder="Search by name, nationality, position..."
             value={search}
@@ -375,7 +419,7 @@ export default function FactoryInsurance() {
       </div>
 
       {/* Members Table — cosmetic treatment only; all member actions and data sources are unchanged. */}
-      <Card className="overflow-hidden rounded-2xl border-slate-200 bg-white shadow-sm dark:border-slate-700/70 dark:bg-[#0b1729] dark:shadow-lg dark:shadow-blue-950/20">
+      <Card className="overflow-hidden rounded-2xl border-slate-200 bg-white shadow-sm dark:border-slate-700/70 dark:bg-[hsl(var(--factory-hue)_58%_10%)] dark:shadow-lg dark:shadow-blue-950/20">
         <CardContent className="overflow-x-auto p-0">
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
@@ -408,34 +452,68 @@ export default function FactoryInsurance() {
             </div>
           ) : (
             <Table className="min-w-[1140px]">
-              <TableHeader className="bg-slate-100/90 dark:bg-[#1c2e49]">
+              <TableHeader className="bg-slate-100/90 dark:bg-[hsl(var(--factory-hue)_45%_20%)]">
                 <TableRow className="border-slate-200 hover:bg-transparent dark:border-slate-700/70 dark:hover:bg-transparent">
-                  <TableHead className="h-12 whitespace-nowrap text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-200">Name</TableHead>
-                  <TableHead className="h-12 whitespace-nowrap text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-200">Insurance No.</TableHead>
-                  <TableHead className="h-12 whitespace-nowrap text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-200">Nationality</TableHead>
-                  <TableHead className="h-12 whitespace-nowrap text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-200">Position</TableHead>
-                  <TableHead className="h-12 whitespace-nowrap text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-200">Start Date</TableHead>
-                  <TableHead className="h-12 whitespace-nowrap text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-200">Date of Birth</TableHead>
-                  <TableHead className="h-12 whitespace-nowrap text-right text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-200">Monthly Amount</TableHead>
-                  <TableHead className="h-12 whitespace-nowrap text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-200">Status</TableHead>
-                  <TableHead className="h-12 whitespace-nowrap text-right text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-200">Actions</TableHead>
+                  <TableHead className="h-12 whitespace-nowrap text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-200">
+                    Name
+                  </TableHead>
+                  <TableHead className="h-12 whitespace-nowrap text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-200">
+                    Insurance No.
+                  </TableHead>
+                  <TableHead className="h-12 whitespace-nowrap text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-200">
+                    Nationality
+                  </TableHead>
+                  <TableHead className="h-12 whitespace-nowrap text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-200">
+                    Position
+                  </TableHead>
+                  <TableHead className="h-12 whitespace-nowrap text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-200">
+                    Start Date
+                  </TableHead>
+                  <TableHead className="h-12 whitespace-nowrap text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-200">
+                    Date of Birth
+                  </TableHead>
+                  <TableHead className="h-12 whitespace-nowrap text-right text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-200">
+                    Monthly Amount
+                  </TableHead>
+                  <TableHead className="h-12 whitespace-nowrap text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-200">
+                    Status
+                  </TableHead>
+                  <TableHead className="h-12 whitespace-nowrap text-right text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-200">
+                    Actions
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredMembers.map((m) => (
                   <TableRow
                     key={m.id}
-                    className="cursor-pointer border-slate-100 transition-colors even:bg-slate-50/80 hover:bg-blue-50/80 dark:border-slate-700/60 dark:even:bg-[#17263d]/55 dark:hover:bg-blue-900/25"
+                    className="cursor-pointer border-slate-100 transition-colors even:bg-slate-50/80 hover:bg-blue-50/80 dark:border-slate-700/60 dark:even:bg-[hsl(var(--factory-hue)_45%_16%)]/55 dark:hover:bg-blue-900/25"
                     onClick={() => setStatementMember(m)}
                     data-testid={`row-member-${m.id}`}
                   >
-                    <TableCell className="whitespace-nowrap font-semibold text-slate-900 dark:text-slate-100">{m.name}</TableCell>
-                    <TableCell className="font-mono text-sm text-slate-700 dark:text-slate-200">{m.insuranceNumber || "—"}</TableCell>
-                    <TableCell><span className={m.nationality ? `inline-flex rounded-lg px-2.5 py-1 text-xs font-semibold ${m.nationality.toLowerCase() === "lebanese" ? "bg-violet-100 text-violet-800 dark:bg-violet-500/20 dark:text-violet-200" : "bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-200"}` : "text-muted-foreground"}>{m.nationality || "—"}</span></TableCell>
+                    <TableCell className="whitespace-nowrap font-semibold text-slate-900 dark:text-slate-100">
+                      {m.name}
+                    </TableCell>
+                    <TableCell className="font-mono text-sm text-slate-700 dark:text-slate-200">
+                      {m.insuranceNumber || "—"}
+                    </TableCell>
+                    <TableCell>
+                      <span
+                        className={
+                          m.nationality
+                            ? `inline-flex rounded-lg px-2.5 py-1 text-xs font-semibold ${m.nationality.toLowerCase() === "lebanese" ? "bg-violet-100 text-violet-800 dark:bg-violet-500/20 dark:text-violet-200" : "bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-200"}`
+                            : "text-muted-foreground"
+                        }
+                      >
+                        {m.nationality || "—"}
+                      </span>
+                    </TableCell>
                     <TableCell className="text-muted-foreground">{m.positionWorking || "—"}</TableCell>
                     <TableCell>{formatDisplayDate(m.startDate)}</TableCell>
                     <TableCell>{m.dob ? formatDisplayDate(m.dob) : "—"}</TableCell>
-                    <TableCell className="text-right font-mono font-semibold text-slate-900 dark:text-slate-100">${parseFloat(m.amount).toFixed(2)}</TableCell>
+                    <TableCell className="text-right font-mono font-semibold text-slate-900 dark:text-slate-100">
+                      ${parseFloat(m.amount).toFixed(2)}
+                    </TableCell>
                     <TableCell>
                       {m.active ? (
                         <Badge
@@ -446,7 +524,11 @@ export default function FactoryInsurance() {
                           <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Active
                         </Badge>
                       ) : (
-                        <Badge variant="outline" className="rounded-full text-muted-foreground" data-testid={`badge-status-${m.id}`}>
+                        <Badge
+                          variant="outline"
+                          className="rounded-full text-muted-foreground"
+                          data-testid={`badge-status-${m.id}`}
+                        >
                           Inactive
                         </Badge>
                       )}

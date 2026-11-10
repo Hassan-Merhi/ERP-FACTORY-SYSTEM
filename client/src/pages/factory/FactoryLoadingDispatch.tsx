@@ -178,7 +178,7 @@ function StatCard({
   icon: typeof Package;
 }) {
   return (
-    <Card className="border-slate-200/90 bg-white/90 dark:border-blue-500/20 dark:bg-[#101c34]">
+    <Card className="border-slate-200/90 bg-white/90 dark:border-blue-500/20 dark:bg-[hsl(var(--factory-hue)_53%_13%)]">
       <CardContent className="flex items-center justify-between gap-2 p-3 sm:p-4">
         <div className="min-w-0">
           <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
@@ -383,11 +383,11 @@ export default function FactoryLoadingDispatch() {
 
   return (
     <div
-      className="flex h-full min-w-0 flex-col overflow-y-auto bg-slate-50/70 dark:bg-[#080f1c]"
+      className="flex h-full min-w-0 flex-col overflow-y-auto bg-slate-50/70 dark:bg-[hsl(var(--factory-hue)_56%_7%)]"
       data-testid="factory-loading-dispatch-page"
     >
       <div className="mx-auto w-full max-w-[1480px] space-y-5 p-3 pb-10 sm:p-5 lg:p-7">
-        <div className="relative overflow-hidden rounded-[22px] border border-blue-200/80 bg-gradient-to-r from-white via-blue-50/90 to-sky-100/80 p-4 shadow-sm dark:border-blue-500/25 dark:from-[#12213e] dark:via-[#102448] dark:to-[#092853] sm:p-5">
+        <div className="relative overflow-hidden rounded-[22px] border border-blue-200/80 bg-gradient-to-r from-white via-blue-50/90 to-sky-100/80 p-4 shadow-sm dark:border-blue-500/25 dark:from-[hsl(var(--factory-hue)_55%_16%)] dark:via-[hsl(var(--factory-hue)_64%_17%)] dark:to-[hsl(var(--factory-hue)_80%_18%)] sm:p-5">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex min-w-0 items-center gap-3">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-lg shadow-blue-500/20">
@@ -483,7 +483,7 @@ export default function FactoryLoadingDispatch() {
           <StatCard label="Open dispatches" value={printNumber(openTrips)} icon={Truck} />
         </div>
 
-        <Card className="border-blue-100 bg-white dark:border-blue-500/20 dark:bg-[#101c34]">
+        <Card className="border-blue-100 bg-white dark:border-blue-500/20 dark:bg-[hsl(var(--factory-hue)_53%_13%)]">
           <CardContent className="space-y-3 p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-sm font-semibold">Overall truck verification</span>
@@ -528,7 +528,7 @@ export default function FactoryLoadingDispatch() {
               </div>
             )}
             {!tripsQuery.isPending && tripsQuery.isSuccess && visibleTrips.length === 0 && (
-              <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-blue-200 bg-white/80 p-10 text-center dark:border-blue-500/25 dark:bg-[#101c34]">
+              <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-blue-200 bg-white/80 p-10 text-center dark:border-blue-500/25 dark:bg-[hsl(var(--factory-hue)_53%_13%)]">
                 <Truck className="h-9 w-9 text-blue-500" />
                 <p className="font-semibold">
                   {trips.length === 0 ? "No dispatch trips yet" : "No dispatches match this filter"}
@@ -552,7 +552,7 @@ export default function FactoryLoadingDispatch() {
                   type="button"
                   key={trip.id}
                   onClick={() => navigate(tripPath(orderId, trip.id))}
-                  className="group rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition-colors hover:border-blue-400 hover:bg-blue-50/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 dark:border-blue-500/20 dark:bg-[#101c34] dark:hover:border-blue-400"
+                  className="group rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition-colors hover:border-blue-400 hover:bg-blue-50/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 dark:border-blue-500/20 dark:bg-[hsl(var(--factory-hue)_53%_13%)] dark:hover:border-blue-400"
                   data-testid={"dispatch-trip-" + trip.id}
                 >
                   <div className="flex items-start justify-between gap-2">
@@ -567,7 +567,7 @@ export default function FactoryLoadingDispatch() {
                     </div>
                     <TripStatusBadge status={trip.status} />
                   </div>
-                  <div className="mt-4 grid grid-cols-2 gap-2 rounded-xl bg-slate-50 p-3 dark:bg-[#0b162a]">
+                  <div className="mt-4 grid grid-cols-2 gap-2 rounded-xl bg-slate-50 p-3 dark:bg-[hsl(var(--factory-hue)_58%_10%)]">
                     <div>
                       <p className="text-[11px] text-muted-foreground">Bales verified</p>
                       <p className="font-mono font-bold">{printNumber(numberValue(trip.scannedBales))}</p>
@@ -609,7 +609,7 @@ export default function FactoryLoadingDispatch() {
             )}
             {selectedTrip && dispatchId !== null && (
               <div className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(290px,0.7fr)]">
-                <Card className="border-blue-100 dark:border-blue-500/20 dark:bg-[#101c34]">
+                <Card className="border-blue-100 dark:border-blue-500/20 dark:bg-[hsl(var(--factory-hue)_53%_13%)]">
                   <CardContent className="space-y-5 p-4 sm:p-5">
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div>
@@ -658,7 +658,7 @@ export default function FactoryLoadingDispatch() {
                       ))}
                     </div>
                     {selectedTrip.notes && (
-                      <div className="rounded-xl bg-slate-50 p-3 dark:bg-[#0b162a]">
+                      <div className="rounded-xl bg-slate-50 p-3 dark:bg-[hsl(var(--factory-hue)_58%_10%)]">
                         <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Notes</p>
                         <p className="mt-1 whitespace-pre-wrap text-sm">{selectedTrip.notes}</p>
                       </div>
@@ -693,7 +693,7 @@ export default function FactoryLoadingDispatch() {
                   </CardContent>
                 </Card>
                 <div className="space-y-3">
-                  <Card className="border-blue-100 dark:border-blue-500/20 dark:bg-[#101c34]">
+                  <Card className="border-blue-100 dark:border-blue-500/20 dark:bg-[hsl(var(--factory-hue)_53%_13%)]">
                     <CardContent className="space-y-3 p-4">
                       <div className="flex items-center gap-2">
                         <Route className="h-4 w-4 text-blue-500" />
@@ -705,7 +705,7 @@ export default function FactoryLoadingDispatch() {
                       <Badge variant="secondary">Scanner available below</Badge>
                     </CardContent>
                   </Card>
-                  <Card className="border-blue-100 dark:border-blue-500/20 dark:bg-[#101c34]">
+                  <Card className="border-blue-100 dark:border-blue-500/20 dark:bg-[hsl(var(--factory-hue)_53%_13%)]">
                     <CardContent className="space-y-3 p-4">
                       <div className="flex items-center gap-2">
                         <FileSearch className="h-4 w-4 text-blue-500" />

@@ -234,7 +234,7 @@ export default function FactoryLoadingDispatchReport() {
 
   return (
     <div
-      className="h-full min-w-0 overflow-y-auto bg-slate-50/90 p-3 pb-12 dark:bg-[#080f1c] sm:p-5 lg:p-7"
+      className="h-full min-w-0 overflow-y-auto bg-slate-50/90 p-3 pb-12 dark:bg-[hsl(var(--factory-hue)_56%_7%)] sm:p-5 lg:p-7"
       data-testid="factory-dispatch-print-report"
     >
       <style>{`
@@ -320,7 +320,7 @@ export default function FactoryLoadingDispatchReport() {
         {report && (
           <article
             id="factory-dispatch-paper"
-            className="space-y-5 rounded-2xl border bg-white p-4 text-slate-950 shadow-sm dark:border-slate-700 dark:bg-[#101c34] dark:text-slate-100 sm:p-6"
+            className="space-y-5 rounded-2xl border bg-white p-4 text-slate-950 shadow-sm dark:border-slate-700 dark:bg-[hsl(var(--factory-hue)_53%_13%)] dark:text-slate-100 sm:p-6"
           >
             <header className="dispatch-print-block space-y-3 border-b border-slate-200 pb-4 dark:border-slate-700">
               <div className="flex flex-wrap justify-between gap-3">
@@ -369,7 +369,7 @@ export default function FactoryLoadingDispatchReport() {
                 ))}
               </div>
               {report.trip?.notes && (
-                <p className="whitespace-pre-wrap rounded-lg bg-slate-50 p-2 text-xs dark:bg-[#0d1829]">
+                <p className="whitespace-pre-wrap rounded-lg bg-slate-50 p-2 text-xs dark:bg-[hsl(var(--factory-hue)_52%_11%)]">
                   <strong>Trip notes:</strong> {report.trip.notes}
                 </p>
               )}
