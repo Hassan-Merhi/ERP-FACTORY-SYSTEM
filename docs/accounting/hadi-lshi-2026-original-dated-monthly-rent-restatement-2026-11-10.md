@@ -75,3 +75,32 @@ One historic **STAFF HOUSE July $2,000** remains unproven/unpaid, excluded; it i
 ## Source-code change in this branch
 
 `server/routes/reportsLedgerRoutes.ts` correctly includes the original archived #881 voucher entries in the existing `/ledger-monthly/1007` month table and its drilldowns. This is actual posted GL display, **not a reconciliation page or a secondary preview**. It must be merged/deployed for the existing UI to reflect source-corrected monthly entries; the correction SQL by itself will not cause a report that omits legacy #881 to show the right months.
+
+## Production execution certificate — 2026-11-10 16:27 UTC
+
+The owner ran the full guarded SQL transaction in production TablePlus and reported:
+
+```
+PASS 434350.00 18000.00 7000.00 11
+NOTICE: PASS: HADI 2026 Jan-Nov month-by-month real GL restatement;
+11 dated journals; no cash movements; #1007 $434350 Dr,
+#1021 $18000 Cr, #1022 $7000 Dr; both artificial openings ZERO;
+timing account closing ZERO.
+```
+
+An independent *read-only live Render Postgres check* at **2026-11-10 16:28:40 UTC** confirmed the following:
+
+- **January through November 2026:** all eleven exact monthly real GL net expense movements match the pre-reviewed source schedule; **eleven $0 monthly variances**. Actual: Jan $32,700, Feb $34,450, Mar $34,450, Apr $37,950, May $40,950, Jun $40,950, Jul $41,250, Aug $43,250, Sep $43,250, Oct $46,200, Nov $38,950; total **$434,350 Dr**.
+- Current Rent Expense #1007: **opening $0**, posted debits **$633,450**, posted credits **$199,100**, closing **$434,350 Dr**. Retired account #881 original posted movements **$323,750 Dr / $323,750 Cr**, closing $0.
+- Accrued Rent Payable #1021: **opening $0**, posted debits **$172,050**, posted credits **$190,050**, closing **$18,000 Cr**.
+- Prepaid Rent #1022: **opening $0**, posted debits **$95,400**, posted credits **$88,400**, closing **$7,000 Dr**.
+- Dedicated timing control #4282, code `HADI-RENT-2026-TIMING`: opening **$0**, debits **$87,000**, credits **$87,000**, closing **$0**.
+- **Exactly 11 correction journals** #17510–#17520, all correctly balanced, original `voucher_date` and `effective_date` in Jan–Nov 2026, historical date is not misrepresented as the actual entry creation date; `created_at` 2026-11-10 16:27:09 UTC.
+- Original payment voucher #6497: 2026-01-01, 2 original lines: entry #23178 Dr #881 $42,000; #23179 Cr legacy #276 $42,000, preserved.
+- Original payment voucher #8870: 2026-06-08, 2 original lines: entry #30535 Dr #1007 $31,500; #30536 Cr SAFE #112 $31,500, preserved.
+- Obsolete legacy payable #1002 posted net now **$0**; original June accrual line #30193 and payment-clearing line #30204 now reference real payable #1021.
+- HADI #2 November 2026 rental-month row #128505 now links to recognized voucher **#17512** and has `used_prepaid_account=true`.
+
+**Status: historical 2026 production GL restatement COMPLETE and independently VERIFIED.** Do **not** rerun correction SQL. Database posting is finished.
+
+**Outstanding:** This PR's source change to the existing monthly ledger/drilldown still requires merge/deployment to display the original archived #881 transactions correctly. Separately, future rent protection work in draft PR #3114 requires code review, runtime tests, authorized merge, and deployment; successful historical DB correction does not prove future code is live. Do not create a new reconciliation section.
