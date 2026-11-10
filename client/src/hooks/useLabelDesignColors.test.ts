@@ -2,8 +2,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const fixture = vi.hoisted(() => ({
   company: null as null | { selectedCompany: { id: number } },
-  query: null as any,
-  data: undefined as any,
+  query: null as null | {
+    queryKey: readonly unknown[];
+    enabled: boolean;
+    staleTime: number;
+    queryFn: () => Promise<Array<{ previewUrl: string }>>;
+  },
+  data: undefined as undefined | Array<{ value: string; label: string; color: string }>,
   loading: false,
   refetch: vi.fn(),
   setBannerTimestamps: vi.fn(),
@@ -13,7 +18,7 @@ vi.mock("@/contexts/CompanyContext", () => ({
   useOptionalCompany: () => fixture.company,
 }));
 vi.mock("@tanstack/react-query", () => ({
-  useQuery: (config: any) => {
+  useQuery: (config: NonNullable<typeof fixture.query>) => {
     fixture.query = config;
     return { data: fixture.data, isLoading: fixture.loading, refetch: fixture.refetch };
   },
@@ -27,6 +32,12 @@ vi.mock("@/lib/labelHtml", () => ({
 
 import { useLabelDesignColors } from "./useLabelDesignColors";
 
+function getQuery(): NonNullable<typeof fixture.query> {
+  const query = fixture.query;
+  if (!query) throw new Error("Expected a mocked query configuration");
+  return query;
+}
+
 describe("useLabelDesignColors", () => {
   beforeEach(() => {
     vi.resetAllMocks();
@@ -38,9 +49,9 @@ describe("useLabelDesignColors", () => {
 
   it("provides static defaults and disables the query without a company", () => {
     const result = useLabelDesignColors();
-    expect(fixture.query.queryKey).toEqual(["/api/factory/label-design-colors", "no-company"]);
-    expect(fixture.query.enabled).toBe(false);
-    expect(fixture.query.staleTime).toBe(30_000);
+    expect(getQuery().queryKey).toEqual(["/api/factory/label-design-colors", "no-company"]);
+    expect(getQuery().enabled).toBe(false);
+    expect(getQuery().staleTime).toBe(30_000);
     expect(result.colors).toEqual([
       expect.objectContaining({ value: "blue", isDefault: true, hasCustom: false, lastModified: null }),
     ]);
@@ -53,8 +64,8 @@ describe("useLabelDesignColors", () => {
     fixture.data = [{ value: "violet", label: "Violet", color: "#404040" }];
     fixture.loading = true;
     const result = useLabelDesignColors();
-    expect(fixture.query.queryKey).toEqual(["/api/factory/label-design-colors", 18]);
-    expect(fixture.query.enabled).toBe(true);
+    expect(getQuery().queryKey).toEqual(["/api/factory/label-design-colors", 18]);
+    expect(getQuery().enabled).toBe(true);
     expect(result.colors).toBe(fixture.data);
     expect(result.isLoading).toBe(true);
   });
@@ -94,7 +105,7 @@ describe("useLabelDesignColors", () => {
     ];
     const fetchMock = vi.fn().mockResolvedValue({ json: vi.fn().mockResolvedValue(rows) });
     vi.stubGlobal("fetch", fetchMock);
-    const result = await fixture.query.queryFn();
+    const result = await getQuery().queryFn();
     expect(fetchMock).toHaveBeenCalledWith("/api/factory/label-design-colors", { credentials: "include" });
     expect(result).toHaveLength(4);
     expect(result[0]).toEqual({
@@ -118,7 +129,7 @@ describe("useLabelDesignColors", () => {
   it("uses the static palette if the server response is not an array", async () => {
     useLabelDesignColors();
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ json: vi.fn().mockResolvedValue({ error: "unexpected" }) }));
-    const values = await fixture.query.queryFn();
+    const values = await getQuery().queryFn();
     expect(values).toEqual([expect.objectContaining({ value: "blue", isDefault: true })]);
     expect(fixture.setBannerTimestamps).toHaveBeenCalledWith({ blue: null });
   });
@@ -126,7 +137,7 @@ describe("useLabelDesignColors", () => {
   it("preserves an intentionally empty server-provided palette", async () => {
     useLabelDesignColors();
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ json: vi.fn().mockResolvedValue([]) }));
-    expect(await fixture.query.queryFn()).toEqual([]);
+    expect(await getQuery().queryFn()).toEqual([]);
     expect(fixture.setBannerTimestamps).toHaveBeenCalledWith({});
   });
 });
