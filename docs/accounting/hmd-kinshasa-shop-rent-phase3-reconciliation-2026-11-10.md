@@ -57,4 +57,17 @@ All mutations use guard conditions, exact voucher/entry identities, business-dat
 | Closed company-8 fiscal periods | None matching the historical correction date |
 | Phase 2 expense/payable GL | $149,160 Dr and $0 |
 
-**Implementation status:** Phase 3 investigation, code safeguards, SQL packages and read-only preflight are complete **on the branch**. **Live Phase 3 changes remain pending TablePlus execution and the deployment prerequisite for the 15 historical hold rows.** No production records were changed by this work. Do not call the full production reconciliation completed until both repairs have actually committed and been read-only verified.
+**Implementation status as of 2026-11-10: COMPLETE IN PRODUCTION.** PR #3108 was merged to main (commit `86481ec3a7d7a0f3a6c00443da410728717afafc`) and Render production service `system` deploy `dep-dbpg6m8n74is73ds89ag` reached `live` on 2026-11-10 at 11:45:22 UTC. The owner executed both Phase 3 guarded repair scripts via TablePlus. All results were independently checked with read-only production queries.
+
+## Final independent verification — completed 2026-11-10
+
+- **June voucher correction:** 4 original debit/credit entries `29370`, `30027`, `30308`, `30312` reclassified from obsolete account `918` to existing liability `1401`; no company-8 historical ledger entries remain on account `918`. Audited by explicit repairs `88682`–`88685` and row-update records `88678`–`88681`.
+- **January–May stale-link cleanup:** exactly **15** monthly rows now have `accrual_voucher_id IS NULL` and `notes LIKE '[RENT_RECOGNITION_HOLD]%'`; **0** references to deleted `8534` remain. Each is fully paid. All 15 repair audit entries persisted on **2026-11-10 at 11:52:17 UTC**.
+- **Rent reconciliation:** **33** monthly rows, **33** matched POSTED payments (one per row); rent expected **$149,160**, cached paid **$149,160**, actual posted **$149,160**; no payment count or amount discrepancies; outstanding **$0**.
+- **Rent Expense / payable GL:** account `877` debit **$158,320**, credit **$9,160**, net **$149,160 Dr**. Account `1401` debit **$81,360**, credit **$81,360**, net **$0**.
+- **Original vouchers:** January–May payment vouchers `6470`, `6475`, `6476`, `7478`, `7479`, `7480`; June accrual/payment/AP-clearing vouchers `8537`, `8722`, `8802`, `8804`; July accrual/payment vouchers `9960`, `10579`, `10580`, `10581` remain live, non-optional. Deleted original accrual voucher `8534` was **not** recreated.
+- **Cash:** account `352` entries and total company-wide balance were not directly altered by the Phase 3 SQL; original rent payment entries preserved.
+- **New vouchers:** **none** created by either repair. Both SQL scripts updated only existing entries or monthly ledger notes/references; the safeguards remain deployed.
+
+**Phase 3 is closed.** No further production SQL is required for these January–November 2026 HMD KINSHASA rent records.
+
