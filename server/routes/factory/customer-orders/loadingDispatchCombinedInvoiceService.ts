@@ -30,6 +30,7 @@ import {
 import { PRIORITY_SCAN_LOCK_NAMESPACE } from "./priorityScanQueue";
 import { acquireProformaCapacityTransactionLock } from "./proformaCapacityConcurrency";
 import { OrderReconciliationError } from "./loadingDispatchOrderReconciliationModel";
+import { assertFactoryDispatchReleaseReadyTx } from "../../../services/factory/dispatchReleaseReadiness";
 
 const arr = async (tx:DbTransaction,q:ReturnType<typeof sql>)=>resultRows(await tx.execute(q));
 const money=(v:unknown)=>new MoneyDecimal(String(v??"0"));
@@ -348,6 +349,7 @@ export interface CombinedInvoiceFinalResult {
 export async function finalizeCombinedInvoiceTx(
   tx:DbTransaction,s:CombinedInvoiceScope,expectedFingerprint:string
 ):Promise<CombinedInvoiceFinalResult>{
+  await assertFactoryDispatchReleaseReadyTx(tx,"FINAL_INVOICE");
   await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE},${s.companyId})`);
   const [before]=await arr(tx,sql`
     SELECT id,proforma_id_used AS "proformaId"
