@@ -190,7 +190,7 @@ export default function FactoryLoadingDispatchFinance({ orderId, dispatchId, com
   const busy = save.isPending || remove.isPending;
 
   return (
-    <Card className="border-slate-200 bg-white dark:border-slate-700 dark:bg-[#101c34]" data-testid="dispatch-trip-financial-preview">
+    <Card className="border-slate-200 bg-white dark:border-slate-700 dark:bg-card" data-testid="dispatch-trip-financial-preview">
       <CardContent className="space-y-4 p-4">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="flex items-start gap-2">
