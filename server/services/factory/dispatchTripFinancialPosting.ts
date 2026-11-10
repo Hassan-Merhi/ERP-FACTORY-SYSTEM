@@ -194,10 +194,30 @@ async function assertHardenedFinancialSchemaTx(tx: DbTransaction): Promise<void>
          WHERE tgrelid=to_regclass('public.customer_order_bales')
            AND tgname='factory_dispatch_order_bale_financial_guard'
            AND tgenabled <> 'D'
-      ) AS "baleGuard"
+      ) AS "baleGuard",
+      EXISTS(
+        SELECT 1 FROM pg_trigger
+         WHERE tgrelid=to_regclass('public.vouchers')
+           AND tgname='factory_dispatch_source_voucher_guard'
+           AND tgenabled <> 'D'
+      ) AS "voucherGuard",
+      EXISTS(
+        SELECT 1 FROM pg_trigger
+         WHERE tgrelid=to_regclass('public.voucher_entries')
+           AND tgname='factory_dispatch_source_voucher_entries_guard'
+           AND tgenabled <> 'D'
+      ) AS "voucherEntriesGuard",
+      EXISTS(
+        SELECT 1 FROM pg_trigger
+         WHERE tgrelid=to_regclass('public.accounting_posting_requests')
+           AND tgname='factory_dispatch_source_posting_identity_guard'
+           AND tgenabled <> 'D'
+      ) AS "postingIdentityGuard"
   `);
   if (!ready?.financialRls || !ready?.postingsRls ||
-      !ready?.physicalGuard || !ready?.baleGuard) {
+      !ready?.physicalGuard || !ready?.baleGuard ||
+      !ready?.voucherGuard || !ready?.voucherEntriesGuard ||
+      !ready?.postingIdentityGuard) {
     refuse("TRIP_FINANCIAL_SQL_PENDING",
       "Trip financial posting is disabled until the final Phase 2 and Phase 4 TablePlus SQL has been installed.",
       503);
