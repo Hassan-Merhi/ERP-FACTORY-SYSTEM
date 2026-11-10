@@ -197,10 +197,10 @@ export const factoryDispatchOrderConsolidations = pgTable("factory_dispatch_orde
     ${t.status} <> 'FINALIZED' OR
     (${t.reconciledAt} IS NOT NULL AND ${t.finalizedAt} IS NOT NULL
      AND ${t.finalizedByUserId} IS NOT NULL AND ${t.invoiceNumber} IS NOT NULL
-     AND ${t.finalizationDetails}->>'invoiceNumber' = ${t.invoiceNumber}
-     AND ${t.finalizationDetails}->>'customerReceivableReposted' = 'false'
-     AND jsonb_typeof(${t.finalizationDetails}->'voucherIds') = 'array'
-     AND jsonb_typeof(${t.finalizationDetails}->'includedPostingIds') = 'array')`),
+     AND COALESCE(${t.finalizationDetails}->>'invoiceNumber' = ${t.invoiceNumber}, FALSE)
+     AND COALESCE(${t.finalizationDetails}->>'customerReceivableReposted' = 'false', FALSE)
+     AND COALESCE(jsonb_typeof(${t.finalizationDetails}->'voucherIds') = 'array', FALSE)
+     AND COALESCE(jsonb_typeof(${t.finalizationDetails}->'includedPostingIds') = 'array', FALSE))`),
   approvalValid: check("factory_dispatch_order_consolidations_signoff_ck", sql`
     (${t.reconciledAt} IS NULL AND ${t.reconciledByUserId} IS NULL AND ${t.reconciliationReason} IS NULL)
     OR (${t.reconciledAt} IS NOT NULL AND ${t.reconciledByUserId} IS NOT NULL
