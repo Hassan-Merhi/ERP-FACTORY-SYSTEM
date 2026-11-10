@@ -94,11 +94,17 @@ export function validChargeInput(value: unknown): {
   };
 }
 
-export function accountAcceptsCharge(kind: TripChargeKind, accountType: string): boolean {
-  const type = accountType.trim().toLowerCase().replace(/[_-]/g, " ");
-  if (kind === "BILLABLE") return /income|revenue|sales/.test(type);
-  if (kind === "DISCOUNT") return /income|revenue|sales|expense|discount/.test(type);
-  return /expense|cost|inventory|asset/.test(type);
+/**
+ * Operators may map a trip charge, discount or expense to ANY ledger account
+ * type. The draft API and posting engine still enforce that the selected
+ * account belongs to the active Factory company, is active, not hidden or
+ * deleted, and is eligible for writing a voucher.
+ *
+ * Accounting direction is unchanged: billable -> CREDIT chosen ledger;
+ * discount and internal expense -> DEBIT chosen ledger.
+ */
+export function accountAcceptsCharge(_kind: TripChargeKind, _accountType: string): boolean {
+  return true;
 }
 
 export function accountAcceptsOffset(accountType: string): boolean {
