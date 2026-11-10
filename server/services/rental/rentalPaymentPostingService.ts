@@ -851,6 +851,12 @@ export async function postScheduledGroup(
   // Immediate payments use their caller's transaction so payment rows, monthly
   // balances, and accounting entries commit or roll back together.
   const applyPosting = async (tx: Parameters<Parameters<typeof db.transaction>[0]>[0]) => {
+    // Use the SAME contract lock order as immediate payment creation so that
+    // scheduled groups cannot race each other (or a new cash receipt) into
+    // paying the same rental month twice.
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtext(${`rental-contract:${contractCompanyId}:${contract.id}`}))`
+    );
     await tx.execute(sql`SELECT pg_advisory_xact_lock(${lockKey})`);
 
     // Lock the WHOLE group, not just rows still marked SCHEDULED. A mixed
@@ -891,6 +897,61 @@ export async function postScheduledGroup(
       const error: RentalPostingError = new Error("RENTAL_SCHEDULED_PAYMENT_NOT_YET_DUE");
       error.status = 409;
       throw error;
+    }
+
+    // Scheduled allocations were planned on their creation date. Another
+    // payment can settle the same period before its posting date arrives.
+    // Re-evaluate CURRENT live posted vouchers under locked month rows.
+    // Reject stale scheduled groups without touching cash, vouchers or flags.
+    const monthIds = groupRows.map((r) => r.ledgerRowId as number);
+    if (new Set(monthIds).size !== monthIds.length) {
+      const error: RentalPostingError = new Error("RENTAL_SCHEDULED_PAYMENT_DUPLICATE_MONTH");
+      error.status = 409;
+      throw error;
+    }
+    const lockedMonths = (await tx.execute(sql`
+      SELECT ml.id,ml.year,ml.month,ml.expected_amount
+      FROM property_monthly_ledger ml
+      WHERE ml.id IN (${sql.raw(monthIds.join(","))})
+        AND ml.company_id=${contractCompanyId}
+        AND ml.contract_id=${contract.id}
+      ORDER BY ml.id FOR UPDATE OF ml
+    `)).rows as Array<{ id: number; year: number; month: number; expected_amount: string }>;
+    if (lockedMonths.length !== monthIds.length) {
+      const error: RentalPostingError = new Error("RENTAL_SCHEDULED_PAYMENT_MONTH_MISSING");
+      error.status = 409;
+      throw error;
+    }
+    const lockedById = new Map(lockedMonths.map((row) => [Number(row.id), row]));
+    const bookedAmounts = (await tx.execute(sql`
+      SELECT p.ledger_row_id,COALESCE(SUM(p.amount::numeric),0) AS paid
+      FROM property_payments p
+      JOIN vouchers v ON v.id=p.voucher_id AND v.company_id=p.company_id
+        AND v.deleted_at IS NULL AND v.optional=FALSE
+      WHERE p.company_id=${companyId} AND p.module=${module}
+        AND p.contract_id=${contract.id}
+        AND p.posting_status='POSTED'
+        AND p.ledger_row_id IN (${sql.raw(monthIds.join(","))})
+      GROUP BY p.ledger_row_id
+    `)).rows as Array<{ ledger_row_id: number; paid: string }>;
+    const paidByMonth = new Map(bookedAmounts.map((row) => [Number(row.ledger_row_id), toMoney(row.paid)]));
+    for (const row of groupRows) {
+      const locked = lockedById.get(row.ledgerRowId as number);
+      if (!locked ||
+          locked.year !== row.forYear || locked.month !== row.forMonth) {
+        const error: RentalPostingError = new Error("RENTAL_SCHEDULED_PAYMENT_MONTH_CHANGED");
+        error.status = 409;
+        throw error;
+      }
+      const expected = toMoney(locked.expected_amount).gt(0)
+        ? toMoney(locked.expected_amount)
+        : toMoney(contract.rentalAmount);
+      const prior = paidByMonth.get(locked.id) ?? new Decimal(0);
+      if (prior.plus(toMoney(row.amount)).gt(expected.plus("0.005"))) {
+        const error: RentalPostingError = new Error("RENTAL_SCHEDULED_PAYMENT_ALLOCATION_STALE");
+        error.status = 409;
+        throw error;
+      }
     }
 
     const totalAmountStr = sumMoney(groupRows.map((r) => r.amount as string)).toFixed(2);
