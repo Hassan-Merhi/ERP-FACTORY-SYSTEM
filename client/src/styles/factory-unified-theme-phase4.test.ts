@@ -17,7 +17,9 @@ describe("Factory blue theme Phase 4 rendering contracts", () => {
       ["properties", ["factory", "erp"]],
       ["erp", ["factory", "properties"]],
     ] as const) {
-      const shell = read(`app/${mode === "factory" ? "Factory" : mode === "properties" ? "Properties" : "Erp"}Shell.tsx`);
+      const shell = read(
+        `app/${mode === "factory" ? "Factory" : mode === "properties" ? "Properties" : "Erp"}Shell.tsx`
+      );
       const css = read(`styles/${mode}-unified-theme.css`);
       expect(shell).toContain(`useDocumentAppShell("${mode}")`);
       expect(shell).toContain(`styles/${mode}-unified-theme.css`);
@@ -37,7 +39,17 @@ describe("Factory blue theme Phase 4 rendering contracts", () => {
     expect(light).toBeDefined();
     expect(dark).toBeDefined();
     for (const block of [light ?? "", dark ?? ""]) {
-      for (const token of ["background", "sidebar", "sidebar-accent", "border", "card-border", "muted", "accent", "primary", "ring"]) {
+      for (const token of [
+        "background",
+        "sidebar",
+        "sidebar-accent",
+        "border",
+        "card-border",
+        "muted",
+        "accent",
+        "primary",
+        "ring",
+      ]) {
         expect(block, `missing --${token}`).toMatch(new RegExp(`--${token}:\\s*var\\(--factory-hue\\)`));
       }
     }
