@@ -53,6 +53,9 @@ const finalTriggers=[
   ["factory_dispatch_final_voucher_guard","vouchers"],
   ["factory_dispatch_final_voucher_entries_guard","voucher_entries"],
   ["factory_dispatch_final_posting_identity_guard","accounting_posting_requests"],
+  ["factory_dispatch_final_order_source_guard","customer_orders"],
+  ["factory_dispatch_final_commercial_lines_guard","customer_order_lines"],
+  ["factory_dispatch_final_sold_bales_guard","factory_bales"],
 ];
 const signedColumns=[
   ["factory_dispatch_order_consolidations","reconciled_at"],
