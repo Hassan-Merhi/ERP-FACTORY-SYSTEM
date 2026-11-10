@@ -63,10 +63,9 @@ export default function LedgerMonthlySummary() {
   const handleBack = useBackToParent();
   const [, params] = useRoute("/ledger-monthly/:accountId");
   const [, factoryParams] = useRoute("/factory/ledger-monthly/:accountId");
-  const accountId =
-    params?.accountId || factoryParams?.accountId
-      ? parseInt((params?.accountId || factoryParams?.accountId) as string)
-      : null;
+  const [, propertiesParams] = useRoute("/properties/ledger-monthly/:accountId");
+  const accountParam = params?.accountId || factoryParams?.accountId || propertiesParams?.accountId;
+  const accountId = accountParam ? parseInt(accountParam, 10) : null;
 
   const [periodFilter, setPeriodFilter] = useState<PeriodFilterValue>(getDefaultPeriodValue("this_year"));
   useDateJump((date) => setPeriodFilter({ fromDate: date, toDate: date, preset: "custom" }));
@@ -157,7 +156,7 @@ export default function LedgerMonthlySummary() {
                       data-testid="text-closing-balance"
                     >
                       {formatAmount(Math.abs(data.grandTotal.closingBalance))}{" "}
-                      <span className={drCrClass(data.grandTotal.closingBalance >= 0 ? "Cr" : "Dr")}>
+                      <span className={creditPositiveBalanceClass(data.grandTotal.closingBalance)}>
                         {data.grandTotal.closingBalance === 0 ? "—" : data.grandTotal.closingBalance > 0 ? "Cr" : "Dr"}
                       </span>
                     </p>
