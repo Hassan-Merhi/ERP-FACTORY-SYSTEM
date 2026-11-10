@@ -1,7 +1,7 @@
 # Factory blue-theme unification — Phase 1 source audit
 
-**Audit date:** 2026-11-10  
-**Baseline:** `main` at `262446deb643cba454176bdb7ba16603b2466552`  
+**Audit date:** 2026-11-10
+**Baseline:** `main` at `262446deb643cba454176bdb7ba16603b2466552`
 **Status:** Phase 1 source inventory and classification complete. **No UI colors or business logic changed in this phase.**
 
 ## Scope and counting rules
