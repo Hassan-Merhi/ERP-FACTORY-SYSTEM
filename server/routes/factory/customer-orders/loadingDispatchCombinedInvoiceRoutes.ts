@@ -114,7 +114,7 @@ export function registerFactoryDispatchCombinedInvoiceRoutes(app:Express):void{
       try{
         // Freeze the existing invoice engine's canonical Excel/PDF document
         // using the FINALIZED order and immutable signed trip data.
-        const doc=await freezeCanonicalInvoiceDocument(s.orderId,s.companyId,false);
+        const doc=await freezeCanonicalInvoiceDocument(s.orderId,s.companyId,!out.replayed);
         frozen=Boolean(doc && doc.status==="FINALIZED");
       }catch(error){
         // Transaction already committed. Snapshot can retry on first invoice
