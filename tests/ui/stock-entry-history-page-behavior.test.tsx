@@ -1,4 +1,8 @@
 import React, { createContext, useContext } from "react";
+
+vi.mock("@/contexts/CompanyContext", () => ({
+  useCompany: () => ({ selectedCompany: { id: 1, name: "Test Factory", companyType: "factory" } }),
+}));
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -49,8 +53,8 @@ vi.mock("@tanstack/react-query", () => ({
   }),
   useQueries: () => [],
   useInfiniteQuery: ({ queryKey, enabled }: any) => {
-    harness.historyQueries.push(queryKey[1]);
-    const params = new URLSearchParams(queryKey[1]);
+    harness.historyQueries.push(queryKey[2]);
+    const params = new URLSearchParams(queryKey[2]);
     const selectedWorker = params.get("workerId");
     const secondWorker = {
       ...group,
@@ -235,6 +239,8 @@ describe("stock entry history page behavior", () => {
 
   it("loads worker choices for a history-only user without Payroll Hub access", () => {
     harness.accessValue = {
+      companyId: 1,
+      hasFactoryAccess: true,
       fullAccess: false,
       hasFactoryAccess: true,
       pageKeys: ["factory/stock-entry"],
