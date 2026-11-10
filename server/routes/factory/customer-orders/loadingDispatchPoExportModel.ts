@@ -105,7 +105,6 @@ export class TripPoExportError extends Error {
 function refuse(code: string, message: string, status = 409): never {
   throw new TripPoExportError(code, message, status);
 }
-const ZERO = new MoneyDecimal(0);
 const cents = (text: string, label: string, allowZero = true): string => {
   if (typeof text !== "string" || !/^(?:0|[1-9][0-9]{0,13})(?:\.[0-9]{1,2})?$/.test(text.trim())) {
     refuse("PO_AMOUNT_INVALID", `${label} needs a nonnegative USD amount with up to two decimals`, 400);
