@@ -122,8 +122,19 @@ BEGIN
        )
        AND EXISTS (
          SELECT 1 FROM vouchers v
+         JOIN customer_orders co ON co.id=NEW.order_id AND co.company_id=target_company
           WHERE v.id=NEW.voucher_id AND v.company_id=target_company
             AND v.deleted_at IS NULL AND COALESCE(v.optional,FALSE)=FALSE
+            AND EXISTS(
+              SELECT 1 FROM voucher_entries ve
+               WHERE ve.voucher_id=v.id AND ve.customer_id=co.customer_id
+                 AND ve.debit_amount=OLD.amount
+            )
+            AND EXISTS(
+              SELECT 1 FROM voucher_entries ve
+               WHERE ve.voucher_id=v.id AND ve.ledger_account_id=OLD.ledger_account_id
+                 AND ve.credit_amount=OLD.amount
+            )
        )
     THEN RETURN NEW;
     END IF;
