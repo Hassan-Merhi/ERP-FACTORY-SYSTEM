@@ -34,10 +34,10 @@ BEGIN
         (reconciled_at IS NOT NULL AND finalized_at IS NOT NULL
          AND finalized_by_user_id IS NOT NULL
          AND invoice_number IS NOT NULL AND length(trim(invoice_number))>0
-         AND finalization_details->>'invoiceNumber'=invoice_number
-         AND finalization_details->>'customerReceivableReposted'='false'
-         AND jsonb_typeof(finalization_details->'voucherIds')='array'
-         AND jsonb_typeof(finalization_details->'includedPostingIds')='array')
+         AND COALESCE(finalization_details->>'invoiceNumber'=invoice_number,FALSE)
+         AND COALESCE(finalization_details->>'customerReceivableReposted'='false',FALSE)
+         AND COALESCE(jsonb_typeof(finalization_details->'voucherIds')='array',FALSE)
+         AND COALESCE(jsonb_typeof(finalization_details->'includedPostingIds')='array',FALSE))
       );
   END IF;
 END $phase8_checks$;
