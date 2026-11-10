@@ -3,7 +3,7 @@ import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, Table
 import { Skeleton } from "@/components/ui/skeleton";
 import { Wallet, Package, FileText, Landmark } from "lucide-react";
 
-import { calculateAbsoluteTotal, formatSmartCurrency } from "../accountMath";
+import { calculateAbsoluteTotal, calculateCashTotal, formatSignedSmartCurrency, formatSmartCurrency } from "../accountMath";
 import type { AnalyticsLegacyState } from "../useAnalyticsLegacy";
 
 export function BalanceSectionsPanel({ analytics }: { analytics: AnalyticsLegacyState }) {
@@ -16,6 +16,7 @@ export function BalanceSectionsPanel({ analytics }: { analytics: AnalyticsLegacy
     loansBanksAccounts,
     renderHierarchicalAccounts,
   } = analytics;
+  const cashTotal = calculateCashTotal(cashAccounts);
   return (
     <>
       {activeSection === "assets" && (
@@ -130,8 +131,8 @@ export function BalanceSectionsPanel({ analytics }: { analytics: AnalyticsLegacy
               </div>
               <div className="text-right">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Total Cash</p>
-                <p className="text-2xl font-bold font-mono tabular-nums">
-                  {formatSmartCurrency(calculateAbsoluteTotal(cashAccounts))}
+                <p className={`text-2xl font-bold font-mono tabular-nums ${cashTotal < 0 ? "text-red-500 dark:text-red-400" : ""}`}>
+                  {formatSignedSmartCurrency(cashTotal)}
                 </p>
               </div>
             </div>
@@ -152,12 +153,12 @@ export function BalanceSectionsPanel({ analytics }: { analytics: AnalyticsLegacy
                       <TableHead className="text-right">Balance</TableHead>
                     </TableRow>
                   </TableHeader>
-                  <TableBody>{renderHierarchicalAccounts(cashAccounts)}</TableBody>
+                  <TableBody>{renderHierarchicalAccounts(cashAccounts, true)}</TableBody>
                   <TableFooter>
                     <TableRow>
                       <TableCell className="font-semibold">Total Cash</TableCell>
-                      <TableCell className="text-right font-bold font-mono">
-                        {formatSmartCurrency(calculateAbsoluteTotal(cashAccounts))}
+                      <TableCell className={`text-right font-bold font-mono ${cashTotal < 0 ? "text-red-500 dark:text-red-400" : ""}`}>
+                        {formatSignedSmartCurrency(cashTotal)}
                       </TableCell>
                     </TableRow>
                   </TableFooter>
