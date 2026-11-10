@@ -92,7 +92,7 @@ export function useBaleProductsModel() {
       return res.ok ? res.json() : {};
     },
   });
-  const accessReady = Boolean(selectedCompany?.id && myAccess?.companyId === selectedCompany.id && myAccess?.hasFactoryAccess === true);
+  const accessReady = Boolean(selectedCompany?.id && myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true);
   const perUserHiddenBP = accessReady ? (myAccess?.hiddenCostFields ?? []) : [];
   const hideAvgRate =
     !accessReady || myAccess?.hideAllCosts === true ||
