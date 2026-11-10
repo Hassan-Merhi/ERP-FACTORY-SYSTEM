@@ -150,6 +150,15 @@ export async function loadOrderDispatchReconciliationTx(
       liveCount=Number(row?.count??0);
     }
     if(liveCount!==vouchers.length)continue;
+    if(vouchers.length===0){
+      // A zero-priced bale trip with no fees or expenses may correctly
+      // have a signed POST record but no debit/credit voucher.
+      financial.postingVerified=new MoneyDecimal(financial.customerTotal).isZero() &&
+        new MoneyDecimal(financial.goodsSubtotal).isZero() &&
+        new MoneyDecimal(financial.billableChargesTotal).isZero() &&
+        new MoneyDecimal(financial.discountTotal).isZero();
+      continue;
+    }
     // Original customer receivable MUST be tied to the exact FDTR voucher,
     // never merely an arbitrary voucher in the same company. Reversals or a
     // replaced sales voucher block the signed combined invoice.
