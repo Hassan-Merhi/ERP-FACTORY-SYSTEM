@@ -160,3 +160,22 @@ The user-facing guarded SQL and instructions:
 `HADI_ALL_ORIGINAL_RENT_TO_1007_COPY.txt`,
 `HADI_ALL_ORIGINAL_RENT_TO_1007_README.txt`.
 These were prepared in the conversation's working files. They use one SERIALIZABLE transaction and a standard single-quoted `DO '...' LANGUAGE plpgsql` block compatible with TablePlus's **Run All**, with source-row fingerprint checks and unconditional postconditions. They have **not been executed** by ChatGPT, whose production PostgreSQL connector is read-only. The old narrower `HADI_JANUARY_15000_TO_32700` SQL is superseded and should NOT be applied before/after this full consolidation unless explicitly reassessed.
+
+## February 2026 original-voucher correction — prepared, not yet executed
+
+The owner confirmed all 53 surviving original legacy #881 postings were reclassified to #1007 and redundant June transfer #8787 was soft-retired. A live Render read-only query confirmed **zero posted #881 entries**, historical transfer `deleted_at` present, and all 11 monthly amounts unchanged, with **#1007 434,350 Dr**, **#1021 18,000 Cr**, **#1022 7,000 Dr**, period timing #4282 zero.
+
+The next target is February. Original Payment **#6478** (February 1, 2026) is $5,250, for February–April small shop rent: original debit entry **#22755 Dr #1007 $5,250** and cash counterpart **#22756 Cr KOLWEZI CASH #6 $5,250**. Exact economic split is February rent $1,750, March/April prepaid $3,500. Two already-existing February 1 Journal vouchers **#12990** and **#13004**, each Dr Prepaid #1022 $1,750 / Cr Expense #1007 $1,750, reclassified those future months from February rent expense. They have **no** property-month accrual links, rental payment links, or cost-center allocations.
+
+Therefore the prepared February-only repair:
+1. Updates **original entry #22755** on Payment #6478 to Dr #1007 **$1,750** (old $5,250).
+2. Adds a new Dr Prepaid #1022 **$3,500** **entry on the same original Payment #6478**. The original **KOLWEZI CASH Cr $5,250** line #22756, payment date, total, and voucher ID remain unchanged.
+3. Soft-retires historical duplicate reclassification voucher headers #12990 and #13004 while preserving all their original entry records and adding explicit audit reasons. These 2 JVs no longer influence posted general ledger.
+4. Asserts February **actual posted** Dr #1007 $34,450 / Cr #1007 **$0**, January stays Dr $32,700/Cr $0, all Jan–Nov net monthly expense amounts unchanged, Expense #1007 $434,350 Dr, Prepaid #1022 $7,000 Dr, Payable #1021 $18,000 Cr, old #881 $0, timing #4282 $0.
+5. The script refuses changed sources, any closed periods, duplicate run, or missing previous consolidation audit; validates immutable original KOLWEZI CASH entry fingerprint `421ec07ee9d2214999d53932fffb1985`. In total three new repair audit rows and **zero new vouchers**. Original journals are retained for audits, not erased.
+
+A fresh read-only preflight on 2026-11-10 found all exact expected original rows, source header identities, the completed **54 prior consolidation audit rows**, zero February repairs already run, and zero closed periods or dependent allocation/lease-payment links.
+
+User-facing file: `HADI_FEBRUARY_ORIGINAL_VOUCHERS_TABLEPLUS.sql` (plus copy-text and README), generated in current ChatGPT workspace. It uses a **single standard-quoted DO** and SERIALIZABLE transaction for TablePlus Run All, with final independent read-only query; the actual correction remains **UNEXECUTED** until the owner runs the file in TablePlus and reports `PASS HADI FEB ORIGINAL`.
+
+Future pending gross credits: June $218,300, July $400, October $2,000, to be assessed **one by one**, not visually netted and not automatically erased without corresponding financial source evidence. Separate unfinished future-posting PR #3114 needs testing and deployment.
