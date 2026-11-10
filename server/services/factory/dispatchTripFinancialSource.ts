@@ -10,6 +10,7 @@
  * will group the rows by ARTICLE CODE, not physical bale barcode.
  */
 import { createHash } from "node:crypto";
+import type Decimal from "decimal.js";
 import { sql } from "drizzle-orm";
 import type { DbTransaction } from "../../db";
 import { MoneyDecimal, sumMoney } from "../../lib/money";
@@ -99,7 +100,7 @@ const idString = (value: unknown): string => {
   return /^[1-9][0-9]*$/.test(stringified) ? stringified : "";
 };
 
-function decimal(value: unknown, places: number, label: string): MoneyDecimal {
+function decimal(value: unknown, places: number, label: string): Decimal {
   const str = String(value ?? "");
   if (!/^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/.test(str)) {
     refuse("MANIFEST_INVALID", label + " must be a non-negative decimal");
