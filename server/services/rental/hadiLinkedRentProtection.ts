@@ -13,7 +13,7 @@ import { getRentalBillingDay, getRentalPeriodDueDate } from "./rentalPeriodServi
 import { isValidRentalBusinessDate } from "./rentalPaymentClassification";
 import { runWithAutoTransferCounterparties } from "./autoTransferScope";
 import { HADI_LINKED_RENT, classifyHadiRentDifference, positiveRentalDue } from "./hadiRentLedgerPolicy";
-export { HADI_HISTORICAL_ACCRUAL_GUARD, HADI_LINKED_RENT, isHadiHistoricAccrualRepair, classifyHadiRentDifference, positiveRentalDue } from "./hadiRentLedgerPolicy";
+export { HADI_HISTORICAL_ACCRUAL_GUARD, HADI_LINKED_RENT, isHadiHistoricAccrualRepair, isHadiProtectedRentMonth, classifyHadiRentDifference, positiveRentalDue } from "./hadiRentLedgerPolicy";
 
 export interface HadiLinkedRentControl {
   asOf: string;
