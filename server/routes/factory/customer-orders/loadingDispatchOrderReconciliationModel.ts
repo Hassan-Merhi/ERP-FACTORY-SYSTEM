@@ -93,7 +93,7 @@ function kg(value: string | number): string {
   return new MoneyDecimal(v).toFixed(3);
 }
 const canonicalArticle = (article: string) => article.trim().toUpperCase();
-function amount(value: string): MoneyDecimal { return new MoneyDecimal(safeMoney(value)); }
+function amount(value: string) { return new MoneyDecimal(safeMoney(value)); }
 function key(id: unknown): string { return String(id ?? ""); }
 export function calculateOrderDispatchReconciliation(input: OrderReconciliationInput): OrderReconciliationResult {
   if (![input.companyId,input.orderId].every(v=>Number.isSafeInteger(v) && v>0)) fail("RECONCILIATION_ID_INVALID", "Invalid company or order");
@@ -204,8 +204,13 @@ export function calculateOrderDispatchReconciliation(input: OrderReconciliationI
     loaded:[...input.loaded].sort((a,b)=>a.baleId-b.baleId),
     scans:[...input.scans].sort((a,b)=>a.scanId.localeCompare(b.scanId)),
     trips:[...input.trips].sort((a,b)=>a.id.localeCompare(b.id)),
+    // ERP PO file generation is independent and can occur after the Factory
+    // order is signed. Exclude export metadata from the approval fingerprint.
     financials:[...input.financials].sort((a,b)=>a.dispatchId.localeCompare(b.dispatchId))
-      .map(f=>({...f,financialBales:[...f.financialBales].sort((a,b)=>a.baleId-b.baleId)})),
+      .map(f=>({
+        ...f,exportedPoNumber:null,exportedAt:null,
+        financialBales:[...f.financialBales].sort((a,b)=>a.baleId-b.baleId),
+      })),
     orderCharges:input.orderCharges.slice().sort((a,b)=>a.id-b.id),
   })).digest("hex");
   return {
