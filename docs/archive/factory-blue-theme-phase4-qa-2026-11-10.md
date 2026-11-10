@@ -243,3 +243,47 @@ Subsequent production fixture investigation correctly identified needed mock res
 TinyFish is already installed, as is the Vercel connector; no new connector installation is needed. TinyFish was previously used for authenticated desktop checks and currently does not expose reliable exact-width resizing. Full authenticated production route screenshots at 390px/768px are therefore still a separate gate from this source-build/synthetic-data verification.
 
 **Phase 4 certification:** Focused Vitest (8/8) and production build passed in earlier sessions; real Factory dark-mode routes have been checked at desktop size; 30/36 isolated full-React empty-state mobile/tablet/desktop tests now pass. A production overview mock fixture and the authenticated mobile/tablet visual matrix remain open. Avoid claiming production deployments were updated without checking the Render deployment revision.
+
+## Phase 4 isolated full-React responsive matrix completed — 36/36 (2026-11-10)
+
+The missing synthetic payloads for the Production Overview screen were completed in an isolated non-production Chromium test harness. These responses represent an empty, synthetic Factory company, not real ledger/payroll/stock data. The Production Overview screen then rendered its real React components and production metrics/sections in **all six target viewport/theme combinations**, with no top-level error boundary and no document-level horizontal overflow.
+
+The **complete six-route × three-viewport × two-theme matrix** was rerun against the built application. The result, including the exact viewport values and active HTML theme class for each case, was:
+
+```text
+MATRIX_EXIT:0
+SUMMARY {"total":36,"passed":36,"failures":[]}
+```
+
+A reusable, UTF-8 test harness was committed to `tests/e2e/factory-theme-responsive-phase4.mjs` (commit `043095ae4adc7d85a3d1ebffe4d01563a77034aa`). The harness intercepts `/api/*` with synthetic Admin, Factory company, one mock location, production report, and salary/attendance data; it **bypasses service workers** and verifies that the actual React Factory route renders without route error boundaries at 390/768/1440, in light/dark, with no document-level horizontal overflow. It captures individual Chromium screenshots in the configured scratch output directory, which is not committed as application source.
+
+After committing the harness, it was executed again from the checked-out `main` file and returned:
+
+```text
+FINAL_EXIT:0
+SUMMARY {"passed":36,"total":36,"screenshotDir":"/tmp/factory-phase4-final-36"}
+```
+
+The completed cases cover:
+- Location Inventory: 6/6
+- Invoicing: 6/6
+- Suppliers (Parties): 6/6
+- Production Overview: 6/6
+- Containers Hub: 6/6
+- Payroll/Workers: 6/6
+
+**Distinction:** This fully resolves the previous **isolated mock-browser Phase 4 responsive-matrix gap**. Mocked empty-state screenshots do not prove real production inventory tables, dialogs or long lists at the same viewport sizes.
+
+A separate final authenticated TinyFish attempt explicitly tested availability of 390px / 768px viewport emulation on the live application. The browser agent returned **`unsupported`**, noting no resize/device-emulation control and no means to assert `window.innerWidth` at those requested dimensions. Therefore exact-width **authenticated live production** screenshots are still unverified. Previous authenticated desktop smoke tests covered all six Factory dark-mode pages. Do **not** claim this tool certified the production mobile/tablet layout or that `main` was deployed to Render.
+
+### Phase 4 sign-off scope
+
+- [x] Unified Factory theme source and dark-background fixes on `main`
+- [x] Factory theme Vitest tests: 8/8 (prior executed isolated runs)
+- [x] Vite production build (prior successful isolated run; Vite client built again for final matrix)
+- [x] Full actual-React synthetic-browser responsive matrix: **36/36** passing
+- [x] Authenticated desktop dark-mode smoke checks of six Factory areas
+- [ ] Exact-width authenticated **production-data** page screenshots on 390px and 768px browsers — unsupported by current TinyFish browser
+- [ ] Confirm newest `main` theme fixes deployed to the intended Render production service; deployment remains separate from merging commits.
+
+**Outcome:** The user-requested remaining **isolated responsive testing** is complete. Retain a separate live-production mobile/tablet acceptance gate rather than creating false certification.
