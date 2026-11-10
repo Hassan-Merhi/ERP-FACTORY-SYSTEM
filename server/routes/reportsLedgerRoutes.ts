@@ -200,14 +200,6 @@ export function registerReportsLedgerRoutes(app: Express) {
 
       res.json({
         account: { id: account.id, code: account.code, name: account.name },
-        // HADI's original historical correction vouchers have real gross Dr/Cr
-        // entries, while each reconciled rent month has a net debit. Preserve
-        // raw amounts in the API and voucher drilldown; the summary page may
-        // show the net-side presentation rather than gross correction turnover.
-        presentation: companyId === HADI_ERP_RENT_MERGE.companyId &&
-          accountId === HADI_ERP_RENT_MERGE.targetLedgerId &&
-          statementAccountIds.includes(HADI_ERP_RENT_MERGE.legacyLedgerId)
-          ? "net-expense" : "gross",
         openingBalance: openingBalance.toNumber(),
         rentServiceMonthPreview,
         months: monthlyData,
