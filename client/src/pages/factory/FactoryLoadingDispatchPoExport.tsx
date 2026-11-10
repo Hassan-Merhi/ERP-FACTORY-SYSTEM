@@ -141,7 +141,7 @@ export default function FactoryLoadingDispatchPoExport({ orderId, dispatchId, co
     setRatesReviewed(false);
     setChargesReviewed(false);
     setPreviewResult(null);
-  }, [source?.sourceFingerprint, source?.revision, source?.previousExport?.exportFingerprint]);
+  }, [source]);
 
   const choice = () => ({
     supplierCode: supplierCode.trim(),
