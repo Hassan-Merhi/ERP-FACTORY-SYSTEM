@@ -106,7 +106,7 @@ export default function FactoryWaste() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/waste", from, to] });
+      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/waste", selectedCompany?.id, from, to) });
       setDialogOpen(false);
       resetForm();
     },
@@ -117,7 +117,7 @@ export default function FactoryWaste() {
       await factoryApiRequest("DELETE", `/api/factory/waste/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/waste", from, to] });
+      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/waste", selectedCompany?.id, from, to) });
       setPendingDeleteId(null);
     },
   });
