@@ -137,141 +137,29 @@ export default function FactoryLoadingDispatchPostingPanel({ orderId, dispatchId
   const exportTripInvoice = async () => {
     setExportingInvoice(true);
     try {
-      const overview = await read<{
-        order: { customerName: string | null; containerNumber: string | null };
-        trips: Array<{ id: string; dispatchNumber: number; financialStatus: string; scannedBales: number; scannedWeightKg: string; goodsSubtotal: string | null; billableCharges: string | null; discounts: string | null; customerTotal: string | null; postedAt: string | null }>;
-        charges: Array<{ dispatchId: string | null; name: string; kind: string; amount: string }>;
-      }>("/api/factory/customer-orders/" + orderId + "/loading-dispatches/order-overview");
-      const trip = overview.trips.find(t => t.id === String(dispatchId));
-      if (!trip || !["POSTED", "CONSOLIDATED"].includes(trip.financialStatus) || trip.customerTotal === null) {
-        throw new Error("Financially finalize this trip before exporting its invoice.");
+      const url = "/api/factory/customer-orders/" + orderId +
+        "/loading-dispatches/order-overview/trips/" + dispatchId + "/invoice.xlsx";
+      const response = await fetch(url, { credentials: "include", cache: "no-store" });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.message || "Could not export trip invoice");
       }
-      const invoiceLines = await read<{
-        goodsSubtotal: string;
-        lines: Array<{ articleCode: string; productName: string; pricingMode: string;
-          unitPrice: string; weightKg: string; lineTotal: string }>;
-      }>("/api/factory/customer-orders/" + orderId + "/loading-dispatches/order-overview/trips/" + dispatchId + "/invoice-lines");
-      const toCents = (value: string) => Math.round(Number(value) * 100);
-      const goodsCents = invoiceLines.lines.reduce((sum, line) => sum + toCents(line.lineTotal), 0);
-      if (!Number.isSafeInteger(goodsCents) || goodsCents !== toCents(invoiceLines.goodsSubtotal) ||
-          goodsCents !== toCents(trip.goodsSubtotal ?? "0")) {
-        throw new Error("Frozen article totals do not match posted trip goods. Invoice export blocked.");
-      }
-      const grouped = new Map<string, { articleCode: string; productName: string; pricingMode: string;
-        unitPrice: string; quantity: number; weight: number; cents: number }>();
-      for (const line of invoiceLines.lines) {
-        const key = JSON.stringify([line.articleCode, line.productName, line.pricingMode, line.unitPrice]);
-        const current = grouped.get(key) ?? { articleCode: line.articleCode, productName: line.productName,
-          pricingMode: line.pricingMode, unitPrice: line.unitPrice, quantity: 0, weight: 0, cents: 0 };
-        current.quantity++;
-        current.weight += Number(line.weightKg);
-        current.cents += toCents(line.lineTotal);
-        grouped.set(key, current);
-      }
-      const escapeHtml = (v: unknown) => String(v ?? "").replace(/[&<>"']/g, c => ({
-        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
-      })[c] || c);
-      const currency = (v: string | null) => "$" + dollars(v ?? undefined);
-      const charges = overview.charges.filter(c => c.dispatchId === String(dispatchId) && (c.kind === "BILLABLE" || c.kind === "DISCOUNT"));
-      const articleRows = [...grouped.values()].map(line => `<tr>
-        <td><strong>${escapeHtml(line.articleCode)}</strong></td>
-        <td>${escapeHtml(line.productName)}</td>
-        <td class="right">${line.quantity}</td>
-        <td class="right">${escapeHtml(line.weight.toFixed(2))}</td>
-        <td class="right">${escapeHtml(line.pricingMode.toLowerCase() === "per_kg" ? "per kg" : "per bale")}</td>
-        <td class="right">${escapeHtml("$" + Number(line.unitPrice).toFixed(4))}</td>
-        <td class="right">${escapeHtml("$" + (line.cents / 100).toFixed(2))}</td>
-      </tr>`).join("");
-      const chargeRows = charges.map(c => `<tr><td>${escapeHtml(c.name)} (${escapeHtml(c.kind)})</td><td class="right">${escapeHtml((c.kind === "DISCOUNT" ? "−" : "") + currency(c.amount))}</td></tr>`).join("");
-      const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Trip ${trip.dispatchNumber} — Customer Invoice</title>
-        <style>
-          :root{color-scheme:light}*{box-sizing:border-box}
-          body{font-family:Arial,Helvetica,sans-serif;color:#15243b;background:#f1f5f9;margin:0;padding:32px 16px;font-size:13px}
-          .sheet{max-width:850px;margin:auto;background:#fff;min-height:980px;padding:46px 52px;box-shadow:0 12px 45px #0f172a14}
-          .toolbar{max-width:850px;margin:0 auto 16px;text-align:right}
-          button{border:0;background:#173f76;color:#fff;border-radius:7px;padding:12px 20px;font-weight:700;cursor:pointer}
-          .masthead{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;border-bottom:3px solid #173f76;padding-bottom:25px}
-          .brand{font-size:27px;letter-spacing:.08em;font-weight:800;color:#173f76}
-          .subbrand{color:#64748b;font-size:11px;letter-spacing:.12em;margin-top:6px}
-          h1{font-size:26px;margin:0;color:#173f76;text-align:right}
-          .invoice-type{color:#64748b;text-align:right;font-size:12px;margin-top:6px}
-          .details{display:grid;grid-template-columns:1fr 1fr;gap:26px;margin:32px 0}
-          .detail{border:1px solid #e2e8f0;border-radius:8px;padding:18px;min-height:125px}
-          .eyebrow{font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:#64748b;font-weight:700;margin-bottom:10px}
-          .customer{font-size:17px;font-weight:700;overflow-wrap:anywhere}
-          .meta{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px}
-          .meta span{color:#64748b}.meta strong{display:block;margin-top:4px;font-size:12px;color:#15243b}
-          .section{font-size:15px;color:#173f76;font-weight:700;margin:28px 0 12px}
-          table{width:100%;border-collapse:collapse;font-size:11px}th{background:#173f76;color:white;text-align:left;padding:13px 14px;font-size:11px;letter-spacing:.04em}
-          td{padding:14px;border-bottom:1px solid #e2e8f0;vertical-align:top}
-          tr:nth-child(even) td{background:#f8fafc}.right{text-align:right;white-space:nowrap}
-          .summary{width:340px;max-width:100%;margin:26px 0 0 auto}
-          .summary div{display:flex;justify-content:space-between;gap:20px;padding:9px 12px}
-          .summary .grand{background:#eaf1fa;border-top:2px solid #173f76;font-size:17px;font-weight:800;color:#173f76;padding:16px 12px}
-          .foot{margin-top:64px;border-top:1px solid #cbd5e1;padding-top:16px;color:#64748b;font-size:11px;line-height:1.7}
-          @page{size:A4;margin:12mm}
-          @media print{body{background:#fff;padding:0}.sheet{box-shadow:none;max-width:none;min-height:0;padding:0}.toolbar{display:none}
-          .masthead,.details,.summary,.foot{break-inside:avoid}th{-webkit-print-color-adjust:exact;print-color-adjust:exact}
-          .summary .grand{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
-          @media(max-width:560px){.sheet{padding:25px 18px}.details{grid-template-columns:1fr}.masthead{flex-direction:column}h1,.invoice-type{text-align:left}}
-        </style></head><body>
-        <div class="toolbar"><button onclick="window.print()">Print / Save as PDF</button></div>
-        <main class="sheet">
-          <header class="masthead">
-            <div><div class="brand">FACTORY</div><div class="subbrand">CUSTOMER DISPATCH DOCUMENT</div></div>
-            <div><h1>TRIP INVOICE</h1><div class="invoice-type">Posted trip #${trip.dispatchNumber} · Order #${orderId}</div></div>
-          </header>
-          <section class="details">
-            <div class="detail"><div class="eyebrow">Bill to</div><div class="customer">${escapeHtml(overview.order.customerName || "Customer not specified")}</div></div>
-            <div class="detail"><div class="eyebrow">Shipment details</div><div class="meta">
-              <div><span>Trip</span><strong>#${trip.dispatchNumber}</strong></div>
-              <div><span>Order</span><strong>#${orderId}</strong></div>
-              <div><span>Container</span><strong>${escapeHtml(overview.order.containerNumber || "—")}</strong></div>
-              <div><span>Posted date</span><strong>${escapeHtml(trip.postedAt ? new Date(trip.postedAt).toLocaleDateString() : "—")}</strong></div>
-            </div></div>
-          </section>
-          <div class="section">Shipment summary</div>
-          <div class="meta" style="grid-template-columns:repeat(2,minmax(0,1fr));margin-bottom:26px">
-            <div><span>Signed bales</span><strong>${trip.scannedBales}</strong></div>
-            <div><span>Total weight</span><strong>${escapeHtml(trip.scannedWeightKg)} kg</strong></div>
-          </div>
-          <div class="section">Invoice breakdown</div>
-          <table><thead><tr><th>Article code</th><th>Description</th><th class="right">Bales</th><th class="right">KG</th><th class="right">Basis</th><th class="right">Unit price</th><th class="right">Total USD</th></tr></thead><tbody>
-            ${articleRows}
-          </tbody></table>
-          <div class="section">Additional charges &amp; discounts</div>
-          <table><thead><tr><th>Description</th><th class="right">Amount (USD)</th></tr></thead><tbody>
-            ${chargeRows || '<tr><td colspan="2">No additional trip charges</td></tr>'}
-          </tbody></table>
-          <div class="summary">
-            <div><span>Goods subtotal</span><strong>${escapeHtml(currency(trip.goodsSubtotal))}</strong></div>
-            <div><span>Billable charges</span><strong>${escapeHtml(currency(trip.billableCharges))}</strong></div>
-            <div><span>Discounts</span><strong>−${escapeHtml(currency(trip.discounts))}</strong></div>
-            <div class="grand"><span>Amount due (USD)</span><span>${escapeHtml(currency(trip.customerTotal))}</span></div>
-          </div>
-          <footer class="foot">This document represents only trip #${trip.dispatchNumber} under order #${orderId}.
-          Amounts are sourced from existing posted Factory financial records. Exporting does not create
-          additional accounting entries. The final consolidated order invoice is handled separately.</footer>
-        </main></body></html>`;
-      const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = `Factory_Trip_${trip.dispatchNumber}_Invoice.html`;
+      anchor.href = objectUrl;
+      anchor.download = "Factory_Trip_Invoice_" + dispatchId + ".xlsx";
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 60000);
-      toast({ title: "Trip invoice downloaded", description: "Open the HTML file and select Print / Save as PDF." });
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+      toast({ title: "Excel trip invoice downloaded" });
     } catch (error) {
-      toast({ title: "Invoice export unavailable", description: errorText(error), variant: "destructive" });
+      toast({ title: "Excel invoice export failed", description: errorText(error), variant: "destructive" });
     } finally {
       setExportingInvoice(false);
     }
   };
-
   const existingPostings = history.data?.postings ?? [];
 
   if (!roleCanPost(role)) return null;
@@ -337,7 +225,7 @@ export default function FactoryLoadingDispatchPostingPanel({ orderId, dispatchId
           {["POSTED", "CONSOLIDATED"].includes(financialStatus) && (
             <Button type="button" variant="outline" className="w-full" disabled={exportingInvoice}
               onClick={() => void exportTripInvoice()} data-testid="dispatch-export-trip-invoice">
-              <Download className="mr-2 h-4 w-4" /> {exportingInvoice ? "Preparing invoice…" : "Export Trip Invoice"}
+              <Download className="mr-2 h-4 w-4" /> {exportingInvoice ? "Preparing invoice…" : "Export Trip Invoice (Excel)"}
             </Button>
           )}
           {financialStatus === "CONSOLIDATED" && (
