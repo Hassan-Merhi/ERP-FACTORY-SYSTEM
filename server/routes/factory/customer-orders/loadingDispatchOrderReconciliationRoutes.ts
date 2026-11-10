@@ -31,7 +31,8 @@ import {
 const path="/api/factory/customer-orders/:id/loading-dispatches/order-reconciliation";
 const access=requireFactoryTabAccess("factory/invoicing","hide_invoicing_loadings_tab");
 const read = (v: unknown) => resultRows(v);
-const refusal=(code:string,message:string,status=409):never=>{throw new OrderReconciliationError(code,message,status);};
+// Explicitly typed so TypeScript narrows after a refusal (an inferred arrow type does not).
+const refusal:(code:string,message:string,status?:number)=>never=(code,message,status=409)=>{throw new OrderReconciliationError(code,message,status);};
 function reason(body:unknown,min=10):string{
   const raw=(body as Record<string,unknown>|null)?.reason;
   if(typeof raw!=="string" || raw.trim().length<min || raw.trim().length>1000){

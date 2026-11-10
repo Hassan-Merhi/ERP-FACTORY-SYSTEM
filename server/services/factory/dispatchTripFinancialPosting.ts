@@ -35,7 +35,8 @@ export class TripFinancialPostingError extends Error {
     this.name = "TripFinancialPostingError";
   }
 }
-const refuse = (code: string, message: string, status = 409): never => {
+// Explicitly typed so TypeScript narrows after a refusal (an inferred arrow type does not).
+const refuse: (code: string, message: string, status?: number) => never = (code, message, status = 409) => {
   throw new TripFinancialPostingError(code, message, status);
 };
 const rows = async (tx: DbTransaction, q: ReturnType<typeof sql>) => resultRows(await tx.execute(q));

@@ -19,8 +19,7 @@ import { isPerpetualInventoryActive } from "../../../services/accounting/perpetu
 import { ledgerAccountByCodeTx, systemAccountIdsTx } from "../../../services/accounting/perpetualInventory/linkedJournal";
 import { postFactoryVoucherTx } from "../../../services/factory/factoryVoucherPosting";
 import { writeDaybookEntry } from "../_helpers";
-import {
-  customerInvoiceSequences, customerOrderBales, customerOrderLines,
+import { customerOrderLines,
   customerOrders, factoryBales, customerOrderCharges,
 } from "@shared/schema";
 import {
