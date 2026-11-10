@@ -150,10 +150,10 @@ export async function runRentalReconciliation(
     `SELECT ml.id AS ledger_row_id, ml.contract_id, ml.year, ml.month, ml.accrual_voucher_id,
             v.deleted_at AS voucher_deleted_at
      FROM property_monthly_ledger ml
-     LEFT JOIN vouchers v ON v.id = ml.accrual_voucher_id
+     LEFT JOIN vouchers v ON v.id = ml.accrual_voucher_id AND v.company_id = ml.company_id
      WHERE ml.company_id = $1 AND ml.module = $2
        AND ml.accrual_voucher_id IS NOT NULL
-       AND (v.id IS NULL OR v.deleted_at IS NOT NULL)`,
+       AND (v.id IS NULL OR v.deleted_at IS NOT NULL OR v.optional = TRUE)`,
     [companyId, module]
   );
   for (const r of orphanAccruals) {

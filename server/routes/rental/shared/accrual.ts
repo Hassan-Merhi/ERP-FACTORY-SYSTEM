@@ -7,7 +7,7 @@ import { eq, and, sql, inArray, isNull, isNotNull, ne } from "drizzle-orm";
 import { RentalModule, findOrCreateLedgerAccount } from "./ledger";
 import { ensureMonthlyLedgerRows } from "./monthly-rows";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
-import { isRentRecognitionHeld } from "../../../services/rental/rentRecognitionHold";
+import { isRentRecognitionHeld, isRentMonthReadyToRecognize } from "../../../services/rental/rentRecognitionHold";
 import { postAccrualPassTx, type RentAccrualPostingOptions } from "./accrual-posting";
 
 export type { RentAccrualPostingOptions } from "./accrual-posting";
@@ -214,7 +214,11 @@ export async function postRentAccrualForCompany(
       );
     alreadyDone = allAccruedForSkip.length;
 
-    const pendingRows = allUnaccrued.filter((r) => isDue(r) && contractsWithPositiveOutstanding.has(r.contractId));
+    // A reviewed historical month with a deleted accrual link must never re-accrue
+    // just because a later month on the same contract becomes unpaid.
+    const pendingRows = allUnaccrued.filter((r) =>
+      isRentMonthReadyToRecognize(r.notes, isDue(r)) && contractsWithPositiveOutstanding.has(r.contractId)
+    );
 
     logger.info(
       `[postRentAccrual] company=${companyId} unaccrued=${allUnaccrued.length} pendingDue=${pendingRows.length} alreadyDone=${alreadyDone} curYear=${curYear} curMonth=${curMonth} curDay=${curDay} contractsWithPositiveOutstanding=${contractsWithPositiveOutstanding.size}`
@@ -373,7 +377,9 @@ export async function postRentAccrualForCompany(
             sql`${propertyMonthlyLedger.expectedAmount}::numeric > 0`
           )
         );
-      const dueAdvanceRows = advanceRows.filter((r) => isDue(r));
+      // Holds also protect the advance-recognition path: a mixed batch must not
+      // cause historical, already-recognized months to be posted again.
+      const dueAdvanceRows = advanceRows.filter((r) => isRentMonthReadyToRecognize(r.notes, isDue(r)));
       if (dueAdvanceRows.length > 0) {
         await db.transaction(async (tx) => {
           const pendingIds15 = dueAdvanceRows.map((r) => r.id);
