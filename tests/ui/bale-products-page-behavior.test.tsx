@@ -1,4 +1,8 @@
 import React, { createContext, useContext } from "react";
+
+vi.mock("@/contexts/CompanyContext", () => ({
+  useCompany: () => ({ selectedCompany: { id: 1, name: "Test Factory", companyType: "factory" } }),
+}));
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -58,7 +62,7 @@ vi.mock("@tanstack/react-query", () => ({
   useQuery: ({ queryKey }: any) => {
     const root = queryKey?.[0];
     if (root === "/api/auth/me") return { data: { id: "user-1", role: harness.currentRole, currentRole: harness.currentRole } };
-    if (root === "/api/factory/my-access") return { data: { hiddenCostFields: [] } };
+    if (root === "/api/factory/my-access") return { data: { companyId: 1, hasFactoryAccess: true, hideAllCosts: false, hiddenCostFields: [] } };
     if (root === "/api/factory/settings") return { data: { hideAvgCost: false, hideSellingPrice: false } };
     if (root === "/api/factory/bale-products") return { data: products, isLoading: false };
     if (root === "/api/factory/categories") {
