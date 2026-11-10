@@ -287,6 +287,7 @@ export default function FactoryLoadingDispatchPoExport({ orderId, dispatchId, co
               <p className="text-[11px] text-muted-foreground">
                 These are ERP supplier purchase rates, not Factory customer selling prices.
                 The exported Quantity is the number of physically scanned bales of each article.
+                ERP code/alias matching is case-sensitive, so verify every exported article code exists in the target ERP.
               </p>
               <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
                 {source.articles.map(article => (
@@ -375,7 +376,8 @@ export default function FactoryLoadingDispatchPoExport({ orderId, dispatchId, co
             )}
             <p className="border-t pt-3 text-[11px] text-muted-foreground">
               <strong>Manual ERP step:</strong> Switch to Normal ERP → PO Import, upload this spreadsheet,
-              validate the article codes and supplier, then import it yourself.
+              validate that each ERP Item_Barcode matches the correct article code/alias (not only a similar item name),
+              confirm the supplier and purchase rates, then import it yourself.
               Exporting never creates an ERP supplier balance, a purchase order, a voucher, or the combined Factory invoice.
             </p>
           </>
