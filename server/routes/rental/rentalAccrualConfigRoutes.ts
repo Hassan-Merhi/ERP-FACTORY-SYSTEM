@@ -4,6 +4,7 @@ import {
   runWithAutoTransferCounterparties,
 } from "../../services/rental/autoTransferScope";
 import { getErrorMessage } from "../../lib/httpHandlers";
+import { HADI_HISTORICAL_ACCRUAL_GUARD, isHadiHistoricAccrualRepair } from "../../services/rental/hadiLinkedRentProtection";
 import { runRentalReconciliation } from "../../services/rental/rentalReconciliationService";
 import { logger } from "../../lib/logger";
 import {
@@ -69,6 +70,12 @@ export function registerRentalAccrualConfigRoutes(
     try {
       const companyId = getCompanyId(req);
       if (!companyId) return res.status(400).json({ message: "No company selected" });
+
+      // HADI historical rent is already reconciled in its original vouchers.
+      // Do not create reversal/correction journals or reset any old month links.
+      if (isHadiHistoricAccrualRepair(companyId, module)) {
+        return res.status(409).json(HADI_HISTORICAL_ACCRUAL_GUARD);
+      }
 
       await ensureMonthlyForCompany(companyId, module);
 
@@ -499,6 +506,10 @@ export function registerRentalAccrualConfigRoutes(
     try {
       const companyId = getCompanyId(req);
       if (!companyId) return res.status(400).json({ message: "No company selected" });
+      // A reversal would change the protected balance and leave an old month eligible for another accrual.
+      if (isHadiHistoricAccrualRepair(companyId, module)) {
+        return res.status(409).json(HADI_HISTORICAL_ACCRUAL_GUARD);
+      }
       if (module !== "ERP")
         return res.status(400).json({ message: "Accrual reversal is only available for ERP module" });
 
