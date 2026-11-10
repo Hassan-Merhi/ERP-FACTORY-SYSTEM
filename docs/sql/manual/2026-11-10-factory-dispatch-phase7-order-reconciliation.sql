@@ -81,6 +81,7 @@ DECLARE
   target_order INTEGER;
   target_company INTEGER;
   is_signed BOOLEAN;
+  new_target_signed BOOLEAN;
 BEGIN
   IF TG_TABLE_NAME='factory_loading_dispatches'
      OR TG_TABLE_NAME='factory_loading_dispatch_scans'
@@ -105,6 +106,30 @@ BEGIN
   ) INTO is_signed;
   IF is_signed THEN
     RAISE EXCEPTION 'This order has a signed all-truck reconciliation; change of scanned/loaded/charge evidence is forbidden';
+  END IF;
+  -- Also reject moving a row FROM an unsigned order INTO a signed order.
+  -- Without checking NEW ownership, UPDATE order_id could evade an OLD-only
+  -- guard and pollute the signed bale/scan/charge evidence.
+  IF TG_OP='UPDATE' THEN
+    IF TG_TABLE_NAME='factory_loading_dispatches'
+       OR TG_TABLE_NAME='factory_loading_dispatch_scans'
+       OR TG_TABLE_NAME='factory_loading_dispatch_closure_history' THEN
+      SELECT EXISTS(
+        SELECT 1 FROM factory_dispatch_order_consolidations
+         WHERE company_id=NEW.company_id AND order_id=NEW.order_id
+           AND reconciled_at IS NOT NULL AND status IN ('DRAFT','FINALIZED')
+      ) INTO new_target_signed;
+    ELSE
+      SELECT EXISTS(
+        SELECT 1 FROM factory_dispatch_order_consolidations c
+        JOIN customer_orders o ON o.id=NEW.order_id
+         WHERE c.company_id=o.company_id AND c.order_id=NEW.order_id
+           AND c.reconciled_at IS NOT NULL AND c.status IN ('DRAFT','FINALIZED')
+      ) INTO new_target_signed;
+    END IF;
+    IF new_target_signed THEN
+      RAISE EXCEPTION 'Cannot move barcode, trip or charge evidence into a signed Factory order';
+    END IF;
   END IF;
   IF TG_OP='DELETE' THEN RETURN OLD; END IF;
   RETURN NEW;
