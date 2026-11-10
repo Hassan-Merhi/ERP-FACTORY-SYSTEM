@@ -117,6 +117,15 @@ export async function loadOrderDispatchReconciliationTx(
     exportedAt:row.exportedAt==null?null:str(row.exportedAt),
     financialBales:[],
   }));
+  // Scope the posted voucher ledger check to the Factory order's actual
+  // customer. A linked voucher existing with the right ID does not prove it
+  // still carries the signed customer receivable or goods clearing.
+  const [invoiceCustomer]=await query(tx,sql`
+    SELECT customer_id AS "customerId" FROM customer_orders
+    WHERE company_id=${scope.companyId} AND id=${scope.orderId}
+  `);
+  const customerId=id(invoiceCustomer?.customerId);
+
   // Verify every original POST record references live, non-optional
   // vouchers in the same Factory company. Never count a reversed, deleted or
   // unlinked voucher simply because the control row still says POSTED.
@@ -140,7 +149,49 @@ export async function loadOrderDispatchReconciliationTx(
       `);
       liveCount=Number(row?.count??0);
     }
-    financial.postingVerified=liveCount===vouchers.length;
+    if(liveCount!==vouchers.length)continue;
+    // Original customer receivable MUST be tied to the exact FDTR voucher,
+    // never merely an arbitrary voucher in the same company. Reversals or a
+    // replaced sales voucher block the signed combined invoice.
+    const [reversed]=await query(tx,sql`
+      SELECT id FROM factory_dispatch_trip_postings
+       WHERE company_id=${scope.companyId} AND order_id=${scope.orderId}
+         AND dispatch_id=${financial.dispatchId} AND kind='REVERSAL'
+         AND reverses_posting_id=${id(source.postingId)}
+       LIMIT 1
+    `);
+    if(reversed)continue;
+    const salesNumber=`FDTR-${scope.companyId}-${financial.dispatchId}-${financial.revision}`;
+    const [actual]=await query(tx,sql`
+      SELECT v.id,
+        COALESCE(SUM(CASE WHEN ve.customer_id=${customerId}
+          THEN ve.debit_amount-ve.credit_amount ELSE 0 END),0)::text AS "customerDebit",
+        COALESCE(SUM(CASE WHEN la.code='FACTORY_DISPATCH_CLEARING'
+          AND ve.customer_id IS NULL
+          THEN ve.credit_amount-ve.debit_amount ELSE 0 END),0)::text AS "goodsClearingCredit"
+      FROM vouchers v
+      JOIN voucher_entries ve ON ve.voucher_id=v.id
+      LEFT JOIN ledger_accounts la ON la.id=ve.ledger_account_id
+        AND la.company_id=v.company_id
+      WHERE v.company_id=${scope.companyId} AND v.voucher_number=${salesNumber}
+        AND v.id IN (${sql.join(vouchers.map(v=>sql`${v}`),sql`,`)})
+        AND v.deleted_at IS NULL AND COALESCE(v.optional,FALSE)=FALSE
+      GROUP BY v.id
+    `);
+    const hasFinancialCustomer=Number(financial.customerTotal)>0;
+    const hasGoods=Number(financial.goodsSubtotal)>0;
+    if((hasGoods||hasFinancialCustomer) &&
+       (!actual || !new MoneyDecimal(str(actual.customerDebit)).eq(financial.customerTotal) ||
+         !new MoneyDecimal(str(actual.goodsClearingCredit)).eq(financial.goodsSubtotal))){
+      continue;
+    }
+    // When a POST with no customer and no goods legitimately has only
+    // internal expenses (zero-price dispatch), there need not be an FDTR
+    // voucher. Such cases are still audited by their exact expense vouchers.
+    if(!(hasGoods||hasFinancialCustomer) && actual &&
+      (!new MoneyDecimal(str(actual.customerDebit)).isZero() ||
+       !new MoneyDecimal(str(actual.goodsClearingCredit)).isZero()))continue;
+    financial.postingVerified=true;
   }
 
   if(mapped.length){
