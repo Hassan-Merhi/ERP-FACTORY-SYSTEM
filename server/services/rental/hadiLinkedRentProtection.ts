@@ -12,26 +12,8 @@ import { MoneyDecimal, toMoney } from "../../lib/money";
 import { getRentalBillingDay, getRentalPeriodDueDate } from "./rentalPeriodService";
 import { isValidRentalBusinessDate } from "./rentalPaymentClassification";
 import { runWithAutoTransferCounterparties } from "./autoTransferScope";
-
-export const HADI_LINKED_RENT = Object.freeze({
-  payerCompanyId: 1,
-  propertiesCompanyId: 13,
-  payableLedgerId: 1021,
-  prepaidLedgerId: 1022,
-  expenseLedgerId: 1007,
-});
-
-export const HADI_HISTORICAL_ACCRUAL_GUARD = Object.freeze({
-  code: "HADI_RENT_HISTORICAL_REPAIR_LOCKED",
-  message:
-    "HADI L'SHI historical rent has been reconciled in its original vouchers. " +
-    "Use the read-only linked-rent reconciliation and an audited original-voucher correction; " +
-    "automatic re-accrue/reversal would change verified rent balances.",
-});
-
-export function isHadiHistoricAccrualRepair(companyId: number, module: string): boolean {
-  return companyId === HADI_LINKED_RENT.payerCompanyId && module === "ERP";
-}
+import { HADI_LINKED_RENT, classifyHadiRentDifference, positiveRentalDue } from "./hadiRentLedgerPolicy";
+export { HADI_HISTORICAL_ACCRUAL_GUARD, HADI_LINKED_RENT, isHadiHistoricAccrualRepair, classifyHadiRentDifference, positiveRentalDue } from "./hadiRentLedgerPolicy";
 
 export interface HadiLinkedRentControl {
   asOf: string;
@@ -54,28 +36,6 @@ export interface HadiLinkedRentControl {
     paidAsOf: string;
     outstanding: string;
   }>;
-}
-
-/** Avoid netting one contract's overpayment against another contract's arrears. */
-export function positiveRentalDue(expected: string, paid: string): MoneyDecimal {
-  return MoneyDecimal.max(0, toMoney(expected).minus(toMoney(paid))).toDecimalPlaces(2);
-}
-
-/** No rounding or absolute-value tricks can make an imbalance look matched. */
-export function classifyHadiRentDifference(
-  payableCredit: string,
-  linkedOutstanding: string,
-  ownedOutstanding: string,
-  unmatchedPostedPayments: number
-): { difference: string; status: "MATCH" | "REVIEW" } {
-  const difference = toMoney(payableCredit)
-    .minus(toMoney(linkedOutstanding))
-    .minus(toMoney(ownedOutstanding))
-    .toDecimalPlaces(2);
-  return {
-    difference: difference.toFixed(2),
-    status: difference.abs().lte("0.005") && unmatchedPostedPayments === 0 ? "MATCH" : "REVIEW",
-  };
 }
 
 function ymd(date: Date | string): string {
