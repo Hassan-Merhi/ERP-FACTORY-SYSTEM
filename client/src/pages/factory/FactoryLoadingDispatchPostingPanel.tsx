@@ -178,11 +178,11 @@ export default function FactoryLoadingDispatchPostingPanel({ orderId, dispatchId
         <td>${escapeHtml(line.productName)}</td>
         <td class="right">${line.quantity}</td>
         <td class="right">${escapeHtml(line.weight.toFixed(2))}</td>
-        <td class="right">${escapeHtml(line.pricingMode === "per_kg" ? "per kg" : "per bale")}</td>
+        <td class="right">${escapeHtml(line.pricingMode.toLowerCase() === "per_kg" ? "per kg" : "per bale")}</td>
         <td class="right">${escapeHtml("$" + Number(line.unitPrice).toFixed(4))}</td>
         <td class="right">${escapeHtml("$" + (line.cents / 100).toFixed(2))}</td>
       </tr>`).join("");
-      const chargeRows = charges.map(c => `<tr><td>${escapeHtml(c.name)} (${escapeHtml(c.kind)})</td><td class="right">${escapeHtml(currency(c.amount))}</td></tr>`).join("");
+      const chargeRows = charges.map(c => `<tr><td>${escapeHtml(c.name)} (${escapeHtml(c.kind)})</td><td class="right">${escapeHtml((c.kind === "DISCOUNT" ? "−" : "") + currency(c.amount))}</td></tr>`).join("");
       const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>Trip ${trip.dispatchNumber} — Customer Invoice</title>
