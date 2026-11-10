@@ -204,6 +204,66 @@ export async function buildLiveCanonicalInvoiceDocument(
       }) satisfies CanonicalInvoiceCharge
   );
 
+  // A Phase 8 consolidated invoice owns the original ONE customer_orders row,
+  // but its trip charges live in immutable financial snapshots, NOT in
+  // customer_order_charges. Render those exact customer-billable fees and
+  // discounts ONCE without cloning them into the old charge voucher workflow.
+  let dispatchTrips: CanonicalInvoiceDocument["dispatchTrips"] = undefined;
+  let signedGoods: number | null = null;
+  if (safeString(header.status)==="FINALIZED") {
+    const [tableExists] = resultRows<{ present: boolean }>(await db.execute(sql`
+      SELECT to_regclass('public.factory_dispatch_order_consolidations') IS NOT NULL AS present
+    `));
+    if (tableExists?.present) {
+      const [consolidated] = resultRows<{
+        status: string; reconciliation_snapshot: unknown; goods_subtotal: string;
+      }>(await db.execute(sql`
+        SELECT status,reconciliation_snapshot,goods_subtotal::text
+        FROM factory_dispatch_order_consolidations
+        WHERE company_id=${companyId} AND order_id=${orderId} LIMIT 1
+      `));
+      if (consolidated?.status==="FINALIZED") {
+        const snapshot=consolidated.reconciliation_snapshot as
+          { trips?: Array<{dispatchId?:unknown;dispatchNumber?:unknown;postedBales?:unknown;customerTotal?:unknown}> }|null;
+        dispatchTrips=Array.isArray(snapshot?.trips)
+          ? snapshot.trips.map(t=>({
+              dispatchId:safeString(t.dispatchId),
+              dispatchNumber:safeNumber(t.dispatchNumber),
+              postedBales:safeNumber(t.postedBales),
+              customerTotal:safeNumber(t.customerTotal),
+            }))
+          : [];
+        signedGoods=safeNumber(consolidated.goods_subtotal);
+        const tripChargeResult=await db.execute(sql`
+          SELECT c.id,c.name,c.kind,c.amount::text AS amount,
+                 d.dispatch_number AS "dispatchNumber"
+            FROM factory_dispatch_trip_charges c
+            JOIN factory_dispatch_trip_financials f
+              ON f.id=c.financial_id AND f.company_id=c.company_id
+             AND f.order_id=c.order_id AND f.dispatch_id=c.dispatch_id
+             AND f.status='CONSOLIDATED' AND c.revision=f.posting_revision
+            JOIN factory_loading_dispatches d
+              ON d.id=c.dispatch_id AND d.company_id=c.company_id AND d.order_id=c.order_id
+           WHERE c.company_id=${companyId} AND c.order_id=${orderId}
+             AND c.kind IN ('BILLABLE','DISCOUNT') AND c.locked_at IS NOT NULL
+           ORDER BY d.dispatch_number,c.id
+        `);
+        for(const row of resultRows<{
+          id:unknown;name:unknown;kind:unknown;amount:unknown;dispatchNumber:unknown;
+        }>(tripChargeResult)) {
+          charges.push({
+            id:-safeNumber(row.id),
+            name:`Trip #${safeNumber(row.dispatchNumber)} — ${safeString(row.name,"Charge")}`,
+            amount:safeNumber(row.amount)*(row.kind==="DISCOUNT"?-1:1),
+            // Trip freight is intentionally not "FREIGHT": the existing
+            // exporter filters that bucket and would otherwise hide it.
+            chargeType:"OTHER",
+          });
+        }
+      }
+    }
+  }
+
   return {
     version: 1,
     orderId: safeNumber(header.id),
@@ -213,17 +273,18 @@ export async function buildLiveCanonicalInvoiceDocument(
     status: safeString(header.status),
     customerName: safeString(header.customer_name, "-"),
     customerCode: safeString(header.customer_code),
-    baseCurrency: safeString(header.base_currency, "USD").toUpperCase(),
+    baseCurrency: dispatchTrips ? "USD" : safeString(header.base_currency, "USD").toUpperCase(),
     containerNumber: safeString(header.container_number),
     destination: safeString(header.destination),
     shippingCompany: safeString(header.shipping_company),
-    subtotalBales: safeNumber(header.subtotal_bales),
+    subtotalBales: signedGoods ?? safeNumber(header.subtotal_bales),
     freightAmount: safeNumber(header.freight_amount),
     otherChargesTotal: safeNumber(header.other_charges_total),
     grandTotal: safeNumber(header.grand_total),
     totalQtyBales: safeNumber(header.total_qty_bales),
     lines,
     charges,
+    ...(dispatchTrips ? { dispatchTrips } : {}),
     frozenAt: null,
   };
 }
