@@ -6,6 +6,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useToast } from "@/hooks/use-toast";
 import { canUseFactorySurface } from "@/lib/factoryClientAccess";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import type { FactoryMyAccess } from "@shared/apiTypes";
 
 import { fetchProduction, type ProductionResponse } from "./factory/factoryProductionTargetsModel";
@@ -22,14 +24,17 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
   const { formatDisplayDate } = useDateFormat();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { selectedCompany } = useCompany();
   const { data: myAccess } = useQuery<FactoryMyAccess>({
-    queryKey: ["/api/factory/my-access"],
+    queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     staleTime: 5 * 60_000,
   });
+  const companyAccess = myAccess?.companyId === selectedCompany?.id && selectedCompany?.id ? myAccess : undefined;
   const canReadWorkerPicker =
-    canUseFactorySurface(myAccess, "factory/stock-entry", ["hide_tab_stockentry_history"]) ||
-    canUseFactorySurface(myAccess, "factory/payroll-hub", ["hide_tab_payrollhub_workers"]);
-  const canReadProductionTargets = canUseFactorySurface(myAccess, "factory/stock-entry", [
+    canUseFactorySurface(companyAccess, "factory/stock-entry", ["hide_tab_stockentry_history"]) ||
+    canUseFactorySurface(companyAccess, "factory/payroll-hub", ["hide_tab_payrollhub_workers"]);
+  const canReadProductionTargets = canUseFactorySurface(companyAccess, "factory/stock-entry", [
     "hide_tab_stockentry_production_targets",
   ]);
   const today = new Date().toLocaleDateString("en-CA");
@@ -71,7 +76,7 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
   const {
     data: historyPages, isLoading, hasNextPage, isFetchingNextPage, fetchNextPage,
   } = useInfiniteQuery<StockEntryHistoryPage, Error>({
-    queryKey: ["/api/factory/bales/stock-entry-history", params.toString()],
+    queryKey: companyQueryKey("/api/factory/bales/stock-entry-history", selectedCompany?.id, params.toString()),
     initialPageParam: 1,
     queryFn: async ({ pageParam }) => {
       const pageParams = new URLSearchParams(params);
@@ -85,7 +90,7 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
       return data as StockEntryHistoryPage;
     },
     getNextPageParam: (lastPage) => lastPage.hasNextPage ? lastPage.page + 1 : undefined,
-    enabled: dateRangeValid,
+    enabled: Boolean(selectedCompany?.id) && dateRangeValid,
     staleTime: 60_000,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
@@ -108,7 +113,7 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
   const totalWeight = useMemo(() => groups.reduce((sum, group) => sum + parseFloat(group.totalWeight || "0"), 0), [groups]);
 
   const { data: workers = [] } = useQuery<StockEntryWorker[]>({
-    queryKey: ["/api/factory/workers?profile=picker"],
+    queryKey: companyQueryKey("/api/factory/workers?profile=picker", selectedCompany?.id),
     staleTime: 60_000,
     refetchOnWindowFocus: false,
     enabled: canReadWorkerPicker,
@@ -116,7 +121,7 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
 
   const targetDate = isSingleDay ? fromDate : null;
   const { data: productionTargets } = useQuery<ProductionResponse>({
-    queryKey: ["/api/factory/staff-tracking", "production", "daily", targetDate, targetDate],
+    queryKey: companyQueryKey("/api/factory/staff-tracking", selectedCompany?.id, "production", "daily", targetDate, targetDate),
     queryFn: () => fetchProduction("daily", targetDate!, targetDate!),
     enabled: canReadProductionTargets && Boolean(targetDate),
     staleTime: 30_000,
@@ -196,7 +201,7 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
       const group = groups.find((item) => groupKey(item) === baseKey);
       if (!group) {
         return {
-          queryKey: ["stock-entry-history", "missing-group", key],
+          queryKey: ["stock-entry-history", selectedCompany?.id ?? "no-company", "missing-group", key],
           queryFn: async () => [] as BaleDetail[],
           enabled: false,
         };
@@ -211,12 +216,12 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
       if (debouncedSearch.trim()) groupParams.set("search", debouncedSearch.trim());
 
       return {
-        queryKey: ["/api/factory/bales/stock-entry-history/group", groupParams.toString()],
+        queryKey: companyQueryKey("/api/factory/bales/stock-entry-history/group", selectedCompany?.id, groupParams.toString()),
         queryFn: (): Promise<BaleDetail[]> =>
           fetchAllStockEntryHistoryPages(groupParams).then((rows) => rows.flatMap((item) => item.bales ?? [])),
         staleTime: 5 * 60 * 1000,
         refetchOnWindowFocus: false,
-        enabled: useLite,
+        enabled: useLite && Boolean(selectedCompany?.id),
       };
     }),
   });
