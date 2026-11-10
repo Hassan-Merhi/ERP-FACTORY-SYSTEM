@@ -35,7 +35,9 @@ export class TripFinancialPostingError extends Error {
     this.name = "TripFinancialPostingError";
   }
 }
-const refuse = (code: string, message: string): never => { throw new TripFinancialPostingError(code, message); };
+const refuse = (code: string, message: string, status = 409): never => {
+  throw new TripFinancialPostingError(code, message, status);
+};
 const rows = async (tx: DbTransaction, q: ReturnType<typeof sql>) => resultRows(await tx.execute(q));
 const numberId = (value: unknown): number => {
   const n = Number(value);
@@ -167,11 +169,40 @@ function requireDate(date: string) {
     refuse("TRIP_POSTING_DATE_INVALID", "Provide a valid company business date before posting");
   }
 }
+/** Posting stays disabled until BOTH manual TablePlus SQL files are applied. */
+async function assertHardenedFinancialSchemaTx(tx: DbTransaction): Promise<void> {
+  const [ready] = await rows(tx, sql`
+    SELECT
+      (SELECT relforcerowsecurity FROM pg_class
+        WHERE oid=to_regclass('public.factory_dispatch_trip_financials')) AS "financialRls",
+      (SELECT relforcerowsecurity FROM pg_class
+        WHERE oid=to_regclass('public.factory_dispatch_trip_postings')) AS "postingsRls",
+      EXISTS(
+        SELECT 1 FROM pg_trigger
+         WHERE tgrelid=to_regclass('public.factory_loading_dispatches')
+           AND tgname='factory_dispatch_physical_posted_guard'
+           AND tgenabled <> 'D'
+      ) AS "physicalGuard",
+      EXISTS(
+        SELECT 1 FROM pg_trigger
+         WHERE tgrelid=to_regclass('public.customer_order_bales')
+           AND tgname='factory_dispatch_order_bale_financial_guard'
+           AND tgenabled <> 'D'
+      ) AS "baleGuard"
+  `);
+  if (!ready?.financialRls || !ready?.postingsRls ||
+      !ready?.physicalGuard || !ready?.baleGuard) {
+    refuse("TRIP_FINANCIAL_SQL_PENDING",
+      "Trip financial posting is disabled until the final Phase 2 and Phase 4 TablePlus SQL has been installed.",
+      503);
+  }
+}
 /** One atomic finalization; caller creates a real database transaction. */
 export async function postDispatchTripFinancialTx(
   tx: DbTransaction, scope: DispatchPostingScope, req: DispatchPostingRequest
 ): Promise<DispatchPostingResult> {
   requireDate(req.postingDate);
+  await assertHardenedFinancialSchemaTx(tx);
   await lockTripOrder(tx, scope);
   const financial = await readFinancial(tx, scope);
   if (financial?.status === "POSTED") {
@@ -359,6 +390,7 @@ export async function reverseDispatchTripFinancialTx(
   tx: DbTransaction, scope: DispatchPostingScope, args: { date: string; reason: string }
 ) {
   requireDate(args.date);
+  await assertHardenedFinancialSchemaTx(tx);
   if (args.reason.trim().length < 10 || args.reason.trim().length > 1000) {
     refuse("TRIP_REVERSAL_REASON_REQUIRED", "Enter an explanation between 10 and 1,000 characters");
   }
