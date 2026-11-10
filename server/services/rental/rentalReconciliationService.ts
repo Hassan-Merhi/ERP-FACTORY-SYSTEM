@@ -194,7 +194,9 @@ export async function runRentalReconciliation(
             ) AS billing_date
      FROM property_monthly_ledger ml
      JOIN property_contracts pc ON pc.id = ml.contract_id
+       AND pc.company_id=ml.company_id AND pc.module=ml.module
      LEFT JOIN vouchers v ON v.id = ml.accrual_voucher_id
+       AND v.company_id=ml.company_id AND v.optional=FALSE
      WHERE ml.company_id = $1 AND ml.module = $2
        AND ml.accrual_voucher_id IS NOT NULL
        AND v.id IS NOT NULL AND v.deleted_at IS NULL
