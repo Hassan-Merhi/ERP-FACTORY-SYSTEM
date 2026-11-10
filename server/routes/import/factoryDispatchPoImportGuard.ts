@@ -100,6 +100,9 @@ export async function validateFactoryDispatchPoImport(
   const values: Decimal[] = [];
   for (const [index, item] of container.items.entries()) {
     const code = String(item.barcode ?? "").trim();
+    if (String(item.supplierCode ?? "").trim() !== supplierCode) {
+      errors.push(`ERP PO article ${code || index + 1}: Supplier_Code differs across rows or is missing.`);
+    }
     if (!code || code.length > 50 || /^[=+@-]/.test(code)) {
       errors.push(`ERP PO row ${index + 1}: a valid article code is required, not a bale reference.`);
       continue;
