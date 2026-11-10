@@ -38,6 +38,8 @@ export interface PoImportPreviewCharges {
 
 export interface PoImportPreviewContainer {
   containerNumber: string;
+  /** Exact Supplier_Code from original PO worksheet, carried into validation. */
+  supplierCode?: string;
   items: PoImportPreviewItem[];
   charges: PoImportPreviewCharges;
   itemsCount: number;
@@ -175,6 +177,7 @@ export function findPreviewContainer(preview: unknown, containerNumber: string):
   return {
     container: {
       containerNumber,
+      supplierCode: optionalString(entry.supplierCode),
       items,
       charges,
       itemsCount: toFiniteNumber(entry.itemsCount) ?? items.length,
