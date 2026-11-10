@@ -282,6 +282,28 @@ describe("Rental payment accounting and reconciliation", () => {
     // No automatic correction, no new voucher and no cash mutation.
   });
 
+  it("does not count guarantee-only payments toward a rental month allocation", async () => {
+    await q(
+      `INSERT INTO property_payments
+         (company_id,module,contract_id,unit_id,ledger_row_id,amount,
+          payment_date,for_year,for_month,posting_status)
+       VALUES ($1,'ERP',$2,$3,NULL,'500.00',$4,
+         EXTRACT(YEAR FROM $4::date)::int,EXTRACT(MONTH FROM $4::date)::int,'POSTED')`,
+      [ctx.companyId, testContractId, testUnitId, todayStr()]
+    );
+    const res = await createPayment({ amount: "500" });
+    expect(res.status).toBe(200);
+    const period = await q(
+      `SELECT expected_amount,paid_amount FROM property_monthly_ledger
+       WHERE company_id=$1 AND contract_id=$2
+         AND year=EXTRACT(YEAR FROM $3::date)
+         AND month=EXTRACT(MONTH FROM $3::date)`,
+      [ctx.companyId, testContractId, todayStr()]
+    );
+    expect(period).toHaveLength(1);
+    expect(Number(period[0].paid_amount)).toBe(500);
+  });
+
   it("refuses a rental payment with no cash/bank ledger instead of marking it POSTED", async () => {
     const res = await agent.post("/api/erp/rental/payments").send({
       contractId: testContractId,
