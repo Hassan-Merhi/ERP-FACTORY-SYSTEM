@@ -43,6 +43,15 @@ const moneyText=(v:unknown)=>{
 const raise=(code:string,message:string,status=409):never=>{
   throw new OrderReconciliationError(code,message,status);
 };
+const costText=(v:unknown)=>{
+  const raw=String(v??"");
+  // Factory bale costs are NUMERIC(20,7): sum full precision, round once
+  // for the final COGS voucher, matching existing Factory inventory accounting.
+  if(!/^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,7})?$/.test(raw)){
+    raise("COMBINED_INVOICE_COST_INVALID","A shipped bale has an invalid 7-decimal cost");
+  }
+  return new MoneyDecimal(raw);
+};
 const numberId=(v:unknown)=>{
   const n=Number(v);
   if(!Number.isSafeInteger(n)||n<1)raise("COMBINED_INVOICE_INVALID_ID","Invoice source has an invalid record ID");
@@ -253,9 +262,9 @@ export async function loadCombinedInvoicePlanTx(
         if(["DELETED","SOLD"].includes(String(b.status))){
           issues.push("A signed physical bale was already sold or deleted before consolidation");
         }
-        const c=String(b.totalCost??"0");
-        if(!/^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,2})?$/.test(c)){
-          issues.push("A signed bale has an invalid, negative or unpriced inventory cost");
+        const c=String(b.totalCost??"");
+        if(!/^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,7})?$/.test(c)){
+          issues.push("A signed bale has an invalid or missing 7-decimal inventory cost");
         } else cost=cost.plus(c);
       }
     }
@@ -275,7 +284,7 @@ export async function loadCombinedInvoicePlanTx(
       tripCustomerTotal:current.summary.customerTotal,
       originalOrderCharges:originalTotal.toFixed(2),
       finalInvoiceTotal:finalTotal.toFixed(2),
-      physicalBales:bales.length,totalCost:cost.toFixed(2),postCOGS,
+      physicalBales:bales.length,totalCost:cost.toDecimalPlaces(2).toFixed(2),postCOGS,
       originalCharges,
       trips:current.trips.map(t=>({
         dispatchId:t.dispatchId,dispatchNumber:t.dispatchNumber,
@@ -426,7 +435,11 @@ export async function finalizeCombinedInvoiceTx(
   if(locked.length!==baleIds.length || locked.some(b=>["SOLD","DELETED"].includes(String(b.status)))){
     raise("COMBINED_INVOICE_BALE_INVALID","One of the signed shipped bales was already sold or is missing");
   }
-  const inventoryCost=sumMoney(locked.map(b=>moneyText(b.totalCost))).toFixed(2);
+  const inventoryCost=sumMoney(locked.map(b=>costText(b.totalCost)))
+    .toDecimalPlaces(2).toFixed(2);
+  if(inventoryCost!==plan.totalCost){
+    raise("COMBINED_INVOICE_COST_CHANGED","Shipped bale inventory costs changed; refresh the invoice preview");
+  }
   // Original charges may already be posted as pre-invoice charges; do not post
   // them again. Missing ones get exactly one engine source identity per charge.
   const originalChargesVoucherIds:number[]=[];
