@@ -18,6 +18,7 @@ import { registerFactoryLoadingDispatchAllocationRoutes } from "./factory/custom
 import { registerFactoryLoadingDispatchLifecycleRoutes } from "./factory/customer-orders/loadingDispatchLifecycleRoutes";
 import { registerFactoryLoadingDispatchFinancialRoutes } from "./factory/customer-orders/loadingDispatchFinancialChargeRoutes";
 import { registerFactoryLoadingDispatchPostingRoutes } from "./factory/customer-orders/loadingDispatchFinancialPostingRoutes";
+import { registerFactoryLoadingDispatchPoExportRoutes } from "./factory/customer-orders/loadingDispatchPoExportRoutes";
 import { hasLiveFinancialTripTx } from "../services/factory/dispatchTripFinancialGuards";
 import { registerFactoryLoadingDispatchReportRoutes } from "./factory/customer-orders/loadingDispatchReportRoutes";
 import { registerFactoryContainerReadAccessRoutes } from "./factory/factoryContainerReadAccessRoutes";
@@ -258,6 +259,7 @@ export function registerFactoryRoutes(app: Express, requireAuth: RequestHandler,
   registerFactoryLoadingDispatchLifecycleRoutes(app);
   registerFactoryLoadingDispatchFinancialRoutes(app);
   registerFactoryLoadingDispatchPostingRoutes(app);
+  registerFactoryLoadingDispatchPoExportRoutes(app);
   registerFactoryLoadingDispatchAllocationRoutes(app);
   registerFactoryLoadingDispatchComparisonRoutes(app);
   registerFactoryLoadingDispatchScanRoutes(app);
