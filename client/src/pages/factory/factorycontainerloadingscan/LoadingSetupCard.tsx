@@ -12,7 +12,7 @@ export function LoadingSetupCard({ model }: { model: FactoryContainerLoadingScan
   const { orderId, customerId, activeProformas } = model;
 
   return (
-    <div className="overflow-hidden rounded-[22px] border border-blue-100/90 bg-white shadow-[0_18px_48px_-40px_rgba(30,64,175,0.75)] dark:border-blue-500/25 dark:bg-[hsl(var(--factory-hue)_50%_13%)]">
+    <div className="overflow-hidden rounded-[22px] border border-blue-100/90 bg-white shadow-[0_18px_48px_-40px_hsl(var(--factory-hue)_71%_40%_/_0.75)] dark:border-blue-500/25 dark:bg-[hsl(var(--factory-hue)_50%_13%)]">
       <div className="flex items-center gap-3 border-b border-blue-100 bg-gradient-to-r from-blue-50/90 to-white px-4 py-3.5 dark:border-blue-500/20 dark:from-[hsl(var(--factory-hue)_58%_18%)] dark:to-[hsl(var(--factory-hue)_50%_13%)] sm:px-5">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-indigo-700 text-white shadow-md shadow-blue-500/20">
           <ClipboardList className="h-5 w-5" />

@@ -84,4 +84,38 @@ describe("Factory unified blue theme", () => {
       expect(readFileSync(join(factoryStyles, page), "utf8")).toContain("hsl(var(--factory-hue)_");
     }
   });
+
+  it("derives decorative shadows and Container Loading artwork from the Factory hue", () => {
+    const rgbPattern = /rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(?:0?\.\d+|1)\s*\)/g;
+    const violations = sourceFiles(factoryStyles, ".tsx").flatMap((path) =>
+      readFileSync(path, "utf8")
+        .split("\n")
+        .filter((line) => line.includes("shadow-[") || line.includes("bg-["))
+        .flatMap((line) =>
+          [...line.matchAll(rgbPattern)]
+            .filter((match) => {
+              const rgb = match.slice(1, 4).map(Number);
+              // Exclude neutral slate shadows and distinct semantic colors.
+              return fixedBrandColor(match[0]) && Math.max(...rgb) - Math.min(...rgb) > 55;
+            })
+            .map((match) => relative(projectRoot, path) + ": " + match[0])
+        )
+    );
+    expect(violations).toEqual([]);
+
+    const container = readFileSync(join(factoryStyles, "FactoryContainerLoadingScan.tsx"), "utf8");
+    const financial = readFileSync(join(factoryStyles, "FactoryFinancialSnapshot.tsx"), "utf8");
+    const pressing = readFileSync(join(factoryStyles, "PressingHistoryReport.tsx"), "utf8");
+    const theme = readFileSync(factoryTheme, "utf8");
+    const targets = readFileSync(join(factoryStyles, "productiontargets/productionTargetsPremium.css"), "utf8");
+
+    expect(container).toContain("factory-container-stripes");
+    expect(container).not.toMatch(/#[\da-fA-F]{6}\b/);
+    expect(financial).toContain('color="var(--factory-color-500)"');
+    expect(pressing).toContain("shadow-[0_12px_30px_-22px_hsl(var(--factory-hue)_");
+    expect(theme).toContain(':root[data-app-shell="factory"] .factory-container-stripes');
+    expect(theme).toMatch(/background-image:\s*repeating-linear-gradient\(\s*90deg,\s*hsl\(var\(--factory-hue\)/);
+    expect(targets).toContain("color: var(--factory-color-400);");
+    expect(targets).not.toContain("#ff68b0");
+  });
 });

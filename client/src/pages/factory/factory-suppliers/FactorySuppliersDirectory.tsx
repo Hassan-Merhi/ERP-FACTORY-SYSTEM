@@ -51,7 +51,7 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
     >
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center gap-3.5">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-blue-400/25 bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-[0_8px_24px_rgba(37,99,235,0.20)]">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-blue-400/25 bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-[0_8px_24px_hsl(var(--factory-hue)_83%_53%_/_0.20)]">
             <Truck className="h-5 w-5" aria-hidden="true" />
           </div>
           <div className="min-w-0">

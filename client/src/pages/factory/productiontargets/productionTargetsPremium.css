@@ -244,7 +244,7 @@
   place-items: center;
   width: 45px;
   height: 45px;
-  color: #ff68b0;
+  color: var(--factory-color-400);
   background: hsl(var(--factory-hue) 71% 52% / 0.12);
   border-radius: 12px;
 }

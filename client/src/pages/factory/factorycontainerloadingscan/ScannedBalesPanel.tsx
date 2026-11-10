@@ -174,7 +174,7 @@ function BaleGroups({
           aria-hidden="true"
           className="pointer-events-none absolute left-1/2 top-1/2 h-44 w-44 -translate-x-1/2 -translate-y-[70%] rounded-full bg-blue-400/10 blur-3xl dark:bg-blue-500/20"
         />
-        <div className="relative mb-4 flex h-20 w-20 items-center justify-center rounded-[22px] border border-blue-300/60 bg-white/90 shadow-[0_16px_38px_-20px_rgba(37,99,235,0.6)] dark:border-blue-400/40 dark:bg-blue-500/15">
+        <div className="relative mb-4 flex h-20 w-20 items-center justify-center rounded-[22px] border border-blue-300/60 bg-white/90 shadow-[0_16px_38px_-20px_hsl(var(--factory-hue)_83%_53%_/_0.6)] dark:border-blue-400/40 dark:bg-blue-500/15">
           <span
             aria-hidden="true"
             className="absolute -left-2 -top-2 h-4 w-4 rounded-tl-lg border-l-[3px] border-t-[3px] border-sky-500"
@@ -405,7 +405,7 @@ export function ScannedBalesPanel({ model }: { model: FactoryContainerLoadingSca
   return (
     <div className="flex min-h-0 min-w-0 flex-col xl:w-[60%]">
       <div
-        className={`flex min-h-0 flex-1 flex-col overflow-hidden rounded-[22px] border border-blue-100/90 bg-white shadow-[0_18px_48px_-40px_rgba(30,64,175,0.75)] transition-all duration-300 dark:border-blue-500/25 dark:bg-[hsl(var(--factory-hue)_50%_13%)] ${
+        className={`flex min-h-0 flex-1 flex-col overflow-hidden rounded-[22px] border border-blue-100/90 bg-white shadow-[0_18px_48px_-40px_hsl(var(--factory-hue)_71%_40%_/_0.75)] transition-all duration-300 dark:border-blue-500/25 dark:bg-[hsl(var(--factory-hue)_50%_13%)] ${
           scanFlash === "success" ? "ring-2 ring-green-500/80" : scanFlash === "error" ? "ring-2 ring-red-500/80" : ""
         }`}
       >
