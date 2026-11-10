@@ -14,6 +14,7 @@
  * invoice is finalized, not debit receivables again.
  */
 import { sql } from "drizzle-orm";
+import type Decimal from "decimal.js";
 import type { DbTransaction } from "../../db";
 import { resultRows } from "../../lib/queryResult";
 import { MoneyDecimal } from "../../lib/money";
@@ -247,7 +248,7 @@ export async function postDispatchTripFinancialTx(
   );
   const customerTotal = money(totals.customerTotal);
   const goods = money(source.goodsSubtotal);
-  const positive = (v: MoneyDecimal) => v.gt(0);
+  const positive = (v: Decimal) => v.gt(0);
   const invoiceLines: FactoryVoucherLine[] = [];
   if (positive(customerTotal)) invoiceLines.push({
     ledgerAccountId: customerLedgerId, customerId: source.customerId,
