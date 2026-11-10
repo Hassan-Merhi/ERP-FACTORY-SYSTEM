@@ -146,11 +146,42 @@ export default function FactoryLoadingDispatchPostingPanel({ orderId, dispatchId
       if (!trip || !["POSTED", "CONSOLIDATED"].includes(trip.financialStatus) || trip.customerTotal === null) {
         throw new Error("Financially finalize this trip before exporting its invoice.");
       }
+      const invoiceLines = await read<{
+        goodsSubtotal: string;
+        lines: Array<{ articleCode: string; productName: string; pricingMode: string;
+          unitPrice: string; weightKg: string; lineTotal: string }>;
+      }>("/api/factory/customer-orders/" + orderId + "/loading-dispatches/order-overview/trips/" + dispatchId + "/invoice-lines");
+      const toCents = (value: string) => Math.round(Number(value) * 100);
+      const goodsCents = invoiceLines.lines.reduce((sum, line) => sum + toCents(line.lineTotal), 0);
+      if (!Number.isSafeInteger(goodsCents) || goodsCents !== toCents(invoiceLines.goodsSubtotal) ||
+          goodsCents !== toCents(trip.goodsSubtotal ?? "0")) {
+        throw new Error("Frozen article totals do not match posted trip goods. Invoice export blocked.");
+      }
+      const grouped = new Map<string, { articleCode: string; productName: string; pricingMode: string;
+        unitPrice: string; quantity: number; weight: number; cents: number }>();
+      for (const line of invoiceLines.lines) {
+        const key = JSON.stringify([line.articleCode, line.productName, line.pricingMode, line.unitPrice]);
+        const current = grouped.get(key) ?? { articleCode: line.articleCode, productName: line.productName,
+          pricingMode: line.pricingMode, unitPrice: line.unitPrice, quantity: 0, weight: 0, cents: 0 };
+        current.quantity++;
+        current.weight += Number(line.weightKg);
+        current.cents += toCents(line.lineTotal);
+        grouped.set(key, current);
+      }
       const escapeHtml = (v: unknown) => String(v ?? "").replace(/[&<>"']/g, c => ({
         "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
       })[c] || c);
       const currency = (v: string | null) => "$" + dollars(v ?? undefined);
       const charges = overview.charges.filter(c => c.dispatchId === String(dispatchId) && (c.kind === "BILLABLE" || c.kind === "DISCOUNT"));
+      const articleRows = [...grouped.values()].map(line => `<tr>
+        <td><strong>${escapeHtml(line.articleCode)}</strong></td>
+        <td>${escapeHtml(line.productName)}</td>
+        <td class="right">${line.quantity}</td>
+        <td class="right">${escapeHtml(line.weight.toFixed(2))}</td>
+        <td class="right">${escapeHtml(line.pricingMode === "per_kg" ? "per kg" : "per bale")}</td>
+        <td class="right">${escapeHtml("$" + Number(line.unitPrice).toFixed(4))}</td>
+        <td class="right">${escapeHtml("$" + (line.cents / 100).toFixed(2))}</td>
+      </tr>`).join("");
       const chargeRows = charges.map(c => `<tr><td>${escapeHtml(c.name)} (${escapeHtml(c.kind)})</td><td class="right">${escapeHtml(currency(c.amount))}</td></tr>`).join("");
       const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -173,7 +204,7 @@ export default function FactoryLoadingDispatchPostingPanel({ orderId, dispatchId
           .meta{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px}
           .meta span{color:#64748b}.meta strong{display:block;margin-top:4px;font-size:12px;color:#15243b}
           .section{font-size:15px;color:#173f76;font-weight:700;margin:28px 0 12px}
-          table{width:100%;border-collapse:collapse}th{background:#173f76;color:white;text-align:left;padding:13px 14px;font-size:11px;letter-spacing:.04em}
+          table{width:100%;border-collapse:collapse;font-size:11px}th{background:#173f76;color:white;text-align:left;padding:13px 14px;font-size:11px;letter-spacing:.04em}
           td{padding:14px;border-bottom:1px solid #e2e8f0;vertical-align:top}
           tr:nth-child(even) td{background:#f8fafc}.right{text-align:right;white-space:nowrap}
           .summary{width:340px;max-width:100%;margin:26px 0 0 auto}
