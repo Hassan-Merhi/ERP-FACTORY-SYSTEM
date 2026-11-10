@@ -48,7 +48,12 @@ const commonTriggers=[
   ["factory_dispatch_signed_order_charge_guard","customer_order_charges"],
   ["factory_dispatch_signed_financial_guard","factory_dispatch_trip_financials"],
 ];
-const finalTriggers=[["factory_dispatch_final_invoice_guard","factory_dispatch_order_consolidations"]];
+const finalTriggers=[
+  ["factory_dispatch_final_invoice_guard","factory_dispatch_order_consolidations"],
+  ["factory_dispatch_final_voucher_guard","vouchers"],
+  ["factory_dispatch_final_voucher_entries_guard","voucher_entries"],
+  ["factory_dispatch_final_posting_identity_guard","accounting_posting_requests"],
+];
 const signedColumns=[
   ["factory_dispatch_order_consolidations","reconciled_at"],
   ["factory_dispatch_order_consolidations","reconciliation_snapshot"],
