@@ -156,14 +156,21 @@ BEGIN
       RAISE EXCEPTION 'Source-owned Factory dispatch voucher cannot be changed or retired; use trip financial correction';
     END IF;
   END IF;
-  IF TG_OP = 'UPDATE' AND TG_TABLE_NAME = 'voucher_entries' AND NEW.voucher_id IS DISTINCT FROM OLD.voucher_id THEN
-    SELECT company_id INTO protected_company_id FROM vouchers WHERE id = NEW.voucher_id;
-    IF EXISTS (
-      SELECT 1 FROM factory_dispatch_trip_postings p
-       WHERE p.company_id=protected_company_id
-         AND p.voucher_ids @> jsonb_build_array(NEW.voucher_id)
-    ) THEN
-      RAISE EXCEPTION 'Cannot transfer an entry into a finalized Factory dispatch voucher';
+  -- PostgreSQL PL/pgSQL does not short-circuit this expression safely across
+  -- trigger relations: NEW on vouchers has no voucher_id field.
+  -- Guard the record-type-specific reference in nested control flow.
+  IF TG_TABLE_NAME = 'voucher_entries' THEN
+    IF TG_OP = 'UPDATE' THEN
+      IF NEW.voucher_id IS DISTINCT FROM OLD.voucher_id THEN
+        SELECT company_id INTO protected_company_id FROM vouchers WHERE id = NEW.voucher_id;
+        IF EXISTS (
+          SELECT 1 FROM factory_dispatch_trip_postings p
+           WHERE p.company_id=protected_company_id
+             AND p.voucher_ids @> jsonb_build_array(NEW.voucher_id)
+        ) THEN
+          RAISE EXCEPTION 'Cannot transfer an entry into a finalized Factory dispatch voucher';
+        END IF;
+      END IF;
     END IF;
   END IF;
   IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
