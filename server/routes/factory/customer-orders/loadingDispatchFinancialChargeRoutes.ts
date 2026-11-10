@@ -152,7 +152,7 @@ function validateAccounts(
   if (input.offsetLedgerAccountId !== null) {
     const offset = accounts.find(a => a.id === input.offsetLedgerAccountId);
     if (!offset || !accountAcceptsOffset(offset.accountType)) {
-      fail(400, "OFFSET_ACCOUNT_INVALID", "Select an active company-owned payable, cash or clearing offset account");
+      fail(400, "OFFSET_ACCOUNT_INVALID", "Select an active company-owned payable or accrual liability account");
     }
   }
 }
