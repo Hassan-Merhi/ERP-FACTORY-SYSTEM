@@ -70,12 +70,15 @@ function numericMoney(input: unknown): Decimal | null {
   return value.isFinite() && value.gte(0) ? value : null;
 }
 /** The legacy PO parser stores calculated spreadsheet totals as JS numbers. */
-function roundedSourceAmount(raw: unknown): Decimal | null {
+function roundedSourceAmount(raw: unknown, allowNegative = false): Decimal | null {
   if ((typeof raw !== "number" && typeof raw !== "string") ||
       !Number.isFinite(Number(raw))) return null;
   const value = new MoneyDecimal(String(raw));
   const rounded = value.toDecimalPlaces(2);
-  return value.minus(rounded).abs().lte("0.005") ? rounded : null;
+  // Only absorb IEEE-754 addition/multiplication noise, not genuine
+  // three-decimal charges or a negative line/invoice charge.
+  if (!allowNegative && rounded.isNegative()) return null;
+  return value.minus(rounded).abs().lte("0.0000001") ? rounded : null;
 }
 function nonNegativeQuantity(item: PoImportPreviewItem): boolean {
   return Number.isSafeInteger(item.quantity) && item.quantity > 0;
@@ -146,7 +149,7 @@ export async function validateFactoryDispatchPoImport(
   // Round totals from the existing importer to cents without mistaking
   // harmless IEEE-754 summing artifacts for altered supplier amounts.
   const declaredGoods = roundedSourceAmount(container.itemsTotal);
-  const declaredCharges = roundedSourceAmount(container.chargesTotal);
+  const declaredCharges = roundedSourceAmount(container.chargesTotal, true);
   const declaredTotal = roundedSourceAmount(container.grandTotal);
   const chargesTotal = checked.freight && checked.surcharge && checked.fumigation &&
     checked.discount && checked.documentCharges
