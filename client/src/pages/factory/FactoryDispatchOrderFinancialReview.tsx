@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import FactoryDispatchCombinedInvoicePanel from "./FactoryDispatchCombinedInvoicePanel";
 
 export interface DispatchOrderReconciliation {
   orderId: number;
@@ -72,6 +73,7 @@ interface Props {
   loading: boolean;
   error: string | null;
   orderId: number;
+  companyId: number | null | undefined;
   isSupervisor: boolean;
   onRefresh: () => void;
 }
@@ -83,7 +85,7 @@ const currency = (s: string) => {
 };
 const errText=(e:unknown)=>e instanceof Error?e.message:"Could not approve order reconciliation";
 export default function FactoryDispatchOrderFinancialReview({
-  value,loading,error,orderId,isSupervisor,onRefresh,
+  value,loading,error,orderId,companyId,isSupervisor,onRefresh,
 }:Props){
   const {toast}=useToast();
   const [open,setOpen]=useState(false);
@@ -195,6 +197,15 @@ export default function FactoryDispatchOrderFinancialReview({
                   <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600" />{msg}
                 </p>
               ))}
+              {value.approval && (
+                <FactoryDispatchCombinedInvoicePanel
+                  orderId={orderId}
+                  companyId={companyId}
+                  signedFingerprint={value.approval.fingerprint}
+                  isSupervisor={isSupervisor}
+                  onFinalized={onRefresh}
+                />
+              )}
               {value.approval && (
                 <div className={"rounded-lg border p-3 text-xs "+(value.approvalCurrent?
                   "border-emerald-300 bg-emerald-50/70 dark:border-emerald-800 dark:bg-emerald-950/20":
