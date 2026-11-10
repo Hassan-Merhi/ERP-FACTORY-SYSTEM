@@ -21,7 +21,10 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
-import { AttendanceReportRequestError, readAttendanceReportResponse } from "./factoryworkerattendancereport/reportResponse";
+import {
+  AttendanceReportRequestError,
+  readAttendanceReportResponse,
+} from "./factoryworkerattendancereport/reportResponse";
 import { validateAttendanceReportDateRange } from "@shared/attendanceReportDateRange";
 
 import type {
@@ -42,7 +45,11 @@ import {
 } from "./factoryworkerattendancereport/utils";
 import { StatusPill } from "./factoryworkerattendancereport/components/StatusPill";
 import { AttendanceAdminApprovalDialog } from "./factoryattendance/components/AttendanceAdminApprovalDialog";
-import { attendancePastDates, attendanceToday, type AttendanceAdminCredentials } from "./factoryattendance/attendanceEditPolicy";
+import {
+  attendancePastDates,
+  attendanceToday,
+  type AttendanceAdminCredentials,
+} from "./factoryattendance/attendanceEditPolicy";
 import { useToast } from "@/hooks/use-toast";
 
 type AttendanceReportRecord = { workerId: number; attendanceDate: string; status: string };
@@ -98,10 +105,7 @@ export default function FactoryWorkerAttendanceReport() {
     return { startDate: customStart, endDate: customEnd };
   }, [mode, customStart, customEnd]);
 
-  const dateRangeError = useMemo(
-    () => validateAttendanceReportDateRange(startDate, endDate),
-    [startDate, endDate]
-  );
+  const dateRangeError = useMemo(() => validateAttendanceReportDateRange(startDate, endDate), [startDate, endDate]);
   const queryKey = ["/api/factory/workers/attendance-report", startDate, endDate];
 
   const { data, isLoading, isError, error, refetch } = useQuery<AttendanceReportData>({
@@ -117,8 +121,7 @@ export default function FactoryWorkerAttendanceReport() {
     enabled: dateRangeError === null,
     // A proxy 502/503 can be transient. Do not retry denied, missing or malformed responses.
     retry: (failureCount, requestError) =>
-      failureCount < 2 &&
-      (!(requestError instanceof AttendanceReportRequestError) || requestError.retryable),
+      failureCount < 2 && (!(requestError instanceof AttendanceReportRequestError) || requestError.retryable),
     retryDelay: (failureCount) => Math.min(1000 * 2 ** failureCount, 3000),
   });
 
@@ -329,7 +332,7 @@ export default function FactoryWorkerAttendanceReport() {
   }, [data, mode, customStart, customEnd]);
 
   return (
-    <div className="flex flex-col gap-5 rounded-2xl bg-gradient-to-b from-blue-50/50 via-background to-background px-2 pb-4 text-foreground dark:from-[#0b172b] dark:via-[#0b1220] dark:to-[#0b1220] sm:px-4 sm:py-4 print:gap-3 print:rounded-none print:bg-white print:p-0 print:text-black">
+    <div className="flex flex-col gap-5 rounded-2xl bg-gradient-to-b from-blue-50/50 via-background to-background px-2 pb-4 text-foreground dark:from-[hsl(var(--factory-hue)_59%_11%)] dark:via-[hsl(var(--factory-hue)_49%_8%)] dark:to-[hsl(var(--factory-hue)_49%_8%)] sm:px-4 sm:py-4 print:gap-3 print:rounded-none print:bg-white print:p-0 print:text-black">
       <AttendanceAdminApprovalDialog
         open={approvalOpen}
         onOpenChange={handleApprovalOpenChange}
@@ -366,7 +369,7 @@ export default function FactoryWorkerAttendanceReport() {
       {/* ── Date mode selector ──────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-3 print:hidden">
         <span className="text-sm font-semibold text-muted-foreground">Period:</span>
-        <div className="flex flex-wrap items-center gap-1 rounded-xl border border-slate-200 bg-white/80 p-1 shadow-sm dark:border-blue-900/60 dark:bg-[#122037]">
+        <div className="flex flex-wrap items-center gap-1 rounded-xl border border-slate-200 bg-white/80 p-1 shadow-sm dark:border-blue-900/60 dark:bg-[hsl(var(--factory-hue)_51%_14%)]">
           {(["today", "yesterday", "thisMonth", "custom"] as DateMode[]).map((m) => (
             <Button
               key={m}
@@ -394,7 +397,7 @@ export default function FactoryWorkerAttendanceReport() {
 
         {/* Month navigator for thisMonth */}
         {mode === "thisMonth" && (
-          <div className="flex flex-wrap items-center gap-1 rounded-xl border border-slate-200 bg-white/80 p-1 shadow-sm dark:border-blue-900/60 dark:bg-[#122037]">
+          <div className="flex flex-wrap items-center gap-1 rounded-xl border border-slate-200 bg-white/80 p-1 shadow-sm dark:border-blue-900/60 dark:bg-[hsl(var(--factory-hue)_51%_14%)]">
             <Button
               variant="ghost"
               size="icon"
@@ -444,7 +447,7 @@ export default function FactoryWorkerAttendanceReport() {
       {/* ── Filter + toggle bar ─────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-3 print:hidden">
         <span className="text-sm font-semibold text-muted-foreground">Show:</span>
-        <div className="flex flex-wrap items-center gap-1 rounded-xl border border-slate-200 bg-white/80 p-1 shadow-sm dark:border-blue-900/60 dark:bg-[#122037]">
+        <div className="flex flex-wrap items-center gap-1 rounded-xl border border-slate-200 bg-white/80 p-1 shadow-sm dark:border-blue-900/60 dark:bg-[hsl(var(--factory-hue)_51%_14%)]">
           <Button
             variant="ghost"
             size="sm"
@@ -512,7 +515,7 @@ export default function FactoryWorkerAttendanceReport() {
             onClick={() => setHideFullAbsent((v) => !v)}
             data-testid="toggle-hide-full-absent"
             className={cn(
-              "h-9 gap-1.5 rounded-lg border-slate-200 px-3 text-xs font-semibold dark:border-blue-900/60 dark:bg-[#122037]",
+              "h-9 gap-1.5 rounded-lg border-slate-200 px-3 text-xs font-semibold dark:border-blue-900/60 dark:bg-[hsl(var(--factory-hue)_51%_14%)]",
               hideFullAbsent &&
                 "border-blue-400 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-500/15 dark:text-blue-300"
             )}
@@ -535,7 +538,7 @@ export default function FactoryWorkerAttendanceReport() {
           onClick={() => setEditMode((v) => !v)}
           data-testid="toggle-edit-mode"
           className={cn(
-            "h-9 gap-1.5 rounded-lg border-slate-200 px-3 text-xs font-semibold dark:border-blue-900/60 dark:bg-[#122037]",
+            "h-9 gap-1.5 rounded-lg border-slate-200 px-3 text-xs font-semibold dark:border-blue-900/60 dark:bg-[hsl(var(--factory-hue)_51%_14%)]",
             editMode &&
               "border-blue-400 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-500/15 dark:text-blue-300"
           )}
@@ -548,9 +551,7 @@ export default function FactoryWorkerAttendanceReport() {
 
       {dateRangeError && (
         <Card>
-          <CardContent className="p-4 text-sm text-muted-foreground">
-            {dateRangeError}
-          </CardContent>
+          <CardContent className="p-4 text-sm text-muted-foreground">{dateRangeError}</CardContent>
         </Card>
       )}
 
@@ -589,7 +590,7 @@ export default function FactoryWorkerAttendanceReport() {
 
           {/* ── Summary cards ───────────────────────────────────────────────── */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5 print:grid-cols-5">
-            <Card className="relative min-w-0 overflow-hidden rounded-2xl border shadow-sm dark:shadow-[0_12px_25px_rgba(0,0,0,0.22)] print:rounded-none print:border-gray-300 print:bg-white print:bg-none print:shadow-none border-blue-300/70 dark:border-blue-500/60 bg-gradient-to-br from-blue-50 via-blue-50/70 to-white dark:from-[#1a3866] dark:via-[#112848] dark:to-[#0d1b32]">
+            <Card className="relative min-w-0 overflow-hidden rounded-2xl border shadow-sm dark:shadow-[0_12px_25px_rgba(0,0,0,0.22)] print:rounded-none print:border-gray-300 print:bg-white print:bg-none print:shadow-none border-blue-300/70 dark:border-blue-500/60 bg-gradient-to-br from-blue-50 via-blue-50/70 to-white dark:from-[hsl(var(--factory-hue)_59%_25%)] dark:via-[hsl(var(--factory-hue)_62%_17%)] dark:to-[hsl(var(--factory-hue)_59%_12%)]">
               <CardContent className="flex min-h-[106px] items-center gap-3 p-4">
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl print:hidden bg-blue-100 text-blue-600 dark:bg-blue-500/25 dark:text-blue-300">
                   <UsersRound className="h-6 w-6" />
@@ -633,7 +634,7 @@ export default function FactoryWorkerAttendanceReport() {
                 </div>
               </CardContent>
             </Card>
-            <Card className="relative min-w-0 overflow-hidden rounded-2xl border shadow-sm dark:shadow-[0_12px_25px_rgba(0,0,0,0.22)] print:rounded-none print:border-gray-300 print:bg-white print:bg-none print:shadow-none border-violet-300/70 dark:border-violet-500/60 bg-gradient-to-br from-violet-50 via-violet-50/70 to-white dark:from-[#403061] dark:via-[#302448] dark:to-[#1b1a38]">
+            <Card className="relative min-w-0 overflow-hidden rounded-2xl border shadow-sm dark:shadow-[0_12px_25px_rgba(0,0,0,0.22)] print:rounded-none print:border-gray-300 print:bg-white print:bg-none print:shadow-none border-violet-300/70 dark:border-violet-500/60 bg-gradient-to-br from-violet-50 via-violet-50/70 to-white dark:from-[hsl(var(--factory-hue)_34%_28%)] dark:via-[hsl(var(--factory-hue)_33%_21%)] dark:to-[hsl(var(--factory-hue)_37%_16%)]">
               <CardContent className="flex min-h-[106px] items-center gap-3 p-4">
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl print:hidden bg-violet-100 text-violet-700 dark:bg-violet-500/25 dark:text-violet-300">
                   <Coins className="h-6 w-6" />
@@ -649,7 +650,7 @@ export default function FactoryWorkerAttendanceReport() {
                 </div>
               </CardContent>
             </Card>
-            <Card className="relative min-w-0 overflow-hidden rounded-2xl border shadow-sm dark:shadow-[0_12px_25px_rgba(0,0,0,0.22)] print:rounded-none print:border-gray-300 print:bg-white print:bg-none print:shadow-none border-cyan-300/70 dark:border-cyan-500/60 bg-gradient-to-br from-cyan-50 via-cyan-50/70 to-white dark:from-[#0f4654] dark:via-[#103440] dark:to-[#0b2534]">
+            <Card className="relative min-w-0 overflow-hidden rounded-2xl border shadow-sm dark:shadow-[0_12px_25px_rgba(0,0,0,0.22)] print:rounded-none print:border-gray-300 print:bg-white print:bg-none print:shadow-none border-cyan-300/70 dark:border-cyan-500/60 bg-gradient-to-br from-cyan-50 via-cyan-50/70 to-white dark:from-[hsl(var(--factory-hue)_70%_19%)] dark:via-[hsl(var(--factory-hue)_60%_16%)] dark:to-[hsl(var(--factory-hue)_65%_12%)]">
               <CardContent className="flex min-h-[106px] items-center gap-3 p-4">
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl print:hidden bg-cyan-100 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-300">
                   <HandCoins className="h-6 w-6" />
@@ -727,24 +728,24 @@ export default function FactoryWorkerAttendanceReport() {
             </Card>
           ) : (
             /* ── Attendance grid ────────────────────────────────────────────── */
-            <div className="overflow-auto rounded-2xl border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.06)] dark:border-blue-900/70 dark:bg-[#0c172a] dark:shadow-[0_16px_32px_rgba(0,0,0,0.2)] print:max-h-none print:overflow-visible print:rounded-none print:border-0 print:bg-white print:shadow-none">
+            <div className="overflow-auto rounded-2xl border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.06)] dark:border-blue-900/70 dark:bg-[hsl(var(--factory-hue)_56%_11%)] dark:shadow-[0_16px_32px_rgba(0,0,0,0.2)] print:max-h-none print:overflow-visible print:rounded-none print:border-0 print:bg-white print:shadow-none">
               <table className="w-full text-xs border-collapse min-w-max print:text-[11px]">
                 <thead>
-                  <tr className="bg-slate-100 text-slate-700 dark:bg-[#172b49] dark:text-slate-200 print:bg-gray-100 print:text-black">
-                    <th className="sticky left-0 top-0 z-30 min-w-[88px] whitespace-nowrap border-b border-r border-slate-200 bg-slate-100 px-3 py-3 text-left font-semibold dark:border-[#2b4060] dark:bg-[#172b49] print:bg-gray-100">
+                  <tr className="bg-slate-100 text-slate-700 dark:bg-[hsl(var(--factory-hue)_52%_19%)] dark:text-slate-200 print:bg-gray-100 print:text-black">
+                    <th className="sticky left-0 top-0 z-30 min-w-[88px] whitespace-nowrap border-b border-r border-slate-200 bg-slate-100 px-3 py-3 text-left font-semibold dark:border-[hsl(var(--factory-hue)_38%_27%)] dark:bg-[hsl(var(--factory-hue)_52%_19%)] print:bg-gray-100">
                       Code
                     </th>
-                    <th className="sticky left-[88px] top-0 z-30 min-w-[160px] whitespace-nowrap border-b border-r border-slate-200 bg-slate-100 px-3 py-3 text-left font-semibold dark:border-[#2b4060] dark:bg-[#172b49] print:bg-gray-100">
+                    <th className="sticky left-[88px] top-0 z-30 min-w-[160px] whitespace-nowrap border-b border-r border-slate-200 bg-slate-100 px-3 py-3 text-left font-semibold dark:border-[hsl(var(--factory-hue)_38%_27%)] dark:bg-[hsl(var(--factory-hue)_52%_19%)] print:bg-gray-100">
                       Worker
                     </th>
                     {data.dates.map(({ date, label, abbr, isWeekend }) => (
                       <th
                         key={date}
                         className={cn(
-                          "sticky top-0 z-20 w-8 min-w-[32px] border-b border-r border-slate-200 px-0 py-2 text-center font-semibold dark:border-[#2b4060]",
+                          "sticky top-0 z-20 w-8 min-w-[32px] border-b border-r border-slate-200 px-0 py-2 text-center font-semibold dark:border-[hsl(var(--factory-hue)_38%_27%)]",
                           isWeekend
                             ? "bg-amber-50/80 text-amber-600 dark:bg-[#3d301f] dark:text-amber-300"
-                            : "bg-slate-100 dark:bg-[#172b49]"
+                            : "bg-slate-100 dark:bg-[hsl(var(--factory-hue)_52%_19%)]"
                         )}
                       >
                         <div className="flex flex-col items-center gap-0 leading-tight">
@@ -753,13 +754,13 @@ export default function FactoryWorkerAttendanceReport() {
                         </div>
                       </th>
                     ))}
-                    <th className="sticky top-0 z-20 min-w-[52px] whitespace-nowrap border-b border-r border-slate-200 bg-slate-100 px-2 py-3 text-center font-bold text-emerald-700 dark:border-[#2b4060] dark:bg-[#172b49] dark:text-emerald-300 print:bg-gray-100">
+                    <th className="sticky top-0 z-20 min-w-[52px] whitespace-nowrap border-b border-r border-slate-200 bg-slate-100 px-2 py-3 text-center font-bold text-emerald-700 dark:border-[hsl(var(--factory-hue)_38%_27%)] dark:bg-[hsl(var(--factory-hue)_52%_19%)] dark:text-emerald-300 print:bg-gray-100">
                       P
                     </th>
-                    <th className="sticky top-0 z-20 min-w-[52px] whitespace-nowrap border-b border-r border-slate-200 bg-slate-100 px-2 py-3 text-center font-bold text-red-500 dark:border-[#2b4060] dark:bg-[#172b49] dark:text-red-400 print:bg-gray-100">
+                    <th className="sticky top-0 z-20 min-w-[52px] whitespace-nowrap border-b border-r border-slate-200 bg-slate-100 px-2 py-3 text-center font-bold text-red-500 dark:border-[hsl(var(--factory-hue)_38%_27%)] dark:bg-[hsl(var(--factory-hue)_52%_19%)] dark:text-red-400 print:bg-gray-100">
                       A
                     </th>
-                    <th className="sticky top-0 z-20 min-w-[52px] whitespace-nowrap border-b border-slate-200 bg-slate-100 px-2 py-3 text-center font-bold dark:border-[#2b4060] dark:bg-[#172b49] print:bg-gray-100">
+                    <th className="sticky top-0 z-20 min-w-[52px] whitespace-nowrap border-b border-slate-200 bg-slate-100 px-2 py-3 text-center font-bold dark:border-[hsl(var(--factory-hue)_38%_27%)] dark:bg-[hsl(var(--factory-hue)_52%_19%)] print:bg-gray-100">
                       %
                     </th>
                   </tr>
@@ -770,23 +771,29 @@ export default function FactoryWorkerAttendanceReport() {
                     <tr
                       key={worker.id}
                       className={cn(
-                        "border-b border-slate-100 transition-colors hover:bg-blue-50/70 dark:border-[#253651] dark:hover:bg-[#1a3456]",
-                        idx % 2 === 0 ? "bg-white dark:bg-[#0c172a]" : "bg-slate-50/70 dark:bg-[#101e33]"
+                        "border-b border-slate-100 transition-colors hover:bg-blue-50/70 dark:border-[hsl(var(--factory-hue)_37%_23%)] dark:hover:bg-[hsl(var(--factory-hue)_54%_22%)]",
+                        idx % 2 === 0
+                          ? "bg-white dark:bg-[hsl(var(--factory-hue)_56%_11%)]"
+                          : "bg-slate-50/70 dark:bg-[hsl(var(--factory-hue)_52%_13%)]"
                       )}
                       data-testid={`row-worker-${worker.id}`}
                     >
                       <td
                         className={cn(
-                          "sticky left-0 z-10 border-r border-slate-100 px-3 py-2 font-mono text-muted-foreground dark:border-[#253651]",
-                          idx % 2 === 0 ? "bg-white dark:bg-[#0c172a]" : "bg-slate-50/70 dark:bg-[#101e33]"
+                          "sticky left-0 z-10 border-r border-slate-100 px-3 py-2 font-mono text-muted-foreground dark:border-[hsl(var(--factory-hue)_37%_23%)]",
+                          idx % 2 === 0
+                            ? "bg-white dark:bg-[hsl(var(--factory-hue)_56%_11%)]"
+                            : "bg-slate-50/70 dark:bg-[hsl(var(--factory-hue)_52%_13%)]"
                         )}
                       >
                         {worker.employeeCode || "—"}
                       </td>
                       <td
                         className={cn(
-                          "sticky left-[88px] z-10 whitespace-nowrap border-r border-slate-100 px-3 py-2 font-semibold dark:border-[#253651]",
-                          idx % 2 === 0 ? "bg-white dark:bg-[#0c172a]" : "bg-slate-50/70 dark:bg-[#101e33]"
+                          "sticky left-[88px] z-10 whitespace-nowrap border-r border-slate-100 px-3 py-2 font-semibold dark:border-[hsl(var(--factory-hue)_37%_23%)]",
+                          idx % 2 === 0
+                            ? "bg-white dark:bg-[hsl(var(--factory-hue)_56%_11%)]"
+                            : "bg-slate-50/70 dark:bg-[hsl(var(--factory-hue)_52%_13%)]"
                         )}
                       >
                         <span className="truncate block max-w-[180px]" title={worker.fullName}>
@@ -805,7 +812,7 @@ export default function FactoryWorkerAttendanceReport() {
                           <td
                             key={date}
                             className={cn(
-                              "w-8 border-r border-slate-100 px-0 py-2 text-center dark:border-[#253651]",
+                              "w-8 border-r border-slate-100 px-0 py-2 text-center dark:border-[hsl(var(--factory-hue)_37%_23%)]",
                               isWeekend ? "bg-amber-50/40 dark:bg-amber-900/5" : ""
                             )}
                             data-testid={`cell-${worker.id}-${date}`}
@@ -849,11 +856,11 @@ export default function FactoryWorkerAttendanceReport() {
                       })}
 
                       {/* Present count */}
-                      <td className="border-r border-slate-100 px-2 py-2 text-center font-bold tabular-nums text-emerald-700 dark:border-[#253651] dark:text-emerald-400">
+                      <td className="border-r border-slate-100 px-2 py-2 text-center font-bold tabular-nums text-emerald-700 dark:border-[hsl(var(--factory-hue)_37%_23%)] dark:text-emerald-400">
                         {worker.presentCount}
                       </td>
                       {/* Absent count */}
-                      <td className="border-r border-slate-100 px-2 py-2 text-center font-bold tabular-nums text-red-500 dark:border-[#253651] dark:text-red-400">
+                      <td className="border-r border-slate-100 px-2 py-2 text-center font-bold tabular-nums text-red-500 dark:border-[hsl(var(--factory-hue)_37%_23%)] dark:text-red-400">
                         {worker.absentCount}
                       </td>
                       {/* Attendance % */}
@@ -875,9 +882,9 @@ export default function FactoryWorkerAttendanceReport() {
                   ))}
 
                   {/* ── Daily summary row ────────────────────────────────────── */}
-                  <tr className="sticky bottom-0 border-t-2 border-blue-200 bg-blue-50 font-semibold dark:border-blue-900/70 dark:bg-[#183050] print:bg-gray-100">
-                    <td className="px-2 py-2 border-r sticky left-0 bg-blue-50 dark:bg-[#183050] z-10 text-muted-foreground text-[11px] print:bg-gray-100" />
-                    <td className="px-3 py-2 border-r sticky left-[88px] bg-blue-50 dark:bg-[#183050] z-10 text-muted-foreground text-[11px] whitespace-nowrap print:bg-gray-100">
+                  <tr className="sticky bottom-0 border-t-2 border-blue-200 bg-blue-50 font-semibold dark:border-blue-900/70 dark:bg-[hsl(var(--factory-hue)_54%_20%)] print:bg-gray-100">
+                    <td className="px-2 py-2 border-r sticky left-0 bg-blue-50 dark:bg-[hsl(var(--factory-hue)_54%_20%)] z-10 text-muted-foreground text-[11px] print:bg-gray-100" />
+                    <td className="px-3 py-2 border-r sticky left-[88px] bg-blue-50 dark:bg-[hsl(var(--factory-hue)_54%_20%)] z-10 text-muted-foreground text-[11px] whitespace-nowrap print:bg-gray-100">
                       Daily Total
                     </td>
                     {data.dates.map(({ date }) => {
@@ -912,7 +919,7 @@ export default function FactoryWorkerAttendanceReport() {
           )}
 
           {/* ── Legend ──────────────────────────────────────────────────────── */}
-          <div className="flex flex-wrap items-center gap-4 rounded-xl border border-slate-200 bg-white/70 px-4 py-3 text-xs text-muted-foreground dark:border-blue-900/50 dark:bg-[#111f36]/80 print:hidden">
+          <div className="flex flex-wrap items-center gap-4 rounded-xl border border-slate-200 bg-white/70 px-4 py-3 text-xs text-muted-foreground dark:border-blue-900/50 dark:bg-[hsl(var(--factory-hue)_52%_14%)]/80 print:hidden">
             <span className="flex items-center gap-1.5">
               <span className="inline-flex items-center justify-center w-4 h-4 rounded-xs bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 text-[11px] font-bold">
                 P

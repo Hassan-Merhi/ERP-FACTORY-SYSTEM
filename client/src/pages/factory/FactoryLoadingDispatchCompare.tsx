@@ -163,11 +163,11 @@ export default function FactoryLoadingDispatchCompare() {
 
   return (
     <div
-      className="h-full min-w-0 overflow-y-auto bg-slate-50/80 p-3 pb-10 dark:bg-[#080f1c] sm:p-5 lg:p-7"
+      className="h-full min-w-0 overflow-y-auto bg-slate-50/80 p-3 pb-10 dark:bg-[hsl(var(--factory-hue)_56%_7%)] sm:p-5 lg:p-7"
       data-testid="factory-dispatch-comparison-page"
     >
       <div className="mx-auto max-w-[1480px] space-y-4">
-        <div className="rounded-2xl border border-blue-200 bg-gradient-to-r from-white via-blue-50 to-sky-100 p-4 dark:border-blue-500/25 dark:from-[#142441] dark:via-[#112848] dark:to-[#0a2952] sm:p-5">
+        <div className="rounded-2xl border border-blue-200 bg-gradient-to-r from-white via-blue-50 to-sky-100 p-4 dark:border-blue-500/25 dark:from-[hsl(var(--factory-hue)_53%_17%)] dark:via-[hsl(var(--factory-hue)_62%_17%)] dark:to-[hsl(var(--factory-hue)_78%_18%)] sm:p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3">
               <div className="rounded-xl bg-blue-600 p-3 text-white">
@@ -308,7 +308,7 @@ export default function FactoryLoadingDispatchCompare() {
 
             {!selectedId && (
               <Card
-                className="border-blue-200 bg-white dark:border-blue-500/25 dark:bg-[#101c34]"
+                className="border-blue-200 bg-white dark:border-blue-500/25 dark:bg-[hsl(var(--factory-hue)_53%_13%)]"
                 data-testid="pending-loading-final-reconciliation"
               >
                 <CardContent className="space-y-4 p-4">
@@ -359,7 +359,7 @@ export default function FactoryLoadingDispatchCompare() {
                       </div>
                       <div className="max-h-[360px] overflow-auto rounded-lg border dark:border-slate-700">
                         <table className="w-full min-w-[480px] text-left text-xs">
-                          <thead className="sticky top-0 bg-slate-100 dark:bg-[#0b162a]">
+                          <thead className="sticky top-0 bg-slate-100 dark:bg-[hsl(var(--factory-hue)_58%_10%)]">
                             <tr>
                               <th className="px-3 py-2">Select</th>
                               <th className="px-3 py-2">Bale reference</th>
@@ -404,7 +404,7 @@ export default function FactoryLoadingDispatchCompare() {
               </Card>
             )}
 
-            <Card className="border-blue-100 bg-white dark:border-blue-500/20 dark:bg-[#101c34]">
+            <Card className="border-blue-100 bg-white dark:border-blue-500/20 dark:bg-[hsl(var(--factory-hue)_53%_13%)]">
               <CardContent className="space-y-3 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-sm font-bold">Verification progress</p>
@@ -441,7 +441,7 @@ export default function FactoryLoadingDispatchCompare() {
               </CardContent>
             </Card>
 
-            <Card className="min-w-0 border-slate-200 bg-white dark:border-blue-500/20 dark:bg-[#101c34]">
+            <Card className="min-w-0 border-slate-200 bg-white dark:border-blue-500/20 dark:bg-[hsl(var(--factory-hue)_53%_13%)]">
               <CardContent className="space-y-3 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
@@ -492,7 +492,7 @@ export default function FactoryLoadingDispatchCompare() {
                 </div>
                 <div className="overflow-x-auto rounded-xl border dark:border-slate-700">
                   <table className="w-full min-w-[900px] text-left text-xs">
-                    <thead className="sticky top-0 bg-slate-100 text-muted-foreground dark:bg-[#0c192e]">
+                    <thead className="sticky top-0 bg-slate-100 text-muted-foreground dark:bg-[hsl(var(--factory-hue)_59%_11%)]">
                       <tr>
                         <th className="px-3 py-3 font-semibold">Article</th>
                         <th className="px-3 py-3 text-right font-semibold">Pending Loading</th>
@@ -602,7 +602,7 @@ export default function FactoryLoadingDispatchCompare() {
               )}
             </div>
 
-            <Card className="border-slate-200 dark:border-blue-500/20 dark:bg-[#101c34]">
+            <Card className="border-slate-200 dark:border-blue-500/20 dark:bg-[hsl(var(--factory-hue)_53%_13%)]">
               <CardContent className="space-y-3 p-4">
                 <h3 className="text-sm font-bold">All truck trips</h3>
                 {result.trips.length === 0 ? (

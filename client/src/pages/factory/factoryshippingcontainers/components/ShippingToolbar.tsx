@@ -49,7 +49,7 @@ export function ShippingToolbar({
   hiddenCount,
 }: ShippingToolbarProps) {
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-card p-2.5 shadow-sm dark:bg-[#101c30]">
+    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-card p-2.5 shadow-sm dark:bg-[hsl(var(--factory-hue)_50%_13%)]">
       <div className="relative min-w-[200px] flex-[2_1_260px]">
         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input

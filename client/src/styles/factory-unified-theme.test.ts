@@ -10,11 +10,11 @@ const projectRoot = process.cwd();
 const factoryStyles = join(projectRoot, "client/src/pages/factory");
 const factoryTheme = join(projectRoot, "client/src/styles/factory-unified-theme.css");
 
-function cssFiles(dir: string): string[] {
+function sourceFiles(dir: string, extension: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const path = join(dir, entry.name);
-    if (entry.isDirectory()) return cssFiles(path);
-    return entry.isFile() && entry.name.endsWith(".css") ? [path] : [];
+    if (entry.isDirectory()) return sourceFiles(path, extension);
+    return entry.isFile() && entry.name.endsWith(extension) ? [path] : [];
   });
 }
 
@@ -54,7 +54,7 @@ describe("Factory unified blue theme", () => {
       factoryTheme,
       join(projectRoot, "client/src/factory-mobile-operations.css"),
       join(projectRoot, "client/src/factory-mobile-touch-targets.css"),
-      ...cssFiles(factoryStyles),
+      ...sourceFiles(factoryStyles, ".css"),
     ];
     const colorPattern = /#[a-fA-F0-9]{6}\b|rgba?\(\s*\d+\s*,\s*\d+\s*,\s*\d+(?:\s*,\s*\d*\.?\d+)?\s*\)/g;
     const violations = candidates.flatMap((path) =>
@@ -64,5 +64,24 @@ describe("Factory unified blue theme", () => {
         .map((color) => relative(projectRoot, path) + ": " + color)
     );
     expect(violations).toEqual([]);
+  });
+  it("has no fixed blue or violet card backgrounds, borders or gradients in Factory pages", () => {
+    const colorPattern = /(?:[\w-]+:)*(?:bg|border|from|via|to)-\[(#[a-fA-F0-9]{6})\]/g;
+    const violations = sourceFiles(factoryStyles, ".tsx").flatMap((path) =>
+      [...readFileSync(path, "utf8").matchAll(colorPattern)]
+        .map((match) => match[1])
+        // Attendance absence/leave uses a distinct rose status color.
+        .filter((color) => fixedBrandColor(color) && color !== "#392033")
+        .map((color) => relative(projectRoot, path) + ": " + color)
+    );
+    expect(violations).toEqual([]);
+    for (const page of [
+      "CustomerLoadingSummaryCards.tsx",
+      "FactoryInvoicing.tsx",
+      "FactoryInsurance.tsx",
+      "FactoryWorkerAttendanceReport.tsx",
+    ]) {
+      expect(readFileSync(join(factoryStyles, page), "utf8")).toContain("hsl(var(--factory-hue)_");
+    }
   });
 });
