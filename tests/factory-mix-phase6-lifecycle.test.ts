@@ -256,6 +256,51 @@ describe("Phase 6 historical completion / carry-forward evidence", () => {
     expect(damaged.issues.map((i) => i.code)).toContain("CARRY_SOURCE_MISSING");
   });
 
+  it("accepts a topped-up carry-forward and still flags a header that the recorded sources do not explain", () => {
+    const toppedUp = {
+      status: "CARRY_FORWARD",
+      carry_forward_from_id: 49,
+      parent_id: 49,
+      parent_company_id: 12,
+      parent_status: "CLOSED",
+      parent_deleted_at: null,
+      parent_batch_code: "FMB-2026-0035",
+      parent_batch_date: "2026-03-25",
+      parent_cost_per_kg: "0.6325000",
+      batch_date: "2026-03-26",
+      // 100 kg carried at 0.6325 plus a 50 kg top-up at 0.80 re-blends to 0.6883333.
+      total_weight_kg: "150.000",
+      used_kg: "0",
+      cost_per_kg: "0.6883333",
+      total_cost: "103.2500000",
+      carry_source_count: "1",
+      carry_source_kg: "100.000",
+      carry_source_usd: "63.2500000",
+      added_source_count: "1",
+      added_source_kg: "50.000",
+      added_source_usd: "40.0000000",
+    };
+    expect(classifyMixLifecycleEvidence(saved(toppedUp), 12).issues).toEqual([]);
+
+    const unexplained = classifyMixLifecycleEvidence(saved({ ...toppedUp, total_cost: "120.0000000" }), 12);
+    expect(unexplained.issues.map((i) => i.code)).toContain("CARRY_SOURCE_INCONSISTENT");
+
+    // Without any added source line the parent rate must still match.
+    const drift = classifyMixLifecycleEvidence(
+      saved({
+        ...toppedUp,
+        total_weight_kg: "100.000",
+        total_cost: "63.2500000",
+        cost_per_kg: "0.7000000",
+        added_source_count: "0",
+        added_source_kg: "0",
+        added_source_usd: "0",
+      }),
+      12
+    );
+    expect(drift.issues.map((i) => i.code)).toEqual(["CARRY_RATE_DRIFT"]);
+  });
+
   it("marks missing / foreign parent IDs and downstream daily usage over-allocation", () => {
     const row = classifyMixLifecycleEvidence(
       saved({

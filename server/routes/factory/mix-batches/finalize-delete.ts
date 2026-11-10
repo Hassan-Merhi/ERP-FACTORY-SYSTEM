@@ -152,10 +152,13 @@ export function registerFactoryMixBatchFinalizeDeleteRoutes(app: Express) {
               )
             )
             .limit(1),
+          // Source rows of a soft-deleted downstream mix are retained as history
+          // after its consumption was reversed; only live owners are dependencies.
           tx
             .select({ id: factoryMixBatchSources.id })
             .from(factoryMixBatchSources)
-            .where(eq(factoryMixBatchSources.sourceBatchId, id))
+            .innerJoin(factoryMixBatches, eq(factoryMixBatches.id, factoryMixBatchSources.mixBatchId))
+            .where(and(eq(factoryMixBatchSources.sourceBatchId, id), isNull(factoryMixBatches.deletedAt)))
             .limit(1),
           tx
             .select({ id: factoryBales.id })

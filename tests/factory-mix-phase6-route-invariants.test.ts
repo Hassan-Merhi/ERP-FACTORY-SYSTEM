@@ -40,6 +40,13 @@ describe("Phase 6 mix quantity writer guards", () => {
     expect(source).not.toContain("GREATEST(");
   });
 
+  it("ignores source rows of soft-deleted downstream mixes when checking live dependencies", () => {
+    const liveOwnerOnly =
+      /\.from\(factoryMixBatchSources\)\s*\.innerJoin\(factoryMixBatches, eq\(factoryMixBatches\.id, factoryMixBatchSources\.mixBatchId\)\)\s*\.where\(and\(eq\(factoryMixBatchSources\.sourceBatchId, (?:id|batch\.id)\), isNull\(factoryMixBatches\.deletedAt\)\)\)/;
+    expect(read("server/routes/factory/mix-batches/finalize-delete.ts")).toMatch(liveOwnerOnly);
+    expect(read("server/services/factory/mixBatchEditReview.ts")).toMatch(liveOwnerOnly);
+  });
+
   it("requires unique original raw stock and exact capacity before deleted mix restore", () => {
     const source = read("server/routes/admin/deleted-items/restore.ts");
     expect(source).toContain("requireMixDeletionSafe({ ...mix, deletedAt: null }, false)");

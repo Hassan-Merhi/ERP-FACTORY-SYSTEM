@@ -162,10 +162,13 @@ export async function prepareMixSourceEditReview(
       .limit(1),
     // Also protect against circular mix source references when an old usage
     // counter failed to reflect consumption by another mix.
+    // Rows owned by a soft-deleted downstream mix are retained history, not a
+    // live dependency: that mix's consumption was already reversed on delete.
     executor
       .select({ id: factoryMixBatchSources.id })
       .from(factoryMixBatchSources)
-      .where(eq(factoryMixBatchSources.sourceBatchId, batch.id))
+      .innerJoin(factoryMixBatches, eq(factoryMixBatches.id, factoryMixBatchSources.mixBatchId))
+      .where(and(eq(factoryMixBatchSources.sourceBatchId, batch.id), isNull(factoryMixBatches.deletedAt)))
       .limit(1),
   ]);
   if (linkedBales.length || linkedPressing.length || linkedUsage.length || linkedDownstreamMix.length) {

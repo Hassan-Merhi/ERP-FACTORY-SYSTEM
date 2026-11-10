@@ -34,6 +34,10 @@ interface MixLifecycleDbLine {
   carry_source_count: string;
   carry_source_kg: string;
   carry_source_usd: string;
+  /** Source lines added after the carry (legitimate top-ups). Absent on legacy snapshots. */
+  added_source_count?: string | null;
+  added_source_kg?: string | null;
+  added_source_usd?: string | null;
   daily_usage_count: string;
   daily_usage_kg: string;
   child_count: string;
@@ -137,6 +141,7 @@ export function classifyMixLifecycleEvidence(row: MixLifecycleDbLine, companyId:
     issue("ACTIVE_WITH_ZERO_REMAINDER", "review", "Active batch has no remaining kg to consume.");
   }
   const parentId = row.carry_forward_from_id;
+  const toppedUp = Number(row.added_source_count ?? 0) > 0;
   if (parentId !== null) {
     if (row.parent_id === null) {
       issue("CARRY_PARENT_MISSING", "error", "The recorded parent batch no longer exists.");
@@ -168,10 +173,12 @@ export function classifyMixLifecycleEvidence(row: MixLifecycleDbLine, companyId:
         "Carry-forward requires exactly one recorded parent-source cost/weight line."
       );
     } else {
-      if (
-        dec(row.carry_source_kg).minus(total).abs().gt(KG) ||
-        dec(row.carry_source_usd).minus(dec(row.total_cost)).abs().gt(USD)
-      ) {
+      // A carry-forward that later received a top-up keeps its parent link while
+      // its header grows by the appended source lines. Compare the header with
+      // the carried portion plus those recorded additions, never the carry alone.
+      const expectedKg = dec(row.carry_source_kg).plus(dec(row.added_source_kg ?? "0"));
+      const expectedUsd = dec(row.carry_source_usd).plus(dec(row.added_source_usd ?? "0"));
+      if (expectedKg.minus(total).abs().gt(KG) || expectedUsd.minus(dec(row.total_cost)).abs().gt(USD)) {
         issue(
           "CARRY_SOURCE_INCONSISTENT",
           "error",
@@ -180,6 +187,9 @@ export function classifyMixLifecycleEvidence(row: MixLifecycleDbLine, companyId:
       }
     }
     if (
+      // A topped-up carry-forward is re-blended with the added sources, so its
+      // rate legitimately differs from the parent's recorded rate.
+      !toppedUp &&
       row.parent_company_id === companyId &&
       row.parent_cost_per_kg != null &&
       dec(row.parent_cost_per_kg).minus(dec(row.cost_per_kg)).abs().gt("0.0001")
@@ -291,6 +301,8 @@ export async function getPhase6MixLifecycleReport(companyId: number): Promise<Ph
           "p.batch_date::text AS parent_batch_date,p.cost_per_kg::text AS parent_cost_per_kg," +
           "COALESCE(s.cnt,0)::text AS carry_source_count,COALESCE(s.kg,0)::text AS carry_source_kg," +
           "COALESCE(s.usd,0)::text AS carry_source_usd," +
+          "COALESCE(a.cnt,0)::text AS added_source_count,COALESCE(a.kg,0)::text AS added_source_kg," +
+          "COALESCE(a.usd,0)::text AS added_source_usd," +
           "COALESCE(d.cnt,0)::text AS daily_usage_count,COALESCE(d.kg,0)::text AS daily_usage_kg," +
           "COALESCE(ch.cnt,0)::text AS child_count " +
           "FROM factory_mix_batches m " +
@@ -298,6 +310,10 @@ export async function getPhase6MixLifecycleReport(companyId: number): Promise<Ph
           "LEFT JOIN LATERAL (SELECT COUNT(*) cnt,COALESCE(SUM(x.weight_kg),0) kg," +
           "COALESCE(SUM(x.total_cost),0) usd FROM factory_mix_batch_sources x " +
           "WHERE x.mix_batch_id=m.id AND x.source_batch_id=m.carry_forward_from_id) s ON TRUE " +
+          "LEFT JOIN LATERAL (SELECT COUNT(*) cnt,COALESCE(SUM(x.weight_kg),0) kg," +
+          "COALESCE(SUM(x.total_cost),0) usd FROM factory_mix_batch_sources x " +
+          "WHERE m.carry_forward_from_id IS NOT NULL AND x.mix_batch_id=m.id " +
+          "AND x.source_batch_id IS DISTINCT FROM m.carry_forward_from_id) a ON TRUE " +
           "LEFT JOIN LATERAL (SELECT COUNT(*) cnt,COALESCE(SUM(d.kg_used),0) kg " +
           "FROM factory_daily_usages d WHERE d.company_id=m.company_id AND d.mix_batch_id=m.id) d ON TRUE " +
           "LEFT JOIN LATERAL (SELECT COUNT(*) cnt FROM factory_mix_batches child " +
