@@ -9,6 +9,7 @@ import { queryClient, keyStartsWith, invalidateCustomerBalances } from "@/lib/qu
 import { useAppMode } from "@/contexts/AppModeContext";
 import { getApiRequest } from "@/lib/factoryApi";
 import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import { Badge } from "@/components/ui/badge";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -115,8 +116,8 @@ export default function FactoryInvoiceCreate() {
   const customerId = selectedCustomerId ? parseInt(selectedCustomerId) : null;
 
   const { data: orderDetail } = useQuery<OrderDetail>({
-    queryKey: ["/api/factory/customer-orders", orderId],
-    enabled: !!orderId,
+    queryKey: companyQueryKey("/api/factory/customer-orders", selectedCompany?.id, orderId),
+    enabled: Boolean(selectedCompany?.id) && !!orderId,
   });
 
   // ── Sync state from loaded existing order (URL ?orderId=) ──────────────────
@@ -133,27 +134,30 @@ export default function FactoryInvoiceCreate() {
   }, [orderDetail, selectedCustomerId]);
 
   const { data: customers = [] } = useQuery<Customer[]>({
-    queryKey: ["/api/factory/customers"],
+    queryKey: companyQueryKey("/api/factory/customers", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
   });
 
   const { data: locations = [] } = useQuery<Location[]>({
-    queryKey: ["/api/locations"],
+    queryKey: companyQueryKey("/api/locations", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
   });
 
   const { data: ledgerAccounts = [] } = useQuery<{ id: number; name: string; code: string }[]>({
-    queryKey: ["/api/ledger-accounts?includeHidden=true&profile=picker"],
+    queryKey: companyQueryKey("/api/ledger-accounts?includeHidden=true&profile=picker", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     staleTime: 60_000,
     refetchOnWindowFocus: false,
   });
 
   const { data: proformaSummaries = [] } = useQuery<Array<Omit<Proforma, "lines"> & { lineCount: number }>>({
-    queryKey: [`/api/factory/customer-proformas?customerId=${customerId}&profile=summary`],
-    enabled: !!customerId,
+    queryKey: companyQueryKey(`/api/factory/customer-proformas?customerId=${customerId}&profile=summary`, selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id) && !!customerId,
   });
 
   const activeProformaSummary = proformaSummaries.find((proforma) => proforma.isActive) || null;
   const { data: activeProforma = null } = useQuery<Proforma>({
-    queryKey: ["/api/factory/customer-proformas/detail", activeProformaSummary?.id],
+    queryKey: companyQueryKey("/api/factory/customer-proformas/detail", selectedCompany?.id, activeProformaSummary?.id),
     queryFn: async () => {
       const response = await fetch(`/api/factory/customer-proformas/${activeProformaSummary?.id}`, {
         credentials: "include",
@@ -161,7 +165,7 @@ export default function FactoryInvoiceCreate() {
       if (!response.ok) throw new Error("Failed to load proforma details");
       return response.json();
     },
-    enabled: !!activeProformaSummary?.id,
+    enabled: Boolean(selectedCompany?.id) && !!activeProformaSummary?.id,
   });
 
   const createOrderMutation = useMutation({
