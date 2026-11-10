@@ -1,4 +1,8 @@
 import React from "react";
+
+vi.mock("@/contexts/CompanyContext", () => ({
+  useCompany: () => ({ selectedCompany: { id: 1, name: "Test Factory", companyType: "factory" } }),
+}));
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -11,7 +15,7 @@ const harness = vi.hoisted(() => ({
 vi.mock("@tanstack/react-query", () => ({
   useQuery: ({ queryKey }: any) => {
     if (queryKey?.[0] === "/api/factory/my-access") {
-      return { data: { fullAccess: true, pageKeys: [], hiddenCostFields: [] } };
+      return { data: { companyId: 1, hasFactoryAccess: true, fullAccess: true, pageKeys: [], hiddenCostFields: [] } };
     }
     if (queryKey?.[0] === "/api/factory/bales" && queryKey.length > 2) {
       const today = new Date().toLocaleDateString("en-CA");
