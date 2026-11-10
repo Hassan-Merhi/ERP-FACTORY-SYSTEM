@@ -16,6 +16,7 @@ import { registerFactoryLoadingDispatchScanRoutes } from "./factory/customer-ord
 import { registerFactoryLoadingDispatchComparisonRoutes } from "./factory/customer-orders/loadingDispatchComparisonRoutes";
 import { registerFactoryLoadingDispatchAllocationRoutes } from "./factory/customer-orders/loadingDispatchAllocationRoutes";
 import { registerFactoryLoadingDispatchLifecycleRoutes } from "./factory/customer-orders/loadingDispatchLifecycleRoutes";
+import { registerFactoryLoadingDispatchFinancialRoutes } from "./factory/customer-orders/loadingDispatchFinancialChargeRoutes";
 import { registerFactoryLoadingDispatchReportRoutes } from "./factory/customer-orders/loadingDispatchReportRoutes";
 import { registerFactoryContainerReadAccessRoutes } from "./factory/factoryContainerReadAccessRoutes";
 import { registerFactoryDocsUsersRoutes } from "./factory/docs-users";
@@ -219,6 +220,7 @@ export function registerFactoryRoutes(app: Express, requireAuth: RequestHandler,
   // access flags and tenant scope. Read-only GETs remain company-scoped.
   registerFactoryLoadingDispatchReportRoutes(app);
   registerFactoryLoadingDispatchLifecycleRoutes(app);
+  registerFactoryLoadingDispatchFinancialRoutes(app);
   registerFactoryLoadingDispatchAllocationRoutes(app);
   registerFactoryLoadingDispatchComparisonRoutes(app);
   registerFactoryLoadingDispatchScanRoutes(app);
