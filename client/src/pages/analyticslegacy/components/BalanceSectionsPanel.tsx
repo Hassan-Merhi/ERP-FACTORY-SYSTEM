@@ -3,7 +3,7 @@ import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, Table
 import { Skeleton } from "@/components/ui/skeleton";
 import { Wallet, Package, FileText, Landmark } from "lucide-react";
 
-import { calculateAbsoluteTotal, calculateCashTotal, formatSignedSmartCurrency, formatSmartCurrency } from "../accountMath";
+import { calculateNetAccountTotal, formatSignedSmartCurrency } from "../accountMath";
 import type { AnalyticsLegacyState } from "../useAnalyticsLegacy";
 
 export function BalanceSectionsPanel({ analytics }: { analytics: AnalyticsLegacyState }) {
@@ -16,7 +16,10 @@ export function BalanceSectionsPanel({ analytics }: { analytics: AnalyticsLegacy
     loansBanksAccounts,
     renderHierarchicalAccounts,
   } = analytics;
-  const cashTotal = calculateCashTotal(cashAccounts);
+  const assetTotal = calculateNetAccountTotal(assetAccounts);
+  const liabilityTotal = calculateNetAccountTotal(liabilityAccounts);
+  const cashTotal = calculateNetAccountTotal(cashAccounts);
+  const loansBanksTotal = calculateNetAccountTotal(loansBanksAccounts);
   return (
     <>
       {activeSection === "assets" && (
@@ -31,8 +34,8 @@ export function BalanceSectionsPanel({ analytics }: { analytics: AnalyticsLegacy
               </div>
               <div className="text-right">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Total</p>
-                <p className="text-2xl font-bold font-mono tabular-nums">
-                  {formatSmartCurrency(calculateAbsoluteTotal(assetAccounts))}
+                <p className={`text-2xl font-bold font-mono tabular-nums ${assetTotal < 0 ? "text-red-500 dark:text-red-400" : ""}`}>
+                  {formatSignedSmartCurrency(assetTotal)}
                 </p>
               </div>
             </div>
@@ -57,8 +60,8 @@ export function BalanceSectionsPanel({ analytics }: { analytics: AnalyticsLegacy
                   <TableFooter>
                     <TableRow>
                       <TableCell className="font-semibold">Total</TableCell>
-                      <TableCell className="text-right font-bold font-mono">
-                        {formatSmartCurrency(calculateAbsoluteTotal(assetAccounts))}
+                      <TableCell className={`text-right font-bold font-mono ${assetTotal < 0 ? "text-red-500 dark:text-red-400" : ""}`}>
+                        {formatSignedSmartCurrency(assetTotal)}
                       </TableCell>
                     </TableRow>
                   </TableFooter>
@@ -81,8 +84,8 @@ export function BalanceSectionsPanel({ analytics }: { analytics: AnalyticsLegacy
               </div>
               <div className="text-right">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Total</p>
-                <p className="text-2xl font-bold font-mono tabular-nums">
-                  {formatSmartCurrency(calculateAbsoluteTotal(liabilityAccounts))}
+                <p className={`text-2xl font-bold font-mono tabular-nums ${liabilityTotal < 0 ? "text-red-500 dark:text-red-400" : ""}`}>
+                  {formatSignedSmartCurrency(liabilityTotal)}
                 </p>
               </div>
             </div>
@@ -107,8 +110,8 @@ export function BalanceSectionsPanel({ analytics }: { analytics: AnalyticsLegacy
                   <TableFooter>
                     <TableRow>
                       <TableCell className="font-semibold">Total</TableCell>
-                      <TableCell className="text-right font-bold font-mono">
-                        {formatSmartCurrency(calculateAbsoluteTotal(liabilityAccounts))}
+                      <TableCell className={`text-right font-bold font-mono ${liabilityTotal < 0 ? "text-red-500 dark:text-red-400" : ""}`}>
+                        {formatSignedSmartCurrency(liabilityTotal)}
                       </TableCell>
                     </TableRow>
                   </TableFooter>
@@ -153,7 +156,7 @@ export function BalanceSectionsPanel({ analytics }: { analytics: AnalyticsLegacy
                       <TableHead className="text-right">Balance</TableHead>
                     </TableRow>
                   </TableHeader>
-                  <TableBody>{renderHierarchicalAccounts(cashAccounts, true)}</TableBody>
+                  <TableBody>{renderHierarchicalAccounts(cashAccounts)}</TableBody>
                   <TableFooter>
                     <TableRow>
                       <TableCell className="font-semibold">Total Cash</TableCell>
@@ -181,8 +184,8 @@ export function BalanceSectionsPanel({ analytics }: { analytics: AnalyticsLegacy
               </div>
               <div className="text-right">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Total Balance</p>
-                <p className="text-2xl font-bold font-mono tabular-nums">
-                  {formatSmartCurrency(calculateAbsoluteTotal(loansBanksAccounts))}
+                <p className={`text-2xl font-bold font-mono tabular-nums ${loansBanksTotal < 0 ? "text-red-500 dark:text-red-400" : ""}`}>
+                  {formatSignedSmartCurrency(loansBanksTotal)}
                 </p>
               </div>
             </div>
@@ -207,8 +210,8 @@ export function BalanceSectionsPanel({ analytics }: { analytics: AnalyticsLegacy
                   <TableFooter>
                     <TableRow>
                       <TableCell className="font-semibold">Total Balance</TableCell>
-                      <TableCell className="text-right font-bold font-mono">
-                        {formatSmartCurrency(calculateAbsoluteTotal(loansBanksAccounts))}
+                      <TableCell className={`text-right font-bold font-mono ${loansBanksTotal < 0 ? "text-red-500 dark:text-red-400" : ""}`}>
+                        {formatSignedSmartCurrency(loansBanksTotal)}
                       </TableCell>
                     </TableRow>
                   </TableFooter>
