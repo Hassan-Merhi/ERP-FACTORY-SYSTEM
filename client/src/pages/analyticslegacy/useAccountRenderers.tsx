@@ -9,7 +9,9 @@ import type { Account, NetProfitAccount } from "./types";
 import {
   calculateChildrenTotal,
   calculatePLTotal,
+  cashSignedBalance,
   formatCurrency,
+  formatSignedSmartCurrency,
   formatSmartCurrency,
   groupAccountsByParent,
   parseBalance,
@@ -138,7 +140,7 @@ export function useAccountRenderers(deps: {
   };
 
   // Render hierarchical accounts (ordinary zero-balance accounts stay hidden).
-  const renderHierarchicalAccounts = (accountList: Account[]) => {
+  const renderHierarchicalAccounts = (accountList: Account[], showSignedCashBalances = false) => {
     const { parentAccounts, accountMap } = groupAccountsByParent(accountList);
 
     return (
@@ -147,8 +149,12 @@ export function useAccountRenderers(deps: {
           const children = accountMap.get(parent.accountId) || [];
           const hasChildren = children.length > 0;
           const isExpanded = expandedAccounts.has(parent.accountId);
-          const childrenTotal = hasChildren ? calculateChildrenTotal(parent.accountId, accountMap) : 0;
-          const parentBalance = parseBalance(parent.balance);
+          const childrenTotal = hasChildren
+            ? showSignedCashBalances
+              ? children.reduce((sum, child) => sum + cashSignedBalance(child), 0)
+              : calculateChildrenTotal(parent.accountId, accountMap)
+            : 0;
+          const parentBalance = showSignedCashBalances ? cashSignedBalance(parent) : parseBalance(parent.balance);
           const displayBalance = hasChildren ? childrenTotal : parentBalance;
           const preservePayrollChildren = keepsZeroBalanceChildren(parent.name);
           const visibleChildren = preservePayrollChildren
@@ -183,8 +189,8 @@ export function useAccountRenderers(deps: {
                     <span className={hasChildren ? "" : "hover:underline"}>{parent.name}</span>
                   </div>
                 </TableCell>
-                <TableCell className={`text-right font-mono font-medium ${drCrClass(parent.balanceSide || "Dr")}`}>
-                  {formatSmartCurrency(displayBalance)}
+                <TableCell className={`text-right font-mono font-medium ${drCrClass(showSignedCashBalances ? (displayBalance < 0 ? "Cr" : "Dr") : (parent.balanceSide || "Dr"))}`}>
+                  {showSignedCashBalances ? formatSignedSmartCurrency(displayBalance) : formatSmartCurrency(displayBalance)}
                 </TableCell>
               </TableRow>
               {hasChildren &&
@@ -198,7 +204,7 @@ export function useAccountRenderers(deps: {
                   >
                     <TableCell className="pl-8 text-muted-foreground hover:underline">{child.name}</TableCell>
                     <TableCell className={`text-right font-mono ${drCrClass(child.balanceSide || "Dr")}`}>
-                      {formatSmartCurrency(parseBalance(child.balance))}
+                      {showSignedCashBalances ? formatSignedSmartCurrency(cashSignedBalance(child)) : formatSmartCurrency(parseBalance(child.balance))}
                     </TableCell>
                   </TableRow>
                 ))}
