@@ -23,6 +23,22 @@ export function isHadiHistoricAccrualRepair(companyId: number, module: string): 
 }
 
 /** Only January–November 2026 and older are sealed by the certified repair. */
+/** December 2026 onward: HADI recognizes the full linked rent even if
+ * its separate Properties landlord has received cash already. This avoids
+ * dropping tenant expense when the landlord's paid_amount reaches expected. */
+export function isFutureHadiLinkedRentMonth(
+  companyId: number,
+  module: string,
+  linkedContract: boolean,
+  year: number,
+  month: number
+): boolean {
+  return companyId === HADI_LINKED_RENT.payerCompanyId &&
+    module === "ERP" && linkedContract &&
+    Number.isInteger(year) && month >= 1 && month <= 12 &&
+    year * 100 + month >= 202612;
+}
+
 export function isHadiProtectedRentMonth(
   companyId: number,
   module: string,
