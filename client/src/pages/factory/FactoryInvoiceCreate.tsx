@@ -115,7 +115,10 @@ export default function FactoryInvoiceCreate() {
   const lastCompanyRef = useRef(selectedCompany?.id);
   useEffect(() => {
     if (lastCompanyRef.current === selectedCompany?.id) return;
+    const hadPreviousCompany = Boolean(lastCompanyRef.current);
     lastCompanyRef.current = selectedCompany?.id;
+    // Initial company hydration must not discard ?orderId= deep links.
+    if (!hadPreviousCompany) return;
     setSelectedCustomerId("");
     setChargeLedgerAccountId("");
     setSelectedLocationId("");
