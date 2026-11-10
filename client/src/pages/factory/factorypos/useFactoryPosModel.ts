@@ -12,6 +12,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useReactToPrint } from "react-to-print";
 import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import { apiRequest, queryClient, getAppDate } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type {
@@ -91,17 +92,17 @@ export function useFactoryPosModel() {
   const [mobileRowTarget, setMobileRowTarget] = useState<number | null>(null);
 
   // Queries
-  const { data: locations } = useQuery<PosLocation[]>({ queryKey: ["/api/locations"] });
-  const { data: allCustomers } = useQuery<PosCustomer[]>({ queryKey: ["/api/factory/customers"] });
+  const { data: locations } = useQuery<PosLocation[]>({ queryKey: companyQueryKey("/api/locations", selectedCompany?.id), enabled: Boolean(selectedCompany?.id) });
+  const { data: allCustomers } = useQuery<PosCustomer[]>({ queryKey: companyQueryKey("/api/factory/customers", selectedCompany?.id), enabled: Boolean(selectedCompany?.id) });
   const { data: inventory, isLoading: invLoading } = useQuery<InventoryItem[]>({
-    queryKey: ["/api/factory/location-inventory", locationId],
+    queryKey: companyQueryKey("/api/factory/location-inventory", selectedCompany?.id, locationId),
     queryFn: async () => {
       if (!locationId) return [];
       const res = await fetch(`/api/factory/location-inventory/${locationId}`, { credentials: "include" });
       if (!res.ok) return [];
       return res.json();
     },
-    enabled: !!locationId,
+    enabled: !!locationId && Boolean(selectedCompany?.id),
   });
   // Factory POS needs cash and deduction options even when the user has no
   // general Accounting module access. This endpoint is read-only, limited to
@@ -128,8 +129,8 @@ export function useFactoryPosModel() {
     setCashAccountId("");
   }, [selectedCompany?.id]);
   const { data: sales, isLoading: salesLoading } = useQuery<PosSale[]>({
-    queryKey: ["/api/factory/pos/sales"],
-    enabled: showHistory,
+    queryKey: companyQueryKey("/api/factory/pos/sales", selectedCompany?.id),
+    enabled: showHistory && Boolean(selectedCompany?.id),
   });
   const { data: authUser } = useQuery<{ fullName?: string; name?: string; username?: string; email?: string }>({
     queryKey: ["/api/auth/me"],
@@ -138,14 +139,14 @@ export function useFactoryPosModel() {
 
   // Fetch existing sale when in edit mode
   const { data: editSaleData } = useQuery({
-    queryKey: ["/api/factory/pos/sales", editSaleId],
+    queryKey: companyQueryKey("/api/factory/pos/sales", selectedCompany?.id, editSaleId),
     queryFn: async () => {
       if (!editSaleId) return null;
       const res = await fetch(`/api/factory/pos/sales/${editSaleId}`, { credentials: "include" });
       if (!res.ok) throw new Error("Sale not found");
       return res.json();
     },
-    enabled: !!editSaleId,
+    enabled: !!editSaleId && Boolean(selectedCompany?.id),
   });
 
   // Populate form when edit data loads
