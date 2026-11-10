@@ -1,6 +1,6 @@
 import { TabsList, PillTabButton } from "@/components/ui/tabs";
 import { getErrorDetails } from "@shared/errorUtils";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Redirect, useLocation } from "wouter";
 import { PageHeader } from "@/components/PageHeader";
@@ -52,19 +52,24 @@ import { isWipers, isWipersBale } from "./wipersreentry/utils";
 import { preparePriorityWipersLabels, printLabelsInBrowser } from "./wipersreentry/printUtils";
 import { productMatchesSearch } from "@shared/factoryProductSearch";
 import type { FactoryMyAccess } from "@shared/apiTypes";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 export default function WipersReEntry() {
+  const { selectedCompany } = useCompany();
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const { colors } = useLabelDesignColors();
   const appMode = useAppMode();
   const modeApiRequest = getApiRequest(appMode);
   const { data: myAccess } = useQuery<FactoryMyAccess>({
-    queryKey: ["/api/factory/my-access"],
+    queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     staleTime: 5 * 60000,
   });
-  const hiddenTabs = myAccess?.hiddenCostFields ?? [];
-  const showRelabeling = !hiddenTabs.includes("hide_tab_relabeling_main");
-  const showWipersReEntry = !hiddenTabs.includes("hide_tab_relabeling_wipers");
+  const accessReady = Boolean(selectedCompany?.id && myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true);
+  const hiddenTabs = accessReady ? (myAccess?.hiddenCostFields ?? []) : [];
+  const showRelabeling = accessReady && !hiddenTabs.includes("hide_tab_relabeling_main");
+  const showWipersReEntry = accessReady && !hiddenTabs.includes("hide_tab_relabeling_wipers");
   const [entryDate, setEntryDate] = useState<string>(new Date().toLocaleDateString("en-CA"));
   const [selectedLocationId, setSelectedLocationId] = useState<string>("");
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -81,24 +86,35 @@ export default function WipersReEntry() {
   const [pendingLabels, setPendingLabels] = useState<LabelData[] | null>(null);
   const scanRef = useRef<HTMLInputElement>(null);
   const { data: baleProducts, isLoading: productsLoading } = useQuery<FactoryBaleProduct[]>({
-    queryKey: ["/api/factory/bale-products?profile=picker"],
+    queryKey: companyQueryKey("/api/factory/bale-products?profile=picker", selectedCompany?.id), enabled: Boolean(selectedCompany?.id),
   });
-  const { data: locations } = useQuery<Location[]>({ queryKey: ["/api/locations"] });
-  const { data: categories = [] } = useQuery<FactoryCategory[]>({ queryKey: ["/api/factory/categories"] });
+  const { data: locations } = useQuery<Location[]>({ queryKey: companyQueryKey("/api/locations", selectedCompany?.id), enabled: Boolean(selectedCompany?.id) });
+  const { data: categories = [] } = useQuery<FactoryCategory[]>({ queryKey: companyQueryKey("/api/factory/categories", selectedCompany?.id), enabled: Boolean(selectedCompany?.id) });
   interface WorkerOption {
     id: number;
     fullName?: string;
     name?: string;
   }
-  const { data: workers = [] } = useQuery<WorkerOption[]>({ queryKey: ["/api/factory/workers?profile=picker"] });
+  const { data: workers = [] } = useQuery<WorkerOption[]>({ queryKey: companyQueryKey("/api/factory/workers?profile=picker", selectedCompany?.id), enabled: Boolean(selectedCompany?.id) });
   interface BaleListRow {
     bale: FactoryBale;
     product: FactoryBaleProduct;
   }
   const { data: allBalesData = [], isLoading: balesLoading } = useQuery<BaleListRow[]>({
-    queryKey: ["/api/factory/bales"],
-    enabled: cleanupOpen,
+    queryKey: companyQueryKey("/api/factory/bales", selectedCompany?.id),
+    enabled: cleanupOpen && Boolean(selectedCompany?.id),
   });
+  useEffect(() => {
+    setSelectedLocationId("");
+    setCart([]);
+    setCleanupSelectedIds(new Set());
+    setCreatedBales(null);
+    setConfirmOpen(false);
+    setCleanupOpen(false);
+    setSupervisorUsername("");
+    setSupervisorPassword("");
+    setPendingLabels(null);
+  }, [selectedCompany?.id]);
   const activeLocations = locations?.filter((l) => l.active) ?? [];
   const wiperProducts = baleProducts?.filter((p) => p.active && isWipers(p, categories)) ?? [];
   const currentWipersBales = allBalesData
