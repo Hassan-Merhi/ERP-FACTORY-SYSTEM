@@ -968,6 +968,15 @@ export function registerPoImportRoutes(app: Express) {
         containerNumber: container.containerNumber,
         itemsCount: containerPreview.itemsCount,
         grandTotal: containerPreview.grandTotal,
+        ...(factoryTripCheck.identity ? {
+          factoryDispatchReceipt: {
+            id: factoryTripReceiptId,
+            origin: factoryTripCheck.identity,
+            status: "IMPORTED",
+            supplierId,
+            erpSupplierInvoiceTotal: factoryTripCheck.supplierTotal,
+          },
+        } : {}),
       });
     } catch (error: unknown) {
       logger.error("PO Import error:", { error: error });
