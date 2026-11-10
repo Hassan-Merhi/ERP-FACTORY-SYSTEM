@@ -138,7 +138,6 @@ export async function loadFactoryDispatchOrderOverviewTx(
     generatedPoFiles:0,signed:false,finalized:false,invoiceConsistent:false,
   };
   const notices:string[]=[];
-  const tripMap=new Map(physical.map(t=>[str(t.id),t]));
   const trips:FactoryDispatchOrderOverview["trips"]=physical.map(t=>({
     id:str(t.id),dispatchNumber:integer(t.dispatchNumber),status:str(t.status),
     notes:txt(t.notes),closedAt:stamp(t.closedAt),
