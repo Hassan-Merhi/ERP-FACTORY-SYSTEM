@@ -348,6 +348,7 @@ export default function FactoryLoadingDispatchCompare() {
                     ? financialReconciliation.error.message : "Financial reconciliation unavailable")
                   : null}
                 orderId={orderId}
+                companyId={companyId}
                 isSupervisor={isSupervisor}
                 onRefresh={refreshAllReconciliation}
               />
