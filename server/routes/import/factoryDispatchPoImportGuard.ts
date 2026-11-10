@@ -69,6 +69,14 @@ function numericMoney(input: unknown): Decimal | null {
   const value = new MoneyDecimal(String(input).trim());
   return value.isFinite() && value.gte(0) ? value : null;
 }
+/** The legacy PO parser stores calculated spreadsheet totals as JS numbers. */
+function roundedSourceAmount(raw: unknown): Decimal | null {
+  if ((typeof raw !== "number" && typeof raw !== "string") ||
+      !Number.isFinite(Number(raw))) return null;
+  const value = new MoneyDecimal(String(raw));
+  const rounded = value.toDecimalPlaces(2);
+  return value.minus(rounded).abs().lte("0.005") ? rounded : null;
+}
 function nonNegativeQuantity(item: PoImportPreviewItem): boolean {
   return Number.isSafeInteger(item.quantity) && item.quantity > 0;
 }
@@ -108,7 +116,7 @@ export async function validateFactoryDispatchPoImport(
       errors.push(`ERP PO article ${code}: quantity must be a positive whole number of scanned bales.`);
     }
     const rate = numericMoney(item.rate);
-    const lineTotal = numericMoney(item.lineTotal);
+    const lineTotal = roundedSourceAmount(item.lineTotal);
     if (!rate || !rate.gt(0) || !lineTotal ||
         !rate.times(item.quantity).toDecimalPlaces(2).eq(lineTotal)) {
       errors.push(`ERP PO article ${code}: a positive two-decimal purchase rate and matching line total are required.`);
@@ -127,24 +135,16 @@ export async function validateFactoryDispatchPoImport(
   const chargeFields = ["freight", "surcharge", "fumigation", "discount", "documentCharges"] as const;
   const checked: Record<string, Decimal> = {};
   for (const key of chargeFields) {
-    const value = numericMoney(amounts[key] ?? 0);
+    const value = roundedSourceAmount(amounts[key] ?? 0);
     if (!value) errors.push(`ERP invoice ${key} must be a nonnegative two-decimal USD amount.`);
     else checked[key] = value;
   }
   const itemTotal = sumMoney(values);
-  // The existing ERP parser sums numeric cells using JS numbers, so a sum
-  // such as 0.1 + 0.2 can be 0.30000000000000004. Round these computed
-  // totals to cents, while strictly validating the source line rates.
-  const roundedDeclared = (raw: unknown): Decimal | null => {
-    if ((typeof raw !== "number" && typeof raw !== "string") ||
-        !Number.isFinite(Number(raw))) return null;
-    const value = new MoneyDecimal(String(raw));
-    const rounded = value.toDecimalPlaces(2);
-    return value.minus(rounded).abs().lte("0.005") ? rounded : null;
-  };
-  const declaredGoods = roundedDeclared(container.itemsTotal);
-  const declaredCharges = roundedDeclared(container.chargesTotal);
-  const declaredTotal = roundedDeclared(container.grandTotal);
+  // Round totals from the existing importer to cents without mistaking
+  // harmless IEEE-754 summing artifacts for altered supplier amounts.
+  const declaredGoods = roundedSourceAmount(container.itemsTotal);
+  const declaredCharges = roundedSourceAmount(container.chargesTotal);
+  const declaredTotal = roundedSourceAmount(container.grandTotal);
   const chargesTotal = checked.freight && checked.surcharge && checked.fumigation &&
     checked.discount && checked.documentCharges
     ? checked.freight.plus(checked.surcharge).plus(checked.fumigation)
