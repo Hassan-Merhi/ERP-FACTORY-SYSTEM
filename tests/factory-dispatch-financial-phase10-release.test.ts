@@ -61,6 +61,9 @@ describe("Phase 10 Factory dispatch accounting safety / release contract",()=>{
       "factory_dispatch_final_voucher_guard",
       "factory_dispatch_final_voucher_entries_guard",
       "factory_dispatch_final_posting_identity_guard",
+      "factory_dispatch_final_order_source_guard",
+      "factory_dispatch_final_commercial_lines_guard",
+      "factory_dispatch_final_sold_bales_guard",
       "factory_dispatch_final_invoice_number_uq",
     ]){expect(release).toContain(guard);expect(phase8).toContain(guard);}
     expect(finalizer).toContain('assertFactoryDispatchReleaseReadyTx(tx,"FINAL_INVOICE")');
