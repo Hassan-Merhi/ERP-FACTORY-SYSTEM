@@ -31,7 +31,7 @@ Other linked records: company #1 HADI L'SHI (ERP payer), company #13 Hassan Prop
 
 ### 4. Read-only linked source settlement vs ERP ledger reconciliation
 - New service `server/services/rental/hadiLinkedRentProtection.ts`.
-- Admin/Developer/authorized rental reconciliation users can GET `/api/<erp-rental-prefix>/linked-rent-control?asOf=YYYY-MM-DD` using existing registration via `server/routes/rentalRouteFactory.ts`.
+- Admin/Developer/authorized rental reconciliation users can GET `/api/erp/rental/linked-rent-control?asOf=YYYY-MM-DD` using existing registration via `server/routes/rentalRouteFactory.ts`.
 - Requires authorized read access to **both** HADI company #1 and linked Properties company #13; otherwise responds with 403 from the standard counterparty scope check.
 - Shows 5 source contracts, each period's expected rent, only **POSTED payments with a valid active owner-company voucher**, per-month positive rent due, active HADI-owned due, company1 ledger payable #1021, mismatch and invalid posted voucher count. Never nets a different contract's prepaid credit against an unpaid contract.
 - Mismatched data returns `status:"REVIEW"` **without** creating or modifying any journal. A reported difference requires original-voucher evidence; no automatic owner-side receipt to tenant-side payable matching/journal is manufactured.
