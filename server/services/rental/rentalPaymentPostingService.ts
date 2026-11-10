@@ -192,6 +192,18 @@ async function postGroupCore(
     throw error;
   }
 
+  const accountValid = (await tx.execute(sql`
+    SELECT id FROM ledger_accounts
+    WHERE id=${cashAccountId} AND company_id=${companyId}
+      AND active=TRUE AND deleted_at IS NULL
+    LIMIT 1
+  `)).rows;
+  if (accountValid.length !== 1) {
+    const error: RentalPostingError = new Error("RENTAL_PAYMENT_CASH_ACCOUNT_NOT_AVAILABLE_IN_COMPANY");
+    error.status = 409;
+    throw error;
+  }
+
   const isShop = isSharedPayment || unit?.unitType === "SHOP";
 
   if (isShop) {
