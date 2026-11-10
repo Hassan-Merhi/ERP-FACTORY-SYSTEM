@@ -180,6 +180,15 @@ export function registerOrderBaleRemovalRoutes(app: Express) {
   app.delete("/api/factory/customer-orders/:id/bales/:baleId", requireAuth, async (req: Request, res: Response) => {
     try {
       const reconciliation = req.query.source === "dispatch-reconciliation";
+      // Phase 7 supersedes the old per-bale loop. This path has no approval
+      // fingerprint and can leave the order partially reconciled; refuse it.
+      // All shortages now use the atomic order-wide POST/remove-unshipped API.
+      if (reconciliation) {
+        return res.status(409).json({
+          code: "USE_ATOMIC_DISPATCH_RECONCILIATION",
+          message: "Use Compare All Trips → approve a batch of unshipped bales with a reason. Individual dispatch-reconciliation deletes are disabled.",
+        });
+      }
       const access = reconciliation ? await getFactoryAccessState(req) : null;
       if (reconciliation && (!access || !["admin", "owner", "developer"].includes(access.role.toLowerCase()))) {
         return res.status(403).json({ message: "Only Admin, Owner or Developer can reconcile missing dispatch bales" });
