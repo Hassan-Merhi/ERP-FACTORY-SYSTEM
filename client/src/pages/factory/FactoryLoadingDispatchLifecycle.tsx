@@ -160,7 +160,7 @@ export default function FactoryLoadingDispatchLifecycle({
   const capabilities = factoryActionCapabilities({
     role,
     hasFactoryAccess: Boolean(
-      selectedCompany?.id === companyId && access?.companyId === companyId && access?.hasFactoryAccess === true
+      selectedCompany?.id === companyId && access?.companyId === companyId && access?.hasFactoryAccess
     ),
   });
   const supervisory = capabilities["dispatch.approve-discrepancy"];

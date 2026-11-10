@@ -23,7 +23,11 @@ vi.mock("@/contexts/ConnectivityContext", async () => (await import("./pageMocks
 vi.mock("@/contexts/LocationContext", async () => (await import("./pageMocks")).locationContextMock);
 vi.mock("@/contexts/CursorNavContext", async () => (await import("./pageMocks")).cursorNavMock);
 
-const MY_ACCESS_KEY = ["/api/factory/my-access"] as const;
+// Some surfaces read access under the bare endpoint key and others under
+// companyQueryKey(url, selectedCompany.id); the mocked company is id 1. Seed
+// both so each page sees the same grant whichever key it reads.
+const MY_ACCESS_KEYS = [["/api/factory/my-access"], ["/api/factory/my-access", 1]] as const;
+const seedAccess = (myAccess: FactoryMyAccess) => MY_ACCESS_KEYS.map((key) => [key, myAccess] as const);
 
 function access(overrides: Partial<FactoryMyAccess> = {}): FactoryMyAccess {
   return {
@@ -96,7 +100,7 @@ describe("Factory Overview payroll reads", () => {
       },
     });
     client.setQueryData(["/api/auth/me"], { id: "test-user", role: "Developer" });
-    client.setQueryData(MY_ACCESS_KEY, myAccess);
+    for (const key of MY_ACCESS_KEYS) client.setQueryData(key, myAccess);
     const wrapper = ({ children }: { children: React.ReactNode }) => (
       <QueryClientProvider client={client}>{children}</QueryClientProvider>
     );
@@ -144,7 +148,7 @@ describe("Factory Overview payroll reads", () => {
 describe("Factory Stock Entry production-session read", () => {
   async function mount(myAccess: FactoryMyAccess) {
     const { default: BaleStockEntry } = await import("@/pages/factory/BaleStockEntry");
-    renderWithProviders(<BaleStockEntry />, { seedQueries: [[MY_ACCESS_KEY, myAccess]] });
+    renderWithProviders(<BaleStockEntry />, { seedQueries: seedAccess(myAccess) });
   }
 
   it("does not read the production session when Production Targets is hidden", async () => {
@@ -166,7 +170,7 @@ describe("Factory Stock Entry production-session read", () => {
 describe("Factory Stock Entry History support reads", () => {
   async function mount(myAccess: FactoryMyAccess) {
     const { default: StockEntryHistory } = await import("@/pages/StockEntryHistory");
-    renderWithProviders(<StockEntryHistory />, { seedQueries: [[MY_ACCESS_KEY, myAccess]] });
+    renderWithProviders(<StockEntryHistory />, { seedQueries: seedAccess(myAccess) });
   }
 
   const historyRoutes = {

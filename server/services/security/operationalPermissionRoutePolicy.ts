@@ -302,6 +302,9 @@ export const OPERATIONAL_ROUTE_PERMISSIONS: Readonly<Record<OperationalPermissio
     "GET /api/factory/customer-orders/:id/export/excel",
     "GET /api/factory/customer-orders/:id/export-excel",
     "GET /api/factory/customer-orders/:id/pending-export",
+    // Loading-dispatch reconciliation and per-trip manifest workbooks (Dispatch Management Phase 7).
+    "GET /api/factory/customer-orders/:id/loading-dispatches/reports/overall.xlsx",
+    "GET /api/factory/customer-orders/:id/loading-dispatches/:dispatchId/reports/manifest.xlsx",
     "GET /api/factory/bale-products/arabic-import/capabilities/export",
     "GET /api/factory/bale-products/arabic-template",
     "GET /api/factory/daily-report/export",

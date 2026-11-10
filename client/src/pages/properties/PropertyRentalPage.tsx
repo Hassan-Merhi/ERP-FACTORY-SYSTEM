@@ -109,11 +109,12 @@ export default function PropertyRentalPage({
     showHistoricalPaid &&
     !historicalLoading &&
     !historicalError &&
-    historyReconciliation?.companyId === selectedCompany?.id &&
-    historyReconciliation?.loading === false &&
-    historyReconciliation?.rentAndCashBalance != null &&
-    historyReconciliation?.depositBalance != null &&
-    historyReconciliation?.accountSum != null;
+    historyReconciliation !== null &&
+    historyReconciliation.companyId === selectedCompany?.id &&
+    !historyReconciliation.loading &&
+    historyReconciliation.rentAndCashBalance !== null &&
+    historyReconciliation.depositBalance !== null &&
+    historyReconciliation.accountSum !== null;
   // For HASSAN PROPERTIES, the Payments Log uses an account-balance total:
   // withdrawal through 26 Oct + ALI cash + optional Properties cashbox + tenant deposits.
   // Cash accounts may include guarantee deposits, so this is NOT rent-only.

@@ -175,7 +175,7 @@ describe("Wave H populated factory surfaces", () => {
       <TooltipProvider>
         <FactoryStockAllocationV5 />
       </TooltipProvider>,
-      { seedQueries: [[["/api/factory/v5/stock-allocation", false, undefined], data]] }
+      { seedQueries: [[["/api/factory/v5/stock-allocation", 1, false, undefined], data]] }
     );
 
     expect(await screen.findAllByText("Alpha Bale")).not.toHaveLength(0);
@@ -244,7 +244,7 @@ describe("Wave H populated factory surfaces", () => {
       <TooltipProvider>
         <FactoryOtwTrackingTab />
       </TooltipProvider>,
-      { seedQueries: [[["/api/factory/containers", "otw"], containers]] }
+      { seedQueries: [[["/api/factory/containers", 1, "otw"], containers]] }
     );
 
     expect(await screen.findByText("MSCU1234567")).toBeInTheDocument();
@@ -327,12 +327,15 @@ describe("Wave H populated factory surfaces", () => {
 
     renderWithProviders(<FactoryInvoiceDetail />, {
       seedQueries: [
-        [["/api/factory/customer-orders", 77], order],
-        [["/api/ledger-accounts?includeHidden=true"], [{ id: 21, name: "Freight Expense", code: "EXP-F" }]],
-        [["/api/factory/my-access"], { hiddenCostFields: [], fullAccess: true }],
+        [["/api/factory/customer-orders", 1, 77], order],
+        [["/api/ledger-accounts?includeHidden=true", 1], [{ id: 21, name: "Freight Expense", code: "EXP-F" }]],
+        [
+          ["/api/factory/my-access", 1],
+          { hiddenCostFields: [], fullAccess: true, hasFactoryAccess: true, hideAllCosts: false, companyId: 1 },
+        ],
         [["/api/auth/me"], { id: "test-user", role: "Developer" }],
-        [["/api/factory/customer-proformas", 10], [{ id: 501, name: "PRO-501", lines: [] }]],
-        [["/api/factory/dispatch-batches", 601], dispatch],
+        [["/api/factory/customer-proformas", 1, 10, "summary"], [{ id: 501, name: "PRO-501", lines: [] }]],
+        [["/api/factory/dispatch-batches", 1, 601], dispatch],
       ],
     });
 

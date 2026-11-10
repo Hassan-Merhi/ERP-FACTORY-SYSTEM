@@ -118,10 +118,11 @@ export default function RentalPaymentsLog({ rentalModule, pageTitle, pageIcon, t
     isFullHistory &&
     !isLoading &&
     !paymentsError &&
-    reconciliation?.companyId === selectedCompany?.id &&
-    reconciliation?.loading === false &&
-    reconciliation?.accountSum != null &&
-    reconciliation?.aliCashLedgerId != null;
+    reconciliation !== null &&
+    reconciliation.companyId === selectedCompany?.id &&
+    !reconciliation.loading &&
+    reconciliation.accountSum !== null &&
+    reconciliation.aliCashLedgerId !== null;
   const total = isPropertiesPayments
     ? paymentTotals.cash / 100
     : filtered.reduce((sum, payment) => sum + Number(payment.amount), 0);

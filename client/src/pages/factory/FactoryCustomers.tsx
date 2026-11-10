@@ -48,6 +48,7 @@ import { PaginationBar } from "@/components/PaginationBar";
 import { useTablePrefs } from "@/hooks/use-table-prefs";
 import { useClientTablePagination } from "@/hooks/use-client-table-pagination";
 import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { FactoryCustomerFormDialogs } from "./factorycustomers/FactoryCustomerFormDialogs";
 import type { Customer } from "./factorycustomers/types";
@@ -89,7 +90,8 @@ export default function FactoryCustomers() {
     error,
     refetch: refetchCustomers,
   } = useQuery<Customer[]>({
-    queryKey: ["/api/factory/customers"],
+    queryKey: companyQueryKey("/api/factory/customers", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
   });
 
   const createMutation = useMutation({
@@ -155,7 +157,8 @@ export default function FactoryCustomers() {
   });
 
   const { data: deletedCustomers = [] } = useQuery<Customer[]>({
-    queryKey: ["/api/factory/customers/deleted"],
+    queryKey: companyQueryKey("/api/factory/customers/deleted", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     enabled: showDeleted,
   });
 

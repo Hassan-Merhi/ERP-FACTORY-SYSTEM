@@ -49,8 +49,9 @@ describe("Desktop table structure is preserved", () => {
   it("FactoryWorkers.tsx — <TableBody present (rows intact)", () => {
     expect(src(FACTORY_WORKERS_ROSTER)).toContain("TableBody");
   });
-  it("Accounts.tsx — <Table or table structure imported", () => {
-    const s = src("client/src/pages/Accounts.tsx");
+  it("Accounts — <Table or table structure imported", () => {
+    // Accounts.tsx is a thin wrapper; the ledger tables live in AccountsLegacy.
+    const s = src("client/src/pages/AccountsLegacy.tsx");
     const hasTable = s.includes("<Table") || s.includes("table") || s.includes("AccountTable");
     expect(hasTable).toBe(true);
   });

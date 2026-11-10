@@ -1,7 +1,7 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
-import { companyDataKey } from "@/lib/frontendDataArchitecture";
-import { useOptionalCompany } from "@/contexts/CompanyContext";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import { factoryApiRequest } from "@/lib/factoryApi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -35,10 +35,10 @@ function getSeverityBadge(severity: string) {
 }
 
 export default function FactoryAlerts() {
-  const companyId = useOptionalCompany()?.selectedCompany?.id;
+  const { selectedCompany } = useCompany();
   const alertsQuery = useQuery<Alert[]>({
-    queryKey: companyDataKey("/api/factory/alerts", companyId),
-    enabled: !!companyId,
+    queryKey: companyQueryKey("/api/factory/alerts", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     refetchInterval: 300_000,
   });
 
