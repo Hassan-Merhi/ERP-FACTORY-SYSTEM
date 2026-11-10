@@ -107,10 +107,7 @@ describe("Factory unified blue theme", () => {
     const financial = readFileSync(join(factoryStyles, "FactoryFinancialSnapshot.tsx"), "utf8");
     const pressing = readFileSync(join(factoryStyles, "PressingHistoryReport.tsx"), "utf8");
     const theme = readFileSync(factoryTheme, "utf8");
-    const targets = readFileSync(
-      join(factoryStyles, "productiontargets/productionTargetsPremium.css"),
-      "utf8"
-    );
+    const targets = readFileSync(join(factoryStyles, "productiontargets/productionTargetsPremium.css"), "utf8");
 
     expect(container).toContain("factory-container-stripes");
     expect(container).not.toMatch(/#[\da-fA-F]{6}\b/);
@@ -121,5 +118,4 @@ describe("Factory unified blue theme", () => {
     expect(targets).toContain("color: var(--factory-color-400);");
     expect(targets).not.toContain("#ff68b0");
   });
-
 });

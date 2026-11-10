@@ -3,7 +3,14 @@ import { useQuery } from "@tanstack/react-query";
 import { CalendarClock, CalendarDays, Check, RefreshCw, Target, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { translatePressingUiText } from "@/i18n/pressingUiTranslations";
@@ -23,17 +30,23 @@ const SCHEDULE_DAYS = [
 const scheduleHourLabel = (hour: number) =>
   String(hour).padStart(2, "0") + ":00–" + String(hour + 1).padStart(2, "0") + ":00";
 type HourlyResponse = PressingHourlySnapshot;
-const formatKg = (value: number) =>
-  value.toLocaleString(undefined, { maximumFractionDigits: 3 });
+const formatKg = (value: number) => value.toLocaleString(undefined, { maximumFractionDigits: 3 });
 function localHour(iso: string): number {
-  return Number(new Intl.DateTimeFormat("en-GB", {
-    timeZone: ZONE, hour: "2-digit", hourCycle: "h23",
-  }).format(new Date(iso)));
+  return Number(
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: ZONE,
+      hour: "2-digit",
+      hourCycle: "h23",
+    }).format(new Date(iso))
+  );
 }
 function hourLabel(iso: string): string {
   return new Date(iso).toLocaleTimeString("en-GB", {
-    timeZone: ZONE, hour: "2-digit", minute: "2-digit",
-    hourCycle: "h23", timeZoneName: "shortOffset",
+    timeZone: ZONE,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+    timeZoneName: "shortOffset",
   });
 }
 type Verdict = "off" | "zero" | "upcoming" | "progress" | "none" | "met" | "above" | "below";
@@ -52,15 +65,29 @@ const verdictStyle: Record<Verdict, { label: string; pill: string; bar: string }
   progress: { label: "In progress", pill: "bg-sky-500/15 text-sky-600 dark:text-sky-300", bar: "bg-sky-500" },
   none: { label: "No scans", pill: "bg-slate-500/15 text-muted-foreground", bar: "bg-slate-500" },
   met: { label: "Target met", pill: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300", bar: "bg-emerald-500" },
-  above: { label: "aboveTarget", pill: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300", bar: "bg-emerald-500" },
+  above: {
+    label: "aboveTarget",
+    pill: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+    bar: "bg-emerald-500",
+  },
   below: { label: "belowTarget", pill: "bg-rose-500/15 text-rose-700 dark:text-rose-300", bar: "bg-rose-500" },
 };
 
 /** Confirmed scans only; editable date-scoped hour targets are shared by P1/P2/P3.
  * No active shift schedule exists, so zero-scan completed hours stay neutral. */
-export default function PressingHourlyTargets({ active, companyId, serverToday, selectedDay, onDayChange, onDataChange }: {
-  active: boolean; companyId: number; serverToday?: string;
-  selectedDay?: string; onDayChange?: (day: string) => void;
+export default function PressingHourlyTargets({
+  active,
+  companyId,
+  serverToday,
+  selectedDay,
+  onDayChange,
+  onDataChange,
+}: {
+  active: boolean;
+  companyId: number;
+  serverToday?: string;
+  selectedDay?: string;
+  onDayChange?: (day: string) => void;
   onDataChange?: (data: PressingHourlySnapshot | undefined, companyId: number) => void;
 }) {
   const { toast } = useToast();
@@ -83,13 +110,16 @@ export default function PressingHourlyTargets({ active, companyId, serverToday, 
     if (selectedDay === undefined) setLocalDay(serverToday || "");
     setDrafts({});
   }, [companyId, serverToday, selectedDay]);
-  useEffect(() => { setDrafts({}); }, [day]);
+  useEffect(() => {
+    setDrafts({});
+  }, [day]);
   const hourly = useQuery<HourlyResponse>({
     queryKey: [ENDPOINT, companyId, day],
     enabled: active,
     queryFn: async () => {
       const response = await fetch(ENDPOINT + (day ? "?day=" + encodeURIComponent(day) : ""), {
-        credentials: "include", cache: "no-store",
+        credentials: "include",
+        cache: "no-store",
       });
       if (!response.ok) throw new Error("Could not load hourly targets (" + response.status + ")");
       return response.json() as Promise<HourlyResponse>;
@@ -98,47 +128,50 @@ export default function PressingHourlyTargets({ active, companyId, serverToday, 
     refetchOnWindowFocus: false,
   });
   const data = hourly.data;
-  useEffect(() => { onDataChange?.(data, companyId); }, [data, companyId, onDataChange]);
+  useEffect(() => {
+    onDataChange?.(data, companyId);
+  }, [data, companyId, onDataChange]);
   const serverDate = data?.serverNow
     ? new Intl.DateTimeFormat("en-GB", {
-        timeZone: ZONE, year: "numeric", month: "2-digit", day: "2-digit",
+        timeZone: ZONE,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
       }).formatToParts(new Date(data.serverNow))
     : [];
-  const datePart = (type: string) => serverDate.find(part => part.type === type)?.value;
-  const maxDay = serverToday || (serverDate.length
-    ? [datePart("year"), datePart("month"), datePart("day")].join("-")
-    : undefined);
+  const datePart = (type: string) => serverDate.find((part) => part.type === type)?.value;
+  const maxDay =
+    serverToday || (serverDate.length ? [datePart("year"), datePart("month"), datePart("day")].join("-") : undefined);
   const now = data ? new Date(data.serverNow).getTime() : 0;
   // Keep all ten production hours visible (including upcoming hours) so every
   // daily target can be entered in advance. DST transitions use true instants.
-  const hours = [...new Set((data?.hours || []).map(row => row.hourStart))]
-    .filter(hour => localHour(hour) >= 7 && localHour(hour) < 17)
+  const hours = [...new Set((data?.hours || []).map((row) => row.hourStart))]
+    .filter((hour) => localHour(hour) >= 7 && localHour(hour) < 17)
     .sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
   const configured = (hour: string) => data?.hourlyTargetsKg?.[String(localHour(hour))];
-  const baseline = (data?.workers || []).map(worker => worker.targetKgPerHour);
-  const uniformBaseline = baseline.length && baseline.every(v => v === baseline[0]) ? baseline[0] : null;
+  const baseline = (data?.workers || []).map((worker) => worker.targetKgPerHour);
+  const uniformBaseline = baseline.length && baseline.every((v) => v === baseline[0]) ? baseline[0] : null;
   const targetText = (hour: string) => {
     const value = configured(hour);
     if (data?.scheduledWorkday === false && value === undefined) return "";
     return value !== undefined ? String(value) : uniformBaseline !== null ? String(uniformBaseline) : "";
   };
   const valueForHour = (hour: string) => drafts[hour] ?? targetText(hour);
-  const dirty = (hour: string) => drafts[hour] !== undefined &&
-    drafts[hour] !== targetText(hour);
+  const dirty = (hour: string) => drafts[hour] !== undefined && drafts[hour] !== targetText(hour);
 
   async function save(hour: string) {
     if (!data?.canEdit || savingHour) return;
     const raw = valueForHour(hour);
     const targetKgPerHour = Number(raw);
-    if (!raw.trim() || !Number.isFinite(targetKgPerHour) ||
-        targetKgPerHour < 0 || targetKgPerHour > 100000) {
+    if (!raw.trim() || !Number.isFinite(targetKgPerHour) || targetKgPerHour < 0 || targetKgPerHour > 100000) {
       toast({ title: "Invalid target", description: t("invalidTargetDescription"), variant: "destructive" });
       return;
     }
     setSavingHour(hour);
     try {
       const response = await fetch(ENDPOINT, {
-        method: "PUT", credentials: "include",
+        method: "PUT",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ day: data.day, hour: localHour(hour), targetKgPerHour }),
       });
@@ -147,11 +180,24 @@ export default function PressingHourlyTargets({ active, companyId, serverToday, 
         throw new Error(result.message || "Could not save hourly target");
       }
       await hourly.refetch();
-      setDrafts(current => { const next = { ...current }; delete next[hour]; return next; });
-      toast({ title: "Hourly target saved", description: hourLabel(hour) + " — " + formatKg(targetKgPerHour) + " KG per worker" });
+      setDrafts((current) => {
+        const next = { ...current };
+        delete next[hour];
+        return next;
+      });
+      toast({
+        title: "Hourly target saved",
+        description: hourLabel(hour) + " — " + formatKg(targetKgPerHour) + " KG per worker",
+      });
     } catch (error) {
-      toast({ title: "Target not saved", description: error instanceof Error ? error.message : "Unknown error", variant: "destructive" });
-    } finally { setSavingHour(null); }
+      toast({
+        title: "Target not saved",
+        description: error instanceof Error ? error.message : "Unknown error",
+        variant: "destructive",
+      });
+    } finally {
+      setSavingHour(null);
+    }
   }
 
   function openDailySchedule() {
@@ -162,16 +208,16 @@ export default function PressingHourlyTargets({ active, companyId, serverToday, 
     for (const weekday of SCHEDULE_DAYS) {
       const fields: Record<string, string> = {};
       for (const hour of SCHEDULE_HOURS) {
-        const target = data.editableWeeklySchedulesKg?.[String(weekday.id)]?.[String(hour)]
-          ?? uniformBaseline ?? 850;
+        const target = data.editableWeeklySchedulesKg?.[String(weekday.id)]?.[String(hour)] ?? uniformBaseline ?? 850;
         fields[String(hour)] = String(target);
       }
       draftsByDay[String(weekday.id)] = fields;
     }
     const todayName = new Intl.DateTimeFormat("en-US", {
-      timeZone: ZONE, weekday: "long",
+      timeZone: ZONE,
+      weekday: "long",
     }).format(new Date(data.serverNow));
-    setSelectedWeekday(SCHEDULE_DAYS.find(day => day.name === todayName)?.id ?? 1);
+    setSelectedWeekday(SCHEDULE_DAYS.find((day) => day.name === todayName)?.id ?? 1);
     setScheduleDrafts(draftsByDay);
     setScheduleOpen(true);
   }
@@ -196,7 +242,8 @@ export default function PressingHourlyTargets({ active, companyId, serverToday, 
     setSavingSchedule(true);
     try {
       const response = await fetch(ENDPOINT + "/daily-schedule", {
-        method: "PUT", credentials: "include",
+        method: "PUT",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ weekday: selectedWeekday, targetsKg }),
       });
@@ -205,10 +252,11 @@ export default function PressingHourlyTargets({ active, companyId, serverToday, 
         throw new Error(result.message || "Could not save recurring daily schedule");
       }
       await hourly.refetch();
-      const weekdayName = SCHEDULE_DAYS.find(day => day.id === selectedWeekday)?.name ?? "Selected day";
+      const weekdayName = SCHEDULE_DAYS.find((day) => day.id === selectedWeekday)?.name ?? "Selected day";
       toast({
         title: weekdayName + " schedule saved",
-        description: "The hourly targets repeat every " + weekdayName + " from today onward. You can now select another day.",
+        description:
+          "The hourly targets repeat every " + weekdayName + " from today onward. You can now select another day.",
       });
     } catch (error) {
       toast({
@@ -222,8 +270,10 @@ export default function PressingHourlyTargets({ active, companyId, serverToday, 
   }
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-border/70 bg-gradient-to-br from-card via-card to-sky-500/[0.035] shadow-[0_12px_38px_-22px_hsl(var(--factory-hue)_89%_48%_/_0.25)]"
-      data-testid="pressing-hourly-targets">
+    <section
+      className="overflow-hidden rounded-2xl border border-border/70 bg-gradient-to-br from-card via-card to-sky-500/[0.035] shadow-[0_12px_38px_-22px_hsl(var(--factory-hue)_89%_48%_/_0.25)]"
+      data-testid="pressing-hourly-targets"
+    >
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 p-4 sm:px-5">
         <div className="flex items-start gap-3">
           <div className="rounded-xl border border-blue-500/20 bg-blue-500/10 p-2.5 text-blue-500">
@@ -235,9 +285,14 @@ export default function PressingHourlyTargets({ active, companyId, serverToday, 
               07:00–17:00 Beirut time · confirmed scans only · target per worker
             </p>
             {data?.canEdit && (
-              <Button type="button" size="sm" variant="outline"
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
                 className="mt-2 h-8 gap-1.5 rounded-lg border-sky-500/30 bg-sky-500/5 text-xs font-semibold hover:bg-sky-500/10"
-                onClick={openDailySchedule} data-testid="pressing-open-daily-schedule">
+                onClick={openDailySchedule}
+                data-testid="pressing-open-daily-schedule"
+              >
                 <CalendarClock className="h-3.5 w-3.5 text-sky-500" />
                 Weekly schedule
               </Button>
@@ -251,17 +306,31 @@ export default function PressingHourlyTargets({ active, companyId, serverToday, 
         </div>
         <div className="flex items-center gap-2">
           <CalendarDays className="hidden h-4 w-4 text-muted-foreground sm:block" />
-          <Input aria-label="Hourly target date" type="date" max={maxDay}
-            className="h-9 w-[150px] rounded-lg border-border/70 bg-background/70 text-xs" value={day || data?.day || ""}
-            onChange={event => setDay(event.target.value)} />
-          <Button size="sm" variant="outline" className="h-9 rounded-lg" disabled={hourly.isFetching}
-            onClick={() => void hourly.refetch()}>
+          <Input
+            aria-label="Hourly target date"
+            type="date"
+            max={maxDay}
+            className="h-9 w-[150px] rounded-lg border-border/70 bg-background/70 text-xs"
+            value={day || data?.day || ""}
+            onChange={(event) => setDay(event.target.value)}
+          />
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-9 rounded-lg"
+            disabled={hourly.isFetching}
+            onClick={() => void hourly.refetch()}
+          >
             <RefreshCw className={"h-3.5 w-3.5 " + (hourly.isFetching ? "animate-spin" : "")} />
             <span className="sr-only">Refresh hourly targets</span>
           </Button>
         </div>
       </div>
-      {hourly.isError && <p role="alert" className="p-4 text-sm text-destructive">Could not load hourly targets. Try Refresh.</p>}
+      {hourly.isError && (
+        <p role="alert" className="p-4 text-sm text-destructive">
+          Could not load hourly targets. Try Refresh.
+        </p>
+      )}
       {hourly.isLoading && <p className="p-4 text-sm text-muted-foreground">Loading hourly production…</p>}
       {data && (
         <>
@@ -269,96 +338,172 @@ export default function PressingHourlyTargets({ active, companyId, serverToday, 
             <table className="w-full min-w-[840px] border-separate border-spacing-0 text-left text-xs">
               <thead className="text-muted-foreground">
                 <tr className="bg-muted/50">
-                  <th scope="col" className="rounded-l-lg px-3 py-3 font-semibold">Hour (Beirut)</th>
-                  <th scope="col" className="w-[178px] px-3 py-3 font-semibold">{t("hourTargetHeader")}</th>
-                  {data.workers.map(worker => <th scope="col" key={worker.userId} className="min-w-[200px] px-3 py-3 font-semibold">{worker.name}</th>)}
+                  <th scope="col" className="rounded-l-lg px-3 py-3 font-semibold">
+                    Hour (Beirut)
+                  </th>
+                  <th scope="col" className="w-[178px] px-3 py-3 font-semibold">
+                    {t("hourTargetHeader")}
+                  </th>
+                  {data.workers.map((worker) => (
+                    <th scope="col" key={worker.userId} className="min-w-[200px] px-3 py-3 font-semibold">
+                      {worker.name}
+                    </th>
+                  ))}
                   {data.workers.length === 0 && <th className="rounded-r-lg px-3 py-3">{t("noWorkersConfigured")}</th>}
                 </tr>
               </thead>
               <tbody>
-                {hours.map(hour => {
+                {hours.map((hour) => {
                   const started = new Date(hour).getTime() <= now;
                   const complete = new Date(hour).getTime() + 3600000 <= now;
                   const hourTarget = configured(hour);
-                  return <tr key={hour} className="group transition-colors hover:bg-sky-500/[0.035]">
-                    <th scope="row" className="whitespace-nowrap border-b border-border/50 px-3 py-3 font-bold tabular-nums">{hourLabel(hour)}</th>
-                    <td className="border-b border-border/50 px-3 py-2">
-                      <div className="flex items-center gap-1">
-                        <div className="relative">
-                          <Input type="number" min="0" max="100000" step="0.001"
-                            aria-label={"Hourly target for " + hourLabel(hour)}
-                            title={t("hourTargetDescription")}
-                            className="h-9 w-[105px] rounded-lg border-border/80 bg-background/75 pr-8 text-right font-bold tabular-nums"
-                            placeholder="Mixed" value={valueForHour(hour)}
-                            readOnly={!data.canEdit} disabled={savingHour === hour}
-                            onChange={event => setDrafts(current => ({ ...current, [hour]: event.target.value }))}
-                            onKeyDown={event => {
-                              if (event.key === "Enter" && dirty(hour)) void save(hour);
-                              if (event.key === "Escape") setDrafts(current => {
-                                const next = { ...current }; delete next[hour]; return next;
-                              });
-                            }} />
-                          <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-muted-foreground">KG</span>
-                        </div>
-                        {data.canEdit && <Button type="button" size="icon" variant={dirty(hour) ? "default" : "ghost"}
-                          className={"h-8 w-8 shrink-0 rounded-lg " + (!dirty(hour) ? "opacity-30" : "")}
-                          aria-label={"Save target for " + hourLabel(hour)} title={t("saveHourTarget")}
-                          disabled={!dirty(hour) || savingHour !== null}
-                          onClick={() => void save(hour)}><Check className="h-4 w-4" /></Button>}
-                      </div>
-                      {hourTarget === undefined && uniformBaseline === null && (
-                        <span className="text-[10px] text-muted-foreground">{t("workerDefaults")}</span>
-                      )}
-                    </td>
-                    {data.workers.map(worker => {
-                      const row = data.hours.find(item => item.hourStart === hour && item.userId === worker.userId);
-                      const kg = Number(row?.kg || 0);
-                      // Sundays without an explicit or historical target are off,
-                      // not 0/850 KG misses. Existing historical Sunday targets remain visible.
-                      const scheduled = data.scheduledWorkday !== false || hourTarget !== undefined;
-                      const target = scheduled ? hourTarget ?? worker.targetKgPerHour : 0;
-                      const verdict = scheduled
-                        ? resultStatus(kg, target, Number(row?.bales || 0), started, complete)
-                        : "off";
-                      const style = verdictStyle[verdict];
-                      const percent = target > 0 ? Math.round(kg / target * 100) : 0;
-                      return <td key={worker.userId} className="border-b border-border/50 px-3 py-2.5">
-                        <div className="flex flex-wrap items-center justify-between gap-1.5">
-                          <strong className="whitespace-nowrap tabular-nums">
-                            {formatKg(kg)} / {scheduled ? formatKg(target) + " KG" : "Off"}
-                          </strong>
-                          <span className={"rounded-full px-2 py-1 text-[10px] font-semibold " + style.pill}>{verdict === "upcoming" || verdict === "above" || verdict === "below" ? t(style.label as "upcoming" | "aboveTarget" | "belowTarget") : style.label}</span>
-                        </div>
-                        <div className="mt-2 flex items-center gap-2">
-                          <div role="progressbar" aria-label={worker.name + " at " + hourLabel(hour)}
-                            aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.min(100, Math.max(0, percent))}
-                            className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
-                            <div className={"h-full rounded-full transition-all " + style.bar}
-                              style={{ width: Math.min(100, Math.max(0, percent)) + "%" }} />
+                  return (
+                    <tr key={hour} className="group transition-colors hover:bg-sky-500/[0.035]">
+                      <th
+                        scope="row"
+                        className="whitespace-nowrap border-b border-border/50 px-3 py-3 font-bold tabular-nums"
+                      >
+                        {hourLabel(hour)}
+                      </th>
+                      <td className="border-b border-border/50 px-3 py-2">
+                        <div className="flex items-center gap-1">
+                          <div className="relative">
+                            <Input
+                              type="number"
+                              min="0"
+                              max="100000"
+                              step="0.001"
+                              aria-label={"Hourly target for " + hourLabel(hour)}
+                              title={t("hourTargetDescription")}
+                              className="h-9 w-[105px] rounded-lg border-border/80 bg-background/75 pr-8 text-right font-bold tabular-nums"
+                              placeholder="Mixed"
+                              value={valueForHour(hour)}
+                              readOnly={!data.canEdit}
+                              disabled={savingHour === hour}
+                              onChange={(event) => setDrafts((current) => ({ ...current, [hour]: event.target.value }))}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter" && dirty(hour)) void save(hour);
+                                if (event.key === "Escape")
+                                  setDrafts((current) => {
+                                    const next = { ...current };
+                                    delete next[hour];
+                                    return next;
+                                  });
+                              }}
+                            />
+                            <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-muted-foreground">
+                              KG
+                            </span>
                           </div>
-                          <span className="w-9 shrink-0 text-right font-medium tabular-nums text-muted-foreground">{target > 0 ? percent + "%" : "—"}</span>
+                          {data.canEdit && (
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant={dirty(hour) ? "default" : "ghost"}
+                              className={"h-8 w-8 shrink-0 rounded-lg " + (!dirty(hour) ? "opacity-30" : "")}
+                              aria-label={"Save target for " + hourLabel(hour)}
+                              title={t("saveHourTarget")}
+                              disabled={!dirty(hour) || savingHour !== null}
+                              onClick={() => void save(hour)}
+                            >
+                              <Check className="h-4 w-4" />
+                            </Button>
+                          )}
                         </div>
-                        {complete && Number(row?.bales || 0) > 0 && verdict !== "met" && verdict !== "off" && verdict !== "zero" && (
-                          <div className={"mt-1 text-[10px] " + (verdict === "above" ? "text-emerald-500" : "text-rose-500")}>
-                            {formatKg(Math.abs(kg - target))} KG {verdict === "above" ? "over" : "short"}
-                          </div>
+                        {hourTarget === undefined && uniformBaseline === null && (
+                          <span className="text-[10px] text-muted-foreground">{t("workerDefaults")}</span>
                         )}
-                      </td>;
-                    })}
-                  </tr>;
+                      </td>
+                      {data.workers.map((worker) => {
+                        const row = data.hours.find((item) => item.hourStart === hour && item.userId === worker.userId);
+                        const kg = Number(row?.kg || 0);
+                        // Sundays without an explicit or historical target are off,
+                        // not 0/850 KG misses. Existing historical Sunday targets remain visible.
+                        const scheduled = data.scheduledWorkday !== false || hourTarget !== undefined;
+                        const target = scheduled ? (hourTarget ?? worker.targetKgPerHour) : 0;
+                        const verdict = scheduled
+                          ? resultStatus(kg, target, Number(row?.bales || 0), started, complete)
+                          : "off";
+                        const style = verdictStyle[verdict];
+                        const percent = target > 0 ? Math.round((kg / target) * 100) : 0;
+                        return (
+                          <td key={worker.userId} className="border-b border-border/50 px-3 py-2.5">
+                            <div className="flex flex-wrap items-center justify-between gap-1.5">
+                              <strong className="whitespace-nowrap tabular-nums">
+                                {formatKg(kg)} / {scheduled ? formatKg(target) + " KG" : "Off"}
+                              </strong>
+                              <span className={"rounded-full px-2 py-1 text-[10px] font-semibold " + style.pill}>
+                                {verdict === "upcoming" || verdict === "above" || verdict === "below"
+                                  ? t(style.label as "upcoming" | "aboveTarget" | "belowTarget")
+                                  : style.label}
+                              </span>
+                            </div>
+                            <div className="mt-2 flex items-center gap-2">
+                              <div
+                                role="progressbar"
+                                aria-label={worker.name + " at " + hourLabel(hour)}
+                                aria-valuemin={0}
+                                aria-valuemax={100}
+                                aria-valuenow={Math.min(100, Math.max(0, percent))}
+                                className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-muted"
+                              >
+                                <div
+                                  className={"h-full rounded-full transition-all " + style.bar}
+                                  style={{ width: Math.min(100, Math.max(0, percent)) + "%" }}
+                                />
+                              </div>
+                              <span className="w-9 shrink-0 text-right font-medium tabular-nums text-muted-foreground">
+                                {target > 0 ? percent + "%" : "—"}
+                              </span>
+                            </div>
+                            {complete &&
+                              Number(row?.bales || 0) > 0 &&
+                              verdict !== "met" &&
+                              verdict !== "off" &&
+                              verdict !== "zero" && (
+                                <div
+                                  className={
+                                    "mt-1 text-[10px] " + (verdict === "above" ? "text-emerald-500" : "text-rose-500")
+                                  }
+                                >
+                                  {formatKg(Math.abs(kg - target))} KG {verdict === "above" ? "over" : "short"}
+                                </div>
+                              )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
                 })}
-                {!hours.length && <tr><td colSpan={data.workers.length + 2}
-                  className="p-5 text-center text-muted-foreground">{t("noProductionHours")}</td></tr>}
+                {!hours.length && (
+                  <tr>
+                    <td colSpan={data.workers.length + 2} className="p-5 text-center text-muted-foreground">
+                      {t("noProductionHours")}
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 px-4 py-3 text-xs text-muted-foreground sm:px-5">
-            <span><TrendingUp className="mr-1 inline h-3.5 w-3.5 text-emerald-500" />Green = met/above · Red = below · Blue = in progress · Grey = no scans/upcoming</span>
-            <span>{data.canEdit ? "Edit any hour, then click ✓ to save for the selected day." : "Targets are set by Admin / Owner."}</span>
+            <span>
+              <TrendingUp className="mr-1 inline h-3.5 w-3.5 text-emerald-500" />
+              Green = met/above · Red = below · Blue = in progress · Grey = no scans/upcoming
+            </span>
+            <span>
+              {data.canEdit
+                ? "Edit any hour, then click ✓ to save for the selected day."
+                : "Targets are set by Admin / Owner."}
+            </span>
           </div>
         </>
       )}
-      <Dialog open={scheduleOpen} onOpenChange={open => { if (!savingSchedule) setScheduleOpen(open); }}>
+      <Dialog
+        open={scheduleOpen}
+        onOpenChange={(open) => {
+          if (!savingSchedule) setScheduleOpen(open);
+        }}
+      >
         <DialogContent className="flex max-h-[90dvh] w-[calc(100vw-2rem)] max-w-lg flex-col gap-0 overflow-hidden rounded-2xl border-border/70 bg-background p-0 shadow-2xl">
           <DialogHeader className="shrink-0 border-b border-border/60 bg-gradient-to-r from-sky-500/10 via-background to-violet-500/5 px-5 pb-4 pt-5">
             <DialogTitle className="flex items-center gap-2 text-lg">
@@ -366,9 +511,8 @@ export default function PressingHourlyTargets({ active, companyId, serverToday, 
               Weekly KG schedule
             </DialogTitle>
             <DialogDescription className="text-xs leading-relaxed">
-              Select Monday–Saturday and set each hour's KG target per worker.
-              Save each day separately; it repeats every week from today in Beirut time.
-              Sunday is excluded, and previous days retain their history.
+              Select Monday–Saturday and set each hour's KG target per worker. Save each day separately; it repeats
+              every week from today in Beirut time. Sunday is excluded, and previous days retain their history.
             </DialogDescription>
           </DialogHeader>
           <div className="shrink-0 border-b border-border/60 px-5 py-3">
@@ -376,18 +520,27 @@ export default function PressingHourlyTargets({ active, companyId, serverToday, 
               <span>Select a day</span>
               <span>Sunday · off</span>
             </div>
-            <div role="tablist" aria-label="Choose weekly pressing schedule day"
-              className="grid grid-cols-3 gap-1.5 sm:grid-cols-6">
-              {SCHEDULE_DAYS.map(weekday => (
-                <button key={weekday.id} type="button" role="tab"
+            <div
+              role="tablist"
+              aria-label="Choose weekly pressing schedule day"
+              className="grid grid-cols-3 gap-1.5 sm:grid-cols-6"
+            >
+              {SCHEDULE_DAYS.map((weekday) => (
+                <button
+                  key={weekday.id}
+                  type="button"
+                  role="tab"
                   aria-selected={selectedWeekday === weekday.id}
                   aria-label={weekday.name}
                   disabled={savingSchedule}
                   onClick={() => setSelectedWeekday(weekday.id)}
-                  className={"rounded-lg border px-2 py-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring " +
+                  className={
+                    "rounded-lg border px-2 py-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring " +
                     (selectedWeekday === weekday.id
                       ? "border-sky-500/60 bg-sky-500/15 text-sky-700 dark:text-sky-300"
-                      : "border-border/70 bg-card/50 text-muted-foreground hover:bg-muted/80 hover:text-foreground")}>
+                      : "border-border/70 bg-card/50 text-muted-foreground hover:bg-muted/80 hover:text-foreground")
+                  }
+                >
                   {weekday.short}
                 </button>
               ))}
@@ -395,39 +548,59 @@ export default function PressingHourlyTargets({ active, companyId, serverToday, 
           </div>
           <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-5 py-4">
             <div className="mb-2 grid grid-cols-[1fr_135px] gap-3 px-2 text-[11px] font-semibold text-muted-foreground">
-              <span>{SCHEDULE_DAYS.find(day => day.id === selectedWeekday)?.name} · Beirut time</span>
+              <span>{SCHEDULE_DAYS.find((day) => day.id === selectedWeekday)?.name} · Beirut time</span>
               <span>KG per worker</span>
             </div>
-            {SCHEDULE_HOURS.map(hour => (
-              <div key={hour} className="grid grid-cols-[1fr_135px] items-center gap-3 rounded-xl border border-border/60 bg-card/60 px-3 py-2 transition-colors focus-within:border-sky-500/50">
+            {SCHEDULE_HOURS.map((hour) => (
+              <div
+                key={hour}
+                className="grid grid-cols-[1fr_135px] items-center gap-3 rounded-xl border border-border/60 bg-card/60 px-3 py-2 transition-colors focus-within:border-sky-500/50"
+              >
                 <span className="font-semibold tabular-nums text-sm">{scheduleHourLabel(hour)}</span>
                 <div className="relative">
-                  <Input type="number" inputMode="decimal" min="0" max="100000" step="0.001"
-                    aria-label={SCHEDULE_DAYS.find(day => day.id === selectedWeekday)?.name + " target for " + scheduleHourLabel(hour)}
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    max="100000"
+                    step="0.001"
+                    aria-label={
+                      SCHEDULE_DAYS.find((day) => day.id === selectedWeekday)?.name +
+                      " target for " +
+                      scheduleHourLabel(hour)
+                    }
                     className="h-9 rounded-lg bg-background pr-9 text-right font-semibold tabular-nums"
-                    value={scheduleDrafts[String(selectedWeekday)]?.[String(hour)] ?? ""} disabled={savingSchedule}
-                    onChange={event => setScheduleDrafts(old => ({
-                      ...old,
-                      [String(selectedWeekday)]: {
-                        ...old[String(selectedWeekday)],
-                        [String(hour)]: event.target.value,
-                      },
-                    }))} />
-                  <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-muted-foreground">KG</span>
+                    value={scheduleDrafts[String(selectedWeekday)]?.[String(hour)] ?? ""}
+                    disabled={savingSchedule}
+                    onChange={(event) =>
+                      setScheduleDrafts((old) => ({
+                        ...old,
+                        [String(selectedWeekday)]: {
+                          ...old[String(selectedWeekday)],
+                          [String(hour)]: event.target.value,
+                        },
+                      }))
+                    }
+                  />
+                  <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-muted-foreground">
+                    KG
+                  </span>
                 </div>
               </div>
             ))}
             <p className="pt-2 text-xs leading-relaxed text-muted-foreground">
-              Use 0 KG for an hour with no required target. Save the selected weekday;
-              its times repeat weekly for all three workers. Date-specific changes still take priority.
+              Use 0 KG for an hour with no required target. Save the selected weekday; its times repeat weekly for all
+              three workers. Date-specific changes still take priority.
             </p>
           </div>
           <DialogFooter className="shrink-0 flex-row gap-2 border-t border-border/60 bg-muted/20 px-5 py-4 sm:justify-end">
-            <Button type="button" variant="outline" disabled={savingSchedule}
-              onClick={() => setScheduleOpen(false)}>Cancel</Button>
-            <Button type="button" disabled={savingSchedule || !data?.canEdit}
-              onClick={() => void saveDailySchedule()}>
-              {savingSchedule ? "Saving…" : "Save " + (SCHEDULE_DAYS.find(day => day.id === selectedWeekday)?.name ?? "day") + " schedule"}
+            <Button type="button" variant="outline" disabled={savingSchedule} onClick={() => setScheduleOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="button" disabled={savingSchedule || !data?.canEdit} onClick={() => void saveDailySchedule()}>
+              {savingSchedule
+                ? "Saving…"
+                : "Save " + (SCHEDULE_DAYS.find((day) => day.id === selectedWeekday)?.name ?? "day") + " schedule"}
             </Button>
           </DialogFooter>
         </DialogContent>
