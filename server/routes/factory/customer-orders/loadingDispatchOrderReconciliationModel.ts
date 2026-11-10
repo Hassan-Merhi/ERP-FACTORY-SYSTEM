@@ -17,6 +17,7 @@ export interface OrderFinancialTripEvidence {
   revision: number;
   financialId: string | null;
   postingId: string | null;
+  postingVerified: boolean;
   sourceFingerprint: string | null;
   goodsSubtotal: string;
   billableChargesTotal: string;
@@ -151,6 +152,9 @@ export function calculateOrderDispatchReconciliation(input: OrderReconciliationI
        !/^[a-f0-9]{64}$/.test(f.sourceFingerprint) || !f.postingId || !/^[1-9][0-9]*$/.test(f.postingId) ||
        f.revision<1) issues.add("Every physically closed trip must have one valid financial POST");
     if(f?.postingId) postingIds.push(f.postingId);
+    if(f && ["POSTED","CONSOLIDATED"].includes(f.status) && !f.postingVerified){
+      issues.add("A financially posted trip has missing, reversed or inconsistent source vouchers");
+    }
     const financialBales = f?.financialBales ?? [];
     const signedMap = new Map<number, OrderFinancialTripEvidence["financialBales"][number]>();
     for(const b of financialBales){
