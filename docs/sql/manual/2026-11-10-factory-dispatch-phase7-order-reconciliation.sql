@@ -105,6 +105,28 @@ BEGIN
        AND reconciled_at IS NOT NULL AND status IN ('DRAFT','FINALIZED')
   ) INTO is_signed;
   IF is_signed THEN
+    -- Phase 8 may link a previously unposted original loading charge to its
+    -- newly created customer voucher *during DRAFT consolidation only*.
+    -- Amount, ledger mapping, name and order ownership remain immutable.
+    IF TG_TABLE_NAME='customer_order_charges' AND TG_OP='UPDATE'
+       AND OLD.voucher_id IS NULL AND NEW.voucher_id IS NOT NULL
+       AND NEW.id=OLD.id AND NEW.order_id=OLD.order_id
+       AND NEW.name IS NOT DISTINCT FROM OLD.name
+       AND NEW.amount IS NOT DISTINCT FROM OLD.amount
+       AND NEW.charge_type IS NOT DISTINCT FROM OLD.charge_type
+       AND NEW.ledger_account_id IS NOT DISTINCT FROM OLD.ledger_account_id
+       AND EXISTS (
+         SELECT 1 FROM factory_dispatch_order_consolidations c
+          WHERE c.company_id=target_company AND c.order_id=target_order
+            AND c.reconciled_at IS NOT NULL AND c.status='DRAFT'
+       )
+       AND EXISTS (
+         SELECT 1 FROM vouchers v
+          WHERE v.id=NEW.voucher_id AND v.company_id=target_company
+            AND v.deleted_at IS NULL AND COALESCE(v.optional,FALSE)=FALSE
+       )
+    THEN RETURN NEW;
+    END IF;
     RAISE EXCEPTION 'This order has a signed all-truck reconciliation; change of scanned/loaded/charge evidence is forbidden';
   END IF;
   -- Also reject moving a row FROM an unsigned order INTO a signed order.
