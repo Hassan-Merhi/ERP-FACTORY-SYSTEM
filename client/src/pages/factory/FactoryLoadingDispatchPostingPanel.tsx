@@ -4,7 +4,7 @@
  */
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { CheckCircle2, ClipboardCheck, FileClock, Loader2, RotateCcw, ShieldAlert, Wallet } from "lucide-react";
+import { CheckCircle2, ClipboardCheck, FileClock, Download, Loader2, RotateCcw, ShieldAlert, Wallet } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -132,6 +132,60 @@ export default function FactoryLoadingDispatchPostingPanel({ orderId, dispatchId
     },
   });
   const submitDisabled = mutation.isPending || !confirmed || (mode === "post" ? !canPost : !canReverse || reason.trim().length < 10 || reason.trim().length > 1000);
+
+  const [exportingInvoice, setExportingInvoice] = useState(false);
+  const exportTripInvoice = async () => {
+    setExportingInvoice(true);
+    try {
+      const overview = await read<{
+        order: { customerName: string | null; containerNumber: string | null };
+        trips: Array<{ id: string; dispatchNumber: number; financialStatus: string; scannedBales: number; scannedWeightKg: string; goodsSubtotal: string | null; billableCharges: string | null; discounts: string | null; customerTotal: string | null; postedAt: string | null }>;
+        charges: Array<{ dispatchId: string | null; name: string; kind: string; amount: string }>;
+      }>("/api/factory/customer-orders/" + orderId + "/loading-dispatches/order-overview");
+      const trip = overview.trips.find(t => t.id === String(dispatchId));
+      if (!trip || !["POSTED", "CONSOLIDATED"].includes(trip.financialStatus) || trip.customerTotal === null) {
+        throw new Error("Financially finalize this trip before exporting its invoice.");
+      }
+      const escapeHtml = (v: unknown) => String(v ?? "").replace(/[&<>"']/g, c => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+      })[c] || c);
+      const currency = (v: string | null) => "$" + dollars(v ?? undefined);
+      const charges = overview.charges.filter(c => c.dispatchId === String(dispatchId) && (c.kind === "BILLABLE" || c.kind === "DISCOUNT"));
+      const chargeRows = charges.map(c => `<tr><td>${escapeHtml(c.name)} (${escapeHtml(c.kind)})</td><td class="right">${escapeHtml(currency(c.amount))}</td></tr>`).join("");
+      const html = `<!doctype html><html><head><meta charset="utf-8"><title>Trip ${trip.dispatchNumber} Invoice</title>
+        <style>body{font-family:Arial,sans-serif;color:#172033;max-width:820px;margin:48px auto;padding:0 24px}
+        h1{margin-bottom:5px} .muted{color:#64748b} table{width:100%;border-collapse:collapse;margin-top:28px}
+        th,td{padding:12px;border-bottom:1px solid #ddd;text-align:left}.right{text-align:right}
+        .total{font-weight:bold;font-size:20px}.note{margin-top:35px;font-size:12px;color:#64748b}
+        @media print{body{margin:20px auto}.no-print{display:none}}</style></head><body>
+        <button class="no-print" onclick="window.print()">Print / Save as PDF</button>
+        <h1>Factory — Trip Invoice</h1><p class="muted">Trip #${trip.dispatchNumber} · Order #${orderId} · ${escapeHtml(overview.order.containerNumber || "")}</p>
+        <p><strong>Customer:</strong> ${escapeHtml(overview.order.customerName || "Not specified")}<br>
+        <strong>Posted:</strong> ${escapeHtml(trip.postedAt ? new Date(trip.postedAt).toLocaleString() : "—")}<br>
+        <strong>Signed bales:</strong> ${trip.scannedBales} · <strong>Weight:</strong> ${escapeHtml(trip.scannedWeightKg)} kg</p>
+        <table><thead><tr><th>Description</th><th class="right">USD</th></tr></thead><tbody>
+        <tr><td>Trip goods (${trip.scannedBales} bales)</td><td class="right">${escapeHtml(currency(trip.goodsSubtotal))}</td></tr>
+        ${chargeRows || `<tr><td>Billable charges</td><td class="right">${escapeHtml(currency(trip.billableCharges))}</td></tr><tr><td>Discounts</td><td class="right">${escapeHtml(currency(trip.discounts))}</td></tr>`}
+        <tr class="total"><td>Total customer receivable</td><td class="right">${escapeHtml(currency(trip.customerTotal))}</td></tr>
+        </tbody></table><p class="note">Trip-only invoice document from existing posted Factory accounting.
+        No additional receivable or voucher is created. The final combined order invoice remains separate.</p></body></html>`;
+      const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `Factory_Trip_${trip.dispatchNumber}_Invoice.html`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      toast({ title: "Trip invoice downloaded", description: "Open the HTML file and select Print / Save as PDF." });
+    } catch (error) {
+      toast({ title: "Invoice export unavailable", description: errorText(error), variant: "destructive" });
+    } finally {
+      setExportingInvoice(false);
+    }
+  };
+
   const existingPostings = history.data?.postings ?? [];
 
   if (!roleCanPost(role)) return null;
@@ -193,6 +247,12 @@ export default function FactoryLoadingDispatchPostingPanel({ orderId, dispatchId
                 <RotateCcw className="mr-1.5 h-4 w-4" /> Request controlled reversal
               </Button>
             </div>
+          )}
+          {["POSTED", "CONSOLIDATED"].includes(financialStatus) && (
+            <Button type="button" variant="outline" className="w-full" disabled={exportingInvoice}
+              onClick={() => void exportTripInvoice()} data-testid="dispatch-export-trip-invoice">
+              <Download className="mr-2 h-4 w-4" /> {exportingInvoice ? "Preparing invoice…" : "Export Trip Invoice"}
+            </Button>
           )}
           {financialStatus === "CONSOLIDATED" && (
             <p className="text-xs text-muted-foreground">This trip belongs to the one combined Factory invoice and cannot be reversed independently.</p>
