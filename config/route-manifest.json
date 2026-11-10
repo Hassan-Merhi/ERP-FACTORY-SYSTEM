@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "description": "Ordered snapshot of every registered Express route (method, path, guard chain) and middleware mount. Regenerate with UPDATE_ROUTE_MANIFEST=1 only when a route change is intended; during a file split the manifest must not change at all.",
-  "routeCount": 2384,
+  "routeCount": 2387,
   "middlewareMountCount": 139,
   "routes": [
     "GET /api/admin/operational-monitoring [requireAuth > <anonymous> > <anonymous>]",
@@ -66,6 +66,9 @@
     "GET /api/factory/customer-orders/:id/loading-dispatches/:dispatchId/po-export/setup [requireAuth > <anonymous> > <anonymous>]",
     "POST /api/factory/customer-orders/:id/loading-dispatches/:dispatchId/po-export/preview [requireAuth > <anonymous> > <anonymous>]",
     "POST /api/factory/customer-orders/:id/loading-dispatches/:dispatchId/po-export/download [requireAuth > <anonymous> > <anonymous>]",
+    "GET /api/factory/customer-orders/:id/loading-dispatches/order-reconciliation [requireAuth > <anonymous> > <anonymous>]",
+    "POST /api/factory/customer-orders/:id/loading-dispatches/order-reconciliation/remove-unshipped [requireAuth > <anonymous> > <anonymous>]",
+    "POST /api/factory/customer-orders/:id/loading-dispatches/order-reconciliation/approve [requireAuth > <anonymous> > <anonymous>]",
     "GET /api/factory/customer-orders/:id/loading-dispatches/:dispatchId/allocations [requireAuth > <anonymous> > <anonymous>]",
     "PUT /api/factory/customer-orders/:id/loading-dispatches/:dispatchId/allocations [requireAuth > <anonymous> > <anonymous>]",
     "GET /api/factory/customer-orders/:id/loading-dispatches/comparison [requireAuth > <anonymous> > <anonymous>]",
