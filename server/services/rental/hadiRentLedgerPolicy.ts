@@ -1,3 +1,48 @@
+
+import type Decimal from "decimal.js";
+import { MoneyDecimal, toMoney } from "../../lib/money";
+
+export const HADI_LINKED_RENT = Object.freeze({
+  payerCompanyId: 1,
+  propertiesCompanyId: 13,
+  payableLedgerId: 1021,
+  prepaidLedgerId: 1022,
+  expenseLedgerId: 1007,
+});
+
+export const HADI_HISTORICAL_ACCRUAL_GUARD = Object.freeze({
+  code: "HADI_RENT_HISTORICAL_REPAIR_LOCKED",
+  message:
+    "HADI L'SHI historical rent has been reconciled in its original vouchers. " +
+    "Use the read-only linked-rent reconciliation and an audited original-voucher correction; " +
+    "automatic re-accrue/reversal would change verified rent balances.",
+});
+
+export function isHadiHistoricAccrualRepair(companyId: number, module: string): boolean {
+  return companyId === HADI_LINKED_RENT.payerCompanyId && module === "ERP";
+}
+
+/** Keep overpayment as a separate credit, never reduce an unrelated month's due. */
+export function positiveRentalDue(expected: string, paid: string): Decimal {
+  return MoneyDecimal.max(0, toMoney(expected).minus(toMoney(paid))).toDecimalPlaces(2);
+}
+
+export function classifyHadiRentDifference(
+  payableCredit: string,
+  linkedOutstanding: string,
+  ownedOutstanding: string,
+  unmatchedPostedPayments: number
+): { difference: string; status: "MATCH" | "REVIEW" } {
+  const difference = toMoney(payableCredit)
+    .minus(toMoney(linkedOutstanding))
+    .minus(toMoney(ownedOutstanding))
+    .toDecimalPlaces(2);
+  return {
+    difference: difference.toFixed(2),
+    status: difference.abs().lte("0.005") && unmatchedPostedPayments === 0 ? "MATCH" : "REVIEW",
+  };
+}
+
 /**
  * HADI L'SHI's linked Properties rent is expensed by a monthly accrual:
  *   Dr Rent Expense - ERP Shops (#1007), Cr Accrued Rent Payable (#1021).
