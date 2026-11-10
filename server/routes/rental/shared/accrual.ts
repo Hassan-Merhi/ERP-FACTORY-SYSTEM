@@ -504,6 +504,64 @@ export async function postRentAccrualForCompany(
       const duePrepaid = prepaidUnaccrued.filter((r) => isDue(r) && !isRentRecognitionHeld(r.notes));
       if (duePrepaid.length > 0) {
         await db.transaction(async (tx) => {
+          // PREPAY RECOGNITION: lock the month first and prove the actual
+          // posted pre-billing cash vouchers. A stale paid_amount cache or
+          // payment posted after the billing day must never over-credit
+          // Prepaid Rent (or silently create a duplicate expense).
+          const prepaidIds = duePrepaid.map((r) => r.id);
+          if (prepaidIds.some((id) => !Number.isSafeInteger(id) || id <= 0)) {
+            throw new Error("RENTAL_PREPAID_INVALID_MONTH_ID");
+          }
+          const lockedPrepaid = (await tx.execute(sql`
+            SELECT ml.id, ml.paid_amount, ml.expected_amount, ml.notes,
+              ml.accrual_voucher_id, ml.used_prepaid_account
+            FROM property_monthly_ledger ml
+            WHERE ml.id IN (${sql.raw(prepaidIds.join(","))})
+              AND ml.accrual_voucher_id IS NULL
+              AND ml.used_prepaid_account=TRUE
+            ORDER BY ml.id FOR UPDATE OF ml
+          `)).rows as Array<{
+            id: number; paid_amount: string; expected_amount: string;
+            notes: string | null; accrual_voucher_id: number | null;
+            used_prepaid_account: boolean;
+          }>;
+          if (lockedPrepaid.length !== prepaidIds.length ||
+              lockedPrepaid.some((r) => isRentRecognitionHeld(r.notes))) {
+            throw new Error("RENTAL_PREPAID_MONTH_CHANGED_OR_HELD");
+          }
+
+          const postedPrepaid = (await tx.execute(sql`
+            SELECT p.ledger_row_id,
+              COALESCE(SUM(p.amount::numeric),0) AS paid
+            FROM property_payments p
+            JOIN property_monthly_ledger ml ON ml.id=p.ledger_row_id
+            JOIN property_contracts pc ON pc.id=ml.contract_id
+            JOIN vouchers v ON v.id=p.voucher_id AND v.company_id=p.company_id
+              AND v.deleted_at IS NULL AND v.optional=FALSE
+            WHERE p.ledger_row_id IN (${sql.raw(prepaidIds.join(","))})
+              AND p.posting_status='POSTED'
+              AND p.payment_date<=${effectiveAsOf}::date
+              AND p.payment_date < MAKE_DATE(
+                ml.year, ml.month,
+                LEAST(EXTRACT(DAY FROM pc.start_date::date)::int,
+                  EXTRACT(DAY FROM
+                    DATE_TRUNC('MONTH', MAKE_DATE(ml.year,ml.month,1))
+                    + INTERVAL '1 MONTH' - INTERVAL '1 DAY')::int)
+              )
+            GROUP BY p.ledger_row_id
+          `)).rows as Array<{ ledger_row_id: number; paid: string }>;
+          const postedPrepaidMap = new Map(
+            postedPrepaid.map((r) => [Number(r.ledger_row_id), toMoney(r.paid).toDecimalPlaces(2)])
+          );
+          // Any mismatch means an unreviewed previous payment, old voucher,
+          // or stale cache. Fail closed; keep all cash/prepaid balances intact.
+          for (const row of lockedPrepaid) {
+            const actual = postedPrepaidMap.get(Number(row.id)) ?? new MoneyDecimal(0);
+            if (!actual.eq(toMoney(row.paid_amount).toDecimalPlaces(2)) ||
+                actual.gt(toMoney(row.expected_amount).toDecimalPlaces(2))) {
+              throw new Error("RENTAL_PREPAID_POSTED_PAYMENTS_DO_NOT_MATCH_MONTH");
+            }
+          }
           const expenseId = await findOrCreateLedgerAccount(
             tx,
             companyId,
@@ -528,7 +586,7 @@ export async function postRentAccrualForCompany(
           const expectedOf = (r: (typeof duePrepaid)[number]) => toMoney(r.expectedAmount).toDecimalPlaces(2);
           const totalExpected = duePrepaid.reduce((s, r) => s.plus(expectedOf(r)), new MoneyDecimal(0));
           const totalPaid = duePrepaid.reduce(
-            (s, r) => s.plus(MoneyDecimal.min(toMoney(r.paidAmount).toDecimalPlaces(2), expectedOf(r))),
+            (s, r) => s.plus(MoneyDecimal.min(postedPrepaidMap.get(Number(r.id)) ?? new MoneyDecimal(0), expectedOf(r))),
             new MoneyDecimal(0)
           );
           const totalUnpaid = MoneyDecimal.max(0, totalExpected.minus(totalPaid));

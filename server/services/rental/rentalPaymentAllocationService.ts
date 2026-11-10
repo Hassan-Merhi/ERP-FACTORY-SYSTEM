@@ -17,16 +17,22 @@ type PostedMonthTotal = { for_year: string; for_month: string; paid_total: strin
 async function postedTotalsByMonth(contractId: number, tx?: DbTransaction): Promise<PostedMonthTotal[]> {
   if (tx)
     return resultRows<PostedMonthTotal>(
-      await tx.execute(sql`SELECT for_year, for_month, COALESCE(SUM(amount::numeric), 0) AS paid_total
-     FROM property_payments
-     WHERE contract_id = ${contractId} AND posting_status = 'POSTED'
-     GROUP BY for_year, for_month`)
+      await tx.execute(sql`SELECT p.for_year, p.for_month, COALESCE(SUM(p.amount::numeric), 0) AS paid_total
+     FROM property_payments p
+     JOIN vouchers v ON v.id=p.voucher_id AND v.company_id=p.company_id
+       AND v.deleted_at IS NULL AND v.optional=FALSE
+     WHERE p.contract_id = ${contractId} AND p.posting_status = 'POSTED'
+       AND p.ledger_row_id IS NOT NULL
+     GROUP BY p.for_year, p.for_month`)
     );
   const { rows } = await pool.query<PostedMonthTotal>(
-    `SELECT for_year, for_month, COALESCE(SUM(amount::numeric), 0) AS paid_total
-     FROM property_payments
-     WHERE contract_id = $1 AND posting_status = 'POSTED'
-     GROUP BY for_year, for_month`,
+    `SELECT p.for_year, p.for_month, COALESCE(SUM(p.amount::numeric), 0) AS paid_total
+     FROM property_payments p
+     JOIN vouchers v ON v.id=p.voucher_id AND v.company_id=p.company_id
+       AND v.deleted_at IS NULL AND v.optional=FALSE
+     WHERE p.contract_id = $1 AND p.posting_status = 'POSTED'
+       AND p.ledger_row_id IS NOT NULL
+     GROUP BY p.for_year, p.for_month`,
     [contractId]
   );
   return rows;
@@ -52,7 +58,7 @@ export async function findEarliestOutstandingMonth(
 ): Promise<{ year: number; month: number }> {
   const runner = tx ?? db;
   const [contractRow] = await runner
-    .select({ startDate: propertyContracts.startDate })
+    .select({ startDate: propertyContracts.startDate, rentalAmount: propertyContracts.rentalAmount })
     .from(propertyContracts)
     .where(eq(propertyContracts.id, contractId));
 
@@ -84,7 +90,13 @@ export async function findEarliestOutstandingMonth(
     const billingDate = getRentalPeriodDueDate(row.year, row.month, billingDay);
     if (billingDate > paymentDate) continue;
     const posted = postedByMonth.get(`${row.year}-${row.month}`) ?? new MoneyDecimal(0);
-    const expected = toMoney(row.expectedAmount as string);
+    const persistedExpected = toMoney(row.expectedAmount as string);
+    // A future prepaid month may still have a zero expected_amount cache
+    // when it becomes due. Match the allocation builder's existing fallback
+    // to the contract rent until its due-month upsert populates the amount.
+    const expected = persistedExpected.isZero()
+      ? toMoney(contractRow?.rentalAmount ?? 0)
+      : persistedExpected;
     if (expected.minus(posted).gt("0.005")) {
       return { year: row.year, month: row.month };
     }
