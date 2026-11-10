@@ -7,7 +7,7 @@ import { eq, and, sql, inArray, isNull, isNotNull, ne } from "drizzle-orm";
 import { RentalModule, findOrCreateLedgerAccount } from "./ledger";
 import { ensureMonthlyLedgerRows } from "./monthly-rows";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
-import { isRentRecognitionHeld } from "../../../services/rental/rentRecognitionHold";
+import { isRentRecognitionHeld, isRentMonthReadyToRecognize } from "../../../services/rental/rentRecognitionHold";
 import { postAccrualPassTx, type RentAccrualPostingOptions } from "./accrual-posting";
 
 export type { RentAccrualPostingOptions } from "./accrual-posting";
@@ -217,7 +217,7 @@ export async function postRentAccrualForCompany(
     // A reviewed historical month with a deleted accrual link must never re-accrue
     // just because a later month on the same contract becomes unpaid.
     const pendingRows = allUnaccrued.filter((r) =>
-      isDue(r) && !isRentRecognitionHeld(r.notes) && contractsWithPositiveOutstanding.has(r.contractId)
+      isRentMonthReadyToRecognize(r.notes, isDue(r)) && contractsWithPositiveOutstanding.has(r.contractId)
     );
 
     logger.info(
@@ -379,7 +379,7 @@ export async function postRentAccrualForCompany(
         );
       // Holds also protect the advance-recognition path: a mixed batch must not
       // cause historical, already-recognized months to be posted again.
-      const dueAdvanceRows = advanceRows.filter((r) => isDue(r) && !isRentRecognitionHeld(r.notes));
+      const dueAdvanceRows = advanceRows.filter((r) => isRentMonthReadyToRecognize(r.notes, isDue(r)));
       if (dueAdvanceRows.length > 0) {
         await db.transaction(async (tx) => {
           const pendingIds15 = dueAdvanceRows.map((r) => r.id);
