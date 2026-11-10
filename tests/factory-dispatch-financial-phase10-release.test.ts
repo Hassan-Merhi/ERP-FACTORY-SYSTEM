@@ -43,6 +43,19 @@ describe("Phase 10 Factory dispatch accounting safety / release contract",()=>{
     expect((phase4.match(/\$\$/g)||[]).length).toBe(6);
     expect((phase8.match(/\$\$/g)||[]).length%2).toBe(0);
   });
+  it("guards voucher_entries-only fields from vouchers and posting request trigger rows",()=>{
+    const together=file("docs/sql/manual/2026-11-10-factory-dispatch-all-phases-tableplus.sql");
+    for (const script of [phase4, together]) {
+      expect(script).not.toContain(
+        "IF TG_OP = 'UPDATE' AND TG_TABLE_NAME = 'voucher_entries' AND NEW.voucher_id"
+      );
+      expect(script).toContain(
+        "IF TG_TABLE_NAME = 'voucher_entries' THEN\n    IF TG_OP = 'UPDATE' THEN\n      IF NEW.voucher_id IS DISTINCT FROM OLD.voucher_id THEN"
+      );
+      expect(script).toContain("Cannot transfer an entry into a finalized Factory dispatch voucher");
+      expect(script).toContain("Source-owned Factory dispatch voucher cannot be changed or retired");
+    }
+  });
   it("requires installed immutable financial, physical and voucher guards before approval",()=>{
     for(const fragment of [
       "factory_dispatch_signed_trip_guard",
