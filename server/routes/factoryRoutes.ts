@@ -17,6 +17,7 @@ import { registerFactoryLoadingDispatchComparisonRoutes } from "./factory/custom
 import { registerFactoryLoadingDispatchAllocationRoutes } from "./factory/customer-orders/loadingDispatchAllocationRoutes";
 import { registerFactoryLoadingDispatchLifecycleRoutes } from "./factory/customer-orders/loadingDispatchLifecycleRoutes";
 import { registerFactoryLoadingDispatchFinancialRoutes } from "./factory/customer-orders/loadingDispatchFinancialChargeRoutes";
+import { registerFactoryLoadingDispatchPostingRoutes } from "./factory/customer-orders/loadingDispatchFinancialPostingRoutes";
 import { registerFactoryLoadingDispatchReportRoutes } from "./factory/customer-orders/loadingDispatchReportRoutes";
 import { registerFactoryContainerReadAccessRoutes } from "./factory/factoryContainerReadAccessRoutes";
 import { registerFactoryDocsUsersRoutes } from "./factory/docs-users";
@@ -221,6 +222,7 @@ export function registerFactoryRoutes(app: Express, requireAuth: RequestHandler,
   registerFactoryLoadingDispatchReportRoutes(app);
   registerFactoryLoadingDispatchLifecycleRoutes(app);
   registerFactoryLoadingDispatchFinancialRoutes(app);
+  registerFactoryLoadingDispatchPostingRoutes(app);
   registerFactoryLoadingDispatchAllocationRoutes(app);
   registerFactoryLoadingDispatchComparisonRoutes(app);
   registerFactoryLoadingDispatchScanRoutes(app);
