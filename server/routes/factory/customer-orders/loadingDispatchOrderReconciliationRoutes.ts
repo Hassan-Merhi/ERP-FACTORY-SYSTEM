@@ -205,7 +205,7 @@ export function registerFactoryDispatchOrderReconciliationRoutes(app:Express):vo
           await reversePriorityAllocationForDeletedBaleTx(tx,{
             companyId:s.companyId,baleId:row.baleId,detachedOrderId:s.orderId,
             actor:s.username,actorId:s.userId,
-            reason:"Phase 7 approved unshipped dispatch reconciliation: "+why,
+            reason:"Phase 7 approved unshipped dispatch reconciliation",
             deferQueueRecovery:true,
           });
         }
