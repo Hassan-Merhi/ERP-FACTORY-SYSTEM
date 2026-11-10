@@ -101,7 +101,10 @@ export default function FactoryPriorityScan() {
   const [scanning, setScanning] = useState(false);
   const [feedback, setFeedback] = useState<ScanFeedback | null>(null);
   const [priorityFlashVisible, setPriorityFlashVisible] = useState(false);
-  const [localFlash, setLocalFlash] = useState<Pick<PriorityScanHistoryResponse["scans"][number], "referenceNumber" | "priority" | "color" | "orderId"> | null>(null);
+  const [localFlash, setLocalFlash] = useState<Pick<
+    PriorityScanHistoryResponse["scans"][number],
+    "referenceNumber" | "priority" | "color" | "orderId"
+  > | null>(null);
   const [historyView, setHistoryView] = useState<"condensed" | "detailed">("condensed");
 
   const { data: configs = [], isLoading: configsLoading } = useQuery<PriorityScanConfig[]>({
@@ -349,7 +352,9 @@ export default function FactoryPriorityScan() {
         });
       } else {
         showFeedback({
-          type: /already (?:been )?(?:scanned|loaded|added|in)|reserved for another loading/i.test(requestError.message || "")
+          type: /already (?:been )?(?:scanned|loaded|added|in)|reserved for another loading/i.test(
+            requestError.message || ""
+          )
             ? "duplicate"
             : "error",
           referenceNumber,
@@ -374,7 +379,9 @@ export default function FactoryPriorityScan() {
             <Layers className="h-5 w-5" />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-semibold tracking-wide text-slate-500 dark:text-slate-400">{tr("priorityQueue")}</p>
+            <p className="text-xs font-semibold tracking-wide text-slate-500 dark:text-slate-400">
+              {tr("priorityQueue")}
+            </p>
             <p className="text-2xl font-bold tabular-nums text-blue-700 dark:text-blue-300">{activeQueue.length}</p>
           </div>
         </div>
@@ -383,8 +390,15 @@ export default function FactoryPriorityScan() {
             <PackageCheck className="h-5 w-5" />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-semibold tracking-wide text-slate-500 dark:text-slate-400">{tr("thisSession")}</p>
-            <p className="text-2xl font-bold tabular-nums text-emerald-700 dark:text-emerald-300" data-testid="priority-scan-today-count">{sessionScans.length.toLocaleString()}</p>
+            <p className="text-xs font-semibold tracking-wide text-slate-500 dark:text-slate-400">
+              {tr("thisSession")}
+            </p>
+            <p
+              className="text-2xl font-bold tabular-nums text-emerald-700 dark:text-emerald-300"
+              data-testid="priority-scan-today-count"
+            >
+              {sessionScans.length.toLocaleString()}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-3 rounded-2xl border border-violet-200/80 bg-white/95 px-4 py-3 shadow-sm dark:border-violet-400/25 dark:bg-gradient-to-r dark:from-[hsl(var(--factory-hue)_35%_19%)] dark:to-[hsl(var(--factory-hue)_43%_17%)]">
@@ -392,7 +406,9 @@ export default function FactoryPriorityScan() {
             <ListOrdered className="h-5 w-5" />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-semibold tracking-wide text-slate-500 dark:text-slate-400">{tr("currentPriority")}</p>
+            <p className="text-xs font-semibold tracking-wide text-slate-500 dark:text-slate-400">
+              {tr("currentPriority")}
+            </p>
             <p className="text-2xl font-bold tabular-nums text-violet-700 dark:text-violet-300">
               {activeQueue.length ? "#" + activeQueue[0].priority : "—"}
             </p>
@@ -438,7 +454,12 @@ export default function FactoryPriorityScan() {
                 data-testid="input-priority-scan"
               />
             </div>
-            <MobileBarcodeScanner onScan={(code) => void handleScan(code)} feedback={feedback} disabled={scanning} className="h-12 w-12 shrink-0 rounded-xl border-blue-300 dark:border-blue-400/55" />
+            <MobileBarcodeScanner
+              onScan={(code) => void handleScan(code)}
+              feedback={feedback}
+              disabled={scanning}
+              className="h-12 w-12 shrink-0 rounded-xl border-blue-300 dark:border-blue-400/55"
+            />
             <Button
               type="button"
               className="h-12 shrink-0 rounded-xl bg-blue-600 px-4 font-semibold text-white shadow-md shadow-blue-600/20 hover:bg-blue-500 dark:bg-blue-600 dark:hover:bg-blue-500 sm:px-6"
@@ -493,12 +514,24 @@ export default function FactoryPriorityScan() {
               ? "border-slate-400/40 shadow-slate-950/15 dark:border-white/20 dark:shadow-black/25"
               : "border-slate-200 bg-white dark:border-slate-700 dark:bg-gradient-to-br dark:from-[hsl(var(--factory-hue)_54%_18%)] dark:to-[hsl(var(--factory-hue)_64%_12%)]",
           ].join(" ")}
-          style={currentPriorityBale ? { backgroundColor: currentPriorityBale.color, color: getPriorityScanLetterInk(currentPriorityBale.color) } : undefined}
-          aria-label={currentPriorityBale ? tr("priorityColor", { color: currentPriorityBale.color }) : tr("currentPriority")}
+          style={
+            currentPriorityBale
+              ? {
+                  backgroundColor: currentPriorityBale.color,
+                  color: getPriorityScanLetterInk(currentPriorityBale.color),
+                }
+              : undefined
+          }
+          aria-label={
+            currentPriorityBale ? tr("priorityColor", { color: currentPriorityBale.color }) : tr("currentPriority")
+          }
           data-testid="current-priority-color"
         >
           {currentPriorityBale ? (
-            <div className="flex h-full min-h-[230px] flex-col items-center justify-center gap-2 p-5 text-center" aria-live="polite">
+            <div
+              className="flex h-full min-h-[230px] flex-col items-center justify-center gap-2 p-5 text-center"
+              aria-live="polite"
+            >
               <div className="flex items-center gap-1.5 rounded-full border border-current/30 bg-white/15 px-3 py-1 text-xs font-bold">
                 <CheckCircle2 className="h-4 w-4" />
                 {tr("scanned")}
@@ -513,7 +546,9 @@ export default function FactoryPriorityScan() {
                   {getPriorityScanLetter(currentPriorityBale.color)}
                 </span>
               )}
-              <div className="max-w-full truncate font-mono text-lg font-bold">{currentPriorityBale.referenceNumber}</div>
+              <div className="max-w-full truncate font-mono text-lg font-bold">
+                {currentPriorityBale.referenceNumber}
+              </div>
               <p className="text-xs font-semibold">
                 {tr("priorityNumber", { priority: currentPriorityBale.priority })} ·{" "}
                 {tr("loadingNumber", { orderId: currentPriorityBale.orderId })}
@@ -575,7 +610,16 @@ export default function FactoryPriorityScan() {
                   ].join(" ")}
                   data-testid={"priority-queue-row-" + item.orderId}
                 >
-                  <span className={["w-fit rounded-lg px-2 py-1 text-sm font-bold tabular-nums", index === 0 ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/25 dark:text-emerald-200" : "bg-slate-100 text-slate-600 dark:bg-slate-700/60 dark:text-slate-300"].join(" ")}>#{item.priority}</span>
+                  <span
+                    className={[
+                      "w-fit rounded-lg px-2 py-1 text-sm font-bold tabular-nums",
+                      index === 0
+                        ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/25 dark:text-emerald-200"
+                        : "bg-slate-100 text-slate-600 dark:bg-slate-700/60 dark:text-slate-300",
+                    ].join(" ")}
+                  >
+                    #{item.priority}
+                  </span>
                   <div className="flex min-w-0 items-center gap-3">
                     <PriorityScanColorLetter color={item.color} />
                     <div className="min-w-0">
@@ -589,7 +633,9 @@ export default function FactoryPriorityScan() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-base font-bold tabular-nums text-slate-900 dark:text-slate-100">{item.load?.totalQtyBales ?? 0}</div>
+                    <div className="text-base font-bold tabular-nums text-slate-900 dark:text-slate-100">
+                      {item.load?.totalQtyBales ?? 0}
+                    </div>
                     <div className="text-[11px] text-slate-500 dark:text-slate-400">{tr("scanned")}</div>
                   </div>
                   <div className="hidden justify-end sm:flex">
@@ -648,12 +694,17 @@ export default function FactoryPriorityScan() {
             {historyView === "condensed" ? (
               <div className="divide-y divide-slate-100 dark:divide-slate-700/60">
                 {condensedSessionScans.map((group) => (
-                  <div key={group.name.toLocaleLowerCase("en-US")} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-blue-400/5">
+                  <div
+                    key={group.name.toLocaleLowerCase("en-US")}
+                    className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-blue-400/5"
+                  >
                     <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
                     <div className="min-w-0 flex-1">
                       <div className="truncate font-medium">{group.name}</div>
                       {group.articleCode && (
-                        <div className="truncate font-mono text-xs text-slate-500 dark:text-slate-400">{group.articleCode}</div>
+                        <div className="truncate font-mono text-xs text-slate-500 dark:text-slate-400">
+                          {group.articleCode}
+                        </div>
                       )}
                     </div>
                     <div className="flex flex-wrap items-center gap-1">
@@ -661,14 +712,19 @@ export default function FactoryPriorityScan() {
                         <PriorityScanColorLetter key={color} color={color} size="sm" />
                       ))}
                     </div>
-                    <Badge variant="secondary" className="shrink-0">{group.count} {tr("scanned")}</Badge>
+                    <Badge variant="secondary" className="shrink-0">
+                      {group.count} {tr("scanned")}
+                    </Badge>
                   </div>
                 ))}
               </div>
             ) : (
               <div className="divide-y divide-slate-100 dark:divide-slate-700/60">
                 {sessionScans.map((scan) => (
-                  <div key={scan.id} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-blue-400/5">
+                  <div
+                    key={scan.id}
+                    className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-blue-400/5"
+                  >
                     <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
                     <div className="min-w-[150px] font-mono font-medium">{scan.referenceNumber}</div>
                     <div className="min-w-0 flex-1 truncate text-sm">{scan.productName || tr("unnamedProduct")}</div>
@@ -685,7 +741,9 @@ export default function FactoryPriorityScan() {
             )}
             <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50/80 px-4 py-3 text-sm dark:border-slate-700 dark:bg-[hsl(var(--factory-hue)_60%_16%)]">
               <span className="font-medium">Total scanned bales</span>
-              <Badge variant="secondary" data-testid="priority-scan-total">{sessionScans.length}</Badge>
+              <Badge variant="secondary" data-testid="priority-scan-total">
+                {sessionScans.length}
+              </Badge>
             </div>
           </>
         )}

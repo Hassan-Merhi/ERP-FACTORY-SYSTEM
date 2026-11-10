@@ -15,7 +15,11 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
 import { AttendanceAdminApprovalDialog } from "./factoryattendance/components/AttendanceAdminApprovalDialog";
-import { attendancePastDates, attendanceToday, type AttendanceAdminCredentials } from "./factoryattendance/attendanceEditPolicy";
+import {
+  attendancePastDates,
+  attendanceToday,
+  type AttendanceAdminCredentials,
+} from "./factoryattendance/attendanceEditPolicy";
 import {
   CalendarDays,
   CheckCircle,
@@ -61,11 +65,13 @@ const STATUS_OPTIONS: AttendanceStatus[] = ["Present", "Absent", "Late", "Half D
 
 // Visual-only palette: status identifiers and attendance rules remain unchanged.
 const STATUS_COLORS: Record<string, string> = {
-  Present: "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-500/50 dark:bg-emerald-500/15 dark:text-emerald-200",
+  Present:
+    "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-500/50 dark:bg-emerald-500/15 dark:text-emerald-200",
   Absent: "border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-500/50 dark:bg-rose-500/15 dark:text-rose-200",
   Late: "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-500/50 dark:bg-amber-500/15 dark:text-amber-200",
   "Half Day": "border-sky-300 bg-sky-50 text-sky-800 dark:border-sky-500/50 dark:bg-sky-500/15 dark:text-sky-200",
-  Leave: "border-violet-300 bg-violet-50 text-violet-800 dark:border-violet-500/50 dark:bg-violet-500/15 dark:text-violet-200",
+  Leave:
+    "border-violet-300 bg-violet-50 text-violet-800 dark:border-violet-500/50 dark:bg-violet-500/15 dark:text-violet-200",
 };
 
 const SUMMARY_TONES: Record<string, { card: string; icon: string; glow: string }> = {
@@ -129,7 +135,10 @@ function SummaryCard({
   const tone = SUMMARY_TONES[label] ?? SUMMARY_TONES.Total;
   return (
     <Card className={`relative isolate overflow-hidden rounded-2xl shadow-sm ${tone.card}`}>
-      <div aria-hidden="true" className={`pointer-events-none absolute -bottom-12 -right-8 h-32 w-44 rotate-[-20deg] rounded-full blur-2xl ${tone.glow}`} />
+      <div
+        aria-hidden="true"
+        className={`pointer-events-none absolute -bottom-12 -right-8 h-32 w-44 rotate-[-20deg] rounded-full blur-2xl ${tone.glow}`}
+      />
       <CardContent className="relative flex items-center justify-between gap-3 px-4 py-4 sm:px-5 sm:py-5">
         <div className="min-w-0">
           <p className="text-sm font-medium text-slate-600 dark:text-slate-200">{label}</p>
@@ -137,7 +146,9 @@ function SummaryCard({
             {value}
           </p>
         </div>
-        <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl shadow-sm ${tone.icon}`}>{icon}</div>
+        <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl shadow-sm ${tone.icon}`}>
+          {icon}
+        </div>
       </CardContent>
     </Card>
   );
@@ -189,12 +200,15 @@ export default function FactoryEmployeeAttendanceTab() {
   const saveMutation = useMutation({
     mutationFn: (payload: { records: EmployeeAttendanceBulkRecord[]; credentials?: AttendanceAdminCredentials }) =>
       apiRequest("POST", "/api/factory/employee-attendance/bulk", {
-        records: payload.records, ...payload.credentials,
+        records: payload.records,
+        ...payload.credentials,
       }),
     onSuccess: () => {
       setApprovalOpen(false);
       setPendingApprovalRecords(null);
-      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employee-attendance", selectedCompany?.id, selectedDate) });
+      queryClient.invalidateQueries({
+        queryKey: companyQueryKey("/api/factory/employee-attendance", selectedCompany?.id, selectedDate),
+      });
       toast({ title: "Attendance saved", description: `Saved for ${selectedDate}` });
     },
     onError: (err: ClientErrorLike) => {
@@ -222,7 +236,8 @@ export default function FactoryEmployeeAttendanceTab() {
   }, [data, selectedDate, attendanceMap, notesMap, saveMutation, selectedCompany?.id]);
 
   const approveAttendanceSave = (credentials: AttendanceAdminCredentials) => {
-    if (selectedCompany?.id && pendingApprovalRecords) saveMutation.mutate({ records: pendingApprovalRecords, credentials });
+    if (selectedCompany?.id && pendingApprovalRecords)
+      saveMutation.mutate({ records: pendingApprovalRecords, credentials });
   };
 
   const markAll = (status: AttendanceStatus) => {
@@ -256,7 +271,11 @@ export default function FactoryEmployeeAttendanceTab() {
       <div className="inline-flex flex-wrap gap-2 rounded-xl border border-slate-200 bg-white/80 p-1.5 shadow-sm dark:border-blue-400/20 dark:bg-slate-900/70">
         <Button
           variant={mode === "daily" ? "default" : "outline"}
-          className={mode === "daily" ? "rounded-lg border-blue-500 bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-md shadow-blue-500/20 hover:from-sky-600 hover:to-blue-700" : "rounded-lg border-transparent text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"}
+          className={
+            mode === "daily"
+              ? "rounded-lg border-blue-500 bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-md shadow-blue-500/20 hover:from-sky-600 hover:to-blue-700"
+              : "rounded-lg border-transparent text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+          }
           onClick={() => setMode("daily")}
           data-testid="button-mode-daily"
         >
@@ -265,7 +284,11 @@ export default function FactoryEmployeeAttendanceTab() {
         </Button>
         <Button
           variant={mode === "perEmployee" ? "default" : "outline"}
-          className={mode === "perEmployee" ? "rounded-lg border-blue-500 bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-md shadow-blue-500/20 hover:from-sky-600 hover:to-blue-700" : "rounded-lg border-transparent text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"}
+          className={
+            mode === "perEmployee"
+              ? "rounded-lg border-blue-500 bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-md shadow-blue-500/20 hover:from-sky-600 hover:to-blue-700"
+              : "rounded-lg border-transparent text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+          }
           onClick={() => setMode("perEmployee")}
           data-testid="button-mode-per-employee"
         >
@@ -321,7 +344,13 @@ export default function FactoryEmployeeAttendanceTab() {
                   >
                     <UserX className="h-4 w-4 mr-1" /> Mark All Absent
                   </Button>
-                  <Button variant="ghost" className="rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-800/60 dark:hover:bg-slate-700" onClick={reset} disabled={!emps.length} data-testid="button-reset">
+                  <Button
+                    variant="ghost"
+                    className="rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-800/60 dark:hover:bg-slate-700"
+                    onClick={reset}
+                    disabled={!emps.length}
+                    data-testid="button-reset"
+                  >
                     <RotateCcw className="h-4 w-4 mr-1" /> Reset
                   </Button>
                   <Button
@@ -374,7 +403,9 @@ export default function FactoryEmployeeAttendanceTab() {
           <Card className="overflow-hidden rounded-2xl border-slate-200/90 bg-white/95 shadow-sm dark:border-blue-400/25 dark:bg-[hsl(var(--factory-hue)_53%_16%)]/80">
             <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 px-4 pb-3 pt-5 sm:px-5">
               <CardTitle className="flex flex-wrap items-center gap-2 text-base font-semibold sm:text-lg">
-                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-200"><CalendarDays className="h-5 w-5" /></span>
+                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-200">
+                  <CalendarDays className="h-5 w-5" />
+                </span>
                 Employees — {formatDate(selectedDate)}
                 {shift && <Badge variant="secondary">{shift}</Badge>}
               </CardTitle>
@@ -402,11 +433,21 @@ export default function FactoryEmployeeAttendanceTab() {
                     <table className="w-full min-w-[760px] text-sm">
                       <thead className="sticky top-0 z-30">
                         <tr className="border-b border-slate-200 bg-slate-100/90 dark:border-slate-600 dark:bg-[hsl(var(--factory-hue)_43%_23%)]">
-                          <th className="text-left px-4 py-3 font-semibold text-slate-600 dark:text-slate-200 w-8">#</th>
-                          <th className="text-left px-4 py-3 font-semibold text-slate-600 dark:text-slate-200">Employee</th>
-                          <th className="text-left px-4 py-3 font-semibold text-slate-600 dark:text-slate-200">Department</th>
-                          <th className="text-left px-4 py-3 font-semibold text-slate-600 dark:text-slate-200 w-44">Status</th>
-                          <th className="text-left px-4 py-3 font-semibold text-slate-600 dark:text-slate-200">Notes</th>
+                          <th className="text-left px-4 py-3 font-semibold text-slate-600 dark:text-slate-200 w-8">
+                            #
+                          </th>
+                          <th className="text-left px-4 py-3 font-semibold text-slate-600 dark:text-slate-200">
+                            Employee
+                          </th>
+                          <th className="text-left px-4 py-3 font-semibold text-slate-600 dark:text-slate-200">
+                            Department
+                          </th>
+                          <th className="text-left px-4 py-3 font-semibold text-slate-600 dark:text-slate-200 w-44">
+                            Status
+                          </th>
+                          <th className="text-left px-4 py-3 font-semibold text-slate-600 dark:text-slate-200">
+                            Notes
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
@@ -480,7 +521,9 @@ export default function FactoryEmployeeAttendanceTab() {
                             value={status}
                             onValueChange={(v) => setAttendanceMap((p) => ({ ...p, [emp.id]: v as AttendanceStatus }))}
                           >
-                            <SelectTrigger className={`h-10 rounded-lg text-sm font-semibold ${STATUS_COLORS[status] ?? ""}`}>
+                            <SelectTrigger
+                              className={`h-10 rounded-lg text-sm font-semibold ${STATUS_COLORS[status] ?? ""}`}
+                            >
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -546,7 +589,13 @@ function PerEmployeeView() {
   const empIdNum = selectedEmpId ? parseInt(selectedEmpId) : null;
 
   const { data: attendanceRecords } = useQuery<AttRecord[]>({
-    queryKey: companyQueryKey("/api/factory/employee-attendance/employee", selectedCompany?.id, empIdNum, startDate, endDate),
+    queryKey: companyQueryKey(
+      "/api/factory/employee-attendance/employee",
+      selectedCompany?.id,
+      empIdNum,
+      startDate,
+      endDate
+    ),
     queryFn: async () => {
       if (!empIdNum) return [];
       const res = await fetch(
@@ -576,13 +625,20 @@ function PerEmployeeView() {
   const saveMutation = useMutation({
     mutationFn: (payload: { records: EmployeeAttendanceBulkRecord[]; credentials?: AttendanceAdminCredentials }) =>
       apiRequest("POST", "/api/factory/employee-attendance/bulk", {
-        records: payload.records, ...payload.credentials,
+        records: payload.records,
+        ...payload.credentials,
       }),
     onSuccess: () => {
       setApprovalOpen(false);
       setPendingApprovalRecords(null);
       queryClient.invalidateQueries({
-        queryKey: companyQueryKey("/api/factory/employee-attendance/employee", selectedCompany?.id, empIdNum, startDate, endDate),
+        queryKey: companyQueryKey(
+          "/api/factory/employee-attendance/employee",
+          selectedCompany?.id,
+          empIdNum,
+          startDate,
+          endDate
+        ),
       });
       toast({ title: "Attendance saved", description: `${dates.length} days saved.` });
     },
@@ -615,7 +671,8 @@ function PerEmployeeView() {
   };
 
   const approveAttendanceSave = (credentials: AttendanceAdminCredentials) => {
-    if (selectedCompany?.id && pendingApprovalRecords) saveMutation.mutate({ records: pendingApprovalRecords, credentials });
+    if (selectedCompany?.id && pendingApprovalRecords)
+      saveMutation.mutate({ records: pendingApprovalRecords, credentials });
   };
 
   const selectedEmp = (empList ?? []).find((e) => e.id === empIdNum);

@@ -22,13 +22,18 @@ const HIDDEN_KEYS: Record<Section, string> = {
 
 export default function FactoryPayrollHub() {
   const { selectedCompany } = useCompany();
-  const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id), enabled: Boolean(selectedCompany?.id), staleTime: 5 * 60000 });
+  const { data: myAccess } = useQuery<FactoryMyAccess>({
+    queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
+    staleTime: 5 * 60000,
+  });
   const { language } = useApplicationLanguage();
   const tr = (key: Parameters<typeof translateFactoryStaffTrackingText>[0]) =>
     translateFactoryStaffTrackingText(key, language);
-  const hidden = myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
-    ? myAccess.hiddenCostFields
-    : Object.values(HIDDEN_KEYS);
+  const hidden =
+    myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
+      ? myAccess.hiddenCostFields
+      : Object.values(HIDDEN_KEYS);
 
   const sections = SECTIONS.filter((section) => !hidden.includes(HIDDEN_KEYS[section]));
   const defaultSection: Section = sections[0] ?? "workers";
@@ -53,8 +58,14 @@ export default function FactoryPayrollHub() {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="relative shrink-0 overflow-hidden border-b border-blue-500/15 bg-gradient-to-br from-blue-500/10 via-background to-background dark:border-slate-700/70 dark:from-[hsl(var(--factory-hue)_55%_15%)] dark:via-[hsl(var(--factory-hue)_53%_10%)] dark:to-background">
-        <div aria-hidden="true" className="pointer-events-none absolute -right-20 -top-32 h-72 w-[50rem] rounded-full bg-blue-500/10 blur-3xl dark:bg-blue-600/20" />
-        <div aria-hidden="true" className="pointer-events-none absolute right-0 top-12 h-px w-1/2 -rotate-12 bg-gradient-to-l from-blue-400/40 via-blue-400/10 to-transparent" />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -right-20 -top-32 h-72 w-[50rem] rounded-full bg-blue-500/10 blur-3xl dark:bg-blue-600/20"
+        />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute right-0 top-12 h-px w-1/2 -rotate-12 bg-gradient-to-l from-blue-400/40 via-blue-400/10 to-transparent"
+        />
         {/* Shared page-header grammar (accent bar, icon, subtitle) like the ERP and Properties pages. */}
         <div className="relative z-10 px-4 pt-5 sm:px-6 sm:pt-6 [&>header]:mb-0 [&>header]:border-b-0 [&>header]:pb-4 [&_[data-testid=text-page-title]]:font-bold [&_[data-testid=text-page-title]]:tracking-tight [&_[data-testid=text-page-title]>span:first-child]:rounded-xl [&_[data-testid=text-page-title]>span:first-child]:border [&_[data-testid=text-page-title]>span:first-child]:border-blue-400/30 [&_[data-testid=text-page-title]>span:first-child]:bg-blue-500/15 [&_[data-testid=text-page-title]>span:first-child]:p-3 [&_[data-testid=text-page-title]>span:first-child]:text-blue-500 dark:[&_[data-testid=text-page-title]>span:first-child]:text-sky-300">
           <PageHeader
@@ -66,14 +77,23 @@ export default function FactoryPayrollHub() {
         </div>
 
         <div className="erp-mobile-scroll-tabs relative z-10 px-4 pb-4 sm:px-6 sm:pb-5">
-          <TabsList className="w-max min-w-full gap-1.5 rounded-2xl border-blue-500/15 bg-background/70 p-1.5 shadow-lg shadow-blue-950/5 backdrop-blur-md dark:border-slate-600/60 dark:bg-slate-900/70 sm:min-w-0 sm:w-fit" aria-label="Factory sections">
+          <TabsList
+            className="w-max min-w-full gap-1.5 rounded-2xl border-blue-500/15 bg-background/70 p-1.5 shadow-lg shadow-blue-950/5 backdrop-blur-md dark:border-slate-600/60 dark:bg-slate-900/70 sm:min-w-0 sm:w-fit"
+            aria-label="Factory sections"
+          >
             {tabs.map(({ key, label, Icon }) => {
               const active = activeSection === key;
               return (
                 <PillTabButton
                   key={key}
                   selected={active}
-                  className={active ? (key === "employees" ? "bg-gradient-to-r from-emerald-700 to-emerald-600 text-white shadow-md shadow-emerald-600/20 hover:text-white" : "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md shadow-blue-600/20 hover:text-white") : "hover:bg-blue-500/10"}
+                  className={
+                    active
+                      ? key === "employees"
+                        ? "bg-gradient-to-r from-emerald-700 to-emerald-600 text-white shadow-md shadow-emerald-600/20 hover:text-white"
+                        : "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md shadow-blue-600/20 hover:text-white"
+                      : "hover:bg-blue-500/10"
+                  }
                   data-testid={`tab-people-${key}`}
                   onClick={() => setActiveSection(key)}
                 >

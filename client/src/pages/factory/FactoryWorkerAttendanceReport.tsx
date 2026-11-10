@@ -21,7 +21,10 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
-import { AttendanceReportRequestError, readAttendanceReportResponse } from "./factoryworkerattendancereport/reportResponse";
+import {
+  AttendanceReportRequestError,
+  readAttendanceReportResponse,
+} from "./factoryworkerattendancereport/reportResponse";
 import { validateAttendanceReportDateRange } from "@shared/attendanceReportDateRange";
 
 import type {
@@ -42,7 +45,11 @@ import {
 } from "./factoryworkerattendancereport/utils";
 import { StatusPill } from "./factoryworkerattendancereport/components/StatusPill";
 import { AttendanceAdminApprovalDialog } from "./factoryattendance/components/AttendanceAdminApprovalDialog";
-import { attendancePastDates, attendanceToday, type AttendanceAdminCredentials } from "./factoryattendance/attendanceEditPolicy";
+import {
+  attendancePastDates,
+  attendanceToday,
+  type AttendanceAdminCredentials,
+} from "./factoryattendance/attendanceEditPolicy";
 import { useToast } from "@/hooks/use-toast";
 
 type AttendanceReportRecord = { workerId: number; attendanceDate: string; status: string };
@@ -98,10 +105,7 @@ export default function FactoryWorkerAttendanceReport() {
     return { startDate: customStart, endDate: customEnd };
   }, [mode, customStart, customEnd]);
 
-  const dateRangeError = useMemo(
-    () => validateAttendanceReportDateRange(startDate, endDate),
-    [startDate, endDate]
-  );
+  const dateRangeError = useMemo(() => validateAttendanceReportDateRange(startDate, endDate), [startDate, endDate]);
   const queryKey = ["/api/factory/workers/attendance-report", startDate, endDate];
 
   const { data, isLoading, isError, error, refetch } = useQuery<AttendanceReportData>({
@@ -117,8 +121,7 @@ export default function FactoryWorkerAttendanceReport() {
     enabled: dateRangeError === null,
     // A proxy 502/503 can be transient. Do not retry denied, missing or malformed responses.
     retry: (failureCount, requestError) =>
-      failureCount < 2 &&
-      (!(requestError instanceof AttendanceReportRequestError) || requestError.retryable),
+      failureCount < 2 && (!(requestError instanceof AttendanceReportRequestError) || requestError.retryable),
     retryDelay: (failureCount) => Math.min(1000 * 2 ** failureCount, 3000),
   });
 
@@ -548,9 +551,7 @@ export default function FactoryWorkerAttendanceReport() {
 
       {dateRangeError && (
         <Card>
-          <CardContent className="p-4 text-sm text-muted-foreground">
-            {dateRangeError}
-          </CardContent>
+          <CardContent className="p-4 text-sm text-muted-foreground">{dateRangeError}</CardContent>
         </Card>
       )}
 
@@ -771,14 +772,18 @@ export default function FactoryWorkerAttendanceReport() {
                       key={worker.id}
                       className={cn(
                         "border-b border-slate-100 transition-colors hover:bg-blue-50/70 dark:border-[hsl(var(--factory-hue)_37%_23%)] dark:hover:bg-[hsl(var(--factory-hue)_54%_22%)]",
-                        idx % 2 === 0 ? "bg-white dark:bg-[hsl(var(--factory-hue)_56%_11%)]" : "bg-slate-50/70 dark:bg-[hsl(var(--factory-hue)_52%_13%)]"
+                        idx % 2 === 0
+                          ? "bg-white dark:bg-[hsl(var(--factory-hue)_56%_11%)]"
+                          : "bg-slate-50/70 dark:bg-[hsl(var(--factory-hue)_52%_13%)]"
                       )}
                       data-testid={`row-worker-${worker.id}`}
                     >
                       <td
                         className={cn(
                           "sticky left-0 z-10 border-r border-slate-100 px-3 py-2 font-mono text-muted-foreground dark:border-[hsl(var(--factory-hue)_37%_23%)]",
-                          idx % 2 === 0 ? "bg-white dark:bg-[hsl(var(--factory-hue)_56%_11%)]" : "bg-slate-50/70 dark:bg-[hsl(var(--factory-hue)_52%_13%)]"
+                          idx % 2 === 0
+                            ? "bg-white dark:bg-[hsl(var(--factory-hue)_56%_11%)]"
+                            : "bg-slate-50/70 dark:bg-[hsl(var(--factory-hue)_52%_13%)]"
                         )}
                       >
                         {worker.employeeCode || "—"}
@@ -786,7 +791,9 @@ export default function FactoryWorkerAttendanceReport() {
                       <td
                         className={cn(
                           "sticky left-[88px] z-10 whitespace-nowrap border-r border-slate-100 px-3 py-2 font-semibold dark:border-[hsl(var(--factory-hue)_37%_23%)]",
-                          idx % 2 === 0 ? "bg-white dark:bg-[hsl(var(--factory-hue)_56%_11%)]" : "bg-slate-50/70 dark:bg-[hsl(var(--factory-hue)_52%_13%)]"
+                          idx % 2 === 0
+                            ? "bg-white dark:bg-[hsl(var(--factory-hue)_56%_11%)]"
+                            : "bg-slate-50/70 dark:bg-[hsl(var(--factory-hue)_52%_13%)]"
                         )}
                       >
                         <span className="truncate block max-w-[180px]" title={worker.fullName}>

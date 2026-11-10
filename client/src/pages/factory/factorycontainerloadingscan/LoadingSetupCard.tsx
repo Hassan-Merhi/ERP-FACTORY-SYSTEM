@@ -32,7 +32,10 @@ export function LoadingSetupCard({ model }: { model: FactoryContainerLoadingScan
             {model.tr("customer")}
           </label>
           <Select value={model.selectedCustomerId} onValueChange={model.setSelectedCustomerId} disabled={!!orderId}>
-            <SelectTrigger className="h-11 rounded-xl border-blue-200/90 bg-slate-50/60 shadow-sm focus:ring-blue-500/30 dark:border-blue-500/25 dark:bg-[hsl(var(--factory-hue)_59%_11%)]" data-testid="select-customer">
+            <SelectTrigger
+              className="h-11 rounded-xl border-blue-200/90 bg-slate-50/60 shadow-sm focus:ring-blue-500/30 dark:border-blue-500/25 dark:bg-[hsl(var(--factory-hue)_59%_11%)]"
+              data-testid="select-customer"
+            >
               <SelectValue placeholder={model.tr("selectCustomer")} />
             </SelectTrigger>
             <SelectContent>
@@ -51,7 +54,10 @@ export function LoadingSetupCard({ model }: { model: FactoryContainerLoadingScan
             {model.tr("loadingLocation")}
           </label>
           <Select value={model.selectedLocationId} onValueChange={model.setSelectedLocationId} disabled={!!orderId}>
-            <SelectTrigger className="h-11 rounded-xl border-blue-200/90 bg-slate-50/60 shadow-sm focus:ring-blue-500/30 dark:border-blue-500/25 dark:bg-[hsl(var(--factory-hue)_59%_11%)]" data-testid="select-location">
+            <SelectTrigger
+              className="h-11 rounded-xl border-blue-200/90 bg-slate-50/60 shadow-sm focus:ring-blue-500/30 dark:border-blue-500/25 dark:bg-[hsl(var(--factory-hue)_59%_11%)]"
+              data-testid="select-location"
+            >
               <SelectValue placeholder={model.tr("selectLocation")} />
             </SelectTrigger>
             <SelectContent>
@@ -71,7 +77,10 @@ export function LoadingSetupCard({ model }: { model: FactoryContainerLoadingScan
               {model.tr("proforma")}
             </label>
             <Select value={model.selectedProformaId} onValueChange={model.setSelectedProformaId}>
-              <SelectTrigger className="h-11 rounded-xl border-blue-200/90 bg-slate-50/60 shadow-sm focus:ring-blue-500/30 dark:border-blue-500/25 dark:bg-[hsl(var(--factory-hue)_59%_11%)]" data-testid="select-proforma">
+              <SelectTrigger
+                className="h-11 rounded-xl border-blue-200/90 bg-slate-50/60 shadow-sm focus:ring-blue-500/30 dark:border-blue-500/25 dark:bg-[hsl(var(--factory-hue)_59%_11%)]"
+                data-testid="select-proforma"
+              >
                 <SelectValue placeholder={model.tr("selectProforma")} />
               </SelectTrigger>
               <SelectContent>

@@ -70,7 +70,8 @@ describe("Factory unified blue theme", () => {
     const violations = sourceFiles(factoryStyles, ".tsx").flatMap((path) =>
       [...readFileSync(path, "utf8").matchAll(colorPattern)]
         .map((match) => match[1])
-        .filter(fixedBrandColor)
+        // Attendance absence/leave uses a distinct rose status color.
+        .filter((color) => fixedBrandColor(color) && color !== "#392033")
         .map((color) => relative(projectRoot, path) + ": " + color)
     );
     expect(violations).toEqual([]);
@@ -83,5 +84,4 @@ describe("Factory unified blue theme", () => {
       expect(readFileSync(join(factoryStyles, page), "utf8")).toContain("hsl(var(--factory-hue)_");
     }
   });
-
 });

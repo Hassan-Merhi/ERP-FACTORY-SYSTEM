@@ -48,7 +48,8 @@ function Metric({
   return (
     <div
       className={
-        "relative min-w-0 overflow-hidden rounded-xl border bg-card px-3 py-3 shadow-sm dark:bg-[hsl(var(--factory-hue)_54%_14%)] " + border
+        "relative min-w-0 overflow-hidden rounded-xl border bg-card px-3 py-3 shadow-sm dark:bg-[hsl(var(--factory-hue)_54%_14%)] " +
+        border
       }
     >
       <div className="flex min-w-0 items-center gap-2.5">

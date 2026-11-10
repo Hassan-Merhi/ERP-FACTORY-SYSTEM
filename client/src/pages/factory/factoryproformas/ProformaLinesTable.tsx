@@ -134,7 +134,11 @@ export function ProformaLinesTable({
               const lineTotal = line.quantity * lineWt;
               const isEditingQty = inlineQtyLineId === line.id;
               return (
-                <TableRow key={line.id} className="even:bg-muted/20 hover:bg-violet-500/[0.06] dark:hover:bg-violet-400/[0.08]" data-testid={`row-line-${line.id}`}>
+                <TableRow
+                  key={line.id}
+                  className="even:bg-muted/20 hover:bg-violet-500/[0.06] dark:hover:bg-violet-400/[0.08]"
+                  data-testid={`row-line-${line.id}`}
+                >
                   <TableCell
                     className="py-3 font-mono text-xs text-muted-foreground"
                     data-testid={`text-article-code-${line.id}`}
@@ -144,7 +148,10 @@ export function ProformaLinesTable({
                   <TableCell className="py-3 text-sm font-semibold" data-testid={`text-product-name-${line.id}`}>
                     {line.productName}
                   </TableCell>
-                  <TableCell className="py-3 text-right font-mono tabular-nums" data-testid={`text-quantity-${line.id}`}>
+                  <TableCell
+                    className="py-3 text-right font-mono tabular-nums"
+                    data-testid={`text-quantity-${line.id}`}
+                  >
                     {canEdit && isEditingQty ? (
                       <Input
                         type="number"

@@ -23,11 +23,20 @@ export default function FactoryInvoicing() {
   const { language } = useApplicationLanguage();
   const priorityScanLabel = translatePriorityScanText("priorityScan", language);
 
-  const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
-    enabled: Boolean(selectedCompany?.id), staleTime: 5 * 60000 });
-  const hidden = myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
-    ? myAccess.hiddenCostFields
-    : ["hide_invoicing_proformas_tab","hide_invoicing_invoices_tab","hide_invoicing_loadings_tab","hide_tab_loadings_pending"];
+  const { data: myAccess } = useQuery<FactoryMyAccess>({
+    queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
+    staleTime: 5 * 60000,
+  });
+  const hidden =
+    myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
+      ? myAccess.hiddenCostFields
+      : [
+          "hide_invoicing_proformas_tab",
+          "hide_invoicing_invoices_tab",
+          "hide_invoicing_loadings_tab",
+          "hide_tab_loadings_pending",
+        ];
 
   const showProformas = !hidden.includes("hide_invoicing_proformas_tab");
   const showInvoices = !hidden.includes("hide_invoicing_invoices_tab");
