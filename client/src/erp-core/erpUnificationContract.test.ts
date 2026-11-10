@@ -55,4 +55,26 @@ describe("ERP unification final regression contracts", () => {
       expect(imports.length, path).toBe(1);
     }
   });
+  it("uses company-scoped ERP page grants in every remaining reader", () => {
+    const readers = [
+      "client/src/pages/Daybook.tsx",
+      "client/src/pages/Vouchers.tsx",
+      "client/src/pages/stockitems/useStockItems.ts",
+      "client/src/pages/containers/useContainerQueries.ts",
+      "client/src/pages/daybook/DaybookFilters.tsx",
+      "client/src/pages/transactionjournal/useTransactionJournalModel.ts",
+      "client/src/pages/analyticslegacy/useAnalyticsLegacy.tsx",
+      "client/src/pages/accountslegacy/useAccountsLegacyModel.ts",
+      "client/src/pages/factory/daybook/useFactoryDaybookModel.ts",
+    ];
+    for (const path of readers) {
+      const file = source(path);
+      expect(file, path).toContain("erpPageAccessQueryOptions(");
+      expect(file, path).not.toMatch(/queryKey:\s*\[\s*["']\/api\/my-erp-pages["']\s*\]/);
+    }
+    const boundary = source("client/src/app/ErpAccessBoundary.tsx");
+    expect(boundary).not.toContain("LEGACY_ERP_PAGE_ACCESS_QUERY_KEY");
+    expect(boundary).not.toContain("setQueryData(");
+  });
+
 });

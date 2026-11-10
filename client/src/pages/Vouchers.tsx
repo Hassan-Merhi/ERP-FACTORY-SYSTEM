@@ -60,6 +60,7 @@ import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import { isRetailManualVoucherTabHidden, isRetailManualVoucherTypeHidden } from "@/lib/retailVoucherPolicy";
 import { shouldShowFactoryVoucherTab } from "@/pages/vouchers/factoryVoucherPolicy";
 import type { ErpFeatureAccess } from "@/app/erpAccess";
+import { erpPageAccessQueryOptions } from "@/app/erpAccessQuery";
 
 type VoucherTab = "payment" | "receipt" | "journal" | "transfer" | "transferorder" | "adjustment" | "creditnote";
 
@@ -107,8 +108,7 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
   const printRef = useRef<HTMLDivElement>(null);
   const isPOS = !!posUser;
   const { data: erpPageAccess } = useQuery<ErpFeatureAccess>({
-    queryKey: ["/api/my-erp-pages"],
-    enabled: !isPOS && appMode === "erp",
+    ...erpPageAccessQueryOptions(selectedCompany?.id, !isPOS && appMode === "erp"),
   });
   const showOptionalDrafts =
     !isPOS &&

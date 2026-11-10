@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { QueryClient } from "@tanstack/react-query";
 
 import {
   ERP_ADMIN_ONLY_ROUTES,
@@ -88,4 +89,18 @@ describe("ERP role and navigation policy", () => {
     expect(erpPageAccessQueryOptions(undefined, true).enabled).toBe(false);
     expect(erpPageAccessQueryOptions(12, false).enabled).toBe(false);
   });
+  it("isolates page grants and hidden-cost settings between companies", () => {
+    const client = new QueryClient();
+    const alphaKey = erpPageAccessQueryOptions(12, true).queryKey;
+    const betaKey = erpPageAccessQueryOptions(13, true).queryKey;
+    const alpha = { fullAccess: false, pageKeys: ["accounts"], hiddenErpCostFields: ["daybook_amounts"] };
+    const beta = { fullAccess: false, pageKeys: ["stock_items"], hiddenErpCostFields: ["stock_rates"] };
+    client.setQueryData(alphaKey, alpha);
+    client.setQueryData(betaKey, beta);
+    expect(client.getQueryData(alphaKey)).toEqual(alpha);
+    expect(client.getQueryData(betaKey)).toEqual(beta);
+    expect(client.getQueryData(["/api/my-erp-pages"])).toBeUndefined();
+    client.clear();
+  });
+
 });

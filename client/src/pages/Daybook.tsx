@@ -8,6 +8,7 @@ import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@/lib/form-resolver";
 import { useLocation } from "wouter";
 import { useCompany } from "@/contexts/CompanyContext";
+import { erpPageAccessQueryOptions } from "@/app/erpAccessQuery";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { PageHeader } from "@/components/PageHeader";
 import { PaginationBar } from "@/components/PaginationBar";
@@ -76,7 +77,9 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
   const { formatDisplayDate, formatDisplayTime } = useDateFormat();
   const { formatHistoricalBaseAmount: formatAmount, formatTransactionAmount } = useCurrencyContext();
   const [, navigate] = useLocation();
-  const { data: myErpPages } = useQuery<{ hiddenErpCostFields?: string[] }>({ queryKey: ["/api/my-erp-pages"] });
+  const { data: myErpPages } = useQuery<{ hiddenErpCostFields?: string[] }>({
+    ...erpPageAccessQueryOptions(selectedCompany?.id, true),
+  });
   const hiddenErpCosts = myErpPages?.hiddenErpCostFields ?? [];
   const hideAmounts = hiddenErpCosts.includes("daybook_amounts");
   const [activeDaybookTab, setActiveDaybookTab] = useState<"transactions" | "activity">("transactions");
