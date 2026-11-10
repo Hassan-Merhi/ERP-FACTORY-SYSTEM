@@ -95,12 +95,11 @@ function kg(value: string | number): string {
 }
 const canonicalArticle = (article: string) => article.trim().toUpperCase();
 function amount(value: string) { return new MoneyDecimal(safeMoney(value)); }
-function key(id: unknown): string { return String(id ?? ""); }
 export function calculateOrderDispatchReconciliation(input: OrderReconciliationInput): OrderReconciliationResult {
   if (![input.companyId,input.orderId].every(v=>Number.isSafeInteger(v) && v>0)) fail("RECONCILIATION_ID_INVALID", "Invalid company or order");
   const issues = new Set<string>();
   const warnings: string[] = [];
-  if (input.deleted || !["LOADING","PENDING_VERIFICATION","VERIFIED"].includes(input.status) || input.invoiceNumber) {
+  if (input.deleted || !["LOADING","PENDING_VERIFICATION"].includes(input.status) || input.invoiceNumber) {
     issues.add("Order must be active and not already invoiced");
   }
   if (!input.trips.length) issues.add("Create and close at least one physical dispatch trip");
