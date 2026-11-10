@@ -50,6 +50,14 @@ export const factoryDispatchTripFinancials = pgTable("factory_dispatch_trip_fina
   totalsValid: check("factory_dispatch_trip_financials_totals_ck", sql`
     ${t.goodsSubtotal} >= 0 AND ${t.billableChargesTotal} >= 0 AND
     ${t.discountTotal} >= 0 AND ${t.customerTotal} >= 0`),
+  postedSourceValid: check("factory_dispatch_trip_financials_posted_source_ck", sql`
+    ${t.status} IN ('DRAFT', 'REVERSED') OR (
+      ${t.closureHistoryId} IS NOT NULL AND ${t.snapshotRevision} > 0 AND
+      ${t.postingRevision} > 0 AND ${t.sourceFingerprint} IS NOT NULL AND
+      ${t.manifestFingerprint} IS NOT NULL AND ${t.postedAt} IS NOT NULL
+    )`),
+  totalMathValid: check("factory_dispatch_trip_financials_total_math_ck", sql`
+    ${t.customerTotal} = ${t.goodsSubtotal} + ${t.billableChargesTotal} - ${t.discountTotal}`),
 }));
 
 /** Append-only price and barcode snapshot per financial revision. */
@@ -179,6 +187,8 @@ export const factoryDispatchOrderConsolidations = pgTable("factory_dispatch_orde
   statusValid: check("factory_dispatch_order_consolidations_status_ck", sql`${t.status} IN ('DRAFT', 'FINALIZED', 'REVERSED')`),
   totalsValid: check("factory_dispatch_order_consolidations_totals_ck", sql`${t.goodsSubtotal} >= 0 AND ${t.billableChargesTotal} >= 0 AND ${t.discountTotal} >= 0 AND ${t.customerTotal} >= 0`),
   postingListValid: check("factory_dispatch_order_consolidations_postings_ck", sql`jsonb_typeof(${t.includedPostingIds}) = 'array'`),
+  totalMathValid: check("factory_dispatch_order_consolidations_total_math_ck", sql`
+    ${t.customerTotal} = ${t.goodsSubtotal} + ${t.billableChargesTotal} - ${t.discountTotal}`),
 }));
 
 /** Append-only trip/order financial history, distinct from physical dispatch events. */
