@@ -4,7 +4,7 @@ import {
   classifyHadiRentDifference,
   isHadiHistoricAccrualRepair,
   positiveRentalDue,
-} from "../server/services/rental/hadiLinkedRentProtection";
+} from "../server/services/rental/hadiRentLedgerPolicy";
 import {
   isHadiDuplicateLinkedRentExpenseJournal,
 } from "../server/services/rental/hadiRentLedgerPolicy";
