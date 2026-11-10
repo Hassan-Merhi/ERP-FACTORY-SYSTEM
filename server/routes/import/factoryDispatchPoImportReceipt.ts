@@ -66,13 +66,23 @@ async function schemaReady() {
              SELECT relforcerowsecurity
                FROM pg_class WHERE oid=to_regclass('public.factory_dispatch_erp_po_receipts')
            ) AS "forceRls",
+           (
+             SELECT relrowsecurity
+               FROM pg_class WHERE oid=to_regclass('public.factory_dispatch_erp_po_receipts')
+           ) AS "rlsEnabled",
            EXISTS (
              SELECT 1 FROM pg_indexes
               WHERE schemaname='public' AND tablename='factory_dispatch_erp_po_receipts'
                 AND indexname='factory_dispatch_erp_po_receipts_origin_uq'
-           ) AS "originUnique"
+           ) AS "originUnique",
+           EXISTS (
+             SELECT 1 FROM pg_trigger
+              WHERE tgrelid=to_regclass('public.factory_dispatch_erp_po_receipts')
+                AND tgname='factory_dispatch_erp_po_receipt_guard'
+                AND tgenabled <> 'D'
+           ) AS "immutabilityGuard"
   `));
-  if (!row?.ready || !row?.forceRls || !row?.originUnique) {
+  if (!row?.ready || !row?.forceRls || !row?.rlsEnabled || !row?.originUnique || !row?.immutabilityGuard) {
     throw new FactoryTripPoReceiptError(
       "FD_PO_RECEIPT_SQL_PENDING",
       "Factory dispatch ERP import protection is disabled until the Phase 6 TablePlus SQL is installed.",
