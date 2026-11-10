@@ -139,3 +139,24 @@ The first source audit (live read-only preflight **16:52:07 UTC**) found:
 
 The client-side net-only expense presentation commits from 2026-11-10 were explicitly **reverted**. The server-side #881 historical account inclusion in the existing original monthly ledger and voucher drilldown remains. On `main`, that source change still requires a merged PR and deployment to show all the real original #881 transactions.
 
+
+## Final source consolidation proposal: all original rent posted under #1007
+
+Owner clarified 2026-11-10 that **all historical original rent transactions should belong to the surviving ledger #1007 from the beginning**, rather than remaining split with retired #881 or being visually netted.
+
+Read-only production preflight at 2026-11-10 17:09 UTC confirmed:
+- Exactly **54** posted voucher entry rows still directly reference retired #881. The source rows, excluding the one historic consolidation transfer credit, are **53 original entries across 28 balanced historical vouchers**. Those contain **$252,850 gross debits / $96,000 gross credits**, net **$156,850 Dr**.
+- Existing noncash transfer voucher **#8787** (June 1, 2026) is still Dr #1007 **$156,850** / Cr #881 **$156,850**. It was needed only while original entries remained in #881. Once originals move to #1007, it must be **soft-retired**, never counted twice.
+- No linked rental-month entry, rental payment, or cost-center allocation depends on that transfer; all 28 source vouchers currently have matching debit/credit sums and headers, and **no 2026 fiscal period is closed**.
+- Immutable account-row source fingerprint for the 53 original posted legacy lines: `84f9c8b06f39c68149e8ca4037c3f6c8`. A strict guarded transaction refuses altered source identities and a repeat run.
+- The consolidated ledger includes original receipt dates from January–June without modifying actual cash/bank, SAFE, landlord, transfer account counterparts, voucher header dates, or amounts.
+- Preflight simulation of **reassigning the 53 source account links to #1007 and soft-deleting #8787** confirms all 11 monthly net movements exactly: Jan 32,700, Feb 34,450, Mar 34,450, Apr 37,950, May 40,950, Jun 40,950, Jul 41,250, Aug 43,250, Sep 43,250, Oct 46,200, Nov 38,950; year-to-date **$434,350 Dr**.
+- Expected after-state: **zero active voucher entries referencing #881**; #881 **$0**, #1007 **$434,350 Dr**, #1021 **$18,000 Cr**, #1022 **$7,000 Dr**, timing account #4282 **$0**. January direct #1007 Dr $32,700 / Cr $0 without any display override. **0 new vouchers**; 53 original line edits + one soft-supersession of historical transfer.
+- Existing historical/deleted transfer voucher lines are **retained for audit**, no physical DELETE. Exactly 54 explicit `audit_log` repair records required.
+- Follow-up distinction: consolidating #881 into #1007 is a **ledger-account ownership correction**, not a gross Debit/Credit erasure. February will still show $37,950 Dr / $3,500 Cr and June $259,250 Dr / $218,300 Cr in actual vouchers, each netting to their correct monthly expense. Review those historical gross reclassifications **one-by-one**, not by hiding them on screen.
+
+The user-facing guarded SQL and instructions:
+`HADI_ALL_ORIGINAL_RENT_TO_1007_TABLEPLUS.sql`,
+`HADI_ALL_ORIGINAL_RENT_TO_1007_COPY.txt`,
+`HADI_ALL_ORIGINAL_RENT_TO_1007_README.txt`.
+These were prepared in the conversation's working files. They use one SERIALIZABLE transaction and a standard single-quoted `DO '...' LANGUAGE plpgsql` block compatible with TablePlus's **Run All**, with source-row fingerprint checks and unconditional postconditions. They have **not been executed** by ChatGPT, whose production PostgreSQL connector is read-only. The old narrower `HADI_JANUARY_15000_TO_32700` SQL is superseded and should NOT be applied before/after this full consolidation unless explicitly reassessed.
