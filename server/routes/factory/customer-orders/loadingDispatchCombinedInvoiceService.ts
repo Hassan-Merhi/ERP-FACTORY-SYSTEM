@@ -90,7 +90,10 @@ interface LoadedPlan {plan:CombinedInvoicePlan; bales:PostedBale[]; customerId:n
 const sameIds=(a:string[],b:string[])=>JSON.stringify(a.map(String).sort())===JSON.stringify(b.map(String).sort());
 async function verifyOriginalChargeTx(
   tx:DbTransaction,s:OrderReconciliationScope,customerId:number,
-  row:Record<string,unknown>
+  row:{
+    id:unknown;name:unknown;chargeType:unknown;amount:unknown;
+    ledgerAccountId:unknown;voucherId:unknown;
+  }
 ):Promise<OriginalCharge>{
   const charge:OriginalCharge={
     id:numberId(row.id),name:String(row.name??"Charge"),
@@ -253,8 +256,9 @@ export async function loadCombinedInvoicePlanTx(
       }
     }
   }
-  const postCOGS=await isPerpetualInventoryActive(tx,s.companyId,
-    new Date().toISOString().slice(0,10)); // actual posting date may differ; routes override with business date check
+  const previewDate="postingDate" in s && typeof s.postingDate==="string"
+    ? s.postingDate : new Date().toISOString().slice(0,10);
+  const postCOGS=await isPerpetualInventoryActive(tx,s.companyId,previewDate);
   return {
     bales,customerId,
     plan:{
