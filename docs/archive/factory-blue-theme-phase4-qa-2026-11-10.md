@@ -220,3 +220,26 @@ The browser visited six route URLs at 390px, 768px and 1440px in both light and 
 The sandbox uses synthetic mock authentication; it neither stores production login credentials nor edits business data. The previously connected TinyFish plugin remains installed for authenticated live-page smoke testing, but lacks explicit responsive viewport controls. No extra plugin installation was required or discovered as a clear improvement for exact-width authenticated browser testing.
 
 **Disposition:** Meaningful actual React page-level responsive proof at all exact widths exists for Location Inventory and Containers Hub. Other four page-level responsive matrices remain incomplete due to mock-data fidelity, not because a production UI regression was established. Phase 4 should not be falsely closed on the 36 shell loads alone.
+
+## Production-built React responsive mock QA expanded (2026-11-10, latest pass)
+
+A second disposable Vercel sandbox (checked out at `3f9c2cd`) built the **real** Vite client and served it with `vite preview`. Headless Chromium used explicit browser viewports **390px / 768px / 1440px** and theme settings **light / dark**. Synthetic Admin/Factory-company requests were intercepted locally, with real authentication cookies and production API data intentionally excluded. Service workers were bypassed to ensure the intercepted mock responses reached the React application.
+
+Initial minimalist fixture attempts demonstrated why an `html[data-app-shell="factory"]` marker alone is not sufficient evidence: route-level ErrorBoundary pages can still be rendered. Expanding the test fixtures to include `hiddenCostFields: []` in the Factory access object and a synthetic location produced the **last fully captured** matrix:
+
+| Route | Rendered at 390 / 768 / 1440 in both modes |
+| --- | --- |
+| Location Inventory | **6/6** — one synthetic location |
+| Invoicing | **6/6** — empty proforma/customer selection state |
+| Suppliers (`/factory/parties?tab=suppliers`) | **6/6** — empty party table |
+| Containers Hub | **6/6** — no in-transit containers state |
+| Payroll / Workers | **6/6** — no-workers empty table |
+| Production Overview | **0/6** — test fixture lacks complete production/payroll response structure |
+
+**Confirmed total: 30/36 true page renders; zero document-level horizontal overflow in the 36 attempts.** The six production overview attempts were not certified because the mock-only route ErrorBoundary rendered. Browser screenshots were captured in the temporary sandbox for each combination, but are not retained as shareable project artifacts.
+
+Subsequent production fixture investigation correctly identified needed mock response types for `/api/factory/production-value-report`, `/api/factory/workers/attendance-report` and `/api/factory/monthly-salary-summary`. The last test-run log could not be retrieved because the 30-minute sandbox session expired before completion; its result is **unknown**, not a pass.
+
+TinyFish is already installed, as is the Vercel connector; no new connector installation is needed. TinyFish was previously used for authenticated desktop checks and currently does not expose reliable exact-width resizing. Full authenticated production route screenshots at 390px/768px are therefore still a separate gate from this source-build/synthetic-data verification.
+
+**Phase 4 certification:** Focused Vitest (8/8) and production build passed in earlier sessions; real Factory dark-mode routes have been checked at desktop size; 30/36 isolated full-React empty-state mobile/tablet/desktop tests now pass. A production overview mock fixture and the authenticated mobile/tablet visual matrix remain open. Avoid claiming production deployments were updated without checking the Render deployment revision.
