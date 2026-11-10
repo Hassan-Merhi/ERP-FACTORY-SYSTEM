@@ -199,3 +199,24 @@ No business records were edited. The inspector reported no major dark-mode card/
 - The Render live revision and `main` were not asserted equal; this run does not certify production deployment of the newest source changes.
 
 **Phase 4 disposition:** Source and build verification complete; representative live Factory **desktop dark-mode smoke checks complete**. Exact authenticated mobile/tablet route matrix and full screenshot evidence remain an open acceptance gate. Do not mark Phase 4 fully certified until those checks are performed.
+
+## Actual production-built frontend responsive mock-browser run (2026-11-10)
+
+A **new isolated Vercel sandbox** checked out `main` at `3f9c2cd` and ran `npm ci --ignore-scripts`, successfully built the Vite client, and launched `vite preview` without production databases or credentials. A headless Chromium instance then loaded actual bundled Factory React routes in a read-only mock session. All `/api/*` requests were intercepted and answered with deliberately synthetic test company, Admin user, minimal access data, and mock business records; service-worker interception was explicitly bypassed to prevent cached network responses.
+
+The browser visited six route URLs at 390px, 768px and 1440px in both light and dark mode: **36 route/theme/viewport attempts**, 36 with `html[data-app-shell="factory"]`, 0 document-level horizontal overflow, and no JavaScript page errors observed at the top level. The user-facing route error boundary **must** be counted separately, as described below.
+
+| Factory route | Actual page rendered in all six width/theme combinations? | Observations / caveat |
+| --- | --- | --- |
+| `/factory/location-inventory` | **Yes — 6/6** | Shows one synthetic location named "QA Test Location", mobile nav and responsive empty/detail entry layout; no document horizontal overflow |
+| `/factory/containers-hub` | **Yes — 6/6** | Real Factory Containers Hub with mock "no containers on the way" empty state; no document horizontal overflow |
+| `/factory/invoicing` | No | Page error boundary: "Cannot read properties of undefined (reading 'includes')" from incomplete API fixture |
+| `/factory/parties?tab=suppliers` | No | Same error boundary from incomplete API fixture |
+| `/factory/production-report` | No | Page error boundary: "Cannot read properties of undefined (reading 'statusValue')" from incomplete API fixture |
+| `/factory/payroll-hub?section=workers&tab=workers` | No | Same `includes` error boundary from incomplete API fixture |
+
+**Precise pass count: 12/36 actual route renderings, 24/36 fixture-induced route error boundaries.** The initial count of 36/36 shells was **not** equivalent to 36/36 fully rendered pages. The missing response shapes do not prove that production pages fail; earlier authenticated desktop browser visits rendered all six routes. In these fixture tests, 390/768/1440 light/dark screenshot files were captured for all attempted combinations inside the temporary sandbox, but only the 12 successfully rendered pages are useful visual evidence.
+
+The sandbox uses synthetic mock authentication; it neither stores production login credentials nor edits business data. The previously connected TinyFish plugin remains installed for authenticated live-page smoke testing, but lacks explicit responsive viewport controls. No extra plugin installation was required or discovered as a clear improvement for exact-width authenticated browser testing.
+
+**Disposition:** Meaningful actual React page-level responsive proof at all exact widths exists for Location Inventory and Containers Hub. Other four page-level responsive matrices remain incomplete due to mock-data fidelity, not because a production UI regression was established. Phase 4 should not be falsely closed on the 36 shell loads alone.
