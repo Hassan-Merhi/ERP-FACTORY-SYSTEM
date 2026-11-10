@@ -24,7 +24,7 @@ import { recordedRentalPaymentRate } from "./rentalPaymentRate";
 import { rentalPaymentGroupIdentity, rentalPaymentVoucherSuffix } from "./rentalPostingIdentity";
 import { shouldRunRentalAutoTransfer } from "./rentalCashboxPolicy";
 import { appendRentalTenantName } from "./rentalVoucherTenantDescription";
-import { shouldSettleAccruedRentPayable } from "./rentalPaymentClassification";
+import { shouldSettleAccruedRentPayable, isValidRentalBusinessDate } from "./rentalPaymentClassification";
 import { isRentRecognitionHeld } from "./rentRecognitionHold";
 
 export { buildAllocationsForPayment, findEarliestOutstandingMonth } from "./rentalPaymentAllocationService";
@@ -477,6 +477,23 @@ export async function createRentalPaymentGroup(opts: RentalPaymentGroupOptions) 
     isSharedPayment,
   } = opts;
 
+  if (!isValidRentalBusinessDate(paymentDate) ||
+      !isValidRentalBusinessDate(clientDate)) {
+    const error: RentalPostingError = new Error("RENTAL_PAYMENT_DATE_INVALID: use a real YYYY-MM-DD calendar date");
+    error.status = 400;
+    throw error;
+  }
+  if (!isValidRentalBusinessDate(String(contract.startDate).slice(0, 10))) {
+    const error: RentalPostingError = new Error("RENTAL_CONTRACT_BILLING_START_INVALID");
+    error.status = 409;
+    throw error;
+  }
+  if (parseMoneyInput(amount) === null || toMoney(amount).lte(0)) {
+    const error: RentalPostingError = new Error("RENTAL_PAYMENT_AMOUNT_MUST_BE_POSITIVE");
+    error.status = 400;
+    throw error;
+  }
+
   if (paymentDate > clientDate && !scheduleFuturePayment) {
     const err: RentalPostingError = new Error("Future payment dates require Schedule future payment.");
     err.status = 400;
@@ -721,6 +738,11 @@ export async function postScheduledGroup(
   audit?: { actor: { userId: string; username: string }; trigger: string },
   existingTx?: Parameters<Parameters<typeof db.transaction>[0]>[0]
 ): Promise<boolean> {
+  if (!isValidRentalBusinessDate(paymentDate) || !isValidRentalBusinessDate(asOfDate)) {
+    const error: RentalPostingError = new Error("RENTAL_SCHEDULED_PAYMENT_DATE_INVALID");
+    error.status = 400;
+    throw error;
+  }
   const lockKey = hashGroupId(groupId);
   let groupRows: (typeof propertyPayments.$inferSelect)[] = [];
 
