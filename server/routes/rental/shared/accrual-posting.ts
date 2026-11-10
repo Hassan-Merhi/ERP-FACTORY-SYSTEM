@@ -76,6 +76,7 @@ export async function postAccrualPassTx(tx: DbTransaction, input: AccrualPassPos
         -- Never allow a foreign month in an advance/prepaid/deferred pass.
         (${input.companyId}=1 AND ${input.module}='ERP' AND ${input.pass}='accrual'
           AND ml.company_id=13 AND ml.module='PROPERTIES'
+          AND (ml.year*100+ml.month)>=202612
           AND c.company_id=13 AND c.module='PROPERTIES'
           AND c.linked_company_id=1 AND c.status='ACTIVE')
       )
@@ -130,7 +131,8 @@ export async function postAccrualPassTx(tx: DbTransaction, input: AccrualPassPos
               AND source_contract.module='PROPERTIES'
               AND source_contract.linked_company_id=1
               AND source_contract.status='ACTIVE'
-          )`
+          )
+          AND (${propertyMonthlyLedger.year}*100+${propertyMonthlyLedger.month})>=202612`
         )
       : undefined;
   const stamped = await tx
