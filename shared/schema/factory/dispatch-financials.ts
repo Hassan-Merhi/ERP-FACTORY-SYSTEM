@@ -205,37 +205,7 @@ export const factoryDispatchOrderConsolidations = pgTable("factory_dispatch_orde
     (${t.reconciledAt} IS NULL AND ${t.reconciledByUserId} IS NULL AND ${t.reconciliationReason} IS NULL)
     OR (${t.reconciledAt} IS NOT NULL AND ${t.reconciledByUserId} IS NOT NULL
         AND length(trim(${t.reconciliationReason})) BETWEEN 10 AND 1000
-        AND ${t.reconciliationFingerprint} ~ '^[0-9a-f]{64}
-  totalMathValid: check("factory_dispatch_order_consolidations_total_math_ck", sql`
-    ${t.customerTotal} = ${t.goodsSubtotal} + ${t.billableChargesTotal} - ${t.discountTotal}`),
-}));
-
-/** Append-only trip/order financial history, distinct from physical dispatch events. */
-export const factoryDispatchFinancialEvents = pgTable("factory_dispatch_financial_events", {
-  id: bigserial("id", { mode: "number" }).primaryKey(),
-  companyId: integer("company_id").notNull(),
-  orderId: integer("order_id").notNull(),
-  dispatchId: id("dispatch_id"),
-  financialId: id("financial_id"),
-  eventType: varchar("event_type", { length: 64 }).notNull(),
-  details: jsonb("details").notNull().default(sql`'{}'::jsonb`),
-  reason: text("reason"),
-  actorUserId: text("actor_user_id").notNull(),
-  actorUsername: text("actor_username").notNull(),
-  createdAt: utcTime("created_at").notNull().defaultNow(),
-}, (t) => ({
-  orderIdx: index("factory_dispatch_financial_events_order_idx").on(t.companyId, t.orderId, t.id),
-  tripIdx: index("factory_dispatch_financial_events_trip_idx").on(t.companyId, t.dispatchId, t.id),
-}));
-
-export type FactoryDispatchTripFinancial = typeof factoryDispatchTripFinancials.$inferSelect;
-export type FactoryDispatchTripFinancialBale = typeof factoryDispatchTripFinancialBales.$inferSelect;
-export type FactoryDispatchTripCharge = typeof factoryDispatchTripCharges.$inferSelect;
-export type FactoryDispatchTripPosting = typeof factoryDispatchTripPostings.$inferSelect;
-export type FactoryDispatchTripExport = typeof factoryDispatchTripExports.$inferSelect;
-export type FactoryDispatchOrderConsolidation = typeof factoryDispatchOrderConsolidations.$inferSelect;
-export type FactoryDispatchFinancialEvent = typeof factoryDispatchFinancialEvents.$inferSelect;
-
+        AND ${t.reconciliationFingerprint} ~ '^[0-9a-f]{64}$'
         AND jsonb_typeof(${t.reconciliationSnapshot}) = 'object'
         AND ${t.includedPostingIds} <> '[]'::jsonb)`),
   totalMathValid: check("factory_dispatch_order_consolidations_total_math_ck", sql`
