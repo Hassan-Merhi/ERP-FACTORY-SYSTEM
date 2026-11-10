@@ -1,0 +1,82 @@
+name: HMD KINSHASA Phase 4 Focused Verification
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/hmd-kinshasa-phase4-focused-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-rent-tests:
+    name: Phase 4 rent tests (disposable PostgreSQL only)
+    runs-on: ubuntu-26.04
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: heliumdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d heliumdb"
+          --health-interval 10s --health-timeout 5s --health-retries 12
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/heliumdb
+      PGSSLMODE: disable
+      ERP_E2E_DISPOSABLE_DB: "1"
+      TRAINING_SANDBOX_VERIFIED: "1"
+      SESSION_SECRET: phase4-disposable-rental-testing
+      CSRF_ENFORCE: "0"
+      ENABLE_SCHEDULERS: "false"
+      PORT: "5000"
+      SKIP_GIT_HOOKS: "1"
+    steps:
+      - name: Check out Phase 4 production code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Node.js 24
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24.22.2"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --no-audit
+      - name: Verify direct Phase 4 classification safeguards
+        run: node node_modules/vitest/vitest.mjs run tests/hmd-kinshasa-rent-phase4.test.ts --maxWorkers=1
+      - name: Build server and initialize disposable schema
+        run: |
+          set -euo pipefail
+          node build.mjs
+          node node_modules/drizzle-kit/bin.cjs push --force
+      - name: Start app once for required runtime schema bridges
+        shell: bash
+        run: |
+          set -euo pipefail
+          node dist/index.js > "$RUNNER_TEMP/rental-phase4-startup.log" 2>&1 &
+          app_pid=$!
+          trap 'kill "$app_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 120); do
+            if curl -fsS http://127.0.0.1:5000/api/health/db > "$RUNNER_TEMP/rental-phase4-health.json" 2>/dev/null; then break; fi
+            if ! kill -0 "$app_pid" 2>/dev/null; then
+              cat "$RUNNER_TEMP/rental-phase4-startup.log"
+              exit 1
+            fi
+            if [ "$attempt" -eq 120 ]; then
+              cat "$RUNNER_TEMP/rental-phase4-startup.log"
+              exit 1
+            fi
+            sleep 1
+          done
+          node --input-type=module -e "const { ensureCustomerOrderBaleScanAudit } = await import('./server/customerOrderBaleScanAuditBridge.mjs'); await ensureCustomerOrderBaleScanAudit();"
+      - name: Test the actual rent/payment/accounting transaction lifecycle
+        shell: bash
+        run: |
+          set -o pipefail
+          node node_modules/vitest/vitest.mjs run tests/rental-payment-accounting-reconciliation.test.ts --maxWorkers=1
