@@ -9,7 +9,7 @@
  * identity makes a replay of the same batch return the voucher already posted.
  */
 import { createHash } from "node:crypto";
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { propertyMonthlyLedger } from "@shared/schema";
 import type { DbTransaction } from "../../../db";
 import { writeAuditEvent } from "../../../services/audit";
@@ -65,8 +65,20 @@ export async function postAccrualPassTx(tx: DbTransaction, input: AccrualPassPos
       ) AS prior_rent_accrual
     FROM property_monthly_ledger ml
     JOIN property_units u ON u.id=ml.unit_id
+    JOIN property_contracts c ON c.id=ml.contract_id
     WHERE ml.id IN (${sql.raw(rowIds.join(","))})
-      AND ml.company_id=${input.companyId} AND ml.module=${input.module}
+      AND (
+        (ml.company_id=${input.companyId} AND ml.module=${input.module}
+          AND c.company_id=${input.companyId} AND c.module=${input.module})
+        OR
+        -- The sole cross-owned exception: HADI's ERP rent accrual on a
+        -- Properties-company 13 month explicitly linked to HADI company 1.
+        -- Never allow a foreign month in an advance/prepaid/deferred pass.
+        (${input.companyId}=1 AND ${input.module}='ERP' AND ${input.pass}='accrual'
+          AND ml.company_id=13 AND ml.module='PROPERTIES'
+          AND c.company_id=13 AND c.module='PROPERTIES'
+          AND c.linked_company_id=1 AND c.status='ACTIVE')
+      )
     ORDER BY ml.id FOR UPDATE OF ml
   `)).rows as Array<{
     id:number; company_id:number; module:string; accrual_voucher_id:number|null;
@@ -102,15 +114,39 @@ export async function postAccrualPassTx(tx: DbTransaction, input: AccrualPassPos
 
   // Preserve the same company, module and null-stamp invariant when writing.
   // Locks above protect against racing schedulers and manual posting.
-  await tx
+  const ownedRows = and(
+    eq(propertyMonthlyLedger.companyId, input.companyId),
+    eq(propertyMonthlyLedger.module, input.module)
+  );
+  const linkedHadiRows =
+    input.companyId === 1 && input.module === "ERP" && input.pass === "accrual"
+      ? and(
+          eq(propertyMonthlyLedger.companyId, 13),
+          eq(propertyMonthlyLedger.module, "PROPERTIES"),
+          sql`EXISTS (
+            SELECT 1 FROM property_contracts source_contract
+            WHERE source_contract.id = ${propertyMonthlyLedger.contractId}
+              AND source_contract.company_id=13
+              AND source_contract.module='PROPERTIES'
+              AND source_contract.linked_company_id=1
+              AND source_contract.status='ACTIVE'
+          )`
+        )
+      : undefined;
+  const stamped = await tx
     .update(propertyMonthlyLedger)
     .set({ accrualVoucherId: voucher.id })
     .where(and(
-      eq(propertyMonthlyLedger.companyId, input.companyId),
-      eq(propertyMonthlyLedger.module, input.module),
+      linkedHadiRows ? or(ownedRows, linkedHadiRows) : ownedRows,
       inArray(propertyMonthlyLedger.id, rowIds),
       isNull(propertyMonthlyLedger.accrualVoucherId)
-    ));
+    ))
+    .returning({ id: propertyMonthlyLedger.id });
+  if (stamped.length !== rowIds.length) {
+    // Fail the transaction rather than leave a posted voucher with unstamped
+    // owner-company months, which could double-expense the next monthly run.
+    throw new Error("RENTAL_ACCRUAL_MONTH_STAMP_MISMATCH");
+  }
 
   const actor = input.options.actor ?? SYSTEM_RENTAL_ACTOR;
   await writeAuditEvent(
