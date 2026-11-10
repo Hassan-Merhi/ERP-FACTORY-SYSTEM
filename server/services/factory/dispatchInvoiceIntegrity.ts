@@ -165,15 +165,60 @@ export async function auditFactoryDispatchInvoiceTx(
       amount(clearance?.customerImpact).isZero(),
       goods+" clearing and sales, 0 customer",
       fixed(clearance?.goodsClearingDebit)+" / "+fixed(clearance?.goodsSalesCredit)+" / "+fixed(clearance?.customerImpact));
+    const [costVoucher]=await query(tx,sql`
+      SELECT
+        COUNT(DISTINCT v.id)::integer AS "voucherCount",
+        COALESCE(SUM(CASE WHEN la.code='COGS'
+          THEN ve.debit_amount-ve.credit_amount ELSE 0 END),0)::text AS "costDebit",
+        COALESCE(SUM(CASE WHEN la.code='FACTORY_FINISHED_GOODS'
+          THEN ve.credit_amount-ve.debit_amount ELSE 0 END),0)::text AS "inventoryCredit",
+        COALESCE(SUM(CASE WHEN ve.customer_id IS NOT NULL
+          THEN ve.debit_amount-ve.credit_amount ELSE 0 END),0)::text AS "customerImpact"
+      FROM vouchers v JOIN voucher_entries ve ON ve.voucher_id=v.id
+      LEFT JOIN ledger_accounts la ON la.id=ve.ledger_account_id AND la.company_id=v.company_id
+      WHERE v.company_id=${companyId}
+        AND v.voucher_number=${"FDINV-"+companyId+"-"+orderId+"-COGS"}
+        AND v.deleted_at IS NULL AND COALESCE(v.optional,FALSE)=FALSE
+    `);
+    const expectsCost=details.perpetualCOGSPosted===true &&
+      amount(details.inventoryCost).gt(0);
+    pass("INVENTORY_COGS_JOURNAL","Only the active perpetual-inventory cutover can post a one-time cost journal",
+      expectsCost
+        ? num(costVoucher?.voucherCount)===1 &&
+          amount(costVoucher?.costDebit).eq(details.inventoryCost) &&
+          amount(costVoucher?.inventoryCredit).eq(details.inventoryCost) &&
+          amount(costVoucher?.customerImpact).isZero()
+        : num(costVoucher?.voucherCount)===0,
+      expectsCost?"One cost journal for "+fixed(details.inventoryCost):"No cost journal",
+      num(costVoucher?.voucherCount)+" journal(s), "+fixed(costVoucher?.costDebit)+" COGS debit");
+    const [orderChargeEvidence]=await query(tx,sql`
+      SELECT
+        COUNT(*)::integer AS "chargeCount",
+        COUNT(*) FILTER (
+          WHERE c.amount>0 AND (
+            c.voucher_id IS NULL OR v.id IS NULL
+          )
+        )::integer AS "missingChargeVouchers"
+      FROM customer_order_charges c
+      JOIN customer_orders o ON o.id=c.order_id AND o.company_id=${companyId}
+      LEFT JOIN vouchers v ON v.id=c.voucher_id AND v.company_id=o.company_id
+        AND v.deleted_at IS NULL AND COALESCE(v.optional,FALSE)=FALSE
+      WHERE c.order_id=${orderId}
+    `);
+    pass("ORIGINAL_ORDER_CHARGES_LINKED",
+      "Every original order-level customer charge is linked once to an active voucher",
+      num(orderChargeEvidence?.missingChargeVouchers)===0,
+      "0 missing charge vouchers",str(orderChargeEvidence?.missingChargeVouchers));
     const voucherIds=list(details.voucherIds);
-    const vouchers=voucherIds.length ? await query(tx,sql`
+    const voucherIdsValid=voucherIds.every(v=>/^[1-9][0-9]{0,15}$/.test(v));
+    const vouchers=voucherIdsValid && voucherIds.length ? await query(tx,sql`
       SELECT id::text AS id FROM vouchers
       WHERE company_id=${companyId}
         AND id IN (${sql.join(voucherIds.map(v=>sql`${v}`),sql`,`)})
         AND deleted_at IS NULL AND COALESCE(optional,FALSE)=FALSE
     `) : [];
     pass("FINAL_VOUCHERS_ACTIVE","All combined invoice clearing, cost and original order-charge vouchers exist",
-      voucherIds.length===new Set(voucherIds).size &&
+      voucherIdsValid && voucherIds.length===new Set(voucherIds).size &&
       voucherIds.length===vouchers.length,
       str(voucherIds.length),str(vouchers.length));
   }else{
