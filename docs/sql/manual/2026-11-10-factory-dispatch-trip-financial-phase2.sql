@@ -295,8 +295,10 @@ BEGIN
     RAISE EXCEPTION 'Only draft/reversed trip charges can be modified';
   END IF;
 
-  IF TG_OP IN ('UPDATE', 'DELETE') AND OLD.locked_at IS NOT NULL THEN
-    RAISE EXCEPTION 'A previously posted trip charge cannot be changed';
+  IF TG_OP = 'UPDATE' OR TG_OP = 'DELETE' THEN
+    IF OLD.locked_at IS NOT NULL THEN
+      RAISE EXCEPTION 'A previously posted trip charge cannot be changed';
+    END IF;
   END IF;
 
   IF TG_OP = 'UPDATE' AND (
@@ -307,7 +309,10 @@ BEGIN
     RAISE EXCEPTION 'Trip charge ownership and revision cannot be changed';
   END IF;
 
-  RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+  IF TG_OP = 'DELETE' THEN
+    RETURN OLD;
+  END IF;
+  RETURN NEW;
 END;
 $$;
 
