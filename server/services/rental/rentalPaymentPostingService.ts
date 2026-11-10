@@ -626,6 +626,24 @@ export async function createRentalPaymentGroup(opts: RentalPaymentGroupOptions) 
     await tx.execute(
       sql`SELECT pg_advisory_xact_lock(hashtext(${`rental-contract:${contractCompanyId}:${contract.id}`}))`
     );
+    // Never allocate additional rent over a historical POSTED payment whose
+    // original voucher is missing/retired. It may already have affected CASH.
+    // Flag for manual reconciliation rather than booking replacement money.
+    const invalidPosted = (await tx.execute(sql`
+      SELECT p.id FROM property_payments p
+      LEFT JOIN vouchers v ON v.id=p.voucher_id
+        AND v.company_id=p.company_id AND v.deleted_at IS NULL
+        AND v.optional=FALSE
+      WHERE p.company_id=${companyId} AND p.module=${mod}
+        AND p.contract_id=${contract.id} AND p.ledger_row_id IS NOT NULL
+        AND p.posting_status='POSTED' AND v.id IS NULL
+      LIMIT 1
+    `)).rows;
+    if (invalidPosted.length > 0) {
+      const error: RentalPostingError = new Error("RENTAL_PAYMENT_HISTORICAL_VOUCHER_MISSING");
+      error.status = 409;
+      throw error;
+    }
     const recordedRate = await recordedRentalPaymentRate(companyId, currency || "USD", paymentDate, tx);
     const billingDay = getRentalBillingDay(contract.startDate as string);
     const totalAmountExact = parseMoneyInput(amount) ?? 0;
