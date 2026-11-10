@@ -314,6 +314,13 @@ These current-reference documents are indexed here for audit coverage. Their beh
 | [factory-loading-dispatch-phase5.md](factory-loading-dispatch-phase5.md) | Factory Loading Dispatch — Phase 5: Priority allocation and cross-trip coordination |
 | [factory-loading-dispatch-phase6.md](factory-loading-dispatch-phase6.md) | Factory Loading Dispatch — Phase 6: End Dispatch and audit controls |
 | [factory-loading-dispatch-phase7.md](factory-loading-dispatch-phase7.md) | Factory Loading Dispatch — Phase 7: Reports, manifests and exports |
+| [factory-mix-cost-integrity-phase1.md](factory-mix-cost-integrity-phase1.md) | Factory Mix Cost Integrity — Phase 1 |
+| [factory-mix-cost-integrity-phase2.md](factory-mix-cost-integrity-phase2.md) | Factory Mix Cost Integrity — Phase 2 |
+| [factory-mix-cost-integrity-phase3.md](factory-mix-cost-integrity-phase3.md) | Factory Mix Cost Integrity — Phase 3 |
+| [factory-mix-cost-integrity-phase4.md](factory-mix-cost-integrity-phase4.md) | Factory Mix Cost Integrity — Phase 4 |
+| [factory-mix-cost-integrity-phase5.md](factory-mix-cost-integrity-phase5.md) | Factory Mix Cost Integrity — Phase 5 |
+| [factory-mix-cost-integrity-phase6.md](factory-mix-cost-integrity-phase6.md) | Factory Mix Cost Integrity — Phase 6 |
+| [factory-mix-cost-integrity-phase7.md](factory-mix-cost-integrity-phase7.md) | Factory Mix Cost Integrity — Phase 7 |
 | [factory-unification/execution-tracker.md](factory-unification/execution-tracker.md) | Factory Unification — Execution Tracker |
 | [factory-unification/phase-1-baseline.md](factory-unification/phase-1-baseline.md) | Factory Unification — Phase 1 Source Baseline |
 | [factory-unification/phase-1-manual-baseline-protocol.md](factory-unification/phase-1-manual-baseline-protocol.md) | Phase 1 — Manual Runtime Baseline Capture Protocol |
