@@ -4,7 +4,7 @@ import {
   runWithAutoTransferCounterparties,
 } from "../../services/rental/autoTransferScope";
 import { getErrorMessage } from "../../lib/httpHandlers";
-import { HADI_HISTORICAL_ACCRUAL_GUARD, isHadiHistoricAccrualRepair } from "../../services/rental/hadiLinkedRentProtection";
+import { HADI_HISTORICAL_ACCRUAL_GUARD, isHadiHistoricAccrualRepair, isHadiProtectedRentMonth } from "../../services/rental/hadiLinkedRentProtection";
 import { runRentalReconciliation } from "../../services/rental/rentalReconciliationService";
 import { logger } from "../../lib/logger";
 import {
@@ -506,10 +506,6 @@ export function registerRentalAccrualConfigRoutes(
     try {
       const companyId = getCompanyId(req);
       if (!companyId) return res.status(400).json({ message: "No company selected" });
-      // A reversal would change the protected balance and leave an old month eligible for another accrual.
-      if (isHadiHistoricAccrualRepair(companyId, module)) {
-        return res.status(409).json(HADI_HISTORICAL_ACCRUAL_GUARD);
-      }
       if (module !== "ERP")
         return res.status(400).json({ message: "Accrual reversal is only available for ERP module" });
 
@@ -528,6 +524,11 @@ export function registerRentalAccrualConfigRoutes(
           )
         );
       if (!row) return res.status(404).json({ message: "Ledger row not found" });
+      // Historical January–November 2026 rent was repaired in the originals.
+      // New rental months may still use the normal reviewed reversal flow.
+      if (isHadiProtectedRentMonth(companyId, module, row.year, row.month)) {
+        return res.status(409).json(HADI_HISTORICAL_ACCRUAL_GUARD);
+      }
       if (!row.accrualVoucherId)
         return res.status(400).json({ message: "This month has no posted accrual to reverse" });
 
