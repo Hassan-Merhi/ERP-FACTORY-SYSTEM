@@ -15,6 +15,7 @@ import type { StockItem } from "@shared/schema";
  */
 export interface PoImportPreviewItem {
   poNumber: string;
+  supplierCode?: string;
   barcode: string;
   itemName: string;
   quantity: number;
@@ -88,6 +89,7 @@ function parsePreviewItem(value: unknown): { item: PoImportPreviewItem; moneyRea
   return {
     item: {
       poNumber: optionalString(value.poNumber),
+      supplierCode: optionalString(value.supplierCode),
       barcode: optionalString(value.barcode),
       itemName: optionalString(value.itemName),
       quantity: quantity ?? 0,
