@@ -1,11 +1,40 @@
 import type { Express } from "express";
 
-import { and, eq, gte, isNull, lt, lte, ne, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lt, lte, ne, sql } from "drizzle-orm";
 import { requireAuth } from "../auth";
 import { db } from "../db";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { debitMinusCredit, signedOpeningBalance, sumMoney, toMoney } from "../lib/money";
 import { ledgerAccounts, locations, suppliers, voucherEntries, vouchers } from "@shared/schema";
+import { HADI_ERP_RENT_MERGE, isArchivedHadiRentExpenseLedger } from "../services/rental/hadiRentExpenseConsolidation";
+
+
+/**
+ * Match the canonical accounting balance engine: #881 was formally retired
+ * and merged under #1007 without rewriting original vouchers. A monthly report
+ * must show both sets of source entries when the archived master is verified.
+ * This is actual booked GL, not a rent-service preview or synthetic journal.
+ */
+async function ledgerStatementAccountIds(companyId: number, accountId: number): Promise<number[]> {
+  if (companyId !== HADI_ERP_RENT_MERGE.companyId ||
+      accountId !== HADI_ERP_RENT_MERGE.targetLedgerId) {
+    return [accountId];
+  }
+  const [archived] = await db.select({
+    id: ledgerAccounts.id,
+    companyId: ledgerAccounts.companyId,
+    active: ledgerAccounts.active,
+    isHidden: ledgerAccounts.isHidden,
+    openingBalance: ledgerAccounts.openingBalance,
+  }).from(ledgerAccounts).where(and(
+    eq(ledgerAccounts.companyId, companyId),
+    eq(ledgerAccounts.id, HADI_ERP_RENT_MERGE.legacyLedgerId),
+    isNull(ledgerAccounts.deletedAt)
+  )).limit(1);
+  return archived && isArchivedHadiRentExpenseLedger(archived)
+    ? [accountId, HADI_ERP_RENT_MERGE.legacyLedgerId]
+    : [accountId];
+}
 
 export function registerReportsLedgerRoutes(app: Express) {
   app.get("/api/reports/ledger-monthly-summary/:accountId", requireAuth, async (req, res) => {
@@ -24,6 +53,7 @@ export function registerReportsLedgerRoutes(app: Express) {
         .execute()
         .then((rows) => rows[0]);
       if (!account) return res.status(404).json({ message: "Account not found" });
+      const statementAccountIds = await ledgerStatementAccountIds(companyId, accountId);
 
       const start = startDate ? new Date(startDate as string) : new Date(new Date().getFullYear(), 0, 1);
       const end = endDate ? new Date(endDate as string) : new Date(new Date().getFullYear(), 11, 31);
@@ -37,7 +67,7 @@ export function registerReportsLedgerRoutes(app: Express) {
         .innerJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
         .where(
           and(
-            eq(voucherEntries.ledgerAccountId, accountId),
+            inArray(voucherEntries.ledgerAccountId, statementAccountIds),
             eq(vouchers.companyId, companyId),
             isNull(vouchers.deletedAt),
             eq(vouchers.optional, false),
@@ -63,7 +93,7 @@ export function registerReportsLedgerRoutes(app: Express) {
         .innerJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
         .where(
           and(
-            eq(voucherEntries.ledgerAccountId, accountId),
+            inArray(voucherEntries.ledgerAccountId, statementAccountIds),
             eq(vouchers.companyId, companyId),
             isNull(vouchers.deletedAt),
             eq(vouchers.optional, false),
@@ -217,6 +247,7 @@ export function registerReportsLedgerRoutes(app: Express) {
         .execute()
         .then((rows) => rows[0]);
       if (!account) return res.status(404).json({ message: "Account not found" });
+      const statementAccountIds = await ledgerStatementAccountIds(companyId, accountId);
 
       const monthNames = [
         "",
@@ -242,7 +273,7 @@ export function registerReportsLedgerRoutes(app: Express) {
         .innerJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
         .where(
           and(
-            eq(voucherEntries.ledgerAccountId, accountId),
+            inArray(voucherEntries.ledgerAccountId, statementAccountIds),
             eq(vouchers.companyId, companyId),
             isNull(vouchers.deletedAt),
             eq(vouchers.optional, false),
@@ -277,7 +308,7 @@ export function registerReportsLedgerRoutes(app: Express) {
         .innerJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
         .where(
           and(
-            eq(voucherEntries.ledgerAccountId, accountId),
+            inArray(voucherEntries.ledgerAccountId, statementAccountIds),
             eq(vouchers.companyId, companyId),
             isNull(vouchers.deletedAt),
             eq(vouchers.optional, false),
