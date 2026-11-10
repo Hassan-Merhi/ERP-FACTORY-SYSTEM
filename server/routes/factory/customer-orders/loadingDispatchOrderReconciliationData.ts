@@ -126,7 +126,7 @@ export async function loadOrderDispatchReconciliationTx(
     const vouchers=Array.isArray(source.voucherIds)?source.voucherIds.map(id):[];
     const countGoodIds=vouchers.length===new Set(vouchers).size;
     const sameSource=str(source.postedFingerprint)===financial.sourceFingerprint;
-    const sameAmount=/^(?:0|[1-9][0-9]*)(?:\\.[0-9]{1,2})?$/.test(str(source.postedAmount)) &&
+    const sameAmount=/^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,2})?$/.test(str(source.postedAmount)) &&
       new MoneyDecimal(str(source.postedAmount)).eq(new MoneyDecimal(financial.customerTotal));
     if(!source.postingId || !countGoodIds || !sameSource || !sameAmount ||
        (Number(financial.customerTotal)>0 && !vouchers.length)) continue;
