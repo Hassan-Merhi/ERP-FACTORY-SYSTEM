@@ -86,6 +86,40 @@ export function registerFactoryDispatchOrderOverviewRoutes(app:Express):void{
       return res.json(overview);
     }catch(error){return fail(res,error);}
   });
+  // Read-only, posted-revision bale pricing for an individual trip invoice.
+  // Never use mutable order lines or unposted scan estimates as invoice prices.
+  app.get(prefix+"/trips/:dispatchId/invoice-lines",requireAuth,access,async(req,res)=>{
+    try{
+      const context=await scope(req);
+      const dispatchId=parseId(req.params.dispatchId);
+      if(dispatchId===null)throw new OverviewError(400,"DISPATCH_TRIP_ID_INVALID","Invalid trip ID");
+      const lines=await db.transaction(async tx=>{
+        await tx.execute(sql`SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY`);
+        const [financial]=resultRows(await tx.execute(sql`
+          SELECT id,snapshot_revision,goods_subtotal::text AS "goodsSubtotal"
+          FROM factory_dispatch_trip_financials
+          WHERE company_id=${context.companyId} AND order_id=${context.orderId}
+            AND dispatch_id=${dispatchId} AND status IN ('POSTED','CONSOLIDATED')
+          LIMIT 1
+        `));
+        if(!financial)throw new OverviewError(409,"DISPATCH_TRIP_NOT_POSTED","Trip must be financially posted before invoice export");
+        const records=resultRows(await tx.execute(sql`
+          SELECT article_code AS "articleCode",product_name AS "productName",
+            pricing_mode AS "pricingMode",unit_price::text AS "unitPrice",
+            weight_kg::text AS "weightKg",line_total::text AS "lineTotal"
+          FROM factory_dispatch_trip_financial_bales
+          WHERE company_id=${context.companyId} AND order_id=${context.orderId}
+            AND dispatch_id=${dispatchId} AND financial_id=${Number(financial.id)}
+            AND snapshot_revision=${Number(financial.snapshot_revision)}
+          ORDER BY article_code,product_name,bale_id
+        `));
+        if(!records.length)throw new OverviewError(409,"DISPATCH_TRIP_LINES_MISSING","Posted trip has no frozen bale pricing");
+        return {goodsSubtotal:String(financial.goodsSubtotal),lines:records};
+      });
+      res.setHeader("Cache-Control","private, no-store");
+      return res.json(lines);
+    }catch(error){return fail(res,error);}
+  });
   app.get(prefix+"/history",requireAuth,access,async(req,res)=>{
     try{
       const s=await scope(req);const opts=parseHistory(req);
