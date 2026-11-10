@@ -4,7 +4,7 @@ import { useBackToParent } from "@/hooks/use-back-to-parent";
 import { useEscapeToParent } from "@/hooks/use-escape-to-parent";
 import { useQuery } from "@tanstack/react-query";
 import { useAppMode, getModePrefix } from "@/contexts/AppModeContext";
-import { formatNumber, drCrClass } from "@/lib/formatNumber";
+import { formatNumber, drCrClass, creditPositiveBalanceClass } from "@/lib/formatNumber";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { format, parseISO } from "date-fns";
@@ -152,19 +152,23 @@ export default function LedgerMonthlySummary() {
                     <p className="text-sm text-muted-foreground">Closing Balance</p>
                     <p
                       className={`text-xl font-bold font-mono ${
-                        data.grandTotal.closingBalance >= 0 ? "text-green-600" : "text-red-600"
+                        creditPositiveBalanceClass(data.grandTotal.closingBalance)
                       }`}
                       data-testid="text-closing-balance"
                     >
                       {formatAmount(Math.abs(data.grandTotal.closingBalance))}{" "}
                       <span className={drCrClass(data.grandTotal.closingBalance >= 0 ? "Cr" : "Dr")}>
-                        {data.grandTotal.closingBalance >= 0 ? "Cr" : "Dr"}
+                        {data.grandTotal.closingBalance === 0 ? "—" : data.grandTotal.closingBalance > 0 ? "Cr" : "Dr"}
                       </span>
                     </p>
                   </div>
                 </div>
               </CardHeader>
               <CardContent className="pt-4">
+                <p className="mb-3 text-xs text-muted-foreground">
+                  Debit and credit show posted voucher movements. Net Movement shows the monthly result without
+                  changing vouchers, cash or other account balances.
+                </p>
                 <div className="border rounded-lg overflow-hidden">
                   <Table mobileLayout="cards">
                     <TableHeader className="sticky top-0 z-30 bg-background">
@@ -172,6 +176,7 @@ export default function LedgerMonthlySummary() {
                         <TableHead>Particulars</TableHead>
                         <TableHead className="text-right hidden sm:table-cell">Transactions</TableHead>
                         <TableHead className="hidden sm:table-cell"></TableHead>
+                        <TableHead className="text-right">Net Movement</TableHead>
                         <TableHead className="text-right">Closing Balance</TableHead>
                         <TableHead className="w-8"></TableHead>
                       </TableRow>
@@ -179,6 +184,7 @@ export default function LedgerMonthlySummary() {
                         <TableHead></TableHead>
                         <TableHead className="text-right">Debit</TableHead>
                         <TableHead className="text-right">Credit</TableHead>
+                        <TableHead></TableHead>
                         <TableHead></TableHead>
                         <TableHead></TableHead>
                       </TableRow>
@@ -189,8 +195,8 @@ export default function LedgerMonthlySummary() {
                         <TableCell className="font-medium">Opening Balance</TableCell>
                         <TableCell className="hidden sm:table-cell"></TableCell>
                         <TableCell className="hidden sm:table-cell"></TableCell>
-                        <TableCell className="text-right font-mono">
-                          {formatAmount(Math.abs(data.openingBalance))} {data.openingBalance >= 0 ? "Cr" : "Dr"}
+                        <TableCell className={`text-right font-mono ${creditPositiveBalanceClass(data.openingBalance)}`}>
+                          {formatAmount(Math.abs(data.openingBalance))} {data.openingBalance === 0 ? "—" : data.openingBalance > 0 ? "Cr" : "Dr"}
                         </TableCell>
                         <TableCell></TableCell>
                       </TableRow>
@@ -215,10 +221,14 @@ export default function LedgerMonthlySummary() {
                               <TableCell className="text-right font-mono hidden sm:table-cell">
                                 {month.credit > 0 ? formatAmount(month.credit) : ""}
                               </TableCell>
-                              <TableCell className="text-right font-mono">
+                              <TableCell className={`text-right font-mono font-semibold ${month.debit === month.credit ? "text-muted-foreground" : drCrClass(month.debit > month.credit ? "Dr" : "Cr")}`} data-testid={`net-month-${month.month}`}>
+                                {formatAmount(Math.abs(month.debit - month.credit))}{" "}
+                                {month.debit === month.credit ? "—" : month.debit > month.credit ? "Dr" : "Cr"}
+                              </TableCell>
+                              <TableCell className={`text-right font-mono ${creditPositiveBalanceClass(month.closingBalance)}`}>
                                 {formatAmount(Math.abs(month.closingBalance))}{" "}
-                                <span className={`font-semibold ${drCrClass(month.closingBalance >= 0 ? "Cr" : "Dr")}`}>
-                                  {month.closingBalance >= 0 ? "Cr" : "Dr"}
+                                <span className="font-semibold">
+                                  {month.closingBalance === 0 ? "—" : month.closingBalance > 0 ? "Cr" : "Dr"}
                                 </span>
                               </TableCell>
                               <TableCell>
@@ -238,12 +248,14 @@ export default function LedgerMonthlySummary() {
                         <TableCell className="text-right font-mono hidden sm:table-cell">
                           {formatAmount(data.grandTotal.credit)}
                         </TableCell>
-                        <TableCell className="text-right font-mono">
+                        <TableCell className={`text-right font-mono ${data.grandTotal.debit === data.grandTotal.credit ? "text-muted-foreground" : drCrClass(data.grandTotal.debit > data.grandTotal.credit ? "Dr" : "Cr")}`}>
+                          {formatAmount(Math.abs(data.grandTotal.debit - data.grandTotal.credit))}{" "}
+                          {data.grandTotal.debit === data.grandTotal.credit ? "—" : data.grandTotal.debit > data.grandTotal.credit ? "Dr" : "Cr"}
+                        </TableCell>
+                        <TableCell className={`text-right font-mono ${creditPositiveBalanceClass(data.grandTotal.closingBalance)}`}>
                           {formatAmount(Math.abs(data.grandTotal.closingBalance))}{" "}
-                          <span
-                            className={`font-semibold ${drCrClass(data.grandTotal.closingBalance >= 0 ? "Cr" : "Dr")}`}
-                          >
-                            {data.grandTotal.closingBalance >= 0 ? "Cr" : "Dr"}
+                          <span className="font-semibold">
+                            {data.grandTotal.closingBalance === 0 ? "—" : data.grandTotal.closingBalance > 0 ? "Cr" : "Dr"}
                           </span>
                         </TableCell>
                         <TableCell></TableCell>
@@ -285,7 +297,7 @@ export default function LedgerMonthlySummary() {
                           borderRadius: "6px",
                         }}
                       />
-                      <Bar dataKey="debit" fill="hsl(var(--destructive))" name="Debit" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="debit" fill="hsl(var(--chart-2))" name="Debit" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -313,7 +325,7 @@ export default function LedgerMonthlySummary() {
                   <p className="text-sm text-muted-foreground">Closing Balance</p>
                   <p
                     className={`text-lg font-bold font-mono ${
-                      data.grandTotal.closingBalance >= 0 ? "text-green-600" : "text-red-600"
+                      creditPositiveBalanceClass(data.grandTotal.closingBalance)
                     }`}
                   >
                     {formatAmount(Math.abs(data.grandTotal.closingBalance))}
