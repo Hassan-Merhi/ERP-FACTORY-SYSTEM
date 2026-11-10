@@ -42,3 +42,17 @@ A checkout is not accessible to this session's local runtime; GitHub source acce
 On 2026-11-10, the repository's automatic Release Governance workflow rejected direct main commits because it requires each new main SHA to be associated with a merged pull request. The follow-up therefore moved to a dedicated PR branch. This release-governance failure is not evidence of a TypeScript or Factory application error, and the in-progress Main Certification result must be inspected separately.
 
 **No-go for fully claiming Phase 2 DONE** until source audit and runtime/role evidence above are satisfied. Do not treat an authored test as a passing test or a clean source search as proof of cross-company authorization.
+
+## 2026-11-10 check-run follow-up
+
+PR #3122 is the reconciled branch after concurrent main changes, superseding the conflicted PR #3121.
+
+GitHub's Focused security readiness job on an earlier PR #3122 head failed with two findings from `scripts/audit-company-scope.mjs --fail-on-findings`. Both were investigated against the actual SQL and schema:
+- `server/routes/import/factoryDispatchPoImportReceipt.ts` performs a global *existence-only* container-number collision check. `shared/schema/containers.ts` marks `container_number` globally unique, and the import deliberately rejects an existing number regardless of company; narrowing the query would weaken this invariant.
+- `server/services/factory/dispatchTripFinancialPosting.ts` checks PostgreSQL `pg_trigger` and `pg_class` catalog entries, referencing `public.vouchers` only via `to_regclass`. It is not an unscoped voucher-row query.
+
+These two exceptions are now recorded with precise rationale in `config/company-scope-review.json`, with a characterization test `tests/factory-unification-phase2-company-scope-exceptions.test.ts`. The existing audit's review registry is file-scoped, which is a limitation: further SQL in those files must still be examined manually, and strict scanning cannot be regarded as complete authorization certification. The new checks are not claimed as passing until a GitHub run reports their result.
+
+Automatic checks on PR and main may run under the repository configuration; none were manually triggered in this execution. The earlier direct-main Main Certification failure included a formatting issue and frontend test-fixture failures, while Browser E2E passed. Independent changes on main repaired several fixtures, and the remaining Bales History/Wipers test fixtures were updated in PR #3122. The resulting test outcomes must be verified on the merged head.
+
+**Phase 2 remains NOT DONE** until the full source audit, selected-company 200/403 role matrix, A→B→A delayed-response checks, and application test evidence are recorded.
