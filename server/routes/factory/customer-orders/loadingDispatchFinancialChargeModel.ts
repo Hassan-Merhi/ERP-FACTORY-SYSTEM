@@ -84,6 +84,7 @@ export function validChargeInput(value: unknown): {
     invalid("ERP PO export only accepts supported charge types");
   }
   if (kind === "INTERNAL" && erpChargeType !== null) invalid("Internal expenses cannot become ERP supplier charges");
+  if (kind === "DISCOUNT" && erpChargeType !== null) invalid("Discounts use the ERP PO Discount field, not another charge type");
   const notes = data.notes === null || data.notes === undefined || data.notes === ""
     ? null : String(data.notes).trim();
   if (notes && notes.length > 1000) invalid("Notes must be 1,000 characters or fewer");
