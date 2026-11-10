@@ -286,7 +286,11 @@ DECLARE
   parent_id BIGINT;
   parent_status VARCHAR(16);
 BEGIN
-  parent_id := CASE WHEN TG_OP = 'DELETE' THEN OLD.financial_id ELSE NEW.financial_id END;
+  IF TG_OP = 'DELETE' THEN
+    parent_id := OLD.financial_id;
+  ELSE
+    parent_id := NEW.financial_id;
+  END IF;
 
   SELECT status INTO parent_status
     FROM factory_dispatch_trip_financials WHERE id = parent_id FOR UPDATE;
@@ -301,12 +305,12 @@ BEGIN
     END IF;
   END IF;
 
-  IF TG_OP = 'UPDATE' AND (
-    NEW.financial_id <> OLD.financial_id OR NEW.company_id <> OLD.company_id OR
-    NEW.order_id <> OLD.order_id OR NEW.dispatch_id <> OLD.dispatch_id OR
-    NEW.revision <> OLD.revision
-  ) THEN
-    RAISE EXCEPTION 'Trip charge ownership and revision cannot be changed';
+  IF TG_OP = 'UPDATE' THEN
+    IF NEW.financial_id <> OLD.financial_id OR NEW.company_id <> OLD.company_id OR
+       NEW.order_id <> OLD.order_id OR NEW.dispatch_id <> OLD.dispatch_id OR
+       NEW.revision <> OLD.revision THEN
+      RAISE EXCEPTION 'Trip charge ownership and revision cannot be changed';
+    END IF;
   END IF;
 
   IF TG_OP = 'DELETE' THEN
