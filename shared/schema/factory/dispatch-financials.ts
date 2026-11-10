@@ -173,6 +173,10 @@ export const factoryDispatchOrderConsolidations = pgTable("factory_dispatch_orde
   orderId: integer("order_id").notNull(),
   status: varchar("status", { length: 16 }).notNull().default("DRAFT"),
   reconciliationFingerprint: varchar("reconciliation_fingerprint", { length: 64 }),
+  reconciliationSnapshot: jsonb("reconciliation_snapshot").notNull().default(sql`'{}'::jsonb`),
+  reconciledAt: utcTime("reconciled_at"),
+  reconciledByUserId: text("reconciled_by_user_id"),
+  reconciliationReason: text("reconciliation_reason"),
   invoiceNumber: varchar("invoice_number", { length: 50 }),
   includedPostingIds: jsonb("included_posting_ids").notNull().default(sql`'[]'::jsonb`),
   goodsSubtotal: money("goods_subtotal").notNull().default("0"),
@@ -188,6 +192,43 @@ export const factoryDispatchOrderConsolidations = pgTable("factory_dispatch_orde
   statusValid: check("factory_dispatch_order_consolidations_status_ck", sql`${t.status} IN ('DRAFT', 'FINALIZED', 'REVERSED')`),
   totalsValid: check("factory_dispatch_order_consolidations_totals_ck", sql`${t.goodsSubtotal} >= 0 AND ${t.billableChargesTotal} >= 0 AND ${t.discountTotal} >= 0 AND ${t.customerTotal} >= 0`),
   postingListValid: check("factory_dispatch_order_consolidations_postings_ck", sql`jsonb_typeof(${t.includedPostingIds}) = 'array'`),
+  approvalValid: check("factory_dispatch_order_consolidations_signoff_ck", sql`
+    (${t.reconciledAt} IS NULL AND ${t.reconciledByUserId} IS NULL AND ${t.reconciliationReason} IS NULL)
+    OR (${t.reconciledAt} IS NOT NULL AND ${t.reconciledByUserId} IS NOT NULL
+        AND length(trim(${t.reconciliationReason})) BETWEEN 10 AND 1000
+        AND ${t.reconciliationFingerprint} ~ '^[0-9a-f]{64}
+  totalMathValid: check("factory_dispatch_order_consolidations_total_math_ck", sql`
+    ${t.customerTotal} = ${t.goodsSubtotal} + ${t.billableChargesTotal} - ${t.discountTotal}`),
+}));
+
+/** Append-only trip/order financial history, distinct from physical dispatch events. */
+export const factoryDispatchFinancialEvents = pgTable("factory_dispatch_financial_events", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  companyId: integer("company_id").notNull(),
+  orderId: integer("order_id").notNull(),
+  dispatchId: id("dispatch_id"),
+  financialId: id("financial_id"),
+  eventType: varchar("event_type", { length: 64 }).notNull(),
+  details: jsonb("details").notNull().default(sql`'{}'::jsonb`),
+  reason: text("reason"),
+  actorUserId: text("actor_user_id").notNull(),
+  actorUsername: text("actor_username").notNull(),
+  createdAt: utcTime("created_at").notNull().defaultNow(),
+}, (t) => ({
+  orderIdx: index("factory_dispatch_financial_events_order_idx").on(t.companyId, t.orderId, t.id),
+  tripIdx: index("factory_dispatch_financial_events_trip_idx").on(t.companyId, t.dispatchId, t.id),
+}));
+
+export type FactoryDispatchTripFinancial = typeof factoryDispatchTripFinancials.$inferSelect;
+export type FactoryDispatchTripFinancialBale = typeof factoryDispatchTripFinancialBales.$inferSelect;
+export type FactoryDispatchTripCharge = typeof factoryDispatchTripCharges.$inferSelect;
+export type FactoryDispatchTripPosting = typeof factoryDispatchTripPostings.$inferSelect;
+export type FactoryDispatchTripExport = typeof factoryDispatchTripExports.$inferSelect;
+export type FactoryDispatchOrderConsolidation = typeof factoryDispatchOrderConsolidations.$inferSelect;
+export type FactoryDispatchFinancialEvent = typeof factoryDispatchFinancialEvents.$inferSelect;
+
+        AND jsonb_typeof(${t.reconciliationSnapshot}) = 'object'
+        AND ${t.includedPostingIds} <> '[]'::jsonb)`),
   totalMathValid: check("factory_dispatch_order_consolidations_total_math_ck", sql`
     ${t.customerTotal} = ${t.goodsSubtotal} + ${t.billableChargesTotal} - ${t.discountTotal}`),
 }));
