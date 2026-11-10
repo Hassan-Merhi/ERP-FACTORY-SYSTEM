@@ -104,3 +104,15 @@ An independent *read-only live Render Postgres check* at **2026-11-10 16:28:40 U
 **Status: historical 2026 production GL restatement COMPLETE and independently VERIFIED.** Do **not** rerun correction SQL. Database posting is finished.
 
 **Outstanding:** This PR's source change to the existing monthly ledger/drilldown still requires merge/deployment to display the original archived #881 transactions correctly. Separately, future rent protection work in draft PR #3114 requires code review, runtime tests, authorized merge, and deployment; successful historical DB correction does not prove future code is live. Do not create a new reconciliation section.
+
+## Monthly Rent Expense debit-only presentation — 2026-11-10
+
+Owner requested that the existing Rent Expense monthly summary show the **net recognized rent under Debit** instead of confusing gross Debit and Credit correction turnover (like the other rent ledgers), without adding any reconciliation section or changing the already certified voucher restatement.
+
+- `server/routes/reportsLedgerRoutes.ts` continues to return full original gross debit/credit data (and includes retired #881 original voucher entries) but now sets `presentation:"net-expense"` only for HADI company #1 account #1007 with archived #881 verified.
+- `client/src/lib/monthlyRentExpensePresentation.ts` uses cent-precision netting: each month displays `max(debit-credit,0)` under Dr and `max(credit-debit,0)` under Cr. This makes a true net-credit month visible instead of hiding it; it doesn't falsify the audit trail.
+- `client/src/pages/LedgerMonthlySummary.tsx` applies this net presentation to its existing monthly table, grand total and chart. Raw API amounts, voucher drilldown, posted original entries, cash, rent account balances and timing journal metadata remain **unchanged**. The explanatory text explicitly identifies presentation-only netting.
+- `tests/hadi-rent-net-monthly-presentation.test.ts` covers all 11 verified 2026 gross month pairs; expected monthly displayed amounts are January $32,700 Dr through November $38,950 Dr, annual $434,350 Dr and $0 Cr. Also checks cents precision, original input immutability and negative net months.
+- Existing monthly API consumers continue receiving actual gross journal amounts; this client-only display mode cannot cause a false voucher accounting report outside the requested monthly summary.
+- **No new SQL or new vouchers required.** The PR remains unmerged/undeployed; the visible production screenshot will remain gross until deployed.
+
