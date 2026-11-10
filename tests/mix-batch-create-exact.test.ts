@@ -46,7 +46,16 @@ vi.mock("../server/db", async () => {
       Promise.resolve(value).then(resolve, reject);
     return q;
   };
-  const batch = { id: 1, batchCode: "MB1", name: null, totalWeightKg: "0", totalCost: "0", usedKg: "0" };
+  // An open mix: completed or closed mixes are refused before any stock moves.
+  const batch = {
+    id: 1,
+    batchCode: "MB1",
+    name: null,
+    status: "ACTIVE",
+    totalWeightKg: "1",
+    totalCost: "0",
+    usedKg: "0",
+  };
   const db: Record<string, unknown> = {
     select: () => ({ from: (table: never) => chain(getTableName(table) === "factory_mix_batches" ? [batch] : []) }),
     update: (table: never) => ({
@@ -63,6 +72,8 @@ vi.mock("../server/db", async () => {
     }),
     insert: () => ({ values: () => chain([batch]) }),
     delete: () => ({ where: async () => undefined }),
+    // Advisory locks and other raw statements issued inside the transaction.
+    execute: async () => ({ rows: [] }),
   };
   db.transaction = async (fn: (tx: unknown) => unknown) => fn(db);
   return { db };
@@ -108,7 +119,10 @@ describe("mix batch create", () => {
   it("rejects a source weight that does not parse", async () => {
     const res = await patch({ supplierSources: [{ supplierId: 2, weightKg: "abc" }] });
     expect(res.statusCode).toBe(400);
-    expect(res.body).toEqual({ message: "Invalid amount" });
+    expect(res.body).toEqual({
+      code: "MIX_BATCH_LIFECYCLE_REFUSED",
+      message: "Source kg must be positive with no more than 3 decimal places.",
+    });
     expect(h.writes).toEqual([]);
   });
 });
