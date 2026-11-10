@@ -120,14 +120,35 @@ export function registerFactoryDispatchOrderReconciliationRoutes(app:Express):vo
       const s=await scope(req);
       const snapshot=await db.transaction(async tx=>{
         await tx.execute(sql`SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY`);
-        return loadOrderDispatchReconciliationTx(tx,s);
+        const current=await loadOrderDispatchReconciliationTx(tx,s);
+        const [invoice]=read(await tx.execute(sql`
+          SELECT c.status,c.invoice_number AS "invoiceNumber",
+                 c.finalization_details AS "finalization",
+                 o.invoice_number AS "orderInvoice"
+            FROM factory_dispatch_order_consolidations c
+            JOIN customer_orders o ON o.id=c.order_id AND o.company_id=c.company_id
+           WHERE c.company_id=${s.companyId} AND c.order_id=${s.orderId} LIMIT 1
+        `));
+        const details=invoice?.finalization;
+        const finalized=Boolean(current.stored &&
+          current.orderStatus==="FINALIZED" && invoice?.status==="FINALIZED" &&
+          invoice?.invoiceNumber===invoice?.orderInvoice &&
+          details && typeof details==="object" &&
+          (details as Record<string,unknown>).customerReceivableReposted===false);
+        return {...current,finalized};
       });
       res.set("Cache-Control","private, no-store");
       return res.json({
         orderId:s.orderId,loadingStatus:snapshot.orderStatus,
         ...snapshot.result,
+        // The physical source's status becomes FINALIZED and each trip moves
+        // POSTED -> CONSOLIDATED in Phase 8, intentionally changing the live
+        // Phase 7 preview fingerprint. Its original signed fingerprint and
+        // immutable finalization are the authority after finalizing.
+        ...(snapshot.finalized?{blockingReasons:[],fingerprint:snapshot.stored!.fingerprint}:{ }),
         approval:snapshot.stored,
-        approvalCurrent:Boolean(snapshot.stored && snapshot.stored.fingerprint===snapshot.result.fingerprint),
+        approvalCurrent:Boolean(snapshot.stored &&
+          (snapshot.finalized || snapshot.stored.fingerprint===snapshot.result.fingerprint)),
         canApprove:["admin","owner","developer"].includes(s.role) &&
           snapshot.result.ready && !snapshot.stored,
       });
