@@ -431,7 +431,7 @@ export async function runRentalReconciliation(
      FROM voucher_entries ve
      JOIN vouchers v ON v.id=ve.voucher_id AND v.company_id=ve.company_id
        AND v.deleted_at IS NULL AND v.optional=FALSE
-       AND COALESCE(v.effective_date,v.voucher_date)<=$3::date
+       AND COALESCE(v.effective_date,v.voucher_date)<=$2::date
      JOIN ledger_accounts la ON la.id=ve.ledger_account_id
        AND la.company_id=ve.company_id AND la.deleted_at IS NULL
      WHERE ve.company_id=$1
@@ -440,7 +440,7 @@ export async function runRentalReconciliation(
          OR la.code IN ('ACCR-RENT-PAY','ACC-RENT-PAY')
          OR la.code LIKE 'ACCR-RENT-PAY-%'
          OR la.code LIKE 'ACC-RENT-PAY-%')`,
-    [companyId, module, asOf]
+    [companyId, asOf]
   );
 
   const operational = operationalRows[0] ?? {};
