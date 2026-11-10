@@ -24,6 +24,7 @@ import {
 } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { syncFactoryInvoiceTx } from "../../../../services/accounting/perpetualInventory/factoryInvoice";
+import { hasLiveFinancialTripTx } from "../../../../services/factory/dispatchTripFinancialGuards";
 import { retireVouchersTx, sessionRetirementActor } from "../../../../services/accounting/voucherRetirement";
 
 export function registerOrderUnfinalizeRoutes(app: Express) {
@@ -108,6 +109,11 @@ export function registerOrderUnfinalizeRoutes(app: Express) {
           .for("update");
         if (!order) throw new Error("Order not found");
         if (order.status !== "FINALIZED") throw new Error("Only FINALIZED orders can be reverted");
+        // A consolidated invoice must never be reverted by a handler that
+        // simply deletes the invoice cache and restores SOLD bales to stock.
+        if (await hasLiveFinancialTripTx(tx, companyId, orderId)) {
+          throw new Error("DISPATCH_FINANCIAL_REVERSAL_REQUIRED: Trip receivables must be handled through the authorized consolidated-invoice reversal workflow.");
+        }
 
         // New finalizations always persist the authoritative workflow origin.
         // For legacy finalized rows, loading timestamps are durable evidence

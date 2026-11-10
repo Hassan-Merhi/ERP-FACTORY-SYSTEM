@@ -46,6 +46,10 @@ export interface CanonicalInvoiceDocument {
   totalQtyBales: number;
   lines: CanonicalInvoiceLine[];
   charges: CanonicalInvoiceCharge[];
+  /** Signed truck breakdown for one consolidated Factory invoice; optional on legacy invoices. */
+  dispatchTrips?: Array<{
+    dispatchId: string; dispatchNumber: number; postedBales: number; customerTotal: number;
+  }>;
   frozenAt: string | null;
 }
 
