@@ -232,6 +232,7 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
     groupBaleQueries,
     queryClient,
     params,
+    companyId: selectedCompany?.id,
   });
 
   function toggleExpand(key: string) {
