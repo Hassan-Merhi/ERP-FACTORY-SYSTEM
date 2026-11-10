@@ -37,6 +37,7 @@ interface SupplierComboboxProps {
 
 interface POImportItem {
   poNumber: string;
+  supplierCode?: string;
   barcode?: string | null;
   stockItemId?: number | null;
   itemName: string;
