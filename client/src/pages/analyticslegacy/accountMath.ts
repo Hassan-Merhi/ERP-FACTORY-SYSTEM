@@ -45,6 +45,11 @@ export function signedBalance(acc: Account): number {
   return acc.balanceSide === "Cr" ? parseBalance(acc.balance) : -parseBalance(acc.balance);
 }
 
+/** Cash is an asset: a debit adds cash and a credit reduces it. */
+export function cashSignedBalance(acc: Account): number {
+  return -signedBalance(acc);
+}
+
 /**
  * Partition a flat account list into roots and a parentId -> children map.
  * An account counts as a root when its parent is absent from the same list,
@@ -108,6 +113,11 @@ export function calculateTotal(accountList: Account[]): number {
   return total;
 }
 
+/** Net cash debit-minus-credit, using the same parent/child deduplication as calculateTotal. */
+export function calculateCashTotal(accountList: Account[]): number {
+  return -calculateTotal(accountList);
+}
+
 /**
  * Same deduplication as calculateTotal but over displayed (absolute) balances.
  * Used for the Cash, Loans/Banks, Assets and Liabilities sections so the footer
@@ -158,4 +168,9 @@ export function formatSmartCurrency(value: number): string {
     return "$" + absValue.toLocaleString("en-US", { maximumFractionDigits: 0 });
   }
   return "$" + absValue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+/** Preserve the sign of a credit/negative balance in cash analytics. */
+export function formatSignedSmartCurrency(value: number): string {
+  return value < 0 ? `-${formatSmartCurrency(value)}` : formatSmartCurrency(value);
 }

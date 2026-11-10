@@ -2,9 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import {
   calculateAbsoluteTotal,
+  calculateCashTotal,
   calculatePLTotal,
+  cashSignedBalance,
   calculateTotal,
   formatCurrency,
+  formatSignedSmartCurrency,
   formatSmartCurrency,
   groupAccountsByParent,
   isVisibleAnalyticsAssetAccount,
@@ -77,6 +80,20 @@ describe("analytics account math", () => {
     expect(calculateAbsoluteTotal(accounts)).toBe(140);
   });
 
+  it("treats cash debits as positive and cash credits as negative, including grouped children", () => {
+    const accounts = [
+      account({ accountId: 1, balance: 8375, balanceSide: "Dr" }),
+      account({ accountId: 2, balance: "36940" as unknown as number, balanceSide: "Dr" }),
+      account({ accountId: 3, balance: 288395, balanceSide: "Dr" }), // Group parent must not be added separately
+      account({ accountId: 4, parentId: 3, balance: 288395, balanceSide: "Cr" }),
+    ];
+    expect(cashSignedBalance(accounts[0])).toBe(8375);
+    expect(cashSignedBalance(accounts[3])).toBe(-288395);
+    expect(calculateCashTotal(accounts)).toBe(-243080);
+    expect(calculateAbsoluteTotal(accounts)).toBe(333710); // Other legacy panels remain unchanged
+    expect(formatSignedSmartCurrency(calculateCashTotal(accounts))).toBe("-$243,080");
+  });
+
   it("hides only Inventory and SP profit correction suspense from the Assets view and total", () => {
     const candidates = [
       account({ accountId: 10, type: "ledger", code: "INVENTORY", name: "Inventory", accountType: "Asset", balance: 40.36 }),
@@ -124,5 +141,7 @@ describe("analytics account math", () => {
     expect(formatSmartCurrency(1500)).toBe("$1,500");
     expect(formatSmartCurrency(1500.5)).toBe("$1,500.50");
     expect(formatSmartCurrency(-1500.5)).toBe("$1,500.50");
+    expect(formatSignedSmartCurrency(-1500.5)).toBe("-$1,500.50");
+    expect(formatSignedSmartCurrency(1500.5)).toBe("$1,500.50");
   });
 });
