@@ -389,8 +389,10 @@ function ErpPOImport() {
         }
       }
       toast({
-        title: "Import successful",
-        description: `Container ${data.containerNumber} imported with ${data.itemsCount} items`,
+        title: data.factoryDispatchReceipt ? "Factory truck PO imported" : "Import successful",
+        description: data.factoryDispatchReceipt
+          ? `Factory dispatch ${data.factoryDispatchReceipt.origin.factoryDispatchId} linked to ERP container ${data.containerNumber}. Supplier purchase recorded through the existing ERP workflow.`
+          : `Container ${data.containerNumber} imported with ${data.itemsCount} items`,
       });
       queryClient.invalidateQueries({ queryKey: ["/api/containers"] });
       navigate("/containers");
