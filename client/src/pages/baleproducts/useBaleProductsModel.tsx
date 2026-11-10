@@ -3,6 +3,8 @@ import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { getApiRequest } from "@/lib/factoryApi";
 import { useLabelDesignColors } from "@/hooks/useLabelDesignColors";
@@ -10,9 +12,10 @@ import { productMatchesSearch } from "@shared/factoryProductSearch";
 import type { FactoryBaleProduct, FactoryCategory } from "@shared/schema";
 import type { GroupedProduct, ImportPreviewRow } from "./types";
 import { downloadNoPriceBaleOrderSheet, downloadPricedBaleOrderSheet } from "./baleOrderSheetExport";
-import type { AuthMe } from "@shared/apiTypes";
+import type { AuthMe, FactoryMyAccess } from "@shared/apiTypes";
 
 export function useBaleProductsModel() {
+  const { selectedCompany } = useCompany();
   const { colors: designColors } = useLabelDesignColors();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [adminAuthOpen, setAdminAuthOpen] = useState(false);
@@ -77,34 +80,41 @@ export function useBaleProductsModel() {
   const { data: currentUser } = useQuery<AuthMe>({ queryKey: ["/api/auth/me"] });
   const isAdmin = ["Admin", "Owner", "Developer"].includes(currentUser?.currentRole ?? currentUser?.role ?? "");
 
-  const { data: myAccess } = useQuery<{ hiddenCostFields: string[] }>({
-    queryKey: ["/api/factory/my-access"],
+  const { data: myAccess } = useQuery<FactoryMyAccess>({
+    queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
   });
   const { data: factorySettingsData } = useQuery<{ hideAvgCost?: boolean; hideSellingPrice?: boolean }>({
-    queryKey: ["/api/factory/settings"],
+    queryKey: companyQueryKey("/api/factory/settings", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const res = await fetch("/api/factory/settings", { credentials: "include" });
       return res.ok ? res.json() : {};
     },
   });
-  const perUserHiddenBP = myAccess?.hiddenCostFields ?? [];
+  const accessReady = Boolean(selectedCompany?.id && myAccess?.companyId === selectedCompany.id && myAccess?.hasFactoryAccess === true);
+  const perUserHiddenBP = accessReady ? (myAccess?.hiddenCostFields ?? []) : [];
   const hideAvgRate =
+    !accessReady || myAccess?.hideAllCosts === true ||
     perUserHiddenBP.includes("inventory_avg_rate") ||
     perUserHiddenBP.includes("inventory_total_value") ||
     !!factorySettingsData?.hideAvgCost ||
     perUserHiddenBP.includes("hide_export_cost_price");
   const hideSellingPriceBP =
+    !accessReady || myAccess?.hideAllCosts === true ||
     !!factorySettingsData?.hideSellingPrice ||
     perUserHiddenBP.includes("inventory_sell_price") ||
     perUserHiddenBP.includes("inventory_sell_value") ||
     perUserHiddenBP.includes("hide_export_selling_price");
 
   const { data: products, isLoading } = useQuery<FactoryBaleProduct[]>({
-    queryKey: ["/api/factory/bale-products"],
+    queryKey: companyQueryKey("/api/factory/bale-products", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
   });
 
   const { data: categories } = useQuery<FactoryCategory[]>({
-    queryKey: ["/api/factory/categories"],
+    queryKey: companyQueryKey("/api/factory/categories", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
   });
 
   const categoryMap = new Map<number, string>();
