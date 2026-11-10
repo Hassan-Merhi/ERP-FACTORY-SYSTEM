@@ -49,8 +49,8 @@ vi.mock("@tanstack/react-query", () => ({
   }),
   useQueries: () => [],
   useInfiniteQuery: ({ queryKey, enabled }: any) => {
-    harness.historyQueries.push(queryKey[1]);
-    const params = new URLSearchParams(queryKey[1]);
+    harness.historyQueries.push(queryKey[2]);
+    const params = new URLSearchParams(queryKey[2]);
     const selectedWorker = params.get("workerId");
     const secondWorker = {
       ...group,
@@ -130,6 +130,18 @@ vi.mock("@tanstack/react-query", () => ({
   }),
 }));
 
+vi.mock("@/contexts/CompanyContext", () => ({
+  useCompany: () => ({
+    selectedCompany: { id: 1, name: "Factory Test Co", companyType: "factory" },
+    companies: [],
+    isLoading: false,
+  }),
+  useOptionalCompany: () => ({
+    selectedCompany: { id: 1, name: "Factory Test Co", companyType: "factory" },
+    companies: [],
+    isLoading: false,
+  }),
+}));
 vi.mock("@/contexts/DateFormatContext", () => ({
   useDateFormat: () => ({ formatDisplayDate: (value: string) => `D:${value}` }),
 }));
@@ -237,6 +249,7 @@ describe("stock entry history page behavior", () => {
     harness.accessValue = {
       fullAccess: false,
       hasFactoryAccess: true,
+      companyId: 1,
       pageKeys: ["factory/stock-entry"],
       hiddenCostFields: ["hide_tab_stockentry_entry", "hide_tab_stockentry_production_targets"],
     };
