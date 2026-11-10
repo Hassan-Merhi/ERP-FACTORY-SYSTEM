@@ -6,7 +6,9 @@ on:
 permissions: {}
 jobs:
   format-once:
-    if: github.event.head_commit.message == 'chore(erp): request one-time format check correction'
+    if: >-
+      github.event.head_commit.message ==
+      'chore(erp): request one-time format check correction'
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     permissions:
