@@ -121,9 +121,12 @@ function decimalKg(text: string): string {
   }
   return new MoneyDecimal(text).toFixed(3);
 }
+function hasForbiddenControl(value: string): boolean {
+  return [...value].some(ch => ch.charCodeAt(0) < 32 || ch.charCodeAt(0) === 127);
+}
 export function normalizePoArticleCode(raw: string): string {
   const code = String(raw ?? "").trim().toUpperCase();
-  if (!code || code.length > 50 || /^[=+@-]/.test(code) || /[\u0000-\u001f\u007f]/.test(code)) {
+  if (!code || code.length > 50 || /^[=+@-]/.test(code) || hasForbiddenControl(code)) {
     refuse("PO_ARTICLE_INVALID", "A frozen bale has an invalid or spreadsheet-unsafe article code");
   }
   return code;
@@ -131,7 +134,7 @@ export function normalizePoArticleCode(raw: string): string {
 function safeSupplierCode(value: unknown): string {
   const code = typeof value === "string" ? value.trim() : "";
   if (!code || code.length > 100 || /^[=+@-]/.test(code) ||
-      /[\u0000-\u001f\u007f]/.test(code)) {
+      hasForbiddenControl(code)) {
     refuse("PO_SUPPLIER_CODE_INVALID", "Enter a valid ERP supplier code before exporting", 400);
   }
   return code;
@@ -151,7 +154,9 @@ function keepText(value: unknown): string {
   // Excel sheet-to-JSON returns the text verbatim. Never let a spreadsheet
   // formula-like name become an Excel formula when generating a workbook.
   if (!text) return "Unnamed Factory Article";
-  const dangerous = /^[\s\u0000-\u0020]*[=+@-]/.test(text) || /[\r\n\t]/.test(text);
+  const firstNonSpaceOrControl = [...text].find(ch => !/\s/.test(ch) && ch.charCodeAt(0) > 32);
+  const dangerous = (firstNonSpaceOrControl !== undefined && "=+@-".includes(firstNonSpaceOrControl)) ||
+    ["\r", "\n", "\t"].some(ch => text.includes(ch));
   return dangerous ? "'" + text : text;
 }
 export function groupFrozenTripArticles(source: PostedTripPoSource): TripPoArticle[] {
