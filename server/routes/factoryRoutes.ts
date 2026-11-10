@@ -16,6 +16,14 @@ import { registerFactoryLoadingDispatchScanRoutes } from "./factory/customer-ord
 import { registerFactoryLoadingDispatchComparisonRoutes } from "./factory/customer-orders/loadingDispatchComparisonRoutes";
 import { registerFactoryLoadingDispatchAllocationRoutes } from "./factory/customer-orders/loadingDispatchAllocationRoutes";
 import { registerFactoryLoadingDispatchLifecycleRoutes } from "./factory/customer-orders/loadingDispatchLifecycleRoutes";
+import { registerFactoryLoadingDispatchFinancialRoutes } from "./factory/customer-orders/loadingDispatchFinancialChargeRoutes";
+import { registerFactoryLoadingDispatchPostingRoutes } from "./factory/customer-orders/loadingDispatchFinancialPostingRoutes";
+import { registerFactoryLoadingDispatchPoExportRoutes } from "./factory/customer-orders/loadingDispatchPoExportRoutes";
+import { registerFactoryDispatchOrderReconciliationRoutes } from "./factory/customer-orders/loadingDispatchOrderReconciliationRoutes";
+import { registerFactoryDispatchCombinedInvoiceRoutes } from "./factory/customer-orders/loadingDispatchCombinedInvoiceRoutes";
+import { registerFactoryDispatchOrderOverviewRoutes } from "./factory/customer-orders/loadingDispatchOrderOverviewRoutes";
+import { registerFactoryDispatchReleaseReadinessRoutes } from "./factory/customer-orders/loadingDispatchReleaseReadinessRoutes";
+import { hasLiveFinancialTripTx } from "../services/factory/dispatchTripFinancialGuards";
 import { registerFactoryLoadingDispatchReportRoutes } from "./factory/customer-orders/loadingDispatchReportRoutes";
 import { registerFactoryContainerReadAccessRoutes } from "./factory/factoryContainerReadAccessRoutes";
 import { registerFactoryDocsUsersRoutes } from "./factory/docs-users";
@@ -177,6 +185,40 @@ export function registerFactoryRoutes(app: Express, requireAuth: RequestHandler,
   registerPerformanceReadMicrocache(app);
 
   app.use("/api/factory", async (req, res: import("express").Response, next) => {
+    // Phase 4: block legacy order/price/charge mutations while a signed truck
+    // receivable is live. Dispatch lifecycle itself and the authorized
+    // unshipped-bale reconciliation retain their dedicated transaction guards.
+    // This runs before the existing administrative role gate, and uses the
+    // already verified pinned Factory company.
+    if (["POST", "PUT", "PATCH", "DELETE"].includes(req.method) && req.session?.userId) {
+      const match = /^\/customer-orders\/(\d+)(?:\/(.*))?$/.exec(req.path);
+      if (match) {
+        const suffix = match[2] || "";
+        const dispatchOperation = suffix === "loading-dispatches" || suffix.startsWith("loading-dispatches/");
+        const readOnlyMetadata = ["loading-note", "hidden"].includes(suffix);
+        const statusTransition = req.method === "POST" && ["verify", "finalize-loading"].includes(suffix);
+        const reconcileMissingBale = req.method === "DELETE" &&
+          /^bales\/\d+$/.test(suffix) && req.query.source === "dispatch-reconciliation";
+        if (!dispatchOperation && !readOnlyMetadata && !statusTransition && !reconcileMissingBale) {
+          const companyId = Number(req.session.factoryCompanyId);
+          const orderId = Number(match[1]);
+          if (Number.isSafeInteger(companyId) && companyId > 0 &&
+              Number.isSafeInteger(orderId) && orderId > 0) {
+            try {
+              const posted = await db.transaction(tx => hasLiveFinancialTripTx(tx, companyId, orderId));
+              if (posted) {
+                return res.status(409).json({
+                  code: "POSTED_DISPATCH_LOCK",
+                  message: "This loading has financially posted trips. Reverse the trip accounting or complete the authorized combined-invoice workflow before changing the original order.",
+                });
+              }
+            } catch (error) {
+              return next(error);
+            }
+          }
+        }
+      }
+    }
     if (!["PUT", "PATCH", "DELETE"].includes(req.method)) return next();
     if (!req.session?.userId) return next();
     if (req.method === "DELETE" && /^\/bales\/\d+$/.test(req.path)) return next();
@@ -219,6 +261,13 @@ export function registerFactoryRoutes(app: Express, requireAuth: RequestHandler,
   // access flags and tenant scope. Read-only GETs remain company-scoped.
   registerFactoryLoadingDispatchReportRoutes(app);
   registerFactoryLoadingDispatchLifecycleRoutes(app);
+  registerFactoryLoadingDispatchFinancialRoutes(app);
+  registerFactoryLoadingDispatchPostingRoutes(app);
+  registerFactoryLoadingDispatchPoExportRoutes(app);
+  registerFactoryDispatchOrderReconciliationRoutes(app);
+  registerFactoryDispatchCombinedInvoiceRoutes(app);
+  registerFactoryDispatchOrderOverviewRoutes(app);
+  registerFactoryDispatchReleaseReadinessRoutes(app);
   registerFactoryLoadingDispatchAllocationRoutes(app);
   registerFactoryLoadingDispatchComparisonRoutes(app);
   registerFactoryLoadingDispatchScanRoutes(app);

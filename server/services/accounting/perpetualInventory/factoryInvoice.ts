@@ -44,6 +44,7 @@ import { HttpError } from "../../../lib/httpHandlers";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
 import { findFactoryFxRateOnOrBefore, normalizeFactoryCurrency } from "../../factory/factoryFxRateOnDate";
 import { postFactoryVoucherTx, type FactoryVoucherLine } from "../../factory/factoryVoucherPosting";
+import { hasLiveFinancialTripTx } from "../../factory/dispatchTripFinancialGuards";
 import { getInventoryCutover, isPerpetualInventoryActive } from "./cutover";
 import {
   isSupplierPartnerCompany,
@@ -131,6 +132,15 @@ export async function syncFactoryInvoiceTx(
   companyId: number,
   orderId: number
 ): Promise<number | null> {
+  // Phase 4 safety net: a physical truck can already have real receivable
+  // vouchers. Recreating this legacy FULL invoice receivable before Phase 8
+  // clearing/consolidation would debit the same customer twice. Apply this at
+  // the shared journal writer, not just the UI's /finalize route.
+  if (await hasLiveFinancialTripTx(tx, companyId, orderId)) {
+    throw new Error(
+      "DISPATCH_CONSOLIDATION_REQUIRED: Trip receivables have already been posted. Use the dedicated one-invoice consolidation and clearing workflow."
+    );
+  }
   await removeLinkedJournalTx(tx, companyId, factoryInvoiceVoucherNumber(companyId, orderId));
 
   const [order] = await rows<InvoiceRow>(

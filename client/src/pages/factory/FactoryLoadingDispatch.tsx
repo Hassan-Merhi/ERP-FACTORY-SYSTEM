@@ -44,10 +44,14 @@ import { useToast } from "@/hooks/use-toast";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
+import FactoryDispatchOrderDashboard from "./FactoryDispatchOrderDashboard";
 import { FACTORY_DISPATCH_TRIP_STATUS_LABELS, type FactoryDispatchTripStatus } from "@shared/factoryStatusPresentation";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import FactoryLoadingDispatchScanner from "./FactoryLoadingDispatchScanner";
 import FactoryLoadingDispatchLifecycle from "./FactoryLoadingDispatchLifecycle";
+import FactoryLoadingDispatchFinance from "./FactoryLoadingDispatchFinance";
+import FactoryLoadingDispatchPostingPanel from "./FactoryLoadingDispatchPostingPanel";
+import FactoryLoadingDispatchPoExport from "./FactoryLoadingDispatchPoExport";
 
 interface OrderBale {
   id: number;
@@ -311,6 +315,8 @@ export default function FactoryLoadingDispatch() {
     refetchInterval: 15000,
   });
 
+  const role = (user?.currentRole ?? user?.role ?? "").toLowerCase();
+  const canViewFinancialDashboard = ["admin","owner","developer"].includes(role);
   const canEdit = !["View Only", "Create Only"].includes(user?.currentRole ?? user?.role ?? "");
   const canCreate = canEdit && activeOrderStatuses.has(orderQuery.data?.status ?? "");
 
@@ -502,6 +508,18 @@ export default function FactoryLoadingDispatch() {
             </div>
           </CardContent>
         </Card>
+
+        {dispatchId === null && canViewFinancialDashboard && (
+          <ErrorBoundary resetKey={"factory-dispatch-overview-"+orderId}>
+            <FactoryDispatchOrderDashboard
+              orderId={orderId}
+              companyId={companyId}
+              onOpenTrip={(tripId) => navigate(tripPath(orderId, tripId))}
+              onCompareAll={() => navigate("/factory/sales/loading/dispatch/" + orderId + "/compare")}
+              onPhysicalReport={() => navigate("/factory/sales/loading/dispatch/" + orderId + "/report")}
+            />
+          </ErrorBoundary>
+        )}
 
         {dispatchId === null ? (
           <div className="space-y-3">
@@ -742,6 +760,36 @@ export default function FactoryLoadingDispatch() {
                       }}
                     />
                   </ErrorBoundary>
+                  <ErrorBoundary resetKey={"dispatch-finance-" + dispatchId}>
+                    <FactoryLoadingDispatchFinance
+                      key={dispatchId}
+                      orderId={orderId}
+                      dispatchId={dispatchId}
+                      companyId={companyId}
+                      status={selectedTrip.status}
+                      role={user?.currentRole ?? user?.role ?? ""}
+                    />
+                  </ErrorBoundary>
+                  <ErrorBoundary resetKey={"dispatch-posting-" + dispatchId}>
+                    <FactoryLoadingDispatchPostingPanel
+                      key={dispatchId}
+                      orderId={orderId}
+                      dispatchId={dispatchId}
+                      companyId={companyId}
+                      status={selectedTrip.status}
+                      role={user?.currentRole ?? user?.role ?? ""}
+                    />
+                  </ErrorBoundary>
+                  <ErrorBoundary resetKey={"dispatch-po-export-" + dispatchId}>
+                    <FactoryLoadingDispatchPoExport
+                      key={dispatchId}
+                      orderId={orderId}
+                      dispatchId={dispatchId}
+                      companyId={companyId}
+                      status={selectedTrip.status}
+                      role={user?.currentRole ?? user?.role ?? ""}
+                    />
+                  </ErrorBoundary>
                 </div>
                 <div className="xl:col-span-2">
                   <FactoryLoadingDispatchScanner
@@ -764,7 +812,7 @@ export default function FactoryLoadingDispatch() {
         )}
 
         <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 pt-4 text-xs text-muted-foreground dark:border-slate-700">
-          <ShieldCheck className="h-4 w-4" /> Separate truck records · Same loading order · No stock or accounting
+          <ShieldCheck className="h-4 w-4" /> Separate truck records · Same loading order · Draft charge previews do not post stock or accounting
           changes
         </div>
       </div>

@@ -232,6 +232,20 @@ async function customerMemoRows(executor: Executor, query: MemoQuery): Promise<C
     ? sql`(${numberMatches("cv", chargeNumber, false)} OR (${numberMatches("cv", chargeNumber, true)}))`
     : numberMatches("cv", chargeNumber, false);
   const invoiceDate = sql`COALESCE(co.finalized_at, co.created_at)::date`;
+  // A finalized Factory multi-truck invoice ALREADY reached the ledger through
+  // the original FDTR receivables and the FDINV clearing transfer. It does NOT
+  // create a second INV-GL journal. Exclude it from "not yet posted" memos
+  // instead of incorrectly reporting the full invoice amount a second time.
+  const [dispatchSchema] = await rowsOf<{present:boolean}>(executor,sql`
+    SELECT to_regclass('public.factory_dispatch_order_consolidations') IS NOT NULL AS present
+  `);
+  const consolidatedAlreadyPosted = dispatchSchema?.present ? sql`
+    AND NOT EXISTS (
+      SELECT 1 FROM factory_dispatch_order_consolidations dc
+       WHERE dc.company_id=co.company_id AND dc.order_id=co.id
+         AND dc.status='FINALIZED' AND dc.invoice_number=co.invoice_number
+    )
+  ` : sql``;
   const invoices = rowsOf<CustomerMemoRow>(
     executor,
     sql`
@@ -264,6 +278,7 @@ async function customerMemoRows(executor: Executor, query: MemoQuery): Promise<C
         FROM customer_orders co
         LEFT JOIN customer_dispatch_batches b ON b.id = co.dispatch_batch_id AND b.company_id = co.company_id
        WHERE co.company_id = ${companyId} AND co.status = 'FINALIZED' AND ${invoiceNotDeleted}
+         ${consolidatedAlreadyPosted}
          AND co.customer_id IN (${idList(ids)})
          ${invoiceCreated}
          AND NOT ${liveVoucherExists(

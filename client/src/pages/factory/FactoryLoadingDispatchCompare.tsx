@@ -41,6 +41,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { TabsList, PillTabButton } from "@/components/ui/tabs";
 import { companyQueryKey } from "@/lib/companyQueryScope";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import FactoryDispatchOrderFinancialReview, {
+  type DispatchOrderReconciliation,
+} from "./FactoryDispatchOrderFinancialReview";
 
 import {
   Comparison,
@@ -71,6 +76,8 @@ export default function FactoryLoadingDispatchCompare() {
   const [selectedMissing, setSelectedMissing] = useState<number[]>([]);
   const [removeOpen, setRemoveOpen] = useState(false);
   const [removing, setRemoving] = useState(false);
+  const [removalReason, setRemovalReason] = useState("");
+  const [removeConfirmed, setRemoveConfirmed] = useState(false);
   const { toast } = useToast();
   const { data: auth } = useQuery<{
     currentCompanyId?: number | null;
@@ -90,6 +97,24 @@ export default function FactoryLoadingDispatchCompare() {
     enabled: valid && Boolean(companyId),
     refetchInterval: 5000,
   });
+  const reconciliationUrl = "/api/factory/customer-orders/" + orderId +
+    "/loading-dispatches/order-reconciliation";
+  const financialReconciliation = useQuery<DispatchOrderReconciliation>({
+    queryKey: companyQueryKey(reconciliationUrl, companyId),
+    queryFn: async () => {
+      const response = await fetch(reconciliationUrl, { credentials:"include",cache:"no-store" });
+      const data = await response.json().catch(()=>({}));
+      if(!response.ok) throw new Error(data.message || "Unable to read financial reconciliation");
+      return data as DispatchOrderReconciliation;
+    },
+    enabled: valid && Boolean(companyId) && dispatchId === null,
+    refetchInterval: removeOpen ? false : 10000,
+  });
+  const refreshAllReconciliation = () => {
+    void financialReconciliation.refetch();
+    void comparison.refetch();
+    void queryClient.invalidateQueries({ queryKey: companyQueryKey(reconciliationUrl,companyId) });
+  };
   const result = comparison.data;
   const s = result?.summary;
   const articles = useMemo(() => result?.articles ?? [], [result?.articles]);
@@ -99,11 +124,18 @@ export default function FactoryLoadingDispatchCompare() {
   );
   const allTripsEnded =
     Boolean(result?.trips.length) && (result?.trips.every((trip) => trip.status !== "OPEN") ?? false);
+  const isSupervisor = ["admin", "owner", "developer"]
+    .includes((auth?.currentRole ?? auth?.role ?? "").toLowerCase());
   const canReconcile =
-    !selectedId &&
-    allTripsEnded &&
+    !selectedId && allTripsEnded &&
     ["LOADING", "PENDING_VERIFICATION"].includes(result?.loadingStatus ?? "") &&
-    ["admin", "owner", "developer"].includes((auth?.currentRole ?? auth?.role ?? "").toLowerCase());
+    isSupervisor &&
+    Boolean(financialReconciliation.data) &&
+    !financialReconciliation.data?.approval &&
+    financialReconciliation.data?.fingerprint !== undefined &&
+    (financialReconciliation.data?.summary.unshippedBales ?? 0) > 0 &&
+    financialReconciliation.data?.summary.duplicateScans === 0 &&
+    financialReconciliation.data?.summary.unexpectedScans === 0;
   const selectedCurrent = selectedMissing.filter((id) => missingFromLoading.some((bale) => bale.orderBaleId === id));
   const selectedBales = missingFromLoading.filter((bale) => selectedCurrent.includes(bale.orderBaleId!));
   const selectedKg = selectedBales.reduce((sum, bale) => sum + (Number(bale.weightKg) || 0), 0);
@@ -113,35 +145,36 @@ export default function FactoryLoadingDispatchCompare() {
     );
   };
   const removeSelected = async () => {
-    if (!canReconcile || removing || selectedCurrent.length === 0) return;
+    const fin=financialReconciliation.data;
+    if (!canReconcile || removing || !fin || selectedCurrent.length===0 ||
+        !removeConfirmed || removalReason.trim().length<10) return;
     setRemoving(true);
-    let removed = 0;
-    let failure: string | null = null;
     try {
-      // Only loading links are removed; dispatch scan evidence stays untouched.
-      for (const id of selectedCurrent) {
-        await apiRequest(
-          "DELETE",
-          "/api/factory/customer-orders/" + orderId + "/bales/" + id + "?source=dispatch-reconciliation"
-        );
-        removed++;
-      }
-    } catch (error) {
-      failure = error instanceof Error ? error.message : "Loading reconciliation failed";
+      // One signed, all-or-nothing database transaction. Never issue a
+      // sequence of legacy DELETE calls that could partially remove a load.
+      const response=await apiRequest("POST",reconciliationUrl+"/remove-unshipped",{
+        confirm:true,orderBaleIds:selectedCurrent,
+        expectedFingerprint:fin.fingerprint,reason:removalReason.trim(),
+      });
+      const result=await response.json() as {removed:number;remainingUnshipped:number};
+      toast({title:"Unshipped bales reconciled",
+        description:result.removed+" bale(s) returned to stock in one transaction. "+
+          result.remainingUnshipped+" still unshipped."});
+      setSelectedMissing([]);
+      setRemovalReason("");
+      setRemoveConfirmed(false);
+      setRemoveOpen(false);
+      void queryClient.invalidateQueries({
+        queryKey:companyQueryKey("/api/factory/customer-orders/"+orderId,companyId),
+      });
+    } catch(error) {
+      toast({title:"No partial removal committed",
+        description:error instanceof Error?error.message:"Reconciliation failed",
+        variant:"destructive"});
     } finally {
       setRemoving(false);
-      setRemoveOpen(false);
-      setSelectedMissing([]);
-      await comparison.refetch();
-      void queryClient.invalidateQueries({
-        queryKey: companyQueryKey("/api/factory/customer-orders/" + orderId, companyId),
-      });
+      refreshAllReconciliation();
     }
-    toast({
-      title: failure ? "Reconciliation partially completed" : "Pending Loading updated",
-      description: removed + " unscanned bale(s) removed from the loading order" + (failure ? ". " + failure : "."),
-      variant: failure ? "destructive" : "default",
-    });
   };
 
   const rows = useMemo(() => {
@@ -307,6 +340,21 @@ export default function FactoryLoadingDispatchCompare() {
             </div>
 
             {!selectedId && (
+              <FactoryDispatchOrderFinancialReview
+                value={financialReconciliation.data ?? null}
+                loading={financialReconciliation.isPending}
+                error={financialReconciliation.isError
+                  ? (financialReconciliation.error instanceof Error
+                    ? financialReconciliation.error.message : "Financial reconciliation unavailable")
+                  : null}
+                orderId={orderId}
+                companyId={companyId}
+                isSupervisor={isSupervisor}
+                onRefresh={refreshAllReconciliation}
+              />
+            )}
+
+            {!selectedId && (
               <Card
                 className="border-blue-200 bg-white dark:border-blue-500/25 dark:bg-[hsl(var(--factory-hue)_53%_13%)]"
                 data-testid="pending-loading-final-reconciliation"
@@ -397,8 +445,9 @@ export default function FactoryLoadingDispatchCompare() {
                     </>
                   )}
                   <p className="text-[11px] text-muted-foreground">
-                    Removal is restricted to Admin, Owner and Developer, and only for unscanned bales in active loading
-                    orders. It uses the regular audited loading correction and returns the removed bales to stock.
+                    Removal is restricted to Admin, Owner and Developer, requires an approval reason,
+                    and returns only unshipped bales to stock in one atomic transaction. No scanned/posted bale can be removed.
+                    After signing the final order reconciliation, all further removals are locked.
                   </p>
                 </CardContent>
               </Card>
@@ -658,13 +707,25 @@ export default function FactoryLoadingDispatchCompare() {
               remains unchanged.
             </DialogDescription>
           </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="dispatch-shortfall-reason">Reason for removing the unshipped bales</Label>
+            <Textarea id="dispatch-shortfall-reason" rows={3} maxLength={1000}
+              value={removalReason} onChange={e=>setRemovalReason(e.target.value)}
+              placeholder="All trucks are closed; these bales were never physically loaded…" />
+            <label className="flex items-start gap-2 rounded-md border p-3 text-xs">
+              <Checkbox checked={removeConfirmed} onCheckedChange={v=>setRemoveConfirmed(v===true)} />
+              <span>I reviewed the selected exact bale references and authorize returning only
+                unshipped bales to stock as one atomic correction.</span>
+            </label>
+          </div>
           <DialogFooter className="gap-2 sm:gap-0">
             <Button variant="outline" disabled={removing} onClick={() => setRemoveOpen(false)}>
               Cancel
             </Button>
             <Button
               variant="destructive"
-              disabled={!canReconcile || removing || selectedCurrent.length === 0}
+              disabled={!canReconcile || removing || selectedCurrent.length === 0 ||
+                removalReason.trim().length < 10 || removalReason.trim().length > 1000 || !removeConfirmed}
               onClick={() => void removeSelected()}
               data-testid="button-confirm-remove-missing-bales"
             >
