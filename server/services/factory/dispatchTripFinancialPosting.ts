@@ -17,7 +17,7 @@ import { sql } from "drizzle-orm";
 import type Decimal from "decimal.js";
 import type { DbTransaction } from "../../db";
 import { resultRows } from "../../lib/queryResult";
-import { MoneyDecimal } from "../../lib/money";
+import { MoneyDecimal, sumMoney } from "../../lib/money";
 import { customerLedgerAccountTx } from "../accounting/perpetualInventory/factoryInvoice";
 import { ledgerAccountByCodeTx } from "../accounting/perpetualInventory/linkedJournal";
 import {
@@ -176,16 +176,27 @@ export async function postDispatchTripFinancialTx(
   const financial = await readFinancial(tx, scope);
   if (financial?.status === "POSTED") {
     const [record] = await rows(tx, sql`
-      SELECT voucher_ids AS "voucherIds"
+      SELECT voucher_ids AS "voucherIds", source_fingerprint AS "sourceFingerprint"
         FROM factory_dispatch_trip_postings
        WHERE financial_id = ${financial.id} AND kind = 'POST'
          AND posting_revision = ${financial.postingRevision} LIMIT 1
     `);
+    if (!record || !Array.isArray(record.voucherIds)) {
+      refuse("TRIP_POSTING_INCOMPLETE", "The original financial posting evidence is missing; accounting review required");
+    }
+    if (req.sourceFingerprint !== financial.sourceFingerprint ||
+        req.sourceFingerprint !== String(record.sourceFingerprint)) {
+      refuse("TRIP_ALREADY_POSTED_DIFFERENT_SOURCE",
+        "The trip has already been posted from another signed source revision");
+    }
+    const postedCharges = await readCharges(tx, financial.id, financial.postingRevision, scope);
+    const totals = buildTripChargePreview(financial.goodsSubtotal, postedCharges);
     return {
       financialId: financial.id, status: "POSTED", revision: financial.postingRevision,
       goodsSubtotal: financial.goodsSubtotal, billableChargesTotal: financial.billableChargesTotal,
       discountTotal: financial.discountTotal, customerTotal: financial.customerTotal,
-      internalExpenseTotal: "0.00", voucherIds: Array.isArray(record?.voucherIds) ? record.voucherIds.map(numberId) : [],
+      internalExpenseTotal: totals.internalExpenseTotal,
+      voucherIds: record.voucherIds.map(numberId),
       replayed: true,
     };
   }
@@ -265,6 +276,11 @@ export async function postDispatchTripFinancialTx(
     if (charge.kind === "DISCOUNT") invoiceLines.push({
       ledgerAccountId: charge.ledgerAccountId, debit: amount, narration: charge.name,
     });
+  }
+  const voucherDebits = sumMoney(invoiceLines.map(line => line.debit ?? 0));
+  const voucherCredits = sumMoney(invoiceLines.map(line => line.credit ?? 0));
+  if (!voucherDebits.eq(voucherCredits)) {
+    refuse("TRIP_JOURNAL_UNBALANCED", "Customer receivable and trip charge journal does not balance");
   }
   const voucherIds: number[] = [];
   let salesVoucherId: number | null = null;
