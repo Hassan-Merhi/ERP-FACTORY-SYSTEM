@@ -116,3 +116,42 @@ The connected browser automation does not expose explicit 390px/768px/1440px vie
 - [ ] Complete actual 390px/768px/1440px mobile/tablet/desktop screenshot acceptance matrix.
 
 Phase 4 **is not fully certified** on this evidence. Do not change the checklist to completed without actual test and browser artifacts.
+
+## Isolated test-and-render verification (2026-11-10, additional pass)
+
+An isolated Vercel sandbox checked out the current public `main` branch and installed locked NPM dependencies using `npm ci --ignore-scripts`. The actual Vitest frontend suite was executed:
+
+```text
+node node_modules/vitest/vitest.mjs run --config vitest.config.frontend.ts client/src/styles/factory-unified-theme.test.ts client/src/styles/factory-unified-theme-phase4.test.ts
+Test Files 2 passed (2)
+Tests      8 passed (8)
+Exit code  0
+```
+
+The initial run exposed four fixed `dark:bg-[#101c34]` surfaces in Factory dispatch finance components newly added after the earlier color migration. The four files were fixed on `main` using `dark:bg-card`:
+- `FactoryDispatchOrderFinancialReview.tsx`
+- `FactoryLoadingDispatchFinance.tsx`
+- `FactoryLoadingDispatchPoExport.tsx`
+- `FactoryLoadingDispatchPostingPanel.tsx`
+
+Focused tests were rerun after these fixes and then again after formatting the Phase 4 test assertion; all 8 passed on both reruns. The Phase 4 test file passes Prettier.
+
+A real headless Chromium run loaded the current `factory-unified-theme.css` into an isolated representative workspace DOM. For **390px**, **768px**, and **1440px**, separately in **light and dark** mode, all 6 combinations confirmed:
+- `--factory-hue` is `217`;
+- workspace computed backgrounds are valid (`rgb(248, 249, 252)` light and `rgb(19, 22, 27)` dark);
+- Factory container stripe gradients resolve;
+- no horizontal overflow **in that isolated workspace fixture**.
+
+These are measured browser rendering results, **not authenticated real-page visual QA**. The fixture does not include actual dynamic Factory pages, dialogs, data tables or mobile navigation. Screenshot files were generated in the isolated sandbox at `/tmp/factory-theme-{mode}-{width}.png`, not promoted as user-visible downloadable artifacts.
+
+`npm run check` (full TypeScript type-check) exited 137 due to sandbox memory exhaustion, so no passing type-check is claimed. This was a separate broad check, not the focused theme test suite.
+
+### Acceptance state
+- [x] Actual Factory theme Vitest suite: 8/8 passing.
+- [x] Fix four newly introduced hardcoded dispatch-finance dark surfaces.
+- [x] Measured 390/768/1440 light/dark **theme CSS fixture** in Chromium.
+- [ ] Authenticated business-page dark-mode screenshot matrix across the representative Factory routes.
+- [ ] Authenticated business-page layout checks at 390/768/1440 including nav, dialogs and tables.
+- [ ] Verify the updated `main` revision on the deployed service.
+
+**Do not mark Phase 4 certified on these isolated fixture results alone.**
