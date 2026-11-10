@@ -118,6 +118,41 @@ CREATE TRIGGER factory_dispatch_closure_posted_guard
   BEFORE UPDATE OR DELETE ON factory_loading_dispatch_closure_history
   FOR EACH ROW EXECUTE FUNCTION factory_dispatch_guard_posted_physical_evidence();
 
+
+-- Apply the same fail-closed company RLS as the existing ERP vouchers and
+-- ledger_accounts. A missing app.current_company_id MUST NOT expose all trips.
+DO $dispatch_rls$
+DECLARE
+  tenant_table TEXT;
+  policy_name TEXT;
+BEGIN
+  IF to_regprocedure('public.erp_company_scope_matches(integer)') IS NULL THEN
+    RAISE EXCEPTION 'ERP company scope RLS migration 0016 must be installed first';
+  END IF;
+  FOREACH tenant_table IN ARRAY ARRAY[
+    'factory_dispatch_trip_financials',
+    'factory_dispatch_trip_financial_bales',
+    'factory_dispatch_trip_charges',
+    'factory_dispatch_trip_postings',
+    'factory_dispatch_trip_exports',
+    'factory_dispatch_order_consolidations',
+    'factory_dispatch_financial_events'
+  ]
+  LOOP
+    EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', tenant_table);
+    EXECUTE format('ALTER TABLE public.%I FORCE ROW LEVEL SECURITY', tenant_table);
+    policy_name := tenant_table || '_company_scope_policy';
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', policy_name, tenant_table);
+    EXECUTE format(
+      'CREATE POLICY %I ON public.%I AS PERMISSIVE FOR ALL TO public '
+      || 'USING (erp_company_scope_matches(company_id)) '
+      || 'WITH CHECK (erp_company_scope_matches(company_id))',
+      policy_name, tenant_table
+    );
+  END LOOP;
+END
+$dispatch_rls$;
+
 COMMIT;
 
 -- Phase 8 will need its own explicitly controlled consolidated invoice write
