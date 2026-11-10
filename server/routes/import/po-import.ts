@@ -39,6 +39,12 @@ import {
   validateZmwContainerPreview,
 } from "./poImportZambia";
 import { errorStatus } from "../../lib/httpHandlers";
+import { validateFactoryDispatchPoImport } from "./factoryDispatchPoImportGuard";
+import {
+  FactoryTripPoReceiptError, inspectFactoryTripPoReceipt,
+  reserveFactoryTripPoReceipt, completeFactoryTripPoReceipt,
+  canonicalFactoryTripPayloadFingerprint,
+} from "./factoryDispatchPoImportReceipt";
 
 export function registerPoImportRoutes(app: Express) {
   app.post("/api/po-import/validate", requireAuth, async (req, res) => {
@@ -119,6 +125,24 @@ export function registerPoImportRoutes(app: Express) {
             resolvedItems
           ))
         );
+        // FD- trip workbooks have stricter rules than ordinary supplier POs:
+        // company-owned stock CODE/ALIAS must match exactly; similar item
+        // names are not permitted to silently substitute another article.
+        const factoryTripCheck = await validateFactoryDispatchPoImport(
+          req.session.currentCompanyId!, containerPreview, supplier, allStockItems
+        );
+        errors.push(...factoryTripCheck.errors);
+        if (factoryTripCheck.identity) {
+          resolvedItems.splice(0, resolvedItems.length, ...factoryTripCheck.resolvedItems);
+          const previous = await inspectFactoryTripPoReceipt(
+            req.session.currentCompanyId!, factoryTripCheck.identity
+          );
+          if (previous) {
+            errors.push(previous.status === "IMPORTED"
+              ? "This Factory dispatch truck has already been imported into ERP."
+              : "An earlier Factory dispatch PO import requires reconciliation; do not retry or double post.");
+          }
+        }
 
         // Validate parent freight account when freight is present and paid by parent
         const containerFreight = containerPreview.charges?.freight || 0;
@@ -133,6 +157,9 @@ export function registerPoImportRoutes(app: Express) {
         resolvedItems,
       });
     } catch (error: unknown) {
+      if (error instanceof FactoryTripPoReceiptError) {
+        return res.status(error.status).json({ code: error.code, message: error.message });
+      }
       logger.error("PO Import validation error:", { error: error });
       res.status(500).json({ message: getErrorMessage(error) });
     }
@@ -224,6 +251,20 @@ export function registerPoImportRoutes(app: Express) {
       validationErrors.push(
         ...(await collectPreviewItemErrors(containerPreview.items, req.session.currentCompanyId!, allStockItems))
       );
+      // This guard is repeated on the import action itself. Never assume the
+      // client called Validate, or trust previously-resolved stockItemId.
+      const factoryTripCheck = await validateFactoryDispatchPoImport(
+        currentCompanyId, containerPreview, supplier, allStockItems
+      );
+      validationErrors.push(...factoryTripCheck.errors);
+      if (factoryTripCheck.identity) {
+        const previous = await inspectFactoryTripPoReceipt(currentCompanyId, factoryTripCheck.identity);
+        if (previous) {
+          validationErrors.push(previous.status === "IMPORTED"
+            ? "This Factory dispatch truck is already imported into ERP."
+            : "An earlier Factory dispatch PO import needs reconciliation; automatic retry is blocked.");
+        }
+      }
 
       // The explicitly selected invoice currency is stamped on every line (and
       // checked against the sheet) before any Kwacha conversion or write.
@@ -261,6 +302,33 @@ export function registerPoImportRoutes(app: Express) {
       // a placeholder — merge the imported PO/line items into that existing record
       // instead of creating a duplicate or blocking.
       const existingContainerCheck = await storage.getContainerByNumber(containerNumber);
+      // This includes empty OTW placeholders: a Factory trip has an immutable
+      // globally unique container identity and must not attach to another
+      // manually-created tracking placeholder.
+      if (factoryTripCheck.identity && existingContainerCheck) {
+        return res.status(409).json({
+          code: "FD_PO_CONTAINER_ALREADY_EXISTS",
+          message: "This Factory dispatch trip's ERP container already exists. Inspect that container before posting another PO.",
+        });
+      }
+      // Reserve before the first ERP purchase/container/voucher write. The
+      // unique origin index prevents concurrent imports, renamed files, or
+      // edited rates from creating another supplier liability for this truck.
+      // A failed downstream legacy import leaves a PENDING_REVIEW receipt;
+      // never auto-retry a possibly partially posted purchase.
+      const factoryTripReceiptId = factoryTripCheck.identity
+        ? await reserveFactoryTripPoReceipt({
+            companyId: currentCompanyId,
+            supplierId,
+            supplierCode: supplier!.code,
+            identity: factoryTripCheck.identity,
+            fileHash, fileName,
+            amount: factoryTripCheck.supplierTotal!,
+            userId: req.session.userId || String(req.session.username || "system"),
+          }, canonicalFactoryTripPayloadFingerprint(
+            factoryTripCheck.identity, containerPreview, supplier!.code
+          ))
+        : null;
       let container: Container;
       if (existingContainerCheck) {
         const blockedMessage = {
@@ -825,8 +893,12 @@ export function registerPoImportRoutes(app: Express) {
           if (item.barcode) {
             stockItem = await storage.getStockItemByCodeOrAlias(item.barcode, req.session.currentCompanyId!);
           }
-          if (!stockItem && item.itemName) {
+          if (!stockItem && item.itemName && !factoryTripCheck.identity) {
             stockItem = freshStockItems.find((si) => si.name === item.itemName);
+          }
+          if (factoryTripCheck.identity && !stockItem) {
+            throw new FactoryTripPoReceiptError("FD_PO_ARTICLE_CHANGED",
+              "ERP article alias changed during import. Purchase may have partially posted; reconcile the pending receipt instead of retrying.");
           }
 
           if (stockItem) {
@@ -877,13 +949,18 @@ export function registerPoImportRoutes(app: Express) {
       }
 
       // Create import log
-      await storage.createImportLog({
+      const importLog = await storage.createImportLog({
         fileName,
         fileHash,
         rowCount: containerPreview.items.length,
         containerId: container.id,
         status: "Success",
       });
+      if (factoryTripReceiptId !== null) {
+        await completeFactoryTripPoReceipt(
+          currentCompanyId, factoryTripReceiptId, container.id, importLog.id
+        );
+      }
 
       res.json({
         success: true,
@@ -894,6 +971,10 @@ export function registerPoImportRoutes(app: Express) {
       });
     } catch (error: unknown) {
       logger.error("PO Import error:", { error: error });
+      if (error instanceof FactoryTripPoReceiptError) {
+        res.status(error.status).json({ code: error.code, message: error.message });
+        return;
+      }
       if (error instanceof ParentCompanyPostingScopeError) {
         res.status(error.status).json({ code: error.code, message: error.message });
         return;
