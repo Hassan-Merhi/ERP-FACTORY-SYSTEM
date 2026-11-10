@@ -206,6 +206,7 @@ export async function loadFactoryDispatchOrderOverviewTx(
       notices.push("The signed combined invoice does not match the original order's invoice identity. Accounting review is required.");
     }
   }
+  for(const trip of trips)trip.financialStatus="UNPOSTED";
   const financial=await rows(tx,sql`
     SELECT f.dispatch_id::text AS "dispatchId",f.status AS "financialStatus",
       f.posting_revision AS revision,
@@ -304,10 +305,14 @@ export async function loadFactoryDispatchOrderOverviewTx(
   summary.originalOrderCharges=moneySum(original.map(r=>r.amount));
   summary.internalExpenses=moneySum(charges.filter(c=>c.kind==="INTERNAL" &&
     c.status==="POSTED").map(c=>c.amount));
-  summary.invoiceTotal=summary.finalized && consolidated?.details &&
-    typeof consolidated.details==="object" && !Array.isArray(consolidated.details)
-    ? amount((consolidated.details as Record<string,unknown>).finalInvoiceTotal)
-    : null;
+  const signedFinal=consolidated?.details && typeof consolidated.details==="object" &&
+    !Array.isArray(consolidated.details)
+    ? (consolidated.details as Record<string,unknown>).finalInvoiceTotal : null;
+  summary.invoiceTotal=summary.finalized && signedFinal!==null && signedFinal!==undefined
+    ? amount(signedFinal) : null;
+  if(summary.finalized && summary.invoiceTotal===null){
+    notices.push("Finalized invoice is missing its signed total snapshot. Accounting review is required.");
+  }
   if(summary.finalized && summary.invoiceTotal!==null){
     const calculated=amt(summary.tripCustomerTotal).plus(summary.originalOrderCharges);
     if(!calculated.eq(amt(summary.invoiceTotal))){
