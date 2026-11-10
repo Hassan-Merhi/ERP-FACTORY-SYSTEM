@@ -377,6 +377,30 @@ export async function reverseDispatchTripFinancialTx(
        AND reference_id=${scope.orderId} AND transaction_type='PAYMENT' LIMIT 1
   `);
   if (settlement) refuse("TRIP_SETTLEMENT_LOCKED", "Payments linked to this loading must be reversed before financial correction");
+  // A receipt or credit may be recorded directly against the customer's
+  // ledger rather than the order-specific customer_balances cache. Refuse a
+  // potentially settled reversal instead of guessing which credit applied.
+  const [customerCredit] = await rows(tx, sql`
+    SELECT 1
+      FROM customer_orders o
+      JOIN factory_dispatch_trip_financials f
+        ON f.company_id=o.company_id AND f.order_id=o.id
+      JOIN voucher_entries ve ON ve.customer_id=o.customer_id
+      JOIN vouchers v ON v.id=ve.voucher_id AND v.company_id=o.company_id
+     WHERE o.company_id=${scope.companyId} AND o.id=${scope.orderId}
+       AND f.id=${financial.id} AND v.deleted_at IS NULL
+       AND COALESCE(v.optional, FALSE)=FALSE
+       AND COALESCE(ve.credit_amount, 0) > 0
+       AND (
+         COALESCE(v.effective_date,v.voucher_date) >= f.valuation_date
+         OR v.created_at >= f.posted_at
+       )
+     LIMIT 1
+  `);
+  if (customerCredit) {
+    refuse("TRIP_CUSTOMER_CREDIT_RECONCILIATION_REQUIRED",
+      "A customer payment or credit exists after this trip was posted. Reconcile or reverse that credit first.");
+  }
   const [original] = await rows(tx, sql`
     SELECT id,voucher_ids AS "voucherIds",source_fingerprint AS "sourceFingerprint"
       FROM factory_dispatch_trip_postings WHERE financial_id=${financial.id}
