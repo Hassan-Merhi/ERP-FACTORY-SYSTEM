@@ -6,7 +6,7 @@
  * their writes, not in a UI-only check.
  */
 import { sql } from "drizzle-orm";
-import type { DbTransaction } from "../../db";
+import type { DbTransaction, DatabaseOrTransaction } from "../../db";
 import { resultRows } from "../../lib/queryResult";
 
 export async function tripFinancialSchemaInstalledTx(tx: DbTransaction): Promise<boolean> {
@@ -57,6 +57,28 @@ export async function isPostedDispatchBaleTx(
        WHERE b.company_id=${companyId} AND b.order_id=${orderId}
          AND b.bale_id=${baleId} AND b.snapshot_revision=f.snapshot_revision
          AND f.status IN ('POSTED','CONSOLIDATED')
+    ) AS found
+  `));
+  return row?.found === true;
+}
+
+/**
+ * A source-owned voucher (including an offsetting reversal) must never be
+ * edited, retired or reversed through the generic voucher editor: that would
+ * desynchronize the trip's immutable POST/REVERSAL record from the ledger.
+ */
+export async function isDispatchFinancialVoucherTx(
+  executor: DatabaseOrTransaction, companyId: number, voucherId: number
+): Promise<boolean> {
+  const [schema] = resultRows(await executor.execute(sql`
+    SELECT to_regclass('public.factory_dispatch_trip_postings') IS NOT NULL AS installed
+  `));
+  if (schema?.installed !== true) return false;
+  const [row] = resultRows(await executor.execute(sql`
+    SELECT EXISTS (
+      SELECT 1 FROM factory_dispatch_trip_postings
+       WHERE company_id=${companyId}
+         AND voucher_ids @> jsonb_build_array(${voucherId}::integer)
     ) AS found
   `));
   return row?.found === true;
