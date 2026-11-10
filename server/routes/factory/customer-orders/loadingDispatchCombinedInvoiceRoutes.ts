@@ -12,6 +12,7 @@ import { closedPeriodErrorResponse } from "../../../lib/closedPeriodError";
 import { freezeCanonicalInvoiceDocument } from "../../../services/factoryInvoiceDocumentService";
 import { dispatchNotification } from "../../../lib/notificationService";
 import { OrderReconciliationError } from "./loadingDispatchOrderReconciliationModel";
+import { assertFactoryDispatchReleaseReadyTx, DispatchReleaseNotReadyError } from "../../../services/factory/dispatchReleaseReadiness";
 import {
   loadCombinedInvoicePlanTx,finalizeCombinedInvoiceTx,
   type CombinedInvoiceScope,
@@ -33,6 +34,9 @@ async function scope(req:Request):Promise<CombinedInvoiceScope & {role:string}>{
   };
 }
 function errorResult(res:Response,e:unknown){
+  if(e instanceof DispatchReleaseNotReadyError){
+    return res.status(e.status).json({code:e.code,message:e.message,missing:e.report.missing});
+  }
   if(e instanceof OrderReconciliationError){
     return res.status(e.status).json({code:e.code,message:e.message});
   }
@@ -55,6 +59,7 @@ export function registerFactoryDispatchCombinedInvoiceRoutes(app:Express):void{
       const s=await scope(req);
       const result=await db.transaction(async tx=>{
         await tx.execute(sql`SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY`);
+        await assertFactoryDispatchReleaseReadyTx(tx,"FINAL_INVOICE");
         const [final]=resultRows(await tx.execute(sql`
           SELECT c.status,c.invoice_number AS "invoiceNumber",
                  c.reconciliation_fingerprint AS "fingerprint",
