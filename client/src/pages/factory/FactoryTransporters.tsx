@@ -109,7 +109,7 @@ function ChargeDialog({ transporterId, open, onClose }: { transporterId: number;
     onSuccess: () => {
       toast({ title: "Charge recorded" });
       queryClient.invalidateQueries({ queryKey: [API] });
-      queryClient.invalidateQueries({ queryKey: [API, transporterId] });
+      queryClient.invalidateQueries({ queryKey: companyQueryKey(API, selectedCompany?.id, transporterId) });
       setAmount("");
       setDescription("");
       onClose();
@@ -221,7 +221,7 @@ function PaymentDialog({
     onSuccess: () => {
       toast({ title: "Payment recorded" });
       queryClient.invalidateQueries({ queryKey: [API] });
-      queryClient.invalidateQueries({ queryKey: [API, transporterId] });
+      queryClient.invalidateQueries({ queryKey: companyQueryKey(API, selectedCompany?.id, transporterId) });
       setAmount("");
       setDescription("");
       onClose();
@@ -320,7 +320,7 @@ function TransporterStatement({ transporterId, onBack }: { transporterId: number
     onSuccess: () => {
       toast({ title: "Entry deleted" });
       queryClient.invalidateQueries({ queryKey: [API] });
-      queryClient.invalidateQueries({ queryKey: [API, transporterId] });
+      queryClient.invalidateQueries({ queryKey: companyQueryKey(API, selectedCompany?.id, transporterId) });
     },
     onError: (e: ClientErrorLike) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
