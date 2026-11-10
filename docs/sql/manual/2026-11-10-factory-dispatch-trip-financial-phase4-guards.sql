@@ -119,6 +119,71 @@ CREATE TRIGGER factory_dispatch_closure_posted_guard
   FOR EACH ROW EXECUTE FUNCTION factory_dispatch_guard_posted_physical_evidence();
 
 
+-- Source-owned vouchers and their original/reversal entries remain immutable.
+-- No generic voucher editor, retirement, direct SQL update or extra entry may
+-- silently change the linked Factory trip customer amount.
+CREATE OR REPLACE FUNCTION factory_dispatch_guard_posted_vouchers()
+RETURNS TRIGGER LANGUAGE plpgsql AS $
+DECLARE
+  protected_voucher_id INTEGER;
+  protected_company_id INTEGER;
+  linked BOOLEAN;
+BEGIN
+  IF TG_TABLE_NAME = 'voucher_entries' THEN
+    IF TG_OP = 'INSERT' THEN
+      protected_voucher_id := NEW.voucher_id;
+    ELSE
+      protected_voucher_id := OLD.voucher_id;
+    END IF;
+    SELECT company_id INTO protected_company_id FROM vouchers WHERE id = protected_voucher_id;
+  ELSIF TG_TABLE_NAME = 'accounting_posting_requests' THEN
+    IF TG_OP = 'INSERT' THEN RETURN NEW; END IF;
+    protected_voucher_id := OLD.voucher_id;
+    protected_company_id := OLD.company_id;
+  ELSE
+    IF TG_OP = 'INSERT' THEN RETURN NEW; END IF;
+    protected_voucher_id := OLD.id;
+    protected_company_id := OLD.company_id;
+  END IF;
+
+  IF protected_voucher_id IS NOT NULL AND protected_company_id IS NOT NULL THEN
+    SELECT EXISTS (
+      SELECT 1 FROM factory_dispatch_trip_postings p
+       WHERE p.company_id=protected_company_id
+         AND p.voucher_ids @> jsonb_build_array(protected_voucher_id)
+    ) INTO linked;
+    IF linked THEN
+      RAISE EXCEPTION 'Source-owned Factory dispatch voucher cannot be changed or retired; use trip financial correction';
+    END IF;
+  END IF;
+  IF TG_OP = 'UPDATE' AND TG_TABLE_NAME = 'voucher_entries' AND NEW.voucher_id IS DISTINCT FROM OLD.voucher_id THEN
+    SELECT company_id INTO protected_company_id FROM vouchers WHERE id = NEW.voucher_id;
+    IF EXISTS (
+      SELECT 1 FROM factory_dispatch_trip_postings p
+       WHERE p.company_id=protected_company_id
+         AND p.voucher_ids @> jsonb_build_array(NEW.voucher_id)
+    ) THEN
+      RAISE EXCEPTION 'Cannot transfer an entry into a finalized Factory dispatch voucher';
+    END IF;
+  END IF;
+  IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
+  RETURN NEW;
+END;
+$;
+
+DROP TRIGGER IF EXISTS factory_dispatch_source_voucher_guard ON vouchers;
+CREATE TRIGGER factory_dispatch_source_voucher_guard
+  BEFORE UPDATE OR DELETE ON vouchers
+  FOR EACH ROW EXECUTE FUNCTION factory_dispatch_guard_posted_vouchers();
+DROP TRIGGER IF EXISTS factory_dispatch_source_voucher_entries_guard ON voucher_entries;
+CREATE TRIGGER factory_dispatch_source_voucher_entries_guard
+  BEFORE INSERT OR UPDATE OR DELETE ON voucher_entries
+  FOR EACH ROW EXECUTE FUNCTION factory_dispatch_guard_posted_vouchers();
+DROP TRIGGER IF EXISTS factory_dispatch_source_posting_identity_guard ON accounting_posting_requests;
+CREATE TRIGGER factory_dispatch_source_posting_identity_guard
+  BEFORE UPDATE OR DELETE ON accounting_posting_requests
+  FOR EACH ROW EXECUTE FUNCTION factory_dispatch_guard_posted_vouchers();
+
 -- Apply the same fail-closed company RLS as the existing ERP vouchers and
 -- ledger_accounts. A missing app.current_company_id MUST NOT expose all trips.
 DO $dispatch_rls$
