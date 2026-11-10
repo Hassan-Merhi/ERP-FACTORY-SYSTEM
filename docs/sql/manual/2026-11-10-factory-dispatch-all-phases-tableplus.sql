@@ -1,26 +1,19 @@
 -- FACTORY DISPATCH TRIP ACCOUNTING — COMPLETE MANUAL TABLEPLUS MIGRATION
--- Date: 2026-11-10
--- Branch: feature/factory-dispatch-trip-accounting-20261110
--- PHASES: 2, 4, 5, 6, 7, 8 (in that exact order)
--- Updated after Phase 9 schema/report review; Phase 9 needs NO new SQL.
--- GENERATED SOURCE HANDOFF — NOT RUN, NOT DEPLOYED
+-- Date: 2026-11-10 | Branch: feature/factory-dispatch-trip-accounting-20261110
+-- PHASES 2, 4, 5, 6, 7, 8 (in that exact order)
+-- Phase 10: voucher-immutability, safety and SQL-syntax improvements INCLUDED.
+-- This is staged source: NOT EXECUTED, NOT DEPLOYED, NOT TESTED.
 --
--- IMPORTANT: Connect TablePlus to the correct PostgreSQL ERP/Factory DB and
--- verify your company/user scope, backup, migration prerequisites and intended
--- production environment BEFORE executing. Do not execute this on a live
--- database without a verified backup and approval of the final schema.
---
--- This script does NOT perform financial posting or change any existing
--- customer invoice, balance, inventory bale or purchase. It installs tables,
--- indexes, row-level-security policies, triggers, and constraints only.
---
--- Each section has its own BEGIN / COMMIT so you can identify a failing
--- migration. Stop at the FIRST SQL error. Do not continue or retry blindly.
--- Phase 6 requires an existing erp_company_scope_matches(integer) function
--- from the established company RLS migration.
+-- OPERATOR ONLY: Verify the production/staging connection, company-scope RLS
+-- prerequisite erp_company_scope_matches(integer), current migration state
+-- and a verified database BACKUP before execution. Do not run on the wrong DB.
+-- STOP on the FIRST error; DO NOT continue or retry blindly.
+-- This file installs schema/index/trigger/constraint protection ONLY.
+-- It does NOT post any accounting journals, purchases or customer invoices.
+-- Each phase is its own BEGIN/COMMIT section.
 --
 -- ===========================================================================
--- 1. 2026-11-10-factory-dispatch-trip-financial-phase2.sql
+-- SECTION 1 : 2026-11-10-factory-dispatch-trip-financial-phase2.sql
 -- ===========================================================================
 -- PHASE 2: MANUAL TABLEPLUS INSTALLATION FILE (NOT RUN).
 -- Retain with the other phases and hand to the user at the END of the program.
@@ -357,7 +350,7 @@ COMMIT;
 
 
 -- ===========================================================================
--- 2. 2026-11-10-factory-dispatch-trip-financial-phase4-guards.sql
+-- SECTION 2 : 2026-11-10-factory-dispatch-trip-financial-phase4-guards.sql
 -- ===========================================================================
 -- Phase 4 manual SQL ADDENDUM. NOT EXECUTED.
 -- Run in TablePlus AFTER the Phase 2 financial-table DDL at final handoff.
@@ -484,7 +477,7 @@ CREATE TRIGGER factory_dispatch_closure_posted_guard
 -- No generic voucher editor, retirement, direct SQL update or extra entry may
 -- silently change the linked Factory trip customer amount.
 CREATE OR REPLACE FUNCTION factory_dispatch_guard_posted_vouchers()
-RETURNS TRIGGER LANGUAGE plpgsql AS $
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
 DECLARE
   protected_voucher_id INTEGER;
   protected_company_id INTEGER;
@@ -530,7 +523,7 @@ BEGIN
   IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
   RETURN NEW;
 END;
-$;
+$$;
 
 DROP TRIGGER IF EXISTS factory_dispatch_source_voucher_guard ON vouchers;
 CREATE TRIGGER factory_dispatch_source_voucher_guard
@@ -586,7 +579,7 @@ COMMIT;
 
 
 -- ===========================================================================
--- 3. 2026-11-10-factory-dispatch-trip-financial-phase5-export.sql
+-- SECTION 3 : 2026-11-10-factory-dispatch-trip-financial-phase5-export.sql
 -- ===========================================================================
 -- Phase 5: manual-only ERP PO export identity and duplicate guard.
 -- NOT EXECUTED. To be delivered with Phase 2 + Phase 4 SQL at the very end.
@@ -623,7 +616,7 @@ COMMIT;
 
 
 -- ===========================================================================
--- 4. 2026-11-10-factory-dispatch-erp-po-phase6-receipts.sql
+-- SECTION 4 : 2026-11-10-factory-dispatch-erp-po-phase6-receipts.sql
 -- ===========================================================================
 -- Phase 6: Normal ERP receipt identity and duplicate supplier-charge prevention.
 -- NOT EXECUTED. Operator will run via TablePlus at the final handoff.
@@ -754,7 +747,7 @@ COMMIT;
 
 
 -- ===========================================================================
--- 5. 2026-11-10-factory-dispatch-phase7-order-reconciliation.sql
+-- SECTION 5 : 2026-11-10-factory-dispatch-phase7-order-reconciliation.sql
 -- ===========================================================================
 /**
  * Phase 7, TablePlus-only. Applied AFTER Phase 2/4/5/6 scripts,
@@ -995,7 +988,7 @@ COMMIT;
 
 
 -- ===========================================================================
--- 6. 2026-11-10-factory-dispatch-phase8-one-invoice.sql
+-- SECTION 6 : 2026-11-10-factory-dispatch-phase8-one-invoice.sql
 -- ===========================================================================
 -- Phase 8 manual TablePlus script, to run LAST after Phase 2 / 4 / 5 / 6 / 7.
 -- NOT EXECUTED. This file is for the operator's final SQL handoff only.
@@ -1079,6 +1072,70 @@ CREATE TRIGGER factory_dispatch_final_invoice_guard
 CREATE UNIQUE INDEX IF NOT EXISTS factory_dispatch_final_invoice_number_uq
   ON public.factory_dispatch_order_consolidations (company_id,invoice_number)
   WHERE invoice_number IS NOT NULL;
+
+-- A signed final invoice has its own new clearing / COGS / original-charge
+-- voucher IDs. Unlike original FDTR truck vouchers (covered by Phase 4),
+-- these are only referenced by finalization_details and MUST also be locked.
+-- Otherwise a generic voucher editor could rewrite sales after the customer
+-- invoice is final without changing the immutable invoice receipt.
+CREATE OR REPLACE FUNCTION public.factory_dispatch_guard_final_vouchers()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+DECLARE
+  protected_old INTEGER;
+  protected_new INTEGER;
+  old_company INTEGER;
+  new_company INTEGER;
+BEGIN
+  IF TG_TABLE_NAME='voucher_entries' THEN
+    IF TG_OP<>'INSERT' THEN protected_old:=OLD.voucher_id; END IF;
+    IF TG_OP<>'DELETE' THEN protected_new:=NEW.voucher_id; END IF;
+  ELSIF TG_TABLE_NAME='accounting_posting_requests' THEN
+    IF TG_OP<>'INSERT' THEN protected_old:=OLD.voucher_id; END IF;
+    IF TG_OP<>'DELETE' THEN protected_new:=NEW.voucher_id; END IF;
+  ELSE
+    IF TG_OP<>'INSERT' THEN protected_old:=OLD.id; END IF;
+    IF TG_OP<>'DELETE' THEN protected_new:=NEW.id; END IF;
+  END IF;
+
+  IF protected_old IS NOT NULL THEN
+    SELECT company_id INTO old_company FROM vouchers WHERE id=protected_old;
+    IF old_company IS NOT NULL AND EXISTS (
+      SELECT 1 FROM public.factory_dispatch_order_consolidations c
+       WHERE c.company_id=old_company AND c.status='FINALIZED'
+         AND c.finalization_details->'voucherIds' @> jsonb_build_array(protected_old)
+    ) THEN
+      RAISE EXCEPTION 'Finalized Factory combined-invoice source voucher is immutable';
+    END IF;
+  END IF;
+  -- Also reject inserting/moving entries into a protected voucher.
+  IF protected_new IS NOT NULL AND protected_new IS DISTINCT FROM protected_old THEN
+    SELECT company_id INTO new_company FROM vouchers WHERE id=protected_new;
+    IF new_company IS NOT NULL AND EXISTS (
+      SELECT 1 FROM public.factory_dispatch_order_consolidations c
+       WHERE c.company_id=new_company AND c.status='FINALIZED'
+         AND c.finalization_details->'voucherIds' @> jsonb_build_array(protected_new)
+    ) THEN
+      RAISE EXCEPTION 'Cannot insert entries into an immutable Factory combined-invoice voucher';
+    END IF;
+  END IF;
+  IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+  RETURN NEW;
+END; $$;
+
+DROP TRIGGER IF EXISTS factory_dispatch_final_voucher_guard ON public.vouchers;
+CREATE TRIGGER factory_dispatch_final_voucher_guard
+  BEFORE UPDATE OR DELETE ON public.vouchers
+  FOR EACH ROW EXECUTE FUNCTION public.factory_dispatch_guard_final_vouchers();
+
+DROP TRIGGER IF EXISTS factory_dispatch_final_voucher_entries_guard ON public.voucher_entries;
+CREATE TRIGGER factory_dispatch_final_voucher_entries_guard
+  BEFORE INSERT OR UPDATE OR DELETE ON public.voucher_entries
+  FOR EACH ROW EXECUTE FUNCTION public.factory_dispatch_guard_final_vouchers();
+
+DROP TRIGGER IF EXISTS factory_dispatch_final_posting_identity_guard ON public.accounting_posting_requests;
+CREATE TRIGGER factory_dispatch_final_posting_identity_guard
+  BEFORE UPDATE OR DELETE ON public.accounting_posting_requests
+  FOR EACH ROW EXECUTE FUNCTION public.factory_dispatch_guard_final_vouchers();
 
 COMMIT;
 
