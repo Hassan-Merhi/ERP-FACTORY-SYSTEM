@@ -214,7 +214,11 @@ export async function postRentAccrualForCompany(
       );
     alreadyDone = allAccruedForSkip.length;
 
-    const pendingRows = allUnaccrued.filter((r) => isDue(r) && contractsWithPositiveOutstanding.has(r.contractId));
+    // A reviewed historical month with a deleted accrual link must never re-accrue
+    // just because a later month on the same contract becomes unpaid.
+    const pendingRows = allUnaccrued.filter((r) =>
+      isDue(r) && !isRentRecognitionHeld(r.notes) && contractsWithPositiveOutstanding.has(r.contractId)
+    );
 
     logger.info(
       `[postRentAccrual] company=${companyId} unaccrued=${allUnaccrued.length} pendingDue=${pendingRows.length} alreadyDone=${alreadyDone} curYear=${curYear} curMonth=${curMonth} curDay=${curDay} contractsWithPositiveOutstanding=${contractsWithPositiveOutstanding.size}`
@@ -373,7 +377,9 @@ export async function postRentAccrualForCompany(
             sql`${propertyMonthlyLedger.expectedAmount}::numeric > 0`
           )
         );
-      const dueAdvanceRows = advanceRows.filter((r) => isDue(r));
+      // Holds also protect the advance-recognition path: a mixed batch must not
+      // cause historical, already-recognized months to be posted again.
+      const dueAdvanceRows = advanceRows.filter((r) => isDue(r) && !isRentRecognitionHeld(r.notes));
       if (dueAdvanceRows.length > 0) {
         await db.transaction(async (tx) => {
           const pendingIds15 = dueAdvanceRows.map((r) => r.id);
