@@ -178,6 +178,7 @@ export const factoryDispatchOrderConsolidations = pgTable("factory_dispatch_orde
   reconciledByUserId: text("reconciled_by_user_id"),
   reconciliationReason: text("reconciliation_reason"),
   invoiceNumber: varchar("invoice_number", { length: 50 }),
+  finalizationDetails: jsonb("finalization_details").notNull().default(sql`'{}'::jsonb`),
   includedPostingIds: jsonb("included_posting_ids").notNull().default(sql`'[]'::jsonb`),
   goodsSubtotal: money("goods_subtotal").notNull().default("0"),
   billableChargesTotal: money("billable_charges_total").notNull().default("0"),
@@ -192,6 +193,14 @@ export const factoryDispatchOrderConsolidations = pgTable("factory_dispatch_orde
   statusValid: check("factory_dispatch_order_consolidations_status_ck", sql`${t.status} IN ('DRAFT', 'FINALIZED', 'REVERSED')`),
   totalsValid: check("factory_dispatch_order_consolidations_totals_ck", sql`${t.goodsSubtotal} >= 0 AND ${t.billableChargesTotal} >= 0 AND ${t.discountTotal} >= 0 AND ${t.customerTotal} >= 0`),
   postingListValid: check("factory_dispatch_order_consolidations_postings_ck", sql`jsonb_typeof(${t.includedPostingIds}) = 'array'`),
+  finalizedValid: check("factory_dispatch_order_consolidations_final_invoice_ck", sql`
+    ${t.status} <> 'FINALIZED' OR
+    (${t.reconciledAt} IS NOT NULL AND ${t.finalizedAt} IS NOT NULL
+     AND ${t.finalizedByUserId} IS NOT NULL AND ${t.invoiceNumber} IS NOT NULL
+     AND ${t.finalizationDetails}->>'invoiceNumber' = ${t.invoiceNumber}
+     AND ${t.finalizationDetails}->>'customerReceivableReposted' = 'false'
+     AND jsonb_typeof(${t.finalizationDetails}->'voucherIds') = 'array'
+     AND jsonb_typeof(${t.finalizationDetails}->'includedPostingIds') = 'array')`),
   approvalValid: check("factory_dispatch_order_consolidations_signoff_ck", sql`
     (${t.reconciledAt} IS NULL AND ${t.reconciledByUserId} IS NULL AND ${t.reconciliationReason} IS NULL)
     OR (${t.reconciledAt} IS NOT NULL AND ${t.reconciledByUserId} IS NOT NULL
