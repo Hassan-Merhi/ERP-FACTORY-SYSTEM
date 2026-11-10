@@ -54,6 +54,11 @@ interface Overview {
 interface ReleaseGate {
   reconciliation:{ready:boolean;missing:string[];checkedAt:string};
   invoice:{ready:boolean;missing:string[];checkedAt:string};
+  integrity:null|{
+    finalized:boolean;passed:boolean;verifiedAt:string;
+    checks:Array<{code:string;state:"PASS"|"BLOCK"|"INFO"|"NOT_APPLICABLE";
+      message:string;expected?:string;observed?:string}>;
+  };
 }
 interface HistoryEntry {
   source:"PHYSICAL"|"FINANCIAL"|"CLOSURE";id:string;
@@ -227,6 +232,33 @@ export default function FactoryDispatchOrderDashboard({
                       Reconciliation: {gate.data.reconciliation.ready?"Ready":"SQL / guards pending"} ·
                       One invoice: {gate.data.invoice.ready?"Ready":"SQL / guards pending"}
                     </p>
+                    {gate.data.integrity&&(
+                      <div className="space-y-1">
+                        <p className={gate.data.integrity.passed?"text-emerald-700 dark:text-emerald-300":"text-amber-700 dark:text-amber-300"}>
+                          Accounting integrity: {gate.data.integrity.passed
+                            ? gate.data.integrity.finalized?"Final invoice verified":"Current accounting checks passed; invoice not yet finalized"
+                            : gate.data.integrity.finalized
+                              ? "Finalized invoice mismatches detected"
+                              : "Unresolved financial postings"}
+                        </p>
+                        {gate.data.integrity.checks.some(check=>check.state==="BLOCK")&&(
+                          <details>
+                            <summary className="cursor-pointer font-medium">
+                              Review {gate.data.integrity.checks.filter(check=>check.state==="BLOCK").length}
+                              {" "}accounting discrepancy(s)
+                            </summary>
+                            <div className="mt-2 max-h-48 space-y-1 overflow-auto rounded-md bg-background/80 p-2 text-[11px]">
+                              {gate.data.integrity.checks.filter(check=>check.state==="BLOCK")
+                                .map(check=><p key={check.code}>
+                                  <strong>{check.code}</strong> — {check.message}
+                                  {check.expected!==undefined?" · Expected: "+check.expected:""}
+                                  {check.observed!==undefined?" · Observed: "+check.observed:""}
+                                </p>)}
+                            </div>
+                          </details>
+                        )}
+                      </div>
+                    )}
                     {!gate.data.invoice.ready&&(
                       <details className="max-w-2xl">
                         <summary className="cursor-pointer font-medium">
