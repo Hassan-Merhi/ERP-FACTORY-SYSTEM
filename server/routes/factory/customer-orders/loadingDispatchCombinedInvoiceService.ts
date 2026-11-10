@@ -119,13 +119,17 @@ async function verifyOriginalChargeTx(
     const [existing]=await arr(tx,sql`
       SELECT v.id,
         COALESCE(SUM(CASE WHEN ve.customer_id=${customerId}
-          THEN ve.debit_amount-ve.credit_amount ELSE 0 END),0)::text AS "customerImpact"
+          THEN ve.debit_amount-ve.credit_amount ELSE 0 END),0)::text AS "customerImpact",
+        COALESCE(SUM(CASE WHEN ve.ledger_account_id=${charge.ledgerAccountId}
+          AND ve.customer_id IS NULL THEN ve.credit_amount-ve.debit_amount
+          ELSE 0 END),0)::text AS "chargeCredit"
       FROM vouchers v LEFT JOIN voucher_entries ve ON ve.voucher_id=v.id
        WHERE v.company_id=${s.companyId} AND v.id=${charge.voucherId}
         AND v.deleted_at IS NULL AND COALESCE(v.optional,FALSE)=FALSE
        GROUP BY v.id
     `);
-    if(!existing || !money(existing.customerImpact).eq(money(charge.amount))) {
+    if(!existing || !money(existing.customerImpact).eq(money(charge.amount)) ||
+       !money(existing.chargeCredit).eq(money(charge.amount))) {
       raise("COMBINED_INVOICE_CHARGE_ALREADY_POSTED_DIFFERENT",
         `Existing voucher for original charge "${charge.name}" does not match its customer amount`);
     }
