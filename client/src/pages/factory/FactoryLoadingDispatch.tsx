@@ -44,6 +44,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
+import FactoryDispatchOrderDashboard from "./FactoryDispatchOrderDashboard";
 import { FACTORY_DISPATCH_TRIP_STATUS_LABELS, type FactoryDispatchTripStatus } from "@shared/factoryStatusPresentation";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import FactoryLoadingDispatchScanner from "./FactoryLoadingDispatchScanner";
@@ -314,6 +315,8 @@ export default function FactoryLoadingDispatch() {
     refetchInterval: 15000,
   });
 
+  const role = (user?.currentRole ?? user?.role ?? "").toLowerCase();
+  const canViewFinancialDashboard = ["admin","owner","developer"].includes(role);
   const canEdit = !["View Only", "Create Only"].includes(user?.currentRole ?? user?.role ?? "");
   const canCreate = canEdit && activeOrderStatuses.has(orderQuery.data?.status ?? "");
 
@@ -505,6 +508,18 @@ export default function FactoryLoadingDispatch() {
             </div>
           </CardContent>
         </Card>
+
+        {dispatchId === null && canViewFinancialDashboard && (
+          <ErrorBoundary resetKey={"factory-dispatch-overview-"+orderId}>
+            <FactoryDispatchOrderDashboard
+              orderId={orderId}
+              companyId={companyId}
+              onOpenTrip={(tripId) => navigate(tripPath(orderId, tripId))}
+              onCompareAll={() => navigate("/factory/sales/loading/dispatch/" + orderId + "/compare")}
+              onPhysicalReport={() => navigate("/factory/sales/loading/dispatch/" + orderId + "/report")}
+            />
+          </ErrorBoundary>
+        )}
 
         {dispatchId === null ? (
           <div className="space-y-3">
