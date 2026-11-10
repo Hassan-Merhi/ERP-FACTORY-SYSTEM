@@ -24,6 +24,8 @@ import { recordedRentalPaymentRate } from "./rentalPaymentRate";
 import { rentalPaymentGroupIdentity, rentalPaymentVoucherSuffix } from "./rentalPostingIdentity";
 import { shouldRunRentalAutoTransfer } from "./rentalCashboxPolicy";
 import { appendRentalTenantName } from "./rentalVoucherTenantDescription";
+import { shouldSettleAccruedRentPayable } from "./rentalPaymentClassification";
+import { isRentRecognitionHeld } from "./rentRecognitionHold";
 
 export { buildAllocationsForPayment, findEarliestOutstandingMonth } from "./rentalPaymentAllocationService";
 
@@ -200,13 +202,47 @@ async function postGroupCore(
       const due = isRentalPeriodDue(alloc.forYear, alloc.forMonth, billingDay, paymentDate);
 
       if (due) {
+        // A non-null monthly accrual link does NOT establish an AP liability.
+        // It may point to a prepaid/advance recognition journal, a deleted
+        // voucher, or a control account in a different company. Confirm an
+        // actual live credit to this payer's Accrued Rent Payable before
+        // debiting that account in the payment voucher.
         let wasAccrued = false;
         if (alloc.ledgerRowId) {
-          const [lr] = await tx
-            .select({ accrualVoucherId: propertyMonthlyLedger.accrualVoucherId })
-            .from(propertyMonthlyLedger)
-            .where(eq(propertyMonthlyLedger.id, alloc.ledgerRowId));
-          wasAccrued = !!lr?.accrualVoucherId;
+          const evidence = (await tx.execute(sql`
+            SELECT ml.id, ml.notes, v.id IS NOT NULL AS accrual_live,
+              EXISTS (
+                SELECT 1 FROM voucher_entries ve
+                JOIN ledger_accounts la ON la.id=ve.ledger_account_id
+                  AND la.company_id=${companyId} AND la.deleted_at IS NULL
+                WHERE ve.company_id=${companyId} AND ve.voucher_id=v.id
+                  AND ve.credit_amount::numeric > 0
+                  AND la.account_type='Liability'
+                  AND (
+                    la.name='Accrued Rent Payable'
+                    OR la.code='ACC-RENT-PAY' OR la.code LIKE 'ACC-RENT-PAY-%'
+                    OR la.code='ACCR-RENT-PAY' OR la.code LIKE 'ACCR-RENT-PAY-%'
+                  )
+              ) AS credited_payable
+            FROM property_monthly_ledger ml
+            LEFT JOIN vouchers v ON v.id=ml.accrual_voucher_id
+              AND v.company_id=${companyId} AND v.deleted_at IS NULL
+              AND v.optional=FALSE
+            WHERE ml.id=${alloc.ledgerRowId}
+              AND ml.company_id=${contract.companyId}
+              AND ml.contract_id=${contract.id}
+              AND ml.year=${alloc.forYear} AND ml.month=${alloc.forMonth}
+            LIMIT 1
+          `)).rows as Array<{ id: number; notes: string | null; accrual_live: boolean; credited_payable: boolean }>;
+          if (evidence.length !== 1) {
+            throw new Error("RENTAL_PAYMENT_MONTH_LINK_CHANGED");
+          }
+          wasAccrued = shouldSettleAccruedRentPayable({
+            dueOnPaymentDate: due,
+            accrualVoucherLive: evidence[0].accrual_live,
+            creditedAccruedPayable: evidence[0].credited_payable,
+            recognitionHold: isRentRecognitionHeld(evidence[0].notes),
+          });
         }
         if (wasAccrued) {
           accrualAmt = accrualAmt.plus(chunk);
@@ -483,6 +519,18 @@ export async function createRentalPaymentGroup(opts: RentalPaymentGroupOptions) 
       tx
     );
 
+    // Never accept a silently truncated (120-month limit) or empty allocation.
+    // Otherwise the cash voucher would disagree with the requested amount and
+    // a retry could post a different set of monthly lines.
+    const allocatedTotal = sumMoney(allocations.map((a) => a.chunk));
+    if (allocations.length === 0 ||
+        !allocatedTotal.eq(toMoney(totalAmountExact).toDecimalPlaces(2)) ||
+        allocations.some((a) => toMoney(a.chunk).lte(0))) {
+      const error: RentalPostingError = new Error("RENTAL_PAYMENT_ALLOCATION_INCOMPLETE");
+      error.status = 409;
+      throw error;
+    }
+
     for (const alloc of allocations) {
       const allocDueDate = getRentalPeriodDueDate(alloc.year, alloc.month, billingDay);
       const allocIsDue = allocDueDate <= paymentDate;
@@ -643,6 +691,9 @@ export async function postScheduledGroup(
   const applyPosting = async (tx: Parameters<Parameters<typeof db.transaction>[0]>[0]) => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(${lockKey})`);
 
+    // Lock the WHOLE group, not just rows still marked SCHEDULED. A mixed
+    // POSTED/SCHEDULED group is inconsistent and must not create another
+    // cash voucher for the remaining rows.
     groupRows = await tx
       .select()
       .from(propertyPayments)
@@ -650,14 +701,35 @@ export async function postScheduledGroup(
         and(
           eq(propertyPayments.companyId, companyId),
           eq(propertyPayments.module, module),
-          eq(propertyPayments.paymentGroupId, groupId),
-          sql`${propertyPayments.postingStatus} = 'SCHEDULED'`
+          eq(propertyPayments.paymentGroupId, groupId)
         )
       )
       .orderBy(propertyPayments.id)
       .for("update");
 
-    if (groupRows.length === 0) return;
+    if (groupRows.length === 0 ||
+        groupRows.every((r) => r.postingStatus === "POSTED")) {
+      groupRows = [];
+      return;
+    }
+    if (groupRows.some((r) =>
+      r.postingStatus !== "SCHEDULED" ||
+      r.voucherId !== null ||
+      r.contractId !== contract.id ||
+      r.paymentDate !== paymentDate ||
+      r.cashAccountId !== cashAccountId ||
+      String(r.currency ?? "USD").toUpperCase() !== String(currency ?? "USD").toUpperCase() ||
+      r.ledgerRowId === null
+    )) {
+      const error: RentalPostingError = new Error("RENTAL_PAYMENT_GROUP_CHANGED_OR_PARTIALLY_POSTED");
+      error.status = 409;
+      throw error;
+    }
+    if (paymentDate > asOfDate) {
+      const error: RentalPostingError = new Error("RENTAL_SCHEDULED_PAYMENT_NOT_YET_DUE");
+      error.status = 409;
+      throw error;
+    }
 
     const totalAmountStr = sumMoney(groupRows.map((r) => r.amount as string)).toFixed(2);
 
