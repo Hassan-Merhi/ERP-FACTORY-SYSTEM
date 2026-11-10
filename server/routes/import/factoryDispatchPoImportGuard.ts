@@ -97,7 +97,7 @@ export async function validateFactoryDispatchPoImport(
   if (container.items.length === 0) errors.push("Factory dispatch PO has no article lines.");
   if (container.itemsCount !== container.items.length) errors.push("Factory PO item count does not match the signed file.");
   const seen = new Set<string>();
-  const values: MoneyDecimal[] = [];
+  const values: Decimal[] = [];
   for (const [index, item] of container.items.entries()) {
     const code = String(item.barcode ?? "").trim();
     if (!code || code.length > 50 || /^[=+@-]/.test(code)) {
