@@ -35,6 +35,7 @@ import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
+import { drCrClass } from "@/lib/formatNumber";
 import { shouldShowFactoryCustomerDestination } from "./customerDestinationVisibility";
 import "./propertiesLedger.css";
 import {
@@ -443,7 +444,7 @@ export function AccountStatementView({
                 </div>
               ) : (
                 <p
-                  className="mt-2 font-mono text-2xl font-semibold tabular-nums"
+                  className={`mt-2 font-mono text-2xl font-semibold tabular-nums ${drCrClass(balSide(displayClosingBalance))}`}
                   dir="ltr"
                   style={{ textAlign: "start" }}
                 >
@@ -506,9 +507,9 @@ export function AccountStatementView({
                   {showNativeBalance ? (
                     <FxAgentNativeBalance wallet={nativeWallet!} compact />
                   ) : (
-                    <span className="text-sm font-mono tabular-nums shrink-0">
+                    <span className={`text-sm font-mono tabular-nums shrink-0 ${drCrClass(balSide(displayClosingBalance))}`}>
                       {formatAmount(Math.abs(displayClosingBalance))}
-                      <span className="ml-1 text-[11px] opacity-70">{displayClosingBalance >= 0 ? "Dr" : "Cr"}</span>
+                      <span className="ml-1 text-[11px] opacity-70">{balSide(displayClosingBalance)}</span>
                     </span>
                   )}
                 </>
@@ -697,7 +698,7 @@ export function AccountStatementView({
               value: (
                 <>
                   {formatAmount(Math.abs(displayClosingBalance))}
-                  <span className="ms-1 text-[11px] font-normal opacity-70">{balSide(displayClosingBalance)}</span>
+                  <span className={`ms-1 text-[11px] font-normal opacity-70 ${drCrClass(balSide(displayClosingBalance))}`}>{balSide(displayClosingBalance)}</span>
                 </>
               ),
             },
@@ -745,10 +746,10 @@ export function AccountStatementView({
               <p className="text-[11px] text-muted-foreground leading-none mb-0.5">
                 {showNativeBalance ? "Historical USD closing" : "Closing Balance"}
               </p>
-              <p className="text-base font-semibold leading-none tabular-nums">
+              <p className={`text-base font-semibold leading-none tabular-nums ${drCrClass(balSide(displayClosingBalance))}`}>
                 <>
                   {formatAmount(Math.abs(displayClosingBalance))}
-                  <span className="ml-1 text-[11px] font-normal opacity-70">{balSide(displayClosingBalance)}</span>
+                  <span className={`ml-1 text-[11px] font-normal opacity-70 ${drCrClass(balSide(displayClosingBalance))}`}>{balSide(displayClosingBalance)}</span>
                 </>
               </p>
             </div>

@@ -112,9 +112,76 @@ export function registerReportsLedgerRoutes(app: Express) {
         });
       }
 
+      // HMD KINSHASA historic rent: the source cash payment vouchers were all
+      // posted on January 1, but the verified property subledger assigns the
+      // payment to four rental service months. This is a read-only preview, NOT
+      // a GL posting or adjustment. Never mix these values into posted totals.
+      let rentServiceMonthPreview: null | {
+        months: Array<{ month: number; monthName: string; amount: number }>;
+        total: number;
+        kind: "non-posting-rental-subledger";
+      } = null;
+      if (companyId === 8 && accountId === 877 && start.getFullYear() === 2026) {
+        const sourceRows = await db.execute<{
+          month: number; contract_id: number; expected: string; posted_paid: string;
+          posted_count: number; unposted_count: number;
+        } & Record<string, unknown>>(sql`
+          SELECT m.month, m.contract_id, m.expected_amount::text AS expected,
+                 COALESCE(SUM(p.amount::numeric) FILTER (
+                   WHERE p.posting_status = 'POSTED' AND pv.deleted_at IS NULL
+                     AND pv.optional = FALSE
+                 ), 0)::text AS posted_paid,
+                 COUNT(p.id) FILTER (
+                   WHERE p.posting_status = 'POSTED' AND pv.deleted_at IS NULL
+                     AND pv.optional = FALSE
+                 )::int AS posted_count,
+                 COUNT(p.id) FILTER (
+                   WHERE p.posting_status <> 'POSTED' OR pv.id IS NULL
+                     OR pv.deleted_at IS NOT NULL OR pv.optional = TRUE
+                 )::int AS unposted_count
+          FROM property_monthly_ledger m
+          LEFT JOIN property_payments p ON p.ledger_row_id = m.id AND p.company_id = m.company_id
+          LEFT JOIN vouchers pv ON pv.id = p.voucher_id AND pv.company_id = p.company_id
+          WHERE m.company_id = ${companyId} AND m.module = 'ERP'
+            AND m.year = 2026 AND m.contract_id IN (15,16,17)
+          GROUP BY m.id, m.month, m.contract_id, m.expected_amount
+          ORDER BY m.month, m.contract_id
+        `);
+        const groups = new Map<number, { total: ReturnType<typeof toMoney>; contracts: Set<number> }>();
+        let valid = sourceRows.rows.length === 33;
+        for (const item of sourceRows.rows) {
+          const month = Number(item.month);
+          const contractId = Number(item.contract_id);
+          const expected = toMoney(item.expected);
+          if (month < 1 || month > 11 || expected.lte(0)
+              || !expected.eq(toMoney(item.posted_paid))
+              || Number(item.posted_count) !== 1 || Number(item.unposted_count) !== 0) {
+            valid = false;
+          }
+          const group = groups.get(month) ?? { total: toMoney(0), contracts: new Set<number>() };
+          if (group.contracts.has(contractId)) valid = false;
+          group.contracts.add(contractId);
+          group.total = group.total.plus(expected);
+          groups.set(month, group);
+        }
+        if (valid && groups.size === 11 && [...groups.values()].every(g => g.contracts.size === 3 && g.total.eq(13560))) {
+          const previewMonths = [...groups.entries()].sort(([a], [b]) => a - b)
+            .filter(([month]) => {
+              const serviceDate = `2026-${String(month).padStart(2, "0")}-01`;
+              return serviceDate >= start.toISOString().slice(0, 10) && serviceDate <= end.toISOString().slice(0, 10);
+            }).map(([month, group]) => ({ month, monthName: monthNames[month - 1], amount: group.total.toNumber() }));
+          rentServiceMonthPreview = {
+            months: previewMonths,
+            total: sumMoney(previewMonths.map(m => m.amount)).toNumber(),
+            kind: "non-posting-rental-subledger",
+          };
+        }
+      }
+
       res.json({
         account: { id: account.id, code: account.code, name: account.name },
         openingBalance: openingBalance.toNumber(),
+        rentServiceMonthPreview,
         months: monthlyData,
         grandTotal: {
           debit: sumMoney(monthDebits).toNumber(),
