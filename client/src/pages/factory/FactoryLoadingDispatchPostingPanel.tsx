@@ -238,9 +238,12 @@ export default function FactoryLoadingDispatchPostingPanel({ orderId, dispatchId
             <div><span>Total weight</span><strong>${escapeHtml(trip.scannedWeightKg)} kg</strong></div>
           </div>
           <div class="section">Invoice breakdown</div>
+          <table><thead><tr><th>Article code</th><th>Description</th><th class="right">Bales</th><th class="right">KG</th><th class="right">Basis</th><th class="right">Unit price</th><th class="right">Total USD</th></tr></thead><tbody>
+            ${articleRows}
+          </tbody></table>
+          <div class="section">Additional charges &amp; discounts</div>
           <table><thead><tr><th>Description</th><th class="right">Amount (USD)</th></tr></thead><tbody>
-            <tr><td>Goods — ${trip.scannedBales} signed bales</td><td class="right">${escapeHtml(currency(trip.goodsSubtotal))}</td></tr>
-            ${chargeRows}
+            ${chargeRows || '<tr><td colspan="2">No additional trip charges</td></tr>'}
           </tbody></table>
           <div class="summary">
             <div><span>Goods subtotal</span><strong>${escapeHtml(currency(trip.goodsSubtotal))}</strong></div>
