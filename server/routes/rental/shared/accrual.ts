@@ -27,7 +27,7 @@ export async function ensureMonthlyForCompany(companyId: number, module: RentalM
   for (const c of active) await ensureMonthlyLedgerRows(c.id, asOfDate);
 
   // Landlord-owned periods are the source for HADI's linked-company leases.
-  if (companyId === 1 && module === "ERP") {
+  if (companyId === 1 && module === "ERP" && (asOfDate ?? getUtcTodayString()) >= "2026-12-01") {
     const shared = await db.select({ id: propertyContracts.id })
       .from(propertyContracts)
       .where(and(
@@ -121,6 +121,8 @@ export async function postRentAccrualForCompany(
   // be accrued the same way (Dr Rent Expense / Cr Accrued Rent Payable).
   const sharedContracts = await db
     .select({
+      ownerCompanyId: propertyContracts.companyId,
+      ownerModule: propertyContracts.module,
       id: propertyContracts.id,
       unitId: propertyContracts.unitId,
       unitNumber: propertyUnits.unitNumber,
@@ -153,7 +155,9 @@ export async function postRentAccrualForCompany(
 
   const contractIds = allContracts.map((c) => c.id);
   const hadiLinkedContractIds = new Set(
-    companyId === 1 && moduleParam === "ERP" ? sharedContracts.map((c) => c.id) : []
+    companyId === 1 && moduleParam === "ERP"
+      ? sharedContracts.filter((c) => c.ownerCompanyId === 13 && c.ownerModule === "PROPERTIES").map((c) => c.id)
+      : []
   );
   const isFutureLinked = (row: { contractId: number; year: number; month: number }) =>
     isFutureHadiLinkedRentMonth(
