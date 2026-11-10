@@ -123,7 +123,7 @@ CREATE TRIGGER factory_dispatch_closure_posted_guard
 -- No generic voucher editor, retirement, direct SQL update or extra entry may
 -- silently change the linked Factory trip customer amount.
 CREATE OR REPLACE FUNCTION factory_dispatch_guard_posted_vouchers()
-RETURNS TRIGGER LANGUAGE plpgsql AS $
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
 DECLARE
   protected_voucher_id INTEGER;
   protected_company_id INTEGER;
@@ -169,7 +169,7 @@ BEGIN
   IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
   RETURN NEW;
 END;
-$;
+$$;
 
 DROP TRIGGER IF EXISTS factory_dispatch_source_voucher_guard ON vouchers;
 CREATE TRIGGER factory_dispatch_source_voucher_guard
