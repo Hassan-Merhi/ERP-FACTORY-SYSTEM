@@ -7,7 +7,9 @@ import path from "node:path";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { PoImportPreviewContainer } from "../server/routes/import/po-import-preview";
 
-const getStockItemByCodeOrAlias = vi.fn();
+const { getStockItemByCodeOrAlias } = vi.hoisted(() => ({
+  getStockItemByCodeOrAlias: vi.fn(),
+}));
 vi.mock("../server/storage", () => ({
   storage: { getStockItemByCodeOrAlias },
 }));
