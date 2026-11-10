@@ -155,3 +155,13 @@ These are measured browser rendering results, **not authenticated real-page visu
 - [ ] Verify the updated `main` revision on the deployed service.
 
 **Do not mark Phase 4 certified on these isolated fixture results alone.**
+
+## Final focused build verification (2026-11-10)
+
+An isolated Vercel sandbox pulled `main` at `3ba1eee3d658309a6bcb6ff0a890cbb2626cf8c7` and executed `npm run build` (production Vite client, server bundle and runtime dependency checks). **Exit code 0**, including successful transformation of **6,001 modules**. A pre-existing Vite warning about a mixed static/dynamic import in `daybookPaginationClient.ts` was emitted; it was not a build failure.
+
+The same sandbox earlier verified the focused Factory theme Vitest suite at **8/8 passing**. The whole-project TypeScript check was killed for memory (exit 137) and remains unverified. The four newly introduced hardcoded dark card backgrounds were fixed directly on `main`.
+
+A further saved-browser attempt still reached `/login`. The authenticated live Factory route × dark mode × viewport screenshot matrix therefore **remains incomplete** even though the isolated CSS fixture passed all 6 combinations. Production deployment of this revision is separately unverified; do not claim it is live.
+
+**Closing decision:** All accessible Phase 4 source/build/theme-fixture checks completed and passing. Final real-app visual certification remains open until a persistent authorized browser session provides authenticated screenshots at target widths/modes.
