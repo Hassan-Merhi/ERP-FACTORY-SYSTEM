@@ -1,4 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
+import { useOptionalCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import { A4_DESIGN_OPTIONS, setBannerTimestamps } from "@/lib/labelHtml";
 
 export interface DesignColorOption {
@@ -54,8 +56,10 @@ function rowToOption(r: LabelDesignColorRow): DesignColorOption {
 }
 
 export function useLabelDesignColors() {
+  const selectedCompany = useOptionalCompany()?.selectedCompany;
   const query = useQuery<DesignColorOption[]>({
-    queryKey: ["/api/factory/label-design-colors"],
+    queryKey: companyQueryKey("/api/factory/label-design-colors", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: () =>
       fetch("/api/factory/label-design-colors", { credentials: "include" })
         .then((r) => r.json() as Promise<unknown>)

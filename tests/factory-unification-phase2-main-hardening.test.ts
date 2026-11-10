@@ -16,6 +16,12 @@ describe("Factory Phase 2 follow-up isolation on main", () => {
     "client/src/pages/factory/ProductionSummary.tsx": ["/api/factory/bales", "/api/factory/raw-stock"],
     "client/src/pages/StockEntryHistory.tsx": ["/api/factory/my-access", "/api/factory/bales/stock-entry-history", "/api/factory/staff-tracking"],
     "client/src/pages/baleproducts/useBaleProductsModel.tsx": ["/api/factory/my-access", "/api/factory/bale-products", "/api/factory/categories"],
+    "client/src/pages/factory/FactoryStockAllocationV2.tsx": ["/api/factory/v2/stock-allocation"],
+    "client/src/pages/factory/FactoryStockAllocationV3.tsx": ["/api/factory/v3/loads", "/api/factory/v3/proformas"],
+    "client/src/pages/factory/factorysettings/useFactorySettingsModel.ts": ["/api/factory/settings?scope=attendance", "/api/factory/weekly-report-wa-settings"],
+    "client/src/pages/factory/FactoryInvoiceCreate.tsx": ["/api/factory/customer-orders", "/api/factory/customer-proformas/detail"],
+    "client/src/pages/factory/factorypos/useFactoryPosModel.ts": ["/api/factory/customers", "/api/factory/pos/sales"],
+    "client/src/hooks/useLabelDesignColors.ts": ["/api/factory/label-design-colors"],
   };
 
   for (const [path, urls] of Object.entries(scopedPages)) {
@@ -43,6 +49,12 @@ describe("Factory Phase 2 follow-up isolation on main", () => {
     expect(code).toContain("setSelectedCustomerId(\"\")");
     expect(code).toContain("}, [selectedCompany?.id]);");
     expect(code).toContain('companyQueryKey("/api/factory/customers", selectedCompany?.id, selectedCustomerId, "logos")');
+  });
+
+  it("isolates imperative stock entry group queries", () => {
+    const code = source("client/src/pages/stockentryhistory/groupBaleHelpers.ts");
+    expect(code).toContain('companyQueryKey("/api/factory/bales/stock-entry-history/group", companyId');
+    expect(source("client/src/pages/StockEntryHistory.tsx")).toContain("companyId: selectedCompany?.id");
   });
 
   it("preserves URL-first query prefixes and different identities", () => {
