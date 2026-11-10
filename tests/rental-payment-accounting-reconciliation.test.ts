@@ -324,6 +324,61 @@ describe("Rental payment accounting and reconciliation", () => {
     expect(rows).toHaveLength(0);
   });
 
+  it("rejects a second scheduled group that would double-pay the same due month", async () => {
+    const { createRentalPaymentGroup, postScheduledGroup } = await import(
+      "../server/services/rental/rentalPaymentPostingService"
+    );
+    const [contractRow] = await q(
+      "SELECT start_date::text,rental_amount FROM property_contracts WHERE id=$1",
+      [testContractId]
+    );
+    const contract = {
+      id: testContractId,
+      companyId: ctx.companyId,
+      unitId: testUnitId,
+      rentalAmount: String(contractRow.rental_amount),
+      startDate: String(contractRow.start_date),
+    };
+    const unit = { unitNumber: "T-101", unitType: "SHOP", locationGroup: "Test Group" };
+    const next = new Date(todayStr() + "T00:00:00Z");
+    next.setUTCMonth(next.getUTCMonth() + 1, 2);
+    const futureDate = next.toISOString().slice(0, 10);
+    const params = {
+      companyId: ctx.companyId, contractCompanyId: ctx.companyId,
+      module: "ERP" as const, contract, unit,
+      cashAccountId: ctx.cashAccountId,
+      amount: "500", paymentDate: futureDate, clientDate: todayStr(),
+      scheduleFuturePayment: true, currency: "USD", exchangeRate: "1",
+      notes: null, shopExpenseAccountName: "Rent Expense - ERP Shops",
+      incomeAccountName: "Rental Income - ERP",
+    };
+    const first = await createRentalPaymentGroup(params);
+    const duplicate = await createRentalPaymentGroup(params);
+    expect(first.scheduled).toBe(true);
+    expect(duplicate.scheduled).toBe(true);
+    expect(duplicate.paymentGroupId).not.toBe(first.paymentGroupId);
+
+    const post = (groupId: string) => postScheduledGroup(
+      ctx.companyId, ctx.companyId, "ERP", contract, unit, groupId,
+      futureDate, futureDate, ctx.cashAccountId, "USD", "1", null,
+      "Rent Expense - ERP Shops", "Rental Income - ERP", false
+    );
+    expect(await post(first.paymentGroupId)).toBe(true);
+    await expect(post(duplicate.paymentGroupId)).rejects.toThrow(
+      "RENTAL_SCHEDULED_PAYMENT_ALLOCATION_STALE"
+    );
+    const statuses = await q(
+      `SELECT posting_status,COUNT(*)::int n
+       FROM property_payments WHERE contract_id=$1
+       GROUP BY posting_status ORDER BY posting_status`,
+      [testContractId]
+    );
+    expect(statuses).toEqual([
+      { posting_status: "POSTED", n: 1 },
+      { posting_status: "SCHEDULED", n: 1 },
+    ]);
+  });
+
   it("keeps an approved future payment scheduled without a voucher", async () => {
     const res = await createPayment({
       paymentDate: futureDateStr(10),
