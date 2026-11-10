@@ -20,7 +20,7 @@ import { ledgerAccountByCodeTx, systemAccountIdsTx } from "../../../services/acc
 import { postFactoryVoucherTx } from "../../../services/factory/factoryVoucherPosting";
 import { writeDaybookEntry } from "../_helpers";
 import {
-  customerInvoiceSequences, customerOrderBales, customerOrderLines,
+  customerOrderLines,
   customerOrders, factoryBales, customerOrderCharges,
 } from "@shared/schema";
 import {
