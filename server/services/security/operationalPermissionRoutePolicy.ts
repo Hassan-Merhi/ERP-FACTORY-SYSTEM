@@ -304,6 +304,8 @@ export const OPERATIONAL_ROUTE_PERMISSIONS: Readonly<Record<OperationalPermissio
     "GET /api/factory/customer-orders/:id/pending-export",
     // Loading-dispatch reconciliation and per-trip manifest workbooks (Dispatch Management Phase 7).
     "GET /api/factory/customer-orders/:id/loading-dispatches/reports/overall.xlsx",
+    // Phase 9: one order-wide workbook, not an ERP supplier PO import.
+    "GET /api/factory/customer-orders/:id/loading-dispatches/order-overview/report.xlsx",
     "GET /api/factory/customer-orders/:id/loading-dispatches/:dispatchId/reports/manifest.xlsx",
     // Phase 5: manual ERP PO setup/preview/download (never an ERP import).
     "GET /api/factory/customer-orders/:id/loading-dispatches/:dispatchId/po-export/setup",
