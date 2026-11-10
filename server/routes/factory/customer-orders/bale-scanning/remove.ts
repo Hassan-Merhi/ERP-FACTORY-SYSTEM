@@ -28,6 +28,7 @@ import { FactoryInvoiceRateRefusalError } from "../../../../services/accounting/
 import { lockCustomerOrderTx, syncOrderTotalsTx } from "../orderChargeLedger";
 import { closedPeriodErrorResponse } from "../../../../lib/closedPeriodError";
 import { getFactoryAccessState } from "../../../../lib/factoryAccessControl";
+import { hasLiveFinancialTripTx, isPostedDispatchBaleTx } from "../../../../services/factory/dispatchTripFinancialGuards";
 import { canEmptyFactoryLoadingContainer } from "@shared/factoryPermissionCatalog";
 
 class DispatchReconciliationRefusal extends Error {
@@ -80,6 +81,13 @@ export function registerOrderBaleRemovalRoutes(app: Express) {
 
       const removedCount = await db.transaction(async (tx) => {
         await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, ${companyId})`);
+        // Emptied containers would release shipped goods to stock. Serialize
+        // with the same parent lock as trip financial posting and reject that.
+        await lockCustomerOrderTx(tx, companyId, orderId);
+        if (await hasLiveFinancialTripTx(tx, companyId, orderId)) {
+          throw new DispatchReconciliationRefusal(409,
+            "Financially posted dispatch trips cannot be emptied. Reverse their accounting first.");
+        }
         if (order.proformaIdUsed) {
           await acquireProformaCapacityTransactionLock(tx, {
             companyId,
@@ -233,6 +241,17 @@ export function registerOrderBaleRemovalRoutes(app: Express) {
           .select()
           .from(customerOrderBales)
           .where(and(eq(customerOrderBales.orderId, orderId), eq(customerOrderBales.id, baleId)));
+
+        // A shipped/financially posted physical bale must NEVER be returned
+        // to stock, even through a normal (non-reconciliation) remove action.
+        if (orderBale && await isPostedDispatchBaleTx(tx, companyId, orderId, orderBale.baleId)) {
+          throw new DispatchReconciliationRefusal(409,
+            "This bale belongs to a financially posted truck. Reverse that trip before removing it.");
+        }
+        if (!reconciliation && await hasLiveFinancialTripTx(tx, companyId, orderId)) {
+          throw new DispatchReconciliationRefusal(409,
+            "Only authorized Pending Loading reconciliation may remove unshipped bales while trips are financially posted.");
+        }
 
         if (reconciliation) {
           if (!orderBale) {
