@@ -2,6 +2,7 @@
 -- Date: 2026-11-10
 -- Branch: feature/factory-dispatch-trip-accounting-20261110
 -- PHASES: 2, 4, 5, 6, 7, 8 (in that exact order)
+-- Updated after Phase 9 schema/report review; Phase 9 needs NO new SQL.
 -- GENERATED SOURCE HANDOFF — NOT RUN, NOT DEPLOYED
 --
 -- IMPORTANT: Connect TablePlus to the correct PostgreSQL ERP/Factory DB and
