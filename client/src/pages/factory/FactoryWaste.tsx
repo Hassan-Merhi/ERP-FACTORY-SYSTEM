@@ -3,6 +3,8 @@ import { addDays, format } from "date-fns";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import { factoryApiRequest } from "@/lib/factoryApi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -44,6 +46,7 @@ function getDefaultDateRange() {
 }
 
 export default function FactoryWaste() {
+  const { selectedCompany } = useCompany();
   const { formatDisplayDate } = useDateFormat();
   const defaults = getDefaultDateRange();
   const [from, setFrom] = useState(defaults.from);
@@ -80,7 +83,8 @@ export default function FactoryWaste() {
   }, []);
 
   const wasteQuery = useQuery<WasteEntry[]>({
-    queryKey: ["/api/factory/waste", from, to],
+    queryKey: companyQueryKey("/api/factory/waste", selectedCompany?.id, from, to),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const res = await fetch(`/api/factory/waste?from=${from}&to=${to}`);
       if (!res.ok) throw new Error("Failed to load waste entries");
