@@ -4,6 +4,7 @@ import {
   runWithAutoTransferCounterparties,
 } from "../../services/rental/autoTransferScope";
 import { getErrorMessage } from "../../lib/httpHandlers";
+import { runRentalReconciliation } from "../../services/rental/rentalReconciliationService";
 import { logger } from "../../lib/logger";
 import {
   getCompanyId,
@@ -84,6 +85,16 @@ export function registerRentalAccrualConfigRoutes(
             eq(propertyUnits.unitType, "SHOP")
           )
         );
+
+      // Do not post new corrective journals for months whose accrual links
+      // point to deleted vouchers. Such months may already be fully expensed.
+      const audit = await runRentalReconciliation(companyId, module, new Date().toISOString().slice(0, 10));
+      if (audit.mismatches.some((m) => m.type === "D")) {
+        return res.status(409).json({
+          code: "RENTAL_DANGLING_ACCRUAL_REQUIRES_REVIEW",
+          message: "Deleted accrual voucher links require a historical ledger review before re-accruing.",
+        });
+      }
 
       // 1b. Phantom-accrual repair (ALL months, historical + current).
       //
