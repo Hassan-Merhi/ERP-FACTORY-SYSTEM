@@ -1,3 +1,5 @@
+import Decimal from "decimal.js";
+
 /**
  * Rental payment classification for an existing rental-month posting.
  *
@@ -27,10 +29,14 @@ export function shouldSettleAccruedRentPayable(evidence: RentSettlementEvidence)
 
 /** Outstanding operational rent cannot be negative after an overpayment. */
 export function operationalRentOutstanding(expected: string | number, effectivePosted: string | number): number {
-  const remainingCents =
-    Math.round(Number(expected) * 100) - Math.round(Number(effectivePosted) * 100);
-  if (!Number.isFinite(remainingCents)) throw new Error("RENTAL_OUTSTANDING_NONFINITE_AMOUNT");
-  return Math.max(0, remainingCents) / 100;
+  try {
+    const due = new Decimal(expected);
+    const paid = new Decimal(effectivePosted);
+    if (!due.isFinite() || !paid.isFinite()) throw new Error("invalid amount");
+    return Decimal.max(0, due.minus(paid)).toDecimalPlaces(2).toNumber();
+  } catch {
+    throw new Error("RENTAL_OUTSTANDING_NONFINITE_AMOUNT");
+  }
 }
 
 /** A strict business date; prevents permissive Date() rollover (February 30). */
