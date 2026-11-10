@@ -107,7 +107,7 @@ describe("Phase 10 Factory dispatch accounting safety / release contract",()=>{
     expect(finalizer).toContain("invoiceNumberTx(tx,s.companyId)");
     expect(finalizer).toContain("isPerpetualInventoryActive(tx,s.companyId,s.postingDate)");
     expect(finalizer).toContain('status:"SOLD"');
-    expect(finalizer).toContain("SIGNED");
+    expect(finalizer).toContain("source_fingerprint");
     expect(finalizer).toContain("replayed:true");
   });
   it("exposes no-write, company-scoped release diagnostics and final voucher integrity",()=>{
