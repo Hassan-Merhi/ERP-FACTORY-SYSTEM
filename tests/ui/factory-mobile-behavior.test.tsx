@@ -73,7 +73,7 @@ function cellFor(text: string): HTMLElement {
 describe("Factory phone card tables", () => {
   it("restacks Contacts as cards with the name as title and touch-visible row actions", async () => {
     const { default: FactoryContacts } = await import("@/pages/factory/FactoryContacts");
-    renderWithProviders(<FactoryContacts />, { seedQueries: [[["/api/factory/contacts"], contacts]] });
+    renderWithProviders(<FactoryContacts />, { seedQueries: [[["/api/factory/contacts", 1], contacts]] });
 
     const table = await screen.findByTestId("factory-contacts-table");
     expect(table).toHaveAttribute("data-mobile-cards", "true");
@@ -85,7 +85,7 @@ describe("Factory phone card tables", () => {
 
   it("heads Alert cards with the alert title and keeps severity as a labelled field", async () => {
     const { default: FactoryAlerts } = await import("@/pages/factory/FactoryAlerts");
-    renderWithProviders(<FactoryAlerts />, { seedQueries: [[["/api/factory/alerts"], alerts]] });
+    renderWithProviders(<FactoryAlerts />, { seedQueries: [[["/api/factory/alerts", 1], alerts]] });
 
     const table = await screen.findByTestId("factory-alerts-table");
     expect(table).toHaveAttribute("data-mobile-cards", "true");
@@ -99,7 +99,7 @@ describe("Factory phone card tables", () => {
   it("keeps the desktop table on tablet and desktop widths", async () => {
     harness.phone = false;
     const { default: FactoryContacts } = await import("@/pages/factory/FactoryContacts");
-    renderWithProviders(<FactoryContacts />, { seedQueries: [[["/api/factory/contacts"], contacts]] });
+    renderWithProviders(<FactoryContacts />, { seedQueries: [[["/api/factory/contacts", 1], contacts]] });
 
     const table = await screen.findByTestId("factory-contacts-table");
     expect(table).not.toHaveAttribute("data-mobile-cards");
