@@ -55,3 +55,30 @@ For every route/mode/viewport combination: capture a screenshot, test keyboard f
 - [ ] Confirm final deployment in Phase 5.
 
 **Phase 4 is not certified complete** until runtime visual evidence and test execution are attached. This handoff intentionally does not claim screenshots, tests, or deployment that were not run.
+
+## Authenticated live browser follow-up (2026-11-10)
+
+A saved browser profile allowed a read-only authenticated inspection on the Render `system` service. The tester selected the Factory company using the company selector and confirmed the Factory shell was rendered. **This service was running commit `a38227c`, not the later Phase 4 test commits**; runtime results therefore certify the older deployed code only, not the latest `main`.
+
+### Observed Factory routes and palette
+
+| Route | Actual browser evidence | Limit |
+| --- | --- | --- |
+| `/factory/location-inventory` | Location selector, 1 location, search, MHD view and Excel export visible; light background and blue primary accents | A separate run toggled light/dark successfully, but did not cover three viewport widths |
+| `/factory/production-report` | Overview metrics and production graphs rendered | Light theme only |
+| `/factory/invoicing` | Proformas/Invoices/Container Loadings/Pending Loadings/Priority Scan tabs rendered | Light theme only |
+| `/factory/suppliers` | Supplier list, balances and section highlights rendered | Light theme only |
+| `/factory/payroll-hub?section=workers&tab=workers` | Workers table rendered including RTL names | Light theme only |
+| `/factory/containers-hub` | Factory containers UI opened, distinct from ERP `/containers` | Viewport matrix not performed |
+
+In the observed Factory pages, primary navigation and decorative accents were blue. No prominent purple Factory card/background regression was confirmed. A separate orange/purple company-switcher icon and a purple-tinted Customers tab were observed; these should be classified before any change because they may be identity/category accents rather than Factory-branded page surfaces.
+
+### Outstanding certification gaps
+
+- Explicit 390px/768px/1440px browser resizing was not supported by the available browser automation. **No mobile/tablet/desktop viewport matrix was completed.**
+- Light/dark toggle worked in a focused Factory shell visit; **full dark-mode route matrix was not completed**.
+- No screenshot artifact was captured for each route/mode/viewport.
+- No Vitest execution log was captured for the committed Phase 4 tests.
+- Latest `main` changes were not deployed or runtime-tested. Do not claim deployment.
+
+**Disposition:** Partial live QA completed, no confirmed broad blue/purple regression in sampled Factory routes; Phase 4 final certification still depends on tests and full responsive/dark-mode coverage.
