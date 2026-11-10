@@ -232,7 +232,7 @@ export default function FactoryLoadingDispatchPoExport({ orderId, dispatchId, co
 
   if (!canExport(role)) return null;
   return (
-    <Card className="border-blue-200 bg-white dark:border-blue-800/40 dark:bg-[#101c34]" data-testid="dispatch-trip-po-export">
+    <Card className="border-blue-200 bg-white dark:border-blue-800/40 dark:bg-card" data-testid="dispatch-trip-po-export">
       <CardContent className="space-y-4 p-4">
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-start gap-2">
