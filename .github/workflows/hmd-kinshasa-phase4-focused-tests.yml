@@ -48,8 +48,6 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci --no-audit
-      - name: Verify direct Phase 4 classification safeguards
-        run: node node_modules/vitest/vitest.mjs run tests/hmd-kinshasa-rent-phase4.test.ts --maxWorkers=1
       - name: Build server and initialize disposable schema
         run: |
           set -euo pipefail
@@ -75,6 +73,8 @@ jobs:
             sleep 1
           done
           node --input-type=module -e "const { ensureCustomerOrderBaleScanAudit } = await import('./server/customerOrderBaleScanAuditBridge.mjs'); await ensureCustomerOrderBaleScanAudit();"
+      - name: Verify direct Phase 4 classification safeguards
+        run: node node_modules/vitest/vitest.mjs run tests/hmd-kinshasa-rent-phase4.test.ts --maxWorkers=1
       - name: Test the actual rent/payment/accounting transaction lifecycle
         shell: bash
         run: |
