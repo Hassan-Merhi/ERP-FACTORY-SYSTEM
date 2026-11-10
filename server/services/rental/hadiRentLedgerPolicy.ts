@@ -22,6 +22,18 @@ export function isHadiHistoricAccrualRepair(companyId: number, module: string): 
   return companyId === HADI_LINKED_RENT.payerCompanyId && module === "ERP";
 }
 
+/** Only January–November 2026 and older are sealed by the certified repair. */
+export function isHadiProtectedRentMonth(
+  companyId: number,
+  module: string,
+  year: number,
+  month: number
+): boolean {
+  return isHadiHistoricAccrualRepair(companyId, module) &&
+    Number.isInteger(year) && Number.isInteger(month) &&
+    month >= 1 && month <= 12 && year * 100 + month <= 202611;
+}
+
 /** Keep overpayment as a separate credit, never reduce an unrelated month's due. */
 export function positiveRentalDue(expected: string, paid: string): Decimal {
   return MoneyDecimal.max(0, toMoney(expected).minus(toMoney(paid))).toDecimalPlaces(2);
