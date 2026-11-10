@@ -1,19 +1,17 @@
--- FACTORY DISPATCH TRIP ACCOUNTING — COMPLETE MANUAL TABLEPLUS MIGRATION
--- Date: 2026-11-10 | Branch: feature/factory-dispatch-trip-accounting-20261110
--- PHASES 2, 4, 5, 6, 7, 8 (in that exact order)
--- Phase 10: voucher-immutability, safety and SQL-syntax improvements INCLUDED.
--- This is staged source: NOT EXECUTED, NOT DEPLOYED, NOT TESTED.
+-- FACTORY DISPATCH — ONE FINAL MANUAL TABLEPLUS SCRIPT
+-- Date 2026-11-10 | Feature branch: feature/factory-dispatch-trip-accounting-20261110
+-- Phases 2 -> 4 -> 5 -> 6 -> 7 -> 8, including Phase 10 safeguards.
+-- SOURCE ONLY: NOT RUN, NOT TESTED, NOT DEPLOYED.
 --
--- OPERATOR ONLY: Verify the production/staging connection, company-scope RLS
--- prerequisite erp_company_scope_matches(integer), current migration state
--- and a verified database BACKUP before execution. Do not run on the wrong DB.
--- STOP on the FIRST error; DO NOT continue or retry blindly.
--- This file installs schema/index/trigger/constraint protection ONLY.
--- It does NOT post any accounting journals, purchases or customer invoices.
--- Each phase is its own BEGIN/COMMIT section.
+-- OPERATOR MUST CONFIRM database connection/company, RLS prerequisites,
+-- migration history and VERIFIED BACKUP before running in TablePlus.
+-- The established erp_company_scope_matches(integer) RLS function is required.
+-- STOP at the first error. Do NOT continue or retry blindly.
+-- This script does not bill customers, post vouchers, import ERP POs or move stock.
+-- Each section has a separate BEGIN / COMMIT block.
 --
 -- ===========================================================================
--- SECTION 1 : 2026-11-10-factory-dispatch-trip-financial-phase2.sql
+-- SECTION 1 OF 6: 2026-11-10-factory-dispatch-trip-financial-phase2.sql
 -- ===========================================================================
 -- PHASE 2: MANUAL TABLEPLUS INSTALLATION FILE (NOT RUN).
 -- Retain with the other phases and hand to the user at the END of the program.
@@ -350,7 +348,7 @@ COMMIT;
 
 
 -- ===========================================================================
--- SECTION 2 : 2026-11-10-factory-dispatch-trip-financial-phase4-guards.sql
+-- SECTION 2 OF 6: 2026-11-10-factory-dispatch-trip-financial-phase4-guards.sql
 -- ===========================================================================
 -- Phase 4 manual SQL ADDENDUM. NOT EXECUTED.
 -- Run in TablePlus AFTER the Phase 2 financial-table DDL at final handoff.
@@ -579,7 +577,7 @@ COMMIT;
 
 
 -- ===========================================================================
--- SECTION 3 : 2026-11-10-factory-dispatch-trip-financial-phase5-export.sql
+-- SECTION 3 OF 6: 2026-11-10-factory-dispatch-trip-financial-phase5-export.sql
 -- ===========================================================================
 -- Phase 5: manual-only ERP PO export identity and duplicate guard.
 -- NOT EXECUTED. To be delivered with Phase 2 + Phase 4 SQL at the very end.
@@ -616,7 +614,7 @@ COMMIT;
 
 
 -- ===========================================================================
--- SECTION 4 : 2026-11-10-factory-dispatch-erp-po-phase6-receipts.sql
+-- SECTION 4 OF 6: 2026-11-10-factory-dispatch-erp-po-phase6-receipts.sql
 -- ===========================================================================
 -- Phase 6: Normal ERP receipt identity and duplicate supplier-charge prevention.
 -- NOT EXECUTED. Operator will run via TablePlus at the final handoff.
@@ -747,7 +745,7 @@ COMMIT;
 
 
 -- ===========================================================================
--- SECTION 5 : 2026-11-10-factory-dispatch-phase7-order-reconciliation.sql
+-- SECTION 5 OF 6: 2026-11-10-factory-dispatch-phase7-order-reconciliation.sql
 -- ===========================================================================
 /**
  * Phase 7, TablePlus-only. Applied AFTER Phase 2/4/5/6 scripts,
@@ -988,7 +986,7 @@ COMMIT;
 
 
 -- ===========================================================================
--- SECTION 6 : 2026-11-10-factory-dispatch-phase8-one-invoice.sql
+-- SECTION 6 OF 6: 2026-11-10-factory-dispatch-phase8-one-invoice.sql
 -- ===========================================================================
 -- Phase 8 manual TablePlus script, to run LAST after Phase 2 / 4 / 5 / 6 / 7.
 -- NOT EXECUTED. This file is for the operator's final SQL handoff only.
@@ -1136,6 +1134,120 @@ DROP TRIGGER IF EXISTS factory_dispatch_final_posting_identity_guard ON public.a
 CREATE TRIGGER factory_dispatch_final_posting_identity_guard
   BEFORE UPDATE OR DELETE ON public.accounting_posting_requests
   FOR EACH ROW EXECUTE FUNCTION public.factory_dispatch_guard_final_vouchers();
+
+-- A finalized invoice is not just a consolidation row: the original order
+-- number/totals, its commercial lines and the exact SOLD bale valuation are
+-- also immutable historical evidence. Generic pre-existing editors must not
+-- change these after a combined invoice has already been finalized.
+
+CREATE OR REPLACE FUNCTION public.factory_dispatch_guard_final_order_source()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+  IF EXISTS(
+    SELECT 1 FROM public.factory_dispatch_order_consolidations c
+     WHERE c.company_id=OLD.company_id AND c.order_id=OLD.id
+       AND c.status='FINALIZED'
+  ) THEN
+    IF TG_OP='DELETE' THEN
+      RAISE EXCEPTION 'Finalized Factory dispatch customer order cannot be deleted';
+    END IF;
+    IF NEW.company_id IS DISTINCT FROM OLD.company_id
+       OR NEW.customer_id IS DISTINCT FROM OLD.customer_id
+       OR NEW.invoice_number IS DISTINCT FROM OLD.invoice_number
+       OR NEW.status IS DISTINCT FROM OLD.status
+       OR NEW.subtotal_bales IS DISTINCT FROM OLD.subtotal_bales
+       OR NEW.grand_total IS DISTINCT FROM OLD.grand_total
+       OR NEW.freight_amount IS DISTINCT FROM OLD.freight_amount
+       OR NEW.other_charges_total IS DISTINCT FROM OLD.other_charges_total
+       OR NEW.order_date IS DISTINCT FROM OLD.order_date
+       OR NEW.total_qty_bales IS DISTINCT FROM OLD.total_qty_bales
+       OR NEW.deleted_at IS DISTINCT FROM OLD.deleted_at
+    THEN
+      RAISE EXCEPTION 'Finalized Factory dispatch invoice identity and totals are immutable';
+    END IF;
+  END IF;
+  IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+  RETURN NEW;
+END; $$;
+
+DROP TRIGGER IF EXISTS factory_dispatch_final_order_source_guard ON public.customer_orders;
+CREATE TRIGGER factory_dispatch_final_order_source_guard
+  BEFORE UPDATE OR DELETE ON public.customer_orders
+  FOR EACH ROW EXECUTE FUNCTION public.factory_dispatch_guard_final_order_source();
+
+CREATE OR REPLACE FUNCTION public.factory_dispatch_guard_final_commercial_lines()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+DECLARE
+  target_order INTEGER;
+BEGIN
+  IF TG_OP<>'INSERT' THEN
+    target_order := OLD.order_id;
+    IF EXISTS(
+      SELECT 1 FROM public.factory_dispatch_order_consolidations c
+       WHERE c.order_id=target_order AND c.status='FINALIZED'
+    ) THEN
+      RAISE EXCEPTION 'Finalized Factory dispatch commercial invoice lines are immutable';
+    END IF;
+  END IF;
+  IF TG_OP<>'DELETE' THEN
+    target_order := NEW.order_id;
+    IF EXISTS(
+      SELECT 1 FROM public.factory_dispatch_order_consolidations c
+       WHERE c.order_id=target_order AND c.status='FINALIZED'
+    ) THEN
+      RAISE EXCEPTION 'Cannot insert or move lines into a finalized Factory dispatch invoice';
+    END IF;
+  END IF;
+  IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+  RETURN NEW;
+END; $$;
+
+DROP TRIGGER IF EXISTS factory_dispatch_final_commercial_lines_guard ON public.customer_order_lines;
+CREATE TRIGGER factory_dispatch_final_commercial_lines_guard
+  BEFORE INSERT OR UPDATE OR DELETE ON public.customer_order_lines
+  FOR EACH ROW EXECUTE FUNCTION public.factory_dispatch_guard_final_commercial_lines();
+
+CREATE OR REPLACE FUNCTION public.factory_dispatch_guard_final_sold_bales()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+DECLARE
+  finalized BOOLEAN;
+BEGIN
+  SELECT EXISTS(
+    SELECT 1
+      FROM public.factory_dispatch_trip_financial_bales b
+      JOIN public.factory_dispatch_trip_financials f
+        ON f.id=b.financial_id AND f.company_id=b.company_id
+       AND f.order_id=b.order_id AND f.dispatch_id=b.dispatch_id
+      JOIN public.factory_dispatch_order_consolidations c
+        ON c.company_id=f.company_id AND c.order_id=f.order_id
+     WHERE b.company_id=OLD.company_id AND b.bale_id=OLD.id
+       AND b.snapshot_revision=f.snapshot_revision
+       AND f.status='CONSOLIDATED' AND c.status='FINALIZED'
+  ) INTO finalized;
+  IF finalized THEN
+    IF TG_OP='DELETE' THEN
+      RAISE EXCEPTION 'Bale belonging to a finalized combined dispatch invoice cannot be deleted';
+    END IF;
+    IF NEW.company_id IS DISTINCT FROM OLD.company_id
+       OR NEW.status IS DISTINCT FROM OLD.status
+       OR NEW.reference_number IS DISTINCT FROM OLD.reference_number
+       OR NEW.article_code IS DISTINCT FROM OLD.article_code
+       OR NEW.product_name IS DISTINCT FROM OLD.product_name
+       OR NEW.weight_kg IS DISTINCT FROM OLD.weight_kg
+       OR NEW.total_cost IS DISTINCT FROM OLD.total_cost
+       OR NEW.deleted_at IS DISTINCT FROM OLD.deleted_at
+    THEN
+      RAISE EXCEPTION 'Finalized Factory dispatch SOLD bale identity, status and cost are immutable';
+    END IF;
+  END IF;
+  IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+  RETURN NEW;
+END; $$;
+
+DROP TRIGGER IF EXISTS factory_dispatch_final_sold_bales_guard ON public.factory_bales;
+CREATE TRIGGER factory_dispatch_final_sold_bales_guard
+  BEFORE UPDATE OR DELETE ON public.factory_bales
+  FOR EACH ROW EXECUTE FUNCTION public.factory_dispatch_guard_final_sold_bales();
 
 COMMIT;
 
