@@ -94,7 +94,7 @@ const accepts = (kind: Kind, accountType: string): boolean => {
     : kind === "DISCOUNT" ? /income|revenue|sales|expense|discount/.test(t)
       : /expense|cost|inventory|asset/.test(t);
 };
-const acceptsOffset = (type: string) => /liability|payable|cash|bank|asset/i.test(type);
+const acceptsOffset = (type: string) => /liability|payable|accrual|clearing/i.test(type);
 async function readJson<T>(url: string): Promise<T> {
   const response = await fetch(url, { credentials: "include", cache: "no-store", headers: { Accept: "application/json" } });
   const body = await response.json().catch(() => ({}));
