@@ -167,6 +167,10 @@ BEGIN
        OR NEW.status IS DISTINCT FROM OLD.status
        OR NEW.subtotal_bales IS DISTINCT FROM OLD.subtotal_bales
        OR NEW.grand_total IS DISTINCT FROM OLD.grand_total
+       OR NEW.freight_amount IS DISTINCT FROM OLD.freight_amount
+       OR NEW.other_charges_total IS DISTINCT FROM OLD.other_charges_total
+       OR NEW.base_currency IS DISTINCT FROM OLD.base_currency
+       OR NEW.order_date IS DISTINCT FROM OLD.order_date
        OR NEW.total_qty_bales IS DISTINCT FROM OLD.total_qty_bales
        OR NEW.deleted_at IS DISTINCT FROM OLD.deleted_at
     THEN
@@ -188,7 +192,7 @@ DECLARE
   target_order INTEGER;
 BEGIN
   IF TG_OP<>'INSERT' THEN
-    SELECT OLD.order_id INTO target_order;
+    target_order := OLD.order_id;
     IF EXISTS(
       SELECT 1 FROM public.factory_dispatch_order_consolidations c
        WHERE c.order_id=target_order AND c.status='FINALIZED'
@@ -197,7 +201,7 @@ BEGIN
     END IF;
   END IF;
   IF TG_OP<>'DELETE' THEN
-    SELECT NEW.order_id INTO target_order;
+    target_order := NEW.order_id;
     IF EXISTS(
       SELECT 1 FROM public.factory_dispatch_order_consolidations c
        WHERE c.order_id=target_order AND c.status='FINALIZED'
