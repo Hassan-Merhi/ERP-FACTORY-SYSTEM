@@ -7,14 +7,10 @@ import { drCrClass } from "@/lib/formatNumber";
 
 import type { Account, NetProfitAccount } from "./types";
 import {
-  calculateChildrenTotal,
-  calculatePLTotal,
-  cashSignedBalance,
-  formatCurrency,
+  accountDisplayBalance,
+  debitSignedBalance,
   formatSignedSmartCurrency,
-  formatSmartCurrency,
   groupAccountsByParent,
-  parseBalance,
 } from "./accountMath";
 
 /**
@@ -93,9 +89,9 @@ export function useAccountRenderers(deps: {
       const kids = childMap.get(acc.id) || [];
       const hasKids = kids.length > 0;
       const isExpanded = expandedAccounts.has(acc.id);
-      const displayBalance = hasKids
-        ? kids.reduce((s, k) => s + Math.abs(Number(k.balance)), 0)
-        : Math.abs(Number(acc.balance));
+      // Period expense balances are already net Dr-minus-Cr movements.
+      // Group rows must not add credit movements as positive expenses.
+      const displayBalance = Number(acc.balance) + kids.reduce((sum, child) => sum + Number(child.balance), 0);
 
       return (
         <Fragment key={acc.id}>
@@ -116,8 +112,8 @@ export function useAccountRenderers(deps: {
                 <span className={hasKids ? "font-semibold" : "hover:underline"}>{acc.name}</span>
               </div>
             </TableCell>
-            <TableCell className="text-right font-mono text-sm text-green-600 dark:text-green-400">
-              {formatSmartCurrency(displayBalance)}
+            <TableCell className={`text-right font-mono text-sm ${drCrClass(displayBalance < 0 ? "Cr" : "Dr")}`}>
+              {formatSignedSmartCurrency(displayBalance)}
             </TableCell>
           </TableRow>
           {hasKids &&
@@ -129,8 +125,8 @@ export function useAccountRenderers(deps: {
                 onClick={() => goToStatement(child.id, undefined, "ledger")}
               >
                 <TableCell className="pl-8 text-sm text-muted-foreground hover:underline">{child.name}</TableCell>
-                <TableCell className="text-right font-mono text-sm">
-                  {formatSmartCurrency(Math.abs(Number(child.balance)))}
+                <TableCell className={`text-right font-mono text-sm ${drCrClass(Number(child.balance) < 0 ? "Cr" : "Dr")}`}>
+                  {formatSignedSmartCurrency(Number(child.balance))}
                 </TableCell>
               </TableRow>
             ))}
@@ -139,80 +135,60 @@ export function useAccountRenderers(deps: {
     });
   };
 
-  // Render hierarchical accounts (ordinary zero-balance accounts stay hidden).
-  const renderHierarchicalAccounts = (accountList: Account[], showSignedCashBalances = false) => {
+  // All four account-balance tabs display Dr-positive / Cr-negative values.
+  // Render every hierarchy level, using the exact same rollup as the header/footer.
+  const renderHierarchicalAccounts = (accountList: Account[]) => {
     const { parentAccounts, accountMap } = groupAccountsByParent(accountList);
 
-    return (
-      <>
-        {parentAccounts.map((parent) => {
-          const children = accountMap.get(parent.accountId) || [];
-          const hasChildren = children.length > 0;
-          const isExpanded = expandedAccounts.has(parent.accountId);
-          const childrenTotal = hasChildren
-            ? showSignedCashBalances
-              ? children.reduce((sum, child) => sum + cashSignedBalance(child), 0)
-              : calculateChildrenTotal(parent.accountId, accountMap)
-            : 0;
-          const parentBalance = showSignedCashBalances ? cashSignedBalance(parent) : parseBalance(parent.balance);
-          const displayBalance = hasChildren ? childrenTotal : parentBalance;
-          const preservePayrollChildren = keepsZeroBalanceChildren(parent.name);
-          const visibleChildren = preservePayrollChildren
-            ? children
-            : children.filter((child) => parseBalance(child.balance) !== 0);
+    const hasVisibleBalance = (account: Account, visited: Set<number> = new Set()): boolean => {
+      if (visited.has(account.accountId)) return false;
+      const children = account.type === "ledger" ? (accountMap.get(account.accountId) ?? []) : [];
+      if (children.length === 0) return debitSignedBalance(account) !== 0;
+      const path = new Set(visited);
+      path.add(account.accountId);
+      return children.some((child) => hasVisibleBalance(child, path));
+    };
 
-          // Payroll worker ledgers are historical audit rows. Keep the group and its
-          // children visible even when the selected period has zero movement, so
-          // paid/deactivated workers do not disappear from Salary Expense - Workers.
-          if (displayBalance === 0 && !(preservePayrollChildren && visibleChildren.length > 0)) return null;
+    const renderRow = (account: Account, depth: number, ancestors: Set<number>): React.ReactNode => {
+      if (ancestors.has(account.accountId) && account.type === "ledger") return null;
+      const children = account.type === "ledger" ? (accountMap.get(account.accountId) ?? []) : [];
+      const hasChildren = children.length > 0;
+      const isExpanded = expandedAccounts.has(account.accountId);
+      const displayBalance = accountDisplayBalance(account, accountMap);
+      const visibleChildren = children.filter((child) => hasVisibleBalance(child));
+      if (!hasVisibleBalance(account)) return null;
 
-          return (
-            <Fragment key={parent.id}>
-              <TableRow
-                data-testid={`row-account-${parent.id}`}
-                className={`hover-elevate cursor-pointer font-medium`}
-                onClick={() => {
-                  if (hasChildren) {
-                    toggleAccount(parent.accountId);
-                  } else {
-                    goToStatement(parent.accountId, parent.customerId, parent.type);
-                  }
-                }}
-              >
-                <TableCell className="font-medium">
-                  <div className="flex items-center gap-2">
-                    {hasChildren ? (
-                      <span className="text-muted-foreground">
-                        {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                      </span>
-                    ) : null}
-                    <span className={hasChildren ? "" : "hover:underline"}>{parent.name}</span>
-                  </div>
-                </TableCell>
-                <TableCell className={`text-right font-mono font-medium ${drCrClass(showSignedCashBalances ? (displayBalance < 0 ? "Cr" : "Dr") : (parent.balanceSide || "Dr"))}`}>
-                  {showSignedCashBalances ? formatSignedSmartCurrency(displayBalance) : formatSmartCurrency(displayBalance)}
-                </TableCell>
-              </TableRow>
-              {hasChildren &&
-                isExpanded &&
-                visibleChildren.map((child) => (
-                  <TableRow
-                    key={child.id}
-                    data-testid={`row-account-${child.id}`}
-                    className="hover-elevate cursor-pointer"
-                    onClick={() => goToStatement(child.accountId, child.customerId, child.type)}
-                  >
-                    <TableCell className="pl-8 text-muted-foreground hover:underline">{child.name}</TableCell>
-                    <TableCell className={`text-right font-mono ${drCrClass(child.balanceSide || "Dr")}`}>
-                      {showSignedCashBalances ? formatSignedSmartCurrency(cashSignedBalance(child)) : formatSmartCurrency(parseBalance(child.balance))}
-                    </TableCell>
-                  </TableRow>
-                ))}
-            </Fragment>
-          );
-        })}
-      </>
-    );
+      const path = new Set(ancestors);
+      if (account.type === "ledger") path.add(account.accountId);
+      const signedClass = drCrClass(displayBalance < 0 ? "Cr" : "Dr");
+
+      return (
+        <Fragment key={account.id}>
+          <TableRow
+            data-testid={`row-account-${account.id}`}
+            className="hover-elevate cursor-pointer font-medium"
+            onClick={() => hasChildren ? toggleAccount(account.accountId) : goToStatement(account.accountId, account.customerId, account.type)}
+          >
+            <TableCell className={depth > 0 ? "pl-8" : "font-medium"} style={depth > 1 ? { paddingLeft: `${(depth + 1) * 1.25}rem` } : undefined}>
+              <div className="flex items-center gap-2">
+                {hasChildren && (
+                  <span className="text-muted-foreground">
+                    {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                  </span>
+                )}
+                <span className={hasChildren ? "" : "hover:underline"}>{account.name}</span>
+              </div>
+            </TableCell>
+            <TableCell className={`text-right font-mono font-medium ${signedClass}`}>
+              {formatSignedSmartCurrency(displayBalance)}
+            </TableCell>
+          </TableRow>
+          {hasChildren && isExpanded && visibleChildren.map((child) => renderRow(child, depth + 1, path))}
+        </Fragment>
+      );
+    };
+
+    return <>{parentAccounts.map((account) => renderRow(account, 0, new Set()))}</>;
   };
 
   const renderPLAccountTable = (accountList: Account[], showTotal: boolean = true) => {
@@ -236,7 +212,7 @@ export function useAccountRenderers(deps: {
       );
     }
 
-    const total = calculatePLTotal(accountList);
+    const total = accountList.reduce((sum, account) => sum + debitSignedBalance(account), 0);
 
     return (
       <div className="rounded-md border table-responsive">
@@ -255,13 +231,17 @@ export function useAccountRenderers(deps: {
                 onClick={() => goToStatement(account.accountId, account.customerId, account.type)}
               >
                 <TableCell className="hover:underline">{account.name}</TableCell>
-                <TableCell className="text-right font-mono">{formatCurrency(account.balance)}</TableCell>
+                <TableCell className={`text-right font-mono ${drCrClass(debitSignedBalance(account) < 0 ? "Cr" : "Dr")}`}>
+                  {formatSignedSmartCurrency(debitSignedBalance(account))}
+                </TableCell>
               </TableRow>
             ))}
             {showTotal && (
               <TableRow className="font-semibold bg-muted/50">
                 <TableCell>Total</TableCell>
-                <TableCell className="text-right font-mono">{formatCurrency(Math.abs(total))}</TableCell>
+                <TableCell className={`text-right font-mono ${drCrClass(total < 0 ? "Cr" : "Dr")}`}>
+                  {formatSignedSmartCurrency(total)}
+                </TableCell>
               </TableRow>
             )}
           </TableBody>
