@@ -183,7 +183,14 @@ async function postGroupCore(
     return posted.voucher;
   }
 
-  if (!cashAccountId) return null;
+  // Never mark a rent payment POSTED without a cash/bank counterpart.
+  // Historically this returned null yet the caller still marked monthly
+  // allocations as paid, leaving a missing cash voucher and phantom settlement.
+  if (!cashAccountId || !Number.isSafeInteger(cashAccountId) || cashAccountId <= 0) {
+    const error: RentalPostingError = new Error("RENTAL_PAYMENT_CASH_ACCOUNT_REQUIRED");
+    error.status = 409;
+    throw error;
+  }
 
   const isShop = isSharedPayment || unit?.unitType === "SHOP";
 
@@ -549,6 +556,12 @@ export async function createRentalPaymentGroup(opts: RentalPaymentGroupOptions) 
   }
   if (parseMoneyInput(amount) === null || toMoney(amount).lte(0)) {
     const error: RentalPostingError = new Error("RENTAL_PAYMENT_AMOUNT_MUST_BE_POSITIVE");
+    error.status = 400;
+    throw error;
+  }
+
+  if (!cashAccountId || !Number.isSafeInteger(cashAccountId) || cashAccountId <= 0) {
+    const error: RentalPostingError = new Error("RENTAL_PAYMENT_CASH_ACCOUNT_REQUIRED");
     error.status = 400;
     throw error;
   }
