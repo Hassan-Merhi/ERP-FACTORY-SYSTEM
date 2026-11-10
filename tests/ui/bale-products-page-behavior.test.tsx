@@ -57,8 +57,10 @@ const products = [
 vi.mock("@tanstack/react-query", () => ({
   useQuery: ({ queryKey }: any) => {
     const root = queryKey?.[0];
-    if (root === "/api/auth/me") return { data: { id: "user-1", role: harness.currentRole, currentRole: harness.currentRole } };
-    if (root === "/api/factory/my-access") return { data: { hiddenCostFields: [] } };
+    if (root === "/api/auth/me")
+      return { data: { id: "user-1", role: harness.currentRole, currentRole: harness.currentRole } };
+    if (root === "/api/factory/my-access")
+      return { data: { companyId: 1, hasFactoryAccess: true, hiddenCostFields: [] } };
     if (root === "/api/factory/settings") return { data: { hideAvgCost: false, hideSellingPrice: false } };
     if (root === "/api/factory/bale-products") return { data: products, isLoading: false };
     if (root === "/api/factory/categories") {
@@ -87,6 +89,18 @@ vi.mock("@tanstack/react-query", () => ({
 }));
 
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: harness.toast }) }));
+vi.mock("@/contexts/CompanyContext", () => ({
+  useCompany: () => ({
+    selectedCompany: { id: 1, name: "Factory Test Co", companyType: "factory" },
+    companies: [],
+    isLoading: false,
+  }),
+  useOptionalCompany: () => ({
+    selectedCompany: { id: 1, name: "Factory Test Co", companyType: "factory" },
+    companies: [],
+    isLoading: false,
+  }),
+}));
 vi.mock("@/contexts/AppModeContext", () => ({ useAppMode: () => "factory" }));
 vi.mock("@/lib/factoryApi", () => ({ getApiRequest: () => harness.apiRequest }));
 vi.mock("@/lib/queryClient", () => ({ queryClient: { invalidateQueries: harness.invalidateQueries } }));
@@ -283,11 +297,9 @@ describe("bale products page behavior", () => {
     fireEvent.click(screen.getByTestId("button-save-edit-product"));
 
     await waitFor(() =>
-      expect(harness.apiRequest).toHaveBeenCalledWith(
-        "POST",
-        "/api/factory/bale-products/2/cascade-update",
-        { productionPrice: "94.35" }
-      )
+      expect(harness.apiRequest).toHaveBeenCalledWith("POST", "/api/factory/bale-products/2/cascade-update", {
+        productionPrice: "94.35",
+      })
     );
     expect(harness.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Product updated" }));
   });
@@ -301,11 +313,9 @@ describe("bale products page behavior", () => {
     fireEvent.click(screen.getByTestId("button-save-edit-product"));
 
     await waitFor(() =>
-      expect(harness.apiRequest).toHaveBeenCalledWith(
-        "POST",
-        "/api/factory/bale-products/1/cascade-update",
-        { productionPrice: "0" }
-      )
+      expect(harness.apiRequest).toHaveBeenCalledWith("POST", "/api/factory/bale-products/1/cascade-update", {
+        productionPrice: "0",
+      })
     );
   });
 
