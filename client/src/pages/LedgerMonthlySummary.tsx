@@ -42,6 +42,12 @@ interface LedgerMonthlySummaryData {
     startDate: string;
     endDate: string;
   };
+  /** Read-only rental-subledger preview; never a replacement for posted GL. */
+  rentServiceMonthPreview?: {
+    kind: "non-posting-rental-subledger";
+    months: Array<{ month: number; monthName: string; amount: number }>;
+    total: number;
+  } | null;
 }
 
 function formatSmartNumber(value: number): string {
@@ -264,6 +270,49 @@ export default function LedgerMonthlySummary() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Historic rental allocations are verified from posted payment links.
+                They intentionally do not alter the posted GL or cash vouchers. */}
+            {data.rentServiceMonthPreview?.months?.length ? (
+              <Card data-testid="rent-service-month-preview">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">Rent allocated by service month</CardTitle>
+                  <p className="text-xs text-muted-foreground">
+                    Read-only reconciliation from the paid rental subledger. January's original
+                    cash payments remain dated January 1. This schedule is not a posted journal
+                    and does not replace the gross debit/credit ledger or financial statements.
+                  </p>
+                </CardHeader>
+                <CardContent>
+                  <div className="overflow-hidden rounded-lg border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Service month</TableHead>
+                          <TableHead className="text-right">Allocated rent expense</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {data.rentServiceMonthPreview.months.map((m) => (
+                          <TableRow key={m.month}>
+                            <TableCell>{m.monthName}</TableCell>
+                            <TableCell className={`text-right font-mono font-semibold ${drCrClass("Dr")}`}>
+                              {formatAmount(m.amount)} Dr
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                        <TableRow className="bg-muted/40 font-bold">
+                          <TableCell>Total allocated</TableCell>
+                          <TableCell className={`text-right font-mono ${drCrClass("Dr")}`}>
+                            {formatAmount(data.rentServiceMonthPreview.total)} Dr
+                          </TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : null}
 
             {/* Bar Chart */}
             <Card>
