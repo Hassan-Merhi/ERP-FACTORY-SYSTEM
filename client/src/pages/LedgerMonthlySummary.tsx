@@ -7,7 +7,6 @@ import { useAppMode, getModePrefix } from "@/contexts/AppModeContext";
 import { formatNumber, drCrClass, creditPositiveBalanceClass } from "@/lib/formatNumber";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useDateFormat } from "@/contexts/DateFormatContext";
-import { netExpenseMovement, sumPresentedMonthlyMovements } from "@/lib/monthlyRentExpensePresentation";
 import { format, parseISO } from "date-fns";
 import { PageHeader } from "@/components/PageHeader";
 import { ChevronRight, TrendingUp, TrendingDown } from "lucide-react";
@@ -33,8 +32,6 @@ interface LedgerMonthlySummaryData {
     name: string;
   };
   openingBalance: number;
-  /** HADI original vouchers remain gross in API; net Dr/Cr only in monthly summary UI. */
-  presentation?: "net-expense" | "gross";
   months: MonthlyData[];
   grandTotal: {
     debit: number;
@@ -97,22 +94,13 @@ export default function LedgerMonthlySummary() {
     enabled: !!accountId,
   });
 
-  // This is display-only: preserve the original raw Dr/Cr API values, voucher
-  // drilldown and actual closing balance. HADI #1007 includes archived #881.
-  const netRentExpense = data?.presentation === "net-expense";
-  const displayedMonths = (Array.isArray(data?.months) ? data!.months : []).map((month) => {
-    if (!netRentExpense) return month;
-    return { ...month, ...netExpenseMovement(month) };
-  });
-  const displayedTotals = netRentExpense
-    ? sumPresentedMonthlyMovements(displayedMonths)
-    : { debit: data?.grandTotal.debit ?? 0, credit: data?.grandTotal.credit ?? 0 };
-  const chartData = displayedMonths.map((m) => ({
-    name: m.monthName.substring(0, 3),
-    debit: m.debit,
-    credit: m.credit,
-    balance: Math.abs(m.closingBalance),
-  }));
+  const chartData =
+    (Array.isArray(data?.months) ? data!.months : []).map((m) => ({
+      name: m.monthName.substring(0, 3),
+      debit: m.debit,
+      credit: m.credit,
+      balance: Math.abs(m.closingBalance),
+    })) || [];
 
   const handleMonthClick = (month: number, year: number) => {
     const prefix = getModePrefix(appMode);
@@ -183,9 +171,8 @@ export default function LedgerMonthlySummary() {
               </CardHeader>
               <CardContent className="pt-4">
                 <p className="mb-3 text-xs text-muted-foreground">
-                  {netRentExpense
-                    ? "Rent Expense is presented as each month’s net debit or credit, with no double-counted historical corrections. Original gross voucher debits and credits remain available when you open a month."
-                    : "Debit and credit show posted voucher movements. Net Movement shows the monthly result without changing vouchers, cash or other account balances."}
+                  Debit and credit show posted voucher movements. Net Movement shows the monthly result without
+                  changing vouchers, cash or other account balances.
                 </p>
                 <div className="border rounded-lg overflow-hidden">
                   <Table mobileLayout="cards">
@@ -223,7 +210,7 @@ export default function LedgerMonthlySummary() {
                       {(() => {
                         const startYear = parseISO(data.dateRange.startDate).getFullYear();
                         const startMonthNum = parseISO(data.dateRange.startDate).getMonth() + 1;
-                        return displayedMonths.map((month) => {
+                        return (Array.isArray(data.months) ? data.months : []).map((month) => {
                           const year = month.month >= startMonthNum ? startYear : startYear + 1;
                           return (
                             <TableRow
@@ -261,14 +248,14 @@ export default function LedgerMonthlySummary() {
                       <TableRow className="bg-primary/10 font-bold border-t-2">
                         <TableCell>Grand Total</TableCell>
                         <TableCell className="text-right font-mono hidden sm:table-cell">
-                          {formatAmount(displayedTotals.debit)}
+                          {formatAmount(data.grandTotal.debit)}
                         </TableCell>
                         <TableCell className="text-right font-mono hidden sm:table-cell">
-                          {displayedTotals.credit > 0 ? formatAmount(displayedTotals.credit) : ""}
+                          {formatAmount(data.grandTotal.credit)}
                         </TableCell>
-                        <TableCell className={`text-right font-mono ${displayedTotals.debit === displayedTotals.credit ? "text-muted-foreground" : drCrClass(displayedTotals.debit > displayedTotals.credit ? "Dr" : "Cr")}`}>
-                          {formatAmount(Math.abs(displayedTotals.debit - displayedTotals.credit))}{" "}
-                          {displayedTotals.debit === displayedTotals.credit ? "—" : displayedTotals.debit > displayedTotals.credit ? "Dr" : "Cr"}
+                        <TableCell className={`text-right font-mono ${data.grandTotal.debit === data.grandTotal.credit ? "text-muted-foreground" : drCrClass(data.grandTotal.debit > data.grandTotal.credit ? "Dr" : "Cr")}`}>
+                          {formatAmount(Math.abs(data.grandTotal.debit - data.grandTotal.credit))}{" "}
+                          {data.grandTotal.debit === data.grandTotal.credit ? "—" : data.grandTotal.debit > data.grandTotal.credit ? "Dr" : "Cr"}
                         </TableCell>
                         <TableCell className={`text-right font-mono ${creditPositiveBalanceClass(data.grandTotal.closingBalance)}`}>
                           {formatAmount(Math.abs(data.grandTotal.closingBalance))}{" "}
@@ -336,7 +323,7 @@ export default function LedgerMonthlySummary() {
                   ) : (
                     <TrendingDown className="h-4 w-4 text-red-600" />
                   )}
-                  {netRentExpense ? "Monthly Net Rent Expense" : "Monthly Transactions"}
+                  Monthly Transactions
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -358,10 +345,7 @@ export default function LedgerMonthlySummary() {
                           borderRadius: "6px",
                         }}
                       />
-                      <Bar dataKey="debit" fill="hsl(var(--chart-2))" name={netRentExpense ? "Net debit" : "Debit"} radius={[4, 4, 0, 0]} />
-                      {netRentExpense && displayedMonths.some((m) => m.credit > 0) ? (
-                        <Bar dataKey="credit" fill="hsl(var(--destructive))" name="Net credit" radius={[4, 4, 0, 0]} />
-                      ) : null}
+                      <Bar dataKey="debit" fill="hsl(var(--chart-2))" name="Debit" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
