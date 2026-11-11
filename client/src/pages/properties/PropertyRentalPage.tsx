@@ -480,7 +480,7 @@ export default function PropertyRentalPage({
             silently reported in USD. Individual contracts and ledger balances remain unchanged.
           </p>
         )}
-        {showHistoricalPaid && reconciledAccountTotalsReady && (
+        {currentRole === "Developer" && showHistoricalPaid && reconciledAccountTotalsReady && (
           <p className="text-xs text-muted-foreground" data-testid="properties-rent-account-balance-explanation">
             Combined account balances:{" "}
             <span className="font-semibold tabular-nums">
