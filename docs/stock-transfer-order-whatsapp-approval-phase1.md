@@ -98,7 +98,7 @@ or reject revisions, post accounting, or send WhatsApp documents.
 
 `tests/stock-transfer-order-wa-phase1-schema.test.ts` checks SQL and runtime
 migration parity, RLS, origin stamping and the no-approval/no-send boundary.
-`tests/startup-schema-integrity.test.ts` pins the 39 new statements after
+`tests/startup-schema-integrity.test.ts` pins the 44 new statements after
 the reviewed existing 1481-statement baseline.
 
 Before production rollout, a migrated disposable PostgreSQL 16 instance must
