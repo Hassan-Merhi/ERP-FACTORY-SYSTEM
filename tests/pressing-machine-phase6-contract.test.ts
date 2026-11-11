@@ -131,7 +131,8 @@ describe("pressing machine Phase 6 reporting contracts", () => {
     expect(page).toContain("Scanned Items");
     expect(page).toContain('<th className="p-3">Product name</th>');
     expect(page).toContain('{row.productName || "—"}');
-    expect(page).toContain('"operatorName", "productName", "bales"');
+    // Whitespace-insensitive: the formatter may wrap the column list.
+    expect(page.replace(/\s+/g, " ")).toContain('"operatorName", "productName", "bales"');
     expect(page).toContain("useState(false)");
     expect(page).toContain('aria-label="Pressing KG filter"');
     expect(page).toContain("pressing-kpi-");
