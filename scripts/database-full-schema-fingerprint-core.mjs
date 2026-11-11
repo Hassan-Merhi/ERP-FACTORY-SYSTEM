@@ -17,6 +17,18 @@ const clean=(x,keys)=>Object.fromEntries(keys.map(key=>[key,x[key]??null]));
 export function fingerprintFullSchema(snapshot) {
   const groups={
     tables:(snapshot.tables||[]).map(name=>({name})),
+    relations:(snapshot.relations||[]).map(x=>({
+      name:x.relation_name,
+      data:clean(x,["relation_kind","persistence"])
+    })),
+    views:(snapshot.views||[]).map(x=>({
+      name:x.view_name,
+      data:clean(x,["view_kind","definition"])
+    })),
+    sequences:(snapshot.sequences||[]).map(x=>({
+      name:x.sequence_name,
+      data:clean(x,["data_type","start_value","min_value","max_value","increment_by","cycle","cache_size"])
+    })),
     columns:(snapshot.columns||[]).map(x=>({
       name:objectKey(x.table_name,x.column_name),
       data:clean(x,["data_type","not_null","default_expression","identity_generation","generation_expression"])
@@ -60,7 +72,7 @@ export function compareFullSchemaFingerprint(reference,current) {
     return {ok:false,blockers:["invalid-reference-format"],warnings:[]};
   }
   const blockers=[];
-  const groups=["tables","columns","indexes","constraints","triggers","functions","policies"];
+  const groups=["tables","relations","views","sequences","columns","indexes","constraints","triggers","functions","policies"];
   for(const group of groups) {
     const want=reference.objects?.[group];
     const actual=current.objects?.[group];
