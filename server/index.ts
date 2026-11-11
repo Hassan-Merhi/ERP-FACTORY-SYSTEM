@@ -70,6 +70,7 @@ import { ensureContainerExtraExpectedLines } from "./startup/ensureContainerExtr
 import { ensureFactoryLoadingDispatchSchema } from "./startup/ensureFactoryLoadingDispatchSchema";
 import { ensureStockTransferOrderWhatsAppApprovalSchema } from "./startup/ensureStockTransferOrderWhatsAppApprovalSchema";
 import { startStockTransferOrderWaApprovalWorker } from "./services/stockTransferOrderWhatsAppApprovalWorker";
+import { startStockTransferOrderWaDeliveryWorker } from "./services/stockTransferOrderWaDeliveryWorker";
 import { ensureFactoryBaleOrderIntegrity } from "./startup/ensureFactoryBaleOrderIntegrity";
 import { runApprovedLegacyBaleUnitCostRepair } from "./startup/runApprovedLegacyBaleUnitCostRepair";
 import { runApprovedLegacySoldBaleUnitCostRepair } from "./startup/runApprovedLegacySoldBaleUnitCostRepair";
@@ -545,6 +546,7 @@ let migrationsDone = false;
           // decisions; restarts replay the persisted Phase 3 event.
           if (process.env.ENABLE_SCHEDULERS !== "false") {
             startStockTransferOrderWaApprovalWorker();
+            startStockTransferOrderWaDeliveryWorker();
           }
         } else {
           logger.info("[FactoryEdge] Background startup jobs disabled by LAN mode or cloud writer fence");
