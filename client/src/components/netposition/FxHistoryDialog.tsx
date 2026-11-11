@@ -112,7 +112,7 @@ export function FxHistoryDialog({
   const entries = useMemo(() => {
     const keys = new Set(sources.map((source) => source.sourceKey).filter(Boolean));
     const currencies = new Set(
-      sources.flatMap((source) => (source.native || "").toUpperCase().match(/\\b[A-Z]{3}\\b/g) || [])
+      sources.flatMap((source) => (source.native || "").toUpperCase().match(/\b[A-Z]{3}\b/g) || [])
     );
     return (data?.entries ?? []).filter((entry) => {
       if (filter === "supplier" && !["container", "supplier_payment", "supplier_transfer"].includes(entry.kind)) return false;
