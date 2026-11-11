@@ -28,6 +28,7 @@ import { zambiaHistoricalPurchaseCostSchema } from "../server/startup-schema/036
 import { factoryPressingMachineTrackingSchema } from "../server/startup-schema/037-factory-pressing-machine-tracking";
 import { factoryPressingHistoryReportIndexes } from "../server/startup-schema/038-factory-pressing-history-report";
 import { stockTransferOrderWaApprovalFoundation } from "../server/startup-schema/039-stock-transfer-order-wa-approval";
+import { stockTransferOrderWaWebhookIntegrity } from "../server/startup-schema/040-stock-transfer-order-wa-webhook";
 
 /** Statement count of the reviewed composed array. */
 /**
@@ -194,7 +195,7 @@ import { stockTransferOrderWaApprovalFoundation } from "../server/startup-schema
  * count from 1480 to 1481 and changing the pre-034 baseline hash. The
  * statement is idempotent and nothing else moved.
  */
-const EXPECTED_STATEMENT_COUNT = 1525; // Reviewed 1481 baseline + 44 additive Stock Transfer Order approval statements
+const EXPECTED_STATEMENT_COUNT = 1526; // Reviewed 1481 baseline + 44 phase1 + 1 phase3 webhook index
 const EXPECTED_CONTENT_HASH = "83932076dfc1f98fad41c163f700041aedbc3d69fb74d735a2e98a2de7bead2b";
 /**
  * sha256 of JSON.stringify(startupMigrations) for the reviewed composed array.
@@ -320,7 +321,7 @@ describe("startup schema integrity", () => {
             zambiaHistoricalPurchaseCostSchema.length +
             factoryPressingMachineTrackingSchema.length +
             factoryPressingHistoryReportIndexes.length +
-            stockTransferOrderWaApprovalFoundation.length
+            (stockTransferOrderWaApprovalFoundation.length + stockTransferOrderWaWebhookIntegrity.length)
           )
         )
       ),
@@ -337,7 +338,7 @@ describe("startup schema integrity", () => {
       zambiaHistoricalPurchaseCostSchema.length +
       factoryPressingMachineTrackingSchema.length +
       factoryPressingHistoryReportIndexes.length +
-      stockTransferOrderWaApprovalFoundation.length;
+      (stockTransferOrderWaApprovalFoundation.length + stockTransferOrderWaWebhookIntegrity.length);
     expect(startupMigrations.slice(-tail, -tail + supplierTrackingShopDutyDefaultsSchema.length)).toEqual(
       supplierTrackingShopDutyDefaultsSchema
     );
@@ -359,11 +360,11 @@ describe("startup schema integrity", () => {
           zambiaHistoricalPurchaseCostSchema.length -
           factoryPressingMachineTrackingSchema.length -
           factoryPressingHistoryReportIndexes.length -
-          stockTransferOrderWaApprovalFoundation.length,
+          (stockTransferOrderWaApprovalFoundation.length + stockTransferOrderWaWebhookIntegrity.length),
         -zambiaHistoricalPurchaseCostSchema.length -
           factoryPressingMachineTrackingSchema.length -
           factoryPressingHistoryReportIndexes.length -
-          stockTransferOrderWaApprovalFoundation.length
+          (stockTransferOrderWaApprovalFoundation.length + stockTransferOrderWaWebhookIntegrity.length)
       )
     ).toEqual(posPortDepartureDateSchema);
   });
@@ -375,10 +376,10 @@ describe("startup schema integrity", () => {
         -zambiaHistoricalPurchaseCostSchema.length -
           factoryPressingMachineTrackingSchema.length -
           factoryPressingHistoryReportIndexes.length -
-          stockTransferOrderWaApprovalFoundation.length,
+          (stockTransferOrderWaApprovalFoundation.length + stockTransferOrderWaWebhookIntegrity.length),
         -factoryPressingMachineTrackingSchema.length -
           factoryPressingHistoryReportIndexes.length -
-          stockTransferOrderWaApprovalFoundation.length
+          (stockTransferOrderWaApprovalFoundation.length + stockTransferOrderWaWebhookIntegrity.length)
       )
     ).toEqual(zambiaHistoricalPurchaseCostSchema);
     // Every column statement is an idempotent ADD COLUMN IF NOT EXISTS on one
@@ -403,8 +404,8 @@ describe("startup schema integrity", () => {
       startupMigrations.slice(
         -factoryPressingMachineTrackingSchema.length -
           factoryPressingHistoryReportIndexes.length -
-          stockTransferOrderWaApprovalFoundation.length,
-        -factoryPressingHistoryReportIndexes.length - stockTransferOrderWaApprovalFoundation.length
+          (stockTransferOrderWaApprovalFoundation.length + stockTransferOrderWaWebhookIntegrity.length),
+        -factoryPressingHistoryReportIndexes.length - (stockTransferOrderWaApprovalFoundation.length + stockTransferOrderWaWebhookIntegrity.length)
       )
     ).toEqual(factoryPressingMachineTrackingSchema);
     const ddl = factoryPressingMachineTrackingSchema.join("; ");
@@ -422,22 +423,30 @@ describe("startup schema integrity", () => {
     expect(factoryPressingHistoryReportIndexes).toHaveLength(1);
     expect(
       startupMigrations.slice(
-        -stockTransferOrderWaApprovalFoundation.length - 1,
-        -stockTransferOrderWaApprovalFoundation.length
+        -(stockTransferOrderWaApprovalFoundation.length + stockTransferOrderWaWebhookIntegrity.length) - 1,
+        -(stockTransferOrderWaApprovalFoundation.length + stockTransferOrderWaWebhookIntegrity.length)
       )
     ).toEqual(factoryPressingHistoryReportIndexes);
     expect(factoryPressingHistoryReportIndexes[0]).toContain("factory_pressing_confirmations_machine_time_idx");
     expect(factoryPressingHistoryReportIndexes[0]).toContain("WHERE voided_at IS NULL");
   });
 
-  it("appends Stock Transfer Order WhatsApp approval foundation after the previous baseline", () => {
+  it("retains Stock Transfer Order approval foundation immediately before the webhook index", () => {
     expect(stockTransferOrderWaApprovalFoundation).toHaveLength(44);
-    expect(startupMigrations.slice(-44)).toEqual(stockTransferOrderWaApprovalFoundation);
+    expect(startupMigrations.slice(-44 - stockTransferOrderWaWebhookIntegrity.length, -stockTransferOrderWaWebhookIntegrity.length))
+      .toEqual(stockTransferOrderWaApprovalFoundation);
     const sqlText = stockTransferOrderWaApprovalFoundation.join("; ");
     expect(sqlText).toContain("stock_transfer_order_approval_batches");
     expect(sqlText).toContain("stock_transfer_order_approval_batch_revisions");
     expect(sqlText).toContain("workflow_origin");
     expect(sqlText).not.toMatch(/(?:INSERT\\s+INTO\\s+vouchers|UPDATE\\s+stock_transfer_items|UPDATE\\s+inventory)/i);
+  });
+
+  it("appends one immutable inbound-decision uniqueness index after Phase 1", () => {
+    expect(stockTransferOrderWaWebhookIntegrity).toHaveLength(1);
+    expect(startupMigrations.slice(-1)).toEqual(stockTransferOrderWaWebhookIntegrity);
+    expect(stockTransferOrderWaWebhookIntegrity[0]).toContain("sto_wa_batch_decision_once_uk");
+    expect(stockTransferOrderWaWebhookIntegrity[0]).toContain("'done_received','decline_received'");
   });
 
   it("contains only non-empty SQL strings", () => {
