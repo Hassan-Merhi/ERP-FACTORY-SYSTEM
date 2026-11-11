@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  CORE_TABLES,CONTROL_TABLES,CORE_CONSTRAINTS,CONTROL_CONSTRAINTS,
+  CORE_TABLES,CONTROL_TABLES,REQUIRED_RLS_TABLES,CORE_CONSTRAINTS,CONTROL_CONSTRAINTS,
   CORE_TRIGGERS,CONTROL_TRIGGERS,evaluateCatalogIntegrity
 } from "../scripts/database-integrity-catalog-core.mjs";
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"..");
@@ -18,7 +18,7 @@ function snapshot(){
     triggers:[...CORE_TRIGGERS,...CONTROL_TRIGGERS].map(([table_name,trigger_name])=>({
       table_name,trigger_name,enabled:"O"
     })),
-    rls:[{table_name:"voucher_entries",enabled:true,forced:true,policyCount:1}]
+    rls:REQUIRED_RLS_TABLES.map(table_name=>({table_name,enabled:true,forced:true,policyCount:1}))
   };
 }
 
@@ -55,7 +55,7 @@ test("legacy NOT VALID foreign keys are reported, not incorrectly rejected",()=>
 });
 test("RLS force and policy gaps are hard blockers",()=>{
   const snap=snapshot();
-  snap.rls=[{table_name:"voucher_entries",enabled:true,forced:false,policyCount:0}];
+  snap.rls=snap.rls.map(x=>x.table_name==="voucher_entries"?{...x,forced:false,policyCount:0}:x);
   const result=evaluateCatalogIntegrity(snap);
   assert.equal(result.ok,false);
   assert.ok(result.errors.includes("rls-not-forced:voucher_entries"));
@@ -66,4 +66,12 @@ test("catalog collector is transactional read-only and never rewrites financial 
   assert.match(source,/BEGIN READ ONLY/);
   assert.match(source,/ROLLBACK/);
   assert.doesNotMatch(source,/client\.query\(\s*["'`]\s*(?:INSERT|UPDATE|DELETE|CREATE|ALTER|DROP)\b/i);
+});
+
+test("entirely disabled RLS cannot be invisible to catalog checks",()=>{
+  const snap=snapshot();
+  snap.rls=snap.rls.filter(x=>x.table_name!=="voucher_entries");
+  const result=evaluateCatalogIntegrity(snap);
+  assert.equal(result.ok,false);
+  assert.ok(result.errors.includes("rls-disabled:voucher_entries"));
 });
