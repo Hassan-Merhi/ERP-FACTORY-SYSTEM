@@ -7,6 +7,7 @@ import { requireAuth, requireRole } from "../auth";
 import { pool, db } from "../db";
 import { logger } from "../lib/logger";
 import { webhookTokenIsConfigured } from "../services/security/stockTransferOrderWaWebhookAuthentication";
+import { stockTransferOrderWaExecutionEnabled } from "../services/stockTransferOrderWhatsAppApprovalWorker";
 import { getActiveCompanyPermissionContext } from "../services/security/activeCompanyPermissionContext";
 import {
   createStockTransferOrderApprovalDraft,
@@ -158,7 +159,7 @@ export function registerStockTransferOrderWaApprovalRoutes(app: Express,
       ]);
       const wa = await getWaSettings();
       return res.json({ settings: s.rows[0] || {enabled:false,approvalGroupChatId:null,authorizedPhoneE164:null},
-        destinations: d.rows, groups: g.rows, canConfigure: ["Admin","Owner","Developer"].includes(a.role), connected: Boolean(wa?.enabled && wa.instanceId && wa.apiToken), webhookConfigured: webhookTokenIsConfigured() });
+        destinations: d.rows, groups: g.rows, canConfigure: ["Admin","Owner","Developer"].includes(a.role), connected: Boolean(wa?.enabled && wa.instanceId && wa.apiToken), webhookConfigured: webhookTokenIsConfigured(), executionEnabled: stockTransferOrderWaExecutionEnabled() });
     } catch(e) { return errorResponse(res, e); }
   });
 
@@ -326,6 +327,11 @@ export function registerStockTransferOrderWaApprovalRoutes(app: Express,
         new Set(transferIds).size!==transferIds.length||
         transferIds.some(id=>!Number.isSafeInteger(id)||id<=0)) {
         return res.status(400).json({message:"Select persisted orders from one destination."});
+      }
+      if(!stockTransferOrderWaExecutionEnabled()) {
+        return res.status(409).json({
+          message:"WhatsApp approval execution is not enabled on the authoritative ERP server."
+        });
       }
       if(!webhookTokenIsConfigured()) {
         return res.status(409).json({message:"Configure the protected GREEN API approval webhook token before sending requests."});
