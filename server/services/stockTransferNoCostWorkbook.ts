@@ -20,6 +20,9 @@ export async function createNoCostExcel(params: {
   destinationName: string;
   transferDate: string;
   items: NoCostItem[];
+  /** Only populated for verified, fully approved WhatsApp batches. */
+  batchReference?: string;
+  approvedOrders?: string[];
 }): Promise<Buffer> {
   const book = new ExcelJS.Workbook();
   const sheet = book.addWorksheet("Truck Trip");
@@ -106,6 +109,23 @@ export async function createNoCostExcel(params: {
     total.getCell(c).alignment = { horizontal: "center", vertical: "middle" };
   }
   borderRow(total);
+  if (params.batchReference && params.approvedOrders?.length) {
+    const approved = book.addWorksheet("Approved Orders");
+    approved.columns = [{ width: 30 }, { width: 52 }];
+    const heading = approved.addRow(["APPROVED STOCK TRANSFER ORDERS", "Batch Reference"]);
+    heading.font = { bold: true, color: { argb: "FFFFFFFF" } };
+    heading.eachCell(cell => { cell.fill = { type: "pattern", pattern: "solid",
+      fgColor: { argb: "FF6B7A2C" } }; });
+    approved.addRow(["Batch", excelText(params.batchReference)]);
+    approved.addRow(["Destination", excelText(params.destinationName)]);
+    approved.addRow(["Date", params.transferDate]);
+    approved.addRow([]);
+    approved.addRow(["Included Stock Transfer Orders"]);
+    for (const number of params.approvedOrders) {
+      approved.addRow([excelText(number)]);
+    }
+    approved.pageSetup = { orientation: "portrait", fitToPage: true, fitToWidth: 1 };
+  }
   const bytes = await book.xlsx.writeBuffer();
   return Buffer.from(bytes);
 }
