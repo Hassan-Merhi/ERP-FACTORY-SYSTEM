@@ -22,6 +22,7 @@ import {
   employees,
   ledgerAccounts,
   userCompanyRoles,
+  erpUserPageAccess,
   FEATURE_KEYS,
   salaryAdvances,
 } from "@shared/schema";
@@ -578,6 +579,14 @@ export function registerUserManagementRoutes(app: Express) {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
+      // An ERP page assignment is valid only for a member of this company.
+      // Do not expose historical orphan grants to another company's admin.
+      const [membership] = await db
+        .select({ id: userCompanyRoles.id })
+        .from(userCompanyRoles)
+        .where(and(eq(userCompanyRoles.companyId, companyId), eq(userCompanyRoles.userId, req.params.userId)))
+        .limit(1);
+      if (!membership) return res.status(404).json({ message: "User is not assigned to this company" });
       const pageKeys = await storage.getErpUserPageAccess(companyId, req.params.userId);
       res.json({ pageKeys });
     } catch (error: unknown) {
@@ -589,9 +598,40 @@ export function registerUserManagementRoutes(app: Express) {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const { pageKeys } = req.body;
-      if (!Array.isArray(pageKeys)) return res.status(400).json({ message: "pageKeys must be an array" });
-      await storage.setErpUserPageAccess(companyId, req.params.userId, pageKeys);
+
+      const { pageKeys } = req.body ?? {};
+      if (
+        !Array.isArray(pageKeys) ||
+        pageKeys.some((key) => typeof key !== "string" || !FEATURE_KEYS.includes(key as (typeof FEATURE_KEYS)[number])) ||
+        new Set(pageKeys).size !== pageKeys.length
+      ) {
+        return res.status(400).json({ message: "pageKeys must be a unique list of recognized ERP features" });
+      }
+
+      // The membership lock, delete and replacement insert must be atomic:
+      // a concurrent company-role removal or an insertion failure must never
+      // leave a partially updated grant list.
+      const assigned = await db.transaction(async (tx) => {
+        const [membership] = await tx
+          .select({ id: userCompanyRoles.id })
+          .from(userCompanyRoles)
+          .where(and(eq(userCompanyRoles.companyId, companyId), eq(userCompanyRoles.userId, req.params.userId)))
+          .for("update")
+          .limit(1);
+        if (!membership) return false;
+
+        await tx
+          .delete(erpUserPageAccess)
+          .where(and(eq(erpUserPageAccess.companyId, companyId), eq(erpUserPageAccess.userId, req.params.userId)));
+        if (pageKeys.length > 0) {
+          await tx.insert(erpUserPageAccess).values(
+            pageKeys.map((pageKey: string) => ({ companyId, userId: req.params.userId, pageKey }))
+          );
+        }
+        return true;
+      });
+
+      if (!assigned) return res.status(404).json({ message: "User is not assigned to this company" });
       res.json({ message: "Page access updated", pageKeys });
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
