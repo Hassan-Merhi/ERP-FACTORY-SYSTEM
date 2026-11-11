@@ -581,6 +581,34 @@ export function useFactoryProformasModel() {
     },
   });
 
+  const applyAgreedPricesMutation = useMutation({
+    mutationFn: async (proformaId: number) => {
+      const res = await modeApiRequest(
+        "POST",
+        `/api/factory/customer-proformas/${proformaId}/apply-agreed-prices`,
+        {}
+      );
+      return res.json() as Promise<{
+        updated: number;
+        skipped: number;
+        fixed: number;
+        unchanged: number;
+        destination: string;
+      }>;
+    },
+    onSuccess: (result) => {
+      invalidateCustomerProformas();
+      toast({
+        title: "Saved Agreed Prices Applied",
+        description: `${result.updated} line(s) updated for ${result.destination}. ${result.unchanged} already current, ${result.skipped} without saved prices, ${result.fixed} locked.`,
+      });
+    },
+    onError: (error: Error) => {
+      if (error?._handledGlobally) return;
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
   const applyCatalogPricesMutation = useMutation({
     mutationFn: async (proformaId: number) => {
       const res = await modeApiRequest(
@@ -762,6 +790,7 @@ export function useFactoryProformasModel() {
     downloadProformaTemplate,
     handleExcelFile,
     saveAgreedPricesMutation,
+    applyAgreedPricesMutation,
     applyCatalogPricesMutation,
     applyProductionPricesMutation,
     handleCreateProforma,
