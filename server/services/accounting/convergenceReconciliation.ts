@@ -27,6 +27,8 @@ export interface StockConvergenceSnapshot {
   movementQuantity: string;
   documentValue: string;
   movementValue: string;
+  /** Present for transfers: a stale false flag is a reportable discrepancy. */
+  inventoryApplied?: boolean | null;
 }
 
 export interface ConvergenceReconciliationAdapter<TTransaction = CompanyScopedReadTransaction> {
@@ -269,6 +271,19 @@ export async function reconcileConvergenceTx<
     const sourceId = requiredIdentityPart(row.sourceId, "stock.sourceId");
     const identity = `${sourceType}:${sourceId}`;
     assertUniqueIdentity(stockIdentities, identity, "inventory");
+
+    // The canonical journal is authoritative for movement evidence. A transfer
+    // imported with its movements posted but carrying an old false flag must
+    // be visible as an exception, not silently excluded from reconciliation.
+    if (sourceType === "stock-transfer" && row.inventoryApplied !== undefined && row.inventoryApplied !== true) {
+      discrepancies.push({
+        domain: "inventory",
+        identity,
+        code: "STOCK_TRANSFER_APPLIED_FLAG_MISMATCH",
+        expected: "true",
+        actual: String(row.inventoryApplied),
+      });
+    }
 
     compare(
       discrepancies,

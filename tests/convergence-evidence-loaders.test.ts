@@ -112,10 +112,14 @@ const issueLeg = {
   companyId: 4,
   sourceType: "stock-transfer",
   sourceId: "77",
+  stockItemId: 91,
+  locationId: 1,
+  destinationLocationId: 2,
+  idempotencyKey: "stock-transfer:77:91",
   quantityDelta: "-5",
   unitCost: "2.5",
 };
-const receiptLeg = { ...issueLeg, quantityDelta: "5" };
+const receiptLeg = { ...issueLeg, locationId: 2, quantityDelta: "5" };
 
 describe("canonical stock transfer evidence", () => {
   it("reports the receipt leg once both sides balance", () => {
@@ -180,6 +184,7 @@ const document = {
   sourceId: "77",
   transferId: 77,
   voucherId: 500,
+  destinationLocationId: 2,
   companyId: 4,
   documentQuantity: "5",
   documentValue: "12.5",
