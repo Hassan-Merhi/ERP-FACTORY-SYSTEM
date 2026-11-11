@@ -9,8 +9,7 @@
  */
 import { createHash } from "node:crypto";
 const sha=x=>createHash("sha256").update(x).digest("hex");
-const normalized=x=>String(x??"").replace(/\s+/g," ").trim();
-const objectKey=(...x)=>x.join(".");
+ const objectKey=(...x)=>x.join(".");
 const stableJson=value=>JSON.stringify(value);
 const clean=(x,keys)=>Object.fromEntries(keys.map(key=>[key,x[key]??null]));
 
@@ -56,7 +55,7 @@ export function fingerprintFullSchema(snapshot) {
   };
   const objects={};
   for(const [group,rows] of Object.entries(groups)) {
-    objects[group]={};
+    objects[group]=Object.create(null);
     for(const row of rows) {
       if(Object.hasOwn(objects[group],row.name))
         throw new Error("Nonunique schema catalog identity: "+group+":"+row.name);
