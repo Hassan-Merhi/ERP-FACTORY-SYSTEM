@@ -50,7 +50,8 @@ function sourceIds(documents: StockTransferDocumentSnapshot[]): string[] {
 /**
  * Reads canonical movement evidence only for the authoritative stock-transfer
  * documents supplied by the database document adapter. Ordinary writes are
- * keyed by transfer ID while both Excel-import writers are keyed by voucher ID.
+ * keyed by transfer ID while both Excel imports and voucher-level edit routes
+ * are keyed by voucher ID.
  * The explicit requested triples (transfer, voucher, destination) prevent
  * cross-document matches and normalize every movement to the transfer ID.
  * Full edits reverse and reissue while approval revisions move only DELTAS;
@@ -107,8 +108,12 @@ export const loadDatabaseCanonicalStockTransferEvidence: StockTransferMovementEv
        (movement.source_type = 'stock-transfer'
         AND movement.source_id = requested.transfer_id)
        OR
-       (movement.source_type IN ('stock-transfer-import', 'stock-transfer-import-multi-source')
-        AND movement.source_id = requested.voucher_id)
+       (movement.source_type IN (
+          'stock-transfer-import',
+          'stock-transfer-import-multi-source',
+          'voucher_stock_transfer_edit_reverse',
+          'voucher_stock_transfer_edit_apply'
+        ) AND movement.source_id = requested.voucher_id)
      )
     ORDER BY requested.transfer_id, movement.id
   `);
