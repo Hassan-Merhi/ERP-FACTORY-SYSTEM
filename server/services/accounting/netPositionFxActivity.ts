@@ -164,10 +164,10 @@ export async function loadNetPositionFxActivity(input: {
   const factoryEvents: Array<Promise<unknown>> = input.factory ? [
     db.execute(sql`
       SELECT fc.id,
-        COALESCE(fc.arrival_date::date, fc.created_at::date)::text AS date,
+        fc.created_at::date::text AS date,
         fc.created_at::text AS recorded_at,
         fc.container_number AS reference,
-        'Container ' || COALESCE(fc.status, '') || ' — ' || COALESCE(fs.name, 'Supplier') AS description,
+        'Container record (current status: ' || COALESCE(fc.status, '') || ') — ' || COALESCE(fs.name, 'Supplier') AS description,
         UPPER(fc.currency_code) AS currency,
         (COALESCE(fc.total_kg, 0)::numeric * COALESCE(fc.rate_per_kg, 0)::numeric)::text AS native_amount,
         fc.final_payable_amount_usd::text AS usd_amount,
@@ -178,9 +178,9 @@ export async function loadNetPositionFxActivity(input: {
       LEFT JOIN factory_suppliers fs ON fs.id = fc.supplier_id AND fs.company_id = fc.company_id
       WHERE fc.company_id = ${companyId} AND fc.deleted_at IS NULL
         AND UPPER(COALESCE(fc.currency_code, 'USD')) <> 'USD'
-        ${from ? sql`AND COALESCE(fc.arrival_date::date, fc.created_at::date) >= ${from}::date` : sql``}
-        ${to ? sql`AND COALESCE(fc.arrival_date::date, fc.created_at::date) <= ${to}::date` : sql``}
-      ORDER BY COALESCE(fc.arrival_date::date, fc.created_at::date) DESC, fc.id DESC LIMIT 201
+        ${from ? sql`AND fc.created_at::date >= ${from}::date` : sql``}
+        ${to ? sql`AND fc.created_at::date <= ${to}::date` : sql``}
+      ORDER BY fc.created_at DESC, fc.id DESC LIMIT 201
     `),
     db.execute(sql`
       SELECT p.id, p.date::text AS date, NULL::text AS recorded_at,
