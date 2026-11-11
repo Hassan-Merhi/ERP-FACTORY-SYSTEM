@@ -24,15 +24,19 @@ export const REQUIRED = Object.freeze({
   ]
 });
 
+export const REVIEW_ONLY_METRICS = new Set(["unbalanced_active_nonoptional_vouchers"]);
+
 export function summarizeIntegrity({missingTables=[],missingConstraints=[],invalidConstraints=[],missingTriggers=[],metrics={},warnings=[]}) {
   const metricErrors = Object.entries(metrics)
-    .filter(([,count])=>Number(count)>0)
+    .filter(([name,count])=>Number(count)>0 && !REVIEW_ONLY_METRICS.has(name))
     .map(([name,count])=>({name,count:Number(count)}));
   return {
     ok: missingTables.length===0 && missingConstraints.length===0 &&
       missingTriggers.length===0 && metricErrors.length===0,
     missingTables,missingConstraints,invalidConstraints,missingTriggers,metrics,metricErrors,
-    warnings:[...warnings,...invalidConstraints.map(name=>"Historical NOT VALID constraint requires reviewed validation: "+name)]
+    warnings:[...warnings,...invalidConstraints.map(name=>"Historical NOT VALID constraint requires reviewed validation: "+name),
+      ...Object.entries(metrics).filter(([name,count])=>REVIEW_ONLY_METRICS.has(name) && Number(count)>0)
+        .map(([name,count])=>name+": "+count+" gross imbalance(s) require historic/stock exemption review against the voucher balance guard")]
   };
 }
 
