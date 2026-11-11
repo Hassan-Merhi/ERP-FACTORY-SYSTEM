@@ -38,8 +38,7 @@ export function authorizedStockTransferOrderWaWebhook(authHeader: unknown): bool
   return timingSafeEqual(a, b);
 }
 
-export function registerStockTransferOrderWaApprovalWebhookRoutes(app: Express): void {
-  app.post(STOCK_TRANSFER_ORDER_WA_WEBHOOK_PATH, async (req: Request, res: Response) => {
+export async function stockTransferOrderWaWebhookHandler(req: Request, res: Response) {
     res.setHeader("Cache-Control", "no-store");
     if (!webhookTokenIsConfigured()) {
       return res.status(503).json({ code: "STO_WA_WEBHOOK_NOT_CONFIGURED" });
@@ -72,5 +71,8 @@ export function registerStockTransferOrderWaApprovalWebhookRoutes(app: Express):
       res.setHeader("Retry-After", "30");
       return res.status(503).json({ code: "STO_WA_WEBHOOK_TEMPORARILY_UNAVAILABLE" });
     }
-  });
+}
+
+export function registerStockTransferOrderWaApprovalWebhookRoutes(app: Express): void {
+  app.post(STOCK_TRANSFER_ORDER_WA_WEBHOOK_PATH, stockTransferOrderWaWebhookHandler);
 }
