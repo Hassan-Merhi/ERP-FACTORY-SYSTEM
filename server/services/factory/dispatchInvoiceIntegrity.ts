@@ -8,16 +8,14 @@
 import { sql } from "drizzle-orm";
 import type { DbTransaction } from "../../db";
 import { resultRows } from "../../lib/queryResult";
-import { MoneyDecimal, sumMoney } from "../../lib/money";
+import { MoneyDecimal } from "../../lib/money";
+import { inspectDispatchTripPostingSnapshot } from "./dispatchIntegritySnapshot";
+import type { DispatchIntegrityCheck } from "./dispatchIntegritySnapshot";
+export type { DispatchIntegrityCheck,DispatchIntegrityState } from "./dispatchIntegritySnapshot";
 
-export type DispatchIntegrityState="PASS"|"BLOCK"|"INFO"|"NOT_APPLICABLE";
-export interface DispatchIntegrityCheck {
-  code:string;state:DispatchIntegrityState;message:string;
-  expected?:string;observed?:string;
-}
 export interface DispatchInvoiceIntegrityReport {
   orderId:number;companyId:number;
-  finalized:boolean;passed:boolean;
+  finalized:boolean;signedReconciliation:boolean;passed:boolean;
   expectedInvoiceTotal:string|null;originalTruckReceivable:string|null;
   checks:DispatchIntegrityCheck[];
   verifiedAt:string;
@@ -44,7 +42,8 @@ export async function auditFactoryDispatchInvoiceTx(
   const [order]=await query(tx,sql`
     SELECT o.id,o.customer_id AS "customerId",o.status,
       o.invoice_number AS "invoiceNumber",o.grand_total::text AS "grandTotal",
-      c.status AS "combinedStatus",c.invoice_number AS "combinedInvoiceNumber",
+      c.status AS "combinedStatus",c.reconciled_at AS "reconciledAt",
+      c.invoice_number AS "combinedInvoiceNumber",
       c.goods_subtotal::text AS "signedGoods",
       c.billable_charges_total::text AS "signedBillable",
       c.discount_total::text AS "signedDiscounts",
@@ -76,26 +75,20 @@ export async function auditFactoryDispatchInvoiceTx(
     ORDER BY f.dispatch_id
   `);
   const posted=trips.filter(t=>t.status==="POSTED"||t.status==="CONSOLIDATED");
-  const expectedPosts=list(order.postingIds).sort();
-  const actualPosts=posted.map(p=>str(p.postingId)).sort();
-  const goods=sumMoney(posted.map(t=>str(t.goods))).toFixed(2);
-  const billable=sumMoney(posted.map(t=>str(t.billable))).toFixed(2);
-  const discounts=sumMoney(posted.map(t=>str(t.discounts))).toFixed(2);
-  const receivable=sumMoney(posted.map(t=>str(t.total))).toFixed(2);
-  pass("TRIP_POST_IDENTITIES","Every included truck has one original POST identity",
-    posted.length>0 && posted.every(x=>x.postingId!=null) &&
-      new Set(actualPosts).size===actualPosts.length &&
-      JSON.stringify(actualPosts)===JSON.stringify(expectedPosts),
-    expectedPosts.join(","),actualPosts.join(","));
-  pass("SIGNED_TRIP_GOODS","Combined goods equal the sum of posted truck goods",
-    goods===fixed(order.signedGoods),fixed(order.signedGoods),goods);
-  pass("SIGNED_TRIP_CHARGES","Combined charges equal original truck billable fees",
-    billable===fixed(order.signedBillable) && discounts===fixed(order.signedDiscounts),
-    fixed(order.signedBillable)+" / "+fixed(order.signedDiscounts),billable+" / "+discounts);
-  pass("SIGNED_TRIP_RECEIVABLE","Truck receivable is goods + billable fees - discounts",
-    receivable===fixed(order.signedCustomerTotal) &&
-      amount(goods).plus(billable).minus(discounts).eq(receivable),
-    fixed(order.signedCustomerTotal),receivable);
+  // A consolidation row (and its zero-value defaults) is not signed until
+  // reconciled_at exists. Finalized invoices must always be fully audited,
+  // even when a damaged historical row has lost its signoff timestamp.
+  const signedReconciliation=Boolean(order.reconciledAt)||finalized;
+  const snapshot=inspectDispatchTripPostingSnapshot(trips,{
+    isSigned:signedReconciliation,
+    postingIds:order.postingIds,
+    goods:order.signedGoods,
+    billable:order.signedBillable,
+    discounts:order.signedDiscounts,
+    total:order.signedCustomerTotal,
+  });
+  checks.push(...snapshot.checks);
+  const {goods,receivable}=snapshot;
   const [legacy]=await query(tx,sql`
     SELECT
       (SELECT COUNT(*)::integer FROM customer_balances b
@@ -228,7 +221,7 @@ export async function auditFactoryDispatchInvoiceTx(
     });
   }
   return {
-    orderId,companyId,finalized,
+    orderId,companyId,finalized,signedReconciliation,
     passed:checks.every(c=>c.state!=="BLOCK"),
     expectedInvoiceTotal:finalized?str(details.finalInvoiceTotal):null,
     originalTruckReceivable:receivable,checks,
