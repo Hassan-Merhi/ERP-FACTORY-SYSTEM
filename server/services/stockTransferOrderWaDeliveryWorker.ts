@@ -163,7 +163,22 @@ async function recordSameChatAlias(item: DeliveryRow): Promise<boolean> {
     "ORDER BY ev.id LIMIT 1",
     [item.company_id,item.batch_id]
   );
-  if (frozen.rows[0]?.frozen_chat !== item.recipient_chat_id) return true;
+  if (frozen.rows[0]?.frozen_chat !== item.recipient_chat_id) {
+    await pool.query(
+      "WITH refused AS (UPDATE stock_transfer_order_approval_deliveries " +
+      "SET status='failed',attempt_count=$3,available_at=clock_timestamp()+interval '100 years'," +
+      "last_error='Recipient no longer matches the originally approved destination'," +
+      "updated_at=clock_timestamp() " +
+      "WHERE company_id=$1 AND id=$2 AND status IN ('pending','failed') " +
+      "RETURNING id,company_id,batch_id) " +
+      "INSERT INTO stock_transfer_order_approval_events(company_id,batch_id,event_type,details) " +
+      "SELECT company_id,batch_id,'delivery_failed'," +
+      "jsonb_build_object('deliveryId',id,'recipientKind','destination'," +
+      "'reason','frozen_destination_mismatch') FROM refused",
+      [item.company_id,item.id,MAX_ATTEMPTS]
+    );
+    return true;
+  }
   const records = await pool.query<{
     recipient_chat_id: string; status: string; provider_message_id: string | null;
     workbook_sha256: string | null; filename: string | null; workbook_storage_key: string | null;
