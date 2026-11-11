@@ -9,6 +9,7 @@ import { pool } from "../db";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { logger } from "../lib/logger";
 import { registerPosTransferDelegatedApprovalRoutes } from "./posTransferDelegatedApprovalRoutes";
+import { registerStockTransferOrderWaApprovalRoutes } from "./stockTransferOrderWaApprovalRoutes";
 import { getWaSettings, sendWhatsAppFileToChatId } from "../services/whatsappService";
 
 const groupIdPattern = /^\d{5,25}@g\.us$/;
@@ -343,4 +344,5 @@ export function registerStockTransferExportWhatsAppRoutes(app: Express) {
     }
   );
   registerPosTransferDelegatedApprovalRoutes(app, { ensureGroupsTable, createNoCostExcel });
+  registerStockTransferOrderWaApprovalRoutes(app, { ensureGroupsTable });
 }
