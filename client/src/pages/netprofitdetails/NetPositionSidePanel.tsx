@@ -30,6 +30,7 @@ function CategoryGroup({
   groupKey,
   groupSiblings = [],
   actions,
+  onFxClick,
 }: {
   category: string;
   accounts: AccountItem[];
@@ -38,6 +39,7 @@ function CategoryGroup({
   groupKey?: string | null;
   groupSiblings?: string[];
   actions?: InlineOrderActions;
+  onFxClick?: (side: "gain" | "loss") => void;
 }) {
   const [open, setOpen] = useState(true);
   const accountKeys = accounts.filter((a) => a.id != null).map((a) => `ledger:${a.id}`);
@@ -95,7 +97,13 @@ function CategoryGroup({
                 data-testid={`row-account-${i}`}
                 {...inlineDrag(acc.id != null ? `ledger:${acc.id}` : null, actions)}
               >
-                {acc.id ? (
+                {(acc.code === "FX_UNREALIZED_GAIN" || acc.code === "FX_UNREALIZED_LOSS") && onFxClick ? (
+                  <button type="button" className="inline-flex items-center gap-1 text-primary font-medium hover:underline"
+                    onClick={() => onFxClick(acc.code === "FX_UNREALIZED_GAIN" ? "gain" : "loss")}
+                    data-testid={`button-erp-fx-history-${acc.code}`}>
+                    {acc.name} <ExternalLink className="h-3 w-3" />
+                  </button>
+                ) : acc.id ? (
                   <button
                     type="button"
                     onClick={() => window.open(`${ledgerBase}/${acc.id}`, "_blank")}
@@ -151,6 +159,7 @@ export function SidePanel({
   formatAmount,
   displayLayout,
   orderActions,
+  onFxClick,
 }: {
   id: string;
   title: string;
@@ -161,6 +170,7 @@ export function SidePanel({
   formatAmount: (n: number) => string;
   displayLayout?: AccountDisplayLayout;
   orderActions?: InlineOrderActions;
+  onFxClick?: (side: "gain" | "loss") => void;
 }) {
   const [open, setOpen] = useState(true);
 
@@ -278,6 +288,7 @@ export function SidePanel({
                   groupKey={layoutGroupNames.has(cat) ? cat.slice("display:".length) : null}
                   groupSiblings={groupKeys}
                   actions={orderActions}
+                  onFxClick={onFxClick}
                 />
               ))}
               <div
