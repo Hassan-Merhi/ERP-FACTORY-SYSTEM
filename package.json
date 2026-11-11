@@ -96,7 +96,9 @@
     "db:performance:audit": "node scripts/audit-database-performance.mjs --json",
     "db:restore:preflight": "node scripts/verify-restore-target.mjs",
     "test:db:migrations:postgres": "node scripts/test-controlled-migrations-postgres.mjs",
-    "db:release:preflight": "node scripts/verify-database-phase9-release.mjs"
+    "db:release:preflight": "node scripts/verify-database-phase9-release.mjs",
+    "audit:startup-mutations": "node scripts/audit-startup-mutation-coverage.mjs",
+    "audit:startup-mutations:strict": "node scripts/audit-startup-mutation-coverage.mjs --strict"
   },
   "dependencies": {
     "@aparajita/capacitor-biometric-auth": "^10.0.0",
