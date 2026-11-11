@@ -31,6 +31,7 @@ export function StockTransferOrderApprovalRequestPanel({ model, open }: { model:
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [legacyIds, setLegacyIds] = useState<number[]>([]);
   const autoSelected = useRef<number | null>(null);
+  const destinationSeededForCompany = useRef<number | null>(null);
   const [result, setResult] = useState<RequestOutcome | null>(null);
 
   const config = useQuery<StockTransferOrderWaSettings>({
@@ -39,11 +40,17 @@ export function StockTransferOrderApprovalRequestPanel({ model, open }: { model:
     enabled: open && !!selectedCompany?.id,
   });
   useEffect(() => {
-    if (open && model.destinationLocationId &&
-      config.data?.destinations.some(d => d.id === model.destinationLocationId)) {
-      setDestinationId(model.destinationLocationId);
+    if (!open) {
+      destinationSeededForCompany.current = null;
+      return;
     }
-  }, [open, model.destinationLocationId, config.data]);
+    if (destinationSeededForCompany.current === selectedCompany?.id) return;
+    if (model.destinationLocationId &&
+        config.data?.destinations.some(d => d.id === model.destinationLocationId)) {
+      setDestinationId(model.destinationLocationId);
+      destinationSeededForCompany.current = selectedCompany?.id ?? null;
+    }
+  }, [open, model.destinationLocationId, config.data, selectedCompany?.id]);
 
   const eligible = useQuery<{ orders: EligibleOrder[] }>({
     queryKey: [base + "/eligible", selectedCompany?.id, destinationId],
