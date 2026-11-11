@@ -69,6 +69,7 @@ import { ensurePriorityScanSchema } from "./startup/priorityScanSchema";
 import { ensureContainerExtraExpectedLines } from "./startup/ensureContainerExtraExpectedLines";
 import { ensureFactoryLoadingDispatchSchema } from "./startup/ensureFactoryLoadingDispatchSchema";
 import { ensureStockTransferOrderWhatsAppApprovalSchema } from "./startup/ensureStockTransferOrderWhatsAppApprovalSchema";
+import { startStockTransferOrderWaApprovalWorker } from "./services/stockTransferOrderWhatsAppApprovalWorker";
 import { ensureFactoryBaleOrderIntegrity } from "./startup/ensureFactoryBaleOrderIntegrity";
 import { runApprovedLegacyBaleUnitCostRepair } from "./startup/runApprovedLegacyBaleUnitCostRepair";
 import { runApprovedLegacySoldBaleUnitCostRepair } from "./startup/runApprovedLegacySoldBaleUnitCostRepair";
@@ -540,6 +541,11 @@ let migrationsDone = false;
       listenWithRetry(server, port, () => {
         if (shouldStartEdgeBackgroundJobs(readFactoryEdgeConfiguration())) {
           runPostStartupJobs();
+          // Only the authoritative primary executes verified WhatsApp
+          // decisions; restarts replay the persisted Phase 3 event.
+          if (process.env.ENABLE_SCHEDULERS !== "false") {
+            startStockTransferOrderWaApprovalWorker();
+          }
         } else {
           logger.info("[FactoryEdge] Background startup jobs disabled by LAN mode or cloud writer fence");
         }
