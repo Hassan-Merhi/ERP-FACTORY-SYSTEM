@@ -8,6 +8,7 @@
  */
 import { pool } from "../db";
 import { logger } from "../lib/logger";
+import { readFactoryEdgeConfiguration, shouldStartEdgeBackgroundJobs } from "../edge/edgeRuntimePolicy.mjs";
 import { runWithDatabaseMaintenanceScope } from "./security/databaseScopeRuntimeContext";
 import { executeStockTransferOrderWaBatch } from "./stockTransferOrderWhatsAppBatchExecution";
 
@@ -18,7 +19,9 @@ let sweepRunning = false;
 const backoffUntil = new Map<number, number>();
 
 function executorEnabled(): boolean {
-  return process.env.STO_WA_APPROVAL_EXECUTION_ENABLED !== "false";
+  return process.env.STO_WA_APPROVAL_EXECUTION_ENABLED !== "false" &&
+    process.env.ENABLE_SCHEDULERS !== "false" &&
+    shouldStartEdgeBackgroundJobs(readFactoryEdgeConfiguration());
 }
 
 async function processOne(batchId: number): Promise<void> {
@@ -66,10 +69,11 @@ export async function sweepStockTransferOrderWaDecisions(): Promise<number> {
         "WHERE e.company_id=b.company_id AND e.batch_id=b.id " +
         "AND e.event_type IN ('done_received','decline_received')) " +
         "ORDER BY b.id ASC LIMIT $1",
-        [MAX_PER_SWEEP]
+        [MAX_PER_SWEEP * 8]
       );
       let processed = 0;
       for (const item of results.rows) {
+        if (processed >= MAX_PER_SWEEP) break;
         const id = Number(item.id);
         if (!Number.isSafeInteger(id) || id <= 0 || (backoffUntil.get(id) ?? 0) > Date.now()) {
           continue;
