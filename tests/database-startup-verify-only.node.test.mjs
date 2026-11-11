@@ -166,3 +166,19 @@ test("startup mutation inventory loads every numbered startup SQL module",()=>{
   assert.match(inventory,/readdir\(path\.join\(root,"server\/startup-schema"\)\)/);
   assert.match(inventory,/targets\.push\(\.\.\.startupModules\)/);
 });
+
+test("controlled stock, Supplier Partner and POS legacy schema contain only additive statements",()=>{
+  const paths=[
+    "migrations/controlled/20261111_010_stock_item_columns.sql",
+    "migrations/controlled/20261111_011_sp_invoice_charges.sql",
+    "migrations/controlled/20261111_012_pos_port_departure.sql"
+  ];
+  for(const file of paths){
+    const sql=read(file);
+    assert.match(sql,/ALTER TABLE/);
+    assert.doesNotMatch(sql,/\b(?:INSERT|UPDATE|DELETE|TRUNCATE|DROP)\s+/i);
+  }
+  assert.match(read(paths[0]),/selling_price numeric\(15,2\)/i);
+  assert.match(read(paths[1]),/document_charges_usd NUMERIC\(20, 4\)/);
+  assert.match(read(paths[2]),/port_departure_date date/);
+});
