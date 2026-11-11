@@ -12,6 +12,7 @@ export interface StockTransferDocumentSnapshot {
   sourceId: string;
   transferId: number;
   voucherId: number;
+  destinationLocationId?: number;
   companyId: number;
   inventoryApplied?: boolean | null;
   documentQuantity: string;
@@ -79,6 +80,7 @@ export async function loadDatabaseStockTransferDocuments(input: {
     .select({
       transferId: stockTransferVouchers.id,
       voucherId: stockTransferVouchers.voucherId,
+      destinationLocationId: stockTransferVouchers.destinationLocationId,
       companyId: vouchers.companyId,
       inventoryApplied: stockTransferVouchers.inventoryApplied,
       itemCount: sql<number>`count(${stockTransferItems.id})`,
@@ -99,7 +101,13 @@ export async function loadDatabaseStockTransferDocuments(input: {
         inArray(vouchers.voucherType, ["Stock Transfer", "StockTransfer", "Transfer"])
       )
     )
-    .groupBy(stockTransferVouchers.id, stockTransferVouchers.voucherId, vouchers.companyId, stockTransferVouchers.inventoryApplied);
+    .groupBy(
+      stockTransferVouchers.id,
+      stockTransferVouchers.voucherId,
+      stockTransferVouchers.destinationLocationId,
+      vouchers.companyId,
+      stockTransferVouchers.inventoryApplied
+    );
 
   return rows.map((row: Record<string, unknown>) => {
     const transferId = positiveInteger(row.transferId, "transferId");
@@ -125,6 +133,7 @@ export async function loadDatabaseStockTransferDocuments(input: {
       sourceId: String(transferId),
       transferId,
       voucherId,
+      destinationLocationId: positiveInteger(row.destinationLocationId, "destinationLocationId"),
       companyId: rowCompanyId,
       inventoryApplied: row.inventoryApplied === true ? true : row.inventoryApplied === false ? false : null,
       documentQuantity: decimalString(row.documentQuantity, "documentQuantity"),
