@@ -172,8 +172,8 @@ export function StockTransferOrderApprovalSettings() {
             <div className="space-y-2">
               <h4 className="font-medium text-sm">Destination WhatsApp recipients</h4>
               <p className="text-xs text-muted-foreground">
-                The final Excel will go to the approval group and this destination recipient after
-                approval is implemented in Phase 5. Use a group ID ending @g.us or a phone ending @c.us.
+                After full-batch approval, the same cost-free Excel is automatically sent to the
+                approval group and this destination recipient. Use a group ID ending @g.us or a phone ending @c.us.
               </p>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                 {(settings.data?.destinations || []).map(destination => (
