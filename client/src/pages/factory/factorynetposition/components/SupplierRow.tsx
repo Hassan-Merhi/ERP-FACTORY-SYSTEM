@@ -9,11 +9,15 @@ import {ChevronDown, ChevronRight, ExternalLink} from "lucide-react";
 import type {AccountItem} from "../types";
 import {fmt} from "../utils";
 
-export function SupplierRow({ acc, accentClass, index }: { acc: AccountItem; accentClass: string; index: number }) {
+export function SupplierRow({ acc, accentClass, index, onFxClick }: {
+  acc: AccountItem; accentClass: string; index: number;
+  onFxClick?: (side: "gain" | "loss") => void;
+}) {
   const [open, setOpen] = useState(false);
   const hasBreakdown = acc.breakdown && acc.breakdown.length > 0;
   const name = acc.name.toLowerCase();
   const code = acc.code?.toUpperCase() ?? "";
+  const fxSide = code === "FX_UNREALIZED_GAIN" ? "gain" : code === "FX_UNREALIZED_LOSS" ? "loss" : null;
   const href =
     code === "STOCK_OTW" || name.includes("stock otw") ? "/factory/stock-otw" :
     code === "INVENTORY" || name.includes("stock in hand") ? "/factory/location-inventory" :
@@ -37,7 +41,13 @@ export function SupplierRow({ acc, accentClass, index }: { acc: AccountItem; acc
                 {open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
               </button>
             )}
-            {href ? (
+            {fxSide && onFxClick ? (
+              <button type="button" onClick={() => onFxClick(fxSide)}
+                className="font-medium text-primary hover:underline text-left inline-flex items-center gap-1"
+                data-testid={`button-fx-history-${fxSide}`}>
+                {acc.name} <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+              </button>
+            ) : href ? (
               <a
                 href={href}
                 className="font-medium text-foreground hover:underline text-left flex items-center gap-1 min-w-0"
