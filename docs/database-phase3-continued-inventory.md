@@ -8,17 +8,18 @@
 | 20261111_002_startup_warning_schema.sql | Startup warning repair | Additive columns and uniqueness index, no duplicate deletion |
 | 20261111_003_security_permissions_schema.sql | Critical Security bridge | Additive permission table/columns/indexes, **no duplicate deletion and no automatic role grants** |
 | 20261111_004_factory_container_columns.sql | Factory Container bridge | Adds missing columns, **no tracking-data update** |
+| 20261111_005_factory_multilingual_catalog.sql | French catalog and language preferences | Adds multilingual text columns, user language table and optional recode field |
 
-Each source bridge retains its legacy compatibility startup behavior by default. Optional `FIXED_PRODUCTION_PLANNER_SCHEMA_MODE=verify-only`, `STARTUP_WARNING_SCHEMA_MODE=verify-only`, `CRITICAL_SECURITY_SCHEMA_MODE=verify-only`, and `FACTORY_CONTAINER_SCHEMA_MODE=verify-only` permit read-only catalog verification after *manual staging migration* and validation. These flags are **not configured on Render**.
+Each source bridge retains its legacy compatibility startup behavior by default. Optional `FIXED_PRODUCTION_PLANNER_SCHEMA_MODE=verify-only`, `STARTUP_WARNING_SCHEMA_MODE=verify-only`, `CRITICAL_SECURITY_SCHEMA_MODE=verify-only`, and `FACTORY_CONTAINER_SCHEMA_MODE=verify-only`, `FACTORY_MULTILINGUAL_SCHEMA_MODE=verify-only`, `COMPANY_SCOPE_RLS_MODE=verify-only`, and `SUPPLIER_SCOPE_SCHEMA_MODE=verify-only` permit read-only catalog verification after *manual staging migration* and validation. These flags are **not configured on Render**.
 
 ## Critical startup mutations still outstanding — DO NOT enable a global cutover
 
 | Source | Writes / risk | Blocker |
 |---|---|---|
 | `server/factoryBilingualSchemaBridge.mjs` | Factory catalog columns and expression indexes | Map and version all column/index changes; verify active optional tables |
-| `server/factoryTrilingualSchemaBridge.mjs` | Legacy French catalog/language SQL and bale recode column | Historical migration ledger reconciliation, table/definition checks |
-| `server/companyScopeRlsBridge.mjs` | Tenant RLS policies, functions, triggers, voucher-entry company backfill | Preserve exact RLS security and tenant checks; migrate backfill separately |
-| `server/supplierCompanyScopeBridge.mjs` | Legacy supplier scope migration SQL on every startup | Deduplicate historical registry and verify source metadata |
+| `server/factoryTrilingualSchemaBridge.mjs` | Legacy French catalog/language SQL and bale recode column | Additive SQL extracted as migration 005; opt-in verification available, pending staging cutover |
+| `server/companyScopeRlsBridge.mjs` | Tenant RLS policies, functions, triggers, voucher-entry company backfill | Read-only verification option added; migrate historical backfill and reconcile legacy migration separately |
+| `server/supplierCompanyScopeBridge.mjs` | Legacy supplier scope migration SQL on every startup | Read-only verification option added; historical supplier reassignment must remain independently approved |
 | `server/customerOrderBaleScanAuditBridge.mjs` | Scan-history table, functions/triggers/columns | Ensure scan evidence remains complete and timestamps unchanged |
 | `server/wave3SalesHotpathIndexBridge.mjs` | Conditionally creates indexes concurrently | Non-transactional, separately authorized online migration required |
 | `server/inventoryValuationWave6RepairBridge.mjs` | Conditional repair of inventory data | Explicit financial/stock approval required |
@@ -36,4 +37,4 @@ Each source bridge retains its legacy compatibility startup behavior by default.
 
 ## Status
 
-**Partially complete**. These two new extraction paths are not yet authorized for production application. The branch must remain a draft and not be merged/deployed until the outstanding inventory is removed and end-to-end certification passes.
+**Partially complete**. These new extraction paths are not yet authorized for production application. The branch must remain a draft and not be merged/deployed until the outstanding inventory is removed and end-to-end certification passes.
