@@ -163,6 +163,7 @@ export const stockTransferOrderApprovalDeliveries = pgTable(
     claimToken: uuid("claim_token"),
     claimExpiresAt: timestamp("claim_expires_at", { withTimezone: true }),
     attemptCount: integer("attempt_count").notNull().default(0),
+    manualRetryCount: integer("manual_retry_count").notNull().default(0),
     availableAt: timestamp("available_at", { withTimezone: true }).notNull().defaultNow(),
     lastError: text("last_error"),
     acceptedAt: timestamp("accepted_at", { withTimezone: true }),
