@@ -208,6 +208,21 @@ afterAll(async () => {
   closeTestServer();
 }, 120000);
 
+/**
+ * The inbound Stock Transfer Order WhatsApp webhook is token-authenticated and fails
+ * closed: until STO_WA_GREEN_API_WEBHOOK_TOKEN is configured it answers a structured
+ * 503 before reading the body. A test environment has no token, so only this exact
+ * refusal is expected here; any other 5xx on it, and a 503 anywhere else, still fails.
+ */
+function isUnconfiguredWebhookRefusal(method: string, routePath: string, status: number, body: unknown): boolean {
+  return (
+    method === "POST" &&
+    routePath === "/api/stock-transfer-order/wa-approval/webhook" &&
+    status === 503 &&
+    (body as { code?: unknown } | undefined)?.code === "STO_WA_WEBHOOK_NOT_CONFIGURED"
+  );
+}
+
 describe("Phase 1 ERP and partner write validation matrix", () => {
   it("executes domain validation paths without 5xx or lost authentication", async () => {
     expect(routes.length).toBeGreaterThan(30);
@@ -225,6 +240,7 @@ describe("Phase 1 ERP and partner write validation matrix", () => {
           .set("x-client-date", "2026-08-08")
           .send(poisonBody(companies[route.mode]))
           .timeout({ response: REQUEST_TIMEOUT_MS, deadline: REQUEST_TIMEOUT_MS });
+        if (isUnconfiguredWebhookRefusal(route.method, route.path, response.status, response.body)) continue;
         if (response.status >= 500 || response.status === 401) {
           const body = response.body as { message?: string; error?: string } | undefined;
           failures.push({
