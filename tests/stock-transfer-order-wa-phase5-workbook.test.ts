@@ -46,10 +46,12 @@ describe("approved Stock Transfer Order Excel without cost", () => {
     });
     const parsed = new ExcelJS.Workbook();
     await parsed.xlsx.load(workbook);
-    const allText = parsed.worksheets.flatMap(sheet =>
-      sheet.getRows(1, sheet.rowCount)?.flatMap(row =>
-        row.values.slice(1).map(cell => typeof cell === "string" ? cell : String(cell ?? ""))
-      ) || []);
+    const allText: string[] = [];
+    for (const sheet of parsed.worksheets) {
+      sheet.eachRow(row => row.eachCell(cell => {
+        allText.push(typeof cell.value === "string" ? cell.value : String(cell.value ?? ""));
+      }));
+    }
     expect(allText).not.toContain("PRICE");
     expect(allText).not.toContain("COST");
     expect(allText).not.toContain("RATE");
