@@ -22,8 +22,8 @@ describe("ERP Phase 3 page-access assignment safety", () => {
   it("refuses unknown feature names and duplicate feature grants", () => {
     expect(FEATURE_KEYS).toContain("accounts");
     expect(FEATURE_KEYS).toContain("pos");
-    expect(putHandler).toContain("FEATURE_KEYS.includes");
-    expect(putHandler).toContain("new Set(pageKeys).size !== pageKeys.length");
+    expect(putHandler).toContain("parseErpPageGrantKeys(req.body?.pageKeys)");
+    expect(putHandler).toContain("if (pageKeys === null)");
     expect(putHandler).toContain('status(400)');
   });
 
