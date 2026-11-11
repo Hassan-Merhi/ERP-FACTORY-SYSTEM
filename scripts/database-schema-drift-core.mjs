@@ -29,13 +29,19 @@ export const WARNING_COLUMNS = Object.freeze([
   ["user_preferences","factory_net_position_valuation_mode"]
 ]);
 
+export const SECURITY_COLUMNS = Object.freeze(["id","user_id","company_id","permission","granted_by","created_at","updated_at"]);
+export const FACTORY_CONTAINER_COLUMNS = Object.freeze(["supplier_id","origin","total_kg","rate_per_kg","declared_kg","actual_received_kg","final_payable_amount","difference_kg","currency_code","fx_rate_to_usd","fx_rate_to_usd_import","fx_rate_to_usd_offload","fx_rate_source","fx_rate_confirmed","fx_rate_date_import","fx_rate_date_offload","rate_per_kg_usd","final_payable_amount_usd","arrival_date","destination","notes","status","freight","freight_currency_code","freight_account_id","freight_supplier_id","freight_paid_by","freight_own_account_id","freight_fx_rate_to_usd","freight_fx_rate_confirmed","freight_fx_rate_date","other_charges","other_charges_currency_code","other_charges_account_id","other_charges_supplier_id","commission_amount","commission_currency_code","commission_account_id","commission_supplier_id","commission_notes","commission_fx_rate_to_usd","commission_fx_rate_confirmed","commission_fx_rate_date","duty_amount","duty_account_id","duty_status","duty_notes","pre_offload_freight","pre_offload_freight_currency_code","pre_offload_freight_account_id","pre_offload_freight_supplier_id","pre_offload_other_charges","pre_offload_other_charges_account_id","pre_offload_other_charges_supplier_id","pre_offload_status","pre_offload_commission_amount","pre_offload_commission_currency_code","pre_offload_commission_account_id","pre_offload_commission_supplier_id","pre_offload_commission_notes","deleted_at","created_at","updated_at","tracking_enabled","tracking_auto_update","tracking_carrier_hint","tracking_provider","tracking_last_status","tracking_last_location","tracking_last_checked_at","tracking_last_event_date","tracking_last_description","tracking_error","tracking_changed_at","tracking_detected_carrier","tracking_next_check_at","tracking_last_skip_reason","json_cargo_last_checked_at","json_cargo_tracking_status","json_cargo_error","otw_note","otw_docs_received"]);
+
 export function compareSchemaDrift(snapshot, { includeControlled = false } = {}) {
   const expectedTables = [...criticalTables];
   const expectedColumns = [...criticalColumns];
   const expectedIndexes = [...criticalIndexes];
   const expectedConstraints = REQUIRED_CONSTRAINTS.filter(([table])=>includeControlled || table!=="factory_fixed_production_plans");
   if (includeControlled) {
-    expectedTables.push("factory_fixed_production_plans","sp_containers","user_preferences");
+    expectedTables.push("factory_fixed_production_plans","sp_containers","user_preferences","factory_containers","user_security_permissions");
+    expectedIndexes.push("user_security_permissions_unique","user_security_permissions_company_user_idx");
+    for (const name of SECURITY_COLUMNS) expectedColumns.push(["user_security_permissions",name]);
+    for (const name of FACTORY_CONTAINER_COLUMNS) expectedColumns.push(["factory_containers",name]);
     for(const column of PLANNER_COLUMNS) expectedColumns.push(["factory_fixed_production_plans",column]);
     expectedColumns.push(...WARNING_COLUMNS);
   }
