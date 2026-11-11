@@ -26,7 +26,8 @@ let running = false;
 const active = new Set<number>();
 
 export function stockTransferOrderWaDeliveryEnabled(): boolean {
-  return process.env.STO_WA_DELIVERY_ENABLED !== "false" &&
+  return process.env.STO_WA_PRODUCTION_ACTIVATED === "true" &&
+    process.env.STO_WA_DELIVERY_ENABLED !== "false" &&
     process.env.ENABLE_SCHEDULERS !== "false" &&
     shouldStartEdgeBackgroundJobs(readFactoryEdgeConfiguration());
 }
