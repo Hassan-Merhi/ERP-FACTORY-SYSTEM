@@ -10,7 +10,7 @@ const startupSql = stockTransferOrderWaApprovalFoundation.join(";\n");
 
 describe("Stock Transfer Order WhatsApp approval — Phase 1 contract", () => {
   it("mirrors every startup statement in the additive SQL migration", () => {
-    expect(stockTransferOrderWaApprovalFoundation).toHaveLength(39);
+    expect(stockTransferOrderWaApprovalFoundation).toHaveLength(44);
     for (const statement of stockTransferOrderWaApprovalFoundation) {
       expect(sqlMigration).toContain(statement);
     }
@@ -34,6 +34,9 @@ describe("Stock Transfer Order WhatsApp approval — Phase 1 contract", () => {
     expect(startupSql).toContain("workflow_origin text NOT NULL DEFAULT 'stock_transfer'");
     expect(startupSql).toContain("sto_wa_active_transfer_uk");
     expect(startupSql).toContain("sto_wa_batch_message_uk");
+    expect(startupSql).toContain("sto_wa_events_immutable_trg");
+    expect(startupSql).toContain("sto_wa_revisions_immutable_trg");
+    expect(startupSql).toContain("sto_wa_batch_items_guard_trg");
     expect(startupSql).not.toMatch(/\b(?:UPDATE|DELETE FROM|TRUNCATE)\s+(?:vouchers|stock_transfer_items|stock_transfer_revisions|inventory)\b/i);
     expect(startupSql).not.toMatch(/\b(?:INSERT INTO|DELETE FROM)\s+voucher_entries\b/i);
   });
