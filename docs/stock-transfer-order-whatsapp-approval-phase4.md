@@ -53,7 +53,7 @@ No Excel delivery is queued.
 - Admin cancellation is blocked after a verified DONE or DECLINE has been
   recorded, even if execution is not yet complete.
 - Only the authoritative, scheduler-enabled ERP writer may process decisions.
-  Environment switch STO_WA_APPROVAL_EXECUTION_ENABLED=false pauses processing
+  Environment switch STO_WA_PRODUCTION_ACTIVATED=true is required to activate the feature after certification; otherwise execution is disabled. STO_WA_APPROVAL_EXECUTION_ENABLED=false pauses processing
   and prevents new approval requests.
 - The existing approval history UI shows completed status, approving phone,
   review timestamp and included revision count.
