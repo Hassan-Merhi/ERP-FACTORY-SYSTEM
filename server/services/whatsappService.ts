@@ -424,6 +424,67 @@ export async function sendStockTransferOrderApprovalRequest(
   return { outcome: "accepted", instanceId: wa.instanceId, idMessage: body.idMessage.trim() };
 }
 
+/**
+ * Phase 5: send ONE approved cost-free Stock Transfer Order workbook through
+ * the SAME main GREEN API instance that sent the approval request.
+ *
+ * Never fall back to another instance and NEVER retry an ambiguous POST.
+ * Provider success is only "accepted by GREEN API", not proof of delivery to
+ * a human WhatsApp client. The immutable delivery ledger owns retries.
+ */
+export async function sendApprovedStockTransferOrderWorkbook(
+  expectedInstanceId: string,
+  chatId: string,
+  workbook: Buffer,
+  filename: string,
+  caption: string
+): Promise<{
+  outcome: "accepted" | "failed" | "uncertain";
+  idMessage?: string;
+  error?: string;
+}> {
+  const settings = await getWaSettings();
+  if (!settings?.enabled || !settings.instanceId || !settings.apiToken ||
+      settings.instanceId !== expectedInstanceId) {
+    return { outcome: "failed", error: "Original approval WhatsApp instance is no longer configured." };
+  }
+  if (!/^[0-9]{5,25}@(g[.]us|c[.]us)$/.test(chatId) ||
+      !Buffer.isBuffer(workbook) || !workbook.length || workbook.length > 15 * 1024 * 1024 ||
+      !/^[A-Za-z0-9_.-]{1,200}[.]xlsx$/.test(filename) || caption.length > 900) {
+    return { outcome: "failed", error: "Invalid approved workbook or WhatsApp recipient." };
+  }
+  const form = new FormDataLib();
+  form.append("chatId", chatId);
+  form.append("caption", caption);
+  form.append("file", workbook, {
+    filename,
+    contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  let response: Response;
+  try {
+    response = await requestGreenApiUpload(settings, form.getBuffer(), form.getHeaders());
+  } catch (error) {
+    logger.warn("[STO WA] Approved Excel upload outcome uncertain", {
+      chatId, fileSize: workbook.length, error: getErrorMessage(error),
+    });
+    return { outcome: "uncertain", error: "Upload timed out or connection failed; check WhatsApp before retrying." };
+  }
+  if (!response.ok) {
+    // A 5xx or rate-limit response might be returned after acceptance. Never
+    // automatically retry such an ambiguous provider response.
+    if (response.status >= 500 || response.status === 429 || response.status === 408) {
+      return { outcome: "uncertain", error: "GREEN API returned an ambiguous upload response (" + response.status + ")." };
+    }
+    return { outcome: "failed", error: "GREEN API rejected the upload (HTTP " + response.status + ")." };
+  }
+  const body = await response.json().catch(() => null) as { idMessage?: unknown } | null;
+  if (typeof body?.idMessage !== "string" ||
+      !/^[A-Za-z0-9_.:-]{6,160}$/.test(body.idMessage)) {
+    return { outcome: "uncertain", error: "GREEN API accepted the file but did not return a usable message ID." };
+  }
+  return { outcome: "accepted", idMessage: body.idMessage };
+}
+
 /** Send a plain text message to one specific chatId */
 export async function sendWhatsAppTextToChatId(
   chatId: string,
