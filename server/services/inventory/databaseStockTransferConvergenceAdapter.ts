@@ -60,11 +60,11 @@ function identity(sourceType: unknown, sourceId: unknown): string {
 }
 
 /**
- * Reads the authoritative, inventory-applied stock-transfer documents for one
- * company. Draft/optional/deleted transfers are excluded because they are not
- * expected to have posted stock movement evidence yet, and transfers that
- * predate the canonical journal are excluded because no evidence exists or ever
- * will for them — the journal is append-only and is never backfilled.
+ * Reads all nonoptional, active stock-transfer documents created after the
+ * canonical journal began. A stale inventoryApplied=false flag must not hide
+ * a transfer that actually posted stock (for example an imported transfer).
+ * Draft/optional/deleted and pre-journal historical transfers are excluded;
+ * pre-journal evidence cannot be reconstructed from this append-only journal.
  */
 export async function loadDatabaseStockTransferDocuments(input: {
   tx: DrizzleTransaction;
@@ -91,7 +91,8 @@ export async function loadDatabaseStockTransferDocuments(input: {
         eq(vouchers.companyId, companyId),
         isNull(vouchers.deletedAt),
         eq(vouchers.optional, false),
-        eq(stockTransferVouchers.inventoryApplied, true),
+        // Do not trust inventoryApplied as a completeness filter: the
+        // canonical journal must prove whether stock was actually posted.
         gte(stockTransferVouchers.createdAt, journalStart),
         inArray(vouchers.voucherType, ["Stock Transfer", "StockTransfer", "Transfer"])
       )
