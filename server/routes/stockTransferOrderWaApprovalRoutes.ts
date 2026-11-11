@@ -71,7 +71,10 @@ async function setBatchStatus(companyId: number, batchId: number, status: "cance
         )
       : await client.query(
           "UPDATE stock_transfer_order_approval_batches SET status='cancelled',updated_at=clock_timestamp() " +
-          "WHERE company_id=$1 AND id=$2 AND status IN ('draft','requested','stale') RETURNING id",
+          "WHERE company_id=$1 AND id=$2 AND status IN ('draft','requested','stale') " +
+          "AND NOT EXISTS (SELECT 1 FROM stock_transfer_order_approval_events ev " +
+          "WHERE ev.company_id=$1 AND ev.batch_id=$2 " +
+          "AND ev.event_type IN ('done_received','decline_received')) RETURNING id",
           [companyId, batchId]
         );
     if (result.rowCount !== 1) throw new Error("Approval batch changed during delivery");
@@ -300,11 +303,14 @@ export function registerStockTransferOrderWaApprovalRoutes(app: Express,
         "WHERE ev.company_id=b.company_id AND ev.batch_id=b.id " +
         "AND ev.event_type='ignored' AND ev.details->>'reason'='request_send_uncertain' " +
         ") THEN 'uncertain' ELSE b.status END AS status," +
-        'b.requested_at AS "requestedAt",' +
-        'd.name AS "destinationName",COUNT(DISTINCT bi.transfer_id)::int AS "orderCount" ' +
+        'b.requested_at AS "requestedAt",b.reviewed_at AS "reviewedAt",' +
+        'b.reviewed_by_phone_e164 AS "reviewedByPhone",' +
+        'd.name AS "destinationName",COUNT(DISTINCT bi.transfer_id)::int AS "orderCount", ' +
+        'COUNT(DISTINCT br.revision_id)::int AS "revisionCount" ' +
         'FROM stock_transfer_order_approval_batches b ' +
         'JOIN locations d ON d.id=b.destination_location_id AND d.company_id=b.company_id ' +
         'JOIN stock_transfer_order_approval_batch_items bi ON bi.batch_id=b.id AND bi.company_id=b.company_id ' +
+        'LEFT JOIN stock_transfer_order_approval_batch_revisions br ON br.company_id=b.company_id AND br.batch_id=b.id ' +
         'WHERE b.company_id=$1 GROUP BY b.id,d.name ORDER BY b.id DESC LIMIT 15',
         [a.companyId]);
       return res.json({batches:result.rows});
