@@ -63,3 +63,12 @@ test("Factory container schema is extracted without tracking value rewrites", ()
   assert.match(bridge, /BEGIN READ ONLY/);
   assert.match(bridge, /tracking flags still enabled/);
 });
+
+test("tenant RLS has read-only verification with no automatic repair import", () => {
+  const source = read("server/companyScopeRlsBridge.mjs");
+  assert.match(source, /COMPANY_SCOPE_RLS_MODE/);
+  assert.match(source, /BEGIN READ ONLY/);
+  assert.match(source, /if \(verifyOnly\).*RLS schema drift/s);
+  assert.match(source, /COMPANY_SCOPE_RLS_MODE !== "verify-only"/);
+  assert.match(source, /migrationApplied: !verifyOnly/);
+});
