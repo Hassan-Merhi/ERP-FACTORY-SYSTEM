@@ -66,6 +66,40 @@ type FormData = {
 
 type OtherChargeLine = { amount: string; currencyCode: string; ledgerAccountId: string; narration: string };
 
+/**
+ * An auto quote is read-only until it is explicitly recorded. Confirm it via
+ * the audited FX endpoint before a container write that needs a dated rate.
+ * Never silently use today's quote for an older arrival date.
+ */
+async function ensureDatedAutoFxRate(currencyCode: string, arrivalDate: string): Promise<void> {
+  if (currencyCode === "USD") return;
+  const date = arrivalDate.trim();
+  const lookupPath = date
+    ? `/api/factory/fx-rates/${currencyCode}/${date}`
+    : `/api/factory/fx-rates/latest/${currencyCode}`;
+  const lookupResponse = await factoryApiRequest("GET", lookupPath);
+  if (!lookupResponse.ok) {
+    const error = await lookupResponse.json().catch(() => null);
+    throw new Error(error?.message || `No ${currencyCode} exchange rate is available for this container date.`);
+  }
+  const lookup = (await lookupResponse.json()) as { saved?: boolean };
+  if (lookup.saved) return;
+
+  // Saving is a user-initiated action (Create/Update), not a side effect of a
+  // read or opening the dialog. The server records the FX rate and audit trail.
+  const confirmResponse = await factoryApiRequest("POST", "/api/factory/fx-rates/fetched", {
+    currencyCode,
+    ...(date ? { date } : {}),
+  });
+  if (!confirmResponse.ok) {
+    const error = await confirmResponse.json().catch(() => null);
+    throw new Error(
+      error?.message ||
+        `Unable to confirm the dated ${currencyCode} auto exchange rate. An Admin or Owner must record it first.`
+    );
+  }
+}
+
 const BLANK_FORM: FormData = {
   containerNumber: "",
   supplierId: "",
@@ -112,6 +146,7 @@ export function ContainerFormDialog({
   const [fxRate, setFxRate] = useState("1");
   const [fxRateSource, setFxRateSource] = useState<"auto" | "manual">("auto");
   const [fxEffectiveDate, setFxEffectiveDate] = useState("");
+  const [fxIsSuggestion, setFxIsSuggestion] = useState(false);
   // Hydrating an edit happens after the first render. The FX effect must not
   // apply the previous (usually USD/auto) state over that stored manual rate.
   const skipFxEffectForEditId = useRef<number | null>(null);
@@ -124,6 +159,7 @@ export function ContainerFormDialog({
     setFxRate("1");
     setFxRateSource("auto");
     setFxEffectiveDate("");
+    setFxIsSuggestion(false);
   };
 
   useEffect(() => {
@@ -181,6 +217,7 @@ export function ContainerFormDialog({
     setFxRate(stripTrailingZeros(c.fxRateToUsd) || "1");
     setFxRateSource(c.fxRateSource || "auto");
     setFxEffectiveDate(c.fxRateDateImport || "");
+    setFxIsSuggestion(false);
   }, [editingContainer]);
 
   useEffect(() => {
@@ -225,6 +262,7 @@ export function ContainerFormDialog({
     if (currency === "USD") {
       setFxRate("1");
       setFxEffectiveDate("");
+      setFxIsSuggestion(false);
       return;
     }
     if (fxRateSource === "manual") return;
@@ -234,29 +272,42 @@ export function ContainerFormDialog({
     if (
       editingContainer &&
       currency === (editingContainer.currencyCode || "USD") &&
-      fxRateSource === (editingContainer.fxRateSource || "auto")
+      fxRateSource === (editingContainer.fxRateSource || "auto") &&
+      formData.arrivalDate === (editingContainer.arrivalDate || "")
     ) {
       // Restore the actual stored rate on returning to the original FX mode.
       // Otherwise a quote fetched for another currency could remain in state
       // and later be submitted as a manual historical exchange rate.
       setFxRate(stripTrailingZeros(editingContainer.fxRateToUsd) || "1");
       setFxEffectiveDate(editingContainer.fxRateDateImport || "");
+      setFxIsSuggestion(false);
       return;
     }
+    // Auto must preview the rate for the container's accounting date, not
+    // today's quote when the arrival date is in the past.
+    const arrivalDate = formData.arrivalDate.trim();
+    const lookupPath = arrivalDate
+      ? `/api/factory/fx-rates/${currency}/${arrivalDate}`
+      : `/api/factory/fx-rates/latest/${currency}`;
     let cancelled = false;
-    fetch(`/api/factory/fx-rates/latest/${currency}`)
+    factoryApiRequest("GET", lookupPath)
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
-        if (!cancelled && data?.rate) {
-          setFxRate(String(data.rate));
-          setFxEffectiveDate(data.effectiveDate || "");
-        }
+        if (cancelled) return;
+        setFxRate(data?.rate ? String(data.rate) : "");
+        setFxEffectiveDate(data?.effectiveDate || "");
+        setFxIsSuggestion(!!data?.rate && data.saved === false);
       })
-      .catch(() => {});
+      .catch(() => {
+        if (cancelled) return;
+        setFxRate("");
+        setFxEffectiveDate("");
+        setFxIsSuggestion(false);
+      });
     return () => {
       cancelled = true;
     };
-  }, [currency, fxRateSource, editingContainer]);
+  }, [currency, fxRateSource, editingContainer, formData.arrivalDate]);
 
   useEffect(() => {
     if (!editingContainer) setFormData((f) => ({ ...f, commissionCurrencyCode: currency }));
@@ -288,6 +339,7 @@ export function ContainerFormDialog({
 
   const createMutation = useMutation({
     mutationFn: async (data: FormData) => {
+      if (fxRateSource === "auto") await ensureDatedAutoFxRate(currency, data.arrivalDate);
       const freightAmt = parseFloat(data.freight || "0");
       const freightPaidBy = data.freightPaidBy || "supplier";
       const payload = {
@@ -433,6 +485,16 @@ export function ContainerFormDialog({
           if (normalized(field, patch[field]) === normalized(field, original[field])) delete patch[field];
         }
       }
+      // A change to goods/FX can post or reprice a liability. Record any
+      // suggested auto rate for the document date before that server write.
+      if (
+        fxRateSource === "auto" &&
+        ["supplierId", "totalKg", "ratePerKg", "currencyCode", "fxRateSource"].some(
+          (field) => (payload as Record<string, unknown>)[field] !== undefined
+        )
+      ) {
+        await ensureDatedAutoFxRate(currency, data.arrivalDate);
+      }
       const validCharges = otherChargeLines
         .filter((l) => parseFloat(l.amount || "0") > 0)
         .map((l) => ({
@@ -521,6 +583,7 @@ export function ContainerFormDialog({
             fxRateSource={fxRateSource}
             setFxRateSource={setFxRateSource}
             fxEffectiveDate={fxEffectiveDate}
+            fxIsSuggestion={fxIsSuggestion}
             otherChargeLines={otherChargeLines}
             setOtherChargeLines={setOtherChargeLines}
             activeSuppliers={activeSuppliers}
