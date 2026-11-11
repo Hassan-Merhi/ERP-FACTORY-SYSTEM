@@ -146,8 +146,8 @@ export function summarizeCanonicalStockTransferEvidence(input: {
  * correctly reconciled by the NET stock delta at the document destination.
  *
  * Never sum absolute receipt legs: that counts reversals and past revisions as
- * new stock. Every batch must have one issue and one equal receipt, and exactly
- * one destination leg, or the journal is not reliable enough to certify.
+ * new stock. Every batch must have one issue and one equal receipt. Old
+ * destinations are checked for integrity but contribute zero to CURRENT stock.
  */
 export interface CanonicalStockTransferNetMovementRow extends CanonicalStockTransferMovementRow {
   idempotencyKey: string;
@@ -161,16 +161,19 @@ export function summarizeCanonicalStockTransferNetEvidence(input: {
   rows: CanonicalStockTransferNetMovementRow[];
 }): StockTransferMovementEvidence[] {
   const companyId = positiveInteger(input.companyId, "companyId");
-  const batches = new Map<string, {
-    sourceId: string;
-    destinationLocationId: number;
-    rows: Array<{
-      stockItemId: number;
-      locationId: number;
-      quantity: Decimal;
-      unitCost: Decimal;
-    }>;
-  }>();
+  const batches = new Map<
+    string,
+    {
+      sourceId: string;
+      destinationLocationId: number;
+      rows: Array<{
+        stockItemId: number;
+        locationId: number;
+        quantity: Decimal;
+        unitCost: Decimal;
+      }>;
+    }
+  >();
 
   for (const row of input.rows) {
     if (positiveInteger(row.companyId, "movement.companyId") !== companyId) {
