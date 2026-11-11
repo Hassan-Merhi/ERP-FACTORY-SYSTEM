@@ -199,9 +199,9 @@ export async function createStockTransferOrderApprovalDraft(
 
     const inserted = await tx.execute(sql`
       INSERT INTO stock_transfer_order_approval_batches
-        (company_id,destination_location_id,approval_group_chat_id,authorized_phone_e164,created_by)
+        (company_id,destination_location_id,approval_group_chat_id,authorized_phone_e164,created_by,created_at)
       VALUES (${companyId},${destinationId},${setting.approval_group_chat_id},
-              ${setting.authorized_phone_e164},${actorId})
+              ${setting.authorized_phone_e164},${actorId},clock_timestamp())
       RETURNING id,batch_key
     `);
     const header = inserted.rows[0] as { id: number | string; batch_key: string };
