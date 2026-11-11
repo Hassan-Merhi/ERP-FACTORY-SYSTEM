@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "description": "Ordered snapshot of every registered Express route (method, path, guard chain) and middleware mount. Regenerate with UPDATE_ROUTE_MANIFEST=1 only when a route change is intended; during a file split the manifest must not change at all.",
-  "routeCount": 2393,
+  "routeCount": 2394,
   "middlewareMountCount": 139,
   "routes": [
     "GET /api/admin/operational-monitoring [requireAuth > <anonymous> > <anonymous>]",
@@ -374,6 +374,7 @@
     "POST /api/factory/customer-proformas/bulk [requireAuth > <anonymous>]",
     "PUT /api/factory/customer-proformas/:id/replace-lines [requireAuth > <anonymous>]",
     "POST /api/factory/customer-proformas/:id/apply-catalog-prices [requireAuth > <anonymous>]",
+    "POST /api/factory/customer-proformas/:id/apply-agreed-prices [requireAuth > <anonymous>]",
     "POST /api/factory/customer-proformas/:id/apply-production-prices [requireAuth > <anonymous>]",
     "PATCH /api/factory/customer-proformas/:id/transfer [requireAuth > <anonymous>]",
     "PATCH /api/factory/customer-proforma-lines/:lineId/toggle-fixed [requireAuth > <anonymous>]",

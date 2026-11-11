@@ -13,6 +13,7 @@ import { ensureProformaDestinationPricingSchema } from "../server/services/facto
 import { registerFactoryCustomerProformaCrudRoutes } from "../server/routes/factory/customer-proformas/proformas";
 import { registerFactoryCustomerPriceListRoutes } from "../server/routes/factory/customer-proformas/price-lists";
 import { registerFactoryCustomerProformaLineRoutes } from "../server/routes/factory/customer-proformas/lines";
+import { registerFactoryCustomerProformaBulkPricingRoutes } from "../server/routes/factory/customer-proformas/bulk-and-pricing";
 import { createProformaLoadingFixture, createRouteHarness } from "./helpers/proformaLoadingFixture";
 
 const databaseDescribe = process.env.DATABASE_URL ? describe : describe.skip;
@@ -21,7 +22,8 @@ databaseDescribe("destination-scoped proforma prices", () => {
   const call = createRouteHarness(
     registerFactoryCustomerProformaCrudRoutes,
     registerFactoryCustomerPriceListRoutes,
-    registerFactoryCustomerProformaLineRoutes
+    registerFactoryCustomerProformaLineRoutes,
+    registerFactoryCustomerProformaBulkPricingRoutes
   );
   let fixture: Awaited<ReturnType<typeof createProformaLoadingFixture>>;
   let firstId = 0;
@@ -177,4 +179,67 @@ databaseDescribe("destination-scoped proforma prices", () => {
     expect(await readLinePrice(secondLineId)).toBe(10);
     expect(Number(await agreedPrice("L'SHI"))).toBe(25);
   });
+  it("explicitly reapplies only this proforma's saved destination prices, including per-kg lines", async () => {
+    await pool.query(
+      "UPDATE customer_proforma_lines SET pricing_mode = 'per_kg', price_per_kg = 1.5 WHERE id = $1",
+      [secondLineId]
+    );
+    const response = await call(
+      "POST", "/api/factory/customer-proformas/:id/apply-agreed-prices", fixture.companyId,
+      { params: { id: String(secondId) } }
+    );
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toMatchObject({
+      destination: "L'SHI", updated: 1, skipped: 0, fixed: 0, unchanged: 0,
+    });
+    expect(await readLinePrice(secondLineId)).toBe(25);
+    expect(await readLinePrice(firstLineId)).toBe(25);
+    const { rows } = await pool.query<{ pricing_mode: string; price_per_kg: string | null }>(
+      "SELECT pricing_mode, price_per_kg FROM customer_proforma_lines WHERE id = $1",
+      [secondLineId]
+    );
+    expect(rows[0]).toMatchObject({ pricing_mode: "per_bale", price_per_kg: null });
+    expect(Number(await agreedPrice("MALI"))).toBe(10);
+  });
+
+  it("skips missing saved prices, respects locked lines, and does not reprice other proformas", async () => {
+    const missingCode = "UNLISTED-AGREED-PRICE";
+    const { rows } = await pool.query<{ id: number }>(
+      `INSERT INTO customer_proforma_lines
+         (proforma_id, article_code, product_name, quantity, price_per_bale)
+       VALUES ($1, $2, 'Unlisted test item', 2, 7)
+       RETURNING id`,
+      [secondId, missingCode]
+    );
+    await pool.query(
+      "UPDATE customer_proforma_lines SET price_fixed = TRUE, price_per_bale = 9 WHERE id = $1",
+      [secondLineId]
+    );
+    const response = await call(
+      "POST", "/api/factory/customer-proformas/:id/apply-agreed-prices", fixture.companyId,
+      { params: { id: String(secondId) } }
+    );
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toMatchObject({ updated: 0, skipped: 1, fixed: 1, unchanged: 0 });
+    expect(await readLinePrice(secondLineId)).toBe(9);
+    expect(await readLinePrice(rows[0].id)).toBe(7);
+    expect(await readLinePrice(firstLineId)).toBe(25);
+
+    const foreignCompany = await call(
+      "POST", "/api/factory/customer-proformas/:id/apply-agreed-prices", fixture.companyId + 999999,
+      { params: { id: String(secondId) } }
+    );
+    expect(foreignCompany.statusCode).toBe(404);
+    expect(await readLinePrice(secondLineId)).toBe(9);
+  });
+
+  it("requires a destination before applying saved agreed prices", async () => {
+    const unlinkedId = await fixture.proforma([{ code: "UNLINKED-AGREED-TEST", qty: 1 }]);
+    const response = await call(
+      "POST", "/api/factory/customer-proformas/:id/apply-agreed-prices", fixture.companyId,
+      { params: { id: String(unlinkedId) } }
+    );
+    expect(response.statusCode).toBe(400);
+  });
+
 });
