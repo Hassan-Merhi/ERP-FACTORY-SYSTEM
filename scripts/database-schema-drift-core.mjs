@@ -15,7 +15,9 @@ export const REQUIRED_CONSTRAINTS = Object.freeze([
 export const REQUIRED_TRIGGERS = Object.freeze([
   ["voucher_entries","voucher_entries_balance_guard"],
   ["vouchers","vouchers_balance_guard"],
-  ["voucher_entries","voucher_entries_sync_company_id"]
+  ["voucher_entries","voucher_entries_sync_company_id"],
+  ["customer_order_bales","customer_order_bales_set_scanned_at"],
+  ["customer_order_bales_history","customer_order_bales_history_copy_scanned_at"]
 ]);
 export const PLANNER_COLUMNS = Object.freeze([
   "company_id","allocations_20t","is_locked","revision","updated_by","updated_at"
@@ -43,6 +45,17 @@ export const MULTILINGUAL_COLUMNS = Object.freeze([
   ["customer_order_expected_lines","product_name_fr"]
 ]);
 
+export const BILINGUAL_COLUMNS = Object.freeze([
+  ["factory_categories","name_ar"],
+  ["factory_bale_products","name_ar"],["factory_bale_products","description_ar"],
+  ["factory_bales","product_name_ar"],["factory_bales","category_ar"],
+  ["customer_proforma_lines","product_name_ar"],
+  ["customer_order_lines","bale_name_ar"],
+  ["customer_order_bales","bale_name_ar"],
+  ["customer_order_bales_history","bale_name_ar"],
+  ["customer_order_expected_lines","product_name_ar"]
+]);
+
 export function compareSchemaDrift(snapshot, { includeControlled = false } = {}) {
   const expectedTables = [...criticalTables];
   const expectedColumns = [...criticalColumns];
@@ -50,7 +63,9 @@ export function compareSchemaDrift(snapshot, { includeControlled = false } = {})
   const expectedConstraints = REQUIRED_CONSTRAINTS.filter(([table])=>includeControlled || table!=="factory_fixed_production_plans");
   if (includeControlled) {
     expectedTables.push("factory_fixed_production_plans","sp_containers","user_preferences","factory_containers","user_security_permissions","user_language_preferences");
-    expectedColumns.push(...MULTILINGUAL_COLUMNS);
+    expectedColumns.push(...MULTILINGUAL_COLUMNS,...BILINGUAL_COLUMNS,
+      ["customer_order_bales","scanned_at"],["customer_order_bales_history","scanned_at"]);
+    expectedIndexes.push("factory_bale_products_company_article_code_normalized_idx");
     expectedIndexes.push("user_security_permissions_unique","user_security_permissions_company_user_idx");
     for (const name of SECURITY_COLUMNS) expectedColumns.push(["user_security_permissions",name]);
     for (const name of FACTORY_CONTAINER_COLUMNS) expectedColumns.push(["factory_containers",name]);
@@ -72,8 +87,9 @@ export function compareSchemaDrift(snapshot, { includeControlled = false } = {})
   // NOT VALID still enforces new rows. Report separately; no auto VALIDATE.
   const unvalidatedConstraints = expectedConstraints.map(([t,c])=>t+"."+c)
     .filter(x=>constraints.has(x)&&constraints.get(x).validated!==true);
-  const missingTriggers = REQUIRED_TRIGGERS.map(([t,c])=>t+"."+c).filter(x=>!triggers.has(x));
-  const disabledTriggers = REQUIRED_TRIGGERS.map(([t,c])=>t+"."+c)
+  const expectedTriggers=REQUIRED_TRIGGERS.filter(([t])=>includeControlled || !["customer_order_bales","customer_order_bales_history"].includes(t));
+  const missingTriggers = expectedTriggers.map(([t,c])=>t+"."+c).filter(x=>!triggers.has(x));
+  const disabledTriggers = expectedTriggers.map(([t,c])=>t+"."+c)
     .filter(x=>triggers.has(x)&&!["O","A"].includes(triggers.get(x).enabled));
   const blockers={missingTables,missingColumns,missingIndexes,invalidIndexes,missingConstraints,missingTriggers,disabledTriggers};
   return {
