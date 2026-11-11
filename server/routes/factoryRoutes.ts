@@ -197,9 +197,13 @@ export function registerFactoryRoutes(app: Express, requireAuth: RequestHandler,
         const dispatchOperation = suffix === "loading-dispatches" || suffix.startsWith("loading-dispatches/");
         const readOnlyMetadata = ["loading-note", "hidden"].includes(suffix);
         const statusTransition = req.method === "POST" && ["verify", "finalize-loading"].includes(suffix);
+        // A posted earlier truck must not prevent new physical bales being scanned
+        // into the still-open parent loading. The scan route enforces stock,
+        // duplicate, proforma and order-status rules in its own transaction.
+        const continuingLoadingScan = req.method === "POST" && suffix === "bales";
         const reconcileMissingBale = req.method === "DELETE" &&
           /^bales\/\d+$/.test(suffix) && req.query.source === "dispatch-reconciliation";
-        if (!dispatchOperation && !readOnlyMetadata && !statusTransition && !reconcileMissingBale) {
+        if (!dispatchOperation && !readOnlyMetadata && !statusTransition && !continuingLoadingScan && !reconcileMissingBale) {
           const companyId = Number(req.session.factoryCompanyId);
           const orderId = Number(match[1]);
           if (Number.isSafeInteger(companyId) && companyId > 0 &&
