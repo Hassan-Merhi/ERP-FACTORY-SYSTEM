@@ -47,6 +47,11 @@ export async function assertTransferNotAlreadyPostedTx(
     `)
   );
 
+  if (row?.hasOpenMovement === true) {
+    throw new Error(
+      "STOCK_TRANSFER_ALREADY_APPLIED_CANONICAL: stock already moved; inspect the transfer applied flag before posting"
+    );
+  }
   if (!row || row.hasOpenMovement !== false) {
     // Unknown read result must not permit an irreversible double-post.
     throw new Error(
