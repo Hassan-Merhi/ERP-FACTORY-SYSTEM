@@ -13,11 +13,12 @@ test("no anomalies is a clean snapshot",()=>{
   assert.deepEqual(result.metricErrors,[]);
 });
 
-test("missing or unvalidated database protections are blockers",()=>{
+test("missing safeguards block; legacy unvalidated constraints produce explicit warnings",()=>{
   const result=summarizeIntegrity({missingConstraints:["voucher_entries.ledger_account_id_fkey"],invalidConstraints:["voucher_entries.single_side"],missingTriggers:["vouchers.balance_guard"]});
   assert.equal(result.ok,false);
   assert.equal(result.missingConstraints.length,1);
   assert.equal(result.invalidConstraints.length,1);
+  assert.equal(result.warnings.length,1);
 });
 
 test("a single accounting anomaly fails integrity verification",()=>{
@@ -33,4 +34,16 @@ test("audit is strictly read-only and redacts detail rows",()=>{
   assert.match(src,/COUNT\(\*\)/i);
   assert.doesNotMatch(src,/client\.query\(\s*["'`]?(?:UPDATE|DELETE|INSERT|CREATE|ALTER|DROP)\s/i);
   assert.ok(REQUIRED.triggers.some(([,x])=>x==="voucher_entries_balance_guard"));
+});
+
+test("historically NOT VALID constraints are warnings when no other defect exists",()=>{
+  const result=summarizeIntegrity({invalidConstraints:["voucher_entries.voucher_entries_single_side"]});
+  assert.equal(result.ok,true);
+  assert.equal(result.warnings.length,1);
+});
+test("CLI parses only arguments after script name and refuses RLS-hidden incomplete scans",()=>{
+  const source=read("scripts/audit-database-integrity.mjs");
+  assert.match(source,/process\.argv\.slice\(2\)/);
+  assert.match(source,/SET LOCAL row_security = off/);
+  assert.match(source,/BEGIN READ ONLY/);
 });
