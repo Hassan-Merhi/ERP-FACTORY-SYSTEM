@@ -197,8 +197,11 @@ async function recordSameChatAlias(item: DeliveryRow): Promise<boolean> {
     await pool.query(
       "WITH alias AS (UPDATE stock_transfer_order_approval_deliveries " +
         "SET status='verified',last_error=NULL,updated_at=clock_timestamp() " +
-        "WHERE id=$1 AND company_id=$2 AND status IN ('pending','failed','uncertain') " +
-        "RETURNING id,company_id,batch_id) " +
+        "WHERE d.id=$1 AND d.company_id=$2 AND d.status IN ('pending','failed','uncertain') " +
+        "AND EXISTS (SELECT 1 FROM stock_transfer_order_approval_deliveries p " +
+        "WHERE p.company_id=d.company_id AND p.batch_id=d.batch_id " +
+        "AND p.recipient_kind='approval_group' AND p.status='verified') " +
+        "RETURNING d.id,d.company_id,d.batch_id) " +
         "INSERT INTO stock_transfer_order_approval_events(company_id,batch_id,event_type,details) " +
         "SELECT company_id,batch_id,'delivery_manually_verified'," +
         "jsonb_build_object('deliveryId',id,'recipientKind','destination'," +
@@ -214,8 +217,11 @@ async function recordSameChatAlias(item: DeliveryRow): Promise<boolean> {
         "SET status='failed',attempt_count=$3,available_at=clock_timestamp()+interval '100 years'," +
         "last_error='Same WhatsApp chat as approval group; its upload exhausted safe retries'," +
         "updated_at=clock_timestamp() " +
-        "WHERE id=$1 AND company_id=$2 AND status IN ('pending','failed') " +
-        "RETURNING id,company_id,batch_id) " +
+        "WHERE d.id=$1 AND d.company_id=$2 AND d.status IN ('pending','failed') " +
+        "AND EXISTS (SELECT 1 FROM stock_transfer_order_approval_deliveries p " +
+        "WHERE p.company_id=d.company_id AND p.batch_id=d.batch_id " +
+        "AND p.recipient_kind='approval_group' AND p.status='failed' AND p.attempt_count >= $3) " +
+        "RETURNING d.id,d.company_id,d.batch_id) " +
         "INSERT INTO stock_transfer_order_approval_events(company_id,batch_id,event_type,details) " +
         "SELECT company_id,batch_id,'delivery_failed'," +
         "jsonb_build_object('deliveryId',id,'recipientKind','destination','reason','same_chat_primary_failed') FROM alias",
@@ -227,7 +233,11 @@ async function recordSameChatAlias(item: DeliveryRow): Promise<boolean> {
         "WITH alias AS (UPDATE stock_transfer_order_approval_deliveries " +
         "SET status='uncertain',last_error='Same chat as approval group; first send is uncertain'," +
         "updated_at=clock_timestamp() " +
-        "WHERE id=$1 AND company_id=$2 AND status IN ('pending','failed') RETURNING id,company_id,batch_id) " +
+        "WHERE d.id=$1 AND d.company_id=$2 AND d.status IN ('pending','failed') " +
+        "AND EXISTS (SELECT 1 FROM stock_transfer_order_approval_deliveries p " +
+        "WHERE p.company_id=d.company_id AND p.batch_id=d.batch_id " +
+        "AND p.recipient_kind='approval_group' AND p.status='uncertain') " +
+        "RETURNING d.id,d.company_id,d.batch_id) " +
         "INSERT INTO stock_transfer_order_approval_events(company_id,batch_id,event_type,details) " +
         "SELECT company_id,batch_id,'delivery_uncertain'," +
         "jsonb_build_object('deliveryId',id,'recipientKind','destination','reason','same_chat_primary_uncertain') FROM alias",
