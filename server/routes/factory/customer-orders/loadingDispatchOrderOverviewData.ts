@@ -100,6 +100,7 @@ export async function loadFactoryDispatchOrderOverviewTx(
           AND s.dispatch_id=d.id AND s.removed_at IS NULL
      ) sc ON TRUE
     WHERE d.company_id=${companyId} AND d.order_id=${orderId}
+      AND d.status <> 'CANCELLED'
     ORDER BY d.dispatch_number ASC,d.id ASC
   `);
   const [scanStats]=await rows(tx,sql`

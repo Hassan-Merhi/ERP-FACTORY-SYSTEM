@@ -97,6 +97,7 @@ export function registerFactoryLoadingDispatchRoutes(app: Express): void {
           FROM factory_loading_dispatches d
          WHERE d.company_id = ${scope.state.companyId}
            AND d.order_id = ${scope.orderId}
+           AND d.status <> 'CANCELLED'
          ORDER BY d.dispatch_number DESC
       `);
       res.set("Cache-Control", "private, no-store");
@@ -132,6 +133,7 @@ export function registerFactoryLoadingDispatchRoutes(app: Express): void {
           FROM factory_loading_dispatches d
          WHERE d.id = ${dispatchId} AND d.company_id = ${scope.state.companyId}
            AND d.order_id = ${scope.orderId}
+           AND d.status <> 'CANCELLED'
          LIMIT 1
       `);
       const dispatch = resultRows(rows)[0];
@@ -246,6 +248,126 @@ export function registerFactoryLoadingDispatchRoutes(app: Express): void {
       return res.status(500).json({ message: "Could not update dispatch details" });
     }
   });
+
+
+  // "Delete Dispatch" archives a never-finalized open trip. Keep the parent
+  // and append-only evidence for audit/FK integrity; release active verification
+  // and expected reservations without touching the main loading or accounting.
+  app.post("/api/factory/customer-orders/:id/loading-dispatches/:dispatchId/cancel",
+    requireAuth, loadingAccess, async (req, res) => {
+      try {
+        const scope = await resolveOrder(req, res);
+        if (!scope) return;
+        if (!["admin", "owner", "developer"].includes(scope.state.role.trim().toLowerCase())) {
+          return res.status(403).json({ message: "Only Admin, Owner or Developer may delete dispatches" });
+        }
+        const dispatchId = parseId(req.params.dispatchId);
+        if (dispatchId === null) return res.status(400).json({ message: "Invalid dispatch ID" });
+        const reason = typeof req.body?.reason === "string" ? req.body.reason.trim() : "";
+        if (reason.length < 3 || reason.length > 500) {
+          return res.status(400).json({ message: "Enter a deletion reason (3–500 characters)" });
+        }
+        const actorUserId = String(scope.state.userId);
+        const actorUsername = String(req.session.username || actorUserId);
+        const companyId = scope.state.companyId;
+        const orderId = scope.orderId;
+        const outcome = await db.transaction(async (tx) => {
+          const order = resultRows(await tx.execute(sql`
+            SELECT id, status, deleted_at AS "deletedAt", invoice_number AS "invoiceNumber"
+              FROM customer_orders WHERE company_id = ${companyId}
+              AND id = ${orderId} FOR UPDATE
+          `))[0];
+          if (!order) return { status: 404, message: "Loading not found" };
+          if (order.deletedAt || order.invoiceNumber ||
+              !["DRAFT", "LOADING", "PENDING_VERIFICATION"].includes(String(order.status))) {
+            return { status: 409, message: "This loading is already finalized or inactive" };
+          }
+          const trip = resultRows(await tx.execute(sql`
+            SELECT id, status, dispatch_number AS "dispatchNumber"
+              FROM factory_loading_dispatches
+             WHERE id = ${dispatchId} AND company_id = ${companyId}
+               AND order_id = ${orderId} FOR UPDATE
+          `))[0];
+          if (!trip) return { status: 404, message: "Dispatch not found" };
+          if (trip.status !== "OPEN") {
+            return { status: 409, message: "Only open, unfinalized dispatches can be deleted" };
+          }
+          const closed = resultRows(await tx.execute(sql`
+            SELECT id FROM factory_loading_dispatch_closure_history
+             WHERE company_id = ${companyId} AND order_id = ${orderId}
+               AND dispatch_id = ${dispatchId} LIMIT 1
+          `));
+          if (closed.length) {
+            return { status: 409, message: "This dispatch has signed closure history and cannot be deleted" };
+          }
+          // Any financial draft, posted or reversed record must be resolved
+          // through the financial workflow; never orphan its accounting links.
+          const schema = resultRows(await tx.execute(sql`
+            SELECT to_regclass('public.factory_dispatch_trip_financials') IS NOT NULL AS installed
+          `))[0];
+          if (schema?.installed === true) {
+            const finances = resultRows(await tx.execute(sql`
+              SELECT id FROM factory_dispatch_trip_financials
+               WHERE company_id = ${companyId} AND order_id = ${orderId}
+                 AND dispatch_id = ${dispatchId} LIMIT 1
+            `));
+            if (finances.length) {
+              return { status: 409, message: "This dispatch has financial records and cannot be deleted" };
+            }
+          }
+
+          const removedScans = resultRows(await tx.execute(sql`
+            UPDATE factory_loading_dispatch_scans
+               SET removed_at = NOW(), removed_by_user_id = ${actorUserId},
+                   removal_reason = ${"Dispatch deleted: " + reason}
+             WHERE company_id = ${companyId} AND order_id = ${orderId}
+               AND dispatch_id = ${dispatchId} AND removed_at IS NULL
+             RETURNING id::text AS id
+          `));
+          const releasedBales = resultRows(await tx.execute(sql`
+            UPDATE factory_loading_dispatch_expected_bales
+               SET removed_at = NOW(), removed_by_user_id = ${actorUserId},
+                   removal_reason = ${"Dispatch deleted: " + reason}
+             WHERE company_id = ${companyId} AND order_id = ${orderId}
+               AND dispatch_id = ${dispatchId} AND removed_at IS NULL
+             RETURNING id::text AS id
+          `));
+          const removedTargets = resultRows(await tx.execute(sql`
+            DELETE FROM factory_loading_dispatch_expected_articles
+             WHERE company_id = ${companyId} AND order_id = ${orderId}
+               AND dispatch_id = ${dispatchId} RETURNING id
+          `));
+          const updated = resultRows(await tx.execute(sql`
+            UPDATE factory_loading_dispatches
+               SET status = 'CANCELLED', updated_at = NOW()
+             WHERE id = ${dispatchId} AND company_id = ${companyId}
+               AND order_id = ${orderId} AND status = 'OPEN'
+             RETURNING id
+          `));
+          if (!updated.length) throw new Error("Dispatch changed during cancellation");
+          await tx.execute(sql`
+            INSERT INTO factory_loading_dispatch_events
+              (company_id, order_id, dispatch_id, event_type,
+               actor_user_id, actor_username, event_data)
+            VALUES (${companyId}, ${orderId}, ${dispatchId},
+              'DISPATCH_CANCELLED', ${actorUserId}, ${actorUsername},
+              ${JSON.stringify({ reason, dispatchNumber: Number(trip.dispatchNumber),
+                removedScanIds: removedScans.map((s) => String(s.id)),
+                releasedExpectedBales: releasedBales.length,
+                removedArticleTargets: removedTargets.length })}::jsonb)
+          `);
+          return { success: true, removedScans: removedScans.length };
+        });
+        if ("status" in outcome && typeof outcome.status === "number") {
+          return res.status(outcome.status).json({ message: outcome.message });
+        }
+        return res.json(outcome);
+      } catch (error) {
+        logger.error("Error cancelling Factory loading dispatch", { error });
+        return res.status(500).json({ message: "Dispatch deletion failed; no partial changes were committed" });
+      }
+    }
+  );
 
   // Phase 1 create endpoint. Serializing by order-row lock assigns unique,
   // gap-safe trip numbers even when multiple dispatchers create at once.
