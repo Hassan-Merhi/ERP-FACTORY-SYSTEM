@@ -210,6 +210,12 @@ async function claimForSend(row: DeliveryRow, workbook: Rendered): Promise<Claim
     "FROM stock_transfer_order_approval_batches b " +
     "WHERE d.id=$1 AND d.company_id=b.company_id AND d.batch_id=b.id " +
     "AND b.status='approved' AND b.whatsapp_instance_id IS NOT NULL " +
+    "AND d.recipient_chat_id = CASE WHEN d.recipient_kind='approval_group' " +
+    "THEN b.approval_group_chat_id ELSE (" +
+    "SELECT ev.details->>'destinationRecipientChatId' " +
+    "FROM stock_transfer_order_approval_events ev " +
+    "WHERE ev.company_id=b.company_id AND ev.batch_id=b.id " +
+    "AND ev.event_type='draft_created' ORDER BY ev.id LIMIT 1) END " +
     "AND d.status IN ('pending','failed') AND d.available_at<=clock_timestamp() " +
     "AND d.attempt_count < $7 " +
     "RETURNING d.id,d.company_id,d.batch_id,d.recipient_kind,d.recipient_chat_id," +
