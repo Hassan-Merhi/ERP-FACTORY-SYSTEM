@@ -20,6 +20,7 @@ import { closedPeriodErrorResponse } from "../../../lib/closedPeriodError";
 import { containerFreightFxRateToUsd } from "../../../services/factory/factoryVoucherEntryAmounts";
 import { syncContainerCommissionJournalTx } from "../../../services/factory/containerCommissionJournal";
 import { toMoney } from "../../../lib/money";
+import { CONTAINER_MANUAL_FX_INVALID, parseContainerManualFxRate } from "../../../services/factory/containerManualFxRate";
 
 export function registerFactoryContainerCreateRoutes(app: Express) {
   app.post("/api/factory/containers", requireAuth, async (req: Request, res: Response) => {
@@ -41,17 +42,20 @@ export function registerFactoryContainerCreateRoutes(app: Express) {
       const today = getClientDate(req);
       const importDate = parsed.arrivalDate || today;
 
-      // Phase 19 C (M2): a non-USD container is posted at the recorded factory
-      // rate on or before its date (a manual rate entered on the container is
-      // used when such a rate exists), or refused (409 FACTORY_FX_RATE_REQUIRED).
-      // It used to fetch an external rate, never record it, and mark it confirmed.
-      const ownRate =
-        parsed.fxRateSource === "manual" && parsed.fxRateToUsd
-          ? { rate: parsed.fxRateToUsd, confirmed: true }
-          : undefined;
-      const documentRate = await factoryDocumentRate(db, companyId, currencyCode, importDate, ownRate);
-      const fxRate = documentRate.rate;
-      const fxRateSource = documentRate.source === "auto" ? "auto" : "manual";
+      // An explicitly supplied manual rate confirms THIS container's own historical
+      // USD valuation. Do not require (or silently write) a company-wide dated rate.
+      // Auto mode continues to require a recorded rate on/before the document date.
+      const manualRate =
+        parsed.fxRateSource === "manual"
+          ? parseContainerManualFxRate(req.body?.fxRateToUsd, currencyCode)
+          : null;
+      if (parsed.fxRateSource === "manual" && !manualRate) {
+        return res.status(400).json({ message: CONTAINER_MANUAL_FX_INVALID });
+      }
+      const fxRate = manualRate
+        ? manualRate.toFixed()
+        : (await factoryDocumentRate(db, companyId, currencyCode, importDate)).rate;
+      const fxRateSource = parsed.fxRateSource === "manual" ? "manual" : "auto";
 
       const ratePerKg = toMoney(parsed.ratePerKg);
       const ratePerKgUsd = currencyCode === "USD" ? ratePerKg : ratePerKg.times(toMoney(fxRate));
@@ -64,7 +68,8 @@ export function registerFactoryContainerCreateRoutes(app: Express) {
         fxRateSource,
         fxRateDateImport: importDate,
         ratePerKgUsd: ratePerKgUsd.toFixed(),
-        // A recorded dated rate (or the container's own rate checked against one).
+        // An explicitly provided manual rate is confirmed at document scope.
+        // Auto rates still come from the confirmed dated rate table.
         fxRateConfirmed: true,
       };
 
