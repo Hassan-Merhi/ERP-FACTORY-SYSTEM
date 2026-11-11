@@ -168,8 +168,9 @@ describe("stock transfer route POS notification behavior", () => {
     harness.postStockMovementTx.mockResolvedValue({ movements: [], quantity: "3", value: "37.5", idempotent: false });
 
     registerStockTransferCreateRoutes({
-      post: (path: string, ...callbacks: Array<(...args: any[]) => unknown>) => {
-        harness.handlers.set(path, callbacks.at(-1)!);
+      // One handler may be registered for several paths: app.post(["/a", "/b"], …).
+      post: (path: string | string[], ...callbacks: Array<(...args: any[]) => unknown>) => {
+        for (const routePath of Array.isArray(path) ? path : [path]) harness.handlers.set(routePath, callbacks.at(-1)!);
       },
     } as any);
   });
