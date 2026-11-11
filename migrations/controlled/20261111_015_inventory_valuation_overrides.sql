@@ -2,10 +2,6 @@
 -- Additive schema only. Does not post journals, rewrite valuation or touch history.
 -- Requires reviewed manual migration release; no automatic production execution.
 
-updateCostPricesByBarcode;
-
-updateInventory;
-
 CREATE TABLE IF NOT EXISTS inventory_valuation_overrides (
      id BIGSERIAL PRIMARY KEY,
      company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE RESTRICT,
