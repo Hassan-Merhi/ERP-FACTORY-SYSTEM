@@ -98,6 +98,7 @@ describe("Stock Transfer Order Phase 5 no-cost Excel delivery", () => {
     expect(approvalWorker).toContain("queueStockTransferOrderWaDeliveries(batchId)");
     expect(delivery).toContain("shouldStartEdgeBackgroundJobs(readFactoryEdgeConfiguration())");
     expect(delivery).toContain('STO_WA_DELIVERY_ENABLED !== "false"');
+    expect(delivery).toContain('STO_WA_PRODUCTION_ACTIVATED === "true"');
     expect(endpoints).toContain("deliveryEnabled: stockTransferOrderWaDeliveryEnabled()");
     expect(endpoints).toContain("'recipientKind',del.recipient_kind");
     expect(settings).toContain("Final Excel delivery worker enabled");
