@@ -213,6 +213,12 @@ export default function PropertyRentalPage({
   const { data: currentUser } = useQuery(authenticatedUserQueryOptions());
   const currentRole = currentUser?.currentRole ?? currentUser?.role ?? "";
   const canPostDue = currentRole === "Admin" || currentRole === "Owner" || currentRole === "Developer";
+  // Factory Payments Log is an admin page. Do not show a link that the
+  // central Factory route guard will immediately reject for other roles.
+  const showPaymentsLog = Boolean(
+    paymentsLogUrl && !isPropertiesRental &&
+    (rentalModule !== "FACTORY" || currentRole === "Admin" || currentRole === "Developer")
+  );
   const postDue = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", apiBase + "/accruals/post-due");
@@ -325,8 +331,7 @@ export default function PropertyRentalPage({
       <ErpMobileActionsMenu
         data-testid={`button-${testIdPrefix}-actions`}
         actions={[
-          !!paymentsLogUrl &&
-            !isPropertiesRental && {
+          showPaymentsLog && {
               label: "Payments Log",
               icon: ClipboardList,
               onSelect: () => navigate(paymentsLogUrl),
@@ -365,7 +370,7 @@ export default function PropertyRentalPage({
           Pay Selected ({selectedContractIds.size})
         </Button>
       )}
-      {paymentsLogUrl && !isPropertiesRental && (
+      {showPaymentsLog && (
         <Button
           variant="outline"
           size="sm"
