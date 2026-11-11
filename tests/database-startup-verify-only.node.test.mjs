@@ -135,3 +135,11 @@ test("partial global read-only startup cutover fails before schema preload impor
   assert.ok(gate>0 && bridge>gate);
   assert.match(code,/Full read-only database startup cutover is blocked/);
 });
+
+test("startup inventory includes central runtime DDL and never declares certified",()=>{
+  const src=read("scripts/audit-startup-mutation-coverage.mjs");
+  assert.match(src,/server\/startup\/ensureRuntimeSchema\.ts/);
+  assert.match(src,/server\/startup\/runServerStartupMigrations\.ts/);
+  assert.match(src,/certified:false/);
+  assert.match(src,/--strict/);
+});
