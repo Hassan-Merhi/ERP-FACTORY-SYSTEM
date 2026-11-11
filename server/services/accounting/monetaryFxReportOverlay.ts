@@ -134,7 +134,7 @@ export interface MonetaryReportOverlayResult {
 export function applyVerifiedMonetaryFxOverlay(
   payload: MonetaryNetPositionPayload,
   valuation: MonetaryFxValuationResult,
-  options: { showFxAsRows?: boolean } = {}
+  options: { showFxAsRows?: boolean; skipAccountKeys?: ReadonlySet<string> } = {}
 ): MonetaryReportOverlayResult {
   const appliedKeys: string[] = [];
   const skipped: MonetaryReportOverlayDiagnostic[] = [];
@@ -163,6 +163,7 @@ export function applyVerifiedMonetaryFxOverlay(
     breakdownDeltas[side].set(name, (breakdownDeltas[side].get(name) ?? new Decimal(0)).plus(delta));
   };
   for (const val of valuation.accounts) {
+    if (options.skipAccountKeys?.has(val.accountKey)) continue;
     if (val.eligibility === "needs_review") continue;
     const current = val.currentTranslatedUsd;
     if (val.provisional || current === null || val.historicalBaseUsd === null) {
