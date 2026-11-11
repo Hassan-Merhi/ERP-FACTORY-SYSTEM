@@ -342,9 +342,6 @@ export const OPERATIONAL_ROUTE_PERMISSIONS: Readonly<Record<OperationalPermissio
     "GET /api/reports/net-profit-excel",
     "GET /api/reports/net-position-monthly-excel",
     "GET /api/factory/fx-agent-wallets/:id/statement.xlsx",
-    // Factory loading dispatch reports (Excel), like every other Excel export.
-    "GET /api/factory/customer-orders/:id/loading-dispatches/reports/overall.xlsx",
-    "GET /api/factory/customer-orders/:id/loading-dispatches/:dispatchId/reports/manifest.xlsx",
     // Cost-center report exports (one endpoint serves CSV, XLSX and PDF).
     "GET /api/cost-centers/reports/export",
     "GET /api/cost-centers/reports/consolidated/export",
