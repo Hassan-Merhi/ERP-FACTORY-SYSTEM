@@ -52,6 +52,7 @@ import { factoryPressingHistoryReportIndexes } from "./038-factory-pressing-hist
 import { stockTransferOrderWaApprovalFoundation } from "./039-stock-transfer-order-wa-approval";
 import { stockTransferOrderWaWebhookIntegrity } from "./040-stock-transfer-order-wa-webhook";
 import { stockTransferOrderWaDeliverySchema } from "./041-stock-transfer-order-wa-delivery";
+import { stockTransferOrderWaReconciliationSchema } from "./042-stock-transfer-order-wa-reconciliation";
 
 export const startupMigrations: string[] = [
   ...coreTablesAndColumns,
@@ -105,6 +106,7 @@ export const startupMigrations: string[] = [
   ...stockTransferOrderWaApprovalFoundation,
   ...stockTransferOrderWaWebhookIntegrity,
   ...stockTransferOrderWaDeliverySchema,
+  ...stockTransferOrderWaReconciliationSchema,
 ];
 
 // Re-exported so server/index.ts can bootstrap the journal from the module it
