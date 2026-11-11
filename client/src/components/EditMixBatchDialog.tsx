@@ -95,9 +95,12 @@ export function EditMixBatchDialog({
         const srcBatch = existingBatches?.find((b) => b.id === src.sourceBatchId);
         const remaining = srcBatch ? parseFloat(srcBatch.totalWeightKg) - parseFloat(srcBatch.usedKg) : 0;
         const weight = parseFloat(src.weightKg);
-        const currentCost = batch.status === "COMPLETED" || batch.status === "CLOSED"
-          ? parseFloat(src.costPerKg)
-          : srcBatch ? parseFloat(srcBatch.costPerKg || "0") : parseFloat(src.costPerKg);
+        const currentCost =
+          batch.status === "COMPLETED" || batch.status === "CLOSED"
+            ? parseFloat(src.costPerKg)
+            : srcBatch
+              ? parseFloat(srcBatch.costPerKg || "0")
+              : parseFloat(src.costPerKg);
         const existing = batchSourceList.find((item) => item.sourceId === src.sourceBatchId);
         if (existing) {
           existing.weightKg += weight;
@@ -423,9 +426,11 @@ export function EditMixBatchDialog({
     if (values.weightKg > 0) originalSupplierRates.set(supplierId, values.totalCost / values.weightKg);
   }
   const historicalSourcesLocked = batch?.status === "COMPLETED" || batch?.status === "CLOSED";
-  const hasMissingCurrentRates = !historicalSourcesLocked && selectedSources.some(
-    (source) => source.type === "supplier" && (!Number.isFinite(source.costPerKg) || source.costPerKg <= 0)
-  );
+  const hasMissingCurrentRates =
+    !historicalSourcesLocked &&
+    selectedSources.some(
+      (source) => source.type === "supplier" && (!Number.isFinite(source.costPerKg) || source.costPerKg <= 0)
+    );
   const currentUsedKg = batch ? parseFloat(batch.usedKg || "0") : 0;
   // Warn if clearly below used (>1 kg gap). Backend enforces the strict check.
   const belowUsed = totalWeight < currentUsedKg - 1;
@@ -740,15 +745,23 @@ export function EditMixBatchDialog({
                 )}
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">{historicalSourcesLocked ? "Recorded total cost" : "Estimated total cost if saved"}</p>
+                <p className="text-sm text-muted-foreground">
+                  {historicalSourcesLocked ? "Recorded total cost" : "Estimated total cost if saved"}
+                </p>
                 <p className="text-2xl font-bold font-mono">
-                  {hasMissingCurrentRates ? "Unavailable" : "$" + formatNumber(historicalSourcesLocked ? recordedBatchCost.totalCost : totalCost, 4)}
+                  {hasMissingCurrentRates
+                    ? "Unavailable"
+                    : "$" + formatNumber(historicalSourcesLocked ? recordedBatchCost.totalCost : totalCost, 4)}
                 </p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">{historicalSourcesLocked ? "Recorded blended cost/kg" : "Estimated blended cost/kg if saved"}</p>
+                <p className="text-sm text-muted-foreground">
+                  {historicalSourcesLocked ? "Recorded blended cost/kg" : "Estimated blended cost/kg if saved"}
+                </p>
                 <p className="text-2xl font-bold font-mono" data-testid="text-edit-current-estimate">
-                  {hasMissingCurrentRates ? "Unavailable" : "$" + (historicalSourcesLocked ? recordedBatchCost.costPerKg : blendedCostPerKg).toFixed(4)}
+                  {hasMissingCurrentRates
+                    ? "Unavailable"
+                    : "$" + (historicalSourcesLocked ? recordedBatchCost.costPerKg : blendedCostPerKg).toFixed(4)}
                 </p>
               </div>
             </div>
