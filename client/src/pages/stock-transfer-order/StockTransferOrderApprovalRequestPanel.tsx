@@ -2,7 +2,7 @@
  * "Request Approval" tab in the existing Stock Transfer Order Send to WhatsApp.
  * Selects persisted, order-origin vouchers, never draft screen rows.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Loader2, ShieldCheck, AlertTriangle, RefreshCw, XCircle } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -30,6 +30,7 @@ export function StockTransferOrderApprovalRequestPanel({ model, open }: { model:
   const [destinationId, setDestinationId] = useState<number | null>(null);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [legacyIds, setLegacyIds] = useState<number[]>([]);
+  const autoSelected = useRef<number | null>(null);
   const [result, setResult] = useState<RequestOutcome | null>(null);
 
   const config = useQuery<StockTransferOrderWaSettings>({
@@ -61,8 +62,9 @@ export function StockTransferOrderApprovalRequestPanel({ model, open }: { model:
   });
   useEffect(() => {
     const currentTransferId = model.existingTransfer?.id;
-    if (!currentTransferId || !eligible.data) return;
+    if (!currentTransferId || !eligible.data || autoSelected.current === currentTransferId) return;
     if (eligible.data.orders.some(order => order.transferId === currentTransferId && !order.reserved)) {
+      autoSelected.current = currentTransferId;
       setSelectedIds(previous => previous.includes(currentTransferId) ? previous : [...previous, currentTransferId]);
     }
   }, [model.existingTransfer?.id, eligible.data]);
@@ -119,6 +121,7 @@ export function StockTransferOrderApprovalRequestPanel({ model, open }: { model:
 
   function selectDestination(value: string) {
     setDestinationId(Number(value));
+    autoSelected.current = null;
     setSelectedIds([]);
     setLegacyIds([]);
     setResult(null);
@@ -235,7 +238,7 @@ export function StockTransferOrderApprovalRequestPanel({ model, open }: { model:
               <div key={batch.id} className="rounded-md border p-2 flex items-center justify-between gap-2 text-xs">
                 <span className="min-w-0 truncate">{batch.destinationName} · {batch.orderCount} orders</span>
                 <Badge variant="outline">{batch.status}</Badge>
-                {["draft", "requested", "stale"].includes(batch.status) &&
+                {config.data?.canConfigure && ["draft", "requested", "stale"].includes(batch.status) &&
                   <Button size="sm" variant="ghost" disabled={cancel.isPending}
                     onClick={async () => {
                       if (await confirmAction({title:"Cancel this approval request? Check WhatsApp delivery first.",tone:"destructive"})) {
