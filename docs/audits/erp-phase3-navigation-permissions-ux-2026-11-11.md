@@ -41,3 +41,11 @@ This is a safer permission-management contract; it is **not a claim that the end
 - [ ] Exact-commit GitHub CI, build, accessibility/mobile tests, and release smoke tests pass prior to merge/deploy.
 
 **Current status:** Focused backend authorization remediation authored, and source-level navigation/access audit complete. Phase 3 **cannot be declared certified** without integration E2E verification, role-metadata cleanup disposition, and passing exact-head CI. No Factory/Properties modifications, no production changes.
+
+## Finding ERP3-02 — Unscoped ERP hidden-cost administration endpoint (code fix authored)
+
+The adjacent Admin-only `GET/PUT /api/erp-user-hidden-costs/:userId` previously accepted any target user ID while modifying `users.hidden_erp_cost_fields` (a **global user preference**, not a tenant-local grant record). The proposed patch checks selected-company membership for read and update; PUT locks membership while applying the update transactionally and refuses malformed/duplicate restriction keys. This reduces arbitrary cross-company user-ID targeting but does **not** make global hidden-cost preferences tenant-local. Any future company-specific visibility requirement needs a separately designed per-company schema rather than silently pretending this field is isolated.
+
+The production database uses six historical restriction keys (`accounts_balances`, `analytics_financials`, `container_costs`, `daybook_amounts`, `stock_rates`, `voucher_amounts`) in addition to the three current settings keys (`sales_profit_cost`, `hide_export_selling_price`, `hide_export_cost_price`). **All nine are deliberately accepted and preserved** to prevent revealing cost data by accidentally dropping historical restrictions. Unit tests cover that compatibility requirement.
+
+Additional sign-off: verify the Admin cost visibility editor for users assigned to one and multiple companies, and confirm whether its global scope is the approved long-term business policy. Do not automatically migrate user visibility settings.
