@@ -37,6 +37,8 @@ type Header = {
   batch_key: string;
   approval_group_chat_id: string;
   authorized_phone_e164: string;
+  whatsapp_instance_id: string | null;
+  request_message_id: string | null;
 };
 
 type DecisionEvent = {
@@ -44,6 +46,9 @@ type DecisionEvent = {
   event_type: "done_received" | "decline_received";
   sender_chat_id: string | null;
   provider_message_id: string | null;
+  whatsapp_instance_id: string | null;
+  approval_group_chat_id: string | null;
+  quoted_message_id: string | null;
 };
 
 type FinalRevision = {
@@ -111,7 +116,8 @@ async function ensureNoPendingFrozenRevisions(
 
 async function executeWithinTransaction(tx: DbTransaction, batchId: number): Promise<StockTransferOrderWaBatchExecution> {
   const raw = await tx.execute(sql`
-    SELECT id,company_id,status,batch_key,approval_group_chat_id,authorized_phone_e164
+    SELECT id,company_id,status,batch_key,approval_group_chat_id,authorized_phone_e164,
+           whatsapp_instance_id,request_message_id
       FROM stock_transfer_order_approval_batches
      WHERE id=${batchId}
      FOR UPDATE
@@ -124,7 +130,9 @@ async function executeWithinTransaction(tx: DbTransaction, batchId: number): Pro
 
   const companyId = Number(header.company_id);
   const decisions = await tx.execute(sql`
-    SELECT id,event_type,sender_chat_id,provider_message_id
+    SELECT id,event_type,sender_chat_id,provider_message_id,
+           whatsapp_instance_id,approval_group_chat_id,
+           details->>'quotedMessageId' AS quoted_message_id
       FROM stock_transfer_order_approval_events
      WHERE company_id=${companyId} AND batch_id=${batchId}
        AND event_type IN ('done_received','decline_received')
@@ -135,8 +143,13 @@ async function executeWithinTransaction(tx: DbTransaction, batchId: number): Pro
   const decision = rows[0]!.event_type === "done_received" ? "DONE" : "DECLINE";
   const senderChat = rows[0]!.sender_chat_id;
   const expectedSender = header.authorized_phone_e164.slice(1) + "@c.us";
-  if (senderChat !== expectedSender || !rows[0]!.provider_message_id) {
-    throw new StockTransferOrderApprovalError("STO_WA_AUTH_CHANGED", "The verified decision sender no longer matches the batch.");
+  if (senderChat !== expectedSender || !rows[0]!.provider_message_id ||
+      !header.whatsapp_instance_id || !header.request_message_id ||
+      rows[0]!.whatsapp_instance_id !== header.whatsapp_instance_id ||
+      rows[0]!.approval_group_chat_id !== header.approval_group_chat_id ||
+      rows[0]!.quoted_message_id !== header.request_message_id) {
+    throw new StockTransferOrderApprovalError("STO_WA_AUTH_CHANGED",
+      "The stored verified decision does not match the original group, WhatsApp instance, sender, or quoted request.");
   }
 
   // Hold the parent approval batch row lock while checking every frozen order,
