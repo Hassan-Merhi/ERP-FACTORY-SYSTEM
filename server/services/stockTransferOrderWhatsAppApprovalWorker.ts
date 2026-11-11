@@ -20,7 +20,8 @@ let sweepRunning = false;
 const backoffUntil = new Map<number, number>();
 
 export function stockTransferOrderWaExecutionEnabled(): boolean {
-  return process.env.STO_WA_APPROVAL_EXECUTION_ENABLED !== "false" &&
+  return process.env.STO_WA_PRODUCTION_ACTIVATED === "true" &&
+    process.env.STO_WA_APPROVAL_EXECUTION_ENABLED !== "false" &&
     process.env.ENABLE_SCHEDULERS !== "false" &&
     shouldStartEdgeBackgroundJobs(readFactoryEdgeConfiguration());
 }
