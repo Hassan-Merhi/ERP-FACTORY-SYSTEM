@@ -85,7 +85,7 @@ async function collect(client) {
         pg_get_expr(p.polqual,p.polrelid) AS using_expression,
         pg_get_expr(p.polwithcheck,p.polrelid) AS check_expression
       FROM pg_class c JOIN pg_namespace ns ON ns.oid=c.relnamespace
-      LEFT JOIN pg_policy p ON p.polrelid=c.oid AND p.polname=c.relname||'_company_scope_policy'
+      LEFT JOIN pg_policy p ON p.polrelid=c.oid
       WHERE ns.nspname='public' AND c.relkind IN ('r','p')`)
   ]);
   return {
