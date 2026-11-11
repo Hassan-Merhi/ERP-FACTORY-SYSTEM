@@ -53,6 +53,8 @@ function sourceIds(documents: StockTransferDocumentSnapshot[]): string[] {
  * keyed by transfer ID while both Excel-import writers are keyed by voucher ID.
  * The explicit requested (transfer, voucher) pairs prevent a cross-document
  * match and normalize every movement to the transfer document's identity.
+ * Edited transfers must select only the newest revision's issue movements;
+ * its reverse movements and earlier issue generations are audit history.
  */
 export const loadDatabaseCanonicalStockTransferEvidence: StockTransferMovementEvidenceLoader = async ({
   tx,
@@ -83,25 +85,54 @@ export const loadDatabaseCanonicalStockTransferEvidence: StockTransferMovementEv
     sql`, `
   );
   const result = await tx.execute(sql`
-    WITH requested(transfer_id, voucher_id) AS (VALUES ${pairs})
+    WITH requested(transfer_id, voucher_id) AS (VALUES ${pairs}),
+    candidate AS (
+      SELECT
+        movement.company_id,
+        requested.transfer_id,
+        movement.source_type,
+        movement.source_id,
+        movement.idempotency_key,
+        movement.quantity_delta,
+        movement.unit_cost,
+        movement.id,
+        -- A transfer edit writes both reverse and issue batches at revision N.
+        -- Read only the latest issue batch, never all historical generations.
+        -- If a revision has only reversals, do not silently fall back to an
+        -- older issue batch: the missing new issue must fail convergence.
+        CASE WHEN movement.source_type = 'stock-transfer'
+               AND movement.idempotency_key ~ ('^stock-transfer:' || requested.transfer_id || ':rev[0-9]+:(issue|reverse):[0-9]+$')
+             THEN substring(movement.idempotency_key
+                              FROM ('^stock-transfer:' || requested.transfer_id || ':rev([0-9]+):'))::bigint
+             ELSE NULL END AS revision
+      FROM requested
+      INNER JOIN canonical_stock_movements movement
+        ON movement.company_id = ${scopedCompanyId}
+       AND (
+         (movement.source_type = 'stock-transfer'
+          AND movement.source_id = requested.transfer_id)
+         OR
+         (movement.source_type IN ('stock-transfer-import', 'stock-transfer-import-multi-source')
+          AND movement.source_id = requested.voucher_id)
+       )
+    ),
+    latest AS (
+      SELECT transfer_id, max(revision) AS revision FROM candidate GROUP BY transfer_id
+    )
     SELECT
-      movement.company_id AS "companyId",
+      candidate.company_id AS "companyId",
       'stock-transfer'::text AS "sourceType",
-      requested.transfer_id AS "sourceId",
-      movement.source_type AS "originalSourceType",
-      movement.quantity_delta AS "quantityDelta",
-      movement.unit_cost AS "unitCost"
-    FROM requested
-    INNER JOIN canonical_stock_movements movement
-      ON movement.company_id = ${scopedCompanyId}
-     AND (
-       (movement.source_type = 'stock-transfer'
-        AND movement.source_id = requested.transfer_id)
-       OR
-       (movement.source_type IN ('stock-transfer-import', 'stock-transfer-import-multi-source')
-        AND movement.source_id = requested.voucher_id)
-     )
-    ORDER BY requested.transfer_id, movement.id
+      candidate.transfer_id AS "sourceId",
+      candidate.source_type AS "originalSourceType",
+      candidate.quantity_delta AS "quantityDelta",
+      candidate.unit_cost AS "unitCost"
+    FROM candidate
+    INNER JOIN latest ON latest.transfer_id = candidate.transfer_id
+    WHERE (latest.revision IS NULL AND candidate.revision IS NULL)
+       OR (latest.revision IS NOT NULL
+           AND candidate.revision = latest.revision
+           AND candidate.idempotency_key ~ (':issue:[0-9]+$'))
+    ORDER BY candidate.transfer_id, candidate.id
   `);
 
   const rows = resultRows(result);
