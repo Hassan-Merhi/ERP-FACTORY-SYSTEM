@@ -14,8 +14,8 @@
     },
     "GET /api/factory/net-position": {
       "status": 200,
-      "shape": "{asOf,balanceOnTableValue,businessToday,companyId,currencyRevaluation,forUs,forUsTotal,fxAgentWalletWarnings,fxAgentWallets,historyBasis,historyCompleteness,historyCoverage,historyWarnings,inventoryValue,ledgerAssets,ledgerLiabilities,loadingOrders,loadingTotal,netPosition,netPositionLabel,onUs,onUsTotal,payrollPayable,pendingOrders,pendingTotal,rawMaterialValue,stockOtwValue,supplierLiabilities,supplierOverpayments,timeZone,valuationMode,verifiedOrders,verifiedTotal}",
-      "hash": "106c37491bd8d7e28206a4a005a652e6a68961a7697362f0cd0d0966872d047a"
+      "shape": "{asOf,balanceOnTableValue,businessToday,companyId,currencyRevaluation,forUs,forUsTotal,fxAgentWalletWarnings,fxAgentWallets,historyBasis,historyCompleteness,historyCoverage,historyWarnings,inventoryValue,ledgerAssets,ledgerLiabilities,loadingOrders,loadingTotal,netPosition,netPositionLabel,onUs,onUsTotal,payrollPayable,pendingOrders,pendingTotal,rawMaterialValue,stockOtwValue,supplierFxGain,supplierFxLoss,supplierLiabilities,supplierLiabilitiesCurrentRate,supplierOverpayments,timeZone,valuationMode,verifiedOrders,verifiedTotal,walletFxGain,walletFxLoss}",
+      "hash": "986c8b1cb9b0814a97686718e6d29a2984be2d43c4d4222cee2412a876d612c0"
     },
     "GET /api/factory/suppliers/:supplierId/statement": {
       "status": 200,
