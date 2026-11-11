@@ -55,7 +55,7 @@ interface ReleaseGate {
   reconciliation:{ready:boolean;missing:string[];checkedAt:string};
   invoice:{ready:boolean;missing:string[];checkedAt:string};
   integrity:null|{
-    finalized:boolean;passed:boolean;verifiedAt:string;
+    finalized:boolean;signedReconciliation:boolean;passed:boolean;verifiedAt:string;
     checks:Array<{code:string;state:"PASS"|"BLOCK"|"INFO"|"NOT_APPLICABLE";
       message:string;expected?:string;observed?:string}>;
   };
@@ -119,7 +119,8 @@ export default function FactoryDispatchOrderDashboard({
     queryKey:companyQueryKey(base.replace("/order-overview","/release-readiness"),companyId),
     queryFn:()=>json<ReleaseGate>(base.replace("/order-overview","/release-readiness")),
     enabled:Boolean(companyId) && Number.isSafeInteger(orderId) && orderId>0,
-    staleTime:30000,refetchInterval:60000,
+    // Run automatically and refresh after the order-level evidence changes.
+    staleTime:0,refetchInterval:20000,refetchOnWindowFocus:true,
   });
   const value=info.data;
   const history=useInfiniteQuery<HistoryPage,Error>({
@@ -216,68 +217,40 @@ export default function FactoryDispatchOrderDashboard({
               </div>
             ))}
           </div>
-          <div className="flex flex-wrap items-start justify-between gap-2 rounded-xl border border-border bg-muted/25 p-3 text-xs"
-            data-testid="factory-dispatch-release-readiness">
-            <div className="flex items-start gap-2">
-              <ShieldCheck className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-300"/>
-              <div className="space-y-1">
-                <p className="font-semibold">TablePlus accounting safeguards</p>
-                {gate.isPending&&<p className="text-muted-foreground">Checking installed database protections…</p>}
-                {gate.isError&&<p className="text-destructive">
-                  Could not verify safeguards; accounting approval must remain disabled.
-                </p>}
-                {gate.data&&(
-                  <>
-                    <p className="text-muted-foreground">
-                      Reconciliation: {gate.data.reconciliation.ready?"Ready":"SQL / guards pending"} ·
-                      One invoice: {gate.data.invoice.ready?"Ready":"SQL / guards pending"}
-                    </p>
-                    {gate.data.integrity&&(
-                      <div className="space-y-1">
-                        <p className={gate.data.integrity.passed?"text-emerald-700 dark:text-emerald-300":"text-amber-700 dark:text-amber-300"}>
-                          Accounting integrity: {gate.data.integrity.passed
-                            ? gate.data.integrity.finalized?"Final invoice verified":"Current accounting checks passed; invoice not yet finalized"
-                            : gate.data.integrity.finalized
-                              ? "Finalized invoice mismatches detected"
-                              : "Unresolved financial postings"}
-                        </p>
-                        {gate.data.integrity.checks.some(check=>check.state==="BLOCK")&&(
-                          <details>
-                            <summary className="cursor-pointer font-medium">
-                              Review {gate.data.integrity.checks.filter(check=>check.state==="BLOCK").length}
-                              {" "}accounting discrepancy(s)
-                            </summary>
-                            <div className="mt-2 max-h-48 space-y-1 overflow-auto rounded-md bg-background/80 p-2 text-[11px]">
-                              {gate.data.integrity.checks.filter(check=>check.state==="BLOCK")
-                                .map(check=><p key={check.code}>
-                                  <strong>{check.code}</strong> — {check.message}
-                                  {check.expected!==undefined?" · Expected: "+check.expected:""}
-                                  {check.observed!==undefined?" · Observed: "+check.observed:""}
-                                </p>)}
-                            </div>
-                          </details>
-                        )}
+          {/* Accounting integrity is checked automatically in the background.
+              Healthy/pending checks are not a user task or an operational card. */}
+          {(gate.isError ||
+            (gate.data && (!gate.data.reconciliation.ready || !gate.data.invoice.ready ||
+              gate.data.integrity?.passed===false)))&&(
+            <div className="rounded-xl border border-amber-400/50 bg-amber-50/70 p-3 text-xs text-amber-950 dark:border-amber-700 dark:bg-amber-950/20 dark:text-amber-200"
+              data-testid="factory-dispatch-accounting-attention">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0"/>
+                <div className="space-y-1">
+                  <p className="font-semibold">Accounting attention required</p>
+                  {gate.isError&&<p>Automatic accounting verification is temporarily unavailable. Posting and invoice guards remain active.</p>}
+                  {gate.data && (!gate.data.reconciliation.ready || !gate.data.invoice.ready) &&
+                    <p>Required database accounting protections are not installed. Financial approval remains restricted until the administrator applies the missing migration.</p>}
+                  {gate.data?.integrity && !gate.data.integrity.passed && (
+                    <details>
+                      <summary className="cursor-pointer font-medium">
+                        {gate.data.integrity.checks.filter(check=>check.state==="BLOCK").length} accounting discrepancy(s) detected automatically
+                      </summary>
+                      <div className="mt-2 max-h-48 space-y-1 overflow-auto">
+                        {gate.data.integrity.checks.filter(check=>check.state==="BLOCK").map(check=>(
+                          <p key={check.code}>
+                            {check.message}
+                            {check.expected!==undefined?" · Expected: "+check.expected:""}
+                            {check.observed!==undefined?" · Observed: "+check.observed:""}
+                          </p>
+                        ))}
                       </div>
-                    )}
-                    {!gate.data.invoice.ready&&(
-                      <details className="max-w-2xl">
-                        <summary className="cursor-pointer font-medium">
-                          View {gate.data.invoice.missing.length} missing safeguard(s)
-                        </summary>
-                        <div className="mt-1 max-h-40 overflow-auto rounded-md bg-background/80 p-2 font-mono text-[11px]">
-                          {gate.data.invoice.missing.join("\n")}
-                        </div>
-                      </details>
-                    )}
-                  </>
-                )}
+                    </details>
+                  )}
+                </div>
               </div>
             </div>
-            <Button size="sm" variant="outline" onClick={()=>void gate.refetch()}
-              disabled={gate.isFetching}>
-              <RefreshCw className="mr-1.5 h-3.5 w-3.5"/> Check
-            </Button>
-          </div>
+          )}
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-muted/40 px-3 py-2 text-xs">
             <span className="text-muted-foreground">
               Loaded now: {value.summary.originalLoadingBales} · scanned events: {value.summary.scannedBales} ·

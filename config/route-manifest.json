@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "description": "Ordered snapshot of every registered Express route (method, path, guard chain) and middleware mount. Regenerate with UPDATE_ROUTE_MANIFEST=1 only when a route change is intended; during a file split the manifest must not change at all.",
-  "routeCount": 2393,
+  "routeCount": 2397,
   "middlewareMountCount": 139,
   "routes": [
     "GET /api/admin/operational-monitoring [requireAuth > <anonymous> > <anonymous>]",
@@ -72,6 +72,8 @@
     "GET /api/factory/customer-orders/:id/loading-dispatches/combined-invoice/preview [requireAuth > <anonymous> > <anonymous>]",
     "POST /api/factory/customer-orders/:id/loading-dispatches/combined-invoice/finalize [requireAuth > <anonymous> > <anonymous>]",
     "GET /api/factory/customer-orders/:id/loading-dispatches/order-overview [requireAuth > <anonymous> > <anonymous>]",
+    "GET /api/factory/customer-orders/:id/loading-dispatches/order-overview/trips/:dispatchId/invoice-lines [requireAuth > <anonymous> > <anonymous>]",
+    "GET /api/factory/customer-orders/:id/loading-dispatches/order-overview/trips/:dispatchId/invoice.xlsx [requireAuth > <anonymous> > <anonymous>]",
     "GET /api/factory/customer-orders/:id/loading-dispatches/order-overview/history [requireAuth > <anonymous> > <anonymous>]",
     "GET /api/factory/customer-orders/:id/loading-dispatches/order-overview/report.xlsx [requireAuth > <anonymous> > <anonymous>]",
     "GET /api/factory/customer-orders/:id/loading-dispatches/release-readiness [requireAuth > <anonymous> > <anonymous>]",
@@ -431,6 +433,7 @@
     "POST /api/factory/customer-orders-loading [requireAuth > <anonymous>]",
     "POST /api/factory/customer-orders/:id/finalize-loading [requireAuth > <anonymous>]",
     "GET /api/factory/customer-orders/:id/verification-summary [requireAuth > <anonymous>]",
+    "GET /api/factory/customer-orders/:id/container-extra-items/prices [requireAuth > <anonymous>]",
     "GET /api/factory/customer-orders/:id/container-extra-items [requireAuth > <anonymous>]",
     "PUT /api/factory/customer-orders/:id/container-extra-items [requireAuth > <anonymous>]",
     "POST /api/factory/customer-orders/:id/container-extra-items/import [requireAuth > <anonymous>]",
@@ -932,6 +935,7 @@
     "GET /api/erp/rental/auto-transfer-config [requireAuth > <anonymous>]",
     "POST /api/erp/rental/auto-transfer-config [requireAuth > <anonymous>]",
     "DELETE /api/erp/rental/auto-transfer-config/:id [requireAuth > <anonymous>]",
+    "GET /api/erp/rental/linked-rent-control [requireAuth > requireRentalReconciliationPermission > <anonymous>]",
     "GET /api/erp/rental/reconciliation [requireAuth > requireRentalReconciliationPermission > <anonymous>]",
     "GET /api/factory/rental/admin/legacy-prepaid-recognition/plan [requireAuth > <anonymous> > <anonymous>]",
     "POST /api/factory/rental/admin/legacy-prepaid-recognition/apply [requireAuth > <anonymous> > <anonymous>]",
