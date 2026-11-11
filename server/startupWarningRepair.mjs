@@ -179,7 +179,7 @@ async function verifyStartupWarningSchema(client) {
     `);
     if (index.rowCount !== 1 || index.rows[0]?.valid !== true ||
         index.rows[0]?.ready !== true ||
-        !/ON (?:public\\.)?exchange_rates USING btree \\(company_id, effective_date, from_currency, to_currency\\)/i.test(index.rows[0]?.definition || "")) {
+        !String(index.rows[0]?.definition || "").includes("exchange_rates USING btree (company_id, effective_date, from_currency, to_currency)")) {
       missing.push("valid exchange_rates_company_date_pair_unique index");
     }
     if (missing.length) throw new Error("Startup schema verify-only failed: " + missing.join(", "));
