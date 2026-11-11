@@ -20,7 +20,7 @@ import type { StockTransferOrderWaSettings } from "../settings/StockTransferOrde
 
 type Model = ReturnType<typeof useStockTransferOrderModel>;
 type EligibleOrder = { transferId: number; voucherNumber: string; pendingRevisions: number; reserved: boolean };
-type Batch = { id: number; batchKey: string; destinationName: string; orderCount: number; status: string; requestedAt: string|null };
+type Batch = { id: number; batchKey: string; destinationName: string; orderCount: number; revisionCount: number; status: string; requestedAt: string|null; reviewedAt: string|null; reviewedByPhone: string|null };
 type RequestOutcome = { ok: boolean; uncertain?: boolean; batchId: number; batchKey?: string; orders?: number; revisions?: number; message: string };
 const base = "/api/stock-transfer-order/wa-approval";
 
@@ -249,9 +249,17 @@ export function StockTransferOrderApprovalRequestPanel({ model, open }: { model:
           <div className="max-h-40 overflow-y-auto space-y-1">
             {recent.data?.batches.map(batch => (
               <div key={batch.id} className="rounded-md border p-2 flex items-center justify-between gap-2 text-xs">
-                <span className="min-w-0 truncate">{batch.destinationName} · {batch.orderCount} orders</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate">{batch.destinationName} · {batch.orderCount} orders · {batch.revisionCount} revisions</span>
+                  {batch.reviewedByPhone && batch.reviewedAt && (
+                    <span className="block text-muted-foreground mt-0.5">
+                      {batch.status === "approved" ? "Approved" : "Declined"} by WhatsApp {batch.reviewedByPhone}
+                      {" · "}{new Date(batch.reviewedAt).toLocaleString()}
+                    </span>
+                  )}
+                </span>
                 <Badge variant="outline">{batch.status}</Badge>
-                {config.data?.canConfigure && ["draft", "uncertain", "requested", "stale", "done_received", "decline_received"].includes(batch.status) &&
+                {config.data?.canConfigure && ["draft", "uncertain", "requested", "stale"].includes(batch.status) &&
                   <Button size="sm" variant="ghost" disabled={cancel.isPending}
                     onClick={async () => {
                       if (await confirmAction({title:"Cancel this approval request? Check WhatsApp delivery first.",tone:"destructive"})) {
