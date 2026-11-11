@@ -68,6 +68,9 @@ import { ensureFactoryContainerPlannerSchemaOnBoot } from "./startup/factoryCont
 import { ensurePriorityScanSchema } from "./startup/priorityScanSchema";
 import { ensureContainerExtraExpectedLines } from "./startup/ensureContainerExtraExpectedLines";
 import { ensureFactoryLoadingDispatchSchema } from "./startup/ensureFactoryLoadingDispatchSchema";
+import { ensureStockTransferOrderWhatsAppApprovalSchema } from "./startup/ensureStockTransferOrderWhatsAppApprovalSchema";
+import { startStockTransferOrderWaApprovalWorker } from "./services/stockTransferOrderWhatsAppApprovalWorker";
+import { startStockTransferOrderWaDeliveryWorker } from "./services/stockTransferOrderWaDeliveryWorker";
 import { ensureDispatchLoadingBaleScanGuard } from "./startup/ensureDispatchLoadingBaleScanGuard";
 import { ensureFactoryBaleOrderIntegrity } from "./startup/ensureFactoryBaleOrderIntegrity";
 import { runApprovedLegacyBaleUnitCostRepair } from "./startup/runApprovedLegacyBaleUnitCostRepair";
@@ -367,6 +370,9 @@ let migrationsDone = false;
       // Fatal on failure: never report healthy while normal loading is blocked.
       await ensureDispatchLoadingBaleScanGuard(pool);
       logger.info("[startup] ✓ Factory loading dispatch schema and scan guard ensured");
+      // Stock Transfer Orders require the verified, idempotent approval schema before service.
+      await ensureStockTransferOrderWhatsAppApprovalSchema(pool);
+      logger.info("[startup] ✓ Stock Transfer Order WhatsApp approval foundation ensured");
       await ensureFactoryInvoiceDocumentSnapshotStore(pool);
       logger.info("[startup] ✓ Factory invoice document snapshot store ensured");
       try {
@@ -547,6 +553,11 @@ let migrationsDone = false;
       listenWithRetry(server, port, () => {
         if (shouldStartEdgeBackgroundJobs(readFactoryEdgeConfiguration())) {
           runPostStartupJobs();
+          // Run only on the authoritative scheduler, honoring production activation kill switch.
+          if (process.env.ENABLE_SCHEDULERS !== "false") {
+            startStockTransferOrderWaApprovalWorker();
+            startStockTransferOrderWaDeliveryWorker();
+          }
         } else {
           logger.info("[FactoryEdge] Background startup jobs disabled by LAN mode or cloud writer fence");
         }
