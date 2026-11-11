@@ -52,6 +52,9 @@ if (!globalThis[INSTALL_KEY]) {
   }
 
   if (!connectionString) {
+    if (process.env.SUPPLIER_SCOPE_SCHEMA_MODE === "verify-only") {
+      throw new Error("Supplier schema verify-only requires database configuration");
+    }
     console.warn(
       JSON.stringify({
         timestamp: new Date().toISOString(),
@@ -61,6 +64,51 @@ if (!globalThis[INSTALL_KEY]) {
         action: "startup-ensure",
       })
     );
+  } else if (process.env.SUPPLIER_SCOPE_SCHEMA_MODE === "verify-only") {
+    const { Client } = pg;
+    const client = new Client({
+      connectionString,
+      ssl: resolveDatabaseSsl(connectionString),
+      connectionTimeoutMillis: 15_000,
+    });
+    try {
+      await client.connect();
+      await client.query("BEGIN READ ONLY");
+      await client.query("SET LOCAL lock_timeout = '5s'");
+      await client.query("SET LOCAL statement_timeout = '60s'");
+      const result = await client.query(`
+        SELECT
+          to_regclass('public.suppliers') IS NOT NULL AS table_ready,
+          EXISTS(SELECT 1 FROM information_schema.columns
+            WHERE table_schema='public' AND table_name='suppliers' AND column_name='company_id' AND is_nullable='NO') AS company_id_ready,
+          EXISTS(SELECT 1 FROM pg_index i JOIN pg_class c ON c.oid=i.indexrelid
+            WHERE c.relname='suppliers_company_code_unique' AND i.indisunique AND i.indisvalid AND i.indisready) AS company_code_unique,
+          EXISTS(SELECT 1 FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid
+            WHERE c.relname='suppliers' AND t.tgname='suppliers_assign_company_id'
+              AND NOT t.tgisinternal AND t.tgenabled IN ('O','A')) AS supplier_trigger_ready,
+          EXISTS(SELECT 1 FROM pg_constraint co JOIN pg_class c ON c.oid=co.conrelid
+            WHERE c.relname='suppliers' AND co.conname='suppliers_company_id_fkey') AS company_fk_ready
+      `);
+      const state = result.rows[0] || {};
+      if (
+        !state.table_ready ||
+        !state.company_id_ready ||
+        !state.company_code_unique ||
+        !state.supplier_trigger_ready ||
+        !state.company_fk_ready
+      ) {
+        throw new Error(
+          "Supplier company scope schema incomplete; review legacy 20260728 migration before read-only cutover"
+        );
+      }
+      await client.query("ROLLBACK");
+      console.log(JSON.stringify({ module: "supplier-company-scope", mode: "verify-only", schemaVerified: true }));
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => {});
+      throw error;
+    } finally {
+      await client.end().catch(() => {});
+    }
   } else {
     const migrationSql = await readFile(
       new URL("../migrations/20260728_001_supplier_company_scope.sql", import.meta.url),

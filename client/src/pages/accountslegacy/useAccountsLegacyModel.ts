@@ -19,6 +19,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAppMode, useModePrefix } from "@/contexts/AppModeContext";
 import { getApiRequest } from "@/lib/factoryApi";
 import { useCompany } from "@/contexts/CompanyContext";
+import { erpPageAccessQueryOptions } from "@/app/erpAccessQuery";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useDateJump } from "@/hooks/use-date-jump";
@@ -91,7 +92,9 @@ export function useAccountsLegacyModel() {
   function formatAmountForAccount(amount: number, _accountType?: string): string {
     return formatHistoricalBaseAmount(amount);
   }
-  const { data: myErpPages } = useQuery<{ hiddenErpCostFields?: string[] }>({ queryKey: ["/api/my-erp-pages"] });
+  const { data: myErpPages } = useQuery<{ hiddenErpCostFields?: string[] }>({
+    ...erpPageAccessQueryOptions(selectedCompany?.id, true),
+  });
   const hideBalances = (myErpPages?.hiddenErpCostFields ?? []).includes("accounts_balances");
   const appMode = useAppMode();
   const accountsListUrl = appMode === "factory" ? "/api/factory/accounts/list" : "/api/accounts/all";
@@ -549,8 +552,8 @@ export function useAccountsLegacyModel() {
         debitAmount: row.debitAmount,
         creditAmount: row.creditAmount,
       }));
-    return [...posted, ...historical].sort((a, b) =>
-      a.voucherDate.localeCompare(b.voucherDate) || a.entryId - b.entryId
+    return [...posted, ...historical].sort(
+      (a, b) => a.voucherDate.localeCompare(b.voucherDate) || a.entryId - b.entryId
     );
   }, [rawTransactionData]);
 
@@ -559,8 +562,10 @@ export function useAccountsLegacyModel() {
   // reliably identify it. Passing this value as a prop avoids reading a
   // non-subscribed query-cache snapshot in AccountStatementView.
   const statementCustomerId: number | null =
-    rawTransactionData && !Array.isArray(rawTransactionData) &&
-    Number.isSafeInteger(rawTransactionData.customerId) && rawTransactionData.customerId > 0
+    rawTransactionData &&
+    !Array.isArray(rawTransactionData) &&
+    Number.isSafeInteger(rawTransactionData.customerId) &&
+    rawTransactionData.customerId > 0
       ? rawTransactionData.customerId
       : null;
 
@@ -590,16 +595,21 @@ export function useAccountsLegacyModel() {
     });
   }, [transactions, broughtForwardBalance]);
 
-  const vouchersWithBalance = useMemo(() => allVouchersWithBalance.filter((row) =>
-    !isInternalHistoricalSupplierRoutineRow({
-      companyId: row.companyId ?? selectedCompany?.id,
-      voucherId: row.voucherId,
-      voucherDate: row.voucherDate,
-      voucherNumber: row.voucherNumber,
-      voucherDescription: row.voucherDescription,
-      createdAt: row.createdAt,
-    })
-  ), [allVouchersWithBalance, selectedCompany?.id]);
+  const vouchersWithBalance = useMemo(
+    () =>
+      allVouchersWithBalance.filter(
+        (row) =>
+          !isInternalHistoricalSupplierRoutineRow({
+            companyId: row.companyId ?? selectedCompany?.id,
+            voucherId: row.voucherId,
+            voucherDate: row.voucherDate,
+            voucherNumber: row.voucherNumber,
+            voucherDescription: row.voucherDescription,
+            createdAt: row.createdAt,
+          })
+      ),
+    [allVouchersWithBalance, selectedCompany?.id]
+  );
 
   const closingBalance = useMemo(() => {
     if (allVouchersWithBalance.length > 0) {

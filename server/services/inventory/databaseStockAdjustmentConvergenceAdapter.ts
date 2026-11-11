@@ -149,21 +149,68 @@ export async function loadDatabaseCanonicalStockAdjustmentEvidence(input: {
     requested.add(document.sourceId);
   }
 
-  const idList = sql.join(
-    [...requested].map((id) => sql`${id}`),
+  // Edit movements use the voucher ID, while original movements use the
+  // adjustment ID. Each edit reverses the previous version and applies a new
+  // set of lines in one transaction. Compare the current document with the
+  // most recent applied edit, NOT the sum of all historical apply batches.
+  //
+  // Preserve the original-evidence requirement: edits may not manufacture a
+  // clean reconciliation for a document whose initial stock evidence is absent.
+  const documentPairs = sql.join(
+    documents.map((document) => sql`(${String(document.adjustmentId)}::text, ${String(document.voucherId)}::text)`),
     sql`, `
   );
   const result = await tx.execute(sql`
+    WITH requested(adjustment_id, voucher_id) AS (
+      VALUES ${documentPairs}
+    ),
+    latest AS (
+      SELECT
+        r.adjustment_id,
+        r.voucher_id,
+        (
+          SELECT max(e.created_at)
+          FROM canonical_stock_movements e
+          WHERE e.company_id = ${companyId}
+            AND e.source_type = 'stock_adjustment_edit_apply'
+            AND e.source_id = r.voucher_id
+        ) AS last_apply_at
+      FROM requested r
+    )
     SELECT
-      source_id AS "sourceId",
-      company_id AS "companyId",
-      sum(abs(quantity_delta)) AS "movementQuantity",
-      sum(abs(quantity_delta) * unit_cost) AS "movementValue"
-    FROM canonical_stock_movements
-    WHERE company_id = ${companyId}
-      AND source_type = 'stock-adjustment'
-      AND source_id IN (${idList})
-    GROUP BY source_id, company_id
+      r.adjustment_id AS "sourceId",
+      ${companyId}::integer AS "companyId",
+      sum(abs(m.quantity_delta)) AS "movementQuantity",
+      sum(abs(m.quantity_delta) * m.unit_cost) AS "movementValue"
+    FROM latest r
+    JOIN canonical_stock_movements m
+      ON m.company_id = ${companyId}
+     AND (
+       (r.last_apply_at IS NOT NULL
+        AND m.source_type = 'stock_adjustment_edit_apply'
+        AND m.source_id = r.voucher_id
+        AND m.created_at = r.last_apply_at)
+       OR
+       (r.last_apply_at IS NULL
+        AND m.source_type = 'stock-adjustment'
+        AND m.source_id = r.adjustment_id)
+     )
+    WHERE EXISTS (
+      SELECT 1 FROM canonical_stock_movements initial
+      WHERE initial.company_id = ${companyId}
+        AND initial.source_type = 'stock-adjustment'
+        AND initial.source_id = r.adjustment_id
+    )
+    AND (
+      r.last_apply_at IS NOT NULL
+      OR NOT EXISTS (
+        SELECT 1 FROM canonical_stock_movements reversal
+        WHERE reversal.company_id = ${companyId}
+          AND reversal.source_type = 'stock_adjustment_edit_reverse'
+          AND reversal.source_id = r.voucher_id
+      )
+    )
+    GROUP BY r.adjustment_id
   `);
 
   const rows =

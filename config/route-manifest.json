@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "description": "Ordered snapshot of every registered Express route (method, path, guard chain) and middleware mount. Regenerate with UPDATE_ROUTE_MANIFEST=1 only when a route change is intended; during a file split the manifest must not change at all.",
-  "routeCount": 2418,
+  "routeCount": 2415,
   "middlewareMountCount": 141,
   "routes": [
     "POST /api/stock-transfer-order/wa-approval/webhook [stockTransferOrderWaWebhookHandler]",
@@ -11,9 +11,6 @@
     "GET /api/training/media/:topic/captions [requireAuth > <anonymous>]",
     "GET /api/training/media/:topic/screenshot [requireAuth > <anonymous>]",
     "POST /api/offline/legacy-queue/decisions [requireAuth > <anonymous>]",
-    "POST /api/offline/browser-sync/operations [requireAuth > <anonymous>]",
-    "POST /api/offline/browser-sync/operations/discard [requireAuth > <anonymous>]",
-    "POST /api/offline/browser-sync/receipts [requireAuth > <anonymous>]",
     "GET /api/seasonal/christmas-mode [requireAuth > <anonymous>]",
     "PUT /api/seasonal/christmas-mode/preference [requireAuth > <anonymous>]",
     "GET /api/seasonal/christmas-mode/config [requireAuth > <anonymous> > <anonymous>]",

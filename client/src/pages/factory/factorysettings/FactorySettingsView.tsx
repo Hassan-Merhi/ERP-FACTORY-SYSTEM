@@ -651,8 +651,8 @@ export function FactorySettingsView({ model }: Props) {
             Offline Mode
           </CardTitle>
           <CardDescription>
-            Download all factory data to this device so it works without internet. Mutations made while offline are
-            queued and auto-synced when the connection returns.
+            Prepare supported factory data for offline reads on this device. Only approved operations are available
+            through a certified factory LAN server; returning to the cloud requires a supervised handover.
           </CardDescription>
         </CardHeader>
         <CardContent>

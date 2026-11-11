@@ -139,6 +139,14 @@ jobs:
         run: |
           set -euo pipefail
           start=$(date +%s)
+          # The scratch instance is disposable, but refuse any pre-existing
+          # public relations/sequences instead of overwriting another dataset.
+          public_objects=$(psql --host=localhost --port=5432 --username=postgres --dbname=restore_verify \
+            --tuples-only --no-align --command="SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relkind IN ('r','p','m','S','v','f');")
+          if [ "$public_objects" != "0" ]; then
+            echo "::error::Refusing restore: target restore_verify already has $public_objects public objects."
+            exit 1
+          fi
           pg_restore --host=localhost --port=5432 --username=postgres --dbname=restore_verify \
             --no-owner --no-acl --exit-on-error "$RUNNER_TEMP/backup.dump"
           echo "Restore took $(( $(date +%s) - start ))s"

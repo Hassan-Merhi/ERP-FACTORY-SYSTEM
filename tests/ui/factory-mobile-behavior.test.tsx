@@ -39,6 +39,7 @@ vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
 
 vi.mock("@/contexts/CompanyContext", () => ({
   useCompany: () => ({ selectedCompany: { id: 1, name: "Factory Co" }, companies: [], isLoading: false }),
+  useOptionalCompany: () => ({ selectedCompany: { id: 1, name: "Factory Co" }, companies: [], isLoading: false }),
   CompanyProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
