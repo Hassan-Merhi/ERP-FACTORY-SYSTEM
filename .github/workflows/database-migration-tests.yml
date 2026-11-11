@@ -68,6 +68,17 @@ jobs:
       - name: Run migration and recovery unit tests
         run: npm run test:db:migrations
 
+      - name: Verify Phase 9 production release is blocked without evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          if node scripts/verify-database-phase9-release.mjs --commit="$GITHUB_SHA" > "$RUNNER_TEMP/phase9-preflight.json"; then
+            echo "::error::Missing production evidence must block the release."
+            exit 1
+          fi
+          grep -q '"ok": false' "$RUNNER_TEMP/phase9-preflight.json"
+          echo "Phase 9 fail-closed release preflight verified."
+
       - name: Run migration PostgreSQL integration tests
         run: npm run test:db:migrations:postgres
 
