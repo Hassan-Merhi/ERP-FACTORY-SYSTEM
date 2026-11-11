@@ -10,6 +10,7 @@ const read = (p: string) => fs.readFileSync(path.join(process.cwd(), p), "utf8")
 const webhook = read("server/routes/stockTransferOrderWaApprovalWebhookRoutes.ts");
 const parser = read("server/services/stockTransferOrderWhatsAppReplyParser.ts");
 const consumer = read("server/services/stockTransferOrderWhatsAppInbound.ts");
+const batch = read("server/services/stockTransferOrderWhatsAppApprovalBatch.ts");
 const entry = read("server/routes.ts");
 const origin = read("server/security/originGuard.ts");
 const stage = read("server/startup-schema/040-stock-transfer-order-wa-webhook.ts");
@@ -65,6 +66,17 @@ describe("Stock Transfer Order WhatsApp inbound Phase 3", () => {
     expect(consumer).not.toContain("UPDATE stock_transfer_items");
     expect(consumer).not.toContain("sendWhatsAppFileToChatId");
     expect(webhook).toContain("approvalExecuted: false");
+  });
+
+  it("pins the destination recipient and rejects any approval/routing edit after request creation", () => {
+    expect(batch).toContain("destinationRecipientChatId");
+    expect(batch).toContain("draft_created");
+    expect(batch).toContain("STO_WA_DESTINATION_CHANGED");
+    expect(batch).toContain("STO_WA_AUTH_CHANGED");
+    expect(batch).toContain("s.unchanged");
+    expect(batch).toContain("currentDestination.unchanged");
+    expect(batch).toContain("clock_timestamp()");
+    expect(settings).toContain("updated_at=clock_timestamp()");
   });
 
   it("atomically stages one and only one accepted decision per batch", () => {
