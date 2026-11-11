@@ -65,12 +65,12 @@ async function setBatchStatus(companyId: number, batchId: number, status: "cance
     await client.query("BEGIN");
     const result = status === "requested"
       ? await client.query(
-          "UPDATE stock_transfer_order_approval_batches SET status='requested',requested_at=now(),updated_at=now()," +
+          "UPDATE stock_transfer_order_approval_batches SET status='requested',requested_at=now(),updated_at=clock_timestamp()," +
           "whatsapp_instance_id=$3,request_message_id=$4 WHERE company_id=$1 AND id=$2 AND status='draft' RETURNING id",
           [companyId, batchId, values?.instanceId, values?.messageId]
         )
       : await client.query(
-          "UPDATE stock_transfer_order_approval_batches SET status='cancelled',updated_at=now() " +
+          "UPDATE stock_transfer_order_approval_batches SET status='cancelled',updated_at=clock_timestamp() " +
           "WHERE company_id=$1 AND id=$2 AND status IN ('draft','requested','stale') RETURNING id",
           [companyId, batchId]
         );
@@ -177,7 +177,7 @@ export function registerStockTransferOrderWaApprovalRoutes(app: Express,
         "INSERT INTO stock_transfer_order_approval_settings(company_id,enabled,approval_group_chat_id,authorized_phone_e164,updated_by)" +
         " VALUES($1,$2,$3,$4,$5) ON CONFLICT(company_id) DO UPDATE SET enabled=EXCLUDED.enabled," +
         "approval_group_chat_id=EXCLUDED.approval_group_chat_id,authorized_phone_e164=EXCLUDED.authorized_phone_e164," +
-        "updated_by=EXCLUDED.updated_by,updated_at=now()",
+        "updated_by=EXCLUDED.updated_by,updated_at=clock_timestamp()",
         [a.companyId,enabled,groupId||null,phone||null,String(a.userId)]);
       return res.json({ok:true});
     } catch(e) {return errorResponse(res,e);}
@@ -196,7 +196,7 @@ export function registerStockTransferOrderWaApprovalRoutes(app: Express,
         await pool.query(
           "INSERT INTO stock_transfer_order_destination_recipients(company_id,destination_location_id,chat_id,enabled,updated_by)" +
           " VALUES($1,$2,$3,$4,$5) ON CONFLICT(company_id,destination_location_id) DO UPDATE SET " +
-          "chat_id=EXCLUDED.chat_id,enabled=EXCLUDED.enabled,updated_by=EXCLUDED.updated_by,updated_at=now()",
+          "chat_id=EXCLUDED.chat_id,enabled=EXCLUDED.enabled,updated_by=EXCLUDED.updated_by,updated_at=clock_timestamp()",
           [a.companyId,destinationId,chatId,enabled,String(a.userId)]);
         return res.json({ok:true});
       } catch(e) {return errorResponse(res,e);}
