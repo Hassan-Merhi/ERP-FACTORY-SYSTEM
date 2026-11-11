@@ -385,6 +385,45 @@ export async function getPosWaSettings(): Promise<WaSettings | null> {
   return null;
 }
 
+/**
+ * Send a Stock Transfer Order approval request using precisely the configured
+ * main instance. Unlike generic text sending, do NOT fall back to an alternate
+ * WhatsApp account: Phase 3 must correlate the reply to this exact instance.
+ * A transport failure is ambiguous and must never be automatically retried.
+ */
+export async function sendStockTransferOrderApprovalRequest(
+  chatId: string,
+  message: string,
+): Promise<{ outcome: "accepted" | "failed" | "uncertain"; instanceId: string; idMessage?: string; error?: string }> {
+  const wa = await getWaSettings();
+  if (!wa?.enabled || !wa.instanceId || !wa.apiToken) {
+    return { outcome: "failed", instanceId: "", error: "The main WhatsApp instance is not enabled." };
+  }
+  if (!/^\d{5,25}@g\.us$/.test(chatId) || !message || message.length > 19_000) {
+    return { outcome: "failed", instanceId: wa.instanceId, error: "Approval group or message is invalid." };
+  }
+  let response: Response;
+  try {
+    response = await fetch(baseUrl(wa.instanceId, wa.apiToken, "sendMessage"), greenApiRequestInit({
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chatId, message }),
+    }));
+  } catch (error) {
+    logger.error("[STO WhatsApp] Approval request outcome uncertain", { error: getErrorMessage(error) });
+    return { outcome: "uncertain", instanceId: wa.instanceId, error: "Network outcome unknown; check WhatsApp before creating another request." };
+  }
+  if (!response.ok) {
+    logger.warn("[STO WhatsApp] Approval request rejected", { status: response.status });
+    return { outcome: "failed", instanceId: wa.instanceId, error: `WhatsApp rejected the request (HTTP ${response.status}).` };
+  }
+  const body = (await response.json().catch(() => null)) as { idMessage?: unknown } | null;
+  if (typeof body?.idMessage !== "string" || !body.idMessage.trim()) {
+    return { outcome: "uncertain", instanceId: wa.instanceId, error: "WhatsApp accepted the request but its message ID is unavailable." };
+  }
+  return { outcome: "accepted", instanceId: wa.instanceId, idMessage: body.idMessage.trim() };
+}
+
 /** Send a plain text message to one specific chatId */
 export async function sendWhatsAppTextToChatId(
   chatId: string,
