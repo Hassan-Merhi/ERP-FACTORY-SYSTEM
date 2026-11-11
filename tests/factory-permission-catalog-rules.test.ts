@@ -4,7 +4,7 @@
  * and Settings-assignable) and stale hidden-field cleanup.
  */
 import { describe, expect, it } from "vitest";
-import { FACTORY_ACCESS_REGISTRY, FACTORY_SETTINGS_PAGES } from "../shared/factoryAccessRegistry";
+import { FACTORY_ACCESS_REGISTRY, FACTORY_SETTINGS_PAGES, factoryPageAllowsRole, resolveFactoryPage } from "../shared/factoryAccessRegistry";
 import {
   canonicalFactoryPageKey,
   FACTORY_TAB_GRANT_KEYS,
@@ -92,6 +92,20 @@ describe("factory page keys", () => {
 
   it("assigns only Settings-manageable pages", () => {
     expect(normalizeAssignableFactoryPageKeys([assignable.key, notAssignable.key])).toEqual([assignable.key]);
+  });
+});
+
+describe("factory rental Payments Log access", () => {
+  it("resolves its canonical destination and permits Admin and Developer, not ordinary users", () => {
+    const page = resolveFactoryPage("/factory/rental/payments");
+    expect(page?.key).toBe("factory/rental/payments");
+    expect(page?.sidebar).toBe(false);
+    expect(page).toBeDefined();
+    if (!page) return;
+    expect(factoryPageAllowsRole(page, "Admin")).toBe(true);
+    expect(factoryPageAllowsRole(page, "Developer")).toBe(true);
+    expect(factoryPageAllowsRole(page, "User")).toBe(false);
+    expect(factoryPageAllowsRole(page, "Owner")).toBe(false);
   });
 });
 
