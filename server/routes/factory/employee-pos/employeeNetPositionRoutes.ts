@@ -13,6 +13,7 @@ import { loadFactoryHistoricalCoverage } from "../../../services/factory/netPosi
 import { loadFxWalletHistoryGaps } from "../../../services/factory/netPositionFxWalletCoverage";
 import { finishFactoryNetPosition } from "./netPositionHistoricalResponse";
 import { projectFactoryNetPositionMonetaryFx } from "./netPositionMonetaryFxProjection";
+import { loadNetPositionFxActivity } from "../../../services/accounting/netPositionFxActivity";
 import { computeLiveFactoryRentalPositions } from "./netPositionLiveRent";
 import {
   fxAgentTablesExist,
@@ -43,6 +44,26 @@ import { MoneyDecimal, toMoney } from "../../../lib/money";
 import { ledgerCarriesStock } from "../../../services/accounting/perpetualInventory/reportBasis";
 
 export function registerEmployeeNetPositionRoutes(app: Express) {
+  // The Net Position evidence drill-down shares the parent page's Factory
+  // permission boundary. It reads vouchers and rate changes but creates none.
+  app.get("/api/factory/net-position/fx-activity", requireAuth, async (req: Request, res: Response) => {
+    const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+    if (!companyId) return res.status(400).json({ message: "No company selected" });
+    res.setHeader("Cache-Control", "private, no-store");
+    try {
+      return res.json(await loadNetPositionFxActivity({
+        companyId, factory: true, from: req.query.from, to: req.query.to,
+      }));
+    } catch (error) {
+      if (error instanceof Error && /Invalid history date|History start date/.test(error.message)) {
+        return res.status(400).json({ message: error.message });
+      }
+      logger.error("Factory FX evidence history failed", { companyId, error });
+      return res.status(500).json({ message: getErrorMessage(error) });
+    }
+  });
+
+
   app.get("/api/factory/net-position", requireAuth, async (req: Request, res: Response) => {
     // Set once the date resolves: any later failure of a past date is a
     // structured 503, never a partial or current-day figure.
