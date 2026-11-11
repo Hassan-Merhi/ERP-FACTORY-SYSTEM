@@ -18,9 +18,11 @@ import path from "node:path";
 import process from "node:process";
 import pg from "pg";
 import { resolveDatabaseSsl } from "../server/lib/databaseSsl.mjs";
+import { compareFullSchemaFingerprint } from "./database-full-schema-fingerprint-core.mjs";
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"..");
 const runner=path.join(root,"scripts/run-controlled-migrations.mjs");
+const driftRunner=path.join(root,"scripts/audit-database-schema-drift.mjs");
 const confirmation="RUN_DISPOSABLE_PHASE8_MIGRATION_TESTS";
 const lock=748392106;
 const sleep=(ms)=>new Promise(resolve=>setTimeout(resolve,ms));
@@ -41,6 +43,20 @@ async function executeRunner(dbUrl,mode,extra={}) {
     let stdout="",stderr="";
     child.stdout.on("data",data=>{stdout+=data.toString();});
     child.stderr.on("data",data=>{stderr+=data.toString();});
+    child.on("error",reject);
+    child.on("close",code=>resolve({code,stdout,stderr}));
+  });
+}
+
+async function executeDriftFingerprint(dbUrl) {
+  return await new Promise((resolve,reject)=>{
+    const child=spawn(process.execPath,[driftRunner,"--fingerprint"],{
+      cwd:root,env:{...process.env,DATABASE_URL:dbUrl,PGSSLMODE:"disable"},
+      stdio:["ignore","pipe","pipe"]
+    });
+    let stdout="",stderr="";
+    child.stdout.on("data",d=>stdout+=d.toString());
+    child.stderr.on("data",d=>stderr+=d.toString());
     child.on("error",reject);
     child.on("close",code=>resolve({code,stdout,stderr}));
   });
@@ -188,6 +204,22 @@ async function run() {
       assert.equal((await client.query("SELECT company_id FROM locations WHERE id=10")).rows[0].company_id,1);
       assert.equal((await client.query("SELECT company_id FROM ledger_accounts WHERE id=101")).rows[0].company_id,1);
       console.log("PASS: live tenant-control SQL rejects cross-company assignments and parent-account moves");
+
+      // Phase 5: execute the real read-only PostgreSQL catalog collector.
+      // Compare a fingerprint before/after a scratch-only view addition.
+      const before=await executeDriftFingerprint(dbUrl);
+      assert.equal(before.code,0,before.stderr);
+      const reference=JSON.parse(before.stdout);
+      assert.equal(reference.coverage,"full-public-schema-catalog");
+      assert.ok(Object.hasOwn(reference.objects,"functions"));
+      await client.query("CREATE VIEW phase5_schema_drift_fixture AS SELECT id FROM companies");
+      const after=await executeDriftFingerprint(dbUrl);
+      assert.equal(after.code,0,after.stderr);
+      const changed=compareFullSchemaFingerprint(reference,JSON.parse(after.stdout));
+      assert.equal(changed.ok,false);
+      assert.ok(changed.blockers.some(x=>x.includes("phase5_schema_drift_fixture")));
+      await client.query("DROP VIEW phase5_schema_drift_fixture");
+      console.log("PASS: read-only catalog fingerprint detects a real PostgreSQL schema change");
 
       // On an up-to-date DB the rerun performs no mutations.
       result=await executeRunner(dbUrl,"--apply");
