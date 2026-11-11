@@ -30,7 +30,8 @@ import { closedPeriodErrorResponse } from "../../../lib/closedPeriodError";
 import { containerFreightFxRateToUsd } from "../../../services/factory/factoryVoucherEntryAmounts";
 import { syncContainerCommissionJournalTx } from "../../../services/factory/containerCommissionJournal";
 import type Decimal from "decimal.js";
-import { parseMoneyInput, toMoney } from "../../../lib/money";
+import { toMoney } from "../../../lib/money";
+import { CONTAINER_MANUAL_FX_INVALID, parseContainerManualFxRate } from "../../../services/factory/containerManualFxRate";
 import { retireVouchersTx, sessionRetirementActor } from "../../../services/accounting/voucherRetirement";
 
 export function registerFactoryContainerUpdateRoutes(app: Express) {
@@ -252,16 +253,17 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
           // value; otherwise fall back to the existing stored rate, but only if it's actually
           // confirmed already (or, absent the flag on this row, looks like a real explicit
           // rate under the legacy heuristic).
-          const explicitRate = b.fxRateToUsd !== undefined ? parseMoneyInput(dec(b.fxRateToUsd) ?? "") : null;
-          if (b.fxRateToUsd !== undefined && (!explicitRate || !explicitRate.greaterThan(0))) {
-            return res.status(400).json({ message: "Manual FX rate must be a positive number." });
+          const explicitRate =
+            b.fxRateToUsd !== undefined ? parseContainerManualFxRate(b.fxRateToUsd, currencyCode) : null;
+          if (b.fxRateToUsd !== undefined && !explicitRate) {
+            return res.status(400).json({ message: CONTAINER_MANUAL_FX_INVALID });
           }
           let fxRateNum: Decimal;
-          if (explicitRate && explicitRate.greaterThan(0)) {
-            // A manual rate is accepted only where a recorded dated rate exists (the factory document rule).
-            await factoryDocumentRate(db, companyId, currencyCode, importDate);
+          if (explicitRate) {
+            // The operator's manual rate is a confirmed rate for this container,
+            // not an instruction to create or change a dated company-wide FX rate.
             fxRateNum = explicitRate;
-            updateData.fxRateConfirmed = true; // freshly supplied by this request
+            updateData.fxRateConfirmed = true; // explicitly supplied in this PATCH
           } else {
             const { fxRate, looksSet } = resolveStoredFxRate(
               currencyCode,
