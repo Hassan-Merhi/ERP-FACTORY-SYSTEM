@@ -352,7 +352,7 @@ export async function executeStockTransferOrderWaBatch(
           logger.warn("[STO WA] Full approval batch rejected; no partial stock changes", {
             batchId, reason: conflict,
           });
-          return { outcome: "skipped", batchId, reason: conflict };
+          return { outcome: "skipped" as const, batchId, reason: conflict };
         }
         // Unexpected DB/network failures are not classified as stale; leave the
         // immutable decision queued for the durable worker to retry.
