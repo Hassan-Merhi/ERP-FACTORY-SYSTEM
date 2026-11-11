@@ -153,6 +153,26 @@ async function saveExtraItems(companyId: number, orderId: number, items: ExtraIn
 }
 
 export function registerContainerExtraExpectedLineRoutes(app: Express) {
+  // Preview exactly the destination-scoped agreed prices used during saving.
+  app.get("/api/factory/customer-orders/:id/container-extra-items/prices", requireAuth, async (req: Request, res: Response) => {
+    try {
+      if (!allowed(req)) return res.status(403).json({ message: "Access denied" });
+      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+      const orderId = parseId(req.params.id);
+      if (!companyId || orderId === null) return res.status(400).json({ message: "Company and order required" });
+      const order = await findOrder(db, companyId, orderId, false);
+      const prices = resultRows<PriceRow>(await db.execute(sql`
+        SELECT article_code, price_per_bale::text AS price_per_bale
+        FROM customer_destination_price_lists
+        WHERE company_id = ${companyId} AND customer_id = ${order.customer_id}
+          AND destination = UPPER(TRIM(COALESCE(${order.destination}, '')))
+      `));
+      return res.json(prices);
+    } catch (error: unknown) {
+      return sendHttpError(res, error);
+    }
+  });
+
   app.get("/api/factory/customer-orders/:id/container-extra-items", requireAuth, async (req: Request, res: Response) => {
     try {
       if (!allowed(req)) return res.status(403).json({ message: "Access denied" });
