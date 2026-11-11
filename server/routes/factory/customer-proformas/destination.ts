@@ -9,5 +9,8 @@ export function normalizeProformaDestination(value: unknown): string | null {
   if (!normalized || normalized.length > 120) return null;
   if (["LUBUMBASHI", "LSHI", "L'SHI", "L SHI"].includes(normalized)) return "L'SHI";
   if (normalized === "MALI 53") return "MALI";
+  // Historical proformas use KALEMIE while the saved destination price list
+  // was created as KALEME. Treat these spellings as one destination.
+  if (normalized === "KALEMIE") return "KALEME";
   return normalized;
 }

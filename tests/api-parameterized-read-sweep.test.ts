@@ -116,6 +116,27 @@ async function authenticatedAgent(ctx: TestContext, prefix: string): Promise<req
   return agent;
 }
 
+/**
+ * The Factory Dispatch final invoice has a documented fail-closed release gate:
+ * it answers a structured 503 until the manual TablePlus safeguards
+ * (docs/sql/manual/2026-11-10-factory-dispatch-*.sql) are installed, and no
+ * migration installs them, so a CI database never has them. Only this exact
+ * refusal is expected; any other 5xx here, and a 503 anywhere else, still fails.
+ */
+const READINESS_GATED_ROUTES = new Map<string, { status: number; code: string }>([
+  [
+    "/api/factory/customer-orders/:id/loading-dispatches/combined-invoice/preview",
+    { status: 503, code: "FACTORY_DISPATCH_TABLEPLUS_GUARDS_PENDING" },
+  ],
+]);
+
+function isDocumentedReadinessRefusal(route: string, status: number, body: unknown): boolean {
+  const gate = READINESS_GATED_ROUTES.get(route);
+  if (!gate || status !== gate.status) return false;
+  const refusal = body as { code?: unknown; missing?: unknown } | undefined;
+  return refusal?.code === gate.code && Array.isArray(refusal.missing) && refusal.missing.length > 0;
+}
+
 describe("parameterized backend read-surface sweep", () => {
   let erpCtx: TestContext;
   let factoryCtx: TestContext;
@@ -150,6 +171,7 @@ describe("parameterized backend read-surface sweep", () => {
           .query({ limit: 1, page: 1 })
           .timeout({ response: REQUEST_TIMEOUT_MS, deadline: REQUEST_TIMEOUT_MS });
 
+        if (isDocumentedReadinessRefusal(route.manifestPath, response.status, response.body)) continue;
         if (response.status >= 500) {
           failures.push({
             route: route.manifestPath,
