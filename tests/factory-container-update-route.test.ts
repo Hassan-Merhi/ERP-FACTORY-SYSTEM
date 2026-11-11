@@ -314,7 +314,7 @@ describe("PATCH /api/factory/containers/:id — exchange rates", () => {
     for (const rate of ["0", "-1", "not-a-number"]) {
       const response = await patchContainer(id, { fxRateToUsd: rate });
       expect(response.status).toBe(400);
-      expect(response.body.message).toMatch(/Manual FX rate must be a positive number/i);
+      expect(response.body.message).toMatch(/valid positive manual FX rate/i);
       expect((await containerRow(id)).fx_rate_to_usd).toBe("1.20000000");
     }
   });

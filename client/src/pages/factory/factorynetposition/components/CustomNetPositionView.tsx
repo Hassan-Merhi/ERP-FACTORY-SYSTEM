@@ -12,7 +12,10 @@ import { Equal, EyeOff, Eye, RotateCcw } from "lucide-react";
 import type { CustomViewAccount, NetPositionData } from "../types";
 import { fmt, loadCustomViewHidden, saveCustomViewHidden } from "../utils";
 
-export function CustomNetPositionView({ data }: { data: NetPositionData }) {
+export function CustomNetPositionView({ data, onFxClick }: {
+  data: NetPositionData;
+  onFxClick?: (side: "gain" | "loss") => void;
+}) {
   const companyId = data.companyId;
   const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(() => loadCustomViewHidden(companyId));
 
@@ -162,7 +165,13 @@ export function CustomNetPositionView({ data }: { data: NetPositionData }) {
                       >
                         {acc.side === "forUs" ? "Have" : "Owe"}
                       </Badge>
-                      <p className="text-sm font-medium truncate">{acc.name}</p>
+                      {(acc.code === "FX_UNREALIZED_GAIN" || acc.code === "FX_UNREALIZED_LOSS") && onFxClick ? (
+                        <button type="button" onClick={() => onFxClick(acc.code === "FX_UNREALIZED_GAIN" ? "gain" : "loss")}
+                          className="text-sm font-medium text-primary hover:underline inline-flex items-center gap-1"
+                          data-testid={`button-custom-fx-history-${acc.side}`}>
+                          {acc.name}
+                        </button>
+                      ) : <p className="text-sm font-medium truncate">{acc.name}</p>}
                     </div>
                     <p className="text-xs text-muted-foreground">{acc.category}</p>
                   </div>
