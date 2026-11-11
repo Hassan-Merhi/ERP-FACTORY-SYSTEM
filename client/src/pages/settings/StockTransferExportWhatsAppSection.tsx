@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { StockTransferOrderApprovalSettings } from "./StockTransferOrderApprovalSettings";
 
 type WaGroup = { id: number; name: string; chatId: string };
 type GroupSettings = { groups: WaGroup[]; connected: boolean };
@@ -68,6 +69,7 @@ export function StockTransferExportWhatsAppSection() {
   }
 
   return (
+    <>
     <Card data-testid="stock-transfer-export-whatsapp-settings">
       <CardHeader className="space-y-1">
         <CardTitle className="flex items-center gap-2 text-base">
@@ -178,5 +180,7 @@ export function StockTransferExportWhatsAppSection() {
         </div>
       </CardContent>
     </Card>
+    <StockTransferOrderApprovalSettings />
+    </>
   );
 }

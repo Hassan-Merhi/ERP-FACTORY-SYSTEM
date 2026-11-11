@@ -32,6 +32,7 @@ export interface CreateStockTransferInput {
   optional: unknown;
   allowNegativeInventory: unknown;
   actorUserId: string | undefined;
+  workflowOrigin?: "stock_transfer_order";
 }
 
 export async function createStockTransferTx(tx: DbTransaction, input: CreateStockTransferInput) {
@@ -46,6 +47,7 @@ export async function createStockTransferTx(tx: DbTransaction, input: CreateStoc
     notes,
     optional,
     allowNegativeInventory,
+    workflowOrigin,
   } = input;
   const idempotencyKey = requestId
     ? stockDocumentIdempotencyKey({ sourceType: "stock-transfer", companyId, clientRequestId: requestId })
@@ -129,6 +131,7 @@ export async function createStockTransferTx(tx: DbTransaction, input: CreateStoc
       destinationLocationId: Number(destinationLocationId),
       notes: typeof notes === "string" && notes ? notes : null,
       inventoryApplied: optional !== true,
+      workflowOrigin: workflowOrigin === "stock_transfer_order" ? "stock_transfer_order" : "stock_transfer",
     })
     .returning();
 

@@ -29,10 +29,12 @@ import { NotInLedgerCard } from "@/components/netposition/NotInLedgerCard";
 import { Side } from "./factorynetposition/components/Side";
 import { OrderGroup } from "./factorynetposition/components/OrderGroup";
 import { CustomNetPositionView } from "./factorynetposition/components/CustomNetPositionView";
+import { FxHistoryDialog } from "@/components/netposition/FxHistoryDialog";
 
 export default function FactoryNetPosition() {
   const { selectedCompany } = useCompany();
   const [asOf, setAsOf] = useState<string>("");
+  const [fxHistorySide, setFxHistorySide] = useState<"gain" | "loss" | null>(null);
   const isToday = !asOf;
   const { prefs, updatePref, isPending: isSavingValuationMode } = useUserPreferences();
   const valuationMode = prefs?.factoryNetPositionValuationMode === "selling" ? "selling" : "cost";
@@ -281,30 +283,47 @@ export default function FactoryNetPosition() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Side
             label="What We Have"
-            sublabel="Assets owed to us — cash, inventory, receivables, customer balances (Dr)"
+            sublabel="Assets and unrealized FX gains — cash, stock, receivables and orders"
             total={data?.forUs.total ?? 0}
             breakdown={data?.forUs.breakdown ?? []}
             accounts={data?.forUs.accounts ?? []}
             colorClass="text-green-600 dark:text-green-400"
-            icon={<TrendingUp className="h-5 w-5 text-green-600 dark:text-green-400" />}
+            onFxClick={setFxHistorySide}
+             icon={<TrendingUp className="h-5 w-5 text-green-600 dark:text-green-400" />}
           />
           <Side
             label="What We Owe"
-            sublabel="Liabilities — supplier balances and other payables"
+            sublabel="Liabilities and unrealized FX losses — suppliers, loans and other payables"
             total={data?.onUs.total ?? 0}
             breakdown={data?.onUs.breakdown ?? []}
             accounts={data?.onUs.accounts ?? []}
             colorClass="text-red-600 dark:text-red-400"
-            icon={<TrendingDown className="h-5 w-5 text-red-600 dark:text-red-400" />}
+            onFxClick={setFxHistorySide}
+             icon={<TrendingDown className="h-5 w-5 text-red-600 dark:text-red-400" />}
           />
         </div>
+      )}
+
+      {data && fxHistorySide && (
+        <FxHistoryDialog
+          open={true}
+          onOpenChange={(open) => { if (!open) setFxHistorySide(null); }}
+          side={fxHistorySide}
+          amount={(fxHistorySide === "gain" ? data.forUs.accounts : data.onUs.accounts)
+            .find((a) => a.code === (fxHistorySide === "gain" ? "FX_UNREALIZED_GAIN" : "FX_UNREALIZED_LOSS"))?.value ?? 0}
+          sources={(fxHistorySide === "gain" ? data.forUs.accounts : data.onUs.accounts)
+            .find((a) => a.code === (fxHistorySide === "gain" ? "FX_UNREALIZED_GAIN" : "FX_UNREALIZED_LOSS"))?.breakdown}
+          scope="factory"
+          companyId={data.companyId}
+          asOf={displayAsOf}
+        />
       )}
 
       {/* Amounts not yet in the ledger — shown separately, never in the totals */}
       {!isLoading && <NotInLedgerCard section={data?.notInLedger} formatAmount={fmt} />}
 
       {/* Custom Net Position View — view-only, user-configurable account visibility */}
-      {!isLoading && data && <CustomNetPositionView key={data.companyId ?? "no-company"} data={data} />}
+      {!isLoading && data && <CustomNetPositionView key={data.companyId ?? "no-company"} data={data} onFxClick={setFxHistorySide} />}
 
       {/* Broker Balance Breakdown */}
       {!isLoading && (data?.onUs.accounts ?? []).some((a) => a.code === "SUPPLIER" && a.breakdown?.length) && (

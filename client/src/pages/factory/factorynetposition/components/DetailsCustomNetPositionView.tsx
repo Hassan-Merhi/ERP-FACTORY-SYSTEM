@@ -31,10 +31,12 @@ export function CustomNetPositionView({
   data,
   formatAmount,
   asOf,
+  onFxClick,
 }: {
   data: FactoryNetPositionData;
   formatAmount: (n: number) => string;
   asOf: string;
+  onFxClick?: (side: "gain" | "loss") => void;
 }) {
   const storageKey = `${STORAGE_KEY}:${data.companyId ?? "no-company"}`;
   const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(() => {
@@ -200,6 +202,23 @@ export function CustomNetPositionView({
                       <Eye className="h-3.5 w-3.5 text-green-500 shrink-0" />
                     )}
                     <span className={hidden ? "text-muted-foreground line-through" : "text-foreground"}>{a.name}</span>
+                    {(a.code === "FX_UNREALIZED_GAIN" || a.code === "FX_UNREALIZED_LOSS") && onFxClick && (
+                      <span role="link" tabIndex={0}
+                        className="text-primary hover:underline text-xs font-medium inline-flex items-center gap-1"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onFxClick(a.code === "FX_UNREALIZED_GAIN" ? "gain" : "loss");
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            onFxClick(a.code === "FX_UNREALIZED_GAIN" ? "gain" : "loss");
+                          }
+                        }}>
+                        History <ExternalLink className="h-3 w-3" />
+                      </span>
+                    )}
                     {a.id && (
                       <span
                         onClick={(e) => {
@@ -261,6 +280,23 @@ export function CustomNetPositionView({
                       <Eye className="h-3.5 w-3.5 text-red-500 shrink-0" />
                     )}
                     <span className={hidden ? "text-muted-foreground line-through" : "text-foreground"}>{a.name}</span>
+                    {(a.code === "FX_UNREALIZED_GAIN" || a.code === "FX_UNREALIZED_LOSS") && onFxClick && (
+                      <span role="link" tabIndex={0}
+                        className="text-primary hover:underline text-xs font-medium inline-flex items-center gap-1"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onFxClick(a.code === "FX_UNREALIZED_GAIN" ? "gain" : "loss");
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            onFxClick(a.code === "FX_UNREALIZED_GAIN" ? "gain" : "loss");
+                          }
+                        }}>
+                        History <ExternalLink className="h-3 w-3" />
+                      </span>
+                    )}
                     {a.id && (
                       <span
                         onClick={(e) => {

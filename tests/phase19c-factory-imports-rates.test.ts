@@ -156,6 +156,11 @@ afterAll(async () => {
       );
       await client.query(`DELETE FROM vouchers WHERE company_id = $1`, [id]);
     });
+    // Container receipts reference their container, so they go first.
+    await pool.query(
+      `DELETE FROM factory_container_receipts WHERE container_id IN (SELECT id FROM factory_containers WHERE company_id = $1)`,
+      [id]
+    );
     await pool.query(`DELETE FROM factory_containers WHERE company_id = $1`, [id]);
     await pool.query(`DELETE FROM factory_bale_products WHERE company_id = $1`, [id]);
     await pool.query(`DELETE FROM factory_suppliers WHERE company_id = $1`, [id]);
@@ -491,7 +496,9 @@ describe("M2: recorded dated factory rates", () => {
     const ok = await agent.post("/api/factory/containers").send(body);
     expect(ok.status).toBe(200);
     expect(Number(ok.body.fxRateToUsd)).toBe(1.1);
-    expect(ok.body.fxRateSource).toBe("manual");
+    // Since #3157 the source reports how THIS container was rated: a rate taken from the
+    // recorded dated table is "auto"; "manual" is reserved for a rate entered on the container.
+    expect(ok.body.fxRateSource).toBe("auto");
     ids.CONTAINER = ok.body.id;
   }, 60_000);
 
@@ -558,18 +565,24 @@ describe("M2: recorded dated factory rates", () => {
     expect(Number(reposted.rows[0].base_debit)).toBe(43.2);
     expect(Number(reposted.rows[0].fx_rate)).toBe(1.2);
 
-    expect((await pool.query(
-      `SELECT id FROM factory_fx_rates WHERE company_id = $1 AND currency_code = $2 AND effective_date <= $3`,
-      [ctx.companyId, currency, date]
-    )).rows).toHaveLength(0);
+    expect(
+      (
+        await pool.query(
+          `SELECT id FROM factory_fx_rates WHERE company_id = $1 AND currency_code = $2 AND effective_date <= $3`,
+          [ctx.companyId, currency, date]
+        )
+      ).rows
+    ).toHaveLength(0);
 
     const invalid = await agent.patch(`/api/factory/containers/${created.body.id}`).send({
-      fxRateSource: "manual", fxRateToUsd: "0",
+      fxRateSource: "manual",
+      fxRateToUsd: "0",
     });
     expect(invalid.status).toBe(400);
-    const unchanged = await pool.query("SELECT fx_rate_to_usd::numeric AS fx_rate FROM factory_containers WHERE id = $1", [
-      created.body.id,
-    ]);
+    const unchanged = await pool.query(
+      "SELECT fx_rate_to_usd::numeric AS fx_rate FROM factory_containers WHERE id = $1",
+      [created.body.id]
+    );
     expect(Number(unchanged.rows[0].fx_rate)).toBe(1.2);
 
     const offloaded = await agent.post("/api/factory/raw-stock/offload").send({
@@ -588,10 +601,14 @@ describe("M2: recorded dated factory rates", () => {
     );
     expect(Number(fxAtOffload.rows[0].offload_fx)).toBe(1.2);
     expect(fxAtOffload.rows[0].fx_rate_confirmed).toBe(true);
-    expect((await pool.query(
-      `SELECT id FROM factory_fx_rates WHERE company_id = $1 AND currency_code = $2 AND effective_date <= $3`,
-      [ctx.companyId, currency, date]
-    )).rows).toHaveLength(0);
+    expect(
+      (
+        await pool.query(
+          `SELECT id FROM factory_fx_rates WHERE company_id = $1 AND currency_code = $2 AND effective_date <= $3`,
+          [ctx.companyId, currency, date]
+        )
+      ).rows
+    ).toHaveLength(0);
   }, 60_000);
 
   it("container Excel import reports a row with no recorded rate and creates nothing", async () => {
@@ -781,7 +798,9 @@ describe("MC-2: intercompany transfer legs", () => {
          FROM voucher_entries WHERE voucher_id = $1 ORDER BY id`,
       [legs.from]
     );
-    expect(correctedLines.rows.map((line) => [line.ledger_account_id, Number(line.debit), Number(line.credit)])).toEqual([
+    expect(
+      correctedLines.rows.map((line) => [line.ledger_account_id, Number(line.debit), Number(line.credit)])
+    ).toEqual([
       [replacementAccount, 0, 100],
       [ctx.salesAccountId, 100, 0],
     ]);
@@ -817,7 +836,9 @@ describe("MC-2: intercompany transfer legs", () => {
          FROM voucher_entries WHERE voucher_id = $1 ORDER BY id`,
       [legs.from]
     );
-    expect(reclassifiedContra.rows.map((line) => [line.ledger_account_id, Number(line.debit), Number(line.credit)])).toEqual([
+    expect(
+      reclassifiedContra.rows.map((line) => [line.ledger_account_id, Number(line.debit), Number(line.credit)])
+    ).toEqual([
       [replacementAccount, 0, 100],
       [replacementContra, 100, 0],
     ]);
