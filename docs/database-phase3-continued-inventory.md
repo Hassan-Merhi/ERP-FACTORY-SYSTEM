@@ -9,21 +9,23 @@
 | 20261111_003_security_permissions_schema.sql | Critical Security bridge | Additive permission table/columns/indexes, **no duplicate deletion and no automatic role grants** |
 | 20261111_004_factory_container_columns.sql | Factory Container bridge | Adds missing columns, **no tracking-data update** |
 | 20261111_005_factory_multilingual_catalog.sql | French catalog and language preferences | Adds multilingual text columns, user language table and optional recode field |
+| 20261111_006_factory_bilingual_catalog.sql | Arabic catalog compatibility bridge | Additive Arabic text snapshots and normalized article index |
+| 20261111_007_bale_scan_timestamp_audit.sql | Customer order bale scan audit bridge | Live/history scanned_at, timestamp trigger functions and existence-guarded triggers |
 
-Each source bridge retains its legacy compatibility startup behavior by default. Optional `FIXED_PRODUCTION_PLANNER_SCHEMA_MODE=verify-only`, `STARTUP_WARNING_SCHEMA_MODE=verify-only`, `CRITICAL_SECURITY_SCHEMA_MODE=verify-only`, and `FACTORY_CONTAINER_SCHEMA_MODE=verify-only`, `FACTORY_MULTILINGUAL_SCHEMA_MODE=verify-only`, `COMPANY_SCOPE_RLS_MODE=verify-only`, and `SUPPLIER_SCOPE_SCHEMA_MODE=verify-only` permit read-only catalog verification after *manual staging migration* and validation. These flags are **not configured on Render**.
+Each source bridge retains its legacy compatibility startup behavior by default. Optional `FIXED_PRODUCTION_PLANNER_SCHEMA_MODE=verify-only`, `STARTUP_WARNING_SCHEMA_MODE=verify-only`, `CRITICAL_SECURITY_SCHEMA_MODE=verify-only`, and `FACTORY_CONTAINER_SCHEMA_MODE=verify-only`, `FACTORY_MULTILINGUAL_SCHEMA_MODE=verify-only`, `FACTORY_BILINGUAL_SCHEMA_MODE=verify-only`, `BALE_SCAN_AUDIT_SCHEMA_MODE=verify-only`, `COMPANY_SCOPE_RLS_MODE=verify-only`, and `SUPPLIER_SCOPE_SCHEMA_MODE=verify-only` permit read-only catalog verification after *manual staging migration* and validation. These flags are **not configured on Render**.
 
 ## Critical startup mutations still outstanding — DO NOT enable a global cutover
 
 | Source | Writes / risk | Blocker |
 |---|---|---|
-| `server/factoryBilingualSchemaBridge.mjs` | Factory catalog columns and expression indexes | Map and version all column/index changes; verify active optional tables |
+| `server/factoryBilingualSchemaBridge.mjs` | Factory catalog columns and expression indexes | Migration 006 extracted, read-only verification added; staging activation outstanding |
 | `server/factoryTrilingualSchemaBridge.mjs` | Legacy French catalog/language SQL and bale recode column | Additive SQL extracted as migration 005; opt-in verification available, pending staging cutover |
 | `server/companyScopeRlsBridge.mjs` | Tenant RLS policies, functions, triggers, voucher-entry company backfill | Read-only verification option added; migrate historical backfill and reconcile legacy migration separately |
 | `server/supplierCompanyScopeBridge.mjs` | Legacy supplier scope migration SQL on every startup | Read-only verification option added; historical supplier reassignment must remain independently approved |
-| `server/customerOrderBaleScanAuditBridge.mjs` | Scan-history table, functions/triggers/columns | Ensure scan evidence remains complete and timestamps unchanged |
+| `server/customerOrderBaleScanAuditBridge.mjs` | Scan-history table, functions/triggers/columns | Migration 007 extracted, read-only verification added; full scan-history parity outstanding |
 | `server/wave3SalesHotpathIndexBridge.mjs` | Conditionally creates indexes concurrently | Non-transactional, separately authorized online migration required |
 | `server/inventoryValuationWave6RepairBridge.mjs` | Conditional repair of inventory data | Explicit financial/stock approval required |
-| `server/startup/runServerStartupMigrations.ts` | Large legacy DDL loop, insurance-member insertion, sequence updates | Separate all remaining DDL and operational DML into controlled and reviewed migrations |
+| `server/startup/runServerStartupMigrations.ts` | Large legacy DDL loop, insurance-member insertion, sequence updates | Strict mode now blocks unversioned statements and refuses healthy readiness; all statements and operational DML still require extraction |
 | Other `ensureRuntimeSchema` / lazily invoked service schema creators | Dynamic DDL and historical repairs | Full import/call-graph inventory and staged integration |
 
 ## Safety conditions for full Phase 3
@@ -34,6 +36,12 @@ Each source bridge retains its legacy compatibility startup behavior by default.
 4. Historical repair DML moved to separately approved operations, with per-company audit and prior/post totals.
 5. Factory scan timestamps, rental balances, vouchers, payroll, stock and tenant RLS proven unchanged on a restored production-like staging snapshot.
 6. Backups restored and release gate verified against exact commit before promotion.
+
+## Extended remaining-surface audit
+
+Run `npm run audit:startup-mutations` for a read-only report of startup mutation candidates, including `server/index.ts`, `server/startup/ensureRuntimeSchema.ts` and the legacy runner. `npm run audit:startup-mutations:strict` deliberately exits nonzero until remaining mutation candidates are reviewed and converted. Static candidates can include commented code, and a `verify-only` string alone does not prove there are no writes.
+
+`server/startupPreload.mjs` now explicitly blocks a **global** read-only startup activation before importing schema bridges while unversioned runtime writers remain. This protects against a partial cutover being incorrectly marked healthy. The old default startup behavior remains unchanged until independently authorized staged cutover.
 
 ## Status
 
