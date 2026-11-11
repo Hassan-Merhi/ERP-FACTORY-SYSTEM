@@ -394,9 +394,10 @@ export const FACTORY_ACCESS_REGISTRY: readonly FactoryPageDefinition[] = [
     label: "Payments",
     group: "Rentals",
     route: "/factory/rental/payments",
-    sidebar: true,
+    // Reachable via the Shops "Payments Log" action; no duplicate sidebar item.
+    sidebar: false,
     settingsVisible: false,
-    accessLevel: "developer",
+    accessLevel: "admin",
   },
 
   // Intelligence (developer workspace)

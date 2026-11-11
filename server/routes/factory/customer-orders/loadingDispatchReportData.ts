@@ -130,6 +130,7 @@ export async function loadFactoryDispatchReport(input: {
              closed_by_user_id AS "closedByUserId"
         FROM factory_loading_dispatches
        WHERE company_id = ${input.companyId} AND order_id = ${input.orderId}
+         AND status <> 'CANCELLED'
        ORDER BY dispatch_number
     `));
     const selected = input.dispatchId === undefined ? null :
