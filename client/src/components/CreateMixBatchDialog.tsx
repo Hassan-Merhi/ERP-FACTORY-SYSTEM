@@ -15,7 +15,10 @@ import { ToastAction } from "@/components/ui/toast";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import type { FactoryMixBatch } from "@shared/schema";
-import { MIX_BATCH_TARGET_OPTIONS, selectMixBatchTarget } from "@/pages/factory/production-raw-stock/mixBatchCategoryTargets";
+import {
+  MIX_BATCH_TARGET_OPTIONS,
+  selectMixBatchTarget,
+} from "@/pages/factory/production-raw-stock/mixBatchCategoryTargets";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { mixBatchTargetTranslation } from "@/i18n/mixBatchCategoryTargetTranslations";
 
@@ -67,7 +70,8 @@ interface CreateMixBatchDialogProps {
 export function CreateMixBatchDialog({ open, onOpenChange, onCreated }: CreateMixBatchDialogProps) {
   const { toast } = useToast();
   const { language } = useApplicationLanguage();
-  const tierText = (key: Parameters<typeof mixBatchTargetTranslation>[0], values?: Record<string, string | number>) => mixBatchTargetTranslation(key, language, values);
+  const tierText = (key: Parameters<typeof mixBatchTargetTranslation>[0], values?: Record<string, string | number>) =>
+    mixBatchTargetTranslation(key, language, values);
   const [mode, setMode] = useState<DialogMode>("new");
   const [targetBatchId, setTargetBatchId] = useState<string>("");
   const [selectedSources, setSelectedSources] = useState<SourceSelection[]>([]);
@@ -88,15 +92,15 @@ export function CreateMixBatchDialog({ open, onOpenChange, onCreated }: CreateMi
     enabled: open,
   });
 
-  // Only show suppliers that still have raw stock available to add to a mix batch.
-  const availableSuppliers = supplierStock?.filter((s) => {
-    const remaining = parseFloat(s.remainingKg);
-    return (
+  // A supplier with an established USD cost may be used while its stock is
+  // temporarily negative: the next same-supplier offload nets the shortage.
+  // Do not hide suppliers merely because remainingKg is zero or negative.
+  const availableSuppliers = supplierStock?.filter(
+    (s) =>
       s.supplierId !== null &&
-      remaining > 0 &&
+      getSupplierRate(s) > 0 &&
       !selectedSources.some((sel) => sel.type === "supplier" && sel.sourceId === s.supplierId!)
-    );
-  });
+  );
 
   const availableBatchesForSource = existingBatches?.filter((b) => {
     const remaining = parseFloat(b.totalWeightKg) - parseFloat(b.usedKg);
@@ -285,9 +289,8 @@ export function CreateMixBatchDialog({ open, onOpenChange, onCreated }: CreateMi
       const available = parseFloat(stock.remainingKg);
       // Over-use allowed: no guard on weight > available
 
-      // Use the same true remaining-value rate as the Raw Stock card (valueRemainingUsd ÷
-      // freeKg), not the received-weighted costPerKgUsd — otherwise this preview (and the
-      // batch actually created from it) can diverge from what the Raw Stock card shows.
+      // Preview the persisted supplier USD rate. Negative stock must not
+      // create a zero-rate or client-supplied historical cost.
       const costPerKg = getSupplierRate(stock);
       setSelectedSources((prev) => [
         ...prev,
@@ -400,20 +403,30 @@ export function CreateMixBatchDialog({ open, onOpenChange, onCreated }: CreateMi
             <div className="space-y-2" data-testid="mix-batch-production-target-selector">
               <div className="flex flex-wrap items-center gap-2">
                 <Label>{tierText("productionTarget")}</Label>
-                <span role="status" className="text-xs text-muted-foreground" data-testid="mix-batch-production-target-status">
+                <span
+                  role="status"
+                  className="text-xs text-muted-foreground"
+                  data-testid="mix-batch-production-target-status"
+                >
                   {totalWeight > 0
                     ? tierText("tierLabel", { kg: formatNumber(totalWeight), ton: automaticTargetTons })
                     : tierText("selectSources")}
                 </span>
               </div>
-              <div className="inline-flex max-w-full rounded-md border border-border bg-muted/40 p-1 gap-1" role="group" aria-label="Automatically selected production target">
+              <div
+                className="inline-flex max-w-full rounded-md border border-border bg-muted/40 p-1 gap-1"
+                role="group"
+                aria-label="Automatically selected production target"
+              >
                 {MIX_BATCH_TARGET_OPTIONS.map((tons) => (
                   <span
                     key={tons}
                     aria-current={automaticTargetTons === tons ? "true" : undefined}
-                    className={automaticTargetTons === tons
-                      ? "flex min-h-9 min-w-20 items-center justify-center rounded-md bg-primary px-3 text-sm font-semibold text-primary-foreground shadow-sm"
-                      : "flex min-h-9 min-w-20 items-center justify-center rounded-md px-3 text-sm font-semibold text-muted-foreground"}
+                    className={
+                      automaticTargetTons === tons
+                        ? "flex min-h-9 min-w-20 items-center justify-center rounded-md bg-primary px-3 text-sm font-semibold text-primary-foreground shadow-sm"
+                        : "flex min-h-9 min-w-20 items-center justify-center rounded-md px-3 text-sm font-semibold text-muted-foreground"
+                    }
                     data-testid={`mix-batch-target-${tons}`}
                   >
                     {tierText("tons", { ton: tons })}

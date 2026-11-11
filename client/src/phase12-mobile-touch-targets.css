@@ -1,0 +1,12 @@
+/*
+ * Targeted 44px mobile controls for legacy Factory screens.
+ * Doubling the report scope wins over its lazy-loaded premium stylesheet.
+ */
+@media (max-width: 640px) {
+  [data-testid="input-summary-date"],
+  .product-comparison-premium.product-comparison-premium .pc-control-button,
+  .product-comparison-premium.product-comparison-premium .pc-date-input,
+  .product-comparison-premium.product-comparison-premium .pc-filters [data-testid^="product-comparison-"] {
+    min-height: 44px;
+  }
+}
