@@ -49,8 +49,9 @@ vi.mock("@tanstack/react-query", () => ({
   }),
   useQueries: () => [],
   useInfiniteQuery: ({ queryKey, enabled }: any) => {
-    harness.historyQueries.push(queryKey[1]);
-    const params = new URLSearchParams(queryKey[1]);
+    // Company-scoped key: [url, companyId, serialized filters].
+    harness.historyQueries.push(queryKey[2]);
+    const params = new URLSearchParams(queryKey[2]);
     const selectedWorker = params.get("workerId");
     const secondWorker = {
       ...group,
@@ -132,6 +133,10 @@ vi.mock("@tanstack/react-query", () => ({
 
 vi.mock("@/contexts/DateFormatContext", () => ({
   useDateFormat: () => ({ formatDisplayDate: (value: string) => `D:${value}` }),
+}));
+vi.mock("@/contexts/CompanyContext", () => ({
+  useCompany: () => ({ selectedCompany: { id: 1, name: "Factory Co" }, companies: [], isLoading: false }),
+  useOptionalCompany: () => ({ selectedCompany: { id: 1, name: "Factory Co" }, companies: [], isLoading: false }),
 }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: harness.toast }) }));
 vi.mock("@/lib/queryClient", () => ({
@@ -235,6 +240,7 @@ describe("stock entry history page behavior", () => {
 
   it("loads worker choices for a history-only user without Payroll Hub access", () => {
     harness.accessValue = {
+      companyId: 1,
       fullAccess: false,
       hasFactoryAccess: true,
       pageKeys: ["factory/stock-entry"],

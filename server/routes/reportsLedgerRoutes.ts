@@ -9,31 +9,21 @@ import { ledgerAccounts, locations, suppliers, voucherEntries, vouchers } from "
 import { HADI_ERP_RENT_MERGE, isArchivedHadiRentExpenseLedger } from "../services/rental/hadiRentExpenseConsolidation";
 
 
-/**
- * Match the canonical accounting balance engine: #881 was formally retired
- * and merged under #1007 without rewriting original vouchers. A monthly report
- * must show both sets of source entries when the archived master is verified.
- * This is actual booked GL, not a rent-service preview or synthetic journal.
- */
-async function ledgerStatementAccountIds(companyId: number, accountId: number): Promise<number[]> {
+/** Include the archived original rent expense voucher lines, not a preview. */
+async function monthlyStatementAccountIds(companyId: number, accountId: number): Promise<number[]> {
   if (companyId !== HADI_ERP_RENT_MERGE.companyId ||
-      accountId !== HADI_ERP_RENT_MERGE.targetLedgerId) {
-    return [accountId];
-  }
-  const [archived] = await db.select({
-    id: ledgerAccounts.id,
-    companyId: ledgerAccounts.companyId,
-    active: ledgerAccounts.active,
-    isHidden: ledgerAccounts.isHidden,
+      accountId !== HADI_ERP_RENT_MERGE.targetLedgerId) return [accountId];
+  const [old] = await db.select({
+    id: ledgerAccounts.id, companyId: ledgerAccounts.companyId,
+    active: ledgerAccounts.active, isHidden: ledgerAccounts.isHidden,
     openingBalance: ledgerAccounts.openingBalance,
   }).from(ledgerAccounts).where(and(
     eq(ledgerAccounts.companyId, companyId),
-    eq(ledgerAccounts.id, HADI_ERP_RENT_MERGE.legacyLedgerId),
+    eq(ledgerAccounts.id,HADI_ERP_RENT_MERGE.legacyLedgerId),
     isNull(ledgerAccounts.deletedAt)
   )).limit(1);
-  return archived && isArchivedHadiRentExpenseLedger(archived)
-    ? [accountId, HADI_ERP_RENT_MERGE.legacyLedgerId]
-    : [accountId];
+  return old && isArchivedHadiRentExpenseLedger(old)
+    ? [accountId,HADI_ERP_RENT_MERGE.legacyLedgerId] : [accountId];
 }
 
 export function registerReportsLedgerRoutes(app: Express) {
@@ -53,7 +43,7 @@ export function registerReportsLedgerRoutes(app: Express) {
         .execute()
         .then((rows) => rows[0]);
       if (!account) return res.status(404).json({ message: "Account not found" });
-      const statementAccountIds = await ledgerStatementAccountIds(companyId, accountId);
+      const statementAccountIds = await monthlyStatementAccountIds(companyId, accountId);
 
       const start = startDate ? new Date(startDate as string) : new Date(new Date().getFullYear(), 0, 1);
       const end = endDate ? new Date(endDate as string) : new Date(new Date().getFullYear(), 11, 31);
@@ -247,7 +237,7 @@ export function registerReportsLedgerRoutes(app: Express) {
         .execute()
         .then((rows) => rows[0]);
       if (!account) return res.status(404).json({ message: "Account not found" });
-      const statementAccountIds = await ledgerStatementAccountIds(companyId, accountId);
+      const statementAccountIds = await monthlyStatementAccountIds(companyId, accountId);
 
       const monthNames = [
         "",

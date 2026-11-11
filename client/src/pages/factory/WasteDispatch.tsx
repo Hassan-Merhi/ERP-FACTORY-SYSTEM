@@ -2,6 +2,8 @@ import type { ClientErrorLike } from "@/lib/clientError";
 import { useState, useRef, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -37,6 +39,7 @@ import type {
 import { fmt, fmtKg, today } from "./wastedispatch/utils";
 import { WasteDispatchDialogs } from "./wastedispatch/components/WasteDispatchDialogs";
 export default function WasteDispatch() {
+  const { selectedCompany } = useCompany();
   const { toast } = useToast();
 
   // ── Dispatch tab state ─────────────────────────────────────────
@@ -55,7 +58,8 @@ export default function WasteDispatch() {
 
   // ── Dispatch queries ───────────────────────────────────────────
   const { data, isLoading } = useQuery<{ bales: Bale[]; categories: unknown[] }>({
-    queryKey: ["/api/factory/waste-dispatch/bales", search],
+    queryKey: companyQueryKey("/api/factory/waste-dispatch/bales", selectedCompany?.id, search),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
@@ -66,7 +70,8 @@ export default function WasteDispatch() {
   });
 
   const { data: history = [] } = useQuery<WasteDispatchHistoryEntry[]>({
-    queryKey: ["/api/factory/waste-dispatch/history"],
+    queryKey: companyQueryKey("/api/factory/waste-dispatch/history", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const r = await fetch("/api/factory/waste-dispatch/history", { credentials: "include" });
       if (!r.ok) throw new Error(await r.text());

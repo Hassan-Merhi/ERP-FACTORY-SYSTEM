@@ -9,6 +9,7 @@ import { ensureMonthlyLedgerRows } from "./monthly-rows";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
 import { isRentRecognitionHeld, isRentMonthReadyToRecognize } from "../../../services/rental/rentRecognitionHold";
 import { postAccrualPassTx, type RentAccrualPostingOptions } from "./accrual-posting";
+import { isFutureHadiLinkedRentMonth, isHadiProtectedRentMonth } from "../../../services/rental/hadiRentLedgerPolicy";
 
 export type { RentAccrualPostingOptions } from "./accrual-posting";
 
@@ -24,6 +25,19 @@ export async function ensureMonthlyForCompany(companyId: number, module: RentalM
       )
     );
   for (const c of active) await ensureMonthlyLedgerRows(c.id, asOfDate);
+
+  // Landlord-owned periods are the source for HADI's linked-company leases.
+  if (companyId === 1 && module === "ERP" && (asOfDate ?? getUtcTodayString()) >= "2026-12-01") {
+    const shared = await db.select({ id: propertyContracts.id })
+      .from(propertyContracts)
+      .where(and(
+        eq(propertyContracts.companyId, 13),
+        eq(propertyContracts.linkedCompanyId, 1),
+        eq(propertyContracts.module, "PROPERTIES"),
+        eq(propertyContracts.status, "ACTIVE")
+      ));
+    for (const contract of shared) await ensureMonthlyLedgerRows(contract.id, asOfDate);
+  }
 }
 
 /**
@@ -107,6 +121,8 @@ export async function postRentAccrualForCompany(
   // be accrued the same way (Dr Rent Expense / Cr Accrued Rent Payable).
   const sharedContracts = await db
     .select({
+      ownerCompanyId: propertyContracts.companyId,
+      ownerModule: propertyContracts.module,
       id: propertyContracts.id,
       unitId: propertyContracts.unitId,
       unitNumber: propertyUnits.unitNumber,
@@ -138,6 +154,18 @@ export async function postRentAccrualForCompany(
   const batchCurrency = currencyCount.size > 0 ? [...currencyCount.entries()].sort((a, b) => b[1] - a[1])[0][0] : "USD";
 
   const contractIds = allContracts.map((c) => c.id);
+  const hadiLinkedContractIds = new Set(
+    companyId === 1 && moduleParam === "ERP"
+      ? sharedContracts.filter((c) => c.ownerCompanyId === 13 && c.ownerModule === "PROPERTIES").map((c) => c.id)
+      : []
+  );
+  const isFutureLinked = (row: { contractId: number; year: number; month: number }) =>
+    isFutureHadiLinkedRentMonth(
+      companyId, moduleParam, hadiLinkedContractIds.has(row.contractId), row.year, row.month
+    );
+  const isHistoricalHadiLinked = (row: { contractId: number; year: number; month: number }) =>
+    hadiLinkedContractIds.has(row.contractId) &&
+    isHadiProtectedRentMonth(companyId, moduleParam, row.year, row.month);
 
   // Unit name (display label) keyed by unitId
   const unitNameById = new Map(allContracts.map((c) => [c.unitId, c.unitNumber]));
@@ -205,6 +233,14 @@ export async function postRentAccrualForCompany(
       }
     }
 
+    // The owner's payment is not an expense recognition on HADI's books.
+    // A future linked month needs a FULL accrual even if the owner was paid.
+    for (const row of allUnaccrued) {
+      if (isFutureLinked(row) && isDue(row)) {
+        contractsWithPositiveOutstanding.add(row.contractId);
+      }
+    }
+
     // Count already-accrued rows for the "skipped" response metric
     const allAccruedForSkip = await db
       .select({ id: propertyMonthlyLedger.id })
@@ -217,7 +253,7 @@ export async function postRentAccrualForCompany(
     // A reviewed historical month with a deleted accrual link must never re-accrue
     // just because a later month on the same contract becomes unpaid.
     const pendingRows = allUnaccrued.filter((r) =>
-      isRentMonthReadyToRecognize(r.notes, isDue(r)) && contractsWithPositiveOutstanding.has(r.contractId)
+      !isHistoricalHadiLinked(r) && isRentMonthReadyToRecognize(r.notes, isDue(r)) && contractsWithPositiveOutstanding.has(r.contractId)
     );
 
     logger.info(
@@ -248,7 +284,7 @@ export async function postRentAccrualForCompany(
           const idListSql = pendingIds.join(","); // safe: all are DB integers
           const lockResult = await tx.execute(
             sql.raw(
-              `SELECT id, expected_amount, paid_amount, unit_id, month, year
+              `SELECT id, company_id, module, contract_id, expected_amount, paid_amount, unit_id, month, year
          FROM property_monthly_ledger
          WHERE id IN (${idListSql})
            AND accrual_voucher_id IS NULL
@@ -262,6 +298,9 @@ export async function postRentAccrualForCompany(
 
           type LockedRow = {
             id: number;
+            contract_id: number;
+            company_id: number;
+            module: string;
             expected_amount: string;
             paid_amount: string;
             unit_id: number;
@@ -292,7 +331,12 @@ export async function postRentAccrualForCompany(
           for (const locked of lockedRows) {
             const expected = toMoney(locked.expected_amount).toDecimalPlaces(2);
             const paid = actualPaidByRowId.get(Number(locked.id)) ?? new MoneyDecimal(0);
-            const amount = expected.minus(paid).toDecimalPlaces(2);
+            // The Properties owner's cash receipt cannot remove HADI expense.
+            const amount = isFutureLinked({
+              contractId: Number(locked.contract_id),
+              year: Number(locked.year),
+              month: Number(locked.month),
+            }) ? expected : expected.minus(paid).toDecimalPlaces(2);
             if (!amount.gt(0)) continue;
             entries.push({
               id: Number(locked.id),

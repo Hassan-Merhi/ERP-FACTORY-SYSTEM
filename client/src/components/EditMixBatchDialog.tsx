@@ -2,6 +2,7 @@ import type { ClientErrorLike } from "@/lib/clientError";
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { formatNumber } from "@/lib/formatNumber";
+import { recordedMixBatchCost, summarizeRecordedMixSources } from "@/lib/recordedMixBatchCost";
 import { Plus, Trash2, Layers, Package } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -15,52 +16,16 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import type { FactoryMixBatch } from "@shared/schema";
-
-interface SupplierRawStock {
-  supplierName: string;
-  supplierId: number | null;
-  receivedKg: string;
-  usedKg: string;
-  remainingKg: string;
-  costPerKg: string;
-  costPerKgUsd?: string;
-  valueRemaining: string;
-  lastOffloaded: string;
-}
-
-type SourceType = "supplier" | "batch";
-
-interface SourceSelection {
-  type: SourceType;
-  sourceId: number;
-  label: string;
-  weightKg: number;
-  costPerKg: number;
-  totalCost: number;
-  availableKg: number;
-}
-
-interface EditMixBatchDialogProps {
-  batch: FactoryMixBatch | null;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  /** The Production Overview should display recorded sources without permitting edits. */
-  readOnly?: boolean;
-  hideCosts?: boolean;
-  errorMessage?: string | null;
-}
-
-interface StoredMixBatchSource {
-  id: number;
-  sourceBatchId: number | null;
-  sourceBatchCode: string | null;
-  supplierId: number | null;
-  supplierName: string | null;
-  containerNumber: string | null;
-  weightKg: string;
-  costPerKg: string;
-  totalCost: string;
-}
+import { MixBatchRecordedDetailsDialog } from "./MixBatchRecordedDetailsDialog";
+import {
+  hasChangedSourceWeights,
+  type SupplierRawStock,
+  type SourceType,
+  type SourceSelection,
+  type EditMixBatchDialogProps,
+  type StoredMixBatchSource,
+  type SourceEditReview,
+} from "./editMixBatchSources";
 
 export function EditMixBatchDialog({
   batch,
@@ -79,6 +44,9 @@ export function EditMixBatchDialog({
   const [notes, setNotes] = useState("");
   const [batchDate, setBatchDate] = useState<string>("");
   const [initialized, setInitialized] = useState(false);
+  const [sourceTouched, setSourceTouched] = useState(false);
+  const [sourceEditReason, setSourceEditReason] = useState("");
+  const [sourceReview, setSourceReview] = useState<SourceEditReview | null>(null);
 
   const { data: supplierStock } = useQuery<SupplierRawStock[]>({
     queryKey: ["/api/factory/raw-stock"],
@@ -122,41 +90,59 @@ export function EditMixBatchDialog({
 
     for (const src of currentSources) {
       if (src.sourceBatchId) {
-        // Batch source
+        // A batch can have multiple records from the same upstream mix after
+        // top-ups. Merge these so the reviewed payload has one ID per source.
         const srcBatch = existingBatches?.find((b) => b.id === src.sourceBatchId);
-        const existingRemaining = srcBatch ? parseFloat(srcBatch.totalWeightKg) - parseFloat(srcBatch.usedKg) : 0;
-        batchSourceList.push({
-          type: "batch",
-          sourceId: src.sourceBatchId,
-          label: src.sourceBatchCode || `Batch #${src.sourceBatchId}`,
-          weightKg: parseFloat(src.weightKg),
-          costPerKg: parseFloat(src.costPerKg),
-          totalCost: parseFloat(src.totalCost),
-          // Available = what's currently available + what this batch is using (returns on edit)
-          availableKg: existingRemaining + parseFloat(src.weightKg),
-        });
+        const remaining = srcBatch ? parseFloat(srcBatch.totalWeightKg) - parseFloat(srcBatch.usedKg) : 0;
+        const weight = parseFloat(src.weightKg);
+        const currentCost =
+          batch.status === "COMPLETED" || batch.status === "CLOSED"
+            ? parseFloat(src.costPerKg)
+            : srcBatch
+              ? parseFloat(srcBatch.costPerKg || "0")
+              : parseFloat(src.costPerKg);
+        const existing = batchSourceList.find((item) => item.sourceId === src.sourceBatchId);
+        if (existing) {
+          existing.weightKg += weight;
+          existing.totalCost = existing.weightKg * currentCost;
+          existing.costPerKg = currentCost;
+          existing.availableKg = remaining + existing.weightKg;
+        } else {
+          batchSourceList.push({
+            type: "batch",
+            sourceId: src.sourceBatchId,
+            label: src.sourceBatchCode || `Batch #${src.sourceBatchId}`,
+            weightKg: weight,
+            costPerKg: currentCost,
+            totalCost: weight * currentCost,
+            availableKg: remaining + weight,
+          });
+        }
       } else if (src.supplierId) {
         // Supplier source (may span multiple containers — aggregate by supplierId).
-        // Cost/kg ALWAYS comes from the current server-authoritative locked rate
-        // (GET /api/factory/raw-stock), never from the stored source's historical
-        // costPerKg — the locked rate is the single source of truth for a supplier's
-        // rate and must be what's previewed/edited-against, not a stale snapshot.
+        // Completed batches display their original source USD snapshots. Only
+        // editable batches use the latest locked supplier rate as a preview.
+        // Never silently present current supplier prices as saved batch values.
         const existing = supplierMap.get(src.supplierId);
         const stockRow = supplierStock.find((s) => s.supplierId === src.supplierId);
         // Available = current remaining + what was consumed (returns on edit)
         const currentRemaining = stockRow ? parseFloat(stockRow.remainingKg) : 0;
         const currentRate = stockRow ? parseFloat(stockRow.costPerKgUsd || stockRow.costPerKg || "0") : 0;
         const srcWeight = parseFloat(src.weightKg);
+        const isCompleted = batch.status === "COMPLETED" || batch.status === "CLOSED";
+        const savedUsd = Number(src.totalCost) || 0;
         if (existing) {
           existing.weightKg += srcWeight;
-          existing.costPerKg = currentRate;
-          existing.totalCost = existing.weightKg * existing.costPerKg;
+          existing.totalCost = isCompleted ? existing.totalCost + savedUsd : existing.weightKg * currentRate;
+          existing.costPerKg = isCompleted
+            ? (existing.weightKg > 0 ? existing.totalCost / existing.weightKg : 0)
+            : currentRate;
           existing.availableKg = currentRemaining + existing.weightKg;
         } else {
           supplierMap.set(src.supplierId, {
             weightKg: srcWeight,
-            costPerKg: currentRate,
-            totalCost: srcWeight * currentRate,
+            costPerKg: isCompleted && srcWeight > 0 ? savedUsd / srcWeight : currentRate,
+            totalCost: isCompleted ? savedUsd : srcWeight * currentRate,
             label: src.supplierName || `Supplier #${src.supplierId}`,
             availableKg: currentRemaining + srcWeight,
           });
@@ -170,7 +156,7 @@ export function EditMixBatchDialog({
       label: val.label,
       weightKg: val.weightKg,
       costPerKg: val.costPerKg,
-      totalCost: val.weightKg * val.costPerKg,
+      totalCost: val.totalCost,
       availableKg: val.availableKg,
     }));
 
@@ -189,6 +175,9 @@ export function EditMixBatchDialog({
       setBatchDate("");
       setInitialized(false);
       setAddSourceType("supplier");
+      setSourceTouched(false);
+      setSourceEditReason("");
+      setSourceReview(null);
     }
   }, [open]);
 
@@ -207,28 +196,65 @@ export function EditMixBatchDialog({
     );
   });
 
+  const sourcesChanged = sourceTouched && hasChangedSourceWeights(selectedSources, currentSources);
+
+  // Never submit supplier or upstream cost/kg from the browser: the server
+  // resolves all rates and quantities again during its atomic source edit.
+  const sourcePayload = () => ({
+    supplierSources: selectedSources
+      .filter((s) => s.type === "supplier")
+      .map((s) => ({ supplierId: s.sourceId, weightKg: s.weightKg.toString() })),
+    batchSources: selectedSources
+      .filter((s) => s.type === "batch")
+      .map((s) => ({ sourceBatchId: s.sourceId, weightKg: s.weightKg.toString() })),
+  });
+
+  const previewMutation = useMutation<SourceEditReview>({
+    mutationFn: async () => {
+      if (!batch || !sourcesChanged) throw new Error("No source changes to review.");
+      const res = await fetch(`/api/factory/mix-batches/${batch.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          ...sourcePayload(),
+          sourceEditReason,
+          batchDate: batchDate || null,
+          sourceEditPreview: true,
+        }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.message || "Could not review mix sources.");
+      return result;
+    },
+    onSuccess: (review) => setSourceReview(review),
+    onError: (error: ClientErrorLike) => {
+      setSourceReview(null);
+      toast({ title: "Review failed", description: error.message, variant: "destructive" });
+    },
+  });
+
   const saveMutation = useMutation({
     mutationFn: async () => {
-      // Never send costPerKg for supplier sources — the server always applies the
-      // supplier's locked rate and ignores any client-supplied cost.
-      const supplierSourcesPayload = selectedSources
-        .filter((s) => s.type === "supplier")
-        .map((s) => ({ supplierId: s.sourceId, weightKg: s.weightKg.toString() }));
-
-      const batchSourcesPayload = selectedSources
-        .filter((s) => s.type === "batch")
-        .map((s) => ({ sourceBatchId: s.sourceId, weightKg: s.weightKg.toString() }));
-
+      if (sourcesChanged && (!sourceReview?.allowed || !sourceReview.reviewHash)) {
+        throw new Error("Review and approve the proposed material changes before saving.");
+      }
       const res = await fetch(`/api/factory/mix-batches/${batch!.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
-          name: batchName || undefined,
-          notes: notes || undefined,
-          batchDate: batchDate || undefined,
-          supplierSources: supplierSourcesPayload,
-          batchSources: batchSourcesPayload,
+          name: batchName.trim(),
+          notes: notes.trim(),
+          batchDate: batchDate || null,
+          ...(sourcesChanged
+            ? {
+                ...sourcePayload(),
+                sourceEditReason,
+                sourceEditReviewHash: sourceReview!.reviewHash,
+                confirmSourceEdit: true,
+              }
+            : {}),
         }),
       });
       if (!res.ok) {
@@ -241,11 +267,18 @@ export function EditMixBatchDialog({
       queryClient.invalidateQueries({ queryKey: ["/api/factory/mix-batches"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/raw-stock"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/mix-batches", batch?.id, "sources"] });
+      setSourceReview(null);
       onOpenChange(false);
-      toast({ title: "Batch updated", description: "Sources and totals have been recalculated." });
+      toast({
+        title: "Batch updated",
+        description: "Saved with recorded costs protected and inventory changes reviewed.",
+      });
     },
     onError: (err: ClientErrorLike) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      setSourceReview(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/mix-batches"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/raw-stock"] });
+      toast({ title: "Edit rejected", description: err.message, variant: "destructive" });
     },
   });
 
@@ -290,8 +323,15 @@ export function EditMixBatchDialog({
       const stock = supplierStock?.find((s) => s.supplierId?.toString() === selectedSourceId);
       if (!stock || !stock.supplierId) return;
       const available = parseFloat(stock.remainingKg);
-      // Over-use allowed: no guard on weight > available
-      // Always the current locked rate — never editable, never sent to the server.
+      if (weight > available + 0.001) {
+        toast({
+          title: "Insufficient raw stock",
+          description: "This edit would make raw-material inventory negative.",
+          variant: "destructive",
+        });
+        return;
+      }
+      // Current locked USD rate is advisory until the server confirms the review.
       const costPerKg = parseFloat(stock.costPerKgUsd || stock.costPerKg || "0");
       setSelectedSources((prev) => [
         ...prev,
@@ -331,13 +371,17 @@ export function EditMixBatchDialog({
         },
       ]);
     }
+    setSourceTouched(true);
+    setSourceReview(null);
     setSelectedSourceId("");
     setWeightInput("");
   };
 
   const handleUpdateSourceWeight = (type: string, sourceId: number, newWeight: string) => {
-    const weight = parseFloat(newWeight);
-    if (isNaN(weight) || weight <= 0) return;
+    const weight = Number(newWeight);
+    if (!/^\d{1,12}(?:\.\d{1,3})?$/.test(newWeight) || !Number.isFinite(weight) || weight <= 0) return;
+    setSourceTouched(true);
+    setSourceReview(null);
     setSelectedSources((prev) =>
       prev.map((s) => {
         if (s.type === type && s.sourceId === sourceId) {
@@ -348,29 +392,45 @@ export function EditMixBatchDialog({
     );
   };
 
-  // Supplier-source cost/kg is never user-editable — it's always the server's locked
-  // rate. Only batch sources (using their own historical stored cost) can be edited here.
-  const handleUpdateSourceCost = (type: string, sourceId: number, newCostPerKg: string) => {
-    if (type !== "batch") return;
-    const costPerKg = parseFloat(newCostPerKg);
-    if (isNaN(costPerKg) || costPerKg < 0) return;
-    setSelectedSources((prev) =>
-      prev.map((s) => {
-        if (s.type === type && s.sourceId === sourceId) {
-          return { ...s, costPerKg, totalCost: s.weightKg * costPerKg };
-        }
-        return s;
-      })
-    );
-  };
-
+  // Rates are server-authoritative. Source edits change quantities/identity
+  // only; no client-side cost override can silently alter a historical value.
   const handleRemoveSource = (type: string, sourceId: number) => {
+    setSourceTouched(true);
+    setSourceReview(null);
     setSelectedSources((prev) => prev.filter((s) => !(s.type === type && s.sourceId === sourceId)));
   };
 
+  // Two intentionally separate values:
+  // 1. Recorded historical: authoritative saved batch cost, independent of today's rates.
+  // 2. Prospective edit: the current supplier-rate estimate used by the edit UI.
+  const recordedBatchCost = recordedMixBatchCost({
+    totalWeightKg: batch?.totalWeightKg,
+    totalCost: batch?.totalCost,
+    costPerKg: batch?.costPerKg,
+  });
+  const recordedSourceCost = summarizeRecordedMixSources(currentSources ?? []);
+  const savedSourceDifference = Math.abs(recordedSourceCost.totalCost - recordedBatchCost.totalCost);
   const totalWeight = selectedSources.reduce((s, x) => s + x.weightKg, 0);
   const totalCost = selectedSources.reduce((s, x) => s + x.totalCost, 0);
   const blendedCostPerKg = totalWeight > 0 ? totalCost / totalWeight : 0;
+  const originalSupplierRates = new Map<number, number>();
+  const supplierRecorded = new Map<number, { weightKg: number; totalCost: number }>();
+  for (const source of currentSources ?? []) {
+    if (source.supplierId == null || source.sourceBatchId != null) continue;
+    const existing = supplierRecorded.get(source.supplierId) ?? { weightKg: 0, totalCost: 0 };
+    existing.weightKg += Number(source.weightKg) || 0;
+    existing.totalCost += Number(source.totalCost) || 0;
+    supplierRecorded.set(source.supplierId, existing);
+  }
+  for (const [supplierId, values] of supplierRecorded) {
+    if (values.weightKg > 0) originalSupplierRates.set(supplierId, values.totalCost / values.weightKg);
+  }
+  const historicalSourcesLocked = batch?.status === "COMPLETED" || batch?.status === "CLOSED";
+  const hasMissingCurrentRates =
+    !historicalSourcesLocked &&
+    selectedSources.some(
+      (source) => source.type === "supplier" && (!Number.isFinite(source.costPerKg) || source.costPerKg <= 0)
+    );
   const currentUsedKg = batch ? parseFloat(batch.usedKg || "0") : 0;
   // Warn if clearly below used (>1 kg gap). Backend enforces the strict check.
   const belowUsed = totalWeight < currentUsedKg - 1;
@@ -380,126 +440,17 @@ export function EditMixBatchDialog({
   // supplier cost/kg can legitimately change after the original mix.
   if (readOnly) {
     return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" data-testid="mix-batch-details-dialog">
-          <DialogHeader>
-            <DialogTitle>Mix Batch Details — {batch?.batchCode || "Loading…"}</DialogTitle>
-            <DialogDescription>Raw materials and existing batches recorded in this mix.</DialogDescription>
-          </DialogHeader>
-          {!batch && !errorMessage ? (
-            <div className="space-y-3 py-4">
-              <Skeleton className="h-8 w-full" />
-              <Skeleton className="h-24 w-full" />
-            </div>
-          ) : errorMessage || sourcesError ? (
-            <p role="alert" className="py-4 text-sm text-destructive">
-              {errorMessage || "Unable to load the recorded sources for this mix batch."}
-            </p>
-          ) : (
-            <div className="space-y-5">
-              <div className="flex flex-wrap items-center gap-3 text-sm">
-                <Badge variant="outline">View only</Badge>
-                <span className="font-medium">{batch?.name || "Unnamed batch"}</span>
-                <span className="text-muted-foreground">{batch?.batchDate || "No batch date"}</span>
-              </div>
-              {sourcesLoading ? (
-                <div className="space-y-3 py-4">
-                  <Skeleton className="h-8 w-full" />
-                  <Skeleton className="h-24 w-full" />
-                </div>
-              ) : !currentSources?.length ? (
-                <p className="py-4 text-sm text-muted-foreground">No recorded source materials found for this batch.</p>
-              ) : (
-                <div className="overflow-x-auto rounded-md border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Type</TableHead>
-                        <TableHead>Source / Container</TableHead>
-                        <TableHead className="text-right">Weight (kg)</TableHead>
-                        {!hideCosts && <TableHead className="text-right">Cost/kg</TableHead>}
-                        {!hideCosts && <TableHead className="text-right">Total Cost</TableHead>}
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {currentSources.map((source) => (
-                        <TableRow key={source.id} data-testid={`mix-batch-source-${source.id}`}>
-                          <TableCell>
-                            <Badge variant={source.sourceBatchId ? "secondary" : "outline"}>
-                              {source.sourceBatchId ? "Batch" : "Supplier"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="font-medium">
-                              {source.sourceBatchId
-                                ? source.sourceBatchCode || `Batch #${source.sourceBatchId}`
-                                : source.supplierName ||
-                                  (source.supplierId ? `Supplier #${source.supplierId}` : "Raw material")}
-                            </div>
-                            {source.containerNumber && (
-                              <div className="text-xs text-muted-foreground">Container: {source.containerNumber}</div>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right font-mono text-sm">
-                            {formatNumber(parseFloat(source.weightKg) || 0, 3)}
-                          </TableCell>
-                          {!hideCosts && (
-                            <TableCell className="text-right font-mono text-sm">
-                              ${formatNumber(parseFloat(source.costPerKg) || 0, 4)}
-                            </TableCell>
-                          )}
-                          {!hideCosts && (
-                            <TableCell className="text-right font-mono text-sm">
-                              ${formatNumber(parseFloat(source.totalCost) || 0, 4)}
-                            </TableCell>
-                          )}
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-              <div
-                className={`grid gap-3 rounded-md bg-muted p-4 ${hideCosts ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-3"}`}
-              >
-                <div>
-                  <p className="text-sm text-muted-foreground">Total Weight</p>
-                  <p className="text-lg font-semibold font-mono">
-                    {formatNumber(parseFloat(batch?.totalWeightKg || "0"), 3)} kg
-                  </p>
-                </div>
-                {!hideCosts && (
-                  <>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Total Cost</p>
-                      <p className="text-lg font-semibold font-mono">
-                        ${formatNumber(parseFloat(batch?.totalCost || "0"), 4)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Blended Cost/kg</p>
-                      <p className="text-lg font-semibold font-mono">
-                        ${formatNumber(parseFloat(batch?.costPerKg || "0"), 4)}
-                      </p>
-                    </div>
-                  </>
-                )}
-              </div>
-              {batch?.notes && (
-                <div className="space-y-1">
-                  <Label>Notes</Label>
-                  <p className="whitespace-pre-wrap text-sm text-muted-foreground">{batch.notes}</p>
-                </div>
-              )}
-              <div className="flex justify-end">
-                <Button variant="outline" onClick={() => onOpenChange(false)}>
-                  Close
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      <MixBatchRecordedDetailsDialog
+        batch={batch}
+        open={open}
+        onOpenChange={onOpenChange}
+        hideCosts={hideCosts}
+        errorMessage={errorMessage}
+        currentSources={currentSources}
+        sourcesLoading={sourcesLoading}
+        sourcesError={sourcesError}
+        recordedBatchCost={recordedBatchCost}
+      />
     );
   }
 
@@ -509,8 +460,9 @@ export function EditMixBatchDialog({
         <DialogHeader>
           <DialogTitle>Edit Mix Batch — {batch?.batchCode}</DialogTitle>
           <DialogDescription>
-            Change the raw material sources. Old consumption will be reversed and new amounts will be consumed.
-            Already-produced bales ({formatNumber(currentUsedKg)} kg used) must remain covered.
+            Recorded historical costs stay separate from today's supplier-rate estimate. Saving a source edit currently
+            reverses and reapplies consumption; already-produced bales ({formatNumber(currentUsedKg)} kg used) must
+            remain covered.
           </DialogDescription>
         </DialogHeader>
 
@@ -522,6 +474,35 @@ export function EditMixBatchDialog({
           </div>
         ) : (
           <div className="space-y-6">
+            {/* Historical snapshot. It never uses the live raw-stock supplier rate. */}
+            <div className="rounded-md border border-border p-4 space-y-2" data-testid="mix-batch-recorded-valuation">
+              <p className="text-sm font-semibold">Recorded Historical Valuation</p>
+              <p className="text-xs text-muted-foreground">
+                Saved at the original batch valuation. This matches the batch list, details, and historical export.
+              </p>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div>
+                  <p className="text-xs text-muted-foreground">Recorded weight</p>
+                  <p className="font-mono font-semibold">{formatNumber(recordedBatchCost.totalWeightKg, 3)} kg</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Recorded total cost</p>
+                  <p className="font-mono font-semibold">${formatNumber(recordedBatchCost.totalCost, 4)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Recorded blended cost/kg</p>
+                  <p className="font-mono font-semibold" data-testid="text-edit-recorded-blended-cost">
+                    ${recordedBatchCost.costPerKg.toFixed(4)}
+                  </p>
+                </div>
+              </div>
+              {currentSources && savedSourceDifference > 0.02 && (
+                <p role="alert" className="text-xs text-destructive">
+                  Recorded source total differs from the saved batch header by ${formatNumber(savedSourceDifference, 2)}
+                  . Review before changing costs.
+                </p>
+              )}
+            </div>
             {/* Name / Date row */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -538,7 +519,10 @@ export function EditMixBatchDialog({
                 <Input
                   type="date"
                   value={batchDate}
-                  onChange={(e) => setBatchDate(e.target.value)}
+                  onChange={(e) => {
+                    setBatchDate(e.target.value);
+                    setSourceReview(null);
+                  }}
                   data-testid="input-edit-batch-date"
                 />
               </div>
@@ -547,6 +531,16 @@ export function EditMixBatchDialog({
             {/* Add source controls */}
             <div className="space-y-3">
               <h3 className="font-medium">Sources</h3>
+              {historicalSourcesLocked && (
+                <p
+                  role="status"
+                  className="text-xs text-amber-600 dark:text-amber-400"
+                  data-testid="mix-batch-completed-source-lock"
+                >
+                  Completed batch: source quantities are review-only until historical output and accounting
+                  reconciliation (Phases 3–5). Name, date and notes remain editable.
+                </p>
+              )}
               <div className="flex gap-2 flex-wrap">
                 <Button
                   type="button"
@@ -557,6 +551,7 @@ export function EditMixBatchDialog({
                     setSelectedSourceId("");
                     setWeightInput("");
                   }}
+                  disabled={historicalSourcesLocked}
                   data-testid="button-source-type-supplier"
                 >
                   <Package className="h-3 w-3 mr-1" /> Supplier Stock
@@ -570,6 +565,7 @@ export function EditMixBatchDialog({
                     setSelectedSourceId("");
                     setWeightInput("");
                   }}
+                  disabled={historicalSourcesLocked}
                   data-testid="button-source-type-batch"
                 >
                   <Layers className="h-3 w-3 mr-1" /> Existing Batch
@@ -578,7 +574,11 @@ export function EditMixBatchDialog({
 
               <div className="grid grid-cols-3 gap-2">
                 {addSourceType === "supplier" ? (
-                  <Select value={selectedSourceId} onValueChange={handleSourceIdChange}>
+                  <Select
+                    value={selectedSourceId}
+                    disabled={historicalSourcesLocked}
+                    onValueChange={handleSourceIdChange}
+                  >
                     <SelectTrigger data-testid="select-supplier-source">
                       <SelectValue placeholder="Select supplier" />
                     </SelectTrigger>
@@ -586,7 +586,7 @@ export function EditMixBatchDialog({
                       {availableSuppliers?.map((stock) => (
                         <SelectItem key={stock.supplierId!} value={stock.supplierId!.toString()}>
                           {stock.supplierName} ({formatNumber(parseFloat(stock.remainingKg))} kg @ $
-                          {parseFloat(stock.costPerKg).toFixed(4)}/kg)
+                          {parseFloat(stock.costPerKgUsd || stock.costPerKg || "0").toFixed(4)}/kg USD)
                         </SelectItem>
                       ))}
                       {(!availableSuppliers || availableSuppliers.length === 0) && (
@@ -597,7 +597,11 @@ export function EditMixBatchDialog({
                     </SelectContent>
                   </Select>
                 ) : (
-                  <Select value={selectedSourceId} onValueChange={handleSourceIdChange}>
+                  <Select
+                    value={selectedSourceId}
+                    disabled={historicalSourcesLocked}
+                    onValueChange={handleSourceIdChange}
+                  >
                     <SelectTrigger data-testid="select-batch-source">
                       <SelectValue placeholder="Select batch" />
                     </SelectTrigger>
@@ -626,13 +630,16 @@ export function EditMixBatchDialog({
                   value={weightInput}
                   onChange={(e) => setWeightInput(e.target.value)}
                   step="0.001"
+                  disabled={historicalSourcesLocked}
                   data-testid="input-source-weight"
                 />
 
                 <Button
                   type="button"
                   onClick={handleAddSource}
-                  disabled={!selectedSourceId || !weightInput || selectedSourceId === "__none__"}
+                  disabled={
+                    historicalSourcesLocked || !selectedSourceId || !weightInput || selectedSourceId === "__none__"
+                  }
                   data-testid="button-add-source"
                 >
                   <Plus className="h-4 w-4 mr-2" /> Add
@@ -649,8 +656,8 @@ export function EditMixBatchDialog({
                       <TableHead>Type</TableHead>
                       <TableHead>Source</TableHead>
                       <TableHead className="text-right">Weight (kg)</TableHead>
-                      <TableHead className="text-right">Cost/kg</TableHead>
-                      <TableHead className="text-right">Total Cost</TableHead>
+                      <TableHead className="text-right">Current $/kg</TableHead>
+                      <TableHead className="text-right">Estimated cost</TableHead>
                       <TableHead className="w-12"></TableHead>
                     </TableRow>
                   </TableHeader>
@@ -671,35 +678,37 @@ export function EditMixBatchDialog({
                             step="0.001"
                             min="0.001"
                             onChange={(e) => handleUpdateSourceWeight(sel.type, sel.sourceId, e.target.value)}
+                            disabled={historicalSourcesLocked}
                             data-testid={`input-weight-${sel.type}-${sel.sourceId}`}
                           />
                         </TableCell>
                         <TableCell className="text-right">
                           {sel.type === "supplier" ? (
-                            // Supplier rate is always the server-locked rate — read-only,
-                            // it only changes via a real container offload/correction.
+                            <div className="text-right">
+                              <span
+                                className="font-mono text-xs text-muted-foreground"
+                                data-testid={`text-cost-per-kg-${sel.type}-${sel.sourceId}`}
+                                title={historicalSourcesLocked ? "Recorded weighted-average supplier rate at the time of the mix" : "Current supplier rate, used only for an edit estimate"}
+                              >
+                                ${sel.costPerKg.toFixed(4)}
+                              </span>
+                              {!historicalSourcesLocked && originalSupplierRates.has(sel.sourceId) && (
+                                <div
+                                  className="text-[11px] text-muted-foreground"
+                                  title="Saved weighted-average supplier cost in this batch"
+                                >
+                                  Recorded: ${originalSupplierRates.get(sel.sourceId)!.toFixed(4)}
+                                </div>
+                              )}
+                            </div>
+                          ) : (
                             <span
                               className="font-mono text-xs text-muted-foreground"
+                              title="Recorded cost of the upstream batch. Only its source/weight can be changed."
                               data-testid={`text-cost-per-kg-${sel.type}-${sel.sourceId}`}
-                              title="Locked supplier rate — only changes via a container offload or an explicit correction"
                             >
                               ${sel.costPerKg.toFixed(4)}
                             </span>
-                          ) : (
-                            <div className="relative ml-auto w-28">
-                              <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
-                                $
-                              </span>
-                              <Input
-                                type="number"
-                                className="h-7 w-28 pl-4 text-right font-mono text-xs"
-                                value={sel.costPerKg.toFixed(4)}
-                                step="0.0001"
-                                min="0"
-                                onChange={(e) => handleUpdateSourceCost(sel.type, sel.sourceId, e.target.value)}
-                                data-testid={`input-cost-per-kg-${sel.type}-${sel.sourceId}`}
-                              />
-                            </div>
                           )}
                         </TableCell>
                         <TableCell className="text-right font-mono text-sm">
@@ -711,6 +720,7 @@ export function EditMixBatchDialog({
                             variant="ghost"
                             size="icon"
                             onClick={() => handleRemoveSource(sel.type, sel.sourceId)}
+                            disabled={historicalSourcesLocked}
                             data-testid={`button-remove-${sel.type}-${sel.sourceId}`}
                           >
                             <Trash2 className="h-4 w-4" />
@@ -735,14 +745,107 @@ export function EditMixBatchDialog({
                 )}
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Total Cost</p>
-                <p className="text-2xl font-bold font-mono">${formatNumber(totalCost, 4)}</p>
+                <p className="text-sm text-muted-foreground">
+                  {historicalSourcesLocked ? "Recorded total cost" : "Estimated total cost if saved"}
+                </p>
+                <p className="text-2xl font-bold font-mono">
+                  {hasMissingCurrentRates
+                    ? "Unavailable"
+                    : "$" + formatNumber(historicalSourcesLocked ? recordedBatchCost.totalCost : totalCost, 4)}
+                </p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Blended Cost/kg</p>
-                <p className="text-2xl font-bold font-mono">${blendedCostPerKg.toFixed(4)}</p>
+                <p className="text-sm text-muted-foreground">
+                  {historicalSourcesLocked ? "Recorded blended cost/kg" : "Estimated blended cost/kg if saved"}
+                </p>
+                <p className="text-2xl font-bold font-mono" data-testid="text-edit-current-estimate">
+                  {hasMissingCurrentRates
+                    ? "Unavailable"
+                    : "$" + (historicalSourcesLocked ? recordedBatchCost.costPerKg : blendedCostPerKg).toFixed(4)}
+                </p>
               </div>
             </div>
+
+            {hasMissingCurrentRates && (
+              <p role="alert" className="text-xs text-amber-600 dark:text-amber-400">
+                One or more suppliers have no current USD rate. The current-rate estimate is unavailable; their recorded
+                historical costs remain unchanged.
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground" data-testid="mix-batch-cost-basis-notice">
+              {historicalSourcesLocked
+                ? "Completed batch: the recorded supplier source costs and blended total match the saved batch list. Current supplier rates may differ; changing the historical valuation requires a reviewed recost, not an ordinary edit."
+                : "The estimate uses current supplier rates for proposed edits and is not a correction to recorded historical costs. Source changes require a server review and approval."}
+            </p>
+
+            {sourcesChanged && (
+              <div className="space-y-3 rounded-md border border-border p-4" data-testid="mix-source-edit-review">
+                <div>
+                  <p className="text-sm font-semibold">Review Material Source Changes</p>
+                  <p className="text-xs text-muted-foreground">
+                    An explicit review is required before stock allocations can be reversed and reapplied. This review
+                    does not modify inventory or create a voucher.
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="mix-source-edit-reason">Reason for changing recorded materials</Label>
+                  <Textarea
+                    id="mix-source-edit-reason"
+                    value={sourceEditReason}
+                    onChange={(event) => {
+                      setSourceEditReason(event.target.value);
+                      setSourceReview(null);
+                    }}
+                    rows={2}
+                    placeholder="Explain the source or weight correction (at least 10 characters)"
+                    data-testid="input-mix-source-edit-reason"
+                  />
+                </div>
+                {sourceReview && (
+                  <div className="space-y-2 rounded-md border bg-muted/30 p-3" data-testid="mix-source-review-result">
+                    <div className="flex items-center gap-2 text-sm font-semibold">
+                      <Badge variant={sourceReview.allowed ? "secondary" : "destructive"}>
+                        {sourceReview.allowed ? "Safe to apply" : "Correction blocked"}
+                      </Badge>
+                      <span>Server-verified proposal</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Saved kg</p>
+                        <p className="font-mono">{formatNumber(Number(sourceReview.recordedWeightKg), 3)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Proposed kg</p>
+                        <p className="font-mono">{formatNumber(Number(sourceReview.proposedWeightKg), 3)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Saved USD</p>
+                        <p className="font-mono">${formatNumber(Number(sourceReview.recordedTotalCost), 4)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Estimated USD</p>
+                        <p className="font-mono">
+                          {sourceReview.estimatedTotalCost == null
+                            ? "Unavailable"
+                            : "$" + formatNumber(Number(sourceReview.estimatedTotalCost), 4)}
+                        </p>
+                      </div>
+                    </div>
+                    {sourceReview.estimatedDeltaUsd != null && (
+                      <p className="text-xs text-muted-foreground">
+                        Estimated valuation difference: ${formatNumber(Number(sourceReview.estimatedDeltaUsd), 4)} USD.
+                        The server recalculates the cost during the final transaction.
+                      </p>
+                    )}
+                    {sourceReview.warnings.map((warning, i) => (
+                      <p key={i} role="alert" className="text-xs text-destructive">
+                        {warning}
+                      </p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Notes */}
             <div className="space-y-2">
@@ -756,16 +859,39 @@ export function EditMixBatchDialog({
               />
             </div>
 
-            <div className="flex justify-end gap-2">
+            <div className="flex flex-wrap justify-end gap-2">
               <Button variant="outline" onClick={() => onOpenChange(false)} data-testid="button-cancel-edit">
                 Cancel
               </Button>
+              {sourcesChanged && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => previewMutation.mutate()}
+                  disabled={
+                    previewMutation.isPending ||
+                    saveMutation.isPending ||
+                    !currentSources ||
+                    selectedSources.length === 0
+                  }
+                  data-testid="button-preview-source-edit"
+                >
+                  {previewMutation.isPending ? "Reviewing…" : "Review Source Changes"}
+                </Button>
+              )}
               <Button
                 onClick={() => saveMutation.mutate()}
-                disabled={saveMutation.isPending || selectedSources.length === 0}
+                disabled={
+                  saveMutation.isPending ||
+                  previewMutation.isPending ||
+                  !!sourcesError ||
+                  !currentSources ||
+                  selectedSources.length === 0 ||
+                  (sourcesChanged && (!sourceReview?.allowed || !sourceReview.reviewHash))
+                }
                 data-testid="button-save-edit"
               >
-                {saveMutation.isPending ? "Saving…" : "Save Changes"}
+                {saveMutation.isPending ? "Saving…" : sourcesChanged ? "Apply Reviewed Changes" : "Save Changes"}
               </Button>
             </div>
           </div>
