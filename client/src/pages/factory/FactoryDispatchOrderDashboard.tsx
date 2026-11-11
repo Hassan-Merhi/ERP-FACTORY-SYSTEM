@@ -8,7 +8,7 @@ import { useInfiniteQuery,useQuery } from "@tanstack/react-query";
 import {
   Activity,AlertTriangle,CheckCheck,ChevronDown,ClipboardList,Download,
   FileSpreadsheet,FileText,History,Loader2,Package,ReceiptText,RefreshCw,
-  Truck,Wallet,
+  ShieldCheck,Truck,Wallet,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -231,7 +231,7 @@ export default function FactoryDispatchOrderDashboard({
                   {gate.isError&&<p>Automatic accounting verification is temporarily unavailable. Posting and invoice guards remain active.</p>}
                   {gate.data && (!gate.data.reconciliation.ready || !gate.data.invoice.ready) &&
                     <p>Required database accounting protections are not installed. Financial approval remains restricted until the administrator applies the missing migration.</p>}
-                  {gate.data?.integrity?.passed===false&&(
+                  {gate.data?.integrity && !gate.data.integrity.passed && (
                     <details>
                       <summary className="cursor-pointer font-medium">
                         {gate.data.integrity.checks.filter(check=>check.state==="BLOCK").length} accounting discrepancy(s) detected automatically
