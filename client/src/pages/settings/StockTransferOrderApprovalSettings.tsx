@@ -18,6 +18,7 @@ const endpoint = "/api/stock-transfer-order/wa-approval/settings";
 export type StockTransferOrderWaSettings = {
   settings: { enabled: boolean; approvalGroupChatId: string | null; authorizedPhoneE164: string | null };
   connected: boolean;
+  webhookConfigured: boolean;
   canConfigure: boolean;
   groups: Array<{ id: number; name: string; chatId: string }>;
   destinations: Array<{ id: number; name: string; chatId: string | null; enabled: boolean }>;
@@ -116,7 +117,7 @@ export function StockTransferOrderApprovalSettings() {
         <CardDescription>
           Configure the approval group, a single authorized replying phone number, and the WhatsApp
           recipient linked to each destination. Only saved Stock Transfer Orders are eligible.
-          Approval replies are not processed until Phase 3.
+          Incoming DONE and DECLINE replies are verified and recorded, but do not approve stock until Phase 4.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -126,6 +127,15 @@ export function StockTransferOrderApprovalSettings() {
             <Badge variant={settings.data?.connected ? "secondary" : "outline"}>
               {settings.data?.connected ? "Main WhatsApp configured" : "Main WhatsApp not enabled"}
             </Badge>
+            <Badge variant={settings.data?.webhookConfigured ? "secondary" : "outline"}>
+              {settings.data?.webhookConfigured ? "Protected inbound webhook configured" : "Webhook token not configured"}
+            </Badge>
+            {!settings.data?.webhookConfigured && (
+              <p className="text-xs text-amber-600">
+                Set STO_WA_GREEN_API_WEBHOOK_TOKEN on the ERP server and configure Green API
+                webhookUrlToken using Bearer authentication before sending requests.
+              </p>
+            )
             <div className="flex items-center justify-between rounded-lg border px-3 py-2">
               <Label htmlFor="sto-wa-enabled">Enable requesting Stock Transfer Order approvals</Label>
               <Switch id="sto-wa-enabled" checked={enabled} disabled={!settings.data?.canConfigure} onCheckedChange={setEnabled}/>
