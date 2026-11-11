@@ -48,17 +48,17 @@ test("security permissions has controlled non-destructive migration and opt-in r
   const sql = read("migrations/controlled/20261111_003_security_permissions_schema.sql");
   const bridge = read("server/criticalSecuritySchemaBridge.mjs");
   assert.match(sql, /CREATE UNIQUE INDEX IF NOT EXISTS user_security_permissions_unique/);
-  assert.doesNotMatch(sql, /DELETE\\s+FROM|INSERT\\s+INTO|TRUNCATE\\s+/i);
+  assert.doesNotMatch(sql, /DELETE\s+FROM|INSERT\s+INTO|TRUNCATE\s+/i);
   assert.match(bridge, /CRITICAL_SECURITY_SCHEMA_MODE/);
   assert.match(bridge, /BEGIN READ ONLY/);
-  assert.match(bridge, /if \\(verifyOnly\\)/);
+  assert.match(bridge, /if \(verifyOnly\)/);
 });
 
 test("Factory container schema is extracted without tracking value rewrites", () => {
   const sql = read("migrations/controlled/20261111_004_factory_container_columns.sql");
   const bridge = read("server/factoryContainerSchemaBridge.mjs");
   assert.match(sql, /ADD COLUMN IF NOT EXISTS json_cargo_tracking_status TEXT/);
-  assert.doesNotMatch(sql, /UPDATE\\s+factory_containers|DELETE\\s+FROM|TRUNCATE\\s+/i);
+  assert.doesNotMatch(sql, /UPDATE\s+factory_containers|DELETE\s+FROM|TRUNCATE\s+/i);
   assert.match(bridge, /FACTORY_CONTAINER_SCHEMA_MODE/);
   assert.match(bridge, /BEGIN READ ONLY/);
   assert.match(bridge, /tracking flags still enabled/);
