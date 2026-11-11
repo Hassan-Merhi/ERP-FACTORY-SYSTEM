@@ -137,3 +137,125 @@ export function summarizeCanonicalStockTransferEvidence(input: {
     };
   });
 }
+
+/**
+ * Revision-aware, signed evidence for reconciliation against the CURRENT
+ * transfer document. A complete transfer edit first moves old stock back out
+ * of the destination and then moves the replacement in. Immutable approval
+ * revisions instead move only the changed quantity. Both workflows are
+ * correctly reconciled by the NET stock delta at the document destination.
+ *
+ * Never sum absolute receipt legs: that counts reversals and past revisions as
+ * new stock. Every batch must have one issue and one equal receipt, and exactly
+ * one destination leg, or the journal is not reliable enough to certify.
+ */
+export interface CanonicalStockTransferNetMovementRow extends CanonicalStockTransferMovementRow {
+  idempotencyKey: string;
+  stockItemId: number;
+  locationId: number;
+  destinationLocationId: number;
+}
+
+export function summarizeCanonicalStockTransferNetEvidence(input: {
+  companyId: number;
+  rows: CanonicalStockTransferNetMovementRow[];
+}): StockTransferMovementEvidence[] {
+  const companyId = positiveInteger(input.companyId, "companyId");
+  const batches = new Map<string, {
+    sourceId: string;
+    destinationLocationId: number;
+    rows: Array<{
+      stockItemId: number;
+      locationId: number;
+      quantity: Decimal;
+      unitCost: Decimal;
+    }>;
+  }>();
+
+  for (const row of input.rows) {
+    if (positiveInteger(row.companyId, "movement.companyId") !== companyId) {
+      throw new ConvergenceReconciliationError(
+        "CONVERGENCE_COMPANY_MISMATCH",
+        `Canonical transfer ${row.sourceId} crossed the requested company boundary`
+      );
+    }
+    if (row.sourceType !== "stock-transfer") {
+      throw new ConvergenceReconciliationError(
+        "CONVERGENCE_UNEXPECTED_STOCK_EVIDENCE",
+        `Unexpected canonical movement source type ${row.sourceType}`
+      );
+    }
+    const sourceId = String(row.sourceId ?? "").trim();
+    const key = String(row.idempotencyKey ?? "").trim();
+    if (!sourceId || !key) {
+      throw new ConvergenceReconciliationError(
+        "CONVERGENCE_IDENTITY_INVALID",
+        "Canonical transfer movement requires source and idempotency identities"
+      );
+    }
+
+    const stockItemId = positiveInteger(row.stockItemId, "stockItemId");
+    const locationId = positiveInteger(row.locationId, "locationId");
+    const destinationLocationId = positiveInteger(row.destinationLocationId, "destinationLocationId");
+    const quantity = decimal(row.quantityDelta, "movement.quantityDelta");
+    const unitCost = decimal(row.unitCost, "movement.unitCost");
+    if (quantity.isZero() || unitCost.isNegative()) {
+      throw new ConvergenceReconciliationError(
+        "CONVERGENCE_STOCK_EVIDENCE_INVALID",
+        `Canonical transfer ${sourceId} contains an invalid quantity or cost`
+      );
+    }
+
+    const batchKey = JSON.stringify([sourceId, key]);
+    const existing = batches.get(batchKey);
+    if (existing && existing.destinationLocationId !== destinationLocationId) {
+      throw new ConvergenceReconciliationError(
+        "CONVERGENCE_STOCK_EVIDENCE_INVALID",
+        `Canonical transfer ${sourceId} has conflicting destination locations`
+      );
+    }
+    const batch = existing ?? { sourceId, destinationLocationId, rows: [] };
+    batch.rows.push({ stockItemId, locationId, quantity, unitCost });
+    if (batch.rows.length > 2) {
+      throw new ConvergenceReconciliationError(
+        "CONVERGENCE_STOCK_EVIDENCE_INVALID",
+        `Canonical transfer ${sourceId} has too many legs for one journal batch`
+      );
+    }
+    batches.set(batchKey, batch);
+  }
+
+  const byTransfer = new Map<string, { quantity: Decimal; value: Decimal }>();
+  for (const batch of batches.values()) {
+    const [first, second] = batch.rows;
+    if (
+      batch.rows.length !== 2 ||
+      first.stockItemId !== second.stockItemId ||
+      first.locationId === second.locationId ||
+      !first.quantity.eq(second.quantity.negated()) ||
+      !first.unitCost.eq(second.unitCost) ||
+      Number(first.locationId === batch.destinationLocationId) +
+        Number(second.locationId === batch.destinationLocationId) !== 1
+    ) {
+      throw new ConvergenceReconciliationError(
+        "CONVERGENCE_STOCK_EVIDENCE_UNBALANCED",
+        `Canonical transfer ${batch.sourceId} has invalid or unbalanced issue/receipt legs`
+      );
+    }
+    const destLeg = first.locationId === batch.destinationLocationId ? first : second;
+    const current = byTransfer.get(batch.sourceId) ?? {
+      quantity: new Decimal(0),
+      value: new Decimal(0),
+    };
+    current.quantity = current.quantity.plus(destLeg.quantity);
+    current.value = current.value.plus(destLeg.quantity.mul(destLeg.unitCost));
+    byTransfer.set(batch.sourceId, current);
+  }
+  return [...byTransfer.entries()].map(([sourceId, totals]) => ({
+    sourceType: "stock-transfer",
+    sourceId,
+    companyId,
+    movementQuantity: totals.quantity.toFixed(),
+    movementValue: totals.value.toFixed(),
+  }));
+}
