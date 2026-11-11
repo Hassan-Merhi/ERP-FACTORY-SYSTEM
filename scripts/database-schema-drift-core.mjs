@@ -64,6 +64,15 @@ export function compareSchemaDrift(snapshot, { includeControlled = false } = {})
   if (includeControlled) {
     expectedTables.push("factory_fixed_production_plans","sp_containers","user_preferences","factory_containers","user_security_permissions","user_language_preferences",
       "scheduled_whatsapp_occurrences","scheduled_whatsapp_attachments","insurance_member_monthly_amounts");
+    expectedTables.push("financial_operation_requests","inventory_valuation_overrides");
+    expectedIndexes.push(
+      "financial_operation_requests_lookup_idx",
+      "financial_operation_requests_result_idx",
+      "user_presence_last_seen_idx",
+      "user_presence_company_last_seen_idx",
+      "user_presence_user_last_seen_idx",
+      "inventory_valuation_overrides_company_item_location_idx"
+    );
     expectedColumns.push(
       ["stock_items","selling_price"],["stock_items","opening_qty"],
       ["stock_items","opening_rate"],["stock_items","opening_value"],
