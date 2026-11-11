@@ -38,6 +38,14 @@ $optional$;
 
 DO $optional$
 BEGIN
+ IF to_regclass('public.factory_v3_load_bales') IS NOT NULL THEN
+  ALTER TABLE public.factory_v3_load_bales ADD COLUMN IF NOT EXISTS product_name_ar TEXT;
+ END IF;
+END
+$optional$;
+
+DO $optional$
+BEGIN
  IF to_regclass('public.factory_invoice_loading_bales') IS NOT NULL THEN
   ALTER TABLE public.factory_invoice_loading_bales ADD COLUMN IF NOT EXISTS product_name_ar TEXT;
  END IF;
