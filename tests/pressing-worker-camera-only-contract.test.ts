@@ -16,7 +16,8 @@ describe("Pressing worker camera-only access", () => {
   it("grants full scanner UI to Admin, Owner and Developer using the authenticated company role", () => {
     expect(access).toContain('canManage: ["Admin", "Owner", "Developer"].includes(ctx.role) && !ctx.posViewOnly');
     expect(manager).toContain("access.data?.canManage === true");
-    expect(manager).toContain('{fullControls && <><div className="relative min-w-0 flex-1">');
+    // Formatter-tolerant: the guarded fragment may be wrapped in parentheses and split across lines.
+    expect(manager).toMatch(/\{fullControls && \(?\s*<>\s*<div className="relative min-w-0 flex-1">/);
     expect(manager).toContain('data-testid="button-pressing-camera"');
     expect(manager).toContain('showCamera ? "Close Camera" : "Open Camera"');
     expect(manager).toContain("simpleControls={!fullControls}");
@@ -74,7 +75,7 @@ describe("Pressing worker camera-only access", () => {
     expect(hourlyTargets).toContain("enabled: active,");
     expect(hourlyTargets).toContain('day ? "?day=" + encodeURIComponent(day) : ""');
     expect(hourlyTargets).toContain('value={day || data?.day || ""}');
-    expect(hourlyTargets).toContain("{data.canEdit && <Button");
+    expect(hourlyTargets).toMatch(/\{data\.canEdit && \(?\s*<Button/);
     expect(report).toContain("canEdit: ctx.canCorrect");
     expect(report).toMatch(/if \(!ctx\.canCorrect\)\s*throw new ReportPermissionError\(\s*403/);
   });
