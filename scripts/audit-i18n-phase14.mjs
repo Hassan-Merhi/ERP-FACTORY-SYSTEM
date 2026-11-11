@@ -107,6 +107,12 @@ const compatibilityTranslationFiles = [
 ];
 
 const reviewedTechnicalValues = new Set([
+  // Database migration modernization (#3130): operator-only boot diagnostics written to
+  // the deployment log when an opt-in verify-only cutover refuses to start. They are never
+  // rendered in the application interface, so they are not translatable display text.
+  "Scheduled WhatsApp schema verification failed; apply reviewed controlled migration 008 first",
+  "${migrations.length} unversioned startup statements have not been mapped to controlled migrations",
+  "Legacy startup cutover blocked:",
   "HISTORICAL_FX_WALLET_DATE_MISMATCH",
   "HISTORICAL_FX_WALLET_COVERAGE_INVALID",
   "HISTORICAL_FX_WALLET_COVERAGE_EMPTY",
