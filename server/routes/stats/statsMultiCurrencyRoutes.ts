@@ -26,15 +26,14 @@ export function registerStatsMultiCurrencyRoutes(app: Express) {
   // the same pinned company the Factory Net Position report itself uses.
   // Read-only: never create a voucher for an unrealized FX presentation line.
   app.get("/api/accounts/multi-currency/fx-activity", requireAuth, requireNonPOS, async (req, res) => {
-    const factory = req.query.scope === "factory";
-    const companyId = factory
-      ? req.session.factoryCompanyId || req.session.currentCompanyId
-      : req.session.currentCompanyId;
+    // ERP Accounts scope only. Factory uses /api/factory/net-position/fx-activity,
+    // which is governed by Factory Net Position's own page permission.
+    const companyId = req.session.currentCompanyId;
     if (!companyId) return res.status(400).json({ message: "No company selected" });
     res.setHeader("Cache-Control", "private, no-store");
     try {
       return res.json(await loadNetPositionFxActivity({
-        companyId, factory, from: req.query.from, to: req.query.to,
+        companyId, factory: false, from: req.query.from, to: req.query.to,
       }));
     } catch (error) {
       if (error instanceof Error && /Invalid history date|History start date/.test(error.message)) {
