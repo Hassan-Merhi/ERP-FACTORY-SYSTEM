@@ -334,7 +334,7 @@ export default function PropertyRentalPage({
           showPaymentsLog && {
               label: "Payments Log",
               icon: ClipboardList,
-              onSelect: () => navigate(paymentsLogUrl),
+              onSelect: () => { if (paymentsLogUrl) navigate(paymentsLogUrl); },
               testId: `button-${testIdPrefix}-payments-log`,
             },
           {
@@ -374,7 +374,7 @@ export default function PropertyRentalPage({
         <Button
           variant="outline"
           size="sm"
-          onClick={() => navigate(paymentsLogUrl)}
+          onClick={() => { if (paymentsLogUrl) navigate(paymentsLogUrl); }}
           data-testid={`button-${testIdPrefix}-payments-log`}
         >
           <ClipboardList className="h-4 w-4 mr-1" />
