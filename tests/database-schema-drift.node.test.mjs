@@ -57,6 +57,6 @@ test("controlled schema drift catches missing security and Factory container obj
   const result=compareSchemaDrift(completeSnapshot(),{includeControlled:true});
   assert.ok(result.blockers.missingTables.includes("user_security_permissions"));
   assert.ok(result.blockers.missingColumns.includes("user_security_permissions.permission"));
-  assert.ok(result.blockers.missingColumns.includes("factory_containers.json_cargo_error"));
+  assert.ok(result.blockers.missingColumns.includes("factory_containers.tracking_next_check_at"));
   assert.ok(result.blockers.missingIndexes.includes("user_security_permissions_unique"));
 });
