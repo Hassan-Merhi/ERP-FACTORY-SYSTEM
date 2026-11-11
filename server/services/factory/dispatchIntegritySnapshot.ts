@@ -71,8 +71,8 @@ export function inspectDispatchTripPostingSnapshot(
       actualIds.join(","));
     pass("POSTED_TRIP_TOTAL_MATH",
       "Every posted truck receivable equals goods plus billable fees minus discounts",
-      posted.every(row=>amount(row.goods).plus(row.billable)
-        .minus(row.discounts).eq(row.total)),
+      posted.every(row=>amount(row.goods).plus(amount(row.billable))
+        .minus(amount(row.discounts)).eq(amount(row.total))),
       "Goods + billable fees - discounts for each truck",
       posted.length+" posted truck(s)");
   }else{
