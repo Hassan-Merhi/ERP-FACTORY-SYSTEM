@@ -11,6 +11,7 @@ import { logger } from "../lib/logger";
 import { readFactoryEdgeConfiguration, shouldStartEdgeBackgroundJobs } from "../edge/edgeRuntimePolicy.mjs";
 import { runWithDatabaseMaintenanceScope } from "./security/databaseScopeRuntimeContext";
 import { executeStockTransferOrderWaBatch } from "./stockTransferOrderWhatsAppBatchExecution";
+import { queueStockTransferOrderWaDeliveries } from "./stockTransferOrderWaDeliveryWorker";
 
 const SWEEP_INTERVAL_MS = 20_000;
 const MAX_PER_SWEEP = 15;
@@ -29,6 +30,9 @@ async function processOne(batchId: number): Promise<void> {
   try {
     const result = await executeStockTransferOrderWaBatch(batchId);
     backoffUntil.delete(batchId);
+    if (result.outcome === "approved") {
+      queueStockTransferOrderWaDeliveries(batchId);
+    }
     if (result.outcome === "approved" || result.outcome === "declined") {
       logger.info("[STO WA] Full verified decision executed", {
         batchId,
