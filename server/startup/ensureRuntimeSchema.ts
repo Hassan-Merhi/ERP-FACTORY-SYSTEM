@@ -412,7 +412,51 @@ export async function ensureRentalContractCreateColumns(pool: Pool): Promise<voi
   }
 }
 
+/**
+ * The Factory/ERP rental unit insert uses these columns even on installations
+ * that disable bulk startup migrations. Older databases can already contain
+ * property_units, so CREATE TABLE IF NOT EXISTS in the bulk migration does not
+ * repair an incomplete table.
+ *
+ * Only missing columns are added; existing units, leases and accounting entries
+ * are never modified. A healthy installation performs no write or table lock.
+ */
+export async function ensurePropertyUnitsWriteSchema(pool: Pool): Promise<void> {
+  const existing = await pool.query<{ column_name: string }>(
+    `SELECT column_name
+       FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'property_units'`
+  );
+  if (existing.rows.length === 0) {
+    throw new Error("RENTAL_PROPERTY_UNITS_TABLE_MISSING: apply the base rental migration");
+  }
+  const present = new Set(existing.rows.map((row) => row.column_name));
+  const additions: ReadonlyArray<readonly [string, string]> = [
+    ["module", "TEXT NOT NULL DEFAULT 'PROPERTIES'"],
+    ["unit_type", "TEXT"],
+    ["location_group", "TEXT"],
+    ["unit_number", "TEXT"],
+    ["size", "TEXT"],
+    ["dimensions", "TEXT"],
+    ["notes", "TEXT"],
+    ["active", "BOOLEAN NOT NULL DEFAULT TRUE"],
+    ["sort_order", "INTEGER NOT NULL DEFAULT 0"],
+    ["created_at", "TIMESTAMP NOT NULL DEFAULT NOW()"],
+  ];
+  const missing = additions.filter(([column]) => !present.has(column));
+  if (!missing.length) return;
+  await pool.query(
+    `ALTER TABLE public.property_units ${missing
+      .map(([column, type]) => `ADD COLUMN IF NOT EXISTS "${column}" ${type}`)
+      .join(", ")}`
+  );
+  logger.info("[startup] ✓ Rental unit creation columns repaired", {
+    columns: missing.map(([column]) => column),
+  });
+}
+
 export async function ensureRuntimeSchema(pool: Pool): Promise<void> {
+  await ensurePropertyUnitsWriteSchema(pool);
   try {
     await pool.query(
       `CREATE UNIQUE INDEX IF NOT EXISTS exchange_rates_company_date_pair_unique
