@@ -71,6 +71,7 @@ import { ensureFactoryLoadingDispatchSchema } from "./startup/ensureFactoryLoadi
 import { ensureStockTransferOrderWhatsAppApprovalSchema } from "./startup/ensureStockTransferOrderWhatsAppApprovalSchema";
 import { startStockTransferOrderWaApprovalWorker } from "./services/stockTransferOrderWhatsAppApprovalWorker";
 import { startStockTransferOrderWaDeliveryWorker } from "./services/stockTransferOrderWaDeliveryWorker";
+import { ensureDispatchLoadingBaleScanGuard } from "./startup/ensureDispatchLoadingBaleScanGuard";
 import { ensureFactoryBaleOrderIntegrity } from "./startup/ensureFactoryBaleOrderIntegrity";
 import { runApprovedLegacyBaleUnitCostRepair } from "./startup/runApprovedLegacyBaleUnitCostRepair";
 import { runApprovedLegacySoldBaleUnitCostRepair } from "./startup/runApprovedLegacySoldBaleUnitCostRepair";
@@ -365,9 +366,11 @@ let migrationsDone = false;
       // Loading-only expected items must exist even when bulk migrations are disabled.
       await ensureContainerExtraExpectedLines(pool);
       await ensureFactoryLoadingDispatchSchema(pool);
-      logger.info("[startup] ✓ Factory loading dispatch schema ensured");
-      // Fatal on failure: Stock Transfer Order saves use workflow_origin; never
-      // serve requests against a database lacking its approval foundation.
+      // Replace the overbroad Phase 4 guard before the new server accepts scans.
+      // Fatal on failure: never report healthy while normal loading is blocked.
+      await ensureDispatchLoadingBaleScanGuard(pool);
+      logger.info("[startup] ✓ Factory loading dispatch schema and scan guard ensured");
+      // Stock Transfer Orders require the verified, idempotent approval schema before service.
       await ensureStockTransferOrderWhatsAppApprovalSchema(pool);
       logger.info("[startup] ✓ Stock Transfer Order WhatsApp approval foundation ensured");
       await ensureFactoryInvoiceDocumentSnapshotStore(pool);
@@ -542,8 +545,7 @@ let migrationsDone = false;
       listenWithRetry(server, port, () => {
         if (shouldStartEdgeBackgroundJobs(readFactoryEdgeConfiguration())) {
           runPostStartupJobs();
-          // Only the authoritative primary executes verified WhatsApp
-          // decisions; restarts replay the persisted Phase 3 event.
+          // Run only on the authoritative scheduler, honoring production activation kill switch.
           if (process.env.ENABLE_SCHEDULERS !== "false") {
             startStockTransferOrderWaApprovalWorker();
             startStockTransferOrderWaDeliveryWorker();
