@@ -7,6 +7,28 @@ import { resolveDatabaseSsl } from "../lib/databaseSsl.mjs";
 import { markStartupMigrationsComplete, recordStartupMigrationFailures } from "../startupMigrationReport";
 
 export async function runStartupMigrations(migrations: readonly string[], onComplete: () => void) {
+  // Phase 3 strict cutover intentionally refuses unversioned startup SQL until
+  // every legacy statement and data repair has been separately reconciled.
+  // It must never treat an untracked migration as a successful no-op.
+  if (process.env.LEGACY_STARTUP_MIGRATION_MODE === "verify-only") {
+    const failures = migrations.length > 0
+      ? [{sql:"legacy-startup-migration-list",error:`${migrations.length} unversioned startup statements have not been mapped to controlled migrations`}]
+      : [];
+    recordStartupMigrationFailures(failures);
+    try {
+      if (failures.length) {
+        throw new Error(
+          "Legacy startup cutover blocked: " + failures[0].error +
+          ". Reconcile statements and operational data repairs before enabling read-only startup."
+        );
+      }
+      logger.info("Legacy startup migrations verified: no unversioned startup statements or repair writes executed.");
+    } finally {
+      onComplete();
+      markStartupMigrationsComplete();
+    }
+    return;
+  }
   // Use a dedicated single Client for migrations — completely separate from the
   // shared connection pool so migrations never starve user requests of connections.
   const connectionString =
