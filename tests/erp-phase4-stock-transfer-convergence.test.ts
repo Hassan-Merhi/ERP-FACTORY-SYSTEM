@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { loadDatabaseCanonicalStockTransferEvidence } from "../server/services/inventory/databaseCanonicalStockTransferEvidence";
-import { mergeStockTransferConvergenceEvidence } from "../server/services/inventory/databaseStockTransferConvergenceAdapter";
+import { loadDatabaseStockTransferDocuments, mergeStockTransferConvergenceEvidence } from "../server/services/inventory/databaseStockTransferConvergenceAdapter";
 import { reconcileConvergenceTx, type StockConvergenceSnapshot } from "../server/services/accounting/convergenceReconciliation";
 
 const dialect = new PgDialect();
@@ -24,6 +24,39 @@ function postedEvidenceRows() {
 }
 
 describe("ERP Phase 4 canonical transfer import and edit convergence", () => {
+  it("includes posted transfer documents with false applied flags in the reconciliation input", async () => {
+    let whereStatement = "";
+    const selection: Record<string, unknown> = {};
+    for (const stage of ["from", "innerJoin", "leftJoin", "groupBy"]) {
+      selection[stage] = () => selection;
+    }
+    selection.where = (condition: { getSQL: () => never }) => {
+      whereStatement = dialect.sqlToQuery(condition.getSQL()).sql;
+      return selection;
+    };
+    selection.then = (resolve: (rows: unknown[]) => unknown) => Promise.resolve([{
+      transferId: 866,
+      voucherId: 15358,
+      companyId: 9,
+      inventoryApplied: false,
+      itemCount: 58,
+      documentQuantity: "102",
+      documentValue: "10509.98",
+    }]).then(resolve);
+    const tx = {
+      execute: async () => ({ rows: [{ startedAt: "2026-08-15T00:00:00Z" }] }),
+      select: () => selection,
+    } as never;
+    const documents = await loadDatabaseStockTransferDocuments({ tx, companyId: 9 });
+    expect(documents).toHaveLength(1);
+    expect(documents[0]).toMatchObject({
+      sourceId: "866",
+      inventoryApplied: false,
+      documentQuantity: "102",
+    });
+    expect(whereStatement).not.toContain("inventory_applied");
+  });
+
   it("queries normal transfers by transfer ID and both import formats by voucher ID", async () => {
     const queries: Array<{ sql: string; params: unknown[] }> = [];
     const tx = {
