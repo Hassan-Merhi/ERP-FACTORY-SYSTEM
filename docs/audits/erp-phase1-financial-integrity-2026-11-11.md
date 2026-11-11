@@ -38,3 +38,19 @@
 - [ ] Exact-commit backend/frontend certification, security role matrix and recovery evidence pass.
 
 **Status:** Audit evidence captured. Phase 1 financial sign-off **blocked** pending historical provenance and runtime testing. This document itself makes no financial changes.
+
+## Supplemental company-account provenance (read-only verification)
+
+A separate **company-13-scoped** lookup resolves five ledger account IDs that were missing from company-1-scoped joins. All five are presently owned by Hassan Properties (company 13). HADI posted entries pointing to those IDs are historical cross-company links, not merely unresolvable records.
+
+| Properties account ID | HADI entry IDs | HADI voucher IDs |
+|---:|---|---|
+| 21 | 8042, 8748, 9204, 9299 | 2445, 2609, 2727, 2748 |
+| 432 | 9523 | 2813 |
+| 447 | 10165 | 2990 |
+| 904 | 26897 | 7759 |
+| 1212 | 32749 | 9508 |
+
+**Eight confirmed cross-company account references.** The other seven HADI references point to account ID 450 (one) and ID 1002 (six). They were not found within the tested company scopes; their true historical identity remains unresolved. This evidence is tracked in issue #3132. No account or voucher writes are justified by a cross-company ID match alone.
+
+**Important distinction:** HADI can legitimately owe or pay another company, but a voucher line that points directly to an account *owned by that other company* breaks the ledger's ownership model; appropriate due-to/due-from or historic attribution must be established before correction.
