@@ -207,7 +207,7 @@ export default function FactoryLoadingDispatchScanner({
       const result: { count: number } = await response.json();
       setBulkMode(null);
       setBulkReason("");
-      setSelectedIds(new Set());
+      setSelectedIds(new Set<string>());
       void queryClient.invalidateQueries({ queryKey: scanKey });
       void queryClient.invalidateQueries({ queryKey: loadingListKey });
       onChanged();
