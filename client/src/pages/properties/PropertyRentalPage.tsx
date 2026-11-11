@@ -334,7 +334,7 @@ export default function PropertyRentalPage({
           showPaymentsLog && {
               label: "Payments Log",
               icon: ClipboardList,
-              onSelect: () => navigate(paymentsLogUrl),
+              onSelect: () => { if (paymentsLogUrl) navigate(paymentsLogUrl); },
               testId: `button-${testIdPrefix}-payments-log`,
             },
           {
@@ -374,7 +374,7 @@ export default function PropertyRentalPage({
         <Button
           variant="outline"
           size="sm"
-          onClick={() => navigate(paymentsLogUrl)}
+          onClick={() => { if (paymentsLogUrl) navigate(paymentsLogUrl); }}
           data-testid={`button-${testIdPrefix}-payments-log`}
         >
           <ClipboardList className="h-4 w-4 mr-1" />
@@ -480,7 +480,7 @@ export default function PropertyRentalPage({
             silently reported in USD. Individual contracts and ledger balances remain unchanged.
           </p>
         )}
-        {showHistoricalPaid && reconciledAccountTotalsReady && (
+        {currentRole === "Developer" && showHistoricalPaid && reconciledAccountTotalsReady && (
           <p className="text-xs text-muted-foreground" data-testid="properties-rent-account-balance-explanation">
             Combined account balances:{" "}
             <span className="font-semibold tabular-nums">
