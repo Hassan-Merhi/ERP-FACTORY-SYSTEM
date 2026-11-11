@@ -51,6 +51,7 @@ export async function loadFactoryLoadingDispatchComparisonSnapshot(
            truck_plate AS "truckPlate"
       FROM factory_loading_dispatches
      WHERE company_id = ${companyId} AND order_id = ${orderId}
+       AND status <> 'CANCELLED'
      ORDER BY dispatch_number
   `));
   const trips: ComparisonTrip[] = tripsRows.map((row) => ({
@@ -97,7 +98,7 @@ export async function loadFactoryLoadingDispatchComparisonSnapshot(
         ON d.id = s.dispatch_id AND d.company_id = s.company_id
        AND d.order_id = s.order_id
      WHERE s.company_id = ${companyId} AND s.order_id = ${orderId}
-       AND s.removed_at IS NULL
+       AND s.removed_at IS NULL AND d.status <> 'CANCELLED'
      ORDER BY s.id
   `));
   const scans: ComparisonScan[] = scanRows.map((row) => ({
