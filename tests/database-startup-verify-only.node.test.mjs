@@ -118,3 +118,12 @@ test("legacy startup runner refuses unmapped historical statements in opt-in mod
   assert.match(src,/Legacy startup cutover blocked/);
   assert.match(src,/unversioned startup statements have not been mapped/);
 });
+
+test("strict legacy startup failures never mark ERP healthy",()=>{
+  const index=read("server/index.ts");
+  const runner=read("server/startup/runServerStartupMigrations.ts");
+  assert.match(index,/LEGACY_STARTUP_MIGRATION_MODE === "verify-only"/);
+  assert.match(index,/Strict legacy migration verification blocked boot/);
+  assert.match(runner,/Legacy startup cutover blocked/);
+  assert.match(runner,/Never invoke onComplete\/markStartupMigrationsComplete on a blocked/);
+});
