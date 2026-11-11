@@ -20,6 +20,7 @@ export function Side({
   accounts,
   colorClass,
   icon,
+  onFxClick,
 }: {
   label: string;
   sublabel: string;
@@ -28,6 +29,7 @@ export function Side({
   accounts: AccountItem[];
   colorClass: string;
   icon: React.ReactNode;
+  onFxClick?: (side: "gain" | "loss") => void;
 }) {
   const [showAll, setShowAll] = useState(false);
 
@@ -81,7 +83,7 @@ export function Side({
               {showAll && (
                 <div className="space-y-2">
                   {Object.entries(grouped).map(([cat, accs]) => (
-                    <CategoryGroup key={cat} title={cat} accounts={accs} accentClass={colorClass} />
+                    <CategoryGroup key={cat} title={cat} accounts={accs} accentClass={colorClass} onFxClick={onFxClick} />
                   ))}
                 </div>
               )}
