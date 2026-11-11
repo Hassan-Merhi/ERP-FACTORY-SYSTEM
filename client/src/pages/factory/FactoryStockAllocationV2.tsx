@@ -1,5 +1,7 @@
 // LEGACY — Stock Allocation V2. Superseded by FactoryStockAllocationV5. Kept as fallback only. Route: /factory/stock-allocation (not in sidebar).
 import { useState, useMemo } from "react";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2, RefreshCw, Info, Plus } from "lucide-react";
@@ -45,13 +47,15 @@ interface AllocationDataV2 {
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
 export default function FactoryStockAllocationV2() {
+  const { selectedCompany } = useCompany();
   const [visibleProformaIds, setVisibleProformaIds] = useState<Set<number>>(new Set());
   const [showInactiveProformas, setShowInactiveProformas] = useState(false);
   const [showZeroItems, setShowZeroItems] = useState(false);
   const [createDrawerOpen, setCreateDrawerOpen] = useState(false);
 
   const proformaQuery = useQuery<AllocationDataV2>({
-    queryKey: ["/api/factory/v2/stock-allocation"],
+    queryKey: companyQueryKey("/api/factory/v2/stock-allocation", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const res = await fetch("/api/factory/v2/stock-allocation", { credentials: "include" });
       if (!res.ok) {

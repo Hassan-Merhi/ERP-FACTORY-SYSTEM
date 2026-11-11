@@ -167,6 +167,13 @@
       "pinnedBy": [
         "tests/retail-wave2-contract.test.ts"
       ]
+    },
+    {
+      "path": "client/src/pages/factory/FactoryCustomerStatement.tsx",
+      "lines": 1088,
+      "pinnedBy": [
+        "tests/factory-unification-phase2-final-audit.test.ts"
+      ]
     }
   ],
   "pinnedPathsNoLongerPresent": [

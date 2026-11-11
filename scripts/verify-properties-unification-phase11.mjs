@@ -43,7 +43,7 @@ const checks = [
   ["historical cutoff remains 2026-10-26", () => content.snapshot.includes('HISTORICAL_RENT_CUTOFF = "2026-10-26"')],
   ["historical company identity remains stable", () => ["company.id === HASSAN_PROPERTIES_REPORTING_COMPANY_ID", "company.code === HASSAN_PROPERTIES_REPORTING_COMPANY_CODE"].every((value) => content.identity.includes(value))],
   ["unreachable reconciliation tabs removed", () => !content.paymentPage.includes("RECONCILIATION_VIEWS") && !content.filters.includes("effectiveView")],
-  ["company business day used in payment filters", () => content.filters.includes("rentalPeriodStart(period)") && content.reporting.includes("getAppDate()")],
+  ["company business day used in payment filters", () => content.filters.includes("rentalPeriodBounds(effectivePeriod)") && content.reporting.includes("getAppDate()")],
   ["currency checks present in both financial UIs", () => content.paymentPage.includes("hasSingleUsdBasis(filtered)") && content.rentalsPage.includes("contractTotalsAreUsd")],
   ["full-history button restricted to verified historical view", () => content.paymentPage.includes("const copyIsFull = isFullHistory;")],
   ["never show false full-history button on other Properties companies", () => !content.paymentPage.includes("const copyIsFull = noFilters;")],

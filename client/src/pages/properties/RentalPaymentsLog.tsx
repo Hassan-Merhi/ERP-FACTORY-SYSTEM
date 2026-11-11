@@ -24,11 +24,7 @@ import {
   PaymentsReconciliation,
   type ReconciliationSnapshot,
 } from "./property-rental/components/PaymentsReconciliation";
-import {
-  paymentHistoryTsv,
-  reconciledHistoryTsv,
-  receiptTotals,
-} from "./property-rental/paymentsReceiptMath";
+import { paymentHistoryTsv, reconciledHistoryTsv, receiptTotals } from "./property-rental/paymentsReceiptMath";
 import { hasHassanPropertiesHistoricalReportingPolicy } from "@/properties/config/historicalRentReportingPolicy";
 import { useRentalPayments, rentalPaymentsQueryKey } from "@/properties/hooks/useRentalPayments";
 import { useRentalPaymentsFilters } from "@/properties/hooks/useRentalPaymentsFilters";
@@ -63,12 +59,7 @@ interface Props {
   rentalModule: RentalModule;
 }
 
-export default function RentalPaymentsLog({
-  rentalModule,
-  pageTitle,
-  pageIcon,
-  testIdPrefix,
-}: Props) {
+export default function RentalPaymentsLog({ rentalModule, pageTitle, pageIcon, testIdPrefix }: Props) {
   const rentalPolicy = getRentalModulePolicy(rentalModule);
   const apiBase = rentalPolicy.apiBase;
   const { selectedCompany } = useCompany();
@@ -85,13 +76,24 @@ export default function RentalPaymentsLog({
   const isPropertiesPayments = rentalPolicy.usesPropertiesReconciliation;
   const isHassanProperties = isPropertiesPayments && hasHassanPropertiesHistoricalReportingPolicy(selectedCompany);
   const queryKey = rentalPaymentsQueryKey(apiBase, selectedCompany?.id, isPropertiesPayments);
-  const { data: payments = [], isLoading, isError: paymentsError } = useRentalPayments(
-    apiBase, selectedCompany?.id, isPropertiesPayments,
-  );
   const {
-    search, setSearch, period, setPeriod, selectedUnit, setSelectedUnit,
-    selectedTenant, setSelectedTenant,
-    unitOptions, tenantOptions, filtered, noFilters,
+    data: payments = [],
+    isLoading,
+    isError: paymentsError,
+  } = useRentalPayments(apiBase, selectedCompany?.id, isPropertiesPayments);
+  const {
+    search,
+    setSearch,
+    period,
+    setPeriod,
+    selectedUnit,
+    setSelectedUnit,
+    selectedTenant,
+    setSelectedTenant,
+    unitOptions,
+    tenantOptions,
+    filtered,
+    noFilters,
   } = useRentalPaymentsFilters(payments, isPropertiesPayments, selectedCompany?.id);
 
   const deleteMutation = useMutation({
@@ -116,7 +118,8 @@ export default function RentalPaymentsLog({
     isFullHistory &&
     !isLoading &&
     !paymentsError &&
-    reconciliation?.companyId === selectedCompany?.id &&
+    reconciliation !== null &&
+    reconciliation.companyId === selectedCompany?.id &&
     !reconciliation.loading &&
     reconciliation.accountSum !== null &&
     reconciliation.aliCashLedgerId !== null;
@@ -125,10 +128,7 @@ export default function RentalPaymentsLog({
     : filtered.reduce((sum, payment) => sum + Number(payment.amount), 0);
   const clipboardIsUsd = hasSingleUsdBasis(filtered);
   const fullHistoryIsUsd = hasSingleUsdBasis(payments);
-  const displayedFigure = rentalReportingFigure(
-    clipboardIsUsd ? total : null,
-    "posted-cash",
-  );
+  const displayedFigure = rentalReportingFigure(clipboardIsUsd ? total : null, "posted-cash");
   const copyHistory = async () => {
     try {
       await navigator.clipboard.writeText(paymentHistoryTsv(filtered));
@@ -146,7 +146,13 @@ export default function RentalPaymentsLog({
     }
   };
   const copyFullHistory = async () => {
-    if (!reconciliationReady || !fullHistoryIsUsd || reconciliation?.aliCashLedgerId == null || reconciliation.accountSum == null) return;
+    if (
+      !reconciliationReady ||
+      !fullHistoryIsUsd ||
+      reconciliation?.aliCashLedgerId == null ||
+      reconciliation.accountSum == null
+    )
+      return;
     try {
       await navigator.clipboard.writeText(
         reconciledHistoryTsv(payments, {
@@ -181,7 +187,11 @@ export default function RentalPaymentsLog({
     // Full-history export is available only to the verified historical reporting company.
     const copyIsFull = isFullHistory;
     const copyAllowed =
-      !isLoading && !paymentsError && filtered.length > 0 && clipboardIsUsd && (!isFullHistory || (reconciliationReady && fullHistoryIsUsd));
+      !isLoading &&
+      !paymentsError &&
+      filtered.length > 0 &&
+      clipboardIsUsd &&
+      (!isFullHistory || (reconciliationReady && fullHistoryIsUsd));
     return (
       <div className="space-y-4 sm:p-4" data-testid={`page-${testIdPrefix}-payments-log`}>
         {isHassanProperties && (
@@ -219,7 +229,8 @@ export default function RentalPaymentsLog({
         />
         {!clipboardIsUsd && (
           <p className="text-xs text-amber-600 dark:text-amber-400">
-            Payments contain non-USD or unverified currencies. No unconverted combined USD total is shown; USD copy/export requires verified currency evidence.
+            Payments contain non-USD or unverified currencies. No unconverted combined USD total is shown; USD
+            copy/export requires verified currency evidence.
           </p>
         )}
         <RentalPaymentDeleteDialog
@@ -294,9 +305,7 @@ export default function RentalPaymentsLog({
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs text-muted-foreground font-normal">
-              TOTAL AMOUNT RECEIVED
-            </CardTitle>
+            <CardTitle className="text-xs text-muted-foreground font-normal">TOTAL AMOUNT RECEIVED</CardTitle>
           </CardHeader>
           <CardContent>
             <div
@@ -338,9 +347,7 @@ export default function RentalPaymentsLog({
                     <th className="text-left px-3 py-2 font-semibold">Date</th>
                     <th className="text-left px-3 py-2 font-semibold">Client Name</th>
                     <th className="text-left px-3 py-2 font-semibold">Unit</th>
-                    <th className="text-right px-3 py-2 font-semibold">
-                      Amount
-                    </th>
+                    <th className="text-right px-3 py-2 font-semibold">Amount</th>
                     <th className="text-left px-3 py-2 font-semibold">For Month</th>
                     <th className="text-left px-3 py-2 font-semibold">Notes</th>
                     <th className="text-left px-3 py-2 font-semibold">Daybook</th>
@@ -354,9 +361,7 @@ export default function RentalPaymentsLog({
                       className={`border-t ${i % 2 === 1 ? "bg-muted/20" : ""}`}
                       data-testid={`row-payment-${p.id}`}
                     >
-                      <td className="px-3 py-2 tabular-nums text-sm">
-                        {rentalPaymentDateLabel(p.paymentDate)}
-                      </td>
+                      <td className="px-3 py-2 tabular-nums text-sm">{rentalPaymentDateLabel(p.paymentDate)}</td>
                       <td className="px-3 py-2 font-medium">{p.tenantName ?? "—"}</td>
                       <td className="px-3 py-2">
                         <span className="font-mono text-xs">{p.unitNumber ?? "—"}</span>
@@ -367,7 +372,11 @@ export default function RentalPaymentsLog({
                         )}
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums font-semibold text-green-700 dark:text-green-400">
-                        {p.currency?.trim() ? <MoneyAmount amount={p.amount} currency={p.currency} /> : <span title="Recorded currency not verified">{p.amount} (currency unverified)</span>}
+                        {p.currency?.trim() ? (
+                          <MoneyAmount amount={p.amount} currency={p.currency} />
+                        ) : (
+                          <span title="Recorded currency not verified">{p.amount} (currency unverified)</span>
+                        )}
                       </td>
 
                       <td className="px-3 py-2 text-xs text-muted-foreground">

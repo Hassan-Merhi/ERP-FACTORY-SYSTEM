@@ -401,7 +401,7 @@ describe("Wave H populated core-page behavior", () => {
           ],
         ],
         [
-          ["/api/agent-accounts"],
+          ["/api/agent-accounts", 1],
           [{ id: 1, companyId: 1, accountId: "agent-1", accountType: "customer", accountName: "Alpha Agent" }],
         ],
         [

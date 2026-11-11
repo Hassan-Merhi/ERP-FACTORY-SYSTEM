@@ -6,6 +6,8 @@ import { registerCentralRentalPaymentDeletionRoute } from "./rental/centralRenta
 import { registerRentalPaymentsAccrualRoutes } from "./rental/rentalPaymentsAccrualRoutes";
 import { registerRentalAccrualConfigRoutes } from "./rental/rentalAccrualConfigRoutes";
 import { runRentalReconciliation } from "../services/rental/rentalReconciliationService";
+import { getHadiLinkedRentControl, HADI_LINKED_RENT } from "../services/rental/hadiLinkedRentProtection";
+import { RentalAutoTransferScopeError } from "../services/rental/autoTransferScope";
 import { registerDeferredRentReclassificationRoutes } from "./rental/deferredRentReclassificationRoutes";
 import { registerDueRentalPostingRoutes } from "./rental/dueRentalPostingRoutes";
 import { registerLegacyPrepaidRecognitionRoutes } from "./rental/legacyPrepaidRecognitionRoutes";
@@ -43,6 +45,32 @@ export function registerRentalRoutes(
   registerCentralRentalPaymentDeletionRoute(app, module, urlPrefix);
   registerRentalPaymentsAccrualRoutes(app, module, urlPrefix, incomeAccountName, shopExpenseAccountName);
   registerRentalAccrualConfigRoutes(app, module, urlPrefix, incomeAccountName, shopExpenseAccountName);
+
+
+  // HADI's linked Properties rent creates a liability in ERP but receipts
+  // belong to the separate Properties company. Reconcile both *read-only*;
+  // never manufacture historic correcting journals or mutate prepaid rent.
+  if (module === "ERP") {
+    app.get(`${urlPrefix}/linked-rent-control`, requireAuth, requireRentalReconciliationPermission, async (req: Request, res: Response) => {
+      try {
+        const companyId = getCompanyId(req);
+        if (companyId !== HADI_LINKED_RENT.payerCompanyId) return res.status(404).json({ message: "Not found" });
+        const asOf = (req.query.asOf as string | undefined) || getClientDate(req);
+        const result = await getHadiLinkedRentControl(companyId, asOf);
+        return res.json(result);
+      } catch (e: unknown) {
+        if (e instanceof RentalAutoTransferScopeError) {
+          return res.status(e.status).json({ code: e.code, message: e.message });
+        }
+        const error = getErrorMessage(e);
+        if (error === "HADI_LINKED_RENT_INVALID_AS_OF_DATE") {
+          return res.status(400).json({ code: error, message: "Use a valid YYYY-MM-DD asOf date." });
+        }
+        logger.error("[ERP/rental] HADI linked rent control:", { error: e });
+        return res.status(500).json({ message: "Linked rent accounting check failed without changing any vouchers." });
+      }
+    });
+  }
 
   // ── Reconciliation endpoint (Admin / Developer only) ──
   app.get(`${urlPrefix}/reconciliation`, requireAuth, requireRentalReconciliationPermission, async (req: Request, res: Response) => {

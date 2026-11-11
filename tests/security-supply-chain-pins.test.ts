@@ -24,8 +24,9 @@ describe("immutable supply-chain pins for the factory edge and Pullfrog", () => 
     expect(dockerfile).toContain("USER node");
   });
 
-  it("pins Pullfrog to the verified v0.1.117 release commit, never a mutable tag", () => {
-    expect(pullfrog).toContain("uses: pullfrog/pullfrog@a5cc9694d5609b62c1f356ef515889117c44b26c # v0.1.117");
+  it("pins Pullfrog to the verified v0.1.123 release commit, never a mutable tag", () => {
+    // 3c58d31 is what refs/tags/v0.1.123 resolves to in pullfrog/pullfrog (checked 2026-11-09).
+    expect(pullfrog).toContain("uses: pullfrog/pullfrog@3c58d31073422cc1b9573f58b5dbadb7a4914715 # v0.1.123");
     expect(pullfrog).not.toMatch(/uses:\s*pullfrog\/pullfrog@v(?:\d|$)/m);
     expect(pullfrog).toContain("persist-credentials: false");
   });

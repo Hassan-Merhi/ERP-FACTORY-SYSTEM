@@ -6,6 +6,9 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAdminOverride } from "@/hooks/use-admin-override";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
+import type { FactoryMyAccess } from "@shared/apiTypes";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { getApiRequest } from "@/lib/factoryApi";
 import { isZebraMode, printRawZpl } from "@/lib/zebraPrint";
@@ -56,6 +59,7 @@ interface BaleRow {
 type BalesPage = { items: BaleRow[]; total: number; page: number; limit: number; totalPages: number };
 
 export function useBalesHistoryModel() {
+  const { selectedCompany } = useCompany();
   const { wrapAdminAction, AdminDialog } = useAdminOverride();
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [exportFrom, setExportFrom] = useState("");
@@ -102,6 +106,16 @@ export function useBalesHistoryModel() {
     return () => clearTimeout(t);
   }, [searchTerm]);
 
+  // Never reuse previous-company selected bale IDs or pending edits.
+  useEffect(() => {
+    setSelectedIds(new Set());
+    setReturnToStockBale(null);
+    setWeightEditBale(null);
+    setDeleteConfirm(null);
+    setEditingNameId(null);
+    setCurrentPage(1);
+  }, [selectedCompany?.id]);
+
   // Reset to page 1 whenever any filter that changes the result set changes.
   useEffect(() => {
     setCurrentPage(1);
@@ -133,24 +147,27 @@ export function useBalesHistoryModel() {
     }
   };
 
-  const { data: factoryAccess } = useQuery<{ fullAccess: boolean; pageKeys: string[]; hiddenCostFields: string[] }>({
-    queryKey: ["/api/factory/my-access"],
+  const { data: factoryAccess } = useQuery<FactoryMyAccess>({
+    queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
   });
   // View Only / Create Only company roles never change existing bales: the page
   // hides repack and delete (fullAccess-gated) and ignores rename, weight edit
   // and bulk-selection gestures. The server refuses the same writes.
   const recordChanges = useExistingRecordChangeAccess();
-  const myAccess = factoryAccess && !recordChanges.allowed ? { ...factoryAccess, fullAccess: false } : factoryAccess;
+  const scopedAccess = selectedCompany?.id && factoryAccess?.companyId === selectedCompany.id && factoryAccess.hasFactoryAccess === true ? factoryAccess : undefined;
+  const myAccess = scopedAccess && !recordChanges.allowed ? { ...scopedAccess, fullAccess: false } : scopedAccess;
 
   const { data: balesResponse, isLoading } = useQuery<BalesPage>({
-    queryKey: [
+    queryKey: companyQueryKey(
       "/api/factory/bales",
+      selectedCompany?.id,
       dateFilter,
       currentPage,
       statusFilter !== "all" ? statusFilter : undefined,
       batchFilter !== "all" ? batchFilter : undefined,
       debouncedSearch || undefined,
-    ],
+    ),
     queryFn: async () => {
       const params = new URLSearchParams();
       // A reference/text search is global across production dates. Keeping the
@@ -173,7 +190,7 @@ export function useBalesHistoryModel() {
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     refetchOnMount: true,
-    placeholderData: (prev) => prev,
+    enabled: Boolean(selectedCompany?.id),
   });
 
   // Extract flat items + pagination metadata from the paginated response.
@@ -252,14 +269,14 @@ export function useBalesHistoryModel() {
   });
 
   const { data: returnToStockOrderInfo, isLoading: orderInfoLoading } = useQuery({
-    queryKey: ["/api/factory/bales", returnToStockBale?.bale?.id, "order-info"],
+    queryKey: companyQueryKey("/api/factory/bales", selectedCompany?.id, returnToStockBale?.bale?.id, "order-info"),
     queryFn: async () => {
       if (!returnToStockBale) return null;
       const res = await modeApiRequest("GET", `/api/factory/bales/${returnToStockBale.bale.id}/order-info`);
       if (!res.ok) return null;
       return res.json();
     },
-    enabled: !!returnToStockBale,
+    enabled: Boolean(selectedCompany?.id) && !!returnToStockBale,
   });
 
   const returnToStockMutation = useMutation({

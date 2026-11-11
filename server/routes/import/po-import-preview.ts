@@ -15,6 +15,7 @@ import type { StockItem } from "@shared/schema";
  */
 export interface PoImportPreviewItem {
   poNumber: string;
+  supplierCode?: string;
   barcode: string;
   itemName: string;
   quantity: number;
@@ -38,6 +39,8 @@ export interface PoImportPreviewCharges {
 
 export interface PoImportPreviewContainer {
   containerNumber: string;
+  /** Exact Supplier_Code from original PO worksheet, carried into validation. */
+  supplierCode?: string;
   items: PoImportPreviewItem[];
   charges: PoImportPreviewCharges;
   itemsCount: number;
@@ -86,6 +89,7 @@ function parsePreviewItem(value: unknown): { item: PoImportPreviewItem; moneyRea
   return {
     item: {
       poNumber: optionalString(value.poNumber),
+      supplierCode: optionalString(value.supplierCode),
       barcode: optionalString(value.barcode),
       itemName: optionalString(value.itemName),
       quantity: quantity ?? 0,
@@ -175,6 +179,7 @@ export function findPreviewContainer(preview: unknown, containerNumber: string):
   return {
     container: {
       containerNumber,
+      supplierCode: optionalString(entry.supplierCode),
       items,
       charges,
       itemsCount: toFiniteNumber(entry.itemsCount) ?? items.length,

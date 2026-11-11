@@ -20,6 +20,9 @@ const receipt = (id: number, amount: number, overrides: Partial<ReceiptRow> = {}
   tenantName: "Example Tenant",
   unitNumber: "A1",
   locationGroup: "HMD LUBUMBASHI",
+  // USD exports require recorded USD on every row (rentalCurrencyBasis): a
+  // missing currency is unknown, not proof of USD.
+  currency: "USD",
   ...overrides,
 });
 

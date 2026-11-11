@@ -28,6 +28,7 @@ import { accountingPostingRequests, voucherEntries, vouchers } from "@shared/sch
 import type { DatabaseOrTransaction } from "../../db";
 import { writeAuditEvent } from "../audit";
 import { currentAuditActor } from "../audit/auditActorContext";
+import { isDispatchFinancialVoucherTx } from "../factory/dispatchTripFinancialGuards";
 import { isFxAgentSettlementVoucherTx, FX_AGENT_VOUCHER_LOCKED_MESSAGE } from "./fxAgentVoucherLock";
 
 export const RETIRED_VOUCHER_NUMBER_MARK = "~DEL";
@@ -98,6 +99,13 @@ export async function retireVouchersTx(
     .orderBy(vouchers.id)
     .for("update");
   if (found.length === 0) return [];
+  // Financially finalized dispatch vouchers are source-owned. Retiring one
+  // here would remove customer debt without updating its signed trip posting.
+  for (const voucher of found) {
+    if (await isDispatchFinancialVoucherTx(tx, companyId, voucher.id)) {
+      throw new Error("DISPATCH_TRIP_VOUCHER_LOCKED: Reverse the financial trip from Dispatch Management instead");
+    }
+  }
   if (
     await isFxAgentSettlementVoucherTx(
       tx,

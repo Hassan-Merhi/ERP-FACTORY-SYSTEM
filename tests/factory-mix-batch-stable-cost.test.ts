@@ -114,6 +114,13 @@ async function offloadedContainer(
   return container;
 }
 
+const EDIT_REASON = "Reviewed source correction in test";
+
+/** Put a just-created mix into the open, not-yet-drawn-from state the edit and delete workflows accept. */
+async function reopenUnused(batchId: number): Promise<void> {
+  await pool.query(`UPDATE factory_mix_batches SET status = 'OPEN', used_kg = 0 WHERE id = $1`, [batchId]);
+}
+
 async function getSupplierRow(supplierName: string): Promise<any> {
   const response = await agent.get("/api/factory/raw-stock");
   expect(response.status).toBe(200);
@@ -174,20 +181,32 @@ describe("Stable receipt-weighted supplier cost rate", () => {
     expect(Number(secondBatch.body.costPerKg)).toBeCloseTo(0.28, 4);
     const batch2Id = secondBatch.body.id;
 
+    // A mix is recorded as completed when it is created. Topping it up,
+    // re-sourcing it or deleting it would move raw stock under production that
+    // already happened, so each is refused and nothing about the supplier moves.
     const topUp = await agent.post(`/api/factory/mix-batches/${batch1Id}/top-up`).send({
       supplierSources: [{ supplierId: supplierAId, weightKg: "500" }],
     });
-    expect(topUp.status).toBe(200);
-    expect(Number(topUp.body.costPerKg)).toBeCloseTo(0.28, 4);
+    expect(topUp.status).toBe(409);
+    expect(topUp.body.code).toBe("MIX_BATCH_LIFECYCLE_REFUSED");
 
     const edit = await agent.patch(`/api/factory/mix-batches/${batch2Id}`).send({
       supplierSources: [{ supplierId: supplierAId, weightKg: "1500" }],
+      batchSources: [],
+      confirmSourceEdit: true,
+      sourceEditReviewHash: "unreviewed",
+      sourceEditReason: EDIT_REASON,
     });
-    expect(edit.status).toBe(200);
-    expect(Number(edit.body.costPerKg)).toBeCloseTo(0.28, 4);
+    expect(edit.status).toBe(409);
+    expect(edit.body.code).toBe("MIX_BATCH_COMPLETED_SOURCE_EDIT_REQUIRES_REVIEW");
 
     const deletion = await agent.delete(`/api/factory/mix-batches/${batch1Id}`);
-    expect(deletion.status).toBe(200);
+    expect(deletion.status).toBe(409);
+    expect(deletion.body.code).toBe("MIX_BATCH_LIFECYCLE_REFUSED");
+
+    row = await getSupplierRow(`${TEST_PREFIX}_SupplierA`);
+    expect(Number(row.freeKg)).toBeCloseTo(17000, 1);
+    expect(Number(row.costPerKgUsd)).toBeCloseTo(0.28, 4);
 
     const thirdBatch = await agent.post("/api/factory/mix-batches").send({
       supplierSources: [{ supplierId: supplierAId, weightKg: "3000" }],
@@ -306,10 +325,23 @@ describe("Adjustments, tamper resistance and explicit corrections", () => {
     });
     expect(created.status).toBe(200);
 
-    const edited = await agent.patch(`/api/factory/mix-batches/${created.body.id}`).send({
+    await reopenUnused(created.body.id);
+
+    const proposal = {
       supplierSources: [{ supplierId: supplierCId, weightKg: "80", costPerKg: "9.99" }],
-    });
-    expect(edited.status).toBe(200);
+      batchSources: [],
+      sourceEditReason: EDIT_REASON,
+    };
+    const preview = await agent
+      .patch(`/api/factory/mix-batches/${created.body.id}`)
+      .send({ ...proposal, sourceEditPreview: true });
+    expect(preview.status, JSON.stringify(preview.body)).toBe(200);
+    expect(preview.body.allowed, JSON.stringify(preview.body.warnings)).toBe(true);
+
+    const edited = await agent
+      .patch(`/api/factory/mix-batches/${created.body.id}`)
+      .send({ ...proposal, confirmSourceEdit: true, sourceEditReviewHash: preview.body.reviewHash });
+    expect(edited.status, JSON.stringify(edited.body)).toBe(200);
     expect(Number(edited.body.costPerKg)).toBeCloseTo(lockedRate, 4);
   });
 
@@ -321,10 +353,12 @@ describe("Adjustments, tamper resistance and explicit corrections", () => {
     });
     expect(created.status).toBe(200);
 
+    await pool.query(`UPDATE factory_mix_batches SET status = 'ACTIVE' WHERE id = $1`, [created.body.id]);
+
     const topUp = await agent.post(`/api/factory/mix-batches/${created.body.id}/top-up`).send({
       supplierSources: [{ supplierId: supplierCId, weightKg: "30", costPerKg: "9.99" }],
     });
-    expect(topUp.status).toBe(200);
+    expect(topUp.status, JSON.stringify(topUp.body)).toBe(200);
     expect(Number(topUp.body.costPerKg)).toBeCloseTo(lockedRate, 4);
   });
 
@@ -518,11 +552,26 @@ describe("Delete/reverse", () => {
     expect(Number(row.freeKg)).toBeCloseTo(4000, 1);
     expect(Number(row.usedValueUsd)).toBeCloseTo(900, 1);
 
-    expect((await agent.delete(`/api/factory/mix-batches/${created.body.id}`)).status).toBe(200);
+    // A completed mix is not reversible by an ordinary delete: nothing is recredited.
+    const refused = await agent.delete(`/api/factory/mix-batches/${created.body.id}`);
+    expect(refused.status).toBe(409);
+    row = await getSupplierRow(`${TEST_PREFIX}_SupplierF`);
+    expect(Number(row.freeKg)).toBeCloseTo(4000, 1);
+    expect(Number(row.usedValueUsd)).toBeCloseTo(900, 1);
+
+    // An open mix nothing has drawn from is: its sources go back once, at the locked rate.
+    await reopenUnused(created.body.id);
+    const deleted = await agent.delete(`/api/factory/mix-batches/${created.body.id}`);
+    expect(deleted.status, JSON.stringify(deleted.body)).toBe(200);
     row = await getSupplierRow(`${TEST_PREFIX}_SupplierF`);
     expect(Number(row.freeKg)).toBeCloseTo(5000, 1);
     expect(Number(row.usedValueUsd)).toBeCloseTo(0, 1);
     expect(Number(row.costPerKgUsd)).toBeCloseTo(rateBefore, 4);
+
+    // A second delete finds nothing to reverse.
+    expect((await agent.delete(`/api/factory/mix-batches/${created.body.id}`)).status).not.toBe(200);
+    row = await getSupplierRow(`${TEST_PREFIX}_SupplierF`);
+    expect(Number(row.freeKg)).toBeCloseTo(5000, 1);
   });
 });
 

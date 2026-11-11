@@ -5,7 +5,14 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useTablePrefs } from "@/hooks/use-table-prefs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useCallback, useRef } from "react";
 import { useAppMode } from "@/contexts/AppModeContext";
@@ -138,14 +145,20 @@ export default function FactoryInvoices() {
     [toast]
   );
 
-  const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id), enabled: Boolean(selectedCompany?.id), staleTime: 5 * 60000 });
+  const { data: myAccess } = useQuery<FactoryMyAccess>({
+    queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
+    staleTime: 5 * 60000,
+  });
   const accessReady = Boolean(myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess);
   const isAdmin = accessReady && myAccess?.fullAccess === true;
   const { data: authUser } = useQuery<AuthMe>({ queryKey: ["/api/auth/me"], staleTime: 5 * 60000 });
-  const showBookingInfo = accessReady && ["admin", "owner", "developer"].includes(
-    String(authUser?.currentRole || authUser?.role || "").toLowerCase()
-  );
-  const hidden: string[] = accessReady ? myAccess!.hiddenCostFields : ["hide_invoicing_proforma_col", "hide_invoicing_totals_usd"];
+  const showBookingInfo =
+    accessReady &&
+    ["admin", "owner", "developer"].includes(String(authUser?.currentRole || authUser?.role || "").toLowerCase());
+  const hidden: string[] = accessReady
+    ? myAccess!.hiddenCostFields
+    : ["hide_invoicing_proforma_col", "hide_invoicing_totals_usd"];
   const hideProformaCol = !isAdmin || hidden.includes("hide_invoicing_proforma_col");
   const hideTotalsUsd = hidden.includes("hide_invoicing_totals_usd");
 
@@ -155,10 +168,11 @@ export default function FactoryInvoices() {
     `factory-invoices:user:${authUser?.id ?? "pending"}`,
     { companyId: authUser?.currentCompanyId ?? null }
   );
-  const allowedInvoiceColumns = INVOICE_OPTIONAL_COLUMNS.filter(({ key }) =>
-    (key !== "proforma" || !hideProformaCol) &&
-    (key !== "bookingInfo" || showBookingInfo) &&
-    (key !== "total" || !hideTotalsUsd)
+  const allowedInvoiceColumns = INVOICE_OPTIONAL_COLUMNS.filter(
+    ({ key }) =>
+      (key !== "proforma" || !hideProformaCol) &&
+      (key !== "bookingInfo" || showBookingInfo) &&
+      (key !== "total" || !hideTotalsUsd)
   );
   const isColumnVisible = (key: InvoiceColumnKey): boolean =>
     allowedInvoiceColumns.some((column) => column.key === key) && tablePrefs.columns?.[key] !== false;
@@ -186,13 +200,20 @@ export default function FactoryInvoices() {
     isLoading,
     isError,
   } = useQuery<CustomerOrder[]>({
-    queryKey: companyQueryKey(`/api/factory/customer-orders${queryString ? `?${queryString}` : ""}`, selectedCompany?.id, customerFilter, showHidden),
+    queryKey: companyQueryKey(
+      `/api/factory/customer-orders${queryString ? `?${queryString}` : ""}`,
+      selectedCompany?.id,
+      customerFilter,
+      showHidden
+    ),
     enabled: Boolean(selectedCompany?.id),
   });
 
   const changeCustomerMutation = useMutation({
     mutationFn: async ({ orderId, customerId }: { orderId: number; customerId: number }) => {
-      const response = await modeApiRequest("PATCH", `/api/factory/customer-orders/${orderId}/change-customer`, { customerId });
+      const response = await modeApiRequest("PATCH", `/api/factory/customer-orders/${orderId}/change-customer`, {
+        customerId,
+      });
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
         throw new Error(error.message || "Could not change loading customer");
@@ -207,7 +228,8 @@ export default function FactoryInvoices() {
       queryClient.invalidateQueries({ predicate: keyStartsWith("/api/factory/customer-orders") });
       invalidateCustomerBalances();
     },
-    onError: (error: Error) => toast({ title: "Cannot change customer", description: error.message, variant: "destructive" }),
+    onError: (error: Error) =>
+      toast({ title: "Cannot change customer", description: error.message, variant: "destructive" }),
   });
 
   // Update the canonical order record, not a display-only copy. All linked
@@ -273,7 +295,10 @@ export default function FactoryInvoices() {
       return res.json();
     },
     onSuccess: () => {
-      toast({ title: "Loading deleted", description: "Eligible bales returned to available stock. The loading can be found in Deleted Items." });
+      toast({
+        title: "Loading deleted",
+        description: "Eligible bales returned to available stock. The loading can be found in Deleted Items.",
+      });
       queryClient.invalidateQueries({ predicate: keyStartsWith("/api/factory/customer-orders") });
       queryClient.invalidateQueries({ predicate: keyStartsWith("/api/factory/stock") });
       queryClient.invalidateQueries({ predicate: keyStartsWith("/api/factory/bales") });
@@ -312,16 +337,28 @@ export default function FactoryInvoices() {
   // KPIs, tabs and table use the same search and business-date scope.
   const scopedOrders = allOrders.filter((order) => {
     const needle = searchTerm.trim().toLowerCase();
-    if (needle && ![
-      order.customerName, order.invoiceNumber, String(order.id),
-      order.proformaName, order.containerNumber, order.destination,
-    ].some((value) => (value || "").toLowerCase().includes(needle))) return false;
+    if (
+      needle &&
+      ![
+        order.customerName,
+        order.invoiceNumber,
+        String(order.id),
+        order.proformaName,
+        order.containerNumber,
+        order.destination,
+      ].some((value) => (value || "").toLowerCase().includes(needle))
+    )
+      return false;
     const day = (getFactoryInvoiceDate(order) || "").slice(0, 10);
     if (fromDate && (!day || day < fromDate)) return false;
     if (toDate && (!day || day > toDate)) return false;
     return true;
   });
-  const { loading: loadingCount, verified: verifiedCount, finalized: finalizedCount } = statusFilterCounts(scopedOrders);
+  const {
+    loading: loadingCount,
+    verified: verifiedCount,
+    finalized: finalizedCount,
+  } = statusFilterCounts(scopedOrders);
   const filteredOrders = filterOrdersByStatus(scopedOrders, statusFilter);
 
   const statusFilters: { key: StatusFilter; label: string; count: number }[] = [
@@ -418,34 +455,57 @@ export default function FactoryInvoices() {
     unfinalizePending: unfinalizeMutation.isPending,
     onRevertOrder: (orderId: number) => unfinalizeMutation.mutate(orderId),
     onDeleteOrder: (orderId: number) => deleteMutation.mutate(orderId),
-    onChangeCustomer: (orderId: number) => { setChangingCustomerOrderId(orderId); setNewCustomerId(""); },
+    onChangeCustomer: (orderId: number) => {
+      setChangingCustomerOrderId(orderId);
+      setNewCustomerId("");
+    },
   };
 
   return (
     <div className="flex min-w-0 flex-col gap-3 p-3 sm:p-4" data-testid="invoicing-modern-dashboard">
-      <Dialog open={changingCustomerOrderId !== null} onOpenChange={(open) => { if (!open) setChangingCustomerOrderId(null); }}>
+      <Dialog
+        open={changingCustomerOrderId !== null}
+        onOpenChange={(open) => {
+          if (!open) setChangingCustomerOrderId(null);
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Change loading customer</DialogTitle>
             <DialogDescription>
-              Keep all existing loaded bales and container information. The current customer's proforma will be unlinked; select a new proforma afterward if needed.
+              Keep all existing loaded bales and container information. The current customer's proforma will be
+              unlinked; select a new proforma afterward if needed.
             </DialogDescription>
           </DialogHeader>
           <Select value={newCustomerId} onValueChange={setNewCustomerId}>
-            <SelectTrigger data-testid="select-new-loading-customer"><SelectValue placeholder="Choose new customer" /></SelectTrigger>
+            <SelectTrigger data-testid="select-new-loading-customer">
+              <SelectValue placeholder="Choose new customer" />
+            </SelectTrigger>
             <SelectContent>
               {customers.map((customer) => (
-                <SelectItem key={customer.id} value={String(customer.id)}>{customer.legalName}</SelectItem>
+                <SelectItem key={customer.id} value={String(customer.id)}>
+                  {customer.legalName}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setChangingCustomerOrderId(null)}>Cancel</Button>
-            <Button disabled={!newCustomerId || changeCustomerMutation.isPending} onClick={() => {
-              if (changingCustomerOrderId !== null && newCustomerId) {
-                changeCustomerMutation.mutate({ orderId: changingCustomerOrderId, customerId: Number(newCustomerId) });
-              }
-            }}>Save customer</Button>
+            <Button variant="outline" onClick={() => setChangingCustomerOrderId(null)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={!newCustomerId || changeCustomerMutation.isPending}
+              onClick={() => {
+                if (changingCustomerOrderId !== null && newCustomerId) {
+                  changeCustomerMutation.mutate({
+                    orderId: changingCustomerOrderId,
+                    customerId: Number(newCustomerId),
+                  });
+                }
+              }}
+            >
+              Save customer
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -470,11 +530,15 @@ export default function FactoryInvoices() {
                 size="sm"
                 onClick={() => setStatusFilter(f.key)}
                 data-testid={`button-filter-${f.key.toLowerCase()}`}
-                className={cn("h-9 rounded-lg border px-3 text-xs font-semibold", statusFilter === f.key && (
-                  f.key === "LOADING" ? "border-blue-500 bg-blue-600 text-white hover:bg-blue-500"
-                    : f.key === "VERIFIED" ? "border-emerald-500 bg-emerald-600 text-white hover:bg-emerald-500"
-                      : "border-violet-500 bg-violet-600 text-white hover:bg-violet-500"
-                ))}
+                className={cn(
+                  "h-9 rounded-lg border px-3 text-xs font-semibold",
+                  statusFilter === f.key &&
+                    (f.key === "LOADING"
+                      ? "border-blue-500 bg-blue-600 text-white hover:bg-blue-500"
+                      : f.key === "VERIFIED"
+                        ? "border-emerald-500 bg-emerald-600 text-white hover:bg-emerald-500"
+                        : "border-violet-500 bg-violet-600 text-white hover:bg-violet-500")
+                )}
               >
                 {f.label} <span className="ml-1 opacity-70">({f.count})</span>
               </Button>
@@ -545,10 +609,18 @@ export default function FactoryInvoices() {
           </Button>
           <Popover>
             <PopoverTrigger asChild>
-              <Button size="sm" variant="outline" className="h-9 rounded-lg text-xs"
-                title="Choose visible invoice columns" data-testid="button-invoice-columns">
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-9 rounded-lg text-xs"
+                title="Choose visible invoice columns"
+                data-testid="button-invoice-columns"
+              >
                 <SlidersHorizontal className="mr-1.5 h-3.5 w-3.5" />
-                Columns <span className="ml-1 text-muted-foreground">({visibleOptionalColumns}/{allowedInvoiceColumns.length})</span>
+                Columns{" "}
+                <span className="ml-1 text-muted-foreground">
+                  ({visibleOptionalColumns}/{allowedInvoiceColumns.length})
+                </span>
               </Button>
             </PopoverTrigger>
             <PopoverContent align="end" className="w-64 p-3" data-testid="invoice-columns-menu">
@@ -556,20 +628,30 @@ export default function FactoryInvoices() {
               <p className="mt-0.5 text-xs text-muted-foreground">Your choices are saved on this device.</p>
               <div className="mt-3 max-h-72 space-y-1 overflow-y-auto">
                 {allowedInvoiceColumns.map(({ key, label }) => (
-                  <label key={key} htmlFor={`invoice-column-${key}`}
-                    className="flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm hover:bg-muted/60">
-                    <Checkbox id={`invoice-column-${key}`} checked={isColumnVisible(key)}
+                  <label
+                    key={key}
+                    htmlFor={`invoice-column-${key}`}
+                    className="flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm hover:bg-muted/60"
+                  >
+                    <Checkbox
+                      id={`invoice-column-${key}`}
+                      checked={isColumnVisible(key)}
                       onCheckedChange={(checked) => setColumnVisible(key, checked === true)}
-                      data-testid={`checkbox-invoice-column-${key}`} />
+                      data-testid={`checkbox-invoice-column-${key}`}
+                    />
                     <span>{label}</span>
                   </label>
                 ))}
               </div>
               <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/60 pt-2">
                 <span className="text-[11px] text-muted-foreground">Customer & Actions stay visible</span>
-                <Button size="sm" variant="ghost" className="shrink-0 text-xs"
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="shrink-0 text-xs"
                   onClick={() => setTablePrefs((previous) => ({ ...previous, columns: {} }))}
-                  data-testid="button-invoice-show-all-columns">
+                  data-testid="button-invoice-show-all-columns"
+                >
                   Show all
                 </Button>
               </div>
@@ -579,17 +661,38 @@ export default function FactoryInvoices() {
         {showMoreFilters && (
           <div className="flex flex-wrap items-end gap-3 border-b border-border/60 bg-muted/20 px-3 py-3">
             <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-              <span className="inline-flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5" /> From date</span>
-              <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)}
-                className="h-9 w-40 rounded-lg bg-background text-xs" data-testid="input-invoice-from-date" />
+              <span className="inline-flex items-center gap-1">
+                <CalendarDays className="h-3.5 w-3.5" /> From date
+              </span>
+              <Input
+                type="date"
+                value={fromDate}
+                onChange={(e) => setFromDate(e.target.value)}
+                className="h-9 w-40 rounded-lg bg-background text-xs"
+                data-testid="input-invoice-from-date"
+              />
             </label>
             <label className="flex flex-col gap-1 text-xs text-muted-foreground">
               <span>To date</span>
-              <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)}
-                className="h-9 w-40 rounded-lg bg-background text-xs" data-testid="input-invoice-to-date" />
+              <Input
+                type="date"
+                value={toDate}
+                onChange={(e) => setToDate(e.target.value)}
+                className="h-9 w-40 rounded-lg bg-background text-xs"
+                data-testid="input-invoice-to-date"
+              />
             </label>
-            <Button variant="ghost" size="sm" className="h-9 rounded-lg text-xs"
-              onClick={() => { setFromDate(""); setToDate(""); setSearchTerm(""); }} data-testid="button-reset-invoice-filters">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-9 rounded-lg text-xs"
+              onClick={() => {
+                setFromDate("");
+                setToDate("");
+                setSearchTerm("");
+              }}
+              data-testid="button-reset-invoice-filters"
+            >
               Clear dates / search
             </Button>
           </div>
@@ -607,11 +710,11 @@ export default function FactoryInvoices() {
             </summary>
             <div className="px-3 pt-2">
               <InvoiceSummaryBar
-              orders={filteredOrders}
-              hideTotalsUsd={hideTotalsUsd}
-              getRemainingBales={getRemainingBales}
-              getEstimatedKg={getEstimatedKg}
-              getEstimatedPrice={getEstimatedPrice}
+                orders={filteredOrders}
+                hideTotalsUsd={hideTotalsUsd}
+                getRemainingBales={getRemainingBales}
+                getEstimatedKg={getEstimatedKg}
+                getEstimatedPrice={getEstimatedPrice}
               />
             </div>
           </details>
@@ -630,21 +733,77 @@ export default function FactoryInvoices() {
                 <TableRow className="border-b-2 border-border/60 bg-slate-100/80 hover:bg-slate-100/80 dark:bg-muted dark:hover:bg-muted">
                   {/* Drag handle column */}
                   <TableHead className="w-7 px-1" />
-                  <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Customer</TableHead>
-                  {isColumnVisible("loading") && <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Loading #</TableHead>}
-                  {isColumnVisible("proforma") && <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Proforma</TableHead>}
-                  {isColumnVisible("container") && <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Container</TableHead>}
-                  {isColumnVisible("bookingInfo") && <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Booking Info</TableHead>}
-                  {isColumnVisible("destination") && <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Destination</TableHead>}
-                  {isColumnVisible("notes") && <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Notes</TableHead>}
-                  {isColumnVisible("date") && <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Date</TableHead>}
-                  {isColumnVisible("status") && <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</TableHead>}
-                  {isColumnVisible("bales") && <TableHead className="text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">Bales</TableHead>}
-                  {isColumnVisible("weight") && <TableHead className="text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">Weight</TableHead>}
-                  {isColumnVisible("remaining") && <TableHead className="text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">Remaining</TableHead>}
-                  {isColumnVisible("extras") && <TableHead className="text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">Extras</TableHead>}
-                  {isColumnVisible("total") && <TableHead className="text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">Total</TableHead>}
-                  <TableHead className="w-[120px] text-xs font-semibold text-muted-foreground uppercase tracking-wide">Actions</TableHead>
+                  <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    Customer
+                  </TableHead>
+                  {isColumnVisible("loading") && (
+                    <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                      Loading #
+                    </TableHead>
+                  )}
+                  {isColumnVisible("proforma") && (
+                    <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                      Proforma
+                    </TableHead>
+                  )}
+                  {isColumnVisible("container") && (
+                    <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                      Container
+                    </TableHead>
+                  )}
+                  {isColumnVisible("bookingInfo") && (
+                    <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                      Booking Info
+                    </TableHead>
+                  )}
+                  {isColumnVisible("destination") && (
+                    <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                      Destination
+                    </TableHead>
+                  )}
+                  {isColumnVisible("notes") && (
+                    <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                      Notes
+                    </TableHead>
+                  )}
+                  {isColumnVisible("date") && (
+                    <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                      Date
+                    </TableHead>
+                  )}
+                  {isColumnVisible("status") && (
+                    <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                      Status
+                    </TableHead>
+                  )}
+                  {isColumnVisible("bales") && (
+                    <TableHead className="text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                      Bales
+                    </TableHead>
+                  )}
+                  {isColumnVisible("weight") && (
+                    <TableHead className="text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                      Weight
+                    </TableHead>
+                  )}
+                  {isColumnVisible("remaining") && (
+                    <TableHead className="text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                      Remaining
+                    </TableHead>
+                  )}
+                  {isColumnVisible("extras") && (
+                    <TableHead className="text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                      Extras
+                    </TableHead>
+                  )}
+                  {isColumnVisible("total") && (
+                    <TableHead className="text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                      Total
+                    </TableHead>
+                  )}
+                  <TableHead className="w-[120px] text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    Actions
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

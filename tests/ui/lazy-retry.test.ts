@@ -46,4 +46,44 @@ describe("importWithRetry", () => {
     await importWithRetry(factory);
     expect(attempts).toBe(1);
   });
+
+  it("treats a factory that throws synchronously like any other failed attempt", async () => {
+    let attempts = 0;
+    const failure = new Error("chunk manifest unavailable");
+    const factory = (): Promise<{ default: typeof page }> => {
+      attempts += 1;
+      if (attempts === 1) throw failure;
+      return Promise.resolve({ default: page });
+    };
+
+    await expect(importWithRetry(factory)).resolves.toEqual({ default: page });
+    expect(attempts).toBe(2);
+
+    const alwaysThrows = (): Promise<{ default: typeof page }> => {
+      throw failure;
+    };
+    await expect(importWithRetry(alwaysThrows, 1)).rejects.toBe(failure);
+  });
+
+  it("times out an import that never settles so the route cannot stay suspended forever", async () => {
+    vi.useFakeTimers();
+    try {
+      let attempts = 0;
+      const factory = () => {
+        attempts += 1;
+        return new Promise<{ default: typeof page }>(() => {});
+      };
+
+      const outcome = importWithRetry(factory, 1).then(
+        () => "resolved",
+        (error: Error) => error.message
+      );
+      await vi.advanceTimersByTimeAsync(14_999);
+      expect(attempts).toBe(1);
+      await vi.advanceTimersByTimeAsync(1);
+      await expect(outcome).resolves.toBe("Page module loading timed out");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
