@@ -78,7 +78,6 @@ export function StockTransferOrderHeader({ model, onSwitchToNormalView }: StockT
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={orderItems.length === 0}
                   data-testid="button-export-order"
                 >
                   <FileDown className="h-4 w-4 mr-1" />
@@ -87,13 +86,13 @@ export function StockTransferOrderHeader({ model, onSwitchToNormalView }: StockT
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => handleExportOrder(false)} data-testid="export-order-no-cost">
+                <DropdownMenuItem disabled={orderItems.length === 0} onClick={() => handleExportOrder(false)} data-testid="export-order-no-cost">
                   Export without Cost
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setSendWhatsAppOpen(true)} data-testid="send-export-no-cost-whatsapp">
                   <MessageCircle className="mr-2 h-4 w-4" /> Send to WhatsApp (without Cost)
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleExportOrder(true)} data-testid="export-order-with-cost">
+                <DropdownMenuItem disabled={orderItems.length === 0} onClick={() => handleExportOrder(true)} data-testid="export-order-with-cost">
                   Export with Cost
                 </DropdownMenuItem>
               </DropdownMenuContent>

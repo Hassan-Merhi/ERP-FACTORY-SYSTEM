@@ -28,6 +28,8 @@ export const stockTransferVouchers = pgTable("stock_transfer_vouchers", {
     .references(() => locations.id, { onDelete: "restrict" }),
   notes: text("notes"),
   inventoryApplied: boolean("inventory_applied").default(false),
+  // Durable provenance: only orders created through the Stock Transfer Order workflow are eligible for WhatsApp batch approvals.
+  workflowOrigin: text("workflow_origin").notNull().default("stock_transfer"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
