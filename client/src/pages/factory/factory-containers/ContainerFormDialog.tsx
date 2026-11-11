@@ -71,7 +71,7 @@ type OtherChargeLine = { amount: string; currencyCode: string; ledgerAccountId: 
  * the audited FX endpoint before a container write that needs a dated rate.
  * Never silently use today's quote for an older arrival date.
  */
-async function ensureDatedAutoFxRate(currencyCode: string, arrivalDate: string): Promise<void> {
+export async function ensureDatedAutoFxRate(currencyCode: string, arrivalDate: string): Promise<void> {
   if (currencyCode === "USD") return;
   const date = arrivalDate.trim();
   const lookupPath = date
@@ -92,6 +92,9 @@ async function ensureDatedAutoFxRate(currencyCode: string, arrivalDate: string):
     ...(date ? { date } : {}),
   });
   if (!confirmResponse.ok) {
+    if (confirmResponse.status === 403) {
+      throw new Error("An Admin or Owner must confirm the dated factory auto exchange rate.");
+    }
     const error = await confirmResponse.json().catch(() => null);
     throw new Error(
       error?.message ||
