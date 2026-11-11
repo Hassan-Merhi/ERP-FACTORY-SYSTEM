@@ -7,11 +7,12 @@ import { readFileSync } from "node:fs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const runner = path.join(root, "scripts/run-controlled-migrations.mjs");
-const invoke = (args, env = {}) => spawnSync(process.execPath, [runner, ...args], {
-  cwd: root,
-  encoding: "utf8",
-  env: { ...process.env, DATABASE_URL: "", MIGRATION_CONFIRMATION: "", ...env }
-});
+const invoke = (args, env = {}) =>
+  spawnSync(process.execPath, [runner, ...args], {
+    cwd: root,
+    encoding: "utf8",
+    env: { ...process.env, DATABASE_URL: "", MIGRATION_CONFIRMATION: "", ...env },
+  });
 
 test("plan inventories new migration folder without PostgreSQL", () => {
   const result = invoke(["--plan"]);
@@ -23,7 +24,7 @@ test("plan inventories new migration folder without PostgreSQL", () => {
 });
 
 test("refuses implicit apply and ambiguous modes", () => {
-  for (const args of [[], ["--plan","--apply"], ["--unknown"]]) {
+  for (const args of [[], ["--plan", "--apply"], ["--unknown"]]) {
     const result = invoke(args);
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, /Select exactly one/i);
@@ -43,8 +44,8 @@ test("status requires database but never initiates migration with no URL", () =>
 });
 
 test("production app startup does not import the controlled runner", () => {
-  const files = ["server/startupPreload.mjs","server/schemaPreload.mjs","render.yaml"];
+  const files = ["server/startupPreload.mjs", "server/schemaPreload.mjs", "render.yaml"];
   for (const file of files) {
-    assert.doesNotMatch(readFileSync(path.join(root,file),"utf8"), /run-controlled-migrations/);
+    assert.doesNotMatch(readFileSync(path.join(root, file), "utf8"), /run-controlled-migrations/);
   }
 });

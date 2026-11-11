@@ -4,10 +4,8 @@ import { resolveDatabaseSsl } from "./lib/databaseSsl.mjs";
 
 const { Client } = pg;
 const INSTALL_KEY = Symbol.for("erp.factory-bilingual-schema.applied");
-const STARTUP_SCHEMA_LOCK_SQL =
-  "SELECT pg_advisory_lock(hashtext('erp.startup'), hashtext('factory-schema'))";
-const STARTUP_SCHEMA_UNLOCK_SQL =
-  "SELECT pg_advisory_unlock(hashtext('erp.startup'), hashtext('factory-schema'))";
+const STARTUP_SCHEMA_LOCK_SQL = "SELECT pg_advisory_lock(hashtext('erp.startup'), hashtext('factory-schema'))";
+const STARTUP_SCHEMA_UNLOCK_SQL = "SELECT pg_advisory_unlock(hashtext('erp.startup'), hashtext('factory-schema'))";
 
 const connectionString =
   process.env.DATABASE_URL ||
@@ -90,20 +88,23 @@ export async function ensureFactoryBilingualSchema() {
       `);
       const columns = new Set(existing.rows.map((row) => row.table_name + "." + row.column_name));
       const tables = new Set(existing.rows.map((row) => row.table_name));
-      const missing = FACTORY_BILINGUAL_COLUMNS.filter(([table, column, , mustExist]) =>
-        (mustExist || tables.has(table)) && !columns.has(table + "." + column)
+      const missing = FACTORY_BILINGUAL_COLUMNS.filter(
+        ([table, column, , mustExist]) => (mustExist || tables.has(table)) && !columns.has(table + "." + column)
       ).map(([table, column]) => table + "." + column);
       if (required.some(([table]) => !tables.has(table))) {
         missing.push("required Factory bilingual table");
       }
-      const index = await client.query(`
+      const index = await client.query(
+        `
         SELECT EXISTS (
           SELECT 1 FROM pg_index i
           JOIN pg_class c ON c.oid=i.indexrelid
           JOIN pg_namespace n ON n.oid=c.relnamespace
           WHERE n.nspname='public' AND c.relname=$1 AND i.indisvalid AND i.indisready
         ) AS ready
-      `, [FACTORY_BILINGUAL_ARTICLE_INDEX]);
+      `,
+        [FACTORY_BILINGUAL_ARTICLE_INDEX]
+      );
       if (!index.rows[0]?.ready) missing.push(FACTORY_BILINGUAL_ARTICLE_INDEX);
       if (missing.length) throw new Error("Factory bilingual schema incomplete: " + missing.join(", "));
       await client.query("ROLLBACK");

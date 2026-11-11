@@ -156,6 +156,15 @@
     }
   ],
   "classification": {
+    "docs/database-phase9-production-rollout.md": "reference",
+    "docs/database-phase8-migration-testing.md": "reference",
+    "docs/database-phase7-disaster-recovery.md": "reference",
+    "docs/database-phase6-performance.md": "reference",
+    "docs/database-phase5-schema-drift.md": "reference",
+    "docs/database-phase4-integrity-hardening.md": "reference",
+    "docs/database-phase3-startup-cutover.md": "reference",
+    "docs/database-phase3-continued-inventory.md": "reference",
+    "docs/database-migration-modernization-2026-11-11.md": "reference",
     "docs/accounting/hadi-lshi-2026-original-dated-monthly-rent-restatement-2026-11-10.md": "reference",
     "docs/accounting/hadi-lshi-shop-rent-phase1-audit-2026-11-10.md": "reference",
     "docs/accounting/hadi-lshi-shop-rent-phase2-prepared-2026-11-10.md": "reference",

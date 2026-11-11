@@ -14,7 +14,8 @@ import { resolveDatabaseSsl } from "./lib/databaseSsl.mjs";
 const KEY = Symbol.for("erp.fixed-production-planner-schema.applied");
 
 export async function ensureFixedProductionPlannerSchema() {
-  const connectionString = process.env.DATABASE_URL ||
+  const connectionString =
+    process.env.DATABASE_URL ||
     (process.env.PGHOST && process.env.PGUSER && process.env.PGPASSWORD && process.env.PGDATABASE
       ? `postgresql://${encodeURIComponent(process.env.PGUSER)}:${encodeURIComponent(process.env.PGPASSWORD)}@${process.env.PGHOST}:${process.env.PGPORT || "5432"}/${process.env.PGDATABASE}`
       : "");
@@ -35,10 +36,12 @@ export async function ensureFixedProductionPlannerSchema() {
     const verifyOnly = process.env.FIXED_PRODUCTION_PLANNER_SCHEMA_MODE === "verify-only";
     // Verify-only cutover is explicit: the controlled migration must have been
     // applied independently before this setting is enabled. No DDL is allowed.
-    const ddl = verifyOnly ? null : await readFile(
-      new URL("../migrations/20261015_001_factory_fixed_production_planner.sql", import.meta.url),
-      "utf8"
-    );
+    const ddl = verifyOnly
+      ? null
+      : await readFile(
+          new URL("../migrations/20261015_001_factory_fixed_production_planner.sql", import.meta.url),
+          "utf8"
+        );
 
     // Reuse the startup schema advisory lock that protects other schema bridges.
     if (!verifyOnly) {
@@ -62,9 +65,10 @@ export async function ensureFixedProductionPlannerSchema() {
             AS constraint_count
       `);
       const state = check.rows[0] || {};
-      if (state.table_ready !== true || Number(state.column_count) !== 6 ||
-          Number(state.constraint_count) !== 2) {
-        throw new Error("Fixed Production Planner schema incomplete; apply controlled migration before enabling verify-only");
+      if (state.table_ready !== true || Number(state.column_count) !== 6 || Number(state.constraint_count) !== 2) {
+        throw new Error(
+          "Fixed Production Planner schema incomplete; apply controlled migration before enabling verify-only"
+        );
       }
       if (verifyOnly) await client.query("ROLLBACK");
       else await client.query("COMMIT");
@@ -73,10 +77,14 @@ export async function ensureFixedProductionPlannerSchema() {
       throw error;
     } finally {
       if (!verifyOnly) {
-        await client.query("SELECT pg_advisory_unlock(hashtext('erp.startup'), hashtext('factory-schema'))").catch(() => {});
+        await client
+          .query("SELECT pg_advisory_unlock(hashtext('erp.startup'), hashtext('factory-schema'))")
+          .catch(() => {});
       }
     }
-    console.log("[fixed-production-planner] Schema verified" + (verifyOnly ? " (read-only)" : " (compatibility ensure)"));
+    console.log(
+      "[fixed-production-planner] Schema verified" + (verifyOnly ? " (read-only)" : " (compatibility ensure)")
+    );
   } catch (error) {
     console.error("[fixed-production-planner] Schema ensure failed; stopping startup", error);
     throw error;

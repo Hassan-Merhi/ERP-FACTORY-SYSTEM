@@ -67,13 +67,15 @@ export async function ensureScheduledWhatsAppDeliveryTrackingSchema(pool: Pool):
           WHERE n.nspname='public' AND c.relname='scheduled_whatsapp_attachments_status_idx'
             AND i.indisvalid AND i.indisready) AS attachment_status_idx
     `);
-    if (!readiness.rows[0] || Object.values(readiness.rows[0]).some(value=>value!==true)) {
+    if (!readiness.rows[0] || Object.values(readiness.rows[0]).some((value) => value !== true)) {
       throw new Error("Scheduled WhatsApp schema verification failed; apply reviewed controlled migration 008 first");
     }
   }
-  logger.info(verifyOnly
-    ? "[startup] ✓ Scheduled WhatsApp delivery tracking schema verified read-only"
-    : "[startup] ✓ Scheduled WhatsApp delivery tracking schema ensured");
+  logger.info(
+    verifyOnly
+      ? "[startup] ✓ Scheduled WhatsApp delivery tracking schema verified read-only"
+      : "[startup] ✓ Scheduled WhatsApp delivery tracking schema ensured"
+  );
 }
 
 /**

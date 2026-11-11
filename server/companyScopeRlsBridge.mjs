@@ -181,8 +181,11 @@ export async function ensureCompanyScopeRlsReadiness() {
     const missing = await missingRlsReadiness(client, migrationSql);
     if (missing.length > 0) {
       if (verifyOnly) {
-        throw new Error("Company-scope RLS schema drift: " + missing.join(", ") +
-          ". Restore reviewed RLS migration manually before enabling verify-only.");
+        throw new Error(
+          "Company-scope RLS schema drift: " +
+            missing.join(", ") +
+            ". Restore reviewed RLS migration manually before enabling verify-only."
+        );
       }
       log("INFO", "Applying company-scope RLS readiness migration", { missing });
       await client.query(migrationSql);

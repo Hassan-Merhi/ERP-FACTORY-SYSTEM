@@ -25,12 +25,14 @@ await import("./deploymentPreflight.mjs");
 // Fail before any startup schema bridge is imported, preserving the previous
 // healthy deployment. Individual bridge verify-only modes can be rehearsed
 // on isolated staging independently.
-if (process.env.DATABASE_STARTUP_SCHEMA_MODE === "verify-only" ||
-    process.env.LEGACY_STARTUP_MIGRATION_MODE === "verify-only") {
+if (
+  process.env.DATABASE_STARTUP_SCHEMA_MODE === "verify-only" ||
+  process.env.LEGACY_STARTUP_MIGRATION_MODE === "verify-only"
+) {
   throw new Error(
     "Full read-only database startup cutover is blocked: startup-schema, " +
-    "ensureRuntimeSchema, and service boot-time writers remain unversioned. " +
-    "Complete their controlled migration and recovery validation before activation."
+      "ensureRuntimeSchema, and service boot-time writers remain unversioned. " +
+      "Complete their controlled migration and recovery validation before activation."
   );
 }
 // Indexes and audit tables used by hot request paths.

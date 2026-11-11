@@ -68,9 +68,13 @@ async function ensureCriticalSecuritySchema() {
             WHERE ns.nspname='public' AND idx.relname='user_security_permissions_company_user_idx'
               AND i.indisvalid AND i.indisready) AS lookup_ready
       `);
-      const state=check.rows[0] || {};
-      if (state.table_ready !== true || Number(state.columns_ready) !== 7 ||
-          Number(state.unique_ready) !== 1 || Number(state.lookup_ready) !== 1) {
+      const state = check.rows[0] || {};
+      if (
+        state.table_ready !== true ||
+        Number(state.columns_ready) !== 7 ||
+        Number(state.unique_ready) !== 1 ||
+        Number(state.lookup_ready) !== 1
+      ) {
         throw new Error("Critical security permissions schema incomplete; apply reviewed controlled migration first");
       }
       await client.query("ROLLBACK");

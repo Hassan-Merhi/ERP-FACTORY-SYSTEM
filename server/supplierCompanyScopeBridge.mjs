@@ -66,7 +66,11 @@ if (!globalThis[INSTALL_KEY]) {
     );
   } else if (process.env.SUPPLIER_SCOPE_SCHEMA_MODE === "verify-only") {
     const { Client } = pg;
-    const client = new Client({ connectionString, ssl: resolveDatabaseSsl(connectionString), connectionTimeoutMillis: 15_000 });
+    const client = new Client({
+      connectionString,
+      ssl: resolveDatabaseSsl(connectionString),
+      connectionTimeoutMillis: 15_000,
+    });
     try {
       await client.connect();
       await client.query("BEGIN READ ONLY");
@@ -86,12 +90,19 @@ if (!globalThis[INSTALL_KEY]) {
             WHERE c.relname='suppliers' AND co.conname='suppliers_company_id_fkey') AS company_fk_ready
       `);
       const state = result.rows[0] || {};
-      if (!state.table_ready || !state.company_id_ready || !state.company_code_unique ||
-          !state.supplier_trigger_ready || !state.company_fk_ready) {
-        throw new Error("Supplier company scope schema incomplete; review legacy 20260728 migration before read-only cutover");
+      if (
+        !state.table_ready ||
+        !state.company_id_ready ||
+        !state.company_code_unique ||
+        !state.supplier_trigger_ready ||
+        !state.company_fk_ready
+      ) {
+        throw new Error(
+          "Supplier company scope schema incomplete; review legacy 20260728 migration before read-only cutover"
+        );
       }
       await client.query("ROLLBACK");
-      console.log(JSON.stringify({module:"supplier-company-scope",mode:"verify-only",schemaVerified:true}));
+      console.log(JSON.stringify({ module: "supplier-company-scope", mode: "verify-only", schemaVerified: true }));
     } catch (error) {
       await client.query("ROLLBACK").catch(() => {});
       throw error;

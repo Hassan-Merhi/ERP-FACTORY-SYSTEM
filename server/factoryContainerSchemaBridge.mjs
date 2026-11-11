@@ -116,7 +116,8 @@ function log(level, message, extra = {}) {
 
 async function ensureFactoryContainerSchema() {
   if (!connectionString) {
-    if (process.env.FACTORY_CONTAINER_SCHEMA_MODE === "verify-only") throw new Error("Factory container read-only verification requires database configuration");
+    if (process.env.FACTORY_CONTAINER_SCHEMA_MODE === "verify-only")
+      throw new Error("Factory container read-only verification requires database configuration");
     log("WARN", "Factory container schema check skipped because no database configuration is available");
     return;
   }
@@ -157,7 +158,9 @@ async function ensureFactoryContainerSchema() {
     if (verifyOnly) {
       const missing = REQUIRED_COLUMNS.map(([name]) => name).filter((name) => !existingColumns.has(name));
       if (missing.length) {
-        throw new Error("Factory container schema incomplete; apply controlled migration before verify-only: " + missing.join(", "));
+        throw new Error(
+          "Factory container schema incomplete; apply controlled migration before verify-only: " + missing.join(", ")
+        );
       }
       // Older production mode also disables automatic carrier tracking on
       // every startup. That data rewrite is deliberately NOT performed here.

@@ -96,43 +96,45 @@ async function ensureFactoryTrilingualSchema() {
         await client.query("SET LOCAL lock_timeout = '5s'");
         await client.query("SET LOCAL statement_timeout = '60s'");
         const requirements = [
-          ["factory_categories","name_fr"],
-          ["factory_bale_products","name_fr"],["factory_bale_products","description_fr"],
-          ["factory_bales","product_name_fr"],["factory_bales","category_fr"],
-          ["customer_proforma_lines","product_name_fr"],
-          ["customer_order_lines","bale_name_fr"],
-          ["customer_order_bales","bale_name_fr"],
-          ["customer_order_bales_history","bale_name_fr"],
-          ["customer_order_expected_lines","product_name_fr"]
+          ["factory_categories", "name_fr"],
+          ["factory_bale_products", "name_fr"],
+          ["factory_bale_products", "description_fr"],
+          ["factory_bales", "product_name_fr"],
+          ["factory_bales", "category_fr"],
+          ["customer_proforma_lines", "product_name_fr"],
+          ["customer_order_lines", "bale_name_fr"],
+          ["customer_order_bales", "bale_name_fr"],
+          ["customer_order_bales_history", "bale_name_fr"],
+          ["customer_order_expected_lines", "product_name_fr"],
         ];
         const optional = [
-          ["factory_pos_sale_items","product_name_fr"],
-          ["customer_order_bale_removals","product_name_fr"],
-          ["factory_v3_load_bales","product_name_fr"],
-          ["factory_invoice_loading_bales","product_name_fr"],
-          ["customer_dispatch_bale_scans","product_name_fr"],
-          ["bale_recode_items","product_name_fr"],
-          ["bale_recode_items","product_id"]
+          ["factory_pos_sale_items", "product_name_fr"],
+          ["customer_order_bale_removals", "product_name_fr"],
+          ["factory_v3_load_bales", "product_name_fr"],
+          ["factory_invoice_loading_bales", "product_name_fr"],
+          ["customer_dispatch_bale_scans", "product_name_fr"],
+          ["bale_recode_items", "product_name_fr"],
+          ["bale_recode_items", "product_id"],
         ];
-        const columns=await client.query(`
+        const columns = await client.query(`
           SELECT table_name,column_name FROM information_schema.columns
           WHERE table_schema='public'
         `);
-        const available=new Set(columns.rows.map(row=>row.table_name+"."+row.column_name));
-        const tables=new Set(columns.rows.map(row=>row.table_name));
-        const missing=requirements.filter(([t,c])=>!available.has(t+"."+c));
-        for (const [t,c] of optional) {
-          if (tables.has(t)&&!available.has(t+"."+c)) missing.push([t,c]);
+        const available = new Set(columns.rows.map((row) => row.table_name + "." + row.column_name));
+        const tables = new Set(columns.rows.map((row) => row.table_name));
+        const missing = requirements.filter(([t, c]) => !available.has(t + "." + c));
+        for (const [t, c] of optional) {
+          if (tables.has(t) && !available.has(t + "." + c)) missing.push([t, c]);
         }
-        if (!tables.has("user_language_preferences")) missing.push(["user_language_preferences","table"]);
+        if (!tables.has("user_language_preferences")) missing.push(["user_language_preferences", "table"]);
         if (missing.length) {
-          throw new Error("Factory multilingual schema incomplete: "+missing.map(([t,c])=>t+"."+c).join(", "));
+          throw new Error("Factory multilingual schema incomplete: " + missing.map(([t, c]) => t + "." + c).join(", "));
         }
         await client.query("ROLLBACK");
-        console.log(JSON.stringify({module:"factory-trilingual-schema",mode:"verify-only",schemaVerified:true}));
+        console.log(JSON.stringify({ module: "factory-trilingual-schema", mode: "verify-only", schemaVerified: true }));
         return;
-      } catch(error) {
-        await client.query("ROLLBACK").catch(()=>{});
+      } catch (error) {
+        await client.query("ROLLBACK").catch(() => {});
         throw error;
       }
     }
