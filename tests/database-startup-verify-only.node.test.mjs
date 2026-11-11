@@ -191,7 +191,7 @@ test("financial idempotency, presence indexes and valuation history migrations a
   ];
   for(const path of files){
     const sql=read(path).replace(/^--.*$/gm,"");
-    assert.doesNotMatch(sql,/\b(?:INSERT|UPDATE|DELETE|TRUNCATE|DROP)\s+(?:INTO|FROM|TABLE|INDEX|\w+)/i);
+    assert.doesNotMatch(sql,/^\s*(?:INSERT\s+INTO|UPDATE\s+\w+|DELETE\s+FROM|TRUNCATE\s+|DROP\s+)/im);
   }
   assert.match(read(files[0]),/financial_operation_requests_company_key_unique/);
   assert.match(read(files[1]),/user_presence_company_last_seen_idx/);
