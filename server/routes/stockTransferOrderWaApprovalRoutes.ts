@@ -6,6 +6,7 @@ import type { Express, Request, Response } from "express";
 import { requireAuth, requireRole } from "../auth";
 import { pool, db } from "../db";
 import { logger } from "../lib/logger";
+import { webhookTokenIsConfigured } from "./stockTransferOrderWaApprovalWebhookRoutes";
 import { getActiveCompanyPermissionContext } from "../services/security/activeCompanyPermissionContext";
 import {
   createStockTransferOrderApprovalDraft,
@@ -127,7 +128,7 @@ async function makeMessage(companyId: number, batchId: number, key: string, dest
     ),
     "", "Reply directly to THIS message: DONE approves ALL included revisions at once.",
     "DECLINE rejects the whole batch.",
-    "Approval by WhatsApp will be activated in Phase 3.",
+    "DONE/DECLINE replies are recorded, but no order is approved until Phase 4.",
     "Any newly saved revisions invalidate this request.",
   ];
   const message = lines.join("\n");
@@ -154,7 +155,7 @@ export function registerStockTransferOrderWaApprovalRoutes(app: Express,
       ]);
       const wa = await getWaSettings();
       return res.json({ settings: s.rows[0] || {enabled:false,approvalGroupChatId:null,authorizedPhoneE164:null},
-        destinations: d.rows, groups: g.rows, canConfigure: ["Admin","Owner","Developer"].includes(a.role), connected: Boolean(wa?.enabled && wa.instanceId && wa.apiToken) });
+        destinations: d.rows, groups: g.rows, canConfigure: ["Admin","Owner","Developer"].includes(a.role), connected: Boolean(wa?.enabled && wa.instanceId && wa.apiToken), webhookConfigured: webhookTokenIsConfigured() });
     } catch(e) { return errorResponse(res, e); }
   });
 
@@ -286,7 +287,15 @@ export function registerStockTransferOrderWaApprovalRoutes(app: Express,
       const a=await actor(req);
       const result=await pool.query(
         'SELECT b.id,b.batch_key AS "batchKey",' +
-        "CASE WHEN b.status='draft' AND EXISTS (" +
+        "CASE WHEN b.status='requested' AND EXISTS (" +
+        "SELECT 1 FROM stock_transfer_order_approval_events ev " +
+        "WHERE ev.company_id=b.company_id AND ev.batch_id=b.id AND ev.event_type='done_received'" +
+        ") THEN 'done_received' " +
+        "WHEN b.status='requested' AND EXISTS (" +
+        "SELECT 1 FROM stock_transfer_order_approval_events ev " +
+        "WHERE ev.company_id=b.company_id AND ev.batch_id=b.id AND ev.event_type='decline_received'" +
+        ") THEN 'decline_received' " +
+        "WHEN b.status='draft' AND EXISTS (" +
         "SELECT 1 FROM stock_transfer_order_approval_events ev " +
         "WHERE ev.company_id=b.company_id AND ev.batch_id=b.id " +
         "AND ev.event_type='ignored' AND ev.details->>'reason'='request_send_uncertain' " +
@@ -311,6 +320,9 @@ export function registerStockTransferOrderWaApprovalRoutes(app: Express,
         new Set(transferIds).size!==transferIds.length||
         transferIds.some(id=>!Number.isSafeInteger(id)||id<=0)) {
         return res.status(400).json({message:"Select persisted orders from one destination."});
+      }
+      if(!webhookTokenIsConfigured()) {
+        return res.status(409).json({message:"Configure the protected GREEN API approval webhook token before sending requests."});
       }
       const wa=await getWaSettings();
       if(!wa?.enabled||!wa.instanceId||!wa.apiToken||
@@ -355,7 +367,7 @@ export function registerStockTransferOrderWaApprovalRoutes(app: Express,
       draftId=null;
       return res.json({ok:true,batchId:draft.batchId,batchKey:draft.batchKey,orders:draft.transferCount,
         revisions:draft.revisionCount,messageId:sent.idMessage,
-        message:"Approval request sent. Automatic DONE processing is introduced in Phase 3."});
+        message:"Approval request sent. DONE/DECLINE replies are now verified and recorded; approval execution comes in Phase 4."});
     } catch(e) {
       if(draftId!==null&&!accepted&&!sendUncertain) {
         try {const a=await actor(req);await setBatchStatus(a.companyId,draftId,"cancelled");}
