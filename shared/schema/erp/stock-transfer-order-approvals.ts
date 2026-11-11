@@ -9,7 +9,7 @@
 import { sql } from "drizzle-orm";
 import {
   pgTable, integer, bigint, bigserial, text, varchar, boolean, timestamp,
-  uuid, jsonb, unique, uniqueIndex, index, foreignKey,
+  uuid, jsonb, unique, uniqueIndex, index, foreignKey, primaryKey, customType,
 } from "drizzle-orm/pg-core";
 import { companies, locations } from "../common";
 import { stockTransferRevisions, stockTransferVouchers } from "./stock-movements";
@@ -180,6 +180,33 @@ export const stockTransferOrderApprovalDeliveries = pgTable(
       .where(sql`status IN ('pending','failed')`),
     batchIdx: index("sto_wa_delivery_batch_idx").on(t.companyId, t.batchId),
   })
+);
+
+/** Approved quantity-only snapshot; bytea rendered exactly once after approval. */
+const stoApprovedWorkbookBytes = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType() { return "bytea"; },
+});
+export const stockTransferOrderApprovedWorkbooks = pgTable(
+  "stock_transfer_order_approval_workbooks",
+  {
+    companyId: integer("company_id").notNull(),
+    batchId: bigint("batch_id", { mode: "number" }).notNull(),
+    snapshotJson: jsonb("snapshot_json").notNull(),
+    snapshotSha256: varchar("snapshot_sha256", { length: 64 }).notNull(),
+    workbookBytes: stoApprovedWorkbookBytes("workbook_bytes"),
+    workbookSha256: varchar("workbook_sha256", { length: 64 }),
+    filename: text("filename"),
+    renderedAt: timestamp("rendered_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    primaryIdentity: primaryKey({ name: "sto_wa_workbooks_pk", columns: [t.companyId, t.batchId] }),
+    batchFk: foreignKey({
+      name: "sto_wa_workbooks_batch_fk",
+      columns: [t.companyId, t.batchId],
+      foreignColumns: [stockTransferOrderApprovalBatches.companyId, stockTransferOrderApprovalBatches.id],
+    }).onDelete("restrict"),
+  }),
 );
 
 export type StockTransferOrderApprovalBatch = typeof stockTransferOrderApprovalBatches.$inferSelect;
