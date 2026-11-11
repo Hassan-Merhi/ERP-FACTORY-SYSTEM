@@ -8,6 +8,7 @@ import { logAudit } from "../_helpers";
 import { closedPeriodErrorResponse } from "../../lib/closedPeriodError";
 import { sessionRetirementActor } from "../../services/accounting/voucherRetirement";
 import { effectiveErpPageKeys } from "../../services/security/erpViewerPagePolicy";
+import { parseErpPageGrantKeys } from "@shared/erpPageGrantInput";
 import {
   LegacyEmployeeAccountRefusal,
   migrateLegacyEmployeeAccountTx,
@@ -599,12 +600,8 @@ export function registerUserManagementRoutes(app: Express) {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const { pageKeys } = req.body ?? {};
-      if (
-        !Array.isArray(pageKeys) ||
-        pageKeys.some((key) => typeof key !== "string" || !FEATURE_KEYS.includes(key as (typeof FEATURE_KEYS)[number])) ||
-        new Set(pageKeys).size !== pageKeys.length
-      ) {
+      const pageKeys = parseErpPageGrantKeys(req.body?.pageKeys);
+      if (pageKeys === null) {
         return res.status(400).json({ message: "pageKeys must be a unique list of recognized ERP features" });
       }
 
