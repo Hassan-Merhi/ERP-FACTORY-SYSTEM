@@ -8,6 +8,7 @@ import { loadSupplierSettlementBalances } from "../suppliers/balance/settlementP
 import { MoneyDecimal, toMoney } from "../../../lib/money";
 import type { FactoryNetPositionAsOf } from "@shared/factoryNetPositionAsOf";
 import { netPositionRecordedThrough } from "../../../services/factory/netPositionAsOf";
+import { resolveStoredFxRate } from "../../../services/factory/currencyConversion";
 
 /**
  * Section 1 of the factory net-position report: what the company owes its
@@ -43,9 +44,58 @@ export interface NetPositionSupplierContext {
 export interface NetPositionSupplierBalances {
   supplierLockedRateMapNp: Map<number, number>;
   allContainersF: (typeof factoryContainers.$inferSelect)[];
-  supplierItems: { name: string; balanceUsd: number; breakdown?: { label: string; native: string; usd: number }[] }[];
+  supplierItems: { name: string; balanceUsd: number; fxBasisAdjustmentUsd?: number; breakdown?: { label: string; native: string; usd: number }[] }[];
   totalSupplierLiabilities: number;
   totalSupplierOverpayments: number;
+}
+
+/**
+ * Report presentation ONLY: reclassify a verified outstanding foreign payable
+ * from its current-rate supplier row into historical supplier cost + FX gain/loss.
+ * This delta is NEVER a separate asset, ledger posting, or an extra net-position
+ * profit. The caller changes the supplier row by delta and adds the matching FX
+ * line on the opposite side, leaving actual net position unchanged.
+ *
+ * Rates must be explicitly confirmed and identical for every source container
+ * of that currency; mixed-rate/legacy sources are omitted rather than inventing
+ * an unpaid-lot allocation. Settled, overpaid and OTW-only balances are omitted.
+ */
+export function supplierOpenPayableFxBasisAdjustment(input: {
+  pools: readonly { currencyCode: string; balance: string }[];
+  containers: readonly (typeof factoryContainers.$inferSelect)[];
+  getConfigFx: (currency: string) => number;
+  round2: (value: number) => number;
+}): number {
+  let delta = new MoneyDecimal(0);
+  for (const pool of input.pools) {
+    const currency = pool.currencyCode.trim().toUpperCase();
+    const outstanding = toMoney(pool.balance);
+    if (currency === "USD" || !outstanding.gt(0)) continue;
+
+    const sources = input.containers.filter(
+      (c) => (c.currencyCode || "USD").trim().toUpperCase() === currency &&
+        toMoney(c.totalKg).times(toMoney(c.ratePerKg)).gt(0)
+    );
+    if (sources.length === 0 ||
+      sources.some((c) => !["OFFLOADED", "RECEIVED", "PARTIALLY_RECEIVED"].includes(String(c.status ?? "").toUpperCase()))
+    ) continue;
+
+    const rates = sources.map((c) => {
+      const r = resolveStoredFxRate(currency, c.fxRateToUsd, c.fxRateConfirmed ?? undefined);
+      return r.looksSet ? toMoney(r.fxRate) : null;
+    });
+    const first = rates[0];
+    if (!first || rates.some((r) => !r || !r.eq(first))) continue;
+
+    // Round each side as displayed in the supplier balance. This also keeps
+    // cents consistent (e.g., EUR 7,657.20 at 1.18 vs 1.12 is USD 459.44).
+    const historicUsd = outstanding.times(first).toDecimalPlaces(2, MoneyDecimal.ROUND_HALF_UP);
+    const currentUsd = outstanding
+      .times(toMoney(input.getConfigFx(currency)))
+      .toDecimalPlaces(2, MoneyDecimal.ROUND_HALF_UP);
+    delta = delta.plus(historicUsd.minus(currentUsd));
+  }
+  return input.round2(delta.toNumber());
 }
 
 export async function computeNetPositionSupplierBalances(
@@ -130,6 +180,7 @@ export async function computeNetPositionSupplierBalances(
   const supplierItems: {
     name: string;
     balanceUsd: number;
+    fxBasisAdjustmentUsd?: number;
     breakdown?: { label: string; native: string; usd: number }[];
   }[] = [];
   let totalSupplierLiabilities = 0;
@@ -155,7 +206,24 @@ export async function computeNetPositionSupplierBalances(
       }
       const rounded = ctx.round2(brokerUsd.toNumber());
       if (Math.abs(rounded) > 0.01) {
-        supplierItems.push({ name: s.name, balanceUsd: rounded });
+        const fxBasisAdjustmentUsd = rounded > 0 && !ctx.knownAt
+          ? supplierOpenPayableFxBasisAdjustment({
+              pools: stmt.currencyLedgers.map((ledger) => ({
+                currencyCode: String(ledger.currencyCode),
+                balance: String(ledger.netBalance),
+              })),
+              containers: allContainersF.filter(
+                (c) => c.supplierId === s.id || linkedSupplierParent.get(c.supplierId ?? -1) === s.id
+              ),
+              getConfigFx: ctx.getConfigFx,
+              round2: ctx.round2,
+            })
+          : 0;
+        supplierItems.push({
+          name: s.name,
+          balanceUsd: rounded,
+          ...(fxBasisAdjustmentUsd && rounded + fxBasisAdjustmentUsd > 0 ? { fxBasisAdjustmentUsd } : {}),
+        });
         if (rounded > 0) totalSupplierLiabilities += rounded;
         else totalSupplierOverpayments += Math.abs(rounded);
       }
@@ -174,7 +242,19 @@ export async function computeNetPositionSupplierBalances(
     );
 
     if (Math.abs(balance) > 0.01) {
-      supplierItems.push({ name: s.name, balanceUsd: balance });
+      const fxBasisAdjustmentUsd = balance > 0 && !ctx.knownAt
+        ? supplierOpenPayableFxBasisAdjustment({
+            pools,
+            containers: allContainersF.filter((c) => c.supplierId === s.id),
+            getConfigFx: ctx.getConfigFx,
+            round2: ctx.round2,
+          })
+        : 0;
+      supplierItems.push({
+        name: s.name,
+        balanceUsd: balance,
+        ...(fxBasisAdjustmentUsd && balance + fxBasisAdjustmentUsd > 0 ? { fxBasisAdjustmentUsd } : {}),
+      });
       if (balance > 0) totalSupplierLiabilities += balance;
       else totalSupplierOverpayments += Math.abs(balance);
     }
