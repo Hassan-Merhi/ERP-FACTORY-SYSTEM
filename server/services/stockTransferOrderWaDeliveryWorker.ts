@@ -157,8 +157,9 @@ async function recordSameChatAlias(item: DeliveryRow): Promise<boolean> {
   const records = await pool.query<{
     recipient_chat_id: string; status: string; provider_message_id: string | null;
     workbook_sha256: string | null; filename: string | null; workbook_storage_key: string | null;
+    attempt_count: number;
   }>(
-    "SELECT recipient_chat_id,status,provider_message_id,workbook_sha256,filename,workbook_storage_key " +
+    "SELECT recipient_chat_id,status,provider_message_id,workbook_sha256,filename,workbook_storage_key,attempt_count " +
     "FROM stock_transfer_order_approval_deliveries WHERE company_id=$1 AND batch_id=$2 " +
     "AND recipient_kind='approval_group'",
     [item.company_id,item.batch_id]
@@ -166,6 +167,20 @@ async function recordSameChatAlias(item: DeliveryRow): Promise<boolean> {
   const primary = records.rows[0];
   if (!primary || primary.recipient_chat_id !== item.recipient_chat_id) return false;
   if (primary.status !== "accepted" || !primary.provider_message_id) {
+    if (primary.status === "failed" && primary.attempt_count >= MAX_ATTEMPTS) {
+      await pool.query(
+        "WITH alias AS (UPDATE stock_transfer_order_approval_deliveries " +
+        "SET status='failed',attempt_count=$3,available_at=clock_timestamp()+interval '100 years'," +
+        "last_error='Same WhatsApp chat as approval group; its upload exhausted safe retries'," +
+        "updated_at=clock_timestamp() " +
+        "WHERE id=$1 AND company_id=$2 AND status IN ('pending','failed') " +
+        "RETURNING id,company_id,batch_id) " +
+        "INSERT INTO stock_transfer_order_approval_events(company_id,batch_id,event_type,details) " +
+        "SELECT company_id,batch_id,'delivery_failed'," +
+        "jsonb_build_object('deliveryId',id,'recipientKind','destination','reason','same_chat_primary_failed') FROM alias",
+        [item.id,item.company_id,MAX_ATTEMPTS]
+      );
+    }
     if (primary.status === "uncertain") {
       await pool.query(
         "WITH alias AS (UPDATE stock_transfer_order_approval_deliveries " +
