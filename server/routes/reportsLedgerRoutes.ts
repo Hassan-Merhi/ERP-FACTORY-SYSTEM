@@ -1,11 +1,30 @@
 import type { Express } from "express";
 
-import { and, eq, gte, isNull, lt, lte, ne, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lt, lte, ne, sql } from "drizzle-orm";
 import { requireAuth } from "../auth";
 import { db } from "../db";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { debitMinusCredit, signedOpeningBalance, sumMoney, toMoney } from "../lib/money";
 import { ledgerAccounts, locations, suppliers, voucherEntries, vouchers } from "@shared/schema";
+import { HADI_ERP_RENT_MERGE, isArchivedHadiRentExpenseLedger } from "../services/rental/hadiRentExpenseConsolidation";
+
+
+/** Include the archived original rent expense voucher lines, not a preview. */
+async function monthlyStatementAccountIds(companyId: number, accountId: number): Promise<number[]> {
+  if (companyId !== HADI_ERP_RENT_MERGE.companyId ||
+      accountId !== HADI_ERP_RENT_MERGE.targetLedgerId) return [accountId];
+  const [old] = await db.select({
+    id: ledgerAccounts.id, companyId: ledgerAccounts.companyId,
+    active: ledgerAccounts.active, isHidden: ledgerAccounts.isHidden,
+    openingBalance: ledgerAccounts.openingBalance,
+  }).from(ledgerAccounts).where(and(
+    eq(ledgerAccounts.companyId, companyId),
+    eq(ledgerAccounts.id,HADI_ERP_RENT_MERGE.legacyLedgerId),
+    isNull(ledgerAccounts.deletedAt)
+  )).limit(1);
+  return old && isArchivedHadiRentExpenseLedger(old)
+    ? [accountId,HADI_ERP_RENT_MERGE.legacyLedgerId] : [accountId];
+}
 
 export function registerReportsLedgerRoutes(app: Express) {
   app.get("/api/reports/ledger-monthly-summary/:accountId", requireAuth, async (req, res) => {
@@ -24,6 +43,7 @@ export function registerReportsLedgerRoutes(app: Express) {
         .execute()
         .then((rows) => rows[0]);
       if (!account) return res.status(404).json({ message: "Account not found" });
+      const statementAccountIds = await monthlyStatementAccountIds(companyId, accountId);
 
       const start = startDate ? new Date(startDate as string) : new Date(new Date().getFullYear(), 0, 1);
       const end = endDate ? new Date(endDate as string) : new Date(new Date().getFullYear(), 11, 31);
@@ -37,7 +57,7 @@ export function registerReportsLedgerRoutes(app: Express) {
         .innerJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
         .where(
           and(
-            eq(voucherEntries.ledgerAccountId, accountId),
+            inArray(voucherEntries.ledgerAccountId, statementAccountIds),
             eq(vouchers.companyId, companyId),
             isNull(vouchers.deletedAt),
             eq(vouchers.optional, false),
@@ -63,7 +83,7 @@ export function registerReportsLedgerRoutes(app: Express) {
         .innerJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
         .where(
           and(
-            eq(voucherEntries.ledgerAccountId, accountId),
+            inArray(voucherEntries.ledgerAccountId, statementAccountIds),
             eq(vouchers.companyId, companyId),
             isNull(vouchers.deletedAt),
             eq(vouchers.optional, false),
@@ -217,6 +237,7 @@ export function registerReportsLedgerRoutes(app: Express) {
         .execute()
         .then((rows) => rows[0]);
       if (!account) return res.status(404).json({ message: "Account not found" });
+      const statementAccountIds = await monthlyStatementAccountIds(companyId, accountId);
 
       const monthNames = [
         "",
@@ -242,7 +263,7 @@ export function registerReportsLedgerRoutes(app: Express) {
         .innerJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
         .where(
           and(
-            eq(voucherEntries.ledgerAccountId, accountId),
+            inArray(voucherEntries.ledgerAccountId, statementAccountIds),
             eq(vouchers.companyId, companyId),
             isNull(vouchers.deletedAt),
             eq(vouchers.optional, false),
@@ -277,7 +298,7 @@ export function registerReportsLedgerRoutes(app: Express) {
         .innerJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
         .where(
           and(
-            eq(voucherEntries.ledgerAccountId, accountId),
+            inArray(voucherEntries.ledgerAccountId, statementAccountIds),
             eq(vouchers.companyId, companyId),
             isNull(vouchers.deletedAt),
             eq(vouchers.optional, false),

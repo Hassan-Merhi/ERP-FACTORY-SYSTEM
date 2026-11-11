@@ -13,7 +13,13 @@ import { getClientDate } from "../../../lib/dateUtils";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { writeDaybookEntry } from "../_helpers";
-import { factoryContainers, factoryRawStock, factoryMixBatches, factoryMixBatchSources } from "@shared/schema";
+import {
+  factoryContainers,
+  factoryRawStock,
+  factoryMixBatches,
+  factoryMixBatchSources,
+  factorySuppliers,
+} from "@shared/schema";
 import { eq, and, sql, isNull } from "drizzle-orm";
 import { getStableSupplierCost } from "../../../services/factory/rawStockStableCost";
 import {
@@ -25,7 +31,18 @@ import {
 } from "../../../services/factory/baleCostBasis";
 import { recordFactoryStockValueEventTx } from "../../../services/factory/factoryStockValueEvents";
 import Decimal from "decimal.js";
-import { MoneyDecimal, parseMoneyInput, toMoney } from "../../../lib/money";
+import { MoneyDecimal, toMoney } from "../../../lib/money";
+import {
+  MixRawStockShortageError,
+  requireMixFifoFullyAllocated,
+  requireMixRawStockCapacity,
+  availableSupplierAddAllowance,
+} from "../../../services/factory/mixRawStockQuantityGuard";
+import {
+  MixLifecycleRefusal,
+  mixKilograms,
+  requireMixLifecycleAvailable,
+} from "../../../services/factory/mixLifecyclePhase6";
 
 export function registerFactoryMixBatchTopUpRoutes(app: Express) {
   // Top-up an existing mix batch with additional sources
@@ -46,10 +63,22 @@ export function registerFactoryMixBatchTopUpRoutes(app: Express) {
       // Source weights are read the way parseFloat reads them; one that does not
       // parse would otherwise reach usedKg as NaN.
       const allSources: Array<{ weightKg?: unknown }> = [...supplierSources, ...sources, ...batchSources];
-      if (allSources.some((source) => parseMoneyInput(source.weightKg) === null)) {
-        return res.status(400).json({ message: "Invalid amount" });
+      if (
+        allSources.some((source) => {
+          try {
+            mixKilograms(source.weightKg, "Source kg");
+            return false;
+          } catch {
+            return true;
+          }
+        })
+      ) {
+        return res.status(400).json({
+          code: "MIX_BATCH_LIFECYCLE_REFUSED",
+          message: "Source kg must be positive with no more than 3 decimal places.",
+        });
       }
-      const weightOf = (source: { weightKg?: unknown }) => parseMoneyInput(source.weightKg) as Decimal;
+      const weightOf = (source: { weightKg?: unknown }) => mixKilograms(source.weightKg, "Source kg");
 
       // Capture old values before the transaction for the audit log.
       const [batchBeforeTopup] = await db
@@ -70,6 +99,8 @@ export function registerFactoryMixBatchTopUpRoutes(app: Express) {
           .for("update");
 
         if (!batch) throw new Error("Batch not found");
+        // Never silently reopen a completed, closed or deleted historical mix.
+        requireMixLifecycleAvailable(batch);
 
         const existingTotalKg = toMoney(batch.totalWeightKg);
         const existingTotalCost = toMoney(batch.totalCost);
@@ -87,6 +118,13 @@ export function registerFactoryMixBatchTopUpRoutes(app: Express) {
           // happens to draw from.
           // The persisted locked rate only (the legacy receipt-weighted fallback
           // can carry a native-currency cost).
+          // Serialize concurrent mix allocations for the same supplier,
+          // including manual ADD stock with no physical raw-stock rows.
+          await tx
+            .select({ id: factorySuppliers.id })
+            .from(factorySuppliers)
+            .where(and(eq(factorySuppliers.companyId, companyId), eq(factorySuppliers.id, supplierId)))
+            .for("update");
           const [lockedRate, { rows: supplierRawStocks }] = await Promise.all([
             supplierLockedUsdRate(tx, companyId, supplierId),
             getStableSupplierCost(tx, companyId, supplierId, { forUpdate: true }),
@@ -95,6 +133,14 @@ export function registerFactoryMixBatchTopUpRoutes(app: Express) {
           const isManualSupplier = supplierRawStocks.length === 0;
 
           if (isManualSupplier) {
+            const addAllowance = await availableSupplierAddAllowance(
+              tx,
+              companyId,
+              supplierId,
+              supplierRawStocks,
+              txDate || getClientDate(req)
+            );
+            requireMixFifoFullyAllocated(weight.toFixed(3), supplierId, addAllowance.toFixed(3));
             // MANUAL supplier — no container raw-stock rows to update. Still must use
             // the supplier's locked rate; reject if none has ever been established.
             if (lockedRate === null) {
@@ -110,12 +156,11 @@ export function registerFactoryMixBatchTopUpRoutes(app: Express) {
               totalCost: weight.times(lockedRate).toDecimalPlaces(6).toFixed(6),
             });
           } else {
-            // FIFO deduction of usedKg only — this determines WHICH container rows get
-            // debited, never the cost rate itself (that's fixed above). Allow over-use:
-            // any leftover after FIFO drains all rows is pushed onto the last row,
-            // driving its usedKg above receivedKg (negative stock).
+            // FIFO deduction identifies the exact original inventory
+            // containers. Unallocated weight must fail the whole transaction:
+            // never push excess onto the last container.
             let toDeduct = weight;
-            const taken: Array<{ containerId: number; kg: Decimal }> = [];
+            const taken: Array<{ containerId: number; kg: Decimal; adjustmentBacked?: boolean }> = [];
             for (const rs of supplierRawStocks) {
               if (toDeduct.lessThanOrEqualTo(0.001)) break;
               const avail = MoneyDecimal.max(0, toMoney(rs.receivedKg).minus(toMoney(rs.usedKg)));
@@ -128,36 +173,43 @@ export function registerFactoryMixBatchTopUpRoutes(app: Express) {
               taken.push({ containerId: rs.containerId, kg: take });
               toDeduct = toDeduct.minus(take);
             }
-            // If there's still remaining kg (over-use), push it onto the last raw stock row
-            if (toDeduct.greaterThan(0.001) && supplierRawStocks.length > 0) {
-              const lastRs = supplierRawStocks[supplierRawStocks.length - 1];
+            if (toDeduct.gt(0)) {
+              const addAllowance = await availableSupplierAddAllowance(
+                tx,
+                companyId,
+                supplierId,
+                supplierRawStocks,
+                txDate || getClientDate(req)
+              );
+              requireMixFifoFullyAllocated(toDeduct.toFixed(3), supplierId, addAllowance.toFixed(3));
+              const last = supplierRawStocks[supplierRawStocks.length - 1];
               await tx
                 .update(factoryRawStock)
-                .set({ usedKg: sql`${factoryRawStock.usedKg} + ${toDeduct.toFixed()}` })
-                .where(eq(factoryRawStock.id, lastRs.id));
-              taken.push({ containerId: lastRs.containerId, kg: toDeduct });
+                .set({ usedKg: sql`${factoryRawStock.usedKg} + ${toDeduct.toFixed(3)}` })
+                .where(and(eq(factoryRawStock.id, last.id), eq(factoryRawStock.companyId, companyId)));
+              taken.push({ containerId: last.containerId, kg: toDeduct, adjustmentBacked: true });
             }
 
-            // Cost is the supplier's locked rate — client-supplied cost is never
-            // trusted. With no locked rate, each container FIFO drew from is
-            // priced at its own landed USD cost (wave 11).
-            let lineCost = new MoneyDecimal(0);
-            let priced = true;
+            // One persisted source row PER exact FIFO container, matching
+            // mix creation. This preserves historical allocation provenance and
+            // allows correct reversal without guessing a supplier-wide row.
             for (const part of taken) {
               const landed = await containerUsdRate(tx, companyId, part.containerId);
               const rate = lockedRate ?? landed;
               mixCost.add(part.kg, rate, { supplierId, containerId: part.containerId });
               mixCost.addPriceDifference(part.kg, rate, landed);
-              if (rate === null) priced = false;
-              else lineCost = lineCost.plus(part.kg.times(rate));
+              sourceRecords.push({
+                supplierId,
+                containerId: part.containerId,
+                adjustmentBacked: part.adjustmentBacked,
+                weightKg: part.kg.toFixed(3),
+                costPerKg: (rate ?? new MoneyDecimal(0)).toFixed(),
+                totalCost: part.kg
+                  .times(rate ?? 0)
+                  .toDecimalPlaces(6)
+                  .toFixed(6),
+              });
             }
-            const lineRate = priced && weight.gt(0) ? lineCost.dividedBy(weight) : new MoneyDecimal(0);
-            sourceRecords.push({
-              supplierId,
-              weightKg: weight.toFixed(),
-              costPerKg: (lockedRate ?? lineRate).toFixed(),
-              totalCost: (priced ? lineCost : new MoneyDecimal(0)).toDecimalPlaces(6).toFixed(6),
-            });
           }
         }
 
@@ -195,7 +247,11 @@ export function registerFactoryMixBatchTopUpRoutes(app: Express) {
           const priced = await rawSourceUsdRate(tx, companyId, { supplierId: ctnSupplierId2, containerId });
           const costUsd = priced?.rate ?? null;
 
-          // Allow over-use: usedKg may exceed receivedKg, driving stock negative
+          requireMixRawStockCapacity({
+            availableKg: toMoney(rawStockRow.receivedKg).minus(rawStockRow.usedKg).toFixed(3),
+            requestedKg: weight.toFixed(3),
+            source: `container #${containerId}`,
+          });
           await tx
             .update(factoryRawStock)
             .set({ usedKg: sql`${factoryRawStock.usedKg} + ${weight.toFixed()}` })
@@ -225,9 +281,9 @@ export function registerFactoryMixBatchTopUpRoutes(app: Express) {
 
           if (!srcBatch) throw new Error(`Source batch ${sourceBatchId} not found`);
 
-          const batchRemaining = toMoney(srcBatch.totalWeightKg).minus(toMoney(srcBatch.usedKg));
+          const batchRemaining = requireMixLifecycleAvailable(srcBatch);
           const weight = weightOf(bSource);
-          if (weight.greaterThan(batchRemaining.plus(0.001))) {
+          if (weight.greaterThan(batchRemaining)) {
             throw new Error(`Not enough in batch ${srcBatch.batchCode}. Available: ${batchRemaining.toFixed(3)} kg`);
           }
 
@@ -271,18 +327,23 @@ export function registerFactoryMixBatchTopUpRoutes(app: Express) {
             containerId: sr.containerId || null,
             supplierId: sr.supplierId || null,
             sourceBatchId: sr.sourceBatchId || null,
-            sourceType: sr.sourceBatchId
-              ? "BATCH"
-              : sr.supplierId
-                ? sr.containerId
-                  ? "SUPPLIER_FIFO"
-                  : "SUPPLIER"
-                : "CONTAINER_DIRECT",
+            sourceType: sr.adjustmentBacked
+              ? "SUPPLIER_ADJUSTMENT_BACKED"
+              : sr.sourceBatchId
+                ? "BATCH"
+                : sr.supplierId
+                  ? sr.containerId
+                    ? "SUPPLIER_FIFO"
+                    : "SUPPLIER"
+                  : "CONTAINER_DIRECT",
             sourceId: sr.supplierId || sr.containerId || sr.sourceBatchId || null,
             weightKg: sr.weightKg,
             quantityKg: sr.weightKg,
             costPerKg: sr.costPerKg,
             totalCost: sr.totalCost,
+            notes: sr.adjustmentBacked
+              ? "Receipt-row overdraw covered by an existing supplier ADD adjustment; see supplier adjustment ledger."
+              : null,
             inventorySupplierId: sr.sourceBatchId != null ? null : (sr.supplierId ?? null),
           });
         }
@@ -336,6 +397,12 @@ export function registerFactoryMixBatchTopUpRoutes(app: Express) {
 
       res.json(result);
     } catch (error: unknown) {
+      if (error instanceof MixRawStockShortageError) {
+        return res.status(error.status).json({ code: error.code, message: error.message });
+      }
+      if (error instanceof MixLifecycleRefusal) {
+        return res.status(error.statusCode).json({ code: error.code, message: error.message });
+      }
       if (sendFactoryCostBasisRefusal(res, error)) return;
       logger.error("Error topping up mix batch:", { error: error });
       res.status(400).json({ message: getErrorMessage(error) });

@@ -8,7 +8,7 @@ export function hasSingleUsdBasis(rows: readonly { currency?: string | null }[])
 }
 
 /** A financial figure explicitly identifies the source of its calculation. */
-export type RentalReportingBasis = "posted-cash" | "contract-paid" | "reconciled-account-balances";
+export type RentalReportingBasis = "posted-cash" | "contract-paid" | "reconciled-account-balances" | "posted-ledger-expense";
 export type RentalReportingFigure = Readonly<{
   amount: number | null;
   currency: "USD";

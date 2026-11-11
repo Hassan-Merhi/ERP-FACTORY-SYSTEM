@@ -11,7 +11,7 @@ import { parseId } from "../../../../lib/parseId";
 import { HttpError, sendHttpError } from "../../../../lib/httpHandlers";
 import { recalculateOrderTotalsForScannedArticle } from "../bale-scanning/incrementalTotals";
 
-type OrderRow = { customer_id: number; proforma_id_used: number | null; status: string };
+type OrderRow = { customer_id: number; proforma_id_used: number | null; status: string; destination: string | null };
 type ProductRow = { article_code: string; name: string | null; selling_price: string | null };
 type PriceRow = { article_code: string; price_per_bale: string };
 type ExtraLineRow = {
@@ -35,9 +35,9 @@ async function findOrder(
 ): Promise<OrderRow> {
   const rows = resultRows<OrderRow>(await executor.execute(
     lock
-      ? sql`SELECT customer_id, proforma_id_used, status FROM customer_orders
+      ? sql`SELECT customer_id, proforma_id_used, status, destination FROM customer_orders
             WHERE company_id = ${companyId} AND id = ${orderId} AND deleted_at IS NULL FOR UPDATE`
-      : sql`SELECT customer_id, proforma_id_used, status FROM customer_orders
+      : sql`SELECT customer_id, proforma_id_used, status, destination FROM customer_orders
             WHERE company_id = ${companyId} AND id = ${orderId} AND deleted_at IS NULL`
   ));
   if (!rows[0]) throw new HttpError(404, "Container loading not found");
@@ -96,8 +96,9 @@ async function saveExtraItems(companyId: number, orderId: number, items: ExtraIn
     const prices = resultRows<PriceRow>(await tx.execute(sql`
       SELECT DISTINCT ON (UPPER(TRIM(article_code)))
         article_code, price_per_bale::text AS price_per_bale
-      FROM customer_price_lists
+      FROM customer_destination_price_lists
       WHERE company_id = ${companyId} AND customer_id = ${order.customer_id}
+        AND destination = UPPER(TRIM(COALESCE(${order.destination}, '')))
         AND UPPER(TRIM(article_code)) IN (${codes})
       ORDER BY UPPER(TRIM(article_code)), updated_at DESC
     `));
@@ -152,6 +153,26 @@ async function saveExtraItems(companyId: number, orderId: number, items: ExtraIn
 }
 
 export function registerContainerExtraExpectedLineRoutes(app: Express) {
+  // Preview exactly the destination-scoped agreed prices used during saving.
+  app.get("/api/factory/customer-orders/:id/container-extra-items/prices", requireAuth, async (req: Request, res: Response) => {
+    try {
+      if (!allowed(req)) return res.status(403).json({ message: "Access denied" });
+      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+      const orderId = parseId(req.params.id);
+      if (!companyId || orderId === null) return res.status(400).json({ message: "Company and order required" });
+      const order = await findOrder(db, companyId, orderId, false);
+      const prices = resultRows<PriceRow>(await db.execute(sql`
+        SELECT article_code, price_per_bale::text AS price_per_bale
+        FROM customer_destination_price_lists
+        WHERE company_id = ${companyId} AND customer_id = ${order.customer_id}
+          AND destination = UPPER(TRIM(COALESCE(${order.destination}, '')))
+      `));
+      return res.json(prices);
+    } catch (error: unknown) {
+      return sendHttpError(res, error);
+    }
+  });
+
   app.get("/api/factory/customer-orders/:id/container-extra-items", requireAuth, async (req: Request, res: Response) => {
     try {
       if (!allowed(req)) return res.status(403).json({ message: "Access denied" });

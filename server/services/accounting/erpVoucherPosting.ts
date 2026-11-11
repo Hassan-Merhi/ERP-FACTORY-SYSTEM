@@ -32,6 +32,7 @@ import {
 } from "./centralPostingEngine";
 import { normalizeVoucherEntryAmounts } from "./currencyAmounts";
 import { createDatabasePostingDependencies } from "./databasePostingDependencies";
+import { isHadiDuplicateLinkedRentExpenseJournal } from "../rental/hadiRentLedgerPolicy";
 import { allocateVoucherNumberTx } from "./voucherNumbering";
 import {
   getCompanyRequestRuntimeContext,
@@ -218,6 +219,16 @@ export type ErpEntriesPostingInput = Omit<ErpVoucherPostingInput, "lines"> & {
  * dual-currency fields). The total is the exact debit total.
  */
 export async function postErpEntriesTx(tx: DbTransaction, input: ErpEntriesPostingInput): Promise<ErpPostingResult> {
+  // Guard the precise historic HADI/Properties double-expensing pattern before
+  // voucher numbering or inserting any lines. The legitimate monthly accrual
+  // (Dr expense / Cr payable) and payment (Dr payable / Cr owner) still work.
+  if (isHadiDuplicateLinkedRentExpenseJournal(input.companyId, input.voucherType, input.entries)) {
+    throw new PostingValidationError(
+      "HADI_LINKED_RENT_DUPLICATE_EXPENSE_BLOCKED",
+      "HADI rent credited to the Properties owner/settlement account must not debit Rent Expense again. " +
+      "Reconcile the original rent accrual first and settle the valid Accrued Rent Payable entry instead."
+    );
+  }
   const total = input.entries.reduce((sum, entry) => sum.plus(toMoney(entry.debitAmount)), new MoneyDecimal(0));
   const exchangeRate =
     input.exchangeRate == null || input.exchangeRate === "" ? null : toMoney(input.exchangeRate).toFixed();

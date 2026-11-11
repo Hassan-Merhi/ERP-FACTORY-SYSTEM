@@ -121,9 +121,23 @@ function decimalKg(text: string): string {
   }
   return new MoneyDecimal(text).toFixed(3);
 }
+/** True for ASCII control characters (U+0000–U+001F and U+007F). */
+function hasControlCharacter(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code <= 0x1f || code === 0x7f) return true;
+  }
+  return false;
+}
+/** True when, after any leading whitespace or control characters, the text starts like a spreadsheet formula. */
+function startsWithFormulaTrigger(value: string): boolean {
+  let index = 0;
+  while (index < value.length && (value.charCodeAt(index) <= 0x20 || /\s/.test(value[index]))) index += 1;
+  return index < value.length && "=+@-".includes(value[index]);
+}
 export function normalizePoArticleCode(raw: string): string {
   const code = String(raw ?? "").trim().toUpperCase();
-  if (!code || code.length > 50 || /^[=+@-]/.test(code) || /[\u0000-\u001f\u007f]/.test(code)) {
+  if (!code || code.length > 50 || /^[=+@-]/.test(code) || hasControlCharacter(code)) {
     refuse("PO_ARTICLE_INVALID", "A frozen bale has an invalid or spreadsheet-unsafe article code");
   }
   return code;
@@ -131,7 +145,7 @@ export function normalizePoArticleCode(raw: string): string {
 function safeSupplierCode(value: unknown): string {
   const code = typeof value === "string" ? value.trim() : "";
   if (!code || code.length > 100 || /^[=+@-]/.test(code) ||
-      /[\u0000-\u001f\u007f]/.test(code)) {
+      hasControlCharacter(code)) {
     refuse("PO_SUPPLIER_CODE_INVALID", "Enter a valid ERP supplier code before exporting", 400);
   }
   return code;
@@ -151,7 +165,7 @@ function keepText(value: unknown): string {
   // Excel sheet-to-JSON returns the text verbatim. Never let a spreadsheet
   // formula-like name become an Excel formula when generating a workbook.
   if (!text) return "Unnamed Factory Article";
-  const dangerous = /^[\s\u0000-\u0020]*[=+@-]/.test(text) || /[\r\n\t]/.test(text);
+  const dangerous = startsWithFormulaTrigger(text) || /[\r\n\t]/.test(text);
   return dangerous ? "'" + text : text;
 }
 export function groupFrozenTripArticles(source: PostedTripPoSource): TripPoArticle[] {
