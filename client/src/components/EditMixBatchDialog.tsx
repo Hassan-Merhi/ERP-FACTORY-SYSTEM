@@ -95,7 +95,9 @@ export function EditMixBatchDialog({
         const srcBatch = existingBatches?.find((b) => b.id === src.sourceBatchId);
         const remaining = srcBatch ? parseFloat(srcBatch.totalWeightKg) - parseFloat(srcBatch.usedKg) : 0;
         const weight = parseFloat(src.weightKg);
-        const currentCost = srcBatch ? parseFloat(srcBatch.costPerKg || "0") : parseFloat(src.costPerKg);
+        const currentCost = batch.status === "COMPLETED" || batch.status === "CLOSED"
+          ? parseFloat(src.costPerKg)
+          : srcBatch ? parseFloat(srcBatch.costPerKg || "0") : parseFloat(src.costPerKg);
         const existing = batchSourceList.find((item) => item.sourceId === src.sourceBatchId);
         if (existing) {
           existing.weightKg += weight;
@@ -115,26 +117,29 @@ export function EditMixBatchDialog({
         }
       } else if (src.supplierId) {
         // Supplier source (may span multiple containers — aggregate by supplierId).
-        // Cost/kg ALWAYS comes from the current server-authoritative locked rate
-        // (GET /api/factory/raw-stock), never from the stored source's historical
-        // costPerKg — the locked rate is the single source of truth for a supplier's
-        // rate and must be what's previewed/edited-against, not a stale snapshot.
+        // Completed batches display their original source USD snapshots. Only
+        // editable batches use the latest locked supplier rate as a preview.
+        // Never silently present current supplier prices as saved batch values.
         const existing = supplierMap.get(src.supplierId);
         const stockRow = supplierStock.find((s) => s.supplierId === src.supplierId);
         // Available = current remaining + what was consumed (returns on edit)
         const currentRemaining = stockRow ? parseFloat(stockRow.remainingKg) : 0;
         const currentRate = stockRow ? parseFloat(stockRow.costPerKgUsd || stockRow.costPerKg || "0") : 0;
         const srcWeight = parseFloat(src.weightKg);
+        const isCompleted = batch.status === "COMPLETED" || batch.status === "CLOSED";
+        const savedUsd = Number(src.totalCost) || 0;
         if (existing) {
           existing.weightKg += srcWeight;
-          existing.costPerKg = currentRate;
-          existing.totalCost = existing.weightKg * existing.costPerKg;
+          existing.totalCost = isCompleted ? existing.totalCost + savedUsd : existing.weightKg * currentRate;
+          existing.costPerKg = isCompleted
+            ? (existing.weightKg > 0 ? existing.totalCost / existing.weightKg : 0)
+            : currentRate;
           existing.availableKg = currentRemaining + existing.weightKg;
         } else {
           supplierMap.set(src.supplierId, {
             weightKg: srcWeight,
-            costPerKg: currentRate,
-            totalCost: srcWeight * currentRate,
+            costPerKg: isCompleted && srcWeight > 0 ? savedUsd / srcWeight : currentRate,
+            totalCost: isCompleted ? savedUsd : srcWeight * currentRate,
             label: src.supplierName || `Supplier #${src.supplierId}`,
             availableKg: currentRemaining + srcWeight,
           });
@@ -148,7 +153,7 @@ export function EditMixBatchDialog({
       label: val.label,
       weightKg: val.weightKg,
       costPerKg: val.costPerKg,
-      totalCost: val.weightKg * val.costPerKg,
+      totalCost: val.totalCost,
       availableKg: val.availableKg,
     }));
 
@@ -418,7 +423,7 @@ export function EditMixBatchDialog({
     if (values.weightKg > 0) originalSupplierRates.set(supplierId, values.totalCost / values.weightKg);
   }
   const historicalSourcesLocked = batch?.status === "COMPLETED" || batch?.status === "CLOSED";
-  const hasMissingCurrentRates = selectedSources.some(
+  const hasMissingCurrentRates = !historicalSourcesLocked && selectedSources.some(
     (source) => source.type === "supplier" && (!Number.isFinite(source.costPerKg) || source.costPerKg <= 0)
   );
   const currentUsedKg = batch ? parseFloat(batch.usedKg || "0") : 0;
@@ -678,11 +683,11 @@ export function EditMixBatchDialog({
                               <span
                                 className="font-mono text-xs text-muted-foreground"
                                 data-testid={`text-cost-per-kg-${sel.type}-${sel.sourceId}`}
-                                title="Current supplier rate, used only for the estimated cost if the sources are saved"
+                                title={historicalSourcesLocked ? "Recorded weighted-average supplier rate at the time of the mix" : "Current supplier rate, used only for an edit estimate"}
                               >
                                 ${sel.costPerKg.toFixed(4)}
                               </span>
-                              {originalSupplierRates.has(sel.sourceId) && (
+                              {!historicalSourcesLocked && originalSupplierRates.has(sel.sourceId) && (
                                 <div
                                   className="text-[11px] text-muted-foreground"
                                   title="Saved weighted-average supplier cost in this batch"
@@ -735,15 +740,15 @@ export function EditMixBatchDialog({
                 )}
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Estimated total cost if saved</p>
+                <p className="text-sm text-muted-foreground">{historicalSourcesLocked ? "Recorded total cost" : "Estimated total cost if saved"}</p>
                 <p className="text-2xl font-bold font-mono">
-                  {hasMissingCurrentRates ? "Unavailable" : "$" + formatNumber(totalCost, 4)}
+                  {hasMissingCurrentRates ? "Unavailable" : "$" + formatNumber(historicalSourcesLocked ? recordedBatchCost.totalCost : totalCost, 4)}
                 </p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Estimated blended cost/kg if saved</p>
+                <p className="text-sm text-muted-foreground">{historicalSourcesLocked ? "Recorded blended cost/kg" : "Estimated blended cost/kg if saved"}</p>
                 <p className="text-2xl font-bold font-mono" data-testid="text-edit-current-estimate">
-                  {hasMissingCurrentRates ? "Unavailable" : "$" + blendedCostPerKg.toFixed(4)}
+                  {hasMissingCurrentRates ? "Unavailable" : "$" + (historicalSourcesLocked ? recordedBatchCost.costPerKg : blendedCostPerKg).toFixed(4)}
                 </p>
               </div>
             </div>
@@ -755,10 +760,9 @@ export function EditMixBatchDialog({
               </p>
             )}
             <p className="text-xs text-muted-foreground" data-testid="mix-batch-cost-basis-notice">
-              The estimate uses current supplier rates for proposed source edits. It is not a correction to recorded
-              historical costs. Metadata-only saves do not touch consumption. Source changes require a fresh server
-              review, a reason and explicit approval; completed/used batches stay protected pending the historical
-              reconciliation.
+              {historicalSourcesLocked
+                ? "Completed batch: the recorded supplier source costs and blended total match the saved batch list. Current supplier rates may differ; changing the historical valuation requires a reviewed recost, not an ordinary edit."
+                : "The estimate uses current supplier rates for proposed edits and is not a correction to recorded historical costs. Source changes require a server review and approval."}
             </p>
 
             {sourcesChanged && (
