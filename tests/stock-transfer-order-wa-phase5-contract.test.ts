@@ -89,6 +89,7 @@ describe("Stock Transfer Order Phase 5 no-cost Excel delivery", () => {
     expect(delivery).toContain("primary.recipient_chat_id !== item.recipient_chat_id");
     expect(delivery).toContain("sameChatDeduplicated");
     expect(delivery).toContain("same_chat_primary_uncertain");
+    expect(delivery).toContain("frozen_destination_mismatch");
     expect(delivery).toContain("return true; // Always wait for primary");
   });
 
