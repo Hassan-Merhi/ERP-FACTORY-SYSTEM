@@ -23,9 +23,10 @@ export type StockTransferOrderWaSettings = {
   destinations: Array<{ id: number; name: string; chatId: string | null; enabled: boolean }>;
 };
 
-function DestinationRecipient({ destination, groups }: {
+function DestinationRecipient({ destination, groups, canConfigure }: {
   destination: StockTransferOrderWaSettings["destinations"][number];
   groups: StockTransferOrderWaSettings["groups"];
+  canConfigure: boolean;
 }) {
   const { toast } = useToast();
   const [chatId, setChatId] = useState(destination.chatId || "");
@@ -53,18 +54,18 @@ function DestinationRecipient({ destination, groups }: {
         <span className="font-medium text-sm">{destination.name}</span>
         <div className="flex items-center gap-2">
           <Label className="text-xs" htmlFor={"sto-wa-dest-enable-" + destination.id}>Enabled</Label>
-          <Switch id={"sto-wa-dest-enable-" + destination.id} checked={enabled} onCheckedChange={setEnabled}/>
+          <Switch id={"sto-wa-dest-enable-" + destination.id} checked={enabled} disabled={!canConfigure} onCheckedChange={setEnabled}/>
         </div>
       </div>
-      <Select value={groups.some(g => g.chatId === chatId) ? chatId : ""} onValueChange={setChatId}>
+      <Select value={groups.some(g => g.chatId === chatId) ? chatId : ""} disabled={!canConfigure} onValueChange={setChatId}>
         <SelectTrigger><SelectValue placeholder="Select saved WhatsApp group (optional)" /></SelectTrigger>
         <SelectContent>{groups.map(g => (
           <SelectItem key={g.id} value={g.chatId}>{g.name}</SelectItem>
         ))}</SelectContent>
       </Select>
-      <Input value={chatId} onChange={e => setChatId(e.target.value)}
+      <Input value={chatId} disabled={!canConfigure} onChange={e => setChatId(e.target.value)}
         placeholder="WhatsApp group ID or international number@c.us" aria-label={destination.name + " WhatsApp recipient"}/>
-      <Button size="sm" variant="outline" disabled={save.isPending || !chatId.trim()} onClick={() => save.mutate()}>
+      <Button size="sm" variant="outline" disabled={!canConfigure || save.isPending || !chatId.trim()} onClick={() => save.mutate()}>
         {save.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4"/>}
         Save recipient
       </Button>
@@ -159,7 +160,7 @@ export function StockTransferOrderApprovalSettings() {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                 {(settings.data?.destinations || []).map(destination => (
                   <DestinationRecipient key={destination.id} destination={destination}
-                    groups={settings.data?.groups || []}/>
+                    groups={settings.data?.groups || []} canConfigure={!!settings.data?.canConfigure}/>
                 ))}
               </div>
             </div>
