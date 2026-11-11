@@ -265,6 +265,57 @@ describe("Phase 33D employee/factory net position", () => {
     expect(res.body.onUs.accounts).toEqual([expect.objectContaining({ code: "EMPLOYEE_PAYROLL_PAYABLE", value: 0 })]);
   });
 
+  it("includes the supplier FX gain as a visible Have account without double-counting the current payable", async () => {
+    harness.computeNetPositionSupplierBalances.mockResolvedValue({
+      supplierLockedRateMapNp: new Map(),
+      allContainersF: [],
+      supplierItems: [{ name: "EUR Supplier", balanceUsd: 8576.06, fxBasisAdjustmentUsd: 459.44 }],
+      totalSupplierLiabilities: 8576.06,
+      totalSupplierOverpayments: 0,
+    });
+    harness.executeResults.push({ rows: [{ currency_code: "EUR", rate_to_usd: "1.12" }] }, { rows: [] });
+    harness.selectResults.push([], [], [], [], [], []);
+    const res = resHarness();
+    await routes.get("GET /api/factory/net-position")!(req(), res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.forUs.accounts).toContainEqual(expect.objectContaining({
+      code: "FX_UNREALIZED_GAIN", value: 459.44,
+    }));
+    expect(res.body.onUs.accounts).toContainEqual(expect.objectContaining({
+      code: "SUPPLIER", name: "EUR Supplier", value: 9035.50,
+    }));
+    expect(res.body.forUsTotal).toBe(459.44);
+    expect(res.body.onUsTotal).toBe(9035.50);
+    expect(res.body.netPosition).toBe(-8576.06);
+    expect(res.body.supplierLiabilitiesCurrentRate).toBe(8576.06);
+  });
+
+  it("puts an FX loss on the Owe side and preserves the current-rate net exposure", async () => {
+    harness.computeNetPositionSupplierBalances.mockResolvedValue({
+      supplierLockedRateMapNp: new Map(),
+      allContainersF: [],
+      supplierItems: [{ name: "EUR Supplier", balanceUsd: 9494.93, fxBasisAdjustmentUsd: -459.43 }],
+      totalSupplierLiabilities: 9494.93,
+      totalSupplierOverpayments: 0,
+    });
+    harness.executeResults.push({ rows: [{ currency_code: "EUR", rate_to_usd: "1.24" }] }, { rows: [] });
+    harness.selectResults.push([], [], [], [], [], []);
+    const res = resHarness();
+    await routes.get("GET /api/factory/net-position")!(req(), res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.forUs.accounts.some((row: any) => row.code === "FX_UNREALIZED_GAIN")).toBe(false);
+    expect(res.body.onUs.accounts).toContainEqual(expect.objectContaining({
+      code: "FX_UNREALIZED_LOSS", value: 459.43,
+    }));
+    expect(res.body.onUs.accounts).toContainEqual(expect.objectContaining({
+      code: "SUPPLIER", name: "EUR Supplier", value: 9035.50,
+    }));
+    expect(res.body.onUsTotal).toBe(9494.93);
+    expect(res.body.netPosition).toBe(-9494.93);
+  });
+
   it("keeps Parties customer balances and adds verified and loading orders without pending orders", async () => {
     harness.classifyNetPositionAccounts.mockReturnValue({
       forUsAccounts: [
