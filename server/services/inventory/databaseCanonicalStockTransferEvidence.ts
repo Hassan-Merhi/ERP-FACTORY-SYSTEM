@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { ConvergenceReconciliationError } from "../accounting/convergenceReconciliation";
-import { summarizeCanonicalStockTransferEvidence } from "./canonicalStockTransferEvidence";
+import { summarizeCanonicalStockTransferNetEvidence } from "./canonicalStockTransferEvidence";
 import type {
   StockTransferDocumentSnapshot,
   StockTransferMovementEvidence,
@@ -51,10 +51,11 @@ function sourceIds(documents: StockTransferDocumentSnapshot[]): string[] {
  * Reads canonical movement evidence only for the authoritative stock-transfer
  * documents supplied by the database document adapter. Ordinary writes are
  * keyed by transfer ID while both Excel-import writers are keyed by voucher ID.
- * The explicit requested (transfer, voucher) pairs prevent a cross-document
- * match and normalize every movement to the transfer document's identity.
- * Edited transfers must select only the newest revision's issue movements;
- * its reverse movements and earlier issue generations are audit history.
+ * The explicit requested triples (transfer, voucher, destination) prevent
+ * cross-document matches and normalize every movement to the transfer ID.
+ * Full edits reverse and reissue while approval revisions move only DELTAS;
+ * the signed net movement at the destination handles both without discarding
+ * the canonical audit history.
  */
 export const loadDatabaseCanonicalStockTransferEvidence: StockTransferMovementEvidenceLoader = async ({
   tx,
@@ -74,65 +75,42 @@ export const loadDatabaseCanonicalStockTransferEvidence: StockTransferMovementEv
   }
 
   const ids = sourceIds(documents);
-  // The ordinary transfer writer identifies evidence by transfer ID; the two
-  // Excel-import writers identify the same transfer by its voucher ID and a
-  // distinct source type. Normalize all three to the authoritative document's
-  // transfer ID before the balanced-leg summarizer evaluates them.
+  // Ordinary transfers are identified by transfer ID; spreadsheet imports
+  // use voucher ID. All journal generations, including reversals and delta
+  // revisions, must be read to derive the current signed stock quantity.
   const pairs = sql.join(
     documents.map((document) =>
-      sql`(${String(positiveInteger(document.transferId, "document.transferId"))}, ${String(positiveInteger(document.voucherId, "document.voucherId"))})`
+      sql`(
+        ${String(positiveInteger(document.transferId, "document.transferId"))},
+        ${String(positiveInteger(document.voucherId, "document.voucherId"))},
+        ${positiveInteger(document.destinationLocationId, "document.destinationLocationId")}
+      )`
     ),
     sql`, `
   );
   const result = await tx.execute(sql`
-    WITH requested(transfer_id, voucher_id) AS (VALUES ${pairs}),
-    candidate AS (
-      SELECT
-        movement.company_id,
-        requested.transfer_id,
-        movement.source_type,
-        movement.source_id,
-        movement.idempotency_key,
-        movement.quantity_delta,
-        movement.unit_cost,
-        movement.id,
-        -- A transfer edit writes both reverse and issue batches at revision N.
-        -- Read only the latest issue batch, never all historical generations.
-        -- If a revision has only reversals, do not silently fall back to an
-        -- older issue batch: the missing new issue must fail convergence.
-        CASE WHEN movement.source_type = 'stock-transfer'
-               AND movement.idempotency_key ~ ('^stock-transfer:' || requested.transfer_id || ':rev[0-9]+:(issue|reverse):[0-9]+$')
-             THEN substring(movement.idempotency_key
-                              FROM ('^stock-transfer:' || requested.transfer_id || ':rev([0-9]+):'))::bigint
-             ELSE NULL END AS revision
-      FROM requested
-      INNER JOIN canonical_stock_movements movement
-        ON movement.company_id = ${scopedCompanyId}
-       AND (
-         (movement.source_type = 'stock-transfer'
-          AND movement.source_id = requested.transfer_id)
-         OR
-         (movement.source_type IN ('stock-transfer-import', 'stock-transfer-import-multi-source')
-          AND movement.source_id = requested.voucher_id)
-       )
-    ),
-    latest AS (
-      SELECT transfer_id, max(revision) AS revision FROM candidate GROUP BY transfer_id
-    )
+    WITH requested(transfer_id, voucher_id, destination_location_id) AS (VALUES ${pairs})
     SELECT
-      candidate.company_id AS "companyId",
+      movement.company_id AS "companyId",
       'stock-transfer'::text AS "sourceType",
-      candidate.transfer_id AS "sourceId",
-      candidate.source_type AS "originalSourceType",
-      candidate.quantity_delta AS "quantityDelta",
-      candidate.unit_cost AS "unitCost"
-    FROM candidate
-    INNER JOIN latest ON latest.transfer_id = candidate.transfer_id
-    WHERE (latest.revision IS NULL AND candidate.revision IS NULL)
-       OR (latest.revision IS NOT NULL
-           AND candidate.revision = latest.revision
-           AND candidate.idempotency_key ~ (':issue:[0-9]+$'))
-    ORDER BY candidate.transfer_id, candidate.id
+      requested.transfer_id AS "sourceId",
+      movement.stock_item_id AS "stockItemId",
+      movement.location_id AS "locationId",
+      requested.destination_location_id AS "destinationLocationId",
+      movement.idempotency_key AS "idempotencyKey",
+      movement.quantity_delta AS "quantityDelta",
+      movement.unit_cost AS "unitCost"
+    FROM requested
+    INNER JOIN canonical_stock_movements movement
+      ON movement.company_id = ${scopedCompanyId}
+     AND (
+       (movement.source_type = 'stock-transfer'
+        AND movement.source_id = requested.transfer_id)
+       OR
+       (movement.source_type IN ('stock-transfer-import', 'stock-transfer-import-multi-source')
+        AND movement.source_id = requested.voucher_id)
+     )
+    ORDER BY requested.transfer_id, movement.id
   `);
 
   const rows = resultRows(result);
@@ -162,7 +140,7 @@ export const loadDatabaseCanonicalStockTransferEvidence: StockTransferMovementEv
     }
   }
 
-  return summarizeCanonicalStockTransferEvidence({
+  return summarizeCanonicalStockTransferNetEvidence({
     companyId: scopedCompanyId,
     rows: rows.map((row: Record<string, unknown>) => ({
       // Each row was validated in the loop above; these repeat the same
@@ -172,6 +150,10 @@ export const loadDatabaseCanonicalStockTransferEvidence: StockTransferMovementEv
       sourceId: String(row.sourceId ?? "").trim(),
       quantityDelta: String(row.quantityDelta),
       unitCost: String(row.unitCost),
+      idempotencyKey: String(row.idempotencyKey ?? ""),
+      stockItemId: positiveInteger(row.stockItemId, "movement.stockItemId"),
+      locationId: positiveInteger(row.locationId, "movement.locationId"),
+      destinationLocationId: positiveInteger(row.destinationLocationId, "movement.destinationLocationId"),
     })),
   });
 };
