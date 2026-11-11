@@ -13,15 +13,22 @@ import pg from "pg";
 import { resolveDatabaseSsl } from "../server/lib/databaseSsl.mjs";
 import { compareSchemaDrift, compareMigrationHistory } from "./database-schema-drift-core.mjs";
 import { compareDefinitionDrift } from "./database-schema-definition-core.mjs";
+import { fingerprintFullSchema,compareFullSchemaFingerprint } from "./database-full-schema-fingerprint-core.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const allowed = new Set(["--json","--require-controlled"]);
 const supplied = process.argv.slice(2);
-if(supplied.some(arg=>!allowed.has(arg)) || new Set(supplied).size!==supplied.length) {
-  console.error("Only --json and --require-controlled are supported");
+const allowed = new Set(["--json","--require-controlled","--fingerprint"]);
+const referenceArgs = supplied.filter(arg=>arg.startsWith("--full-reference="));
+if(referenceArgs.length>1 || supplied.some(arg=>!allowed.has(arg) && !arg.startsWith("--full-reference=")) ||
+   new Set(supplied).size!==supplied.length ||
+   (supplied.includes("--fingerprint")&&referenceArgs.length)) {
+  console.error("Supported: --json, --require-controlled, --fingerprint, --full-reference=<trusted-file>");
   process.exit(2);
 }
 const requireControlled = supplied.includes("--require-controlled");
+const referencePath = referenceArgs[0]?.slice("--full-reference=".length);
+if(referenceArgs.length && !referencePath) throw new Error("Reference file path must not be empty");
+const fingerprintOnly = supplied.includes("--fingerprint");
 
 async function manifest() {
   const dir=path.join(root,"migrations/controlled");
@@ -41,7 +48,8 @@ async function collect(client) {
       JOIN pg_namespace ns ON ns.oid=c.relnamespace
       WHERE ns.nspname='public' AND c.relkind IN ('r','p')`),
     client.query(`SELECT table_name,column_name,data_type,
-      (is_nullable='NO') AS not_null,column_default AS default_expression
+      (is_nullable='NO') AS not_null,column_default AS default_expression,
+      identity_generation,generation_expression
       FROM information_schema.columns WHERE table_schema='public'`),
     client.query(`SELECT cls.relname AS index_name,tab.relname AS table_name,
         i.indisvalid AS valid,i.indisready AS ready,i.indisunique AS unique,
@@ -61,11 +69,11 @@ async function collect(client) {
       FROM pg_trigger tr JOIN pg_class cls ON cls.oid=tr.tgrelid
       JOIN pg_namespace ns ON ns.oid=cls.relnamespace
       WHERE ns.nspname='public' AND NOT tr.tgisinternal`),
-    client.query(`SELECT p.proname AS function_name,pg_get_functiondef(p.oid) AS definition
+    client.query(`SELECT p.proname AS function_name,
+        pg_get_function_identity_arguments(p.oid) AS identity_arguments,
+        pg_get_functiondef(p.oid) AS definition
       FROM pg_proc p JOIN pg_namespace ns ON ns.oid=p.pronamespace
-      WHERE ns.nspname='public' AND p.proname IN
-        ('set_customer_order_bale_scanned_at','copy_customer_order_bale_scanned_at_to_history')
-        AND p.pronargs=0`),
+      WHERE ns.nspname='public' AND p.prokind IN ('f','p')`),
     client.query(`SELECT c.relname AS table_name,c.relrowsecurity AS enabled,
         c.relforcerowsecurity AS forced,p.polname AS policy_name,
         p.polpermissive AS permissive,
@@ -106,14 +114,24 @@ async function run() {
     const rows=historyExists
       ?(await client.query("SELECT migration_name,checksum FROM public.erp_controlled_migration_history ORDER BY migration_name")).rows
       :[];
+    const fingerprint=fingerprintFullSchema(snapshot);
+    if(fingerprintOnly) {
+      await client.query("ROLLBACK");
+      console.log(JSON.stringify(fingerprint,null,2));
+      return;
+    }
     const migration=compareMigrationHistory(await manifest(),rows,historyExists);
     const schema=compareSchemaDrift(snapshot,{includeControlled:requireControlled});
     const definitions=requireControlled?compareDefinitionDrift(snapshot):null;
     // History is optional for the baseline report, mandatory for certified cutover.
+    const fullReference=referencePath
+      ?compareFullSchemaFingerprint(JSON.parse(await readFile(path.resolve(referencePath),"utf8")),fingerprint)
+      :null;
     const gate=schema.ok && migration.ok && (!requireControlled ||
-      (definitions.ok && historyExists && migration.pending.length===0));
+      (definitions.ok && historyExists && migration.pending.length===0)) &&
+      (!fullReference || fullReference.ok);
     await client.query("ROLLBACK");
-    const output={ok:gate,mode:"read-only",schema,definitions,migration,controlledHistoryRequired:requireControlled};
+    const output={ok:gate,mode:"read-only",schema,definitions,fullReference,migration,controlledHistoryRequired:requireControlled};
     console.log(JSON.stringify(output,null,2));
     if(!gate) process.exitCode=1;
   } catch(error) {
