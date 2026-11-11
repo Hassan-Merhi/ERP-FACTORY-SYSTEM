@@ -249,7 +249,13 @@ describe("after the cut-over", () => {
 
   it("tags finalizing a mix as WASTE for its remaining kg", async () => {
     const id = await mix("100", "40", "2");
-    const finalized = await call("POST /api/factory/mix-batches/:id/finalize", { params: { id: String(id) } });
+    // The 60 kg remainder is only written off once it is explicitly reviewed.
+    const unreviewed = await call("POST /api/factory/mix-batches/:id/finalize", { params: { id: String(id) } });
+    expect(unreviewed.statusCode, JSON.stringify(unreviewed.body)).toBe(409);
+    const finalized = await call("POST /api/factory/mix-batches/:id/finalize", {
+      params: { id: String(id) },
+      body: { confirmRemainderAsWaste: true, wasteKg: "60.000", wasteReason: "Reviewed remainder written off in test" },
+    });
     expect(finalized.statusCode, JSON.stringify(finalized.body)).toBe(200);
     expect((await events()).at(-1)).toEqual(["WASTE", "-120.00", "factory-mix-batch-finalize"]);
   });
@@ -263,8 +269,37 @@ describe("after the cut-over", () => {
     expect((await events()).at(-1)).toEqual(["MATERIAL_PRICE", "-100.00", "factory-mix-batch-delete"]);
   });
 
-  it("carries a mix forward at exactly its cost per kg (no drift, no event)", async () => {
+  it("refuses plain mix consumption, which has no production or ledger posting", async () => {
     const id = await mix("10", "0", "0.3333333");
+    const eventsBefore = (await events()).length;
+    const before = await valuationTotal();
+    const consumed = await call("POST /api/factory/mix-batches/consume", {
+      body: { usages: [{ batchId: id, kgUsed: 3.3 }], usedDate: today },
+    });
+    expect(consumed.statusCode, JSON.stringify(consumed.body)).toBe(409);
+    expect((consumed.body as { code?: string }).code).toBe("MIX_BATCH_LIFECYCLE_REFUSED");
+    // Nothing moved: no carry-forward, no usage, no valuation change, no event.
+    expect(
+      await one<{ n: string }>(`SELECT COUNT(*)::text AS n FROM factory_mix_batches WHERE carry_forward_from_id = $1`, [
+        id,
+      ])
+    ).toEqual({ n: "0" });
+    expect(await one<{ used_kg: string }>(`SELECT used_kg::text FROM factory_mix_batches WHERE id = $1`, [id])).toEqual(
+      { used_kg: "0.000" }
+    );
+    expect(await valuationTotal()).toBe(before);
+    expect((await events()).length).toBe(eventsBefore);
+  });
+});
+
+describe("carry-forward before the cut-over", () => {
+  beforeAll(async () => {
+    await setCutover(false);
+  });
+
+  it("carries a mix forward at exactly its cost per kg (no drift, no event)", async () => {
+    // A carry-forward copies its parent's recorded sources, so the parent needs one.
+    const id = await mix("10", "0", "0.3333333", "10");
     const eventsBefore = (await events()).length;
     const before = toCents(await valuationTotal());
     const consumed = await call("POST /api/factory/mix-batches/consume", {

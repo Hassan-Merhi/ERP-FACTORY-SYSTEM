@@ -13,14 +13,8 @@ import { getClientDate } from "../../../lib/dateUtils";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { writeDaybookEntry } from "../_helpers";
-import {
-  factoryContainers,
-  factoryRawStock,
-  factoryMixBatches,
-  factoryMixBatchSources,
-  factoryDaybookEntries,
-} from "@shared/schema";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { factoryRawStock, factoryMixBatches, factoryMixBatchSources, factoryDaybookEntries } from "@shared/schema";
+import { eq, and, isNull, sql } from "drizzle-orm";
 import { getStableSupplierCost } from "../../../services/factory/rawStockStableCost";
 import {
   containerUsdRate,
@@ -29,8 +23,23 @@ import {
   supplierLockedUsdRate,
 } from "../../../services/factory/baleCostBasis";
 import { recordFactoryStockValueEventTx } from "../../../services/factory/factoryStockValueEvents";
-import Decimal from "decimal.js";
-import { MoneyDecimal, parseMoneyInput, toMoney } from "../../../lib/money";
+import { MoneyDecimal, toMoney } from "../../../lib/money";
+import type Decimal from "decimal.js";
+import {
+  MixEditRequestError,
+  parseMixEditSelection,
+  sameMixEditSources,
+} from "../../../services/factory/mixBatchEditRequest";
+import { prepareMixSourceEditReview } from "../../../services/factory/mixBatchEditReview";
+
+class CompletedMixBatchSourceEditError extends Error {
+  readonly code = "MIX_BATCH_COMPLETED_SOURCE_EDIT_REQUIRES_REVIEW";
+  constructor() {
+    super(
+      "Completed mix batches cannot have source materials repriced automatically. Use the reviewed correction workflow."
+    );
+  }
+}
 
 export function registerFactoryMixBatchUpdateRoutes(app: Express) {
   app.patch("/api/factory/mix-batches/:id", requireAuth, async (req: Request, res: Response) => {
@@ -41,28 +50,88 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
       const id = parseId(req.params.id);
 
       if (id === null) return res.status(400).json({ message: "Invalid id" });
+      if (!req.body || typeof req.body !== "object" || Array.isArray(req.body)) {
+        throw new MixEditRequestError("An edit request body is required.");
+      }
       const { name, notes, batchDate, supplierSources, batchSources } = req.body;
+      if (
+        (name !== undefined && name !== null && typeof name !== "string") ||
+        (notes !== undefined && notes !== null && typeof notes !== "string")
+      ) {
+        throw new MixEditRequestError("Name and notes must be text.");
+      }
+      if (typeof name === "string" && name.length > 500) {
+        throw new MixEditRequestError("Batch name is too long.");
+      }
+      if (batchDate !== undefined && batchDate !== null && batchDate !== "") {
+        const iso = String(batchDate);
+        if (
+          typeof batchDate !== "string" ||
+          !/^\d{4}-\d{2}-\d{2}$/.test(iso) ||
+          Number.isNaN(Date.parse(iso)) ||
+          new Date(iso).toISOString().slice(0, 10) !== iso
+        ) {
+          throw new MixEditRequestError("Batch date must be a valid YYYY-MM-DD date.", "MIX_EDIT_INVALID_DATE");
+        }
+      }
 
-      // If no source data provided → simple name/notes update only
+      // Identical source weights are metadata-only, even if an older client
+      // submits all its sources. Never silently reprice that historical batch.
       const hasSourceUpdate = supplierSources !== undefined || batchSources !== undefined;
+      if (req.body.sourceEditPreview === true && !hasSourceUpdate) {
+        throw new MixEditRequestError("A source-edit preview requires both source lists.");
+      }
+      const parsedSources = hasSourceUpdate ? parseMixEditSelection(req.body) : null;
+      const reason = typeof req.body.sourceEditReason === "string" ? req.body.sourceEditReason.trim() : "";
+      let identicalSources = false;
+      if (parsedSources) {
+        const [existing] = await db
+          .select()
+          .from(factoryMixBatches)
+          .where(
+            and(
+              eq(factoryMixBatches.id, id),
+              eq(factoryMixBatches.companyId, companyId),
+              isNull(factoryMixBatches.deletedAt)
+            )
+          );
+        if (!existing) return res.status(404).json({ message: "Mix batch not found" });
+        const prior = await db.select().from(factoryMixBatchSources).where(eq(factoryMixBatchSources.mixBatchId, id));
+        identicalSources = sameMixEditSources(prior, parsedSources);
+        if (req.body.sourceEditPreview === true) {
+          const preview = await prepareMixSourceEditReview(db, companyId, existing, prior, parsedSources, reason, {
+            proposedBatchDate: batchDate,
+          });
+          res.set("Cache-Control", "private, no-store");
+          return res.json({ ...preview, previewOnly: true, batchCode: existing.batchCode });
+        }
+      }
 
-      if (!hasSourceUpdate) {
+      if (!hasSourceUpdate || identicalSources) {
         const [batch] = await db
           .select()
           .from(factoryMixBatches)
           .where(and(eq(factoryMixBatches.id, id), eq(factoryMixBatches.companyId, companyId)));
-        if (!batch) return res.status(404).json({ message: "Mix batch not found" });
+        if (!batch || batch.deletedAt) return res.status(404).json({ message: "Mix batch not found" });
         const updates: Partial<typeof factoryMixBatches.$inferInsert> = {};
         if (name !== undefined) updates.name = name?.trim() || null;
         if (notes !== undefined) updates.notes = notes?.trim() || null;
         if (batchDate !== undefined) updates.batchDate = batchDate || null;
+        if (Object.keys(updates).length === 0) return res.json(batch);
         // Phase 21 (B): the write and its audit commit together.
         const updated = await db.transaction(async (tx) => {
           const [written] = await tx
             .update(factoryMixBatches)
             .set(updates)
-            .where(eq(factoryMixBatches.id, id))
+            .where(
+              and(
+                eq(factoryMixBatches.id, id),
+                eq(factoryMixBatches.companyId, companyId),
+                isNull(factoryMixBatches.deletedAt)
+              )
+            )
             .returning();
+          if (!written) throw new Error("Mix batch is no longer available");
           await logAudit(
             {
               userId: req.session.userId!,
@@ -87,25 +156,19 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
         return res.json(updated);
       }
 
-      // Source weights are read the way parseFloat reads them; one that does not
-      // parse would otherwise reach usedKg as NaN.
-      const sourceWeights = [...(supplierSources || []), ...(batchSources || [])].map(
-        (source: { weightKg?: unknown }) => parseMoneyInput(source.weightKg)
-      );
-      if (sourceWeights.some((weight) => weight === null)) {
-        return res.status(400).json({ message: "Invalid amount" });
-      }
-      const weightOf = (source: { weightKg?: unknown }) => parseMoneyInput(source.weightKg) as Decimal;
+      // Every real source edit requires a reviewed hash; validation is
+      // repeated under transaction locks before any quantity changes.
+      const sourceInputs = parsedSources!;
+      const weightOf = (source: { weightKg: string }) => toMoney(source.weightKg);
       const ZERO = new MoneyDecimal(0);
+      if (req.body.confirmSourceEdit !== true || typeof req.body.sourceEditReviewHash !== "string") {
+        return res.status(409).json({
+          code: "MIX_EDIT_REVIEW_REQUIRED",
+          message: "Review the proposed source changes before applying them.",
+        });
+      }
 
-      // Capture old values before the transaction so the audit log has real before/after diffs.
-      const [batchBefore] = await db
-        .select()
-        .from(factoryMixBatches)
-        .where(and(eq(factoryMixBatches.id, id), eq(factoryMixBatches.companyId, companyId)));
-      if (!batchBefore) return res.status(404).json({ message: "Mix batch not found" });
-
-      // Full source edit: reverse old consumption, apply new
+      // Full source edit: reverse old consumption, apply new atomically.
       const result = await db.transaction(async (tx) => {
         const [batch] = await tx
           .select()
@@ -113,12 +176,36 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
           .where(and(eq(factoryMixBatches.id, id), eq(factoryMixBatches.companyId, companyId)))
           .for("update");
         if (!batch) throw new Error("Mix batch not found");
+        if (batch.deletedAt) throw new MixEditRequestError("Mix batch not found", "MIX_BATCH_NOT_FOUND", 404);
+        // Completed/used batches require the later historical recost phase.
+        if (batch.status === "COMPLETED" || batch.status === "CLOSED") {
+          throw new CompletedMixBatchSourceEditError();
+        }
 
-        // ── 1. Reverse all existing sources ──
         const oldSources = await tx
           .select()
           .from(factoryMixBatchSources)
-          .where(eq(factoryMixBatchSources.mixBatchId, id));
+          .where(eq(factoryMixBatchSources.mixBatchId, id))
+          .for("update");
+        if (sameMixEditSources(oldSources, sourceInputs)) {
+          throw new MixEditRequestError("No material changes remain to review.", "MIX_EDIT_ALREADY_UNCHANGED", 409);
+        }
+        const batchBefore = batch;
+        const review = await prepareMixSourceEditReview(tx, companyId, batch, oldSources, sourceInputs, reason, {
+          forUpdate: true,
+          proposedBatchDate: batchDate,
+        });
+        if (!review.allowed) {
+          throw new MixEditRequestError(review.warnings.join(" "), "MIX_EDIT_REVIEW_BLOCKED", 409);
+        }
+        if (review.reviewHash !== req.body.sourceEditReviewHash) {
+          throw new MixEditRequestError(
+            "The mix or supplier stock changed since review. Review your changes again.",
+            "MIX_EDIT_REVIEW_STALE",
+            409
+          );
+        }
+        // ── 1. Reverse all existing sources ──
 
         // The material price difference the old sources carried, reversed below.
         let oldPriceDelta = new MoneyDecimal(0);
@@ -126,56 +213,54 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
           if (src.containerId) {
             const landed = await containerUsdRate(tx, companyId, src.containerId);
             const rate = toMoney(src.costPerKg);
-            if (landed && rate.gt(0))
+            if (landed && rate.gt(0)) {
               oldPriceDelta = oldPriceDelta.plus(toMoney(src.weightKg).times(rate.minus(landed)));
-          }
-          if (src.containerId) {
+            }
             const [rsRow] = await tx
               .select()
               .from(factoryRawStock)
-              .where(eq(factoryRawStock.containerId, src.containerId));
-            if (rsRow) {
-              const newUsed = MoneyDecimal.max(ZERO, toMoney(rsRow.usedKg).minus(toMoney(src.weightKg)));
-              await tx
-                .update(factoryRawStock)
-                .set({ usedKg: newUsed.toFixed(3) })
-                .where(eq(factoryRawStock.id, rsRow.id));
+              .where(
+                and(
+                  eq(factoryRawStock.companyId, companyId),
+                  eq(factoryRawStock.containerId, src.containerId),
+                  isNull(factoryRawStock.deletedAt)
+                )
+              )
+              .for("update");
+            if (!rsRow || toMoney(rsRow.usedKg).lessThan(toMoney(src.weightKg))) {
+              throw new MixEditRequestError(
+                "Original raw material consumption cannot be reversed safely.",
+                "MIX_EDIT_SOURCE_REVERSE_UNSAFE",
+                409
+              );
             }
+            await tx
+              .update(factoryRawStock)
+              .set({ usedKg: toMoney(rsRow.usedKg).minus(src.weightKg).toFixed(3) })
+              .where(and(eq(factoryRawStock.id, rsRow.id), eq(factoryRawStock.companyId, companyId)));
           } else if (src.supplierId && !src.sourceBatchId) {
-            // Legacy supplier-only source: FIFO reverse
-            const supplierRawStocks = await tx
-              .select({
-                id: factoryRawStock.id,
-                usedKg: factoryRawStock.usedKg,
-              })
-              .from(factoryRawStock)
-              .innerJoin(factoryContainers, eq(factoryRawStock.containerId, factoryContainers.id))
-              .where(and(eq(factoryRawStock.companyId, companyId), eq(factoryContainers.supplierId, src.supplierId)))
-              .orderBy(desc(factoryRawStock.offloadedAt), desc(factoryRawStock.id));
-            let toRestore = toMoney(src.weightKg);
-            for (const rs of supplierRawStocks) {
-              if (toRestore.lessThanOrEqualTo(0.001)) break;
-              const usedNow = toMoney(rs.usedKg);
-              if (usedNow.lessThanOrEqualTo(0)) continue;
-              const restore = MoneyDecimal.min(toRestore, usedNow);
-              await tx
-                .update(factoryRawStock)
-                .set({ usedKg: MoneyDecimal.max(ZERO, usedNow.minus(restore)).toFixed(3) })
-                .where(eq(factoryRawStock.id, rs.id));
-              toRestore = toRestore.minus(restore);
-            }
+            // The review only allows a legacy supplier-only source when there
+            // are no raw-stock rows at all. Never reverse arbitrary FIFO stock.
           } else if (src.sourceBatchId) {
             const [srcBatch] = await tx
               .select()
               .from(factoryMixBatches)
-              .where(eq(factoryMixBatches.id, src.sourceBatchId));
-            if (srcBatch) {
-              const newUsed = MoneyDecimal.max(ZERO, toMoney(srcBatch.usedKg).minus(toMoney(src.weightKg)));
-              await tx
-                .update(factoryMixBatches)
-                .set({ usedKg: newUsed.toFixed(3), status: "ACTIVE" })
-                .where(eq(factoryMixBatches.id, src.sourceBatchId));
+              .where(and(eq(factoryMixBatches.id, src.sourceBatchId), eq(factoryMixBatches.companyId, companyId)))
+              .for("update");
+            if (!srcBatch || toMoney(srcBatch.usedKg).lessThan(toMoney(src.weightKg))) {
+              throw new MixEditRequestError(
+                "Original upstream batch consumption cannot be reversed safely.",
+                "MIX_EDIT_SOURCE_REVERSE_UNSAFE",
+                409
+              );
             }
+            await tx
+              .update(factoryMixBatches)
+              .set({
+                usedKg: toMoney(srcBatch.usedKg).minus(src.weightKg).toFixed(3),
+                updatedAt: new Date(),
+              })
+              .where(and(eq(factoryMixBatches.id, src.sourceBatchId), eq(factoryMixBatches.companyId, companyId)));
           }
         }
 
@@ -187,9 +272,9 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
         const mixCost = new MixCostAccumulator();
         const sourceRecords = [];
 
-        for (const source of supplierSources || []) {
+        for (const source of sourceInputs.supplierSources) {
           // costPerKg from the client is NEVER trusted for a real supplier.
-          const { supplierId } = source;
+          const supplierId = source.supplierId!;
           const weight = weightOf(source);
 
           // Locked, offload-time moving-average rate — never derived from remaining/
@@ -220,14 +305,11 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
             remaining = remaining.minus(deduct);
           }
           if (remaining.greaterThan(0.001) && supplierRawStocks.length > 0) {
-            const lastRs = supplierRawStocks[supplierRawStocks.length - 1];
-            await tx
-              .update(factoryRawStock)
-              .set({ usedKg: sql`${factoryRawStock.usedKg} + ${remaining.toFixed()}` })
-              .where(eq(factoryRawStock.id, lastRs.id));
-            const ex = perRsDeductions.find((d) => d.containerId === lastRs.containerId);
-            if (ex) ex.deduct = ex.deduct.plus(remaining);
-            else perRsDeductions.push({ containerId: lastRs.containerId, deduct: remaining });
+            throw new MixEditRequestError(
+              "Not enough raw stock to apply this edit without negative inventory.",
+              "MIX_EDIT_INSUFFICIENT_RAW_STOCK",
+              409
+            );
           }
 
           if (supplierRawStocks.length === 0) {
@@ -262,12 +344,18 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
           }
         }
 
-        for (const bSource of batchSources || []) {
-          const { sourceBatchId } = bSource;
+        for (const bSource of sourceInputs.batchSources) {
+          const sourceBatchId = bSource.sourceBatchId!;
           const [srcBatch] = await tx
             .select()
             .from(factoryMixBatches)
-            .where(and(eq(factoryMixBatches.id, sourceBatchId), eq(factoryMixBatches.companyId, companyId)))
+            .where(
+              and(
+                eq(factoryMixBatches.id, sourceBatchId),
+                eq(factoryMixBatches.companyId, companyId),
+                isNull(factoryMixBatches.deletedAt)
+              )
+            )
             .for("update");
           if (!srcBatch) throw new Error(`Source batch ${sourceBatchId} not found`);
           const batchRemaining = toMoney(srcBatch.totalWeightKg).minus(toMoney(srcBatch.usedKg));
@@ -289,10 +377,23 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
         }
 
         const settled = await mixCost.settle(tx, companyId, batchDate || batch.batchDate || getClientDate(req));
+        // A supplier's locked rate could have changed between the in-transaction
+        // review and this final valuation. Refuse rather than silently apply a
+        // different USD amount than the operator explicitly reviewed.
+        if (
+          review.estimatedTotalCost === null ||
+          toMoney(review.estimatedTotalCost).minus(settled.totalCost).abs().gt("0.0001")
+        ) {
+          throw new MixEditRequestError(
+            "Source rates changed during the edit. Review the proposal again.",
+            "MIX_EDIT_REVIEW_STALE",
+            409
+          );
+        }
 
         // ── 5. Update batch totals ──
         const batchUpdates: Partial<typeof factoryMixBatches.$inferInsert> = {
-          totalWeightKg: settled.totalWeight.toDecimalPlaces(6).toFixed(6),
+          totalWeightKg: settled.totalWeight.toDecimalPlaces(3).toFixed(3),
           costPerKg: settled.costPerKg.toFixed(7),
           totalCost: settled.totalCost.toFixed(7),
           updatedAt: new Date(),
@@ -304,7 +405,7 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
         const [updated] = await tx
           .update(factoryMixBatches)
           .set(batchUpdates)
-          .where(eq(factoryMixBatches.id, id))
+          .where(and(eq(factoryMixBatches.id, id), eq(factoryMixBatches.companyId, companyId)))
           .returning();
 
         // ── 6. Insert new source records ──
@@ -358,37 +459,64 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
                 old: toMoney(batchBefore.totalWeightKg).toFixed(3),
                 new: toMoney(edited.totalWeightKg).toFixed(3),
               },
+              totalCost: {
+                old: toMoney(batchBefore.totalCost).toFixed(7),
+                new: toMoney(edited.totalCost).toFixed(7),
+              },
+              sourceEdit: {
+                old: oldSources.map((s) => ({
+                  sourceId: s.id,
+                  supplierId: s.supplierId,
+                  containerId: s.containerId,
+                  sourceBatchId: s.sourceBatchId,
+                  weightKg: s.weightKg,
+                  costPerKg: s.costPerKg,
+                  totalCost: s.totalCost,
+                })),
+                new: {
+                  reason,
+                  reviewHash: review.reviewHash,
+                  newSupplierSources: sourceInputs.supplierSources,
+                  newBatchSources: sourceInputs.batchSources,
+                },
+              },
             },
           },
           tx
         );
+        // Keep the existing daybook reference in the SAME transaction as
+        // source, quantity, valuation and audit updates. This does not create
+        // an extra accounting voucher; failure rolls back the whole edit.
+        await tx
+          .delete(factoryDaybookEntries)
+          .where(
+            and(
+              eq(factoryDaybookEntries.companyId, companyId),
+              eq(factoryDaybookEntries.txType, "MIX_BATCH_CREATED"),
+              eq(factoryDaybookEntries.referenceId, id)
+            )
+          );
+        const mbTxDate = batchDate || edited.batchDate || getClientDate(req);
+        await writeDaybookEntry(tx, {
+          companyId,
+          txDate: mbTxDate,
+          txType: "MIX_BATCH_CREATED",
+          referenceId: edited.id,
+          referenceTable: "factory_mix_batches",
+          description: `Mix batch edited: ${edited.batchCode}${edited.name ? ` – ${edited.name}` : ""} (${toMoney(edited.totalWeightKg).toFixed(1)} kg)`,
+          amountCurrency: toMoney(edited.totalCost).toNumber(),
+          amountUsd: toMoney(edited.totalCost).toNumber(),
+        });
         return edited;
       });
-
-      // Update daybook entry
-      await db
-        .delete(factoryDaybookEntries)
-        .where(
-          and(
-            eq(factoryDaybookEntries.companyId, companyId),
-            eq(factoryDaybookEntries.txType, "MIX_BATCH_CREATED"),
-            eq(factoryDaybookEntries.referenceId, id)
-          )
-        );
-      const mbTxDate = batchDate || result.batchDate || getClientDate(req);
-      await writeDaybookEntry(db, {
-        companyId,
-        txDate: mbTxDate,
-        txType: "MIX_BATCH_CREATED",
-        referenceId: result.id,
-        referenceTable: "factory_mix_batches",
-        description: `Mix batch edited: ${result.batchCode}${result.name ? ` – ${result.name}` : ""} (${toMoney(result.totalWeightKg).toFixed(1)} kg)`,
-        amountCurrency: toMoney(result.totalCost).toNumber(),
-        amountUsd: toMoney(result.totalCost).toNumber(),
-      });
-
       res.json(result);
     } catch (error: unknown) {
+      if (error instanceof MixEditRequestError) {
+        return res.status(error.status).json({ code: error.code, message: error.message });
+      }
+      if (error instanceof CompletedMixBatchSourceEditError) {
+        return res.status(409).json({ code: error.code, message: error.message });
+      }
       if (sendFactoryCostBasisRefusal(res, error)) return;
       logger.error("Error updating mix batch:", { error: error });
       res.status(500).json({ message: getErrorMessage(error) });

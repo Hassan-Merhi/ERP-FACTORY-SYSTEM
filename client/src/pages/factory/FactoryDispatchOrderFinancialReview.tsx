@@ -112,7 +112,7 @@ export default function FactoryDispatchOrderFinancialReview({
   });
   return (
     <>
-      <Card className="border-blue-200 bg-white dark:border-blue-700/40 dark:bg-[#101c34]" data-testid="all-truck-financial-reconciliation">
+      <Card className="border-blue-200 bg-white dark:border-blue-700/40 dark:bg-card" data-testid="all-truck-financial-reconciliation">
         <CardContent className="space-y-4 p-4 sm:p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="flex items-start gap-2">

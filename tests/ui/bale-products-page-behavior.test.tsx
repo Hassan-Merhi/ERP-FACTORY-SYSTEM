@@ -97,6 +97,10 @@ vi.mock("@tanstack/react-query", () => ({
   }),
 }));
 
+vi.mock("@/contexts/CompanyContext", () => ({
+  useCompany: () => ({ selectedCompany: { id: 1, name: "Factory Co" }, companies: [], isLoading: false }),
+  useOptionalCompany: () => ({ selectedCompany: { id: 1, name: "Factory Co" }, companies: [], isLoading: false }),
+}));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: harness.toast }) }));
 vi.mock("@/contexts/AppModeContext", () => ({ useAppMode: () => "factory" }));
 vi.mock("@/lib/factoryApi", () => ({ getApiRequest: () => harness.apiRequest }));

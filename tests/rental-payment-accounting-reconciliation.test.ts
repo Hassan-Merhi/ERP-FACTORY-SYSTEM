@@ -118,6 +118,267 @@ describe("Rental payment accounting and reconciliation", () => {
     expect(payment.voucher_id).toBeTruthy();
   });
 
+  it("recognizes full due rent on the first partial payment and clears its AP with the second", async () => {
+    // A partial $200 receipt against $500 due rent must recognize the full
+    // $500 once, create a $300 payable, and later settle that payable without
+    // adding a second rent expense.
+    const first = await createPayment({ amount: "200" });
+    expect(first.status).toBe(200);
+
+    const firstMonth = await q(
+      `SELECT id, expected_amount, paid_amount, accrual_voucher_id
+       FROM property_monthly_ledger WHERE company_id=$1 AND contract_id=$2
+       ORDER BY year,month LIMIT 1`,
+      [ctx.companyId, testContractId]
+    );
+    expect(firstMonth).toHaveLength(1);
+    expect(Number(firstMonth[0].expected_amount)).toBe(500);
+    expect(Number(firstMonth[0].paid_amount)).toBe(200);
+    expect(firstMonth[0].accrual_voucher_id).toBeTruthy();
+
+    const recognized = await q(
+      `SELECT la.name,ve.debit_amount,ve.credit_amount
+       FROM voucher_entries ve
+       JOIN ledger_accounts la ON la.id=ve.ledger_account_id
+       WHERE ve.voucher_id=$1 ORDER BY ve.id`,
+      [firstMonth[0].accrual_voucher_id]
+    );
+    const initialExpense = recognized.filter((x: any) => x.name.includes("Rent Expense"))
+      .reduce((sum: number, x: any) => sum + Number(x.debit_amount), 0);
+    const initialPayable = recognized.filter((x: any) => x.name === "Accrued Rent Payable")
+      .reduce((sum: number, x: any) => sum + Number(x.credit_amount), 0);
+    expect(initialExpense).toBe(500);
+    expect(initialPayable).toBe(300);
+
+    const interim = await runRentalReconciliation(ctx.companyId, "ERP", todayStr());
+    expect(interim.balances.tenantRentPayable).toBe(300);
+    expect(interim.balances.totalAccrualPayablePosted).toBe(300);
+    expect(interim.counts.H_unsettledAccrualPayment).toBe(0);
+
+    const second = await createPayment({ amount: "300" });
+    expect(second.status).toBe(200);
+    const finalMonth = await q(
+      `SELECT paid_amount,accrual_voucher_id FROM property_monthly_ledger
+       WHERE company_id=$1 AND contract_id=$2 ORDER BY year,month LIMIT 1`,
+      [ctx.companyId, testContractId]
+    );
+    expect(Number(finalMonth[0].paid_amount)).toBe(500);
+    expect(finalMonth[0].accrual_voucher_id).toBe(firstMonth[0].accrual_voucher_id);
+    const postedVoucher = await q(
+      `SELECT voucher_id FROM property_payments WHERE contract_id=$1
+       AND amount::numeric=300 AND posting_status='POSTED' LIMIT 1`,
+      [testContractId]
+    );
+    const settlement = await q(
+      `SELECT la.name,ve.debit_amount FROM voucher_entries ve
+       JOIN ledger_accounts la ON la.id=ve.ledger_account_id
+       WHERE ve.voucher_id=$1 AND ve.debit_amount::numeric>0`,
+      [postedVoucher[0].voucher_id]
+    );
+    expect(settlement.some((x: any) => x.name === "Accrued Rent Payable" &&
+      Number(x.debit_amount) === 300)).toBe(true);
+
+    const result = await runRentalReconciliation(ctx.companyId, "ERP", todayStr());
+    expect(result.balances.tenantRentPayable).toBe(0);
+    expect(result.balances.netOutstanding).toBe(0);
+    expect(result.balances.totalAccrualPayablePosted).toBe(0);
+    expect(result.counts.H_unsettledAccrualPayment).toBe(0);
+  });
+
+  it("recognizes a partially prepaid month atomically when an additional due payment arrives", async () => {
+    const { createRentalPaymentGroup } = await import("../server/services/rental/rentalPaymentPostingService");
+    const [contract] = await q(
+      "SELECT start_date::text,rental_amount FROM property_contracts WHERE id=$1",
+      [testContractId]
+    );
+    const base = {
+      companyId: ctx.companyId,
+      contractCompanyId: ctx.companyId,
+      module: "ERP" as const,
+      contract: {
+        id: testContractId,
+        companyId: ctx.companyId,
+        unitId: testUnitId,
+        rentalAmount: String(contract.rental_amount),
+        startDate: String(contract.start_date),
+      },
+      unit: { unitNumber: "T-101", unitType: "SHOP", locationGroup: "Test Group" },
+      cashAccountId: ctx.cashAccountId,
+      currency: "USD",
+      exchangeRate: "1",
+      notes: null,
+      shopExpenseAccountName: "Rent Expense - ERP Shops",
+      incomeAccountName: "Rental Income - ERP",
+      scheduleFuturePayment: false,
+    };
+    // Current month $500 due; another $200 goes to next month's prepaid asset.
+    const first = await createRentalPaymentGroup({
+      ...base, amount: "700", paymentDate: todayStr(), clientDate: todayStr(),
+    });
+    expect(first.scheduled).toBe(false);
+
+    const next = new Date(todayStr() + "T00:00:00Z");
+    next.setUTCMonth(next.getUTCMonth() + 1, 2);
+    const nextDay = next.toISOString().slice(0, 10);
+    const nextYear = next.getUTCFullYear();
+    const nextMonth = next.getUTCMonth() + 1;
+    const before = await q(
+      `SELECT expected_amount,paid_amount,used_prepaid_account,accrual_voucher_id
+       FROM property_monthly_ledger
+       WHERE company_id=$1 AND contract_id=$2 AND year=$3 AND month=$4`,
+      [ctx.companyId, testContractId, nextYear, nextMonth]
+    );
+    expect(before).toHaveLength(1);
+    expect(Number(before[0].paid_amount)).toBe(200);
+    expect(before[0].used_prepaid_account).toBe(true);
+    expect(before[0].accrual_voucher_id).toBeNull();
+
+    // Simulate the company's next business date in the direct posting service;
+    // no scheduler needs to run first, and nothing is posted twice.
+    const nextPayment = await createRentalPaymentGroup({
+      ...base, amount: "300", paymentDate: nextDay, clientDate: nextDay,
+    });
+    expect(nextPayment.scheduled).toBe(false);
+
+    const after = await q(
+      `SELECT paid_amount,accrual_voucher_id FROM property_monthly_ledger
+       WHERE company_id=$1 AND contract_id=$2 AND year=$3 AND month=$4`,
+      [ctx.companyId, testContractId, nextYear, nextMonth]
+    );
+    expect(Number(after[0].paid_amount)).toBe(500);
+    const postings = await q(
+      `SELECT la.name,ve.debit_amount,ve.credit_amount FROM voucher_entries ve
+       JOIN ledger_accounts la ON la.id=ve.ledger_account_id
+       WHERE ve.voucher_id=$1`,
+      [after[0].accrual_voucher_id]
+    );
+    expect(postings.filter((x: any) => x.name.includes("Rent Expense"))
+      .reduce((a: number, x: any) => a + Number(x.debit_amount), 0)).toBe(500);
+    expect(postings.filter((x: any) => x.name === "Prepaid Rent")
+      .reduce((a: number, x: any) => a + Number(x.credit_amount), 0)).toBe(200);
+    expect(postings.filter((x: any) => x.name === "Accrued Rent Payable")
+      .reduce((a: number, x: any) => a + Number(x.credit_amount), 0)).toBe(300);
+
+    const report = await runRentalReconciliation(ctx.companyId, "ERP", nextDay);
+    expect(report.balances.netOutstanding).toBe(0);
+    expect(report.balances.totalAccrualPayablePosted).toBe(0);
+    expect(report.counts.H_unsettledAccrualPayment).toBe(0);
+  });
+
+  it("never treats a missing-voucher POSTED payment as actual booked settlement", async () => {
+    const paymentDate = todayStr();
+    const res = await createPayment({ amount: "200" });
+    expect(res.status).toBe(200);
+    await q(
+      `UPDATE property_payments SET voucher_id=NULL
+       WHERE contract_id=$1 AND amount::numeric=200 AND posting_status='POSTED'`,
+      [testContractId]
+    );
+    const report = await runRentalReconciliation(ctx.companyId, "ERP", paymentDate);
+    expect(report.counts.G_missingPostedVoucher).toBeGreaterThan(0);
+    expect(report.balances.tenantRentPayable).toBe(500);
+    const repeated = await createPayment({ amount: "100" });
+    expect(repeated.status).toBe(409);
+    // No automatic correction, no new voucher and no cash mutation.
+  });
+
+  it("does not count guarantee-only payments toward a rental month allocation", async () => {
+    await q(
+      `INSERT INTO property_payments
+         (company_id,module,contract_id,unit_id,ledger_row_id,amount,
+          payment_date,for_year,for_month,posting_status)
+       VALUES ($1,'ERP',$2,$3,NULL,'500.00',$4,
+         EXTRACT(YEAR FROM $4::date)::int,EXTRACT(MONTH FROM $4::date)::int,'POSTED')`,
+      [ctx.companyId, testContractId, testUnitId, todayStr()]
+    );
+    const res = await createPayment({ amount: "500" });
+    expect(res.status).toBe(200);
+    const period = await q(
+      `SELECT expected_amount,paid_amount FROM property_monthly_ledger
+       WHERE company_id=$1 AND contract_id=$2
+         AND year=EXTRACT(YEAR FROM $3::date)
+         AND month=EXTRACT(MONTH FROM $3::date)`,
+      [ctx.companyId, testContractId, todayStr()]
+    );
+    expect(period).toHaveLength(1);
+    expect(Number(period[0].paid_amount)).toBe(500);
+  });
+
+  it("refuses a rental payment with no cash/bank ledger instead of marking it POSTED", async () => {
+    const res = await agent.post("/api/erp/rental/payments").send({
+      contractId: testContractId,
+      amount: "500",
+      paymentDate: todayStr(),
+      currency: "USD",
+      cashAccountId: null,
+    });
+    expect(res.status).toBe(400);
+    const rows = await q("SELECT id FROM property_payments WHERE contract_id=$1", [testContractId]);
+    expect(rows).toHaveLength(0);
+  });
+
+  it("refuses invalid business dates before creating any rent voucher", async () => {
+    const res = await createPayment({ paymentDate: "2026-02-30" });
+    expect(res.status).toBe(400);
+    const rows = await q("SELECT id FROM property_payments WHERE contract_id=$1", [testContractId]);
+    expect(rows).toHaveLength(0);
+  });
+
+  it("rejects a second scheduled group that would double-pay the same due month", async () => {
+    const { createRentalPaymentGroup, postScheduledGroup } = await import(
+      "../server/services/rental/rentalPaymentPostingService"
+    );
+    const [contractRow] = await q(
+      "SELECT start_date::text,rental_amount FROM property_contracts WHERE id=$1",
+      [testContractId]
+    );
+    const contract = {
+      id: testContractId,
+      companyId: ctx.companyId,
+      unitId: testUnitId,
+      rentalAmount: String(contractRow.rental_amount),
+      startDate: String(contractRow.start_date),
+    };
+    const unit = { unitNumber: "T-101", unitType: "SHOP", locationGroup: "Test Group" };
+    const next = new Date(todayStr() + "T00:00:00Z");
+    next.setUTCMonth(next.getUTCMonth() + 1, 2);
+    const futureDate = next.toISOString().slice(0, 10);
+    const params = {
+      companyId: ctx.companyId, contractCompanyId: ctx.companyId,
+      module: "ERP" as const, contract, unit,
+      cashAccountId: ctx.cashAccountId,
+      amount: "500", paymentDate: futureDate, clientDate: todayStr(),
+      scheduleFuturePayment: true, currency: "USD", exchangeRate: "1",
+      notes: null, shopExpenseAccountName: "Rent Expense - ERP Shops",
+      incomeAccountName: "Rental Income - ERP",
+    };
+    const first = await createRentalPaymentGroup(params);
+    const duplicate = await createRentalPaymentGroup(params);
+    expect(first.scheduled).toBe(true);
+    expect(duplicate.scheduled).toBe(true);
+    expect(duplicate.paymentGroupId).not.toBe(first.paymentGroupId);
+
+    const post = (groupId: string) => postScheduledGroup(
+      ctx.companyId, ctx.companyId, "ERP", contract, unit, groupId,
+      futureDate, futureDate, ctx.cashAccountId, "USD", "1", null,
+      "Rent Expense - ERP Shops", "Rental Income - ERP", false
+    );
+    expect(await post(first.paymentGroupId)).toBe(true);
+    await expect(post(duplicate.paymentGroupId)).rejects.toThrow(
+      "RENTAL_SCHEDULED_PAYMENT_ALLOCATION_STALE"
+    );
+    const statuses = await q(
+      `SELECT posting_status,COUNT(*)::int n
+       FROM property_payments WHERE contract_id=$1
+       GROUP BY posting_status ORDER BY posting_status`,
+      [testContractId]
+    );
+    expect(statuses).toEqual([
+      { posting_status: "POSTED", n: 1 },
+      { posting_status: "SCHEDULED", n: 1 },
+    ]);
+  });
+
   it("keeps an approved future payment scheduled without a voucher", async () => {
     const res = await createPayment({
       paymentDate: futureDateStr(10),

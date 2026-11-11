@@ -1,4 +1,6 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { Input } from "@/components/ui/input";
 import { AlertTriangle, CheckCircle2, RefreshCw, ShieldAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -94,6 +96,7 @@ function number(value: number): string {
 
 export function HistoricalReplaySafetyPanel() {
   const { toast } = useToast();
+  const [basisEvidenceByAdjustment, setBasisEvidenceByAdjustment] = useState<Record<number, string>>({});
   const previewQuery = useQuery<HistoricalReplayPreview>({
     queryKey: PREVIEW_KEY,
     queryFn: async () => {
@@ -109,9 +112,11 @@ export function HistoricalReplaySafetyPanel() {
     mutationFn: async ({
       adjustmentId,
       valuationBasis,
+      basisEvidence,
     }: {
       adjustmentId: number;
       valuationBasis: "QUANTITY_ONLY" | "VALUED_TRANSFER" | "OPENING_BALANCE";
+      basisEvidence: string;
     }) => {
       const response = await fetch(
         `/api/factory/raw-stock/recalc/historical-replay/adjustments/${adjustmentId}/valuation-basis`,
@@ -119,14 +124,19 @@ export function HistoricalReplaySafetyPanel() {
           method: "PATCH",
           credentials: "same-origin",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ valuationBasis }),
+          body: JSON.stringify({ valuationBasis, basisEvidence }),
         }
       );
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.message || "Failed to classify adjustment");
       return payload;
     },
-    onSuccess: () => {
+    onSuccess: (_response, variables) => {
+      setBasisEvidenceByAdjustment((previous) => {
+        const next = { ...previous };
+        delete next[variables.adjustmentId];
+        return next;
+      });
       queryClient.invalidateQueries({ queryKey: PREVIEW_KEY });
       toast({
         title: "Adjustment classified",
@@ -308,31 +318,55 @@ export function HistoricalReplaySafetyPanel() {
                       {money(row.costPerKg)} {row.currencyCode}
                     </TableCell>
                     <TableCell className="text-right">
-                      <div className="flex flex-wrap justify-end gap-1">
-                        {(["QUANTITY_ONLY", "VALUED_TRANSFER", "OPENING_BALANCE"] as const).map((basis) => (
-                          <Button
-                            key={basis}
-                            size="sm"
-                            variant="outline"
-                            disabled={classifyMutation.isPending}
-                            onClick={async () => {
-                              const readable = basis.replaceAll("_", " ").toLowerCase();
-                              if (
-                                !(await confirmAction({
-                                  title: `Classify adjustment #${row.adjustmentId} as ${readable}?`,
-                                }))
-                              )
-                                return;
-                              classifyMutation.mutate({ adjustmentId: row.adjustmentId, valuationBasis: basis });
-                            }}
-                          >
-                            {basis === "QUANTITY_ONLY"
-                              ? "Quantity only"
-                              : basis === "VALUED_TRANSFER"
-                                ? "Valued transfer"
-                                : "Opening balance"}
-                          </Button>
-                        ))}
+                      <div className="flex flex-col items-end gap-2">
+                        <Input
+                          type="text"
+                          className="h-9 w-full min-w-52 text-xs"
+                          value={basisEvidenceByAdjustment[row.adjustmentId] ?? ""}
+                          onChange={(event) =>
+                            setBasisEvidenceByAdjustment((prev) => ({
+                              ...prev,
+                              [row.adjustmentId]: event.target.value,
+                            }))
+                          }
+                          maxLength={1000}
+                          placeholder="Dated document/reference and reason (20+ characters)"
+                          aria-label={`Evidence for adjustment ${row.adjustmentId}`}
+                          data-testid={`input-replay-adjustment-evidence-${row.adjustmentId}`}
+                        />
+                        <div className="flex flex-wrap justify-end gap-1">
+                          {(["QUANTITY_ONLY", "VALUED_TRANSFER", "OPENING_BALANCE"] as const).map((basis) => (
+                            <Button
+                              key={basis}
+                              size="sm"
+                              variant="outline"
+                              disabled={
+                                classifyMutation.isPending ||
+                                (basisEvidenceByAdjustment[row.adjustmentId] ?? "").trim().length < 20
+                              }
+                              onClick={async () => {
+                                const readable = basis.replaceAll("_", " ").toLowerCase();
+                                if (
+                                  !(await confirmAction({
+                                    title: `Classify adjustment #${row.adjustmentId} as ${readable}?`,
+                                  }))
+                                )
+                                  return;
+                                classifyMutation.mutate({
+                                  adjustmentId: row.adjustmentId,
+                                  valuationBasis: basis,
+                                  basisEvidence: (basisEvidenceByAdjustment[row.adjustmentId] ?? "").trim(),
+                                });
+                              }}
+                            >
+                              {basis === "QUANTITY_ONLY"
+                                ? "Quantity only"
+                                : basis === "VALUED_TRANSFER"
+                                  ? "Valued transfer"
+                                  : "Opening balance"}
+                            </Button>
+                          ))}
+                        </div>
                       </div>
                     </TableCell>
                   </TableRow>

@@ -112,6 +112,23 @@ export default function FactoryInvoiceCreate() {
   const [chargeAmount, setChargeAmount] = useState("");
   const [chargeType, setChargeType] = useState("FREIGHT");
   const scannerRef = useRef<HTMLInputElement>(null);
+  const lastCompanyRef = useRef(selectedCompany?.id);
+  useEffect(() => {
+    if (lastCompanyRef.current === selectedCompany?.id) return;
+    const hadPreviousCompany = Boolean(lastCompanyRef.current);
+    lastCompanyRef.current = selectedCompany?.id;
+    // Initial company hydration must not discard ?orderId= deep links.
+    if (!hadPreviousCompany) return;
+    setSelectedCustomerId("");
+    setChargeLedgerAccountId("");
+    setSelectedLocationId("");
+    setOrderId(null);
+    setScanCode("");
+    setShowFinalizeDialog(false);
+    setChargeName("");
+    setChargeAmount("");
+    setScanFlash(null);
+  }, [selectedCompany?.id]);
 
   const customerId = selectedCustomerId ? parseInt(selectedCustomerId) : null;
 

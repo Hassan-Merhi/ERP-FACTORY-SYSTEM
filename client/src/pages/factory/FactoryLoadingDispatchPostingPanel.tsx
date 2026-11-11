@@ -4,7 +4,7 @@
  */
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { CheckCircle2, ClipboardCheck, FileClock, Loader2, RotateCcw, ShieldAlert, Wallet } from "lucide-react";
+import { CheckCircle2, ClipboardCheck, FileClock, Download, Loader2, RotateCcw, ShieldAlert, Wallet } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -132,13 +132,41 @@ export default function FactoryLoadingDispatchPostingPanel({ orderId, dispatchId
     },
   });
   const submitDisabled = mutation.isPending || !confirmed || (mode === "post" ? !canPost : !canReverse || reason.trim().length < 10 || reason.trim().length > 1000);
+
+  const [exportingInvoice, setExportingInvoice] = useState(false);
+  const exportTripInvoice = async () => {
+    setExportingInvoice(true);
+    try {
+      const url = "/api/factory/customer-orders/" + orderId +
+        "/loading-dispatches/order-overview/trips/" + dispatchId + "/invoice.xlsx";
+      const response = await fetch(url, { credentials: "include", cache: "no-store" });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.message || "Could not export trip invoice");
+      }
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = "Factory_Trip_Invoice_" + dispatchId + ".xlsx";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+      toast({ title: "Excel trip invoice downloaded" });
+    } catch (error) {
+      toast({ title: "Excel invoice export failed", description: errorText(error), variant: "destructive" });
+    } finally {
+      setExportingInvoice(false);
+    }
+  };
   const existingPostings = history.data?.postings ?? [];
 
   if (!roleCanPost(role)) return null;
 
   return (
     <>
-      <Card className="border-emerald-200 bg-white dark:border-emerald-800/40 dark:bg-[#101c34]" data-testid="dispatch-trip-financial-posting">
+      <Card className="border-emerald-200 bg-white dark:border-emerald-800/40 dark:bg-card" data-testid="dispatch-trip-financial-posting">
         <CardContent className="space-y-3 p-4">
           <div className="flex items-start justify-between gap-2">
             <div className="flex items-start gap-2">
@@ -193,6 +221,12 @@ export default function FactoryLoadingDispatchPostingPanel({ orderId, dispatchId
                 <RotateCcw className="mr-1.5 h-4 w-4" /> Request controlled reversal
               </Button>
             </div>
+          )}
+          {["POSTED", "CONSOLIDATED"].includes(financialStatus) && (
+            <Button type="button" variant="outline" className="w-full" disabled={exportingInvoice}
+              onClick={() => void exportTripInvoice()} data-testid="dispatch-export-trip-invoice">
+              <Download className="mr-2 h-4 w-4" /> {exportingInvoice ? "Preparing invoice…" : "Export Trip Invoice (Excel)"}
+            </Button>
           )}
           {financialStatus === "CONSOLIDATED" && (
             <p className="text-xs text-muted-foreground">This trip belongs to the one combined Factory invoice and cannot be reversed independently.</p>

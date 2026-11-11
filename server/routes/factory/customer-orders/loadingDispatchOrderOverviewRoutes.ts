@@ -13,7 +13,7 @@ import { getFactoryAccessState,requireFactoryTabAccess } from "../../../lib/fact
 import { parseId } from "../../../lib/parseId";
 import { resultRows } from "../../../lib/queryResult";
 import { buildSafeFilename } from "../../../lib/contentDisposition";
-import { writeWorkbookToResponse } from "../../../excelHelper";
+import { createWorkbook,writeWorkbookToResponse } from "../../../excelHelper";
 import { logger } from "../../../lib/logger";
 import { loadFactoryDispatchOrderOverviewTx } from "./loadingDispatchOrderOverviewData";
 import {
@@ -85,6 +85,139 @@ export function registerFactoryDispatchOrderOverviewRoutes(app:Express):void{
       res.setHeader("Cache-Control","private, no-store");
       return res.json(overview);
     }catch(error){return fail(res,error);}
+  });
+  // Read-only, posted-revision bale pricing for an individual trip invoice.
+  // Never use mutable order lines or unposted scan estimates as invoice prices.
+  app.get(prefix+"/trips/:dispatchId/invoice-lines",requireAuth,access,async(req,res)=>{
+    try{
+      const context=await scope(req);
+      const dispatchId=parseId(req.params.dispatchId);
+      if(dispatchId===null)throw new OverviewError(400,"DISPATCH_TRIP_ID_INVALID","Invalid trip ID");
+      const lines=await db.transaction(async tx=>{
+        await tx.execute(sql`SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY`);
+        const [financial]=resultRows(await tx.execute(sql`
+          SELECT id,snapshot_revision,goods_subtotal::text AS "goodsSubtotal"
+          FROM factory_dispatch_trip_financials
+          WHERE company_id=${context.companyId} AND order_id=${context.orderId}
+            AND dispatch_id=${dispatchId} AND status IN ('POSTED','CONSOLIDATED')
+          LIMIT 1
+        `));
+        if(!financial)throw new OverviewError(409,"DISPATCH_TRIP_NOT_POSTED","Trip must be financially posted before invoice export");
+        const records=resultRows(await tx.execute(sql`
+          SELECT article_code AS "articleCode",product_name AS "productName",
+            pricing_mode AS "pricingMode",unit_price::text AS "unitPrice",
+            weight_kg::text AS "weightKg",line_total::text AS "lineTotal"
+          FROM factory_dispatch_trip_financial_bales
+          WHERE company_id=${context.companyId} AND order_id=${context.orderId}
+            AND dispatch_id=${dispatchId} AND financial_id=${Number(financial.id)}
+            AND snapshot_revision=${Number(financial.snapshot_revision)}
+          ORDER BY article_code,product_name,bale_id
+        `));
+        if(!records.length)throw new OverviewError(409,"DISPATCH_TRIP_LINES_MISSING","Posted trip has no frozen bale pricing");
+        return {goodsSubtotal:String(financial.goodsSubtotal),lines:records};
+      });
+      res.setHeader("Cache-Control","private, no-store");
+      return res.json(lines);
+    }catch(error){return fail(res,error);}
+  });
+  app.get(prefix+"/trips/:dispatchId/invoice.xlsx",requireAuth,access,async(req,res)=>{
+    try{
+      const context=await scope(req);
+      const dispatchId=parseId(req.params.dispatchId);
+      if(dispatchId===null)throw new OverviewError(400,"DISPATCH_TRIP_ID_INVALID","Invalid trip ID");
+      const data=await db.transaction(async tx=>{
+        await tx.execute(sql`SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY`);
+        const [header]=resultRows(await tx.execute(sql`
+          SELECT f.id AS "financialId",f.snapshot_revision AS revision,
+            f.goods_subtotal::text AS goods,f.billable_charges_total::text AS billable,
+            f.discount_total::text AS discounts,f.customer_total::text AS total,
+            d.dispatch_number AS "tripNumber",d.closed_at AS "closedAt",
+            co.container_number AS container,c.legal_name AS customer,
+            cmp.name AS company
+          FROM factory_dispatch_trip_financials f
+          JOIN factory_loading_dispatches d ON d.id=f.dispatch_id AND d.company_id=f.company_id AND d.order_id=f.order_id
+          JOIN customer_orders co ON co.id=f.order_id AND co.company_id=f.company_id
+          LEFT JOIN customers c ON c.id=co.customer_id AND c.company_id=co.company_id
+          LEFT JOIN companies cmp ON cmp.id=f.company_id
+          WHERE f.company_id=${context.companyId} AND f.order_id=${context.orderId}
+            AND f.dispatch_id=${dispatchId} AND f.status IN ('POSTED','CONSOLIDATED')
+          LIMIT 1
+        `));
+        if(!header)throw new OverviewError(409,"DISPATCH_TRIP_NOT_POSTED","Financially finalize this trip before exporting an invoice");
+        const lines=resultRows(await tx.execute(sql`
+          SELECT article_code AS "articleCode",product_name AS "productName",
+            pricing_mode AS "pricingMode",unit_price::text AS "unitPrice",
+            weight_kg::text AS "weightKg",line_total::text AS "lineTotal"
+          FROM factory_dispatch_trip_financial_bales
+          WHERE company_id=${context.companyId} AND order_id=${context.orderId}
+            AND dispatch_id=${dispatchId} AND financial_id=${Number(header.financialId)}
+            AND snapshot_revision=${Number(header.revision)}
+          ORDER BY article_code,product_name,bale_id
+        `));
+        const charges=resultRows(await tx.execute(sql`
+          SELECT name,kind,amount::text AS amount
+          FROM factory_dispatch_trip_charges
+          WHERE company_id=${context.companyId} AND order_id=${context.orderId}
+            AND dispatch_id=${dispatchId} AND financial_id=${Number(header.financialId)}
+            AND revision=${Number(header.revision)} AND locked_at IS NOT NULL
+            AND kind IN ('BILLABLE','DISCOUNT')
+          ORDER BY id
+        `));
+        return {header,lines,charges};
+      });
+      const h=data.header;
+      const cents=(value:unknown)=>Math.round(Number(value??0)*100);
+      if(!data.lines.length || data.lines.reduce((n,l)=>n+cents(l.lineTotal),0)!==cents(h.goods))
+        throw new OverviewError(409,"DISPATCH_INVOICE_GOODS_MISMATCH","Frozen article totals do not match posted trip goods");
+      if(cents(h.goods)+cents(h.billable)-cents(h.discounts)!==cents(h.total))
+        throw new OverviewError(409,"DISPATCH_INVOICE_TOTAL_MISMATCH","Posted trip totals are inconsistent");
+      const safe=(value:unknown)=>{const v=String(value??"");return /^[\\s]*[=+@-]/.test(v)?"'"+v:v;};
+      const wb=createWorkbook();
+      wb.creator="Factory Dispatch";
+      wb.title="Trip "+h.tripNumber+" invoice";
+      const ws=wb.addWorksheet("Trip Invoice",{views:[{state:"frozen",ySplit:9}]});
+      ws.columns=[{width:19},{width:37},{width:12},{width:16},{width:17},{width:17},{width:19}];
+      ws.mergeCells("A1:G2");ws.getCell("A1").value=safe(h.company||"FACTORY");
+      ws.getCell("A1").font={size:19,bold:true,color:{argb:"FFFFFFFF"}};
+      ws.getCell("A1").fill={type:"pattern",pattern:"solid",fgColor:{argb:"FF173F76"}};
+      ws.getCell("A1").alignment={vertical:"middle"};
+      ws.mergeCells("A3:G3");ws.getCell("A3").value="CUSTOMER TRIP INVOICE — POSTED FINANCIAL RECORD";
+      ws.getCell("A3").font={bold:true,size:14,color:{argb:"FF173F76"}};
+      ws.getCell("A5").value="Customer";ws.getCell("B5").value=safe(h.customer);
+      ws.getCell("D5").value="Trip #";ws.getCell("E5").value=Number(h.tripNumber);
+      ws.getCell("A6").value="Order #";ws.getCell("B6").value=context.orderId;
+      ws.getCell("D6").value="Container";ws.getCell("E6").value=safe(h.container);
+      ws.getCell("A7").value="Closed at";ws.getCell("B7").value=h.closedAt?String(h.closedAt):"—";
+      ws.getRow(8).values=["Article code","Product description","Bales","Weight KG","Price basis","Unit price USD","Line total USD"];
+      const headerRow=ws.getRow(8);headerRow.font={bold:true,color:{argb:"FFFFFFFF"}};
+      headerRow.fill={type:"pattern",pattern:"solid",fgColor:{argb:"FF173F76"}};
+      const groups=new Map<string,{article:string;product:string;basis:string;price:number;qty:number;weight:number;total:number}>();
+      for(const l of data.lines){
+        const key=JSON.stringify([l.articleCode,l.productName,l.pricingMode,l.unitPrice]);
+        const g=groups.get(key)||{article:String(l.articleCode),product:String(l.productName),basis:String(l.pricingMode),price:Number(l.unitPrice),qty:0,weight:0,total:0};
+        g.qty++;g.weight+=Number(l.weightKg);g.total+=cents(l.lineTotal);groups.set(key,g);
+      }
+      for(const g of groups.values())ws.addRow([safe(g.article),safe(g.product),g.qty,g.weight,g.basis,g.price,g.total/100]);
+      ws.addRow([]);
+      ws.addRow(["","GOODS SUBTOTAL","","","","",Number(h.goods)]);
+      ws.addRow(["","ADDITIONAL CHARGES / DISCOUNTS"]);
+      for(const c of data.charges)ws.addRow(["",safe(c.name),c.kind,"","","",Number(c.amount)*(c.kind==="DISCOUNT"?-1:1)]);
+      ws.addRow(["","BILLABLE CHARGES","","","","",Number(h.billable)]);
+      ws.addRow(["","DISCOUNTS","","","","",-Number(h.discounts)]);
+      const totalRow=ws.addRow(["","TOTAL CUSTOMER RECEIVABLE (USD)","","","","",Number(h.total)]);
+      totalRow.font={bold:true,size:13,color:{argb:"FFFFFFFF"}};
+      totalRow.fill={type:"pattern",pattern:"solid",fgColor:{argb:"FF173F76"}};
+      ws.getColumn(6).numFmt="#,##0.0000";
+      ws.getColumn(7).numFmt="#,##0.00;[Red](#,##0.00)";
+      ws.getColumn(4).numFmt="#,##0.00";
+      ws.pageSetup={paperSize:9,orientation:"landscape",fitToPage:true,fitToWidth:1,fitToHeight:0};
+      const file=buildSafeFilename(["Factory_Trip_Invoice",String(h.tripNumber),"Order",String(context.orderId)],"xlsx");
+      res.setHeader("X-Content-Type-Options","nosniff");
+      await writeWorkbookToResponse(wb,res,file);
+    }catch(error){
+      if(res.headersSent||res.writableEnded||res.destroyed){logger.error("Trip invoice Excel failed after headers",{error});return;}
+      return fail(res,error);
+    }
   });
   app.get(prefix+"/history",requireAuth,access,async(req,res)=>{
     try{

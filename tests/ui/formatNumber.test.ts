@@ -7,6 +7,7 @@
  */
 import {
   drCrClass,
+  creditPositiveBalanceClass,
   formatNumber,
   formatCurrency,
   formatCurrencyWithLabel,
@@ -31,6 +32,21 @@ describe("drCrClass", () => {
     expect(drCrClass(null)).toBe("");
     expect(drCrClass(undefined)).toBe("");
     expect(drCrClass("")).toBe("");
+  });
+});
+
+describe("creditPositiveBalanceClass", () => {
+  it("shows a negative credit-positive balance as a green debit", () => {
+    expect(creditPositiveBalanceClass(-149160)).toContain("text-green-600");
+  });
+
+  it("shows a positive credit-positive balance as a red credit", () => {
+    expect(creditPositiveBalanceClass(149160)).toContain("text-red-500");
+  });
+
+  it("keeps zero and invalid values neutral", () => {
+    expect(creditPositiveBalanceClass(0)).toBe("text-muted-foreground");
+    expect(creditPositiveBalanceClass(NaN)).toBe("text-muted-foreground");
   });
 });
 

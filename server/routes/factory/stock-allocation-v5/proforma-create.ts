@@ -55,17 +55,53 @@ export function registerV5ProformaCreateRoutes(app: Express) {
           .values({ companyId, customerId: Number(customerId), name, destination, isActive: isActive ?? false })
           .returning();
 
-        const lineValues = validLines.map((l) => ({
+        // Resolve initial prices on the server too: a slow catalog/price-list
+        // response must not make newly created proformas silently cost zero.
+        // Agreed rates are scoped to this customer AND destination; catalogue
+        // selling price is only the fallback. A truly unpriced article stays 0.
+        const pricingRows = resultRows(await tx.execute(sql`
+          SELECT fbp.article_code, fbp.code, fbp.selling_price,
+                 cdpl.price_per_bale AS agreed_price
+          FROM factory_bale_products fbp
+          LEFT JOIN customer_destination_price_lists cdpl
+            ON cdpl.company_id = fbp.company_id
+           AND cdpl.customer_id = ${Number(customerId)}
+           AND cdpl.destination = ${destination}
+           AND upper(trim(cdpl.article_code)) = upper(trim(fbp.article_code))
+          WHERE fbp.company_id = ${companyId}
+            AND fbp.deleted_at IS NULL
+        `));
+        const pricingByArticle = new Map<string, { catalog: string; agreed: string | null }>();
+        for (const row of pricingRows) {
+          const entry = {
+            catalog: String(row.selling_price ?? "0"),
+            agreed: row.agreed_price == null ? null : String(row.agreed_price),
+          };
+          if (row.article_code) pricingByArticle.set(String(row.article_code).trim().toUpperCase(), entry);
+          if (row.code) pricingByArticle.set(String(row.code).trim().toUpperCase(), entry);
+        }
+        const lineValues = validLines.map((l) => {
+          const existing = pricingByArticle.get(String(l.articleCode).trim().toUpperCase());
+          const supplied = Number(l.pricePerBale ?? 0);
+          const agreed = existing?.agreed == null ? null : Number(existing.agreed);
+          const catalog = Number(existing?.catalog ?? 0);
+          const price = l.pricingMode === "per_kg" ? (l.pricePerBale ?? "0")
+            : Number.isFinite(supplied) && supplied > 0 ? l.pricePerBale
+            : agreed !== null && Number.isFinite(agreed) ? String(agreed)
+            : Number.isFinite(catalog) && catalog > 0 ? String(catalog)
+            : "0";
+          return ({
           proformaId: proforma.id,
           articleCode: l.articleCode,
           productName: l.productName,
           quantity: parseInt(l.quantity),
-          pricePerBale: String(l.pricePerBale ?? "0"),
+          pricePerBale: String(price),
           productionPricePerBale: String(l.productionPricePerBale ?? "0"),
           pricingMode: l.pricingMode ?? "per_bale",
           pricePerKg:
             l.pricingMode === "per_kg" && l.pricePerKg != null && l.pricePerKg !== "" ? String(l.pricePerKg) : null,
-        }));
+          });
+        });
         const insertedLines = await tx.insert(customerProformaLines).values(lineValues).returning();
 
         let createdOrders: (typeof customerOrders.$inferSelect)[] = [];

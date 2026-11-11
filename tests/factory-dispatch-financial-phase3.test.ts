@@ -40,8 +40,11 @@ describe("Factory financial trip charge previews", () => {
       offsetLedgerAccountId: 5,
     })).toThrow("Only internal");
     expect(accountAcceptsCharge("BILLABLE", "Income")).toBe(true);
-    expect(accountAcceptsCharge("BILLABLE", "Liability")).toBe(false);
-    expect(accountAcceptsCharge("INTERNAL", "Expense")).toBe(true);
+    expect(accountAcceptsCharge("BILLABLE", "Liability")).toBe(true);
+    expect(accountAcceptsCharge("BILLABLE", "Asset")).toBe(true);
+    expect(accountAcceptsCharge("BILLABLE", "Expense")).toBe(true);
+    expect(accountAcceptsCharge("INTERNAL", "Income")).toBe(true);
+    expect(accountAcceptsCharge("DISCOUNT", "Liability")).toBe(true);
     expect(accountAcceptsOffset("Liability")).toBe(true);
     expect(accountAcceptsOffset("Bank")).toBe(false);
   });

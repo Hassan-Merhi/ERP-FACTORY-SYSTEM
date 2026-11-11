@@ -58,6 +58,7 @@ vi.mock("@tanstack/react-query", () => ({
   }),
   useQueries: () => [],
   useInfiniteQuery: ({ queryKey, enabled }: any) => {
+    // Company-scoped key: [url, companyId, serialized filters].
     harness.historyQueries.push(queryKey[2]);
     const params = new URLSearchParams(queryKey[2]);
     const selectedWorker = params.get("workerId");
@@ -141,6 +142,10 @@ vi.mock("@tanstack/react-query", () => ({
 
 vi.mock("@/contexts/DateFormatContext", () => ({
   useDateFormat: () => ({ formatDisplayDate: (value: string) => `D:${value}` }),
+}));
+vi.mock("@/contexts/CompanyContext", () => ({
+  useCompany: () => ({ selectedCompany: { id: 1, name: "Factory Co" }, companies: [], isLoading: false }),
+  useOptionalCompany: () => ({ selectedCompany: { id: 1, name: "Factory Co" }, companies: [], isLoading: false }),
 }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: harness.toast }) }));
 vi.mock("@/lib/queryClient", () => ({

@@ -59,9 +59,10 @@ const alerts = [
     severity: "critical",
     title: "Container overdue",
     message: "MSCU1234567 is 4 days late",
-    entity: "container",
+    entityType: "container",
+    entityId: 12,
     createdAt: "2026-09-20T08:00:00.000Z",
-    read: false,
+    isRead: false,
   },
 ];
 

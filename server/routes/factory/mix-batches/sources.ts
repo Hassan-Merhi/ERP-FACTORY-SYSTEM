@@ -18,13 +18,12 @@ import {
   factoryBales,
 } from "@shared/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
-import { MoneyDecimal, sumMoney, toMoney } from "../../../lib/money";
+import { sumMoney, toMoney } from "../../../lib/money";
 import { getClientDate } from "../../../lib/dateUtils";
 import {
   baleCostFromMix,
   FACTORY_COST_SCALE,
   mixCostForPressing,
-  rawSourceUsdRate,
   sendFactoryCostBasisRefusal,
 } from "../../../services/factory/baleCostBasis";
 
@@ -155,32 +154,18 @@ export function registerFactoryMixBatchSourceRoutes(app: Express) {
         .leftJoin(factorySuppliers, eq(factoryMixBatchSources.supplierId, factorySuppliers.id))
         .where(eq(factoryMixBatchSources.mixBatchId, id));
 
-      // For any source row with a stored costPerKg of 0 (or null), look up the
-      // actual weighted-average cost from factoryRawStock so the breakdown
-      // display always shows a meaningful number.
-      const enriched = await Promise.all(
-        results.map(async (src) => {
-          if (toMoney(src.costPerKg).greaterThan(0)) return src;
-
-          // Show the source's USD rate now (the supplier's locked rate, else the
-          // container's landed USD cost; never a native-currency cost). A source
-          // with none is flagged: its mix is unvalued (wave 11).
-          const usdRate = await rawSourceUsdRate(db, companyId, {
-            supplierId: src.supplierId,
-            containerId: src.containerId,
-          });
-          const fallbackCost = usdRate?.rate ?? new MoneyDecimal(0);
-          if (!fallbackCost.greaterThan(0)) return { ...src, noUsdRate: true };
-          // Shown at the stored column scale (7 places), half up.
-          return {
-            ...src,
-            costPerKg: fallbackCost.toFixed(7),
-            totalCost: toMoney(src.weightKg).times(fallbackCost).toFixed(7),
-          };
-        })
-      );
-
-      res.json(enriched);
+      // Historical source details MUST return recorded values. Replacing a
+      // stored zero cost with today's supplier rate made the detail screen
+      // disagree with its own batch header and concealed unvalued sources.
+      // A future prospective-cost preview must use distinct fields/endpoint.
+      const recordedSources = results.map((src) => ({
+        ...src,
+        recordedUnvalued:
+          toMoney(src.weightKg).greaterThan(0) &&
+          (toMoney(src.costPerKg).lessThanOrEqualTo(0) || toMoney(src.totalCost).lessThanOrEqualTo(0)),
+      }));
+      res.set("Cache-Control", "private, no-store");
+      res.json(recordedSources);
     } catch (error: unknown) {
       logger.error("Error fetching mix batch sources:", { error: error });
       res.status(500).json({ message: getErrorMessage(error) });
