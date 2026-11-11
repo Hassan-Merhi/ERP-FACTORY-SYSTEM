@@ -2,7 +2,7 @@
  * generate-icons.js
  * Run: node scripts/generate-icons.js
  *
- * Reads the HMD logo from the web app's public directory and outputs
+ * Reads the Dakzo Systems app icon from the web app's public directory and outputs
  * all icon sizes required by Electron + the Microsoft Store.
  *
  * Requires: sharp  (installed via npm install in desktop/)
@@ -12,7 +12,7 @@ const sharp = require('sharp');
 const path  = require('path');
 const fs    = require('fs');
 
-const SOURCE = path.resolve(__dirname, '../../client/public/hmd-logo-clean.png');
+const SOURCE = path.resolve(__dirname, '../../client/public/dakzo-icon-512-v1.png');
 const OUT    = path.resolve(__dirname, '../icons');
 // electron-builder has no appx.assets option: AppxTarget picks user tile assets
 // up from <buildResources>/appx, and buildResources is `build` in
