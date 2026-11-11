@@ -53,6 +53,7 @@ async function run() {
     let statements=[];
     let statementsReadable=false;
     if(statsAvailable) {
+      await client.query("SAVEPOINT optional_stat_statements");
       try {
         const top=await client.query(`
           SELECT calls::text AS calls,
@@ -62,11 +63,12 @@ async function run() {
           FROM pg_stat_statements ORDER BY total_exec_time DESC LIMIT 10`);
         statements=top.rows;
         statementsReadable=true;
+        await client.query("RELEASE SAVEPOINT optional_stat_statements");
       } catch(error) {
-        // Query permission failures abort the transaction; use a SAVEPOINT
-        // around optional extension reads to preserve the read-only audit.
-        if(error.code!=="42501" && error.code!=="42P01") throw error;
-        throw new Error("pg_stat_statements is present but unavailable; grant read-only stats permission or disable the extension check");
+        await client.query("ROLLBACK TO SAVEPOINT optional_stat_statements");
+        await client.query("RELEASE SAVEPOINT optional_stat_statements");
+        if(error.code!=="42501" && error.code!=="42P01" && error.code!=="55000") throw error;
+        // Optional extension telemetry is not a prerequisite for table/index data.
       }
     }
     const result=summarizeDatabasePerformance({
