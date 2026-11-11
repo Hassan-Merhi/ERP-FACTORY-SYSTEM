@@ -547,9 +547,7 @@ describe("C6: reserved codes and system accounts", () => {
       });
 
       const duplicateId = await ledger("RENAMECLASH", "Equity");
-      const duplicate = await agent
-        .put(`/api/ledger-accounts/${id}`)
-        .send({ name: `${PREFIX}-RENAMECLASH` });
+      const duplicate = await agent.put(`/api/ledger-accounts/${id}`).send({ name: `${PREFIX}-RENAMECLASH` });
       expect(duplicate.status).toBe(400);
       expect(duplicate.body.message).toMatch(/Duplicate ledger/);
       expect(duplicateId).toBeGreaterThan(0);
@@ -795,11 +793,20 @@ describe("PE2: rental reads, roles, business date, actor and rate", () => {
 
   it("posts a scheduled payment as of the business date with the real actor", async () => {
     const [year, month] = today.split("-").map(Number);
+    // A scheduled payment is always allocated to its rental month (the payment
+    // route upserts the month row first), so the fixture carries that link.
+    const { rows: monthRow } = await pool.query<{ id: number }>(
+      `INSERT INTO property_monthly_ledger (company_id, module, contract_id, unit_id, year, month, expected_amount, paid_amount)
+       VALUES ($1, 'ERP', $2, $3, $4, $5, '300.00', 0)
+       ON CONFLICT (contract_id, year, month) DO UPDATE SET expected_amount = property_monthly_ledger.expected_amount
+       RETURNING id`,
+      [ctx.companyId, contractId, unitId, year, month]
+    );
     await pool.query(
       `INSERT INTO property_payments (company_id, module, contract_id, unit_id, amount, payment_date, for_year, for_month,
-         posting_status, payment_group_id, cash_account_id, currency, exchange_rate)
-       VALUES ($1, 'ERP', $2, $3, '300.00', $4, $5, $6, 'SCHEDULED', 'PG-P19B-1', $7, 'USD', '1')`,
-      [ctx.companyId, contractId, unitId, today, year, month, ctx.cashAccountId]
+         posting_status, payment_group_id, cash_account_id, currency, exchange_rate, ledger_row_id)
+       VALUES ($1, 'ERP', $2, $3, '300.00', $4, $5, $6, 'SCHEDULED', 'PG-P19B-1', $7, 'USD', '1', $8)`,
+      [ctx.companyId, contractId, unitId, today, year, month, ctx.cashAccountId, monthRow[0].id]
     );
     const res = await agent.post("/api/erp/rental/payments/post-scheduled").set("X-Client-Date", "2020-01-01");
     expect(res.status).toBe(200);
