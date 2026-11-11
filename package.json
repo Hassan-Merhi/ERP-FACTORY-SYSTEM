@@ -83,7 +83,9 @@
     "verify:manual": "node scripts/run-manual-verification.mjs",
     "verify:unified-accounting": "node scripts/verify-unified-accounting-phase15.mjs",
     "verify:factory-unification": "node scripts/verify-factory-unification-phase8.mjs",
-    "verify:properties-unification": "node scripts/verify-properties-unification-phase11.mjs"
+    "verify:properties-unification": "node scripts/verify-properties-unification-phase11.mjs",
+    "audit:database-migrations": "node scripts/audit-database-migration-hygiene.mjs",
+    "audit:database-migrations:strict": "node scripts/audit-database-migration-hygiene.mjs --strict"
   },
   "dependencies": {
     "@aparajita/capacitor-biometric-auth": "^10.0.0",
