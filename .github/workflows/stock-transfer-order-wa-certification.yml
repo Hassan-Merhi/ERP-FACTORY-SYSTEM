@@ -1,0 +1,108 @@
+name: Stock Transfer Order WhatsApp Phase 7 Certification
+
+on:
+  push:
+    branches:
+      - feature/stock-transfer-order-wa-approval-phase1-20261111
+  pull_request:
+    branches: [main]
+    paths:
+      - "server/services/stockTransferOrder*"
+      - "server/routes/stockTransferOrderWaApproval*"
+      - "server/startup-schema/03*-stock-transfer-order*"
+      - "server/startup-schema/04*-stock-transfer-order*"
+      - "client/src/pages/stock-transfer-order/**"
+      - "tests/stock-transfer-order-wa-*"
+      - ".github/workflows/stock-transfer-order-wa-certification.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sto-wa-phase7-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-and-build:
+    name: Typecheck, build and focused revision tests
+    runs-on: ubuntu-26.04
+    timeout-minutes: 40
+    env:
+      NODE_ENV: test
+      ENABLE_SCHEDULERS: "false"
+      STO_WA_APPROVAL_EXECUTION_ENABLED: "false"
+      STO_WA_DELIVERY_ENABLED: "false"
+      SESSION_SECRET: only-for-disposable-ci-do-not-use-production
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24.22.2"
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Check all TypeScript types
+        run: npm run check
+      - name: Run all focused phases 1–6 tests
+        run: |
+          node node_modules/vitest/vitest.mjs run \
+            tests/stock-transfer-order-wa-phase1-schema.test.ts \
+            tests/stock-transfer-order-wa-phase2-contract.test.ts \
+            tests/stock-transfer-order-wa-phase3-contract.test.ts \
+            tests/stock-transfer-order-wa-phase3-incoming.test.ts \
+            tests/stock-transfer-order-wa-phase4-contract.test.ts \
+            tests/stock-transfer-order-wa-phase4-policy.test.ts \
+            tests/stock-transfer-order-wa-phase5-contract.test.ts \
+            tests/stock-transfer-order-wa-phase5-workbook.test.ts \
+            tests/stock-transfer-order-wa-phase6-contract.test.ts \
+            tests/stock-transfer-order-wa-phase6-policy.test.ts \
+            tests/startup-schema-integrity.test.ts
+      - name: Verify schema and migrations registry
+        run: |
+          npm run verify:migrations
+          npm run verify:startup-migrations
+      - name: Build client and server without enabling jobs
+        run: npm run build
+
+  postgres-certification:
+    name: Disposable PostgreSQL 18 schema integration
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: heliumdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/heliumdb
+      PGSSLMODE: disable
+      NODE_ENV: test
+      SESSION_SECRET: sto-wa-disposable-db-only
+      ENABLE_SCHEDULERS: "false"
+      STO_WA_APPROVAL_EXECUTION_ENABLED: "false"
+      STO_WA_DELIVERY_ENABLED: "false"
+      STO_WA_E2E_DISPOSABLE_DB: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24.22.2"
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Prepare only the disposable local ERP schema
+        run: node node_modules/drizzle-kit/bin.cjs push --force
+      - name: Test idempotent startup DDL, constraints and tenant policies
+        run: node node_modules/vitest/vitest.mjs run tests/stock-transfer-order-wa-phase7-postgres.test.ts

@@ -102,16 +102,11 @@ export default function PropertyRentalPage({
   // the recognized Rent Expense ledger, not the active-contract receipts subtotal.
   // This is presentation ONLY: no rent payments, vouchers or cash balances change.
   // Read the same account/date basis as the existing monthly ledger report.
-  const usesRentExpensePaidBasis = rentalModule === "ERP" && unitType === "SHOP" && selectedCompany?.id === 1;
+  const usesRentExpensePaidBasis =
+    rentalModule === "ERP" && unitType === "SHOP" && selectedCompany?.id === 1;
   const rentalBusinessDay = getAppDate();
   const { data: rentExpenseSummary } = useQuery<{ grandTotal: { closingBalance: number } }>({
-    queryKey: [
-      "/api/reports/ledger-monthly-summary",
-      1007,
-      selectedCompany?.id,
-      rentalBusinessDay,
-      "shop-rental-paid-kpi",
-    ],
+    queryKey: ["/api/reports/ledger-monthly-summary", 1007, selectedCompany?.id, rentalBusinessDay, "shop-rental-paid-kpi"],
     queryFn: async () => {
       const response = await fetch(
         `/api/reports/ledger-monthly-summary/1007?startDate=${rentalBusinessDay.slice(0, 4)}-01-01&endDate=${rentalBusinessDay}`,
@@ -126,8 +121,7 @@ export default function PropertyRentalPage({
   // Never fall back to contract receipts on query failure: that would show a
   // misleading mismatched Total Paid value on this specific page.
   const postedRentExpensePaid =
-    usesRentExpensePaidBasis &&
-    typeof rentExpenseSummary?.grandTotal?.closingBalance === "number" &&
+    usesRentExpensePaidBasis && typeof rentExpenseSummary?.grandTotal?.closingBalance === "number" &&
     Number.isFinite(rentExpenseSummary.grandTotal.closingBalance)
       ? -rentExpenseSummary.grandTotal.closingBalance
       : null;
@@ -178,9 +172,7 @@ export default function PropertyRentalPage({
           : null,
     showHistoricalPaid
       ? "reconciled-account-balances"
-      : usesRentExpensePaidBasis
-        ? "posted-ledger-expense"
-        : "contract-paid",
+      : usesRentExpensePaidBasis ? "posted-ledger-expense" : "contract-paid",
     usesRentExpensePaidBasis ? rentalBusinessDay : null
   );
   const ledgerUsdMoney = (amount: number) => formatMoneyDisplay(amount, { currency: "USD" });
@@ -224,8 +216,7 @@ export default function PropertyRentalPage({
   // Factory Payments Log is an admin page. Do not show a link that the
   // central Factory route guard will immediately reject for other roles.
   const showPaymentsLog = Boolean(
-    paymentsLogUrl &&
-    !isPropertiesRental &&
+    paymentsLogUrl && !isPropertiesRental &&
     (rentalModule !== "FACTORY" || currentRole === "Admin" || currentRole === "Developer")
   );
   const postDue = useMutation({
@@ -341,11 +332,11 @@ export default function PropertyRentalPage({
         data-testid={`button-${testIdPrefix}-actions`}
         actions={[
           showPaymentsLog && {
-            label: "Payments Log",
-            icon: ClipboardList,
-            onSelect: () => paymentsLogUrl && navigate(paymentsLogUrl),
-            testId: `button-${testIdPrefix}-payments-log`,
-          },
+              label: "Payments Log",
+              icon: ClipboardList,
+              onSelect: () => { if (paymentsLogUrl) navigate(paymentsLogUrl); },
+              testId: `button-${testIdPrefix}-payments-log`,
+            },
           {
             label: "Run Monthly Update",
             icon: RefreshCw,
@@ -383,7 +374,7 @@ export default function PropertyRentalPage({
         <Button
           variant="outline"
           size="sm"
-          onClick={() => paymentsLogUrl && navigate(paymentsLogUrl)}
+          onClick={() => { if (paymentsLogUrl) navigate(paymentsLogUrl); }}
           data-testid={`button-${testIdPrefix}-payments-log`}
         >
           <ClipboardList className="h-4 w-4 mr-1" />
@@ -489,7 +480,7 @@ export default function PropertyRentalPage({
             silently reported in USD. Individual contracts and ledger balances remain unchanged.
           </p>
         )}
-        {showHistoricalPaid && reconciledAccountTotalsReady && (
+        {currentRole === "Developer" && showHistoricalPaid && reconciledAccountTotalsReady && (
           <p className="text-xs text-muted-foreground" data-testid="properties-rent-account-balance-explanation">
             Combined account balances:{" "}
             <span className="font-semibold tabular-nums">
