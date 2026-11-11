@@ -13,6 +13,7 @@ import { sql } from "drizzle-orm";
 import { db, type DbTransaction } from "../db";
 import { logger } from "../lib/logger";
 import { writeAuditEvent } from "./audit";
+import { freezeApprovedStockTransferOrderWorkbookTx } from "./stockTransferOrderApprovedWorkbookSnapshot";
 import {
   approveImmutableStockTransferRevision,
   rejectImmutableStockTransferRevision,
@@ -269,6 +270,11 @@ async function executeWithinTransaction(tx: DbTransaction, batchId: number): Pro
   `);
 
   if (newStatus === "approved") {
+    // Freeze exact post-approval quantities while the inventory/voucher
+    // transaction is still open. Later edits cannot change the delivered file.
+    await freezeApprovedStockTransferOrderWorkbookTx(
+      tx, companyId, batchId, batchKey, snapshot.destinationLocationId, snapshot.transferIds
+    );
     // Phase 5 will render and send the *same* final approved workbook to both
     // recipients. Persist both delivery intents in this approval transaction;
     // no Excel or WhatsApp operation happens until Phase 5 is installed.
