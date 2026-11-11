@@ -652,6 +652,7 @@ export function useStockTransferOrderModel() {
       }
 
       const response = await apiRequest("POST", "/api/stock-transfers", {
+        workflowOrigin: "stock_transfer_order",
         destinationLocationId: data.destinationLocationId,
         notes: `Stock Transfer Order - ${data.orderItems.length} items`,
         voucherDate: data.voucherDate,
