@@ -13,6 +13,7 @@ import { loadFactoryHistoricalCoverage } from "../../../services/factory/netPosi
 import { loadFxWalletHistoryGaps } from "../../../services/factory/netPositionFxWalletCoverage";
 import { finishFactoryNetPosition } from "./netPositionHistoricalResponse";
 import { projectFactoryNetPositionMonetaryFx } from "./netPositionMonetaryFxProjection";
+import { loadNetPositionFxActivity } from "../../../services/accounting/netPositionFxActivity";
 import { computeLiveFactoryRentalPositions } from "./netPositionLiveRent";
 import {
   fxAgentTablesExist,
@@ -43,6 +44,26 @@ import { MoneyDecimal, toMoney } from "../../../lib/money";
 import { ledgerCarriesStock } from "../../../services/accounting/perpetualInventory/reportBasis";
 
 export function registerEmployeeNetPositionRoutes(app: Express) {
+  // The Net Position evidence drill-down shares the parent page's Factory
+  // permission boundary. It reads vouchers and rate changes but creates none.
+  app.get("/api/factory/net-position/fx-activity", requireAuth, async (req: Request, res: Response) => {
+    const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+    if (!companyId) return res.status(400).json({ message: "No company selected" });
+    res.setHeader("Cache-Control", "private, no-store");
+    try {
+      return res.json(await loadNetPositionFxActivity({
+        companyId, factory: true, from: req.query.from, to: req.query.to,
+      }));
+    } catch (error) {
+      if (error instanceof Error && /Invalid history date|History start date/.test(error.message)) {
+        return res.status(400).json({ message: error.message });
+      }
+      logger.error("Factory FX evidence history failed", { companyId, error });
+      return res.status(500).json({ message: getErrorMessage(error) });
+    }
+  });
+
+
   app.get("/api/factory/net-position", requireAuth, async (req: Request, res: Response) => {
     // Set once the date resolves: any later failure of a past date is a
     // structured 503, never a partial or current-day figure.
@@ -148,13 +169,13 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
       // Reclassify verified unpaid foreign-currency supplier payables from their
       // current-rate balance into historic-rate suppliers + actual FX display rows.
       // Both sides receive the same offset: the real Net Position is unchanged.
-      const fxGainUsd = round2(supplierItems.reduce(
+      const supplierFxGainUsd = round2(supplierItems.reduce(
         (sum, item) => sum + Math.max(0, item.fxBasisAdjustmentUsd ?? 0), 0
       ));
-      const fxLossUsd = round2(supplierItems.reduce(
+      const supplierFxLossUsd = round2(supplierItems.reduce(
         (sum, item) => sum + Math.max(0, -(item.fxBasisAdjustmentUsd ?? 0)), 0
       ));
-      const supplierLiabilitiesAtHistoricBasis = round2(totalSupplierLiabilities + fxGainUsd - fxLossUsd);
+      const supplierLiabilitiesAtHistoricBasis = round2(totalSupplierLiabilities + supplierFxGainUsd - supplierFxLossUsd);
 
       // ── 2. ERP ledger account balances for the factory company ──────────
       const factoryAccounts = await db
@@ -326,6 +347,10 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
         synchronized: boolean;
       }> = [];
       const fxAgentWalletWarnings: string[] = [];
+      // Keep verified wallet native-rate movement outside the posted ledger
+      // row, so it appears in the same net-position FX gain/loss accounts as
+      // supplier and other monetary currency movements.
+      const walletFxDifferences = new Map<number, { name: string; delta: number }>();
       if (await fxAgentTablesExist()) {
         if (historyCoverage && asOfContext.isHistorical) {
           historyCoverage.gaps.push(...(await loadFxWalletHistoryGaps(companyId, asOfContext)));
@@ -368,11 +393,17 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
             continue;
           }
           const change = toMoney(snapshot.currentUsd).minus(projectedBook);
-          const before = projectedAccountBalances.get(account.id) || { debit: 0, credit: 0 };
-          projectedAccountBalances.set(account.id, {
-            debit: before.debit + (change.gt(0) ? change.toNumber() : 0),
-            credit: before.credit + (change.lt(0) ? change.negated().toNumber() : 0),
-          });
+          if (asOfContext.isHistorical) {
+            // Historical snapshots retain their existing dated wallet valuation
+            // and never acquire new FX display rows.
+            const before = projectedAccountBalances.get(account.id) || { debit: 0, credit: 0 };
+            projectedAccountBalances.set(account.id, {
+              debit: before.debit + (change.gt(0) ? change.toNumber() : 0),
+              credit: before.credit + (change.lt(0) ? change.negated().toNumber() : 0),
+            });
+          } else if (!change.isZero()) {
+            walletFxDifferences.set(account.id, { name: account.name, delta: round2(change.toNumber()) });
+          }
         }
       }
       const classified = classifyNetPositionAccounts(
@@ -569,6 +600,38 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
           !(a.name || "").toLowerCase().includes("prepaid rent")
       );
       const cleanLedgerForUsTotal = round2(cleanLedgerForUs.reduce((s, a) => s + a.value, 0));
+      // Only count wallet FX when its source account actually survives the
+      // authoritative Net Position classifier and suppression rules.
+      const presentedLedgerIds = new Set(
+        [...cleanLedgerForUs, ...ledgerOnUs].filter((a) => a.id !== undefined).map((a) => a.id)
+      );
+      const visibleWalletFx = [...walletFxDifferences.entries()]
+        .filter(([id]) => presentedLedgerIds.has(id))
+        .map(([id, movement]) => ({ ...movement, sourceKey: `ledger:${id}` }));
+      const walletFxGainUsd = round2(visibleWalletFx.reduce((sum, wallet) => sum + Math.max(0, wallet.delta), 0));
+      const walletFxLossUsd = round2(visibleWalletFx.reduce((sum, wallet) => sum + Math.max(0, -wallet.delta), 0));
+      const fxGainUsd = round2(supplierFxGainUsd + walletFxGainUsd);
+      const fxLossUsd = round2(supplierFxLossUsd + walletFxLossUsd);
+      const fxGainBreakdown = [
+        ...supplierItems.filter((item) => (item.fxBasisAdjustmentUsd ?? 0) > 0).map((item) => ({
+          label: `Supplier: ${item.name}`, native: "", usd: round2(item.fxBasisAdjustmentUsd ?? 0),
+          sourceKey: item.supplierId ? `supplier:${item.supplierId}` : undefined,
+        })),
+        ...visibleWalletFx.filter((wallet) => wallet.delta > 0).map((wallet) => ({
+          label: `FX Agent: ${wallet.name}`, native: "EUR", usd: wallet.delta,
+          sourceKey: wallet.sourceKey,
+        })),
+      ];
+      const fxLossBreakdown = [
+        ...supplierItems.filter((item) => (item.fxBasisAdjustmentUsd ?? 0) < 0).map((item) => ({
+          label: `Supplier: ${item.name}`, native: "", usd: round2(-(item.fxBasisAdjustmentUsd ?? 0)),
+          sourceKey: item.supplierId ? `supplier:${item.supplierId}` : undefined,
+        })),
+        ...visibleWalletFx.filter((wallet) => wallet.delta < 0).map((wallet) => ({
+          label: `FX Agent: ${wallet.name}`, native: "EUR", usd: -wallet.delta,
+          sourceKey: wallet.sourceKey,
+        })),
+      ];
 
       // ── Factory Worker Advances — authoritative sum from factory_worker_advances ──
       // Mirrors the Payroll & Benefits "Advances" KPI exactly: SUM(remaining_balance)
@@ -702,10 +765,11 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
         ...(verifiedOrders.length > 0 ? [verifiedOrderEntry] : []),
         ...(loadingOrders.length > 0 ? [loadingOrderEntry] : []),
         ...(fxGainUsd > 0 ? [{
-          name: "Unrealized FX Gain (Supplier Payables)",
-          code: "FX_SUPPLIER_GAIN",
+          name: "Unrealized FX Gains",
+          code: "FX_UNREALIZED_GAIN",
           value: fxGainUsd,
           category: "Exchange Rate Gains",
+          breakdown: fxGainBreakdown,
         }] : []),
         ...cleanLedgerForUs.sort((a, b) => b.value - a.value).map((a) => ({ ...a, value: round2(a.value) })),
         ...customerDrItems
@@ -779,10 +843,11 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
             breakdown: s.breakdown,
           })),
         ...(fxLossUsd > 0 ? [{
-          name: "Unrealized FX Loss (Supplier Payables)",
-          code: "FX_SUPPLIER_LOSS",
+          name: "Unrealized FX Losses",
+          code: "FX_UNREALIZED_LOSS",
           value: fxLossUsd,
           category: "Exchange Rate Losses",
+          breakdown: fxLossBreakdown,
         }] : []),
         ...ledgerOnUs.sort((a, b) => b.value - a.value).map((a) => ({ ...a, value: round2(a.value) })),
         {
@@ -844,8 +909,10 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
         onUs: { total: onUsTotal, breakdown: onUsBreakdown, accounts: onUsAccounts },
         supplierLiabilities: supplierLiabilitiesAtHistoricBasis,
         supplierLiabilitiesCurrentRate: round2(totalSupplierLiabilities),
-        supplierFxGain: fxGainUsd,
-        supplierFxLoss: fxLossUsd,
+        supplierFxGain: supplierFxGainUsd,
+        supplierFxLoss: supplierFxLossUsd,
+        walletFxGain: walletFxGainUsd,
+        walletFxLoss: walletFxLossUsd,
         supplierOverpayments: round2(totalSupplierOverpayments),
         stockOtwValue,
         inventoryValue: baleInventoryValue,
