@@ -8,9 +8,10 @@
  */
 import type { Pool } from "pg";
 import { stockTransferOrderWaApprovalFoundation } from "../startup-schema/039-stock-transfer-order-wa-approval";
+import { stockTransferOrderWaWebhookIntegrity } from "../startup-schema/040-stock-transfer-order-wa-webhook";
 
 export async function ensureStockTransferOrderWhatsAppApprovalSchema(pool: Pick<Pool, "query">): Promise<void> {
-  for (const statement of stockTransferOrderWaApprovalFoundation) {
+  for (const statement of [...stockTransferOrderWaApprovalFoundation, ...stockTransferOrderWaWebhookIntegrity]) {
     await pool.query(statement);
   }
 }
