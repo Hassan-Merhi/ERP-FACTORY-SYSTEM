@@ -49,12 +49,22 @@ for(const file of targets){
   results.push({file,verifyOnly:src.includes("verify-only"),candidates:matches});
 }
 const remaining=results.filter(x=>x.candidates.length && !x.verifyOnly);
+// Historical data-change modules must not be silently recast as harmless
+// additive migrations. Each requires a separate reviewed data plan.
+const knownHistoricalRepairModules=[
+  "server/startup-schema/005-orphan-fk-repairs.ts",
+  "server/startup-schema/022-tenant-control-integrity-repairs.ts",
+  "server/startup/runServerStartupMigrations.ts",
+  "server/startup/ensureRuntimeSchema.ts"
+];
+
 const report={
   mode:"read-only-static-review",
   coverage:"known startup entrypoints, bridges, central runtime schema; not a complete dynamic call graph",
   scannedFiles:results.length,
   startupSchemaModules:startupModules.length,
   filesWithPossibleWrites:results.filter(x=>x.candidates.length).length,
+  historicalRepairOwnersRequired:knownHistoricalRepairModules,
   unconvertedCandidates:remaining.map(x=>({file:x.file,matchingLines:x.candidates.length})),
   warning:"A verify-only mode does NOT guarantee all code paths are read-only. Review each SQL statement and loaded service.",
   certified:false,
