@@ -228,6 +228,7 @@ export default function FactoryProformas() {
                     setPendingDelete={setPendingDelete}
                     onAddLine={() => openAddLineFor(proforma.id)}
                     saveAgreedPricesMutation={model.saveAgreedPricesMutation}
+                    applyAgreedPricesMutation={model.applyAgreedPricesMutation}
                     applyProductionPricesMutation={model.applyProductionPricesMutation}
                     applyCatalogPricesMutation={model.applyCatalogPricesMutation}
                     inlineQtyLineId={model.inlineQtyLineId}

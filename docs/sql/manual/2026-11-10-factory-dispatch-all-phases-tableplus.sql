@@ -362,19 +362,37 @@ CREATE OR REPLACE FUNCTION factory_dispatch_guard_order_bale_evidence()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 DECLARE
   old_company_id INTEGER;
+  order_status TEXT;
+  order_invoice_number TEXT;
   has_live BOOLEAN;
   is_posted_bale BOOLEAN;
 BEGIN
   IF TG_OP = 'INSERT' THEN
-    SELECT company_id INTO old_company_id FROM customer_orders WHERE id = NEW.order_id;
+    SELECT company_id, status, invoice_number
+      INTO old_company_id, order_status, order_invoice_number
+      FROM customer_orders WHERE id = NEW.order_id;
     IF old_company_id IS NULL THEN RETURN NEW; END IF;
+    -- Financially completed orders remain immutable. Earlier POSTED trucks do
+    -- not lock future additions to an unfinished loading; existing posted
+    -- bales, their prices, and their truck evidence are still guarded below.
     SELECT EXISTS(
       SELECT 1 FROM factory_dispatch_trip_financials
        WHERE company_id=old_company_id AND order_id=NEW.order_id
-         AND status IN ('POSTED','CONSOLIDATED')
+         AND status = 'CONSOLIDATED'
     ) INTO has_live;
     IF has_live THEN
-      RAISE EXCEPTION 'Cannot add a bale to a loading with financially posted dispatch trips';
+      RAISE EXCEPTION 'Cannot add bales after the dispatch invoice is consolidated';
+    END IF;
+    SELECT EXISTS(
+      SELECT 1 FROM factory_dispatch_trip_financials
+       WHERE company_id=old_company_id AND order_id=NEW.order_id
+         AND status = 'POSTED'
+    ) INTO has_live;
+    IF has_live AND (
+      order_status NOT IN ('DRAFT', 'LOADING', 'PENDING_VERIFICATION')
+      OR order_invoice_number IS NOT NULL
+    ) THEN
+      RAISE EXCEPTION 'Cannot add bales to a completed dispatch loading';
     END IF;
     RETURN NEW;
   END IF;
