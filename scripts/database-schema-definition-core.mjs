@@ -53,6 +53,11 @@ export const REQUIRED_FUNCTION_SHAPES=Object.freeze([
   {name:"copy_customer_order_bale_scanned_at_to_history",fragments:[
     "NEW.scanned_at","NEW.original_id","customer_order_bales"]}
 ]);
+export const REQUIRED_RLS_POLICY_TABLES=Object.freeze([
+  "vouchers","customers","ledger_accounts","bank_accounts","fixed_assets",
+  "stock_groups","stock_items","inventory","voucher_entries"
+]);
+
 const normalized=x=>String(x??"").toLowerCase().replace(/["']/g,"").replace(/\s+/g," ").trim();
 const includesAll=(value,fragments)=>fragments.every(f=>normalized(value).includes(normalized(f)));
 const key=(t,n)=>t+"."+n;
@@ -63,6 +68,7 @@ export function compareDefinitionDrift(snapshot) {
   const constraints=new Map((snapshot.constraints||[]).map(x=>[key(x.table_name,x.constraint_name),x]));
   const triggers=new Map((snapshot.triggers||[]).map(x=>[key(x.table_name,x.trigger_name),x]));
   const functions=new Map((snapshot.functions||[]).map(x=>[x.function_name,x]));
+  const policies=new Map((snapshot.policies||[]).map(x=>[x.table_name,x]));
   const blockers=[];
   const warnings=[];
   for(const c of REQUIRED_COLUMN_SHAPES) {
@@ -99,6 +105,19 @@ export function compareDefinitionDrift(snapshot) {
     if(!["O","A"].includes(actual.enabled))blockers.push("trigger-disabled:"+item);
     if(!includesAll(actual.definition,[...c.bits,c.functionName]))
       blockers.push("trigger-definition:"+item);
+  }
+  for(const table of REQUIRED_RLS_POLICY_TABLES) {
+    const p=policies.get(table);
+    if(!p){blockers.push("rls-table-missing:"+table);continue;}
+    if(p.enabled!==true)blockers.push("rls-disabled:"+table);
+    if(p.forced!==true)blockers.push("rls-not-forced:"+table);
+    if(p.policy_name!==table+"_company_scope_policy" ||
+       normalized(p.policy_command)!=="all" ||
+       !includesAll(p.using_expression,["erp_company_scope_matches","company_id"]) ||
+       !includesAll(p.check_expression,["erp_company_scope_matches","company_id"]))
+      blockers.push("rls-policy-definition:"+table);
+    if(p.permissive!==true || !Array.isArray(p.roles) || !p.roles.includes("public"))
+      blockers.push("rls-policy-roles:"+table);
   }
   for(const f of REQUIRED_FUNCTION_SHAPES) {
     const actual=functions.get(f.name);
