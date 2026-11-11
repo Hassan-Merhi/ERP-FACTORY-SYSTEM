@@ -59,8 +59,9 @@ export function evaluateCatalogIntegrity(snapshot) {
   const triggers=new Map((snapshot.triggers||[]).map(x=>[key(x.table_name,x.trigger_name),x]));
   const errors=[];
   const warnings=[];
-  const summary={requiredTables:CORE_TABLES.length,availableTables:tables.size,expectedConstraints:0,expectedTriggers:0,legacyNotValidated:0};
-  for(const t of CORE_TABLES) if(!tables.has(t))errors.push("missing-table:"+t);
+  const requiredTables=[...new Set([...CORE_TABLES,...CONTROL_TABLES,...REQUIRED_RLS_TABLES])];
+  const summary={requiredTables:requiredTables.length,availableTables:tables.size,expectedConstraints:0,expectedTriggers:0,legacyNotValidated:0};
+  for(const t of requiredTables) if(!tables.has(t))errors.push("missing-table:"+t);
   const allConstraints=[...CORE_CONSTRAINTS,...CONTROL_CONSTRAINTS.filter(([t])=>tables.has(t))];
   const allTriggers=[...CORE_TRIGGERS,...CONTROL_TRIGGERS.filter(([t])=>tables.has(t))];
   for(const [t,c] of allConstraints) {
