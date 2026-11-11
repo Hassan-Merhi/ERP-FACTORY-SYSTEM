@@ -37,6 +37,7 @@ import {
   requireMixFifoFullyAllocated,
   requireMixRawStockCapacity,
   availableSupplierAddAllowance,
+  splitSupplierShortfall,
 } from "../../../services/factory/mixRawStockQuantityGuard";
 import {
   MixLifecycleRefusal,
@@ -160,7 +161,7 @@ export function registerFactoryMixBatchTopUpRoutes(app: Express) {
             // containers. Unallocated weight must fail the whole transaction:
             // never push excess onto the last container.
             let toDeduct = weight;
-            const taken: Array<{ containerId: number; kg: Decimal; adjustmentBacked?: boolean }> = [];
+            const taken: Array<{ containerId: number; kg: Decimal; adjustmentBacked?: boolean; supplierAdvance?: boolean }> = [];
             for (const rs of supplierRawStocks) {
               if (toDeduct.lessThanOrEqualTo(0.001)) break;
               const avail = MoneyDecimal.max(0, toMoney(rs.receivedKg).minus(toMoney(rs.usedKg)));
@@ -181,13 +182,23 @@ export function registerFactoryMixBatchTopUpRoutes(app: Express) {
                 supplierRawStocks,
                 txDate || getClientDate(req)
               );
-              requireMixFifoFullyAllocated(toDeduct.toFixed(3), supplierId, addAllowance.toFixed(3));
+              const { adjustmentKg, advanceKg } = splitSupplierShortfall(toDeduct.toFixed(3), addAllowance.toFixed(3));
+              if (advanceKg.gt(0) && (lockedRate === null || lockedRate.lte(0))) {
+                throw new MixRawStockShortageError(
+                  `Supplier #${supplierId} needs a known positive locked USD rate before using stock from a future offload.`
+                );
+              }
               const last = supplierRawStocks[supplierRawStocks.length - 1];
               await tx
                 .update(factoryRawStock)
                 .set({ usedKg: sql`${factoryRawStock.usedKg} + ${toDeduct.toFixed(3)}` })
                 .where(and(eq(factoryRawStock.id, last.id), eq(factoryRawStock.companyId, companyId)));
-              taken.push({ containerId: last.containerId, kg: toDeduct, adjustmentBacked: true });
+              if (adjustmentKg.gt(0)) {
+                taken.push({ containerId: last.containerId, kg: adjustmentKg, adjustmentBacked: true });
+              }
+              if (advanceKg.gt(0)) {
+                taken.push({ containerId: last.containerId, kg: advanceKg, supplierAdvance: true });
+              }
             }
 
             // One persisted source row PER exact FIFO container, matching
@@ -202,6 +213,7 @@ export function registerFactoryMixBatchTopUpRoutes(app: Express) {
                 supplierId,
                 containerId: part.containerId,
                 adjustmentBacked: part.adjustmentBacked,
+                supplierAdvance: part.supplierAdvance,
                 weightKg: part.kg.toFixed(3),
                 costPerKg: (rate ?? new MoneyDecimal(0)).toFixed(),
                 totalCost: part.kg
@@ -327,8 +339,10 @@ export function registerFactoryMixBatchTopUpRoutes(app: Express) {
             containerId: sr.containerId || null,
             supplierId: sr.supplierId || null,
             sourceBatchId: sr.sourceBatchId || null,
-            sourceType: sr.adjustmentBacked
-              ? "SUPPLIER_ADJUSTMENT_BACKED"
+            sourceType: sr.supplierAdvance
+              ? "SUPPLIER_ADVANCE"
+              : sr.adjustmentBacked
+                ? "SUPPLIER_ADJUSTMENT_BACKED"
               : sr.sourceBatchId
                 ? "BATCH"
                 : sr.supplierId
