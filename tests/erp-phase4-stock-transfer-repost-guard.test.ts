@@ -41,9 +41,9 @@ describe("ERP Phase 4 fail-closed transfer repost guard", () => {
   });
 
   it("refuses malformed company, transfer and voucher identities", async () => {
-    await expect(assertTransferNotAlreadyPostedTx(transaction(false) as never, { ...input, companyId: 0 })).rejects.toThrow(
-      "STOCK_TRANSFER_POST_IDENTITY_INVALID"
-    );
+    await expect(
+      assertTransferNotAlreadyPostedTx(transaction(false) as never, { ...input, companyId: 0 })
+    ).rejects.toThrow("STOCK_TRANSFER_POST_IDENTITY_INVALID");
   });
 
   it("protects BOTH draft-to-post and finalize flows before applying inventory", () => {
