@@ -80,3 +80,13 @@ test("supplier scope verification skips historical supplier-ownership updates", 
   assert.match(source, /company_code_unique/);
   assert.match(source, /Supplier company scope schema incomplete/);
 });
+
+test("multilingual Factory bridge verifies columns without applying French SQL at boot",()=>{
+  const source=read("server/factoryTrilingualSchemaBridge.mjs");
+  const sql=read("migrations/controlled/20261111_005_factory_multilingual_catalog.sql");
+  assert.match(source,/FACTORY_MULTILINGUAL_SCHEMA_MODE/);
+  assert.match(source,/BEGIN READ ONLY/);
+  assert.match(source,/Factory multilingual schema incomplete/);
+  assert.match(sql,/CREATE TABLE IF NOT EXISTS user_language_preferences/);
+  assert.doesNotMatch(sql,/UPDATE\s+factory_bales|DELETE\s+FROM/i);
+});
