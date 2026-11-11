@@ -1,8 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { loadDatabaseCanonicalStockTransferEvidence } from "../server/services/inventory/databaseCanonicalStockTransferEvidence";
-import { loadDatabaseStockTransferDocuments, mergeStockTransferConvergenceEvidence } from "../server/services/inventory/databaseStockTransferConvergenceAdapter";
-import { reconcileConvergenceTx, type StockConvergenceSnapshot } from "../server/services/accounting/convergenceReconciliation";
+import {
+  loadDatabaseStockTransferDocuments,
+  mergeStockTransferConvergenceEvidence,
+} from "../server/services/inventory/databaseStockTransferConvergenceAdapter";
+import {
+  reconcileConvergenceTx,
+  type StockConvergenceSnapshot,
+} from "../server/services/accounting/convergenceReconciliation";
 
 const dialect = new PgDialect();
 const document = {
@@ -18,8 +24,20 @@ const document = {
 
 function postedEvidenceRows() {
   return [
-    { companyId: 9, sourceType: "stock-transfer", sourceId: "866", quantityDelta: "-102", unitCost: "103.03901960784313725490" },
-    { companyId: 9, sourceType: "stock-transfer", sourceId: "866", quantityDelta: "102", unitCost: "103.03901960784313725490" },
+    {
+      companyId: 9,
+      sourceType: "stock-transfer",
+      sourceId: "866",
+      quantityDelta: "-102",
+      unitCost: "103.03901960784313725490",
+    },
+    {
+      companyId: 9,
+      sourceType: "stock-transfer",
+      sourceId: "866",
+      quantityDelta: "102",
+      unitCost: "103.03901960784313725490",
+    },
   ];
 }
 
@@ -34,15 +52,18 @@ describe("ERP Phase 4 canonical transfer import and edit convergence", () => {
       whereStatement = dialect.sqlToQuery(condition.getSQL()).sql;
       return selection;
     };
-    selection.then = (resolve: (rows: unknown[]) => unknown) => Promise.resolve([{
-      transferId: 866,
-      voucherId: 15358,
-      companyId: 9,
-      inventoryApplied: false,
-      itemCount: 58,
-      documentQuantity: "102",
-      documentValue: "10509.98",
-    }]).then(resolve);
+    selection.then = (resolve: (rows: unknown[]) => unknown) =>
+      Promise.resolve([
+        {
+          transferId: 866,
+          voucherId: 15358,
+          companyId: 9,
+          inventoryApplied: false,
+          itemCount: 58,
+          documentQuantity: "102",
+          documentValue: "10509.98",
+        },
+      ]).then(resolve);
     const tx = {
       execute: async () => ({ rows: [{ startedAt: "2026-08-15T00:00:00Z" }] }),
       select: () => selection,
@@ -123,14 +144,10 @@ describe("ERP Phase 4 canonical transfer import and edit convergence", () => {
       documentValue: "10509.98",
       movementValue: "10509.98",
     };
-    const report = await reconcileConvergenceTx(
-      { execute: async () => ({ rows: [] }) },
-      9,
-      {
-        loadAccountingSnapshots: async () => [],
-        loadStockSnapshots: async () => [documentSnapshot],
-      }
-    );
+    const report = await reconcileConvergenceTx({ execute: async () => ({ rows: [] }) }, 9, {
+      loadAccountingSnapshots: async () => [],
+      loadStockSnapshots: async () => [documentSnapshot],
+    });
     expect(report.clean).toBe(false);
     expect(report.discrepancies).toContainEqual({
       domain: "inventory",
@@ -142,12 +159,10 @@ describe("ERP Phase 4 canonical transfer import and edit convergence", () => {
   });
 
   it("does not mislabel an ordinary applied transfer when its flag is true", async () => {
-    const report = await reconcileConvergenceTx(
-      { execute: async () => ({ rows: [] }) },
-      9,
-      {
-        loadAccountingSnapshots: async () => [],
-        loadStockSnapshots: async () => [{
+    const report = await reconcileConvergenceTx({ execute: async () => ({ rows: [] }) }, 9, {
+      loadAccountingSnapshots: async () => [],
+      loadStockSnapshots: async () => [
+        {
           sourceType: "stock-transfer",
           sourceId: "901",
           companyId: 9,
@@ -156,9 +171,9 @@ describe("ERP Phase 4 canonical transfer import and edit convergence", () => {
           movementQuantity: "2",
           documentValue: "50",
           movementValue: "50",
-        }],
-      }
-    );
+        },
+      ],
+    });
     expect(report.clean).toBe(true);
     expect(report.discrepancies).toEqual([]);
   });
