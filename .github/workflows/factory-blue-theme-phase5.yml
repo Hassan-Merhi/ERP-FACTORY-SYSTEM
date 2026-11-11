@@ -39,7 +39,7 @@ jobs:
       - name: Install Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: "24"
+          node-version: "24.22.2"
           cache: npm
 
       - name: Install locked dependencies
@@ -64,6 +64,7 @@ jobs:
           set -euo pipefail
           node node_modules/vite/bin/vite.js preview --host 127.0.0.1 --port 4174 --strictPort > /tmp/factory-phase5-preview.log 2>&1 &
           for attempt in $(seq 1 45); do
+            echo "Preview readiness attempt ${attempt}/45"
             if curl --fail --silent http://127.0.0.1:4174/factory/location-inventory > /dev/null; then
               exit 0
             fi

@@ -250,15 +250,18 @@ describe("previously unmounted pages", () => {
         name === "WipersReEntry"
           ? {
               seedQueries: [
-                [["/api/factory/my-access", 1], {
-                  companyId: 1,
-                  hasFactoryAccess: true,
-                  fullAccess: true,
-                  hiddenCostFields: [],
-                }],
+                [
+                  ["/api/factory/my-access", 1],
+                  {
+                    companyId: 1,
+                    hasFactoryAccess: true,
+                    fullAccess: true,
+                    hiddenCostFields: [],
+                  },
+                ],
               ],
             }
-          : undefined,
+          : undefined
       );
       expect(await screen.findByTestId(landmark)).toBeInTheDocument();
     });

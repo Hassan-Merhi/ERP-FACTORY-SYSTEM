@@ -2,6 +2,7 @@ import React from "react";
 
 vi.mock("@/contexts/CompanyContext", () => ({
   useCompany: () => ({ selectedCompany: { id: 1, name: "Test Factory", companyType: "factory" } }),
+  useOptionalCompany: () => ({ selectedCompany: { id: 1, name: "Test Factory", companyType: "factory" } }),
 }));
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
