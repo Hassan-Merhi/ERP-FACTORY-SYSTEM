@@ -51,7 +51,7 @@ describe("Stock Transfer Order WhatsApp Phase 6 administrator reconciliation",()
     expect(service).toContain("row.provider_message_id");
     expect(service).toContain("frozenDest");
     expect(service).toContain("header.approval_group_chat_id");
-    expect(service).toContain("await client.query(\\"BEGIN\\")".replaceAll("\\\\",""));
+    expect(service).toContain('await client.query("BEGIN")');
   });
 
   it("distinguishes manual verification from actual provider acceptance and preserves message evidence",()=>{
