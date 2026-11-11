@@ -49,3 +49,11 @@ New source tests: `tests/erp-phase4-stock-transfer-convergence.test.ts` covers m
 **Exit criteria still open:** Run targeted tests/typecheck/full CI, validate document and item-level historical mismatches on a disposable fixture, approve any metadata-only update for transfer 866 after audit, resolve Phase 1/2/3 historical blockers with original evidence, and verify deployed SHA. Do not merge or deploy on simulated evidence alone.
 
 **Status:** The repeatable reconciliation code remediation has been prepared for review. Historical data reconciliation and full Phase 4 certification remain OPEN.
+
+## ERP4-01 follow-up — signed location and voucher-route evidence correction
+
+This supersedes any older "latest revision only" interpretation above. The correct reader sums **signed canonical quantity and value at the CURRENT destination** across all revisions: ordinary edits may reverse and fully reissue, but immutable approved revisions often post only a delta. Every canonical idempotency batch must retain two balanced, matching stock-item and unit-cost legs. Historic batches whose two legs are both outside the present document destination are validated but contribute zero; **192 such old-destination batches** were found for HADI.
+
+In addition to ordinary transfer source IDs and Excel import source IDs, the voucher-level ERP transfer-edit implementation at `server/routes/vouchers/transfer/transfer.ts` can write `voucher_stock_transfer_edit_reverse` and `voucher_stock_transfer_edit_apply` keyed by **voucher ID**. The reader now includes both. No rows of those two types were observed in the current production snapshot; this is preventative coverage rather than a present-production finding.
+
+HADI transfer 846 item 515 has a 350-unit *document-versus-journal* gap, but its approved revision delta was **8 units**, with only 8 units of matching canonical evidence. The 358-unit current document therefore lacks verifiable historical original-movement evidence in the canonical journal; this is **not proof that 350 physical units are missing**. Do not invent journal history or replay physical stock. Review initial transfer posting, old inventory records and the approval audit before deciding if a repair is possible.
