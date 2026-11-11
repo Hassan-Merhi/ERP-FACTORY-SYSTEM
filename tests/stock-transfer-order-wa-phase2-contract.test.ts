@@ -39,7 +39,7 @@ describe("Stock Transfer Order WhatsApp approval Phase 2", () => {
     expect(transferCreate).toContain("req.body?.workflowOrigin !== undefined");
     expect(transferCreate).toContain("RETAIL_MANUAL_VOUCHER_TYPE_BLOCKED");
     expect(permissionBoundary).toContain('"/api/stock-transfer-orders"');
-    expect(permissionBoundary).toContain('"/api/stock-transfer-order"');
+    expect(permissionBoundary).toContain('"/api/stock-transfer-order/wa-approval"');
   });
 
   it("filters only saved, own-company, destination-matched orders", () => {
@@ -88,6 +88,6 @@ describe("Stock Transfer Order WhatsApp approval Phase 2", () => {
     expect(routeManifest.routes).toContain(
       "POST /api/stock-transfer-order/wa-approval/requests [requireAuth > <anonymous> > <anonymous>]"
     );
-    expect(routeManifest.middlewareMounts).toContain("USE /api/stock-transfer-order [<anonymous>]");
+    expect(routeManifest.middlewareMounts).toContain("USE /api/stock-transfer-order/wa-approval [<anonymous>]");
   });
 });
