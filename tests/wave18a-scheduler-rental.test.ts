@@ -349,11 +349,20 @@ describe("rental units GET only reads; post due accruals now posts and audits", 
     await closeBooksThrough(closureDate);
     const scheduledDate = addDays(closureDate, -1);
     const [year, month] = scheduledDate.split("-").map(Number);
+    // A scheduled payment is always allocated to its rental month (the payment
+    // route upserts the month row first), so the fixture carries that link.
+    const { rows: monthRow } = await pool.query<{ id: number }>(
+      `INSERT INTO property_monthly_ledger (company_id, module, contract_id, unit_id, year, month, expected_amount, paid_amount)
+       VALUES ($1, 'ERP', $2, $3, $4, $5, '500.00', 0)
+       ON CONFLICT (contract_id, year, month) DO UPDATE SET expected_amount = property_monthly_ledger.expected_amount
+       RETURNING id`,
+      [ctx.companyId, contractId, unitId, year, month]
+    );
     await pool.query(
       `INSERT INTO property_payments (company_id, module, contract_id, unit_id, amount, payment_date, for_year, for_month,
-         posting_status, payment_group_id, cash_account_id)
-       VALUES ($1, 'ERP', $2, $3, '500.00', $4, $5, $6, 'SCHEDULED', 'PG-W18-CLOSED', $7)`,
-      [ctx.companyId, contractId, unitId, scheduledDate, year, month, ctx.cashAccountId]
+         posting_status, payment_group_id, cash_account_id, ledger_row_id)
+       VALUES ($1, 'ERP', $2, $3, '500.00', $4, $5, $6, 'SCHEDULED', 'PG-W18-CLOSED', $7, $8)`,
+      [ctx.companyId, contractId, unitId, scheduledDate, year, month, ctx.cashAccountId, monthRow[0].id]
     );
 
     const res = await agent.post("/api/erp/rental/accruals/post-due");

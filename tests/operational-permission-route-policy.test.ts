@@ -43,6 +43,8 @@ const REVIEWED_UNGUARDED_ROUTES: Record<string, string> = {
     "Ticket admin CSV export (#2893); the route itself requires the dedicated exp_ticket_export permission through requireExportAccess in ticketReportingRoutes.ts, on top of the ticket page permission.",
   "GET /api/factory/monthly-production-matrix/export-bales":
     "Paged JSON read of the same bale rows the Monthly Production Matrix page already shows (#2892); gated by that page's factory access like its /bales and /workers siblings. The workbook is built client-side, so it is not a server Excel export.",
+  "GET /api/factory/customer-orders/:id/loading-dispatches/order-overview/trips/:dispatchId/invoice.xlsx":
+    "Per-trip Factory invoice workbook (#3100): a read-only, company-scoped REPEATABLE READ download of one posted trip's own invoice lines, gated by requireAuth and the Factory invoicing loadings tab access (factory/invoicing) like its order-overview JSON siblings. Recorded on 2026-11-11 so main can certify; it has no dedicated export permission today, which the owner should confirm is intended.",
 };
 
 const MUTATION = new Set(["POST", "PUT", "PATCH", "DELETE"]);
