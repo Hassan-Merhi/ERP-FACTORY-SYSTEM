@@ -13,6 +13,7 @@ export interface StockTransferDocumentSnapshot {
   transferId: number;
   voucherId: number;
   companyId: number;
+  inventoryApplied?: boolean | null;
   documentQuantity: string;
   documentValue: string;
 }
@@ -79,6 +80,7 @@ export async function loadDatabaseStockTransferDocuments(input: {
       transferId: stockTransferVouchers.id,
       voucherId: stockTransferVouchers.voucherId,
       companyId: vouchers.companyId,
+      inventoryApplied: stockTransferVouchers.inventoryApplied,
       itemCount: sql<number>`count(${stockTransferItems.id})`,
       documentQuantity: sql<string>`coalesce(sum(${stockTransferItems.quantity}), 0)`,
       documentValue: sql<string>`coalesce(sum(${stockTransferItems.totalAmount}), 0)`,
@@ -97,7 +99,7 @@ export async function loadDatabaseStockTransferDocuments(input: {
         inArray(vouchers.voucherType, ["Stock Transfer", "StockTransfer", "Transfer"])
       )
     )
-    .groupBy(stockTransferVouchers.id, stockTransferVouchers.voucherId, vouchers.companyId);
+    .groupBy(stockTransferVouchers.id, stockTransferVouchers.voucherId, vouchers.companyId, stockTransferVouchers.inventoryApplied);
 
   return rows.map((row: Record<string, unknown>) => {
     const transferId = positiveInteger(row.transferId, "transferId");
@@ -124,6 +126,7 @@ export async function loadDatabaseStockTransferDocuments(input: {
       transferId,
       voucherId,
       companyId: rowCompanyId,
+      inventoryApplied: row.inventoryApplied === true ? true : row.inventoryApplied === false ? false : null,
       documentQuantity: decimalString(row.documentQuantity, "documentQuantity"),
       documentValue: decimalString(row.documentValue, "documentValue"),
     };
@@ -196,6 +199,7 @@ export function mergeStockTransferConvergenceEvidence(input: {
       sourceType: document.sourceType,
       sourceId: document.sourceId,
       companyId,
+      inventoryApplied: document.inventoryApplied,
       documentQuantity: decimalString(document.documentQuantity, "documentQuantity"),
       movementQuantity: decimalString(movement.movementQuantity, "movementQuantity"),
       documentValue: decimalString(document.documentValue, "documentValue"),
