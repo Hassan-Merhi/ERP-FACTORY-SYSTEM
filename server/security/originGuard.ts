@@ -25,6 +25,9 @@ export const ORIGIN_GUARD_EXEMPT_PATHS = new Set<string>([
   // log-only (see server/security/contentSecurityPolicy.ts), so there is
   // nothing to forge: it accepts best-effort telemetry and always answers 204.
   "/api/csp-report",
+  // Green API server-to-server notifications use an independent strong Bearer
+  // token and cannot submit an ERP browser CSRF synchronizer token.
+  "/api/stock-transfer-order/wa-approval/webhook",
 ]);
 
 export const originGuard: RequestHandler = (req, res, next) => {
