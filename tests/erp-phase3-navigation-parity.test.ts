@@ -1,13 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import {
-  ERP_MOBILE_PRIMARY_PATHS,
-  erpRegisteredNavigationUrls,
-} from "../client/src/app/erpPageRegistry";
-import {
-  isErpNavigationItemVisible,
-  isErpRouteRoleAllowed,
-} from "../shared/erpNavigationPolicy";
+import { ERP_MOBILE_PRIMARY_PATHS, erpRegisteredNavigationUrls } from "../client/src/app/erpPageRegistry";
+import { isErpNavigationItemVisible, isErpRouteRoleAllowed } from "../shared/erpNavigationPolicy";
 
 const routes = readFileSync(new URL("../client/src/routes/ErpRoutes.tsx", import.meta.url), "utf8");
 

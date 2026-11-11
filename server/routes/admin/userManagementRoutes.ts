@@ -622,9 +622,9 @@ export function registerUserManagementRoutes(app: Express) {
           .delete(erpUserPageAccess)
           .where(and(eq(erpUserPageAccess.companyId, companyId), eq(erpUserPageAccess.userId, req.params.userId)));
         if (pageKeys.length > 0) {
-          await tx.insert(erpUserPageAccess).values(
-            pageKeys.map((pageKey: string) => ({ companyId, userId: req.params.userId, pageKey }))
-          );
+          await tx
+            .insert(erpUserPageAccess)
+            .values(pageKeys.map((pageKey: string) => ({ companyId, userId: req.params.userId, pageKey })));
         }
         return true;
       });

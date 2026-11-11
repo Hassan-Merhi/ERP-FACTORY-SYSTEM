@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { FEATURE_KEYS } from "../shared/schema/common";
-import { ERP_HIDDEN_COST_FIELD_KEYS, parseErpHiddenCostFields, parseErpPageGrantKeys } from "../shared/erpPageGrantInput";
+import {
+  ERP_HIDDEN_COST_FIELD_KEYS,
+  parseErpHiddenCostFields,
+  parseErpPageGrantKeys,
+} from "../shared/erpPageGrantInput";
 
 describe("ERP page grant input validation", () => {
   it("accepts an empty grant list as an explicit, valid revoke", () => {
@@ -14,8 +18,15 @@ describe("ERP page grant input validation", () => {
 
   it("fails closed on unrecognized, repeated, mixed-type or malformed input", () => {
     for (const invalid of [
-      undefined, null, "", {}, ["accounts", "accounts"],
-      ["accounts", "admin-override"], ["accounts", null], [3], "accounts",
+      undefined,
+      null,
+      "",
+      {},
+      ["accounts", "accounts"],
+      ["accounts", "admin-override"],
+      ["accounts", null],
+      [3],
+      "accounts",
     ]) {
       expect(parseErpPageGrantKeys(invalid)).toBeNull();
     }
@@ -37,8 +48,13 @@ describe("ERP hidden-cost restriction input validation", () => {
 
   it("rejects malformed, unknown and duplicate restriction keys", () => {
     for (const invalid of [
-      undefined, null, ["stock_rates", "stock_rates"], ["stock_rates", "unknown_flag"],
-      [null], ["sales_profit_cost", 1], "stock_rates",
+      undefined,
+      null,
+      ["stock_rates", "stock_rates"],
+      ["stock_rates", "unknown_flag"],
+      [null],
+      ["sales_profit_cost", 1],
+      "stock_rates",
     ]) {
       expect(parseErpHiddenCostFields(invalid)).toBeNull();
     }
