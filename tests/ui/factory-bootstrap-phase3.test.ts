@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { resolveAuthenticatedAppRoute } from "@/app/authenticatedAppRouteGuard";
+import { canUsePropertiesCapability } from "@/properties/config/propertiesNavigation";
 
 const baseGuardInput = {
   isAdminOwner: false,
@@ -63,8 +64,15 @@ describe("Phase 3 factory bootstrap isolation", () => {
     const propertiesRoutes = readFileSync("client/src/app/PropertiesRoutes.tsx", "utf8");
     expect(factoryNav).toContain('"Developer", "ERP Tester"');
     expect(factoryRoutes).toContain('user?.role !== "ERP Tester" && <Route path="/my-settings"');
-    expect(propertiesNav).toContain('user?.role !== "ERP Tester"');
-    expect(propertiesRoutes).toContain('user.role !== "ERP Tester" && <Route path="/properties/my-settings"');
+    // Properties gates personal Settings through the shared capability
+    // manifest: the sidebar reads the gate and the route tree mounts behind it.
+    const personalGate = 'canOpenPersonalSettings = canUsePropertiesCapability("personal", user, selectedCompany)';
+    expect(propertiesNav).toContain(personalGate);
+    expect(propertiesRoutes).toContain('{canOpenPersonalSettings && <Route path="/properties/my-settings"');
+    for (const role of ["Admin", "Developer", "User"]) {
+      expect(canUsePropertiesCapability("personal", null, { companyType: "properties", role })).toBe(true);
+    }
+    expect(canUsePropertiesCapability("personal", null, { companyType: "properties", role: "ERP Tester" })).toBe(false);
   });
 
   it("does not let Factory access loading gate a normal ERP company", () => {

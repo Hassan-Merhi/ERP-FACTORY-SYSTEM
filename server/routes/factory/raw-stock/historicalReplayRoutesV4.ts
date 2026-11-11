@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import { getErrorMessage } from "../../../lib/httpHandlers";
+import { inspectPhase5ReplayScopeSafety } from "../../../services/factory/historical-replay/downstreamGatePhase5";
 import { logger } from "../../../lib/logger";
 import crypto from "crypto";
 import { requireAuth, requireRole } from "../../../auth";
@@ -402,6 +403,7 @@ export function registerHistoricalReplayRoutesV4(app: Express): void {
           try {
             await prepareClient.query("BEGIN");
             await prepareClient.query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY");
+            await prepareClient.query("SELECT set_config('app.current_company_id', $1, true)", [String(companyId)]);
             const executor = prepareClient as unknown as ReplayQueryExecutor;
 
             const selectionPreview = await previewHistoricalCostReplayWithExecutor(executor, companyId);
@@ -420,6 +422,7 @@ export function registerHistoricalReplayRoutesV4(app: Express): void {
               lockRows: false,
             });
             const normalizedScope = normalizeReplayWriteScope(internalScope);
+            const downstreamSafety = await inspectPhase5ReplayScopeSafety(executor, companyId, normalizedScope);
             const preview = internalScope._fullPreview;
             const safeSupplierIds = normalizedScope.supplierIds;
             const fingerprint = computeReplayFingerprint(
@@ -444,11 +447,12 @@ export function registerHistoricalReplayRoutesV4(app: Express): void {
               algorithmVersion: REPLAY_ALGORITHM_VERSION,
               expiresAt: Date.now() + REPAIR_TOKEN_TTL_MS,
             };
-            const confirmationToken = signRepairToken(tokenPayload);
+            const confirmationToken = downstreamSafety.safeToApply ? signRepairToken(tokenPayload) : null;
             await prepareClient.query("COMMIT");
 
             return res.json({
               dryRun: true,
+              downstreamSafety,
               summary: preview.summary,
               safeSupplierIds,
               suppliersToApply: preview.supplierRows.filter((supplier) =>
@@ -598,7 +602,8 @@ export function registerHistoricalReplayRoutesV4(app: Express): void {
           error instanceof StaleTokenError ||
           (error as { code?: string }).code === "STALE_TOKEN" ||
           (error as { code?: string }).code === "HISTORICAL_REPLAY_SCOPE_VIOLATION" ||
-          (error as { code?: string }).code === "HISTORICAL_REPLAY_INVARIANT_VIOLATION"
+          (error as { code?: string }).code === "HISTORICAL_REPLAY_INVARIANT_VIOLATION" ||
+          (error as { code?: string }).code === "HISTORICAL_REPLAY_DOWNSTREAM_UNRECONCILED"
         ) {
           return res.status(409).json({
             message: getErrorMessage(error),

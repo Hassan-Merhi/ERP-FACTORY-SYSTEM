@@ -136,12 +136,12 @@ export function AgentStatementPanel({
               ) : (
                 <TrendingUp className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
               )}
-              <span className="font-mono text-lg font-extrabold tabular-nums text-slate-900 dark:text-white" data-testid="text-agent-balance">
+              <span className={`font-mono text-lg font-extrabold tabular-nums ${drCrClass(fxWallet ? (Number(fxWallet.state.eur) >= 0 ? "Dr" : "Cr") : selectedAccount.balanceSide)}`} data-testid="text-agent-balance">
                 {fxWallet
                   ? `EUR ${Number(fxWallet.state.eur).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                   : formatAmount(Math.abs(selectedAccount.balance))}
               </span>
-              <span className={`text-xs font-semibold ${drCrClass(selectedAccount.balanceSide)}`}>
+              <span className={`text-xs font-semibold ${drCrClass(fxWallet ? (Number(fxWallet.state.eur) >= 0 ? "Dr" : "Cr") : selectedAccount.balanceSide)}`}>
                 {fxWallet ? (Number(fxWallet.state.eur) >= 0 ? "Dr" : "Cr") : (selectedAccount.balanceSide ?? "")}
               </span>
               <span className="text-xs font-medium text-slate-500 dark:text-slate-400">{fxWallet ? "native EUR balance" : "current balance"}</span>
@@ -285,20 +285,20 @@ export function AgentStatementPanel({
           <p className="text-xs text-muted-foreground">this period</p>
         </div>
         <div
-          className={`relative space-y-2 overflow-hidden rounded-2xl border p-4 shadow-sm ${closingBalance >= 0 ? "border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 dark:border-blue-500/45 dark:from-[#153f7d] dark:to-[#0c2452]" : "border-orange-200 bg-gradient-to-br from-orange-50 to-amber-50 dark:border-orange-500/45 dark:from-[#51331c] dark:to-[#322417]"}`}
+          className={`relative space-y-2 overflow-hidden rounded-2xl border p-4 shadow-sm ${closingSide.toLowerCase() === "cr" ? "border-red-200 bg-red-50/70 dark:border-red-500/45 dark:bg-red-950/30" : "border-green-200 bg-green-50/70 dark:border-green-500/45 dark:bg-green-950/30"}`}
         >
           <div className="flex items-center justify-between gap-2">
-            <p className={`text-xs font-bold uppercase tracking-wider ${closingBalance >= 0 ? "text-blue-700 dark:text-blue-200" : "text-orange-700 dark:text-orange-200"}`}>Closing</p>
-            <span className={`rounded-xl p-2 ${closingBalance >= 0 ? "bg-blue-100 text-blue-600 dark:bg-blue-400/20 dark:text-blue-200" : "bg-orange-100 text-orange-600 dark:bg-orange-400/20 dark:text-orange-200"}`}>
+            <p className={`text-xs font-bold uppercase tracking-wider ${drCrClass(closingSide)}`}>Closing</p>
+            <span className={`rounded-xl p-2 ${closingSide.toLowerCase() === "cr" ? "bg-red-100 dark:bg-red-950" : "bg-green-100 dark:bg-green-950"} ${drCrClass(closingSide)}`}>
               <Flag className="h-4 w-4" aria-hidden="true" />
             </span>
           </div>
           <p
-            className={`break-words font-mono text-lg font-extrabold leading-tight tracking-tight tabular-nums ${closingBalance >= 0 ? "text-blue-800 dark:text-blue-100" : "text-orange-800 dark:text-orange-100"}`}
+            className={`break-words font-mono text-lg font-extrabold leading-tight tracking-tight tabular-nums ${drCrClass(closingSide)}`}
           >
             {formatAmount(Math.abs(closingBalance))}
           </p>
-          <p className="text-xs text-muted-foreground">{closingSide}</p>
+          <p className={`text-xs font-semibold ${drCrClass(closingSide)}`}>{closingSide}</p>
         </div>
       </div>
 
@@ -485,9 +485,9 @@ export function AgentStatementPanel({
                       <TableCell className="py-3 text-right font-mono text-sm font-semibold text-foreground">
                         {formatAmount(periodCredit)}
                       </TableCell>
-                      <TableCell className="py-3 text-right font-mono text-sm font-bold">
+                      <TableCell className={`py-3 text-right font-mono text-sm font-bold ${drCrClass(closingSide)}`}>
                         {formatAmount(Math.abs(closingBalance))}{" "}
-                        <span className="text-xs font-normal text-muted-foreground">{closingSide}</span>
+                        <span className={`text-xs font-normal ${drCrClass(closingSide)}`}>{closingSide}</span>
                       </TableCell>
                     </TableRow>
                   )}

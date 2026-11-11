@@ -132,6 +132,11 @@ describe("isFactoryTopLevelPath", () => {
     expect(isFactoryTopLevelPath("/factory/payroll-hub?section=workers")).toBe(true);
   });
 
+  it("treats the Others hub as top level although it shares Overview's access entry", () => {
+    expect(isFactoryTopLevelPath("/factory/others")).toBe(true);
+    expect(isFactoryTopLevelPath("/factory/others?tab=product-comparison")).toBe(true);
+  });
+
   it("does not treat detail pages or ERP pages as Factory top level", () => {
     expect(isFactoryTopLevelPath("/factory/vouchers/55/edit")).toBe(false);
     expect(isFactoryTopLevelPath("/vouchers")).toBe(false);

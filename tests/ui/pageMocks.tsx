@@ -137,12 +137,34 @@ export const cursorNavMock = {
 };
 
 /**
+ * GET /api/factory/my-access for the mocked company (id 1). Factory pages fail
+ * closed: they render nothing permission-gated unless the response names the
+ * selected company and grants Factory access, so a generic `[]` or seeded row
+ * is correctly treated as "no access". Mount suites therefore answer this
+ * endpoint with a real full-access payload unless a case overrides it.
+ */
+export const FACTORY_MY_ACCESS_URL = "/api/factory/my-access";
+export function factoryFullAccess() {
+  return {
+    fullAccess: true,
+    pageKeys: [],
+    hasErpAccess: true,
+    hasFactoryAccess: true,
+    hiddenCostFields: [],
+    hideAllCosts: false,
+    companyId: 1,
+    companyName: "Test Co",
+  };
+}
+
+/**
  * Route-aware fetch stub. `routes` maps a URL prefix to the JSON body returned
  * for it; the longest matching prefix wins and anything else gets `[]`. This
  * lets a page render populated rows (the positive path) instead of only its
  * empty state.
  */
-export function stubFetchRoutes(routes: Record<string, unknown> = {}) {
+export function stubFetchRoutes(overrides: Record<string, unknown> = {}) {
+  const routes: Record<string, unknown> = { [FACTORY_MY_ACCESS_URL]: factoryFullAccess(), ...overrides };
   const prefixes = Object.keys(routes).sort((a, b) => b.length - a.length);
   const fetchMock = vi.fn(async (input: any) => {
     const url = String(typeof input === "string" ? input : (input?.url ?? input));
@@ -237,7 +259,8 @@ export function seededPayload() {
  * payload for endpoints whose rows have a nested shape the generic record
  * cannot satisfy.
  */
-export function stubSeededFetch(overrides: Record<string, () => unknown> = {}) {
+export function stubSeededFetch(routeOverrides: Record<string, () => unknown> = {}) {
+  const overrides: Record<string, () => unknown> = { [FACTORY_MY_ACCESS_URL]: factoryFullAccess, ...routeOverrides };
   (global as any).fetch = vi.fn(async (input: unknown) => ({
     ok: true,
     status: 200,

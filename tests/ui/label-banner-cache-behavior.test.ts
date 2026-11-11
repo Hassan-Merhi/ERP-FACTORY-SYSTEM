@@ -52,6 +52,17 @@ describe("label header images", () => {
 describe("design banner cache", () => {
   const design = A4_DESIGN_OPTIONS[0].value;
   const flush = () => new Promise((resolve) => setTimeout(resolve, 20));
+  // The prefetch is fire-and-forget (fetch, then blob, then FileReader), so a
+  // fixed sleep races it on a loaded runner and a late read then leaks into
+  // the next case. Wait on the observable outcome instead.
+  const everyBannerPrefetched = () =>
+    vi.waitFor(() => {
+      for (const option of A4_DESIGN_OPTIONS) {
+        expect(generateCombinedLabelsHtml([label({ designColor: option.value })])).toContain("data:image/jpeg;base64,");
+      }
+    });
+  const everyBannerRequested = () =>
+    vi.waitFor(() => expect(api.callsTo("GET", /^\/labels\//).length).toBe(A4_DESIGN_OPTIONS.length));
 
   it("uses the network URL, cache-busted by the upload timestamp, until prefetched", () => {
     expect(generateCombinedLabelsHtml([label()], design)).toContain(`/labels/hmd-${design}.jpg`);
@@ -72,7 +83,7 @@ describe("design banner cache", () => {
     }) as unknown as typeof fetch;
 
     prefetchBannersForPrint();
-    await flush();
+    await everyBannerPrefetched();
     globalThis.fetch = realFetch;
 
     expect(generateCombinedLabelsHtml([label({ designColor: design })])).toContain("data:image/jpeg;base64,");
@@ -90,6 +101,7 @@ describe("design banner cache", () => {
     api.get(/^\/labels\//, respond(404, {}));
 
     prefetchBannersForPrint();
+    await everyBannerRequested();
     await flush();
 
     expect(generateCombinedLabelsHtml([label()], design)).toContain(`/labels/hmd-${design}.jpg`);

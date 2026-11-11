@@ -13,6 +13,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { BaleHistoryStatusBadge, getBaleHistoryDisplayStatus } from "./BaleHistoryStatusBadge";
 import { useState } from "react";
 import { useEscapeToParent } from "@/hooks/use-escape-to-parent";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
+import type { FactoryMyAccess } from "@shared/apiTypes";
 
 import { BaleWeightEditDialog, type WeightEditBale } from "@/components/BaleWeightEditDialog";
 import type { BaleDetailResponse } from "./types";
@@ -24,6 +27,7 @@ export function FactoryBaleProductMonthDetail() {
   const { formatDisplayDate } = useDateFormat();
   const { formatAmount } = useCurrencyContext();
   const queryClient = useQueryClient();
+  const { selectedCompany } = useCompany();
   useEscapeToParent();
 
   const productId = params.productId || "0";
@@ -36,13 +40,17 @@ export function FactoryBaleProductMonthDetail() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [weightEditBale, setWeightEditBale] = useState<WeightEditBale | null>(null);
 
-  const { data: myAccess } = useQuery<{ fullAccess: boolean; pageKeys: string[]; hiddenCostFields: string[] }>({
-    queryKey: ["/api/factory/my-access"],
+  const { data: myAccess } = useQuery<FactoryMyAccess>({
+    queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
   });
-  const hiddenCost = myAccess?.hiddenCostFields ?? [];
+  const accessReady = Boolean(selectedCompany?.id && myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true);
+  const hiddenCost = accessReady && myAccess?.hideAllCosts !== true
+    ? (myAccess?.hiddenCostFields ?? [])
+    : ["bale_history_cost_per_kg", "bale_history_total_cost"];
 
   const { data: responseData, isLoading } = useQuery<BaleDetailResponse>({
-    queryKey: ["/api/factory/bale-product-history", productId, locationId, year, month],
+    queryKey: companyQueryKey("/api/factory/bale-product-history", selectedCompany?.id, productId, locationId, year, month),
     queryFn: async () => {
       const response = await fetch(`/api/factory/bale-product-history/${productId}/${locationId}/${year}/${month}`, {
         credentials: "include",
@@ -50,7 +58,7 @@ export function FactoryBaleProductMonthDetail() {
       if (!response.ok) throw new Error("Failed to fetch");
       return response.json();
     },
-    enabled: parseInt(productId) > 0 && parseInt(locationId) > 0 && parseInt(year) > 0 && parseInt(month) > 0,
+    enabled: Boolean(selectedCompany?.id) && parseInt(productId) > 0 && parseInt(locationId) > 0 && parseInt(year) > 0 && parseInt(month) > 0,
   });
 
   const data = responseData?.bales;
@@ -95,9 +103,9 @@ export function FactoryBaleProductMonthDetail() {
 
   const handleWeightSuccess = () => {
     queryClient.invalidateQueries({
-      queryKey: ["/api/factory/bale-product-history", productId, locationId, year, month],
+      queryKey: companyQueryKey("/api/factory/bale-product-history", selectedCompany?.id, productId, locationId, year, month),
     });
-    queryClient.invalidateQueries({ queryKey: ["/api/factory/bale-product-history", productId, locationId, year] });
+    queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/bale-product-history", selectedCompany?.id, productId, locationId, year) });
   };
 
   if (isLoading) {

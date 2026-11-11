@@ -1,8 +1,15 @@
 import { useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { authenticatedUserQueryOptions } from "@/contracts/sessionQueryContracts";
+import { useMixIntegrityAudits } from "./useMixIntegrityAudits";
+import { MixIntegrityAuditControls } from "./MixIntegrityAuditControls";
+import { MixIntegrityAuditResults } from "./MixIntegrityAuditResults";
 import { formatNumber } from "@/lib/formatNumber";
+import { summarizeRecordedMixBatches, recordedMixBatchCost } from "@/lib/recordedMixBatchCost";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
+import { useOptionalCompany } from "@/contexts/CompanyContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Layers, Pencil, Trash2, MessageCircle, Loader2, FileSpreadsheet } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -95,6 +102,11 @@ export function MixBatchList({
 }: MixBatchListProps) {
   const recordChanges = useExistingRecordChangeAccess();
   const recordChangeReason = recordChanges.reason ?? undefined;
+  const selectedCompany = useOptionalCompany()?.selectedCompany;
+  // These diagnostic panels are for Developer accounts only; routine mix operations stay available.
+  const { data: currentUser } = useQuery(authenticatedUserQueryOptions());
+  const canAuditHistoricalMixes = currentUser?.role === "Developer";
+  const monitorCompanyId = selectedCompany?.id ?? null;
   const [showAllMixBatches, setShowAllMixBatches] = useState(false);
   const [isExportingExcel, setIsExportingExcel] = useState(false);
   const [exportPeriod, setExportPeriod] = useState<"month" | "all-time">("month");
@@ -103,6 +115,8 @@ export function MixBatchList({
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   });
   const { toast } = useToast();
+
+  const audits = useMixIntegrityAudits({ canAuditHistoricalMixes, monitorCompanyId });
 
   const handleExportExcel = async () => {
     setIsExportingExcel(true);
@@ -133,6 +147,7 @@ export function MixBatchList({
       setIsExportingExcel(false);
     }
   };
+
   const BATCH_PREVIEW_COUNT = 15;
 
   const visibleMixBatches = useMemo(
@@ -141,14 +156,9 @@ export function MixBatchList({
   );
 
   const fmtKg = (n: number) => formatNumber(n, 3);
-  const sumTotal = mixBatches.reduce((sum, batch) => sum + (parseFloat(batch.totalWeightKg) || 0), 0);
+  const { totalWeightKg: sumTotal, costPerKg: blendedCost } = summarizeRecordedMixBatches(mixBatches);
   const sumUsed = mixBatches.reduce((sum, batch) => sum + (parseFloat(batch.usedKg) || 0), 0);
   const sumRemaining = mixBatches.reduce((sum, batch) => sum + (parseFloat(batch.remainingKg) || 0), 0);
-  const weightedCost = mixBatches.reduce(
-    (sum, batch) => sum + (parseFloat(batch.totalWeightKg) || 0) * (parseFloat(batch.costPerKg) || 0),
-    0
-  );
-  const blendedCost = sumTotal > 0 ? weightedCost / sumTotal : 0;
 
   return (
     <Card
@@ -236,6 +246,8 @@ export function MixBatchList({
           </span>
         </div>
 
+        <MixIntegrityAuditControls audits={audits} />
+
         <MixBatchWhatsAppPreview
           reportRef={mixBatchPrintRef}
           date={mixBatchDate}
@@ -247,6 +259,7 @@ export function MixBatchList({
       </CardHeader>
 
       <CardContent className="min-w-0 p-4 sm:p-5">
+        <MixIntegrityAuditResults audits={audits} />
         {isLoading ? (
           <div className="space-y-2">
             <Skeleton className="h-12 w-full" />
@@ -283,7 +296,7 @@ export function MixBatchList({
                 const total = parseFloat(batch.totalWeightKg) || 0;
                 const used = parseFloat(batch.usedKg) || 0;
                 const remaining = parseFloat(batch.remainingKg) || 0;
-                const cost = parseFloat(batch.displayCostPerKg ?? batch.costPerKg ?? "0") || 0;
+                const cost = recordedMixBatchCost(batch).costPerKg;
                 return (
                   <div
                     key={`mobile-${batch.id}`}
@@ -375,7 +388,7 @@ export function MixBatchList({
                     <TableHead>Name</TableHead>
                     <TableHead className="min-w-32 whitespace-nowrap">Date</TableHead>
                     <TableHead className="min-w-32 text-right whitespace-nowrap">Total (kg)</TableHead>
-                    <TableHead className="min-w-36 text-right whitespace-nowrap">Blended Cost</TableHead>
+                    <TableHead className="min-w-36 text-right whitespace-nowrap">Recorded Cost/kg</TableHead>
                     <TableHead className="min-w-20"></TableHead>
                   </TableRow>
                 </TableHeader>
@@ -406,7 +419,7 @@ export function MixBatchList({
                         </TableCell>
                         <TableCell className="text-right font-mono text-sm">{formatNumber(total)}</TableCell>
                         <TableCell className="text-right font-mono text-sm">
-                          ${parseFloat(batch.displayCostPerKg ?? batch.costPerKg ?? "0").toFixed(4)}/kg
+                          ${recordedMixBatchCost(batch).costPerKg.toFixed(4)}/kg
                         </TableCell>
                         <TableCell onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center gap-1">

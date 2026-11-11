@@ -28,151 +28,174 @@ import { FactoryInvoiceRateRefusalError } from "../../../../services/accounting/
 import { lockCustomerOrderTx, syncOrderTotalsTx } from "../orderChargeLedger";
 import { closedPeriodErrorResponse } from "../../../../lib/closedPeriodError";
 import { getFactoryAccessState } from "../../../../lib/factoryAccessControl";
+import { hasLiveFinancialTripTx, isPostedDispatchBaleTx } from "../../../../services/factory/dispatchTripFinancialGuards";
 import { canEmptyFactoryLoadingContainer } from "@shared/factoryPermissionCatalog";
 
 class DispatchReconciliationRefusal extends Error {
-  constructor(readonly statusCode: number, message: string) { super(message); }
+  constructor(
+    readonly statusCode: number,
+    message: string
+  ) {
+    super(message);
+  }
 }
 
 export function registerOrderBaleRemovalRoutes(app: Express) {
   // POST /api/factory/customer-orders/:id/bales/empty — return every scanned bale to stock
   // without cancelling the loading order, so the loader can start the container again from zero.
-  app.post(
-    "/api/factory/customer-orders/:id/bales/empty",
-    requireAuth,
-    async (req: Request, res: Response) => {
-      try {
-        // Resolve the live company membership; a stale pinned factory id
-        // cannot widen this per-company destructive-action grant.
-        const access = await getFactoryAccessState(req);
-        if (!access || !canEmptyFactoryLoadingContainer({
+  app.post("/api/factory/customer-orders/:id/bales/empty", requireAuth, async (req: Request, res: Response) => {
+    try {
+      // Resolve the live company membership; a stale pinned factory id
+      // cannot widen this per-company destructive-action grant.
+      const access = await getFactoryAccessState(req);
+      if (
+        !access ||
+        !canEmptyFactoryLoadingContainer({
           role: access.role,
           hasFactoryAccess: access.hasFactoryAccess,
           pageKeys: access.pageKeys,
           hiddenCostFields: access.hiddenTabs,
-        })) {
-          return res.status(403).json({ message: "You do not have permission to empty this container" });
+        })
+      ) {
+        return res.status(403).json({ message: "You do not have permission to empty this container" });
+      }
+      const companyId = access.companyId;
+
+      const orderId = parseId(req.params.id);
+      if (orderId === null) return res.status(400).json({ message: "Invalid id" });
+
+      const [order] = await db
+        .select()
+        .from(customerOrders)
+        .where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId)));
+      if (!order) return res.status(404).json({ message: "Order not found" });
+
+      if (!["DRAFT", "LOADING"].includes(order.status)) {
+        return res.status(400).json({
+          message: "Can only empty a container while the loading order is in DRAFT or LOADING",
+        });
+      }
+
+      const userId = req.user?.id ? String(req.user.id) : null;
+      const username = req.user?.username || null;
+
+      const removedCount = await db.transaction(async (tx) => {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, ${companyId})`);
+        // Emptied containers would release shipped goods to stock. Serialize
+        // with the same parent lock as trip financial posting and reject that.
+        await lockCustomerOrderTx(tx, companyId, orderId);
+        if (await hasLiveFinancialTripTx(tx, companyId, orderId)) {
+          throw new DispatchReconciliationRefusal(409,
+            "Financially posted dispatch trips cannot be emptied. Reverse their accounting first.");
         }
-        const companyId = access.companyId;
-
-        const orderId = parseId(req.params.id);
-        if (orderId === null) return res.status(400).json({ message: "Invalid id" });
-
-        const [order] = await db
-          .select()
-          .from(customerOrders)
-          .where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId)));
-        if (!order) return res.status(404).json({ message: "Order not found" });
-
-        if (!["DRAFT", "LOADING"].includes(order.status)) {
-          return res.status(400).json({
-            message: "Can only empty a container while the loading order is in DRAFT or LOADING",
+        if (order.proformaIdUsed) {
+          await acquireProformaCapacityTransactionLock(tx, {
+            companyId,
+            proformaId: order.proformaIdUsed,
           });
         }
 
-        const userId = req.user?.id ? String(req.user.id) : null;
-        const username = req.user?.username || null;
+        // Delete the order links first and use RETURNING so concurrent requests
+        // cannot both claim the same scanned bales.
+        const removedLinks = await tx
+          .delete(customerOrderBales)
+          .where(eq(customerOrderBales.orderId, orderId))
+          .returning({
+            id: customerOrderBales.id,
+            baleId: customerOrderBales.baleId,
+          });
 
-        const removedCount = await db.transaction(async (tx) => {
-          await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, ${companyId})`);
-          if (order.proformaIdUsed) {
-            await acquireProformaCapacityTransactionLock(tx, {
-              companyId,
-              proformaId: order.proformaIdUsed,
-            });
-          }
-
-          // Delete the order links first and use RETURNING so concurrent requests
-          // cannot both claim the same scanned bales.
-          const removedLinks = await tx
-            .delete(customerOrderBales)
-            .where(eq(customerOrderBales.orderId, orderId))
-            .returning({
-              id: customerOrderBales.id,
-              baleId: customerOrderBales.baleId,
-            });
-
-          if (removedLinks.length === 0) {
-            await recalculateOrderTotals(tx, orderId);
-            return 0;
-          }
-
-          const baleIds = removedLinks.map((row) => row.baleId);
-          const baleDetails = await tx
-            .select()
-            .from(factoryBales)
-            .where(and(inArray(factoryBales.id, baleIds), eq(factoryBales.companyId, companyId)));
-
-          await tx
-            .update(factoryBales)
-            .set({ status: "IN_STOCK", updatedAt: new Date() })
-            .where(and(inArray(factoryBales.id, baleIds), eq(factoryBales.companyId, companyId)));
-
-          if (baleDetails.length > 0) {
-            await tx.insert(customerOrderBaleRemovals).values(
-              baleDetails.map((bale) => ({
-                orderId,
-                baleId: bale.id,
-                referenceNumber: bale.referenceNumber,
-                articleCode: bale.articleCode || null,
-                productName: bale.productName || null,
-                weightKg: bale.weightKg,
-                removedByUserId: userId,
-                removedByUsername: username,
-              }))
-            );
-          }
-
+        if (removedLinks.length === 0) {
           await recalculateOrderTotals(tx, orderId);
-          for (const row of removedLinks) {
-            await reversePriorityAllocationForDeletedBaleTx(tx, {
-              companyId,
-              baleId: row.baleId,
-              detachedOrderId: orderId,
-              actor: String(username || userId || "unknown"),
-              actorId: userId,
-              reason: "Loading emptied",
-              deferQueueRecovery: true,
-            });
-          }
-          await reactivateAutoCompletedPriorityLoadingsLockedTx(tx, companyId, [orderId]);
-          return removedLinks.length;
-        });
+          return 0;
+        }
 
-        const [updatedOrder] = await db
-          .select({
-            status: customerOrders.status,
-            totalQtyBales: customerOrders.totalQtyBales,
-            totalWeightKg: sql<string>`COALESCE(
+        const baleIds = removedLinks.map((row) => row.baleId);
+        const baleDetails = await tx
+          .select()
+          .from(factoryBales)
+          .where(and(inArray(factoryBales.id, baleIds), eq(factoryBales.companyId, companyId)));
+
+        await tx
+          .update(factoryBales)
+          .set({ status: "IN_STOCK", updatedAt: new Date() })
+          .where(and(inArray(factoryBales.id, baleIds), eq(factoryBales.companyId, companyId)));
+
+        if (baleDetails.length > 0) {
+          await tx.insert(customerOrderBaleRemovals).values(
+            baleDetails.map((bale) => ({
+              orderId,
+              baleId: bale.id,
+              referenceNumber: bale.referenceNumber,
+              articleCode: bale.articleCode || null,
+              productName: bale.productName || null,
+              weightKg: bale.weightKg,
+              removedByUserId: userId,
+              removedByUsername: username,
+            }))
+          );
+        }
+
+        await recalculateOrderTotals(tx, orderId);
+        for (const row of removedLinks) {
+          await reversePriorityAllocationForDeletedBaleTx(tx, {
+            companyId,
+            baleId: row.baleId,
+            detachedOrderId: orderId,
+            actor: String(username || userId || "unknown"),
+            actorId: userId,
+            reason: "Loading emptied",
+            deferQueueRecovery: true,
+          });
+        }
+        await reactivateAutoCompletedPriorityLoadingsLockedTx(tx, companyId, [orderId]);
+        return removedLinks.length;
+      });
+
+      const [updatedOrder] = await db
+        .select({
+          status: customerOrders.status,
+          totalQtyBales: customerOrders.totalQtyBales,
+          totalWeightKg: sql<string>`COALESCE(
             (SELECT SUM(cob.weight) FROM customer_order_bales cob WHERE cob.order_id = ${customerOrders.id}),
             0
           )::text`,
-          })
-          .from(customerOrders)
-          .where(eq(customerOrders.id, orderId));
-        res.json({
-          message: removedCount === 0 ? "Container is already empty" : "Container emptied and bales returned to stock",
-          removed: removedCount,
-          orderId,
-          status: updatedOrder?.status,
-          totalQtyBales: updatedOrder?.totalQtyBales,
-          totalWeightKg: updatedOrder?.totalWeightKg ?? "0",
-        });
-      } catch (error: unknown) {
-        logger.error("Error emptying loading container:", { error });
-        res.status(500).json({ message: getErrorMessage(error) });
-      }
+        })
+        .from(customerOrders)
+        .where(eq(customerOrders.id, orderId));
+      res.json({
+        message: removedCount === 0 ? "Container is already empty" : "Container emptied and bales returned to stock",
+        removed: removedCount,
+        orderId,
+        status: updatedOrder?.status,
+        totalQtyBales: updatedOrder?.totalQtyBales,
+        totalWeightKg: updatedOrder?.totalWeightKg ?? "0",
+      });
+    } catch (error: unknown) {
+      logger.error("Error emptying loading container:", { error });
+      res.status(500).json({ message: getErrorMessage(error) });
     }
-  );
+  });
 
   app.delete("/api/factory/customer-orders/:id/bales/:baleId", requireAuth, async (req: Request, res: Response) => {
     try {
       const reconciliation = req.query.source === "dispatch-reconciliation";
+      // Phase 7 supersedes the old per-bale loop. This path has no approval
+      // fingerprint and can leave the order partially reconciled; refuse it.
+      // All shortages now use the atomic order-wide POST/remove-unshipped API.
+      if (reconciliation) {
+        return res.status(409).json({
+          code: "USE_ATOMIC_DISPATCH_RECONCILIATION",
+          message: "Use Compare All Trips → approve a batch of unshipped bales with a reason. Individual dispatch-reconciliation deletes are disabled.",
+        });
+      }
       const access = reconciliation ? await getFactoryAccessState(req) : null;
       if (reconciliation && (!access || !["admin", "owner", "developer"].includes(access.role.toLowerCase()))) {
         return res.status(403).json({ message: "Only Admin, Owner or Developer can reconcile missing dispatch bales" });
       }
-      const companyId = reconciliation ? access!.companyId : req.session.factoryCompanyId || req.session.currentCompanyId;
+      const companyId = reconciliation
+        ? access!.companyId
+        : req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
 
       const orderId = parseId(req.params.id);
@@ -209,7 +232,7 @@ export function registerOrderBaleRemovalRoutes(app: Express) {
                AND deleted_at IS NULL
           `);
           const status = resultRows(currentRows)[0]?.status;
-          if (!["LOADING", "PENDING_VERIFICATION"].includes(status || "")) {
+          if (!["LOADING", "PENDING_VERIFICATION"].includes(typeof status === "string" ? status : "")) {
             throw new DispatchReconciliationRefusal(409, "Only active Pending Loading orders can be reconciled");
           }
           const tripRows = await tx.execute(sql`
@@ -228,6 +251,17 @@ export function registerOrderBaleRemovalRoutes(app: Express) {
           .from(customerOrderBales)
           .where(and(eq(customerOrderBales.orderId, orderId), eq(customerOrderBales.id, baleId)));
 
+        // A shipped/financially posted physical bale must NEVER be returned
+        // to stock, even through a normal (non-reconciliation) remove action.
+        if (orderBale && await isPostedDispatchBaleTx(tx, companyId, orderId, orderBale.baleId)) {
+          throw new DispatchReconciliationRefusal(409,
+            "This bale belongs to a financially posted truck. Reverse that trip before removing it.");
+        }
+        if (!reconciliation && await hasLiveFinancialTripTx(tx, companyId, orderId)) {
+          throw new DispatchReconciliationRefusal(409,
+            "Only authorized Pending Loading reconciliation may remove unshipped bales while trips are financially posted.");
+        }
+
         if (reconciliation) {
           if (!orderBale) {
             throw new DispatchReconciliationRefusal(409, "Bale is no longer in this loading. Refresh comparison.");
@@ -239,7 +273,10 @@ export function registerOrderBaleRemovalRoutes(app: Express) {
              LIMIT 1
           `);
           if (resultRows(scanned).length > 0) {
-            throw new DispatchReconciliationRefusal(409, "This bale was verified on a trip and cannot be removed as missing");
+            throw new DispatchReconciliationRefusal(
+              409,
+              "This bale was verified on a trip and cannot be removed as missing"
+            );
           }
         }
 

@@ -16,7 +16,13 @@ function safeCell(input: unknown): string | number | null {
   const text = typeof input === "object" ? JSON.stringify(input) : String(input);
   // Spreadsheet formula injection defense; includes leading whitespace
   // followed by one of Excel's formula/control prefix characters.
-  return /^[\u0000-\u0020]*[=+@\-\t\r\n]/.test(text) ? "'" + text : text;
+  // Leading run = every character up to and including U+0020. The value is
+  // formula-like when that run contains a tab/CR/LF, or when the first
+  // character after it is one of = + @ -.
+  let lead = 0;
+  while (lead < text.length && text.charCodeAt(lead) <= 0x20) lead++;
+  const formulaLike = /[\t\r\n]/.test(text.slice(0, lead)) || (lead < text.length && "=+@-".includes(text[lead]));
+  return formulaLike ? "'" + text : text;
 }
 function formattedDate(input: unknown): string | null {
   if (input == null || input === "") return null;
@@ -29,15 +35,23 @@ function round(value: unknown, digits = 3): number | null {
   return Number.isFinite(n) ? Math.round(n * 10 ** digits) / 10 ** digits : null;
 }
 
-type SheetCell = string | number | null;
-function makeSheet(workbook: ExcelJS.Workbook, name: string, headers: string[], rows: SheetCell[][],
-  numericColumns: number[] = []) {
+type SheetCell = string | number | boolean | null;
+function makeSheet(
+  workbook: ExcelJS.Workbook,
+  name: string,
+  headers: string[],
+  rows: SheetCell[][],
+  numericColumns: number[] = []
+) {
   const ws = workbook.addWorksheet(name, { views: [{ state: "frozen", ySplit: 1 }] });
   ws.addRow(headers);
   for (const row of rows) ws.addRow(row.map((value) => safeCell(value)));
   ws.columns = headers.map((heading, index) => ({
-    key: "col" + index, width: Math.min(55, Math.max(15, heading.length + 5,
-      ...rows.slice(0, 80).map((r) => Math.min(55, String(r[index] ?? "").length + 2)))),
+    key: "col" + index,
+    width: Math.min(
+      55,
+      Math.max(15, heading.length + 5, ...rows.slice(0, 80).map((r) => Math.min(55, String(r[index] ?? "").length + 2)))
+    ),
   }));
   const header = ws.getRow(1);
   header.height = 25;
@@ -57,8 +71,14 @@ function makeSheet(workbook: ExcelJS.Workbook, name: string, headers: string[], 
     }
     row.alignment = { vertical: "middle" };
   }
-  ws.pageSetup = { paperSize: 9, orientation: "landscape", fitToPage: true, fitToWidth: 1,
-    fitToHeight: 0, margins: { left: 0.25, right: 0.25, top: 0.5, bottom: 0.5, header: 0.25, footer: 0.25 } };
+  ws.pageSetup = {
+    paperSize: 9,
+    orientation: "landscape",
+    fitToPage: true,
+    fitToWidth: 1,
+    fitToHeight: 0,
+    margins: { left: 0.25, right: 0.25, top: 0.5, bottom: 0.5, header: 0.25, footer: 0.25 },
+  };
   return ws;
 }
 function formatTrip(trip: { dispatchNumber: number }) {
@@ -114,40 +134,98 @@ export function buildFactoryLoadingDispatchWorkbook(report: DispatchReport): Exc
   makeSheet(wb, "Summary", ["Field", "Value"], meta, []);
 
   if (!report.trip) {
-    makeSheet(wb, "Truck Trips",
+    makeSheet(
+      wb,
+      "Truck Trips",
       ["Trip Number", "Status", "Verified Bales", "Verified KG"],
-      comp.trips.map((t) => [
-        t.dispatchNumber, t.status,
-        t.scannedBales, round(t.scannedWeightKg),
-      ]), [1, 3, 4]);
+      comp.trips.map((t) => [t.dispatchNumber, t.status, t.scannedBales, round(t.scannedWeightKg)]),
+      [1, 3, 4]
+    );
   }
 
-  makeSheet(wb, "Article Comparison",
-    ["Priority", "Article", "Product", "Expected Qty", "Verified Qty", "Matched Qty",
-      "Missing Qty", "Extra Qty", "Expected KG", "Verified KG", "KG Difference", "Result"],
+  makeSheet(
+    wb,
+    "Article Comparison",
+    [
+      "Priority",
+      "Article",
+      "Product",
+      "Expected Qty",
+      "Verified Qty",
+      "Matched Qty",
+      "Missing Qty",
+      "Extra Qty",
+      "Expected KG",
+      "Verified KG",
+      "KG Difference",
+      "Result",
+    ],
     comp.articles.map((a) => [
-      a.priorityRank, a.articleCode, a.productName, a.expectedQty,
-      a.scannedQty, a.matchedQty, a.missingQty, a.extraQty,
-      round(a.expectedWeightKg), round(a.scannedWeightKg),
+      a.priorityRank,
+      a.articleCode,
+      a.productName,
+      a.expectedQty,
+      a.scannedQty,
+      a.matchedQty,
+      a.missingQty,
+      a.extraQty,
+      round(a.expectedWeightKg),
+      round(a.scannedWeightKg),
       a.expectedWeightKg === null ? null : round(a.expectedWeightKg - a.scannedWeightKg),
       a.status,
-    ]), [1, 4, 5, 6, 7, 8, 9, 10, 11]);
+    ]),
+    [1, 4, 5, 6, 7, 8, 9, 10, 11]
+  );
 
-  makeSheet(wb, "Verified Bales",
-    ["Dispatch", "Bale Reference", "Article", "Product", "Weight KG", "Scanned By",
-      "Scan Time UTC", "Bale ID", "Scan ID"],
+  makeSheet(
+    wb,
+    "Verified Bales",
+    [
+      "Dispatch",
+      "Bale Reference",
+      "Article",
+      "Product",
+      "Weight KG",
+      "Scanned By",
+      "Scan Time UTC",
+      "Bale ID",
+      "Scan ID",
+    ],
     report.scans.map((s) => [
-      s.dispatchNumber, s.baleReference, s.articleCode,
-      s.productName, round(s.weightKg), s.scannedBy, formattedDate(s.scannedAt),
-      s.baleId, s.scanId,
-    ]), [1, 5, 8]);
+      s.dispatchNumber,
+      s.baleReference,
+      s.articleCode,
+      s.productName,
+      round(s.weightKg),
+      s.scannedBy,
+      formattedDate(s.scannedAt),
+      s.baleId,
+      s.scanId,
+    ]),
+    [1, 5, 8]
+  );
 
-  const baleHeaders = ["Bale Reference", "Article", "Product", "Weight KG",
-    "Reason", "Scanned Dispatch", "Expected Dispatch", "Scanned By", "Scan Time UTC"];
+  const baleHeaders = [
+    "Bale Reference",
+    "Article",
+    "Product",
+    "Weight KG",
+    "Reason",
+    "Scanned Dispatch",
+    "Expected Dispatch",
+    "Scanned By",
+    "Scan Time UTC",
+  ];
   const baleRow = (b: (typeof comp.missingBales)[number]): SheetCell[] => [
-    b.baleReference, b.articleCode, b.productName, round(b.weightKg),
-    b.reason, b.dispatchNumber ?? null, b.expectedDispatchNumber ?? null,
-    b.scannedBy ?? null, formattedDate(b.scannedAt),
+    b.baleReference,
+    b.articleCode,
+    b.productName,
+    round(b.weightKg),
+    b.reason,
+    b.dispatchNumber ?? null,
+    b.expectedDispatchNumber ?? null,
+    b.scannedBy ?? null,
+    formattedDate(b.scannedAt),
   ];
   makeSheet(wb, "Missing Bales", baleHeaders, comp.missingBales.map(baleRow), [4, 6, 7]);
   makeSheet(wb, "Unexpected Bales", baleHeaders, comp.unexpectedBales.map(baleRow), [4, 6, 7]);
@@ -155,11 +233,18 @@ export function buildFactoryLoadingDispatchWorkbook(report: DispatchReport): Exc
   if (comp.duplicateBales.length) {
     makeSheet(wb, "Duplicate Anomalies", baleHeaders, comp.duplicateBales.map(baleRow), [4, 6, 7]);
   }
-  makeSheet(wb, "Audit Trail",
+  makeSheet(
+    wb,
+    "Audit Trail",
     ["Event ID", "Dispatch ID", "Event", "Actor", "Time UTC", "Details"],
     report.audit.map((a) => [
-      a.id, a.dispatchId, a.eventType, a.actorUsername,
-      formattedDate(a.createdAt), JSON.stringify(a.details),
-    ]));
+      a.id,
+      a.dispatchId,
+      a.eventType,
+      a.actorUsername,
+      formattedDate(a.createdAt),
+      JSON.stringify(a.details),
+    ])
+  );
   return wb;
 }

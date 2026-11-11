@@ -1,5 +1,7 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import { factoryApiRequest } from "@/lib/factoryApi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -11,21 +13,33 @@ import { PageHeader } from "@/components/PageHeader";
 
 interface Alert {
   id: number;
-  severity: "critical" | "warning" | "info";
+  severity: "critical" | "error" | "warning" | "info";
   title: string;
-  message: string;
-  entity: string;
+  message: string | null;
+  entityType: string | null;
+  entityId: number | null;
   createdAt: string;
-  read: boolean;
+  isRead: boolean;
 }
 
 function getSeverityBadge(severity: string) {
-  return <StatusBadge status={severity} label={severity} showIcon={false} data-testid={`badge-severity-${severity}`} />;
+  const visibleSeverity = severity === "error" ? "critical" : severity;
+  return (
+    <StatusBadge
+      status={visibleSeverity}
+      label={visibleSeverity}
+      showIcon={false}
+      data-testid={`badge-severity-${visibleSeverity}`}
+    />
+  );
 }
 
 export default function FactoryAlerts() {
+  const { selectedCompany } = useCompany();
   const alertsQuery = useQuery<Alert[]>({
-    queryKey: ["/api/factory/alerts"],
+    queryKey: companyQueryKey("/api/factory/alerts", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
+    refetchInterval: 300_000,
   });
 
   const generateMutation = useMutation({
@@ -47,7 +61,7 @@ export default function FactoryAlerts() {
   });
 
   const alerts = alertsQuery.data ?? [];
-  const unreadCount = alerts.filter((a) => !a.read).length;
+  const unreadCount = alerts.filter((a) => !a.isRead).length;
 
   return (
     <div className="space-y-6">
@@ -125,7 +139,7 @@ export default function FactoryAlerts() {
                   {alerts.map((alert) => (
                     <TableRow
                       key={alert.id}
-                      className={alert.read ? "opacity-60" : ""}
+                      className={alert.isRead ? "opacity-60" : ""}
                       data-testid={`row-alert-${alert.id}`}
                     >
                       {/* Severity is a labelled field on phone cards; the alert title heads the card. */}
@@ -139,12 +153,14 @@ export default function FactoryAlerts() {
                       >
                         {alert.message}
                       </TableCell>
-                      <TableCell data-testid={`text-alert-entity-${alert.id}`}>{alert.entity}</TableCell>
+                      <TableCell data-testid={`text-alert-entity-${alert.id}`}>
+                        {alert.entityType ? `${alert.entityType} #${alert.entityId ?? "?"}` : "—"}
+                      </TableCell>
                       <TableCell className="font-mono text-sm" data-testid={`text-alert-created-${alert.id}`}>
                         {new Date(alert.createdAt).toLocaleString()}
                       </TableCell>
                       <TableCell>
-                        {!alert.read ? (
+                        {!alert.isRead ? (
                           <Button
                             size="sm"
                             variant="outline"

@@ -37,7 +37,7 @@ export async function loadFactoryLoadingDispatchComparisonSnapshot(
   tx: DbTransaction, companyId: number, orderId: number, selectedDispatchId?: number
 ) {
   const orderRows = resultRows(await tx.execute(sql`
-    SELECT id, status, container_number AS "containerNumber",
+    SELECT id, status, invoice_number AS "invoiceNumber", container_number AS "containerNumber",
            deleted_at AS "deletedAt"
       FROM customer_orders
      WHERE id = ${orderId} AND company_id = ${companyId}

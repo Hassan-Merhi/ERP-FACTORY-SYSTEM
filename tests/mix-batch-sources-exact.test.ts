@@ -4,9 +4,9 @@
  *   - The batch must belong to the active company. The route filtered the
  *     source rows by batch id only, so any tenant's batch id returned that
  *     batch's sources (containers, suppliers, costs).
- *   - A zero-cost container source is shown at the container's raw-stock rate,
- *     computed as decimals at the column's 7 places: 1.3 kg at 0.35 is
- *     0.4550000 (the float path returned "0.45499999999999996").
+ *   - A source whose recorded cost was zero MUST remain zero in its
+ *     historical detail view, even if today's container rate is positive.
+ *     The historical cost is flagged, not silently repriced on read.
  */
 import request from "supertest";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
@@ -104,10 +104,13 @@ describe("mix batch sources", () => {
     expect(response.status).toBe(404);
   });
 
-  it("shows a zero-cost container source at the exact container rate", async () => {
+  it("preserves the recorded zero-cost source despite a positive current container rate", async () => {
     const response = await agent.get(`/api/factory/mix-batches/${batchId}/sources`);
     expect(response.status).toBe(200);
     expect(response.body).toHaveLength(1);
-    expect(response.body[0]).toMatchObject({ costPerKg: "0.3500000", totalCost: "0.4550000" });
+    expect(Number(response.body[0].costPerKg)).toBe(0);
+    expect(Number(response.body[0].totalCost)).toBe(0);
+    expect(response.body[0].recordedUnvalued).toBe(true);
+    expect(response.headers["cache-control"]).toBe("private, no-store");
   });
 });

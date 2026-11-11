@@ -38,6 +38,7 @@ import {
 } from "../../routes/helpers/voucherAuditTrail";
 import { writeAuditEvent, type AuditChanges } from "../audit";
 import { assertTransactionCompanyScope } from "../security/transactionCompanyScope";
+import { isDispatchFinancialVoucherTx } from "../factory/dispatchTripFinancialGuards";
 import type { PostedVoucher, PostedVoucherEntry, VoucherEntryInsertFields } from "./accountingTypes";
 import { postBalancedVoucherTx, type CentralPostingDependencies, type PostingActor } from "./centralPostingEngine";
 import { companyBusinessDate } from "./companyBusinessDate";
@@ -194,6 +195,11 @@ export async function assertVoucherEditableTx(
   options: VoucherEditCheckOptions = {}
 ): Promise<VoucherEditContext> {
   const voucher = await lockVoucherTx(tx, voucherId, options.companyId);
+  if (await isDispatchFinancialVoucherTx(tx, voucher.companyId, voucherId)) {
+    throw new VoucherCorrectionError(409, "DISPATCH_TRIP_VOUCHER_LOCKED",
+      "This voucher belongs to a finalized Factory truck. Correct it through the Dispatch Management financial reversal workflow.",
+      { voucherId });
+  }
   if (await isFxAgentSettlementVoucherTx(tx, voucher.companyId, [voucherId])) {
     throw new VoucherCorrectionError(409, FX_AGENT_VOUCHER_LOCKED, FX_AGENT_VOUCHER_LOCKED_MESSAGE, { voucherId });
   }
@@ -332,6 +338,11 @@ export async function reverseVoucherTx(
   const original = await lockVoucherTx(tx, input.voucherId, input.companyId);
   const companyId = original.companyId;
   await assertTransactionCompanyScope(tx, companyId);
+  if (await isDispatchFinancialVoucherTx(tx, companyId, original.id)) {
+    throw new VoucherCorrectionError(409, "DISPATCH_TRIP_VOUCHER_LOCKED",
+      "Trip-owned vouchers cannot be individually reversed. Use Dispatch Management financial reversal.",
+      { voucherId: original.id });
+  }
   if (await isFxAgentSettlementVoucherTx(tx, companyId, [original.id])) {
     throw new VoucherCorrectionError(409, FX_AGENT_VOUCHER_LOCKED, FX_AGENT_VOUCHER_LOCKED_MESSAGE, {
       voucherId: original.id,
