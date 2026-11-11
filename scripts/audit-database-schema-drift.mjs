@@ -43,7 +43,7 @@ async function manifest() {
 }
 
 async function collect(client) {
-  const [tables,columns,indexes,constraints,triggers,functions,policies]=await Promise.all([
+  const [tables,columns,indexes,constraints,triggers,functions,policies,relations,views,sequences]=await Promise.all([
     client.query(`SELECT c.relname AS table_name FROM pg_class c
       JOIN pg_namespace ns ON ns.oid=c.relnamespace
       WHERE ns.nspname='public' AND c.relkind IN ('r','p')`),
@@ -86,7 +86,19 @@ async function collect(client) {
         pg_get_expr(p.polwithcheck,p.polrelid) AS check_expression
       FROM pg_class c JOIN pg_namespace ns ON ns.oid=c.relnamespace
       LEFT JOIN pg_policy p ON p.polrelid=c.oid
-      WHERE ns.nspname='public' AND c.relkind IN ('r','p')`)
+      WHERE ns.nspname='public' AND c.relkind IN ('r','p')`),
+    client.query(`SELECT c.relname AS relation_name,c.relkind::text AS relation_kind,
+        c.relpersistence::text AS persistence
+      FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+      WHERE n.nspname='public' AND c.relkind IN ('r','p','v','m','S','f')`),
+    client.query(`SELECT c.relname AS view_name,c.relkind::text AS view_kind,
+        pg_get_viewdef(c.oid,true) AS definition
+      FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+      WHERE n.nspname='public' AND c.relkind IN ('v','m')`),
+    client.query(`SELECT sequencename AS sequence_name,data_type,
+        start_value::text,min_value::text,max_value::text,
+        increment_by::text,cycle,cache_size::text
+      FROM pg_sequences WHERE schemaname='public'`)
   ]);
   return {
     tables:tables.rows.map(x=>x.table_name),
@@ -95,7 +107,10 @@ async function collect(client) {
     constraints:constraints.rows,
     triggers:triggers.rows,
     functions:functions.rows,
-    policies:policies.rows
+    policies:policies.rows,
+    relations:relations.rows,
+    views:views.rows,
+    sequences:sequences.rows
   };
 }
 
