@@ -355,3 +355,4 @@ These current-reference documents are indexed here for audit coverage. Their beh
 | [properties-unification-phase6-handoff.md](properties-unification-phase6-handoff.md) | Properties Unification — Phase 6 Parity Audit and Claude Merge Handoff |
 | [properties-unification-phases-12-15-tracker.md](properties-unification-phases-12-15-tracker.md) | Properties Mode — Follow-up Unification Execution Tracker (Phases 12–15) |
 | [properties-unification-phases-7-11-tracker.md](properties-unification-phases-7-11-tracker.md) | Properties Mode — Unification Execution Tracker (Phases 7–11) |
+| [audits/erp-phase4-confirmed-defect-remediation-2026-11-11.md](audits/erp-phase4-confirmed-defect-remediation-2026-11-11.md) | ERP Phase 4 stock transfer convergence defect remediation |

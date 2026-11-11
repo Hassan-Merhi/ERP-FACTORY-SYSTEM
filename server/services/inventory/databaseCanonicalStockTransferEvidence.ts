@@ -80,8 +80,9 @@ export const loadDatabaseCanonicalStockTransferEvidence: StockTransferMovementEv
   // use voucher ID. All journal generations, including reversals and delta
   // revisions, must be read to derive the current signed stock quantity.
   const pairs = sql.join(
-    documents.map((document) =>
-      sql`(
+    documents.map(
+      (document) =>
+        sql`(
         ${String(positiveInteger(document.transferId, "document.transferId"))},
         ${String(positiveInteger(document.voucherId, "document.voucherId"))},
         ${positiveInteger(document.destinationLocationId, "document.destinationLocationId")}

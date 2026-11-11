@@ -68,6 +68,8 @@ describe("ERP Phase 4 canonical transfer import and edit convergence", () => {
           transferId: 866,
           voucherId: 15358,
           companyId: 9,
+          sourceLocationId: 3,
+          destinationLocationId: 4,
           inventoryApplied: false,
           itemCount: 58,
           documentQuantity: "102",
