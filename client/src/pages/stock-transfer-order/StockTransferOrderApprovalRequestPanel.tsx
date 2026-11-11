@@ -238,7 +238,7 @@ export function StockTransferOrderApprovalRequestPanel({ model, open }: { model:
               <div key={batch.id} className="rounded-md border p-2 flex items-center justify-between gap-2 text-xs">
                 <span className="min-w-0 truncate">{batch.destinationName} · {batch.orderCount} orders</span>
                 <Badge variant="outline">{batch.status}</Badge>
-                {config.data?.canConfigure && ["draft", "requested", "stale"].includes(batch.status) &&
+                {config.data?.canConfigure && ["draft", "uncertain", "requested", "stale"].includes(batch.status) &&
                   <Button size="sm" variant="ghost" disabled={cancel.isPending}
                     onClick={async () => {
                       if (await confirmAction({title:"Cancel this approval request? Check WhatsApp delivery first.",tone:"destructive"})) {
