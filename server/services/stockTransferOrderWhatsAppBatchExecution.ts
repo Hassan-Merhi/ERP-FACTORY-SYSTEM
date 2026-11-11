@@ -23,6 +23,7 @@ import {
 } from "./stockTransferOrderWhatsAppApprovalBatch";
 import { runWithDatabaseMaintenanceScope } from "./security/databaseScopeRuntimeContext";
 import { runWithAuditActor } from "./audit/auditActorContext";
+import { chooseStockTransferOrderWaApprovalLeaders, stockTransferOrderWaBusinessConflictCode, type StockTransferOrderWaFrozenRevision } from "./stockTransferOrderWhatsAppDecisionPolicy";
 import { isPhase9LanPrimary } from "../edge/phase9PosOutbox";
 import {
   capturePhase9StockTransferRevisionReviewTx,
@@ -45,11 +46,6 @@ type DecisionEvent = {
   provider_message_id: string | null;
 };
 
-type FrozenRevision = {
-  transfer_id: number;
-  revision_id: number;
-  revision_number_snapshot: number;
-};
 type FinalRevision = {
   revision_id: number;
   transfer_id: number;
@@ -60,43 +56,6 @@ export type StockTransferOrderWaBatchExecution =
   | { outcome: "approved" | "declined"; batchId: number; orderCount: number; revisionCount: number;
       appliedRevisions: number; supersededRevisions: number }
   | { outcome: "skipped" | "waiting"; batchId: number; reason: string };
-
-export function chooseStockTransferOrderWaApprovalLeaders(
-  transferIds: readonly number[],
-  revisions: readonly FrozenRevision[],
-): Map<number, number> {
-  const leaders = new Map<number, FrozenRevision>();
-  const expected = new Set(transferIds);
-  for (const revision of revisions) {
-    if (!expected.has(Number(revision.transfer_id))) {
-      throw new StockTransferOrderApprovalError("STO_WA_REVISION_SCOPE", "Batch revision is not part of its frozen orders.");
-    }
-    const transferId = Number(revision.transfer_id);
-    const current = leaders.get(transferId);
-    if (!current ||
-        Number(revision.revision_number_snapshot) > Number(current.revision_number_snapshot) ||
-        (Number(revision.revision_number_snapshot) === Number(current.revision_number_snapshot) &&
-          Number(revision.revision_id) > Number(current.revision_id))) {
-      leaders.set(transferId, revision);
-    }
-  }
-  if (!transferIds.length || [...expected].some(id => !leaders.has(id))) {
-    throw new StockTransferOrderApprovalError("STO_WA_REVISION_SCOPE", "Every selected order requires frozen pending revisions.");
-  }
-  return new Map([...leaders].map(([transferId, revision]) => [transferId, Number(revision.revision_id)]));
-}
-
-function knownBusinessConflict(error: unknown): string | null {
-  const code = String((error as { code?: string })?.code ?? "");
-  if ([
-    "STO_WA_BATCH_STALE", "STO_WA_AUTH_CHANGED", "STO_WA_DESTINATION_CHANGED",
-    "STO_WA_BATCH_INACTIVE", "STO_WA_REVISION_SCOPE",
-    "STOCK_TRANSFER_REVISION_STALE", "STOCK_TRANSFER_REVISION_STATUS",
-    "STOCK_TRANSFER_REVISION_SCOPE", "STOCK_TRANSFER_INSUFFICIENT_STOCK",
-    "STOCK_TRANSFER_DESTINATION_STOCK_CONFLICT",
-  ].includes(code)) return code;
-  return null;
-}
 
 async function captureLanReviewIfNeeded(
   tx: DbTransaction,
@@ -189,7 +148,7 @@ async function executeWithinTransaction(tx: DbTransaction, batchId: number): Pro
      WHERE company_id=${companyId} AND batch_id=${batchId}
      ORDER BY transfer_id,revision_number_snapshot,revision_id
   `);
-  const revisions = frozen.rows as FrozenRevision[];
+  const revisions = frozen.rows as StockTransferOrderWaFrozenRevision[];
   const leaders = chooseStockTransferOrderWaApprovalLeaders(snapshot.transferIds, revisions);
   const reviewerId = "whatsapp:" + header.authorized_phone_e164;
   const batchKey = String(header.batch_key);
@@ -387,7 +346,7 @@ export async function executeStockTransferOrderWaBatch(
       try {
         return await db.transaction(tx => executeWithinTransaction(tx, batchId));
       } catch (error) {
-        const conflict = knownBusinessConflict(error);
+        const conflict = stockTransferOrderWaBusinessConflictCode(error);
         if (conflict) {
           await markBusinessFailureStale(batchId, conflict);
           logger.warn("[STO WA] Full approval batch rejected; no partial stock changes", {
