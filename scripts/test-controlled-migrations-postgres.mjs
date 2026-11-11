@@ -76,6 +76,14 @@ async function run() {
         CREATE TABLE companies (id integer PRIMARY KEY);
         CREATE TABLE users (id varchar PRIMARY KEY);
         CREATE TABLE factory_containers (id integer PRIMARY KEY, company_id integer, container_number text);
+        CREATE TABLE factory_categories (id integer PRIMARY KEY);
+        CREATE TABLE factory_bale_products (id integer PRIMARY KEY);
+        CREATE TABLE factory_bales (id integer PRIMARY KEY);
+        CREATE TABLE customer_proforma_lines (id integer PRIMARY KEY);
+        CREATE TABLE customer_order_lines (id integer PRIMARY KEY);
+        CREATE TABLE customer_order_bales (id integer PRIMARY KEY);
+        CREATE TABLE customer_order_bales_history (id integer PRIMARY KEY);
+        CREATE TABLE customer_order_expected_lines (id integer PRIMARY KEY);
         CREATE TABLE vouchers (id integer PRIMARY KEY);
         CREATE TABLE voucher_entries (id integer PRIMARY KEY);
         CREATE TABLE sp_containers (id integer PRIMARY KEY);
@@ -97,7 +105,7 @@ async function run() {
       let result=await executeRunner(dbUrl,"--status");
       assert.equal(result.code,0,result.stderr);
       assert.equal(JSON.parse(result.stdout).historyExists,false);
-      assert.equal(JSON.parse(result.stdout).pending.length,4);
+      assert.equal(JSON.parse(result.stdout).pending.length,5);
       assert.equal((await client.query("SELECT to_regclass('public.erp_controlled_migration_history') AS name")).rows[0].name,null);
       console.log("PASS: fresh status is read-only and detects all pending migrations");
 
@@ -117,18 +125,19 @@ async function run() {
       result=await executeRunner(dbUrl,"--apply");
       assert.equal(result.code,0,result.stderr);
       const history=await client.query("SELECT migration_name, checksum FROM erp_controlled_migration_history ORDER BY migration_name");
-      assert.equal(history.rows.length,4);
+      assert.equal(history.rows.length,5);
       assert.equal((await client.query("SELECT to_regclass('public.factory_fixed_production_plans') IS NOT NULL AS ok")).rows[0].ok,true);
       assert.equal((await client.query("SELECT to_regclass('public.exchange_rates_company_date_pair_unique') IS NOT NULL AS ok")).rows[0].ok,true);
       assert.equal((await client.query("SELECT to_regclass('public.user_security_permissions_unique') IS NOT NULL AS ok")).rows[0].ok,true);
       assert.equal((await client.query("SELECT count(*)::int AS n FROM information_schema.columns WHERE table_name='factory_containers' AND column_name='json_cargo_tracking_status'")).rows[0].n,1);
+      assert.equal((await client.query("SELECT to_regclass('public.user_language_preferences') IS NOT NULL AS ok")).rows[0].ok,true);
       console.log("PASS: cleaned isolated fixture resumes and completes all controlled migrations");
 
       // On an up-to-date DB the rerun performs no mutations.
       result=await executeRunner(dbUrl,"--apply");
       assert.equal(result.code,0,result.stderr);
       assert.match(result.stdout,/already up to date/);
-      assert.equal((await client.query("SELECT count(*)::int AS n FROM erp_controlled_migration_history")).rows[0].n,4);
+      assert.equal((await client.query("SELECT count(*)::int AS n FROM erp_controlled_migration_history")).rows[0].n,5);
       console.log("PASS: repeat apply is idempotent");
 
       result=await executeRunner(dbUrl,"--status");
