@@ -10,9 +10,10 @@ import type { Pool } from "pg";
 import { stockTransferOrderWaApprovalFoundation } from "../startup-schema/039-stock-transfer-order-wa-approval";
 import { stockTransferOrderWaWebhookIntegrity } from "../startup-schema/040-stock-transfer-order-wa-webhook";
 import { stockTransferOrderWaDeliverySchema } from "../startup-schema/041-stock-transfer-order-wa-delivery";
+import { stockTransferOrderWaReconciliationSchema } from "../startup-schema/042-stock-transfer-order-wa-reconciliation";
 
 export async function ensureStockTransferOrderWhatsAppApprovalSchema(pool: Pick<Pool, "query">): Promise<void> {
-  for (const statement of [...stockTransferOrderWaApprovalFoundation, ...stockTransferOrderWaWebhookIntegrity, ...stockTransferOrderWaDeliverySchema]) {
+  for (const statement of [...stockTransferOrderWaApprovalFoundation, ...stockTransferOrderWaWebhookIntegrity, ...stockTransferOrderWaDeliverySchema, ...stockTransferOrderWaReconciliationSchema]) {
     await pool.query(statement);
   }
 }
