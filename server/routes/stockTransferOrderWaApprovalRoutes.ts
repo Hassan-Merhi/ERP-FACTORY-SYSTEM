@@ -8,7 +8,8 @@ import { pool, db } from "../db";
 import { logger } from "../lib/logger";
 import { webhookTokenIsConfigured } from "../services/security/stockTransferOrderWaWebhookAuthentication";
 import { stockTransferOrderWaExecutionEnabled } from "../services/stockTransferOrderWhatsAppApprovalWorker";
-import { stockTransferOrderWaDeliveryEnabled } from "../services/stockTransferOrderWaDeliveryWorker";
+import { stockTransferOrderWaDeliveryEnabled, queueStockTransferOrderWaDeliveries } from "../services/stockTransferOrderWaDeliveryWorker";
+import { reconcileStockTransferOrderWaDelivery, StockTransferOrderDeliveryReconciliationError } from "../services/stockTransferOrderWaDeliveryReconciliation";
 import { getActiveCompanyPermissionContext } from "../services/security/activeCompanyPermissionContext";
 import {
   createStockTransferOrderApprovalDraft,
@@ -29,7 +30,7 @@ const senders = requireRole("Admin", "Owner", "Developer", "Manager");
 async function actor(req: Request) {
   const a = await getActiveCompanyPermissionContext(req);
   if (!Number.isSafeInteger(a.companyId) || a.companyId <= 0) throw new Error("Active company required");
-  const onlyAdmins = req.method === "PUT" || /\/(?:legacy|enroll-legacy|cancel)$/.test(req.path);
+  const onlyAdmins = req.method === "PUT" || /\/(?:legacy|enroll-legacy|cancel|reconcile|deliveries)$/.test(req.path);
   const roles = onlyAdmins ? ["Admin", "Owner", "Developer"] : ["Admin", "Owner", "Developer", "Manager"];
   if (!roles.includes(a.role)) {
     const error = Object.assign(new Error("Active company does not permit this approval action"), { status: 403 });
@@ -48,6 +49,9 @@ function errorResponse(res: Response, e: unknown) {
   const status = Number((e as { status?: number })?.status ?? 0);
   if (status === 401 || status === 403) {
     return res.status(status).json({ message: "Active company permission is no longer valid." });
+  }
+  if (e instanceof StockTransferOrderDeliveryReconciliationError) {
+    return res.status(e.status).json({message:e.message});
   }
   if (e instanceof StockTransferOrderApprovalError) {
     return res.status(e.code === "STO_WA_SCOPE" ? 403 : 409).json({ code: e.code, message: e.message });
@@ -286,6 +290,86 @@ export function registerStockTransferOrderWaApprovalRoutes(app: Express,
       finally {client.release();}
     } catch(e){return errorResponse(res,e);}
   });
+
+  /**
+   * Administrators can reconcile ONLY approved Stock Transfer Order batches,
+   * scoped to the currently active ERP company. All review evidence is
+   * immutable; none of these actions touch stock, vouchers or cost data.
+   */
+  app.get("/api/stock-transfer-order/wa-approval/requests/:batchId/deliveries",
+    requireAuth,admins,async(req,res)=>{
+      try{
+        const a=await actor(req),batchId=idOf(req.params.batchId);
+        if(!batchId)return res.status(400).json({message:"Invalid approval batch."});
+        const header=await pool.query(
+          'SELECT b.id,b.batch_key AS "batchKey",b.status,' +
+          'b.whatsapp_instance_id AS "whatsappInstanceId", ' +
+          'b.request_message_id AS "requestMessageId", ' +
+          'b.reviewed_at AS "reviewedAt",b.reviewed_by_phone_e164 AS "reviewedByPhone", ' +
+          'd.name AS "destinationName" ' +
+          'FROM stock_transfer_order_approval_batches b ' +
+          'JOIN locations d ON d.id=b.destination_location_id AND d.company_id=b.company_id ' +
+          'WHERE b.company_id=$1 AND b.id=$2',
+          [a.companyId,batchId]
+        );
+        if(!header.rowCount)return res.status(404).json({message:"Approval batch not found."});
+        const [deliveries,events,workbook]=await Promise.all([
+          pool.query(
+            'SELECT id,recipient_kind AS "recipientKind",recipient_chat_id AS "recipientChatId",' +
+            'status,attempt_count AS "attemptCount",manual_retry_count AS "manualRetryCount",' +
+            'provider_message_id AS "providerMessageId",' +
+            'workbook_sha256 AS "workbookSha256",filename,' +
+            'accepted_at AS "acceptedAt",updated_at AS "updatedAt",last_error AS "lastError" ' +
+            'FROM stock_transfer_order_approval_deliveries ' +
+            'WHERE company_id=$1 AND batch_id=$2 ORDER BY recipient_kind',
+            [a.companyId,batchId]
+          ),
+          pool.query(
+            'SELECT id,event_type AS "eventType",occurred_at AS "occurredAt",details ' +
+            'FROM stock_transfer_order_approval_events ' +
+            "WHERE company_id=$1 AND batch_id=$2 AND event_type IN (" +
+            "'delivery_queued','delivery_accepted','delivery_failed','delivery_uncertain'," +
+            "'delivery_manually_verified','delivery_manual_retry') " +
+            'ORDER BY id DESC LIMIT 60',
+            [a.companyId,batchId]
+          ),
+          pool.query(
+            'SELECT snapshot_sha256 AS "snapshotSha256",workbook_sha256 AS "workbookSha256",' +
+            'filename,rendered_at AS "renderedAt" ' +
+            'FROM stock_transfer_order_approval_workbooks ' +
+            'WHERE company_id=$1 AND batch_id=$2',
+            [a.companyId,batchId]
+          ),
+        ]);
+        return res.json({batch:header.rows[0],deliveries:deliveries.rows,
+          events:events.rows,workbook:workbook.rows[0]||null,
+          deliveryEnabled:stockTransferOrderWaDeliveryEnabled()});
+      }catch(e){return errorResponse(res,e);}
+    }
+  );
+
+  app.post("/api/stock-transfer-order/wa-approval/requests/:batchId/deliveries/:recipientKind/reconcile",
+    requireAuth,admins,async(req,res)=>{
+      try {
+        const a=await actor(req),batchId=idOf(req.params.batchId);
+        const recipientKind=req.params.recipientKind;
+        if(!batchId||!["approval_group","destination"].includes(recipientKind)){
+          return res.status(400).json({message:"Select a valid delivery and approved batch."});
+        }
+        const result=await reconcileStockTransferOrderWaDelivery({
+          companyId:a.companyId,batchId,
+          recipientKind:recipientKind as "approval_group"|"destination",
+          actorId:String(a.userId),payload:req.body,
+        });
+        if(result.status==="pending"){
+          // A fresh, explicitly authorized attempt uses the original frozen
+          // destination and the same stored Excel; the durable sweep retries.
+          queueStockTransferOrderWaDeliveries(batchId);
+        }
+        return res.json(result);
+      }catch(e){return errorResponse(res,e);}
+    }
+  );
 
   app.get("/api/stock-transfer-order/wa-approval/recent",requireAuth,senders,async(req,res)=>{
     try {
