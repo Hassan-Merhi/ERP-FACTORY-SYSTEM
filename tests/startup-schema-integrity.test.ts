@@ -27,6 +27,10 @@ import { posPortDepartureDateSchema } from "../server/startup-schema/035-pos-por
 import { zambiaHistoricalPurchaseCostSchema } from "../server/startup-schema/036-zambia-historical-purchase-cost";
 import { factoryPressingMachineTrackingSchema } from "../server/startup-schema/037-factory-pressing-machine-tracking";
 import { factoryPressingHistoryReportIndexes } from "../server/startup-schema/038-factory-pressing-history-report";
+import { stockTransferOrderWaApprovalFoundation } from "../server/startup-schema/039-stock-transfer-order-wa-approval";
+import { stockTransferOrderWaWebhookIntegrity } from "../server/startup-schema/040-stock-transfer-order-wa-webhook";
+import { stockTransferOrderWaDeliverySchema } from "../server/startup-schema/041-stock-transfer-order-wa-delivery";
+import { stockTransferOrderWaReconciliationSchema } from "../server/startup-schema/042-stock-transfer-order-wa-reconciliation";
 
 /** Statement count of the reviewed composed array. */
 /**
@@ -193,7 +197,7 @@ import { factoryPressingHistoryReportIndexes } from "../server/startup-schema/03
  * count from 1480 to 1481 and changing the pre-034 baseline hash. The
  * statement is idempotent and nothing else moved.
  */
-const EXPECTED_STATEMENT_COUNT = 1481; // 1442 existing + 37 Phase 1 + 1 Phase 6 index + 1 MHD view preference
+const EXPECTED_STATEMENT_COUNT = 1537; // Reviewed 1481 baseline + 44 phase1 + 1 phase3 webhook index
 const EXPECTED_CONTENT_HASH = "83932076dfc1f98fad41c163f700041aedbc3d69fb74d735a2e98a2de7bead2b";
 /**
  * sha256 of JSON.stringify(startupMigrations) for the reviewed composed array.
@@ -318,7 +322,8 @@ describe("startup schema integrity", () => {
             posPortDepartureDateSchema.length +
             zambiaHistoricalPurchaseCostSchema.length +
             factoryPressingMachineTrackingSchema.length +
-            factoryPressingHistoryReportIndexes.length
+            factoryPressingHistoryReportIndexes.length +
+            (stockTransferOrderWaApprovalFoundation.length + stockTransferOrderWaWebhookIntegrity.length + stockTransferOrderWaDeliverySchema.length + stockTransferOrderWaReconciliationSchema.length)
           )
         )
       ),
@@ -334,7 +339,8 @@ describe("startup schema integrity", () => {
       posPortDepartureDateSchema.length +
       zambiaHistoricalPurchaseCostSchema.length +
       factoryPressingMachineTrackingSchema.length +
-      factoryPressingHistoryReportIndexes.length;
+      factoryPressingHistoryReportIndexes.length +
+      (stockTransferOrderWaApprovalFoundation.length + stockTransferOrderWaWebhookIntegrity.length + stockTransferOrderWaDeliverySchema.length + stockTransferOrderWaReconciliationSchema.length);
     expect(startupMigrations.slice(-tail, -tail + supplierTrackingShopDutyDefaultsSchema.length)).toEqual(
       supplierTrackingShopDutyDefaultsSchema
     );
@@ -355,10 +361,12 @@ describe("startup schema integrity", () => {
         -1 -
           zambiaHistoricalPurchaseCostSchema.length -
           factoryPressingMachineTrackingSchema.length -
-          factoryPressingHistoryReportIndexes.length,
+          factoryPressingHistoryReportIndexes.length -
+          (stockTransferOrderWaApprovalFoundation.length + stockTransferOrderWaWebhookIntegrity.length + stockTransferOrderWaDeliverySchema.length + stockTransferOrderWaReconciliationSchema.length),
         -zambiaHistoricalPurchaseCostSchema.length -
           factoryPressingMachineTrackingSchema.length -
-          factoryPressingHistoryReportIndexes.length
+          factoryPressingHistoryReportIndexes.length -
+          (stockTransferOrderWaApprovalFoundation.length + stockTransferOrderWaWebhookIntegrity.length + stockTransferOrderWaDeliverySchema.length + stockTransferOrderWaReconciliationSchema.length)
       )
     ).toEqual(posPortDepartureDateSchema);
   });
@@ -369,8 +377,11 @@ describe("startup schema integrity", () => {
       startupMigrations.slice(
         -zambiaHistoricalPurchaseCostSchema.length -
           factoryPressingMachineTrackingSchema.length -
-          factoryPressingHistoryReportIndexes.length,
-        -factoryPressingMachineTrackingSchema.length - factoryPressingHistoryReportIndexes.length
+          factoryPressingHistoryReportIndexes.length -
+          (stockTransferOrderWaApprovalFoundation.length + stockTransferOrderWaWebhookIntegrity.length + stockTransferOrderWaDeliverySchema.length + stockTransferOrderWaReconciliationSchema.length),
+        -factoryPressingMachineTrackingSchema.length -
+          factoryPressingHistoryReportIndexes.length -
+          (stockTransferOrderWaApprovalFoundation.length + stockTransferOrderWaWebhookIntegrity.length + stockTransferOrderWaDeliverySchema.length + stockTransferOrderWaReconciliationSchema.length)
       )
     ).toEqual(zambiaHistoricalPurchaseCostSchema);
     // Every column statement is an idempotent ADD COLUMN IF NOT EXISTS on one
@@ -393,8 +404,10 @@ describe("startup schema integrity", () => {
     expect(factoryPressingMachineTrackingSchema).toHaveLength(37);
     expect(
       startupMigrations.slice(
-        -factoryPressingMachineTrackingSchema.length - factoryPressingHistoryReportIndexes.length,
-        -factoryPressingHistoryReportIndexes.length
+        -factoryPressingMachineTrackingSchema.length -
+          factoryPressingHistoryReportIndexes.length -
+          (stockTransferOrderWaApprovalFoundation.length + stockTransferOrderWaWebhookIntegrity.length + stockTransferOrderWaDeliverySchema.length + stockTransferOrderWaReconciliationSchema.length),
+        -factoryPressingHistoryReportIndexes.length - (stockTransferOrderWaApprovalFoundation.length + stockTransferOrderWaWebhookIntegrity.length + stockTransferOrderWaDeliverySchema.length + stockTransferOrderWaReconciliationSchema.length)
       )
     ).toEqual(factoryPressingMachineTrackingSchema);
     const ddl = factoryPressingMachineTrackingSchema.join("; ");
@@ -408,11 +421,57 @@ describe("startup schema integrity", () => {
     expect(ddl).not.toMatch(/INSERT\\s+INTO\\s+(?:stock_movements|voucher_entries)/i);
   });
 
-  it("appends the idempotent Phase 6 pressing reporting index last", () => {
+  it("keeps the idempotent Phase 6 pressing reporting index immediately before stage 039", () => {
     expect(factoryPressingHistoryReportIndexes).toHaveLength(1);
-    expect(startupMigrations.slice(-1)).toEqual(factoryPressingHistoryReportIndexes);
+    expect(
+      startupMigrations.slice(
+        -(stockTransferOrderWaApprovalFoundation.length + stockTransferOrderWaWebhookIntegrity.length + stockTransferOrderWaDeliverySchema.length + stockTransferOrderWaReconciliationSchema.length) - 1,
+        -(stockTransferOrderWaApprovalFoundation.length + stockTransferOrderWaWebhookIntegrity.length + stockTransferOrderWaDeliverySchema.length + stockTransferOrderWaReconciliationSchema.length)
+      )
+    ).toEqual(factoryPressingHistoryReportIndexes);
     expect(factoryPressingHistoryReportIndexes[0]).toContain("factory_pressing_confirmations_machine_time_idx");
     expect(factoryPressingHistoryReportIndexes[0]).toContain("WHERE voided_at IS NULL");
+  });
+
+  it("retains Stock Transfer Order approval foundation immediately before the webhook index", () => {
+    expect(stockTransferOrderWaApprovalFoundation).toHaveLength(44);
+    expect(startupMigrations.slice(-44 - stockTransferOrderWaWebhookIntegrity.length - stockTransferOrderWaDeliverySchema.length - stockTransferOrderWaReconciliationSchema.length, -stockTransferOrderWaWebhookIntegrity.length - stockTransferOrderWaDeliverySchema.length - stockTransferOrderWaReconciliationSchema.length))
+      .toEqual(stockTransferOrderWaApprovalFoundation);
+    const sqlText = stockTransferOrderWaApprovalFoundation.join("; ");
+    expect(sqlText).toContain("stock_transfer_order_approval_batches");
+    expect(sqlText).toContain("stock_transfer_order_approval_batch_revisions");
+    expect(sqlText).toContain("workflow_origin");
+    expect(sqlText).not.toMatch(/(?:INSERT\\s+INTO\\s+vouchers|UPDATE\\s+stock_transfer_items|UPDATE\\s+inventory)/i);
+  });
+
+  it("appends one immutable inbound-decision uniqueness index after Phase 1", () => {
+    expect(stockTransferOrderWaWebhookIntegrity).toHaveLength(1);
+    expect(startupMigrations.slice(-1 - stockTransferOrderWaDeliverySchema.length - stockTransferOrderWaReconciliationSchema.length, -stockTransferOrderWaDeliverySchema.length + stockTransferOrderWaReconciliationSchema.length)).toEqual(stockTransferOrderWaWebhookIntegrity);
+    expect(stockTransferOrderWaWebhookIntegrity[0]).toContain("sto_wa_batch_decision_once_uk");
+    expect(stockTransferOrderWaWebhookIntegrity[0]).toContain("'done_received','decline_received'");
+  });
+
+  it("appends the immutable final Excel snapshot schema after all Phase 3 statements", () => {
+    expect(stockTransferOrderWaDeliverySchema).toHaveLength(7);
+    expect(startupMigrations.slice(-stockTransferOrderWaDeliverySchema.length - stockTransferOrderWaReconciliationSchema.length, -stockTransferOrderWaReconciliationSchema.length)).toEqual(stockTransferOrderWaDeliverySchema);
+    const sql = stockTransferOrderWaDeliverySchema.join("; ");
+    expect(sql).toContain("stock_transfer_order_approval_workbooks");
+    expect(sql).toContain("sto_wa_workbook_immutable_trg");
+    expect(sql).toContain("FORCE ROW LEVEL SECURITY");
+    expect(sql).not.toMatch(/\\b(?:UPDATE|DELETE FROM|INSERT INTO)\\s+(?:vouchers|stock_transfer_items|inventory)\\b/i);
+  });
+
+  it("appends Stage 042 administrative reconciliation changes after Stage 041", () => {
+    expect(stockTransferOrderWaReconciliationSchema).toHaveLength(4);
+    expect(startupMigrations.slice(-stockTransferOrderWaReconciliationSchema.length))
+      .toEqual(stockTransferOrderWaReconciliationSchema);
+    const ddl=stockTransferOrderWaReconciliationSchema.join("; ");
+    expect(ddl).toContain("manual_retry_count");
+    expect(ddl).toContain("delivery_manually_verified");
+    expect(ddl).toContain("delivery_manual_retry");
+    expect(ddl).toContain("sto_wa_delivery_status_ck");
+    expect(ddl).toContain("NOT VALID");
+    expect(ddl).not.toMatch(/\\b(?:UPDATE|DELETE FROM|INSERT INTO)\\s+(?:vouchers|stock_transfer_items|inventory)\\b/i);
   });
 
   it("contains only non-empty SQL strings", () => {
