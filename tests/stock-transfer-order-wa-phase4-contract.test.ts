@@ -19,6 +19,9 @@ describe("Stock Transfer Order WhatsApp Phase 4 atomic full-batch execution", ()
     expect(executor).toContain("event_type IN ('done_received','decline_received')");
     expect(executor).toContain('header.status !== "requested"');
     expect(executor).toContain("senderChat !== expectedSender");
+    expect(executor).toContain("rows[0]!.whatsapp_instance_id !== header.whatsapp_instance_id");
+    expect(executor).toContain("rows[0]!.approval_group_chat_id !== header.approval_group_chat_id");
+    expect(executor).toContain("rows[0]!.quoted_message_id !== header.request_message_id");
     expect(executor).toContain("assertStockTransferOrderApprovalBatchCurrent");
     expect(executor).toContain("chooseStockTransferOrderWaApprovalLeaders");
     expect(executor).toContain("FOR UPDATE");
