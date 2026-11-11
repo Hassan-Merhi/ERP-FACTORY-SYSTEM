@@ -143,3 +143,26 @@ test("startup inventory includes central runtime DDL and never declares certifie
   assert.match(src,/certified:false/);
   assert.match(src,/--strict/);
 });
+
+test("scheduled WhatsApp schema can be verified without running startup DDL",()=>{
+  const code=read("server/startup/ensureRuntimeSchema.ts");
+  const sql=read("migrations/controlled/20261111_008_scheduled_whatsapp_delivery.sql");
+  assert.match(code,/SCHEDULED_WHATSAPP_SCHEMA_MODE/);
+  assert.match(code,/Scheduled WhatsApp schema verification failed/);
+  assert.match(sql,/scheduled_whatsapp_occurrences_key_unique/);
+  assert.match(sql,/scheduled_whatsapp_attachments_status_idx/);
+  assert.doesNotMatch(sql,/DELETE\s+FROM|UPDATE\s+scheduled_whatsapp/i);
+});
+
+test("insurance monthly amount additive migration contains no historical member modifications",()=>{
+  const sql=read("migrations/controlled/20261111_009_insurance_monthly_amounts.sql");
+  assert.match(sql,/CREATE TABLE IF NOT EXISTS insurance_member_monthly_amounts/);
+  assert.match(sql,/insurance_member_monthly_amounts_member_month_unique/);
+  assert.doesNotMatch(sql,/INSERT\s+INTO|DELETE\s+FROM|UPDATE\s+insurance_members/i);
+});
+
+test("startup mutation inventory loads every numbered startup SQL module",()=>{
+  const inventory=read("scripts/audit-startup-mutation-coverage.mjs");
+  assert.match(inventory,/readdir\(path\.join\(root,"server\/startup-schema"\)\)/);
+  assert.match(inventory,/targets\.push\(\.\.\.startupModules\)/);
+});
