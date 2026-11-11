@@ -54,3 +54,17 @@ A separate **company-13-scoped** lookup resolves five ledger account IDs that we
 **Eight confirmed cross-company account references.** The other seven HADI references point to account ID 450 (one) and ID 1002 (six). They were not found within the tested company scopes; their true historical identity remains unresolved. This evidence is tracked in issue #3132. No account or voucher writes are justified by a cross-company ID match alone.
 
 **Important distinction:** HADI can legitimately owe or pay another company, but a voucher line that points directly to an account *owned by that other company* breaks the ledger's ownership model; appropriate due-to/due-from or historic attribution must be established before correction.
+
+## Item-level reconciliation detail for HADI exceptions
+
+The company-scoped read-only comparison of current `stock_adjustment_items` against either latest edit-apply batch or original canonical evidence identifies the precise conflicting items:
+
+| Adjustment / voucher | Stock item ID | Persisted document | Canonical evidence | Difference |
+|---|---:|---|---|---|
+| 244 / 12612 | 675 | No current item line | Qty 1, value 107.34 | Movement exists without current item |
+| 244 / 12612 | 1578 | No current item line | Qty 1, value 56.64 | Movement exists without current item |
+| 245 / 12614 | 10 different items | 10 persisted lines, total qty 21/value 1,894.16 | No original `stock-adjustment` movement | Missing evidence; do not backfill blindly |
+| 251 / 12886 | 558 | No current item line | Qty 1, value 94.20 | Latest edit movement exists without current item |
+| 299 / 16521 | 7506 | Qty 2, value 168.98 | Qty 1, value 84.485704 | Quantity/value disagreement |
+
+**Open forensic question:** which source correctly represents physical stock after historic edits or partial failures? Establish edit history and inventory-level state before any correction. Differences above are diagnostic, not approved repair amounts.
