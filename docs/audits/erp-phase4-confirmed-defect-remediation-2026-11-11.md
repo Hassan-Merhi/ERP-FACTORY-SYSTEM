@@ -6,12 +6,12 @@
 
 **Confirmed source defect:** `loadDatabaseStockTransferDocuments` previously required `inventory_applied=true`, even though the post-journal Mali import transfer 866 has 116 legitimate movement legs while that flag is false. `loadDatabaseCanonicalStockTransferEvidence` previously read only `source_type='stock-transfer'` where `source_id=transfer.id`. The two ERP import workflows instead write `source_type='stock-transfer-import'` and `source_type='stock-transfer-import-multi-source'`, both keyed by voucher ID.
 
-**Additional complication, caught during production simulation:** Edited ordinary transfers contain historical issue/reverse generations under the same `stock-transfer` source identity. Summing all rows overcounts the current transfer. For example HADI transfer 779 had a `rev0` issue batch, `rev73` reverse and issue batches, and `rev219` reverse and issue batches. The canonical journal must not delete any of these history records.
+**Additional complication, caught during production simulation:** Edited ordinary transfers contain historical issue/reverse generations under the same `stock-transfer` source identity. **Some immutable revision approvals record delta movements only** (not replacement full quantities), so selecting just the latest issue revision is ALSO wrong. Current stock is the signed net at the destination across ALL batches. For example HADI transfer 779 had `rev0` issue, `rev73` reversal/reissue, and `rev219` reversal/reissue batches. The canonical journal must not delete any of these history records.
 
 **Proposed nonposting code change:**
 1. Load every active, nonoptional, post-journal transfer regardless of its `inventory_applied` flag.
 2. Join canonical evidence by the verified document pair `(transfer_id, voucher_id)`: ordinary transfer rows via transfer ID, both import forms via voucher ID; normalize their reporting identity to transfer ID.
-3. Select only issue movements at the greatest observed revision ID for edited transfers; keep old-style unversioned movement rows only when there is no revision. A reverse-only latest revision produces no applied evidence and is not silently replaced with an older issue.
+3. **Retain every complete and delta revision** and reconstruct current inventory as the signed sum of movement legs at the transfer destination. A full edit reverses old stock and reissues replacement; immutable approval revisions write only their signed delta. Group each idempotency batch and validate precisely two equal-and-opposite legs of the same item/cost before adding its signed destination contribution. This catches missing/corrupt movement pairs without hiding legitimate reversals.
 4. Preserve the document's applied flag in the stock snapshot and add `STOCK_TRANSFER_APPLIED_FLAG_MISMATCH` to the ordinary read-only reconciliation discrepancies when false or null.
 5. Existing canonical balanced-leg checks remain authoritative. No inventory, document, or accounting records are written by the reconciliation.
 
@@ -21,14 +21,14 @@ Companies: HADI=1, HMD Kinshasa=8, Mali=9, GC LSHI=10. Only active, nonoptional,
 
 | Company | Post-journal transfers | Missing evidence | Quantity/value exceptions (>0.01 in value or any qty difference) | Unbalanced issue/receipt | False applied flag with evidence |
 |---|---:|---:|---:|---:|---:|
-| HADI (1) | 101 | 0 | 10 | 0 | 0 |
+| HADI (1) | 101 | 0 | 11 | 0 | 0 |
 | Kinshasa (8) | 10 | 0 | 0 | 0 | 0 |
 | Mali (9) | 24 | 0 | 2 | 0 | 1 |
 | GC (10) | 12 | 0 | 0 | 0 | 0 |
 
 **Mali transfer 866 / voucher 15358:** 58 item lines, document quantity 102 and value 10509.98, canonical 116 issue/receipt legs, receipt quantity 102 and value 10509.98, net quantity 0, but `inventory_applied=false`. This is tracking metadata inconsistent with movement evidence; **do not replay stock**. A separate, approved exact metadata-only correction is appropriate only after source audit.
 
-**Remaining document mismatches:** HADI transfer IDs 787, 811, 825, 833, 838, 846, 847, 890, 896, 928. Mali transfer IDs 900, 927 (both ~0.01 cost differences). These require per-stock-item canonical history and edit lineage before any correction. An apparent mismatch may be historical line edit or costing precision, not missing physical stock.
+**Remaining document mismatches:** HADI transfer IDs 787, 811, 825, 833, 838, 846, 847, 890, 893, 896, 928 (transfer 893 is value-only). Mali transfer IDs 900, 927 (both ~0.01 cost differences). These require per-stock-item canonical history and edit lineage before any correction. Under the correct signed-destination aggregation, HADI has **8 quantity** mismatches and **11 value** mismatches above 0.01. HADI transfer 846 item 515 remains a 350-unit document-versus-journal gap. Across the four examined companies, all **9,489 canonical transfer idempotency batches** have exactly two opposite legs, matching item IDs and rates, and two distinct locations. An apparent mismatch may be historical line edit or costing precision, not missing physical stock.
 
 ## ERP4-02 — Historical HADI voucher ledger account ownership (Phase 1 carryover)
 
@@ -44,7 +44,7 @@ One duplicate HADI company-role pair, 20 TEST company ERP page-grant rows withou
 
 ## Tests and certification
 
-New source tests: `tests/erp-phase4-stock-transfer-convergence.test.ts` covers movement-source pair query, latest revision selection, posted false flag inclusion, missing evidence, and discrepancy reporting. Existing suites `tests/canonical-stock-transfer-journal.test.ts`, `tests/convergence-evidence-loaders.test.ts`, `tests/stock-transfer-lifecycle.test.ts` must pass on the exact final PR SHA.
+New source tests: `tests/erp-phase4-stock-transfer-convergence.test.ts` covers movement-source pair query, full-edit and delta revision netting, paired-leg validation, posted false flag inclusion, missing evidence, and discrepancy reporting. Existing suites `tests/canonical-stock-transfer-journal.test.ts`, `tests/convergence-evidence-loaders.test.ts`, `tests/stock-transfer-lifecycle.test.ts` must pass on the exact final PR SHA.
 
 **Exit criteria still open:** Run targeted tests/typecheck/full CI, validate document and item-level historical mismatches on a disposable fixture, approve any metadata-only update for transfer 866 after audit, resolve Phase 1/2/3 historical blockers with original evidence, and verify deployed SHA. Do not merge or deploy on simulated evidence alone.
 
