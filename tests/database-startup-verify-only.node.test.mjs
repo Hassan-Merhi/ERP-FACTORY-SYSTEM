@@ -72,3 +72,11 @@ test("tenant RLS has read-only verification with no automatic repair import", ()
   assert.match(source, /COMPANY_SCOPE_RLS_MODE !== "verify-only"/);
   assert.match(source, /migrationApplied: !verifyOnly/);
 });
+
+test("supplier scope verification skips historical supplier-ownership updates", () => {
+  const source = read("server/supplierCompanyScopeBridge.mjs");
+  assert.match(source, /SUPPLIER_SCOPE_SCHEMA_MODE/);
+  assert.match(source, /BEGIN READ ONLY/);
+  assert.match(source, /company_code_unique/);
+  assert.match(source, /Supplier company scope schema incomplete/);
+});
