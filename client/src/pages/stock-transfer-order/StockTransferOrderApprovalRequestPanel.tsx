@@ -20,7 +20,8 @@ import type { StockTransferOrderWaSettings } from "../settings/StockTransferOrde
 
 type Model = ReturnType<typeof useStockTransferOrderModel>;
 type EligibleOrder = { transferId: number; voucherNumber: string; pendingRevisions: number; reserved: boolean };
-type Batch = { id: number; batchKey: string; destinationName: string; orderCount: number; revisionCount: number; status: string; requestedAt: string|null; reviewedAt: string|null; reviewedByPhone: string|null };
+type Delivery = { recipientKind: "approval_group" | "destination"; status: "pending" | "sending" | "accepted" | "failed" | "uncertain"; attemptCount: number; acceptedAt: string | null; lastError: string | null };
+type Batch = { id: number; batchKey: string; destinationName: string; orderCount: number; revisionCount: number; status: string; requestedAt: string|null; reviewedAt: string|null; reviewedByPhone: string|null; deliveries?: Delivery[] };
 type RequestOutcome = { ok: boolean; uncertain?: boolean; batchId: number; batchKey?: string; orders?: number; revisions?: number; message: string };
 const base = "/api/stock-transfer-order/wa-approval";
 
@@ -156,6 +157,11 @@ export function StockTransferOrderApprovalRequestPanel({ model, open }: { model:
       {config.data && !config.data.executionEnabled && (
         <p className="text-sm text-amber-600">Automatic full-batch approvals are paused on the server.</p>
       )}
+      {config.data && !config.data.deliveryEnabled && (
+        <p className="text-sm text-amber-600">
+          Final Excel delivery is paused. New approval requests are disabled until it is enabled.
+        </p>
+      )}
       {config.data && !config.data.webhookConfigured && (
         <p className="text-sm text-amber-600">
           Approval webhook token is not configured yet; requests are disabled until the provider
@@ -232,7 +238,7 @@ export function StockTransferOrderApprovalRequestPanel({ model, open }: { model:
           </Button>
         </div>
       )}
-      <Button className="w-full" disabled={!config.data?.connected || !config.data?.webhookConfigured || !config.data?.executionEnabled || !config.data?.settings.enabled ||
+      <Button className="w-full" disabled={!config.data?.connected || !config.data?.webhookConfigured || !config.data?.executionEnabled || !config.data?.deliveryEnabled || !config.data?.settings.enabled ||
           !config.data?.destinations.some(d => d.id === destinationId && d.chatId && d.enabled) ||
           selectedIds.length === 0 || send.isPending || !!result}
         onClick={() => send.mutate()} data-testid="sto-wa-send-approval-request">
@@ -261,6 +267,22 @@ export function StockTransferOrderApprovalRequestPanel({ model, open }: { model:
                     <span className="block text-muted-foreground mt-0.5">
                       {batch.status === "approved" ? "Approved" : "Declined"} by WhatsApp {batch.reviewedByPhone}
                       {" · "}{new Date(batch.reviewedAt).toLocaleString()}
+                    </span>
+                  )}
+                  {batch.status === "approved" && (batch.deliveries?.length || 0) > 0 && (
+                    <span className="block text-muted-foreground mt-1 space-y-1">
+                      {batch.deliveries?.map(delivery => (
+                        <span key={delivery.recipientKind} className="block">
+                          {delivery.recipientKind === "approval_group" ? "Approval group" : "Destination"}:
+                          {" "}{delivery.status === "accepted" ? "Accepted by GREEN API" :
+                          delivery.status === "sending" ? "Sending…" :
+                          delivery.status === "uncertain" ? "Outcome unknown — verify in WhatsApp; no automatic retry" :
+                          delivery.status === "failed" ? "Upload rejected — retry queued if attempts remain" : "Awaiting Excel"}
+                          {delivery.status === "uncertain" && (
+                            <AlertTriangle className="inline h-3 w-3 ml-1 text-amber-600" />
+                          )}
+                        </span>
+                      ))}
                     </span>
                   )}
                 </span>
