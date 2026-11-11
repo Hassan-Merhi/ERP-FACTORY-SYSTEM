@@ -213,6 +213,12 @@ export default function PropertyRentalPage({
   const { data: currentUser } = useQuery(authenticatedUserQueryOptions());
   const currentRole = currentUser?.currentRole ?? currentUser?.role ?? "";
   const canPostDue = currentRole === "Admin" || currentRole === "Owner" || currentRole === "Developer";
+  // Factory Payments Log is an admin page. Do not show a link that the
+  // central Factory route guard will immediately reject for other roles.
+  const showPaymentsLog = Boolean(
+    paymentsLogUrl && !isPropertiesRental &&
+    (rentalModule !== "FACTORY" || currentRole === "Admin" || currentRole === "Developer")
+  );
   const postDue = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", apiBase + "/accruals/post-due");
@@ -325,11 +331,10 @@ export default function PropertyRentalPage({
       <ErpMobileActionsMenu
         data-testid={`button-${testIdPrefix}-actions`}
         actions={[
-          !!paymentsLogUrl &&
-            !isPropertiesRental && {
+          showPaymentsLog && {
               label: "Payments Log",
               icon: ClipboardList,
-              onSelect: () => navigate(paymentsLogUrl),
+              onSelect: () => { if (paymentsLogUrl) navigate(paymentsLogUrl); },
               testId: `button-${testIdPrefix}-payments-log`,
             },
           {
@@ -365,11 +370,11 @@ export default function PropertyRentalPage({
           Pay Selected ({selectedContractIds.size})
         </Button>
       )}
-      {paymentsLogUrl && !isPropertiesRental && (
+      {showPaymentsLog && (
         <Button
           variant="outline"
           size="sm"
-          onClick={() => navigate(paymentsLogUrl)}
+          onClick={() => { if (paymentsLogUrl) navigate(paymentsLogUrl); }}
           data-testid={`button-${testIdPrefix}-payments-log`}
         >
           <ClipboardList className="h-4 w-4 mr-1" />
@@ -475,7 +480,7 @@ export default function PropertyRentalPage({
             silently reported in USD. Individual contracts and ledger balances remain unchanged.
           </p>
         )}
-        {showHistoricalPaid && reconciledAccountTotalsReady && (
+        {currentRole === "Developer" && showHistoricalPaid && reconciledAccountTotalsReady && (
           <p className="text-xs text-muted-foreground" data-testid="properties-rent-account-balance-explanation">
             Combined account balances:{" "}
             <span className="font-semibold tabular-nums">
