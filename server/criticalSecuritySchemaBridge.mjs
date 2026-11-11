@@ -26,6 +26,9 @@ function log(level, message, extra = {}) {
 
 async function ensureCriticalSecuritySchema() {
   if (!connectionString) {
+    if (process.env.CRITICAL_SECURITY_SCHEMA_MODE === "verify-only") {
+      throw new Error("Critical security schema verify-only requires a database connection");
+    }
     log("WARN", "Critical security schema check skipped because no database configuration is available");
     return;
   }
@@ -42,9 +45,38 @@ async function ensureCriticalSecuritySchema() {
 
   try {
     await client.connect();
-    await client.query("BEGIN");
+    const verifyOnly = process.env.CRITICAL_SECURITY_SCHEMA_MODE === "verify-only";
+    await client.query(verifyOnly ? "BEGIN READ ONLY" : "BEGIN");
     await client.query("SET LOCAL lock_timeout = '15s'");
     await client.query("SET LOCAL statement_timeout = '60s'");
+
+    if (verifyOnly) {
+      const check = await client.query(`
+        SELECT
+          to_regclass('public.user_security_permissions') IS NOT NULL AS table_ready,
+          (SELECT count(*)::int FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'user_security_permissions'
+              AND column_name = ANY(ARRAY['id','user_id','company_id','permission','granted_by','created_at','updated_at'])) AS columns_ready,
+          (SELECT count(*)::int FROM pg_index i
+            JOIN pg_class idx ON idx.oid=i.indexrelid
+            JOIN pg_namespace ns ON ns.oid=idx.relnamespace
+            WHERE ns.nspname='public' AND idx.relname='user_security_permissions_unique'
+              AND i.indisvalid AND i.indisready AND i.indisunique) AS unique_ready,
+          (SELECT count(*)::int FROM pg_index i
+            JOIN pg_class idx ON idx.oid=i.indexrelid
+            JOIN pg_namespace ns ON ns.oid=idx.relnamespace
+            WHERE ns.nspname='public' AND idx.relname='user_security_permissions_company_user_idx'
+              AND i.indisvalid AND i.indisready) AS lookup_ready
+      `);
+      const state=check.rows[0] || {};
+      if (state.table_ready !== true || Number(state.columns_ready) !== 7 ||
+          Number(state.unique_ready) !== 1 || Number(state.lookup_ready) !== 1) {
+        throw new Error("Critical security permissions schema incomplete; apply reviewed controlled migration first");
+      }
+      await client.query("ROLLBACK");
+      log("INFO", "Critical security permissions schema verified (read-only; no role grants or cleanup)");
+      return;
+    }
 
     const tableLookup = await client.query(`SELECT to_regclass('public.user_security_permissions') AS table_name`);
 
