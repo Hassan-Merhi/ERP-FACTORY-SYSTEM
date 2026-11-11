@@ -8,6 +8,7 @@ import { pool, db } from "../db";
 import { logger } from "../lib/logger";
 import { webhookTokenIsConfigured } from "../services/security/stockTransferOrderWaWebhookAuthentication";
 import { stockTransferOrderWaExecutionEnabled } from "../services/stockTransferOrderWhatsAppApprovalWorker";
+import { stockTransferOrderWaDeliveryEnabled } from "../services/stockTransferOrderWaDeliveryWorker";
 import { getActiveCompanyPermissionContext } from "../services/security/activeCompanyPermissionContext";
 import {
   createStockTransferOrderApprovalDraft,
@@ -159,7 +160,7 @@ export function registerStockTransferOrderWaApprovalRoutes(app: Express,
       ]);
       const wa = await getWaSettings();
       return res.json({ settings: s.rows[0] || {enabled:false,approvalGroupChatId:null,authorizedPhoneE164:null},
-        destinations: d.rows, groups: g.rows, canConfigure: ["Admin","Owner","Developer"].includes(a.role), connected: Boolean(wa?.enabled && wa.instanceId && wa.apiToken), webhookConfigured: webhookTokenIsConfigured(), executionEnabled: stockTransferOrderWaExecutionEnabled() });
+        destinations: d.rows, groups: g.rows, canConfigure: ["Admin","Owner","Developer"].includes(a.role), connected: Boolean(wa?.enabled && wa.instanceId && wa.apiToken), webhookConfigured: webhookTokenIsConfigured(), executionEnabled: stockTransferOrderWaExecutionEnabled(), deliveryEnabled: stockTransferOrderWaDeliveryEnabled() });
     } catch(e) { return errorResponse(res, e); }
   });
 
@@ -307,7 +308,13 @@ export function registerStockTransferOrderWaApprovalRoutes(app: Express,
         'b.requested_at AS "requestedAt",b.reviewed_at AS "reviewedAt",' +
         'b.reviewed_by_phone_e164 AS "reviewedByPhone",' +
         'd.name AS "destinationName",COUNT(DISTINCT bi.transfer_id)::int AS "orderCount", ' +
-        'COUNT(DISTINCT br.revision_id)::int AS "revisionCount" ' +
+        'COUNT(DISTINCT br.revision_id)::int AS "revisionCount", ' +
+        "(SELECT COALESCE(json_agg(json_build_object(" +
+        "'recipientKind',del.recipient_kind,'status',del.status," +
+        "'attemptCount',del.attempt_count,'lastError',del.last_error," +
+        "'acceptedAt',del.accepted_at) ORDER BY del.recipient_kind),'[]'::json) " +
+        "FROM stock_transfer_order_approval_deliveries del " +
+        "WHERE del.company_id=b.company_id AND del.batch_id=b.id) AS deliveries " +
         'FROM stock_transfer_order_approval_batches b ' +
         'JOIN locations d ON d.id=b.destination_location_id AND d.company_id=b.company_id ' +
         'JOIN stock_transfer_order_approval_batch_items bi ON bi.batch_id=b.id AND bi.company_id=b.company_id ' +
@@ -331,6 +338,11 @@ export function registerStockTransferOrderWaApprovalRoutes(app: Express,
       if(!stockTransferOrderWaExecutionEnabled()) {
         return res.status(409).json({
           message:"WhatsApp approval execution is not enabled on the authoritative ERP server."
+        });
+      }
+      if(!stockTransferOrderWaDeliveryEnabled()) {
+        return res.status(409).json({
+          message:"Approved Excel WhatsApp delivery is paused; enable the main delivery worker before requesting approval."
         });
       }
       if(!webhookTokenIsConfigured()) {
