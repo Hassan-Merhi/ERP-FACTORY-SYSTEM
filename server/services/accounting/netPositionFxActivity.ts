@@ -194,8 +194,8 @@ export async function loadNetPositionFxActivity(input: {
       FROM factory_supplier_payments p
       WHERE p.company_id = ${companyId}
         AND UPPER(COALESCE(p.currency_code, 'USD')) <> 'USD'
-        ${from ? sql`AND p.date >= ${from}::date` : sql``}
-        ${to ? sql`AND p.date <= ${to}::date` : sql``}
+        ${from ? sql`AND p.date >= ${from}` : sql``}
+        ${to ? sql`AND p.date <= ${to}` : sql``}
       ORDER BY p.date DESC, p.id DESC LIMIT 201
     `),
     db.execute(sql`
@@ -211,8 +211,8 @@ export async function loadNetPositionFxActivity(input: {
       FROM factory_supplier_fx_transfers t
       WHERE t.company_id = ${companyId}
         AND UPPER(COALESCE(t.from_currency_code, 'USD')) <> 'USD'
-        ${from ? sql`AND t.date >= ${from}::date` : sql``}
-        ${to ? sql`AND t.date <= ${to}::date` : sql``}
+        ${from ? sql`AND t.date >= ${from}` : sql``}
+        ${to ? sql`AND t.date <= ${to}` : sql``}
       ORDER BY t.date DESC, t.id DESC LIMIT 201
     `)
   ] : [];
