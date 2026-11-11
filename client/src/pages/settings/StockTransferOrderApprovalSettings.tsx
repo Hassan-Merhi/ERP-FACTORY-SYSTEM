@@ -18,6 +18,7 @@ const endpoint = "/api/stock-transfer-order/wa-approval/settings";
 export type StockTransferOrderWaSettings = {
   settings: { enabled: boolean; approvalGroupChatId: string | null; authorizedPhoneE164: string | null };
   connected: boolean;
+  canConfigure: boolean;
   groups: Array<{ id: number; name: string; chatId: string }>;
   destinations: Array<{ id: number; name: string; chatId: string | null; enabled: boolean }>;
 };
@@ -126,11 +127,11 @@ export function StockTransferOrderApprovalSettings() {
             </Badge>
             <div className="flex items-center justify-between rounded-lg border px-3 py-2">
               <Label htmlFor="sto-wa-enabled">Enable requesting Stock Transfer Order approvals</Label>
-              <Switch id="sto-wa-enabled" checked={enabled} onCheckedChange={setEnabled}/>
+              <Switch id="sto-wa-enabled" checked={enabled} disabled={!settings.data?.canConfigure} onCheckedChange={setEnabled}/>
             </div>
             <div className="space-y-2">
               <Label>WhatsApp approval group</Label>
-              <Select value={group} onValueChange={setGroup}>
+              <Select value={group} disabled={!settings.data?.canConfigure} onValueChange={setGroup}>
                 <SelectTrigger data-testid="sto-wa-approval-group">
                   <SelectValue placeholder="Choose a linked WhatsApp group"/>
                 </SelectTrigger>
@@ -142,9 +143,9 @@ export function StockTransferOrderApprovalSettings() {
             <div className="space-y-2">
               <Label htmlFor="sto-wa-authorized-phone">Authorized WhatsApp number (international)</Label>
               <Input id="sto-wa-authorized-phone" value={phone} onChange={e => setPhone(e.target.value)}
-                placeholder="+961XXXXXXXX" data-testid="sto-wa-authorized-phone"/>
+                placeholder="+961XXXXXXXX" disabled={!settings.data?.canConfigure} data-testid="sto-wa-authorized-phone"/>
             </div>
-            <Button disabled={save.isPending || (enabled && (!group || !phone.trim()))}
+            <Button disabled={!settings.data?.canConfigure || save.isPending || (enabled && (!group || !phone.trim()))}
               onClick={() => save.mutate()} data-testid="sto-wa-save-settings">
               {save.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4"/>}
               Save approval settings
