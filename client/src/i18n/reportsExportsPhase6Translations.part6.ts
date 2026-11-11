@@ -279,6 +279,22 @@ export const reportsExportsPhase6TranslationsPart6: readonly Phase6ReportsExport
     ar: "تمت استعادة البالة المحذوفة. تم الحفاظ على كمية مخزون ERP الحالية دون إدخال مكرر.",
     fr: "Balle supprimée restaurée. La quantité de stock ERP existante a été conservée sans réception en double.",
   },
+  // Factory Rentals "Add Shop" refusals (#3158).
+  {
+    en: "The rental database schema is out of date. Please deploy the rental schema repair.",
+    ar: "مخطط قاعدة بيانات الإيجارات غير محدّث. يرجى نشر إصلاح مخطط الإيجارات.",
+    fr: "Le schéma de la base de données des locations n’est pas à jour. Veuillez déployer la réparation du schéma des locations.",
+  },
+  {
+    en: "Could not create the shop. The server logged the database error; please contact an administrator.",
+    ar: "تعذّر إنشاء المحل. سجّل الخادم خطأ قاعدة البيانات؛ يرجى التواصل مع المسؤول.",
+    fr: "Impossible de créer la boutique. Le serveur a consigné l’erreur de base de données ; veuillez contacter un administrateur.",
+  },
+  {
+    en: "RENTAL_PROPERTY_UNITS_TABLE_MISSING: apply the base rental migration",
+    ar: "RENTAL_PROPERTY_UNITS_TABLE_MISSING: طبّق ترحيل الإيجارات الأساسي",
+    fr: "RENTAL_PROPERTY_UNITS_TABLE_MISSING : appliquez la migration de base des locations",
+  },
   {
     en: "Enable at least one weekday",
     ar: "فعّل يومًا واحدًا على الأقل من أيام الأسبوع",
