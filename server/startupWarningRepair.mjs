@@ -145,6 +145,51 @@ async function repairExchangeRateDuplicates(client, tables) {
   };
 }
 
+
+/**
+ * Opt-in verification path for the post-migration deployment stage.
+ * The transaction is READ ONLY, so neither DDL nor data repair can execute.
+ * A missing or invalid schema fails startup instead of continuing silently.
+ */
+async function verifyStartupWarningSchema(client) {
+  await client.query("BEGIN READ ONLY");
+  try {
+    await client.query("SET LOCAL statement_timeout = '20s'");
+    const tables = await existingTables(client);
+    const missing = [];
+    for (const spec of SUPPLIER_SYNC_COLUMNS) {
+      if (!tables.has(spec.table)) {
+        missing.push("table " + spec.table);
+        continue;
+      }
+      const exists = await client.query(
+        `SELECT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema='public' AND table_name=$1 AND column_name=$2
+        ) AS present`, [spec.table, spec.column]
+      );
+      if (exists.rows[0]?.present !== true) missing.push(spec.table + "." + spec.column);
+    }
+    const index = await client.query(`
+      SELECT i.indisvalid AS valid, i.indisready AS ready,
+             pg_get_indexdef(i.indexrelid) AS definition
+      FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+      JOIN pg_index i ON i.indexrelid=c.oid
+      WHERE n.nspname='public' AND c.relname='exchange_rates_company_date_pair_unique'
+    `);
+    if (index.rowCount !== 1 || index.rows[0]?.valid !== true ||
+        index.rows[0]?.ready !== true ||
+        !/ON (?:public\\.)?exchange_rates USING btree \\(company_id, effective_date, from_currency, to_currency\\)/i.test(index.rows[0]?.definition || "")) {
+      missing.push("valid exchange_rates_company_date_pair_unique index");
+    }
+    if (missing.length) throw new Error("Startup schema verify-only failed: " + missing.join(", "));
+    await client.query("ROLLBACK");
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw error;
+  }
+}
+
 export async function runStartupWarningRepair() {
   const options = connectionOptions();
   if (!options) {
@@ -154,9 +199,15 @@ export async function runStartupWarningRepair() {
 
   const client = new Client(options);
   let transactionStarted = false;
+  const verifyOnly = process.env.STARTUP_WARNING_SCHEMA_MODE === "verify-only";
 
   try {
     await client.connect();
+    if (verifyOnly) {
+      await verifyStartupWarningSchema(client);
+      structuredLog("INFO", "Startup warning schema verified without writes");
+      return;
+    }
     await client.query(`SET lock_timeout = '30s'`);
     await client.query(`SET statement_timeout = '120s'`);
     await client.query("BEGIN");
@@ -180,10 +231,11 @@ export async function runStartupWarningRepair() {
       await client.query("ROLLBACK").catch(() => undefined);
     }
 
-    structuredLog("WARN", "Startup database warning repair could not complete; normal server startup will continue", {
+    structuredLog(verifyOnly ? "ERROR" : "WARN", "Startup database warning repair could not complete" + (verifyOnly ? "; startup aborting" : "; normal server startup will continue"), {
       error: error instanceof Error ? error.message : String(error),
       code: error && typeof error === "object" && "code" in error ? error.code : undefined,
     });
+    if (verifyOnly) throw error;
   } finally {
     await client.end().catch(() => undefined);
   }
