@@ -61,9 +61,10 @@ async function run() {
   let created=false;
   try {
     await admin.connect();
-    if((await admin.query("SELECT inet_server_addr() AS ip")).rows[0]?.ip &&
-       !["127.0.0.1","::1"].includes(String((await admin.query("SELECT inet_server_addr() AS ip")).rows[0]?.ip)))
-      throw new Error("PostgreSQL server is not loopback");
+    // PostgreSQL inside a GitHub Actions Docker service reports its Docker
+    // bridge address even though the test connects through 127.0.0.1.
+    // Constrain the configured connection URL to loopback (checked above),
+    // create only unique disposable databases, and require explicit test opt-in.
     await admin.query('CREATE DATABASE "'+dbName+'"');
     created=true;
     const dbUrl=connectionFor(dbName);
