@@ -671,7 +671,7 @@ export default function FactoryLoadingDispatch() {
                         </p>
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
-                      {canDeleteDispatch && selectedTrip.status === "OPEN" && (
+                        {canDeleteDispatch && selectedTrip.status === "OPEN" && (
                         <Button
                           size="sm"
                           variant="destructive"
