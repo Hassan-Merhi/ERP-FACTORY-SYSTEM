@@ -29,6 +29,7 @@ export function StockTransferOrderApprovalRequestPanel({ model, open }: { model:
   const { toast } = useToast();
   const [destinationId, setDestinationId] = useState<number | null>(null);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [legacyIds, setLegacyIds] = useState<number[]>([]);
   const [result, setResult] = useState<RequestOutcome | null>(null);
 
   const config = useQuery<StockTransferOrderWaSettings>({
@@ -47,6 +48,11 @@ export function StockTransferOrderApprovalRequestPanel({ model, open }: { model:
     queryKey: [base + "/eligible", selectedCompany?.id, destinationId],
     queryFn: async () => (await apiRequest("GET", base + "/eligible?destinationId=" + destinationId)).json(),
     enabled: open && !!selectedCompany?.id && !!destinationId,
+  });
+  const legacy = useQuery<{ orders: EligibleOrder[] }>({
+    queryKey: [base + "/legacy", selectedCompany?.id, destinationId],
+    queryFn: async () => (await apiRequest("GET", base + "/legacy?destinationId=" + destinationId)).json(),
+    enabled: open && !!selectedCompany?.id && !!destinationId && !!config.data?.canConfigure,
   });
   const recent = useQuery<{ batches: Batch[] }>({
     queryKey: [base + "/recent", selectedCompany?.id],
@@ -82,6 +88,22 @@ export function StockTransferOrderApprovalRequestPanel({ model, open }: { model:
       title: "Approval request not sent", description: getErrorDetails(error).message, variant: "destructive",
     }),
   });
+  const enrollLegacy = useMutation({
+    mutationFn: async () =>
+      (await apiRequest("POST", base + "/enroll-legacy", {
+        destinationLocationId: destinationId, transferIds: legacyIds, acknowledge: true,
+      })).json(),
+    onSuccess: () => {
+      setLegacyIds([]);
+      queryClient.invalidateQueries({ queryKey: [base + "/legacy"] });
+      queryClient.invalidateQueries({ queryKey: [base + "/eligible"] });
+      toast({ title: "Historical Stock Transfer Orders enabled for approval" });
+    },
+    onError: error => toast({
+      title: "Historical order enrollment failed", description: getErrorDetails(error).message,
+      variant: "destructive",
+    }),
+  });
   const cancel = useMutation({
     mutationFn: async (batchId: number) =>
       (await apiRequest("POST", base + "/requests/" + batchId + "/cancel", {})).json(),
@@ -98,6 +120,7 @@ export function StockTransferOrderApprovalRequestPanel({ model, open }: { model:
   function selectDestination(value: string) {
     setDestinationId(Number(value));
     setSelectedIds([]);
+    setLegacyIds([]);
     setResult(null);
   }
   function toggle(id: number, checked: boolean) {
@@ -155,6 +178,36 @@ export function StockTransferOrderApprovalRequestPanel({ model, open }: { model:
               disabled={!available.length || send.isPending}>Select all eligible</Button>
             <span>{selectedIds.length} orders · {pendingCount} pending revisions</span>
           </div>
+        </div>
+      )}
+      {config.data?.canConfigure && destinationId && (legacy.data?.orders.length || 0) > 0 && (
+        <div className="rounded-lg border p-3 space-y-2">
+          <p className="font-medium text-sm">Older saved Stock Transfer Orders</p>
+          <p className="text-xs text-muted-foreground">
+            Orders created before this workflow need one-time admin enrollment.
+            Only previously saved orders identified as Stock Transfer Orders appear here.
+            This changes an order classification only — not its stock or accounting.
+          </p>
+          <div className="max-h-40 overflow-y-auto space-y-1">
+            {legacy.data?.orders.map(order => (
+              <label key={order.transferId} className="flex gap-2 items-center text-sm rounded border p-2">
+                <Checkbox checked={legacyIds.includes(order.transferId)}
+                  onCheckedChange={checked => setLegacyIds(ids => checked ?
+                    [...new Set([...ids, order.transferId])] : ids.filter(id => id !== order.transferId))}/>
+                {order.voucherNumber} · {order.pendingRevisions} revisions
+              </label>
+            ))}
+          </div>
+          <Button variant="outline" size="sm" disabled={enrollLegacy.isPending || !legacyIds.length}
+            onClick={async () => {
+              if (await confirmAction({
+                title:"Confirm these are historical Stock Transfer Orders? Inventory and vouchers remain unchanged.",
+                tone:"default",
+              })) enrollLegacy.mutate();
+            }}>
+            {enrollLegacy.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : null}
+            Enable {legacyIds.length} older orders
+          </Button>
         </div>
       )}
       <Button className="w-full" disabled={!config.data?.connected || !config.data?.settings.enabled ||
