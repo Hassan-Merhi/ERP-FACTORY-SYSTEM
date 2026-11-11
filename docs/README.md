@@ -355,3 +355,4 @@ These current-reference documents are indexed here for audit coverage. Their beh
 | [properties-unification-phase6-handoff.md](properties-unification-phase6-handoff.md) | Properties Unification — Phase 6 Parity Audit and Claude Merge Handoff |
 | [properties-unification-phases-12-15-tracker.md](properties-unification-phases-12-15-tracker.md) | Properties Mode — Follow-up Unification Execution Tracker (Phases 12–15) |
 | [properties-unification-phases-7-11-tracker.md](properties-unification-phases-7-11-tracker.md) | Properties Mode — Unification Execution Tracker (Phases 7–11) |
+| [factory-unification/phase-2-2026-11-10-continuation.md](factory-unification/phase-2-2026-11-10-continuation.md) | Factory Unification Phase 2 continuation handoff (2026-11-10) |

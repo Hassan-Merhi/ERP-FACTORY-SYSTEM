@@ -9,8 +9,10 @@ describe("Factory Phase 2 reviewed company-scope audit exceptions", () => {
     const schema = source("shared/schema/containers.ts");
     const receipt = source("server/routes/import/factoryDispatchPoImportReceipt.ts");
     expect(schema).toContain('containerNumber: varchar("container_number", { length: 100 }).notNull().unique()');
-    expect(receipt).toContain("SELECT id,status FROM containers WHERE container_number=${scope.identity.containerNumber} LIMIT 1");
-    expect(receipt).toContain('FD_PO_CONTAINER_ALREADY_EXISTS');
+    expect(receipt).toContain(
+      "SELECT id,status FROM containers WHERE container_number=${scope.identity.containerNumber} LIMIT 1"
+    );
+    expect(receipt).toContain("FD_PO_CONTAINER_ALREADY_EXISTS");
     expect(receipt).toContain("WHERE erp_company_id=${companyId}");
     expect(receipt).toContain("WHERE id=${receiptId} AND erp_company_id=${companyId}");
   });
