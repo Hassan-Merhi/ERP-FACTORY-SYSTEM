@@ -156,6 +156,8 @@
     }
   ],
   "classification": {
+    "docs/accounting/hadi-lshi-rent-monthwise-original-voucher-audit-2026-11-10.md": "reference",
+    "docs/audits/erp-phase1-financial-integrity-2026-11-11.md": "reference",
     "docs/stock-transfer-order-whatsapp-approval-phase7.md": "reference",
     "docs/stock-transfer-order-whatsapp-approval-phase6.md": "reference",
     "docs/stock-transfer-order-whatsapp-approval-phase5.md": "reference",
