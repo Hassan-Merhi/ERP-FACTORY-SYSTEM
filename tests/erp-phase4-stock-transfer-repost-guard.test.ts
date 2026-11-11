@@ -9,13 +9,13 @@ const input = { companyId: 9, transferId: 866, voucherId: 15358 };
 function transaction(hasOpenMovement: unknown) {
   return {
     execute: vi.fn().mockResolvedValue({ rows: [{ hasOpenMovement }] }),
-  } as never;
+  };
 }
 
 describe("ERP Phase 4 fail-closed transfer repost guard", () => {
   it("refuses an unapplied transfer if its own canonical movements still carry stock", async () => {
     const tx = transaction(true);
-    await expect(assertTransferNotAlreadyPostedTx(tx, input)).rejects.toThrow(
+    await expect(assertTransferNotAlreadyPostedTx(tx as never, input)).rejects.toThrow(
       "STOCK_TRANSFER_ALREADY_APPLIED_CANONICAL"
     );
     expect(tx.execute).toHaveBeenCalledOnce();
@@ -34,14 +34,14 @@ describe("ERP Phase 4 fail-closed transfer repost guard", () => {
 
   it("fails closed when the database does not prove a false outstanding-movement result", async () => {
     for (const value of [undefined, null, "false", 1]) {
-      await expect(assertTransferNotAlreadyPostedTx(transaction(value), input)).rejects.toThrow(
+      await expect(assertTransferNotAlreadyPostedTx(transaction(value) as never, input)).rejects.toThrow(
         "STOCK_TRANSFER_CANONICAL_EVIDENCE_UNVERIFIED"
       );
     }
   });
 
   it("refuses malformed company, transfer and voucher identities", async () => {
-    await expect(assertTransferNotAlreadyPostedTx(transaction(false), { ...input, companyId: 0 })).rejects.toThrow(
+    await expect(assertTransferNotAlreadyPostedTx(transaction(false) as never, { ...input, companyId: 0 })).rejects.toThrow(
       "STOCK_TRANSFER_POST_IDENTITY_INVALID"
     );
   });
@@ -49,7 +49,7 @@ describe("ERP Phase 4 fail-closed transfer repost guard", () => {
   it("protects BOTH draft-to-post and finalize flows before applying inventory", () => {
     const code = readFileSync(new URL("../server/services/stockTransferLifecycle.ts", import.meta.url), "utf8");
     const save = code.slice(code.indexOf("export async function saveStockTransferLifecycleTx"));
-    const finalize = code.slice(code.indexOf("export async function finalizeStockTransferLifecycleTx"));
+    const finalize = code.slice(code.indexOf("export async function finalizeOptionalStockTransferTx"));
     expect(save).toContain("if (!wasApplied && !willBeOptional)");
     expect(save.indexOf("assertTransferNotAlreadyPostedTx")).toBeLessThan(save.indexOf("validateAndApplyItems"));
     expect(finalize.indexOf("assertTransferNotAlreadyPostedTx")).toBeLessThan(
