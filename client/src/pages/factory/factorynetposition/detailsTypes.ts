@@ -5,6 +5,7 @@ export interface AccountItem {
   code: string;
   value: number;
   category: string;
+  breakdown?: Array<{ label: string; native?: string; usd: number; sourceKey?: string }>;
 }
 
 export interface BreakdownItem {
