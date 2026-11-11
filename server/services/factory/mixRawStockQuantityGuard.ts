@@ -132,6 +132,12 @@ export function splitSupplierShortfall(
   shortfallKg: string | number,
   recordedAddAllowanceKg: string | number
 ): { adjustmentKg: ReturnType<typeof toMoney>; advanceKg: ReturnType<typeof toMoney> } {
+  // toMoney() coerces unparseable text to zero; a non-numeric quantity must be
+  // refused here rather than silently recorded as "no shortfall".
+  const isPlainDecimal = (value: string | number) => /^-?\d+(\.\d+)?$/.test(String(value).trim());
+  if (!isPlainDecimal(shortfallKg) || !isPlainDecimal(recordedAddAllowanceKg)) {
+    throw new MixRawStockShortageError("Invalid supplier shortfall or ADD allowance.");
+  }
   const shortfall = toMoney(shortfallKg);
   const allowance = toMoney(recordedAddAllowanceKg);
   if (!shortfall.isFinite() || !allowance.isFinite() || shortfall.lt(0) || allowance.lt(0)) {
