@@ -20,6 +20,7 @@ export type StockTransferOrderWaSettings = {
   connected: boolean;
   webhookConfigured: boolean;
   executionEnabled: boolean;
+  deliveryEnabled: boolean;
   canConfigure: boolean;
   groups: Array<{ id: number; name: string; chatId: string }>;
   destinations: Array<{ id: number; name: string; chatId: string | null; enabled: boolean }>;
@@ -133,6 +134,9 @@ export function StockTransferOrderApprovalSettings() {
             </Badge>
             <Badge variant={settings.data?.executionEnabled ? "secondary" : "outline"}>
               {settings.data?.executionEnabled ? "Automatic batch approval processor enabled" : "Automatic batch approval processor paused"}
+            </Badge>
+            <Badge variant={settings.data?.deliveryEnabled ? "secondary" : "outline"}>
+              {settings.data?.deliveryEnabled ? "Final Excel delivery worker enabled" : "Final Excel delivery paused"}
             </Badge>
             {!settings.data?.webhookConfigured && (
               <p className="text-xs text-amber-600">
