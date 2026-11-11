@@ -24,14 +24,15 @@ export const REQUIRED = Object.freeze({
   ]
 });
 
-export function summarizeIntegrity({missingTables=[],missingConstraints=[],invalidConstraints=[],missingTriggers=[],metrics={}}) {
+export function summarizeIntegrity({missingTables=[],missingConstraints=[],invalidConstraints=[],missingTriggers=[],metrics={},warnings=[]}) {
   const metricErrors = Object.entries(metrics)
     .filter(([,count])=>Number(count)>0)
     .map(([name,count])=>({name,count:Number(count)}));
   return {
     ok: missingTables.length===0 && missingConstraints.length===0 &&
-      invalidConstraints.length===0 && missingTriggers.length===0 && metricErrors.length===0,
-    missingTables,missingConstraints,invalidConstraints,missingTriggers,metrics,metricErrors
+      missingTriggers.length===0 && metricErrors.length===0,
+    missingTables,missingConstraints,invalidConstraints,missingTriggers,metrics,metricErrors,
+    warnings:[...warnings,...invalidConstraints.map(name=>"Historical NOT VALID constraint requires reviewed validation: "+name)]
   };
 }
 
@@ -78,8 +79,11 @@ async function audit(client) {
   }
   // Never infer that a missing table has zero problematic rows.
   if(missingTables.length===0) {
-    // Tenant RLS needs explicit company context for each request. The audit
-    // uses the same maintenance scope as the existing tenant integrity auditor.
+    // Fail closed when this audit role would silently lose tenant-scoped rows.
+    // Setting row_security=off does NOT bypass RLS for a normal role; PostgreSQL
+    // errors on queries that would be filtered. Use a dedicated authorized
+    // audit role with genuine BYPASSRLS privileges, not a forged app setting.
+    await client.query("SET LOCAL row_security = off");
     await client.query("SELECT set_config('app.company_scope_maintenance', 'on', true)");
     const checks = [
       ["orphan_voucher_entries", `
@@ -118,7 +122,7 @@ async function audit(client) {
 
 async function main() {
   if(!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required");
-  if(process.argv.some(a=>!["--json"].includes(a))) throw new Error("Only --json is supported");
+  if(process.argv.slice(2).some(a=>a!=="--json")) throw new Error("Only --json is supported");
   const client=new pg.Client({
     connectionString: process.env.DATABASE_URL,
     ssl: resolveDatabaseSsl(process.env.DATABASE_URL),
