@@ -233,6 +233,46 @@ databaseDescribe("destination-scoped proforma prices", () => {
     expect(await readLinePrice(secondLineId)).toBe(9);
   });
 
+  it("matches historical KALEMIE proformas to KALEME agreed prices without modifying destinations", async () => {
+    const aliasCode = "KALEMIE-ALIAS-TEST";
+    const historicalId = await fixture.proforma([{ code: aliasCode, qty: 1 }]);
+    const [line] = (await pool.query<{ id: number }>(
+      "SELECT id FROM customer_proforma_lines WHERE proforma_id = $1",
+      [historicalId]
+    )).rows;
+    const saved = await call("PUT", "/api/factory/customer-price-lists/:customerId", fixture.companyId, {
+      params: { customerId: String(fixture.customerId) },
+      query: { destination: "KALEME" },
+      body: [{ articleCode: aliasCode, pricePerBale: 42 }],
+    });
+    expect(saved.statusCode).toBe(200);
+    await pool.query(
+      "UPDATE customer_proformas SET destination = 'KALEMIE' WHERE id = $1",
+      [historicalId]
+    );
+
+    const applied = await call(
+      "POST", "/api/factory/customer-proformas/:id/apply-agreed-prices", fixture.companyId,
+      { params: { id: String(historicalId) } }
+    );
+    expect(applied.statusCode).toBe(200);
+    expect(applied.body).toMatchObject({
+      destination: "KALEME", updated: 1, skipped: 0, fixed: 0, unchanged: 0,
+    });
+    expect(await readLinePrice(line.id)).toBe(42);
+    const { rows } = await pool.query<{ destination: string }>(
+      "SELECT destination FROM customer_proformas WHERE id = $1", [historicalId]
+    );
+    expect(rows[0].destination).toBe("KALEMIE");
+
+    const alreadyCurrent = await call(
+      "POST", "/api/factory/customer-proformas/:id/apply-agreed-prices", fixture.companyId,
+      { params: { id: String(historicalId) } }
+    );
+    expect(alreadyCurrent.statusCode).toBe(200);
+    expect(alreadyCurrent.body).toMatchObject({ updated: 0, unchanged: 1, skipped: 0 });
+  });
+
   it("requires a destination before applying saved agreed prices", async () => {
     const unlinkedId = await fixture.proforma([{ code: "UNLINKED-AGREED-TEST", qty: 1 }]);
     const response = await call(
