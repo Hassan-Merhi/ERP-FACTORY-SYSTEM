@@ -7,10 +7,10 @@
 import process from "node:process";
 import pg from "pg";
 import { resolveDatabaseSsl } from "../server/lib/databaseSsl.mjs";
-import { evaluateCatalogIntegrity, CORE_TABLES, CONTROL_TABLES } from "./database-integrity-catalog-core.mjs";
+import { evaluateCatalogIntegrity, CORE_TABLES, CONTROL_TABLES, REQUIRED_RLS_TABLES } from "./database-integrity-catalog-core.mjs";
 
 export async function inspectCatalog(client) {
-  const requested=[...new Set([...CORE_TABLES,...CONTROL_TABLES])];
+  const requested=[...new Set([...CORE_TABLES,...CONTROL_TABLES,...REQUIRED_RLS_TABLES])];
   const [tables,constraints,triggers,rls] = await Promise.all([
     client.query(`SELECT c.relname AS table_name FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
       WHERE n.nspname='public' AND c.relkind IN ('r','p') AND c.relname=ANY($1::text[])`,[requested]),
@@ -25,7 +25,7 @@ export async function inspectCatalog(client) {
       (SELECT count(*)::int FROM pg_policy p WHERE p.polrelid=c.oid) AS "policyCount"
       FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
       WHERE n.nspname='public' AND c.relkind IN ('r','p') AND
-        (c.relrowsecurity OR c.relforcerowsecurity)`)
+        (c.relrowsecurity OR c.relforcerowsecurity OR c.relname=ANY($1::text[]))`,[REQUIRED_RLS_TABLES])
   ]);
   return {tables:tables.rows.map(x=>x.table_name),constraints:constraints.rows,triggers:triggers.rows,rls:rls.rows};
 }
