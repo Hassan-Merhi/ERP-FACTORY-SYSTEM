@@ -329,3 +329,17 @@ These current-reference documents are indexed here for audit coverage. Their beh
 | [properties-unification-phase6-handoff.md](properties-unification-phase6-handoff.md) | Properties Unification — Phase 6 Parity Audit and Claude Merge Handoff |
 | [properties-unification-phases-12-15-tracker.md](properties-unification-phases-12-15-tracker.md) | Properties Mode — Follow-up Unification Execution Tracker (Phases 12–15) |
 | [properties-unification-phases-7-11-tracker.md](properties-unification-phases-7-11-tracker.md) | Properties Mode — Unification Execution Tracker (Phases 7–11) |
+| [hmd-kinshasa-shop-rent-phase1-audit-2026-11-10.md](accounting/hmd-kinshasa-shop-rent-phase1-audit-2026-11-10.md) | HMD KINSHASA — ERP Shops rent ledger, Phase 1 read-only audit |
+| [hmd-kinshasa-shop-rent-phase2-execution-2026-11-10.md](accounting/hmd-kinshasa-shop-rent-phase2-execution-2026-11-10.md) | Phase 2 — HMD KINSHASA historical rent vouchers (execution handoff) |
+| [hmd-kinshasa-shop-rent-phase3-reconciliation-2026-11-10.md](accounting/hmd-kinshasa-shop-rent-phase3-reconciliation-2026-11-10.md) | HMD KINSHASA — Phase 3 33-month reconciliation and historical payable controls |
+| [hmd-kinshasa-shop-rent-phase4-permanent-prevention-2026-11-10.md](accounting/hmd-kinshasa-shop-rent-phase4-permanent-prevention-2026-11-10.md) | HMD KINSHASA ERP shop rent — Phase 4 permanent prevention |
+| [factory-dispatch-trip-accounting-phase1.md](factory-dispatch-trip-accounting-phase1.md) | Factory Dispatch Trip Accounting and Consolidated Invoice — Phase 1 |
+| [factory-dispatch-trip-accounting-phase10.md](factory-dispatch-trip-accounting-phase10.md) | Factory Dispatch Trip Accounting — Phase 10 Release & Accounting Protection |
+| [factory-dispatch-trip-accounting-phase2.md](factory-dispatch-trip-accounting-phase2.md) | Factory Dispatch Trip Accounting — Phase 2 Handoff |
+| [factory-dispatch-trip-accounting-phase3.md](factory-dispatch-trip-accounting-phase3.md) | Factory Dispatch Trip Accounting — Phase 3 implementation |
+| [factory-dispatch-trip-accounting-phase4.md](factory-dispatch-trip-accounting-phase4.md) | Factory Dispatch Trip Accounting — Phase 4 implementation handoff |
+| [factory-dispatch-trip-accounting-phase5.md](factory-dispatch-trip-accounting-phase5.md) | Factory Dispatch Trip Accounting — Phase 5 Handoff |
+| [factory-dispatch-trip-accounting-phase6.md](factory-dispatch-trip-accounting-phase6.md) | Factory Dispatch Trip Accounting — Phase 6 Handoff |
+| [factory-dispatch-trip-accounting-phase7.md](factory-dispatch-trip-accounting-phase7.md) | Factory Dispatch Trip Accounting — Phase 7 Handoff |
+| [factory-dispatch-trip-accounting-phase8.md](factory-dispatch-trip-accounting-phase8.md) | Factory Dispatch Trip Accounting — Phase 8 Handoff |
+| [factory-dispatch-trip-accounting-phase9.md](factory-dispatch-trip-accounting-phase9.md) | Factory Dispatch Accounting — Phase 9 Report, History & Interface |

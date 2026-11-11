@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import { MoneyDecimal } from "../server/lib/money";
 import { buildTripChargePreview, type TripChargeRow } from
   "../server/routes/factory/customer-orders/loadingDispatchFinancialChargeModel";
+import { codeShape, fragmentFor, shaped } from "./helpers/codeShape";
 
 const root = process.cwd();
 const file = (p: string) => fs.readFileSync(path.join(root, p), "utf8");
@@ -41,71 +42,71 @@ describe("Factory trip financial finalization accounting contracts", () => {
     expect(debits.toFixed(2)).toBe("157.65");
     expect(credits.toFixed(2)).toBe("157.65");
     expect(totals.internalExpenseTotal).toBe("19.30");
-    expect(posting).toContain("TRIP_JOURNAL_UNBALANCED");
+    expect(shaped(posting)).toContain(fragmentFor(posting, "TRIP_JOURNAL_UNBALANCED"));
   });
 
   it("uses the canonical Factory voucher engine with a stable source identity", () => {
-    expect(posting).toContain("postFactoryVoucherTx(tx");
-    expect(posting).toContain('sourceType: "factory-dispatch-trip"');
-    expect(posting).toContain('sourceType: "factory-dispatch-trip-internal"');
-    expect(posting).toContain("customerLedgerAccountTx");
-    expect(posting).toContain("FACTORY_DISPATCH_CLEARING");
-    expect(posting).toContain("keyOf(scope.companyId,scope.dispatchId,revision");
-    expect(posting).toContain('kind = \'POST\'');
-    expect(posting).not.toContain("tx.insert(customerBalances)");
+    expect(shaped(posting)).toContain(fragmentFor(posting, "postFactoryVoucherTx(tx"));
+    expect(shaped(posting)).toContain(fragmentFor(posting, 'sourceType: "factory-dispatch-trip"'));
+    expect(shaped(posting)).toContain(fragmentFor(posting, 'sourceType: "factory-dispatch-trip-internal"'));
+    expect(shaped(posting)).toContain(fragmentFor(posting, "customerLedgerAccountTx"));
+    expect(shaped(posting)).toContain(fragmentFor(posting, "FACTORY_DISPATCH_CLEARING"));
+    expect(shaped(posting)).toContain(fragmentFor(posting, "keyOf(scope.companyId,scope.dispatchId,revision"));
+    expect(shaped(posting)).toContain(fragmentFor(posting, 'kind = \'POST\''));
+    expect(shaped(posting)).not.toContain(fragmentFor(posting, "tx.insert(customerBalances)"));
   });
 
   it("atomically freezes signed bale quantities before real voucher posting", () => {
-    const freeze = posting.indexOf("INSERT INTO factory_dispatch_trip_financial_bales");
-    const voucher = posting.indexOf("postFactoryVoucherTx(tx");
+    const freeze = codeShape(posting).indexOf(codeShape("INSERT INTO factory_dispatch_trip_financial_bales"));
+    const voucher = codeShape(posting).indexOf(codeShape("postFactoryVoucherTx(tx"));
     expect(freeze).toBeGreaterThan(0);
     expect(voucher).toBeGreaterThan(freeze);
-    expect(posting).toContain("loadDispatchTripFinancialSource");
-    expect(posting).toContain("TRIP_CHARGES_CHANGED");
-    expect(posting).toContain("TRIP_SOURCE_CHANGED");
-    expect(routes).toContain("await db.transaction(tx => postDispatchTripFinancialTx");
+    expect(shaped(posting)).toContain(fragmentFor(posting, "loadDispatchTripFinancialSource"));
+    expect(shaped(posting)).toContain(fragmentFor(posting, "TRIP_CHARGES_CHANGED"));
+    expect(shaped(posting)).toContain(fragmentFor(posting, "TRIP_SOURCE_CHANGED"));
+    expect(shaped(routes)).toContain(fragmentFor(routes, "await db.transaction(tx => postDispatchTripFinancialTx"));
   });
 
   it("does not allow the legacy full invoice to duplicate trip receivables", () => {
-    expect(legacyFinalize).toContain("hasAnyPhysicalDispatchTx(tx, companyId, orderId)");
-    expect(legacyFinalize).toContain("DISPATCH_CONSOLIDATION_REQUIRED");
-    expect(legacyRevert).toContain("hasLiveFinancialTripTx(tx, companyId, orderId)");
-    expect(legacyRevert).toContain("DISPATCH_FINANCIAL_REVERSAL_REQUIRED");
+    expect(shaped(legacyFinalize)).toContain(fragmentFor(legacyFinalize, "hasAnyPhysicalDispatchTx(tx, companyId, orderId)"));
+    expect(shaped(legacyFinalize)).toContain(fragmentFor(legacyFinalize, "DISPATCH_CONSOLIDATION_REQUIRED"));
+    expect(shaped(legacyRevert)).toContain(fragmentFor(legacyRevert, "hasLiveFinancialTripTx(tx, companyId, orderId)"));
+    expect(shaped(legacyRevert)).toContain(fragmentFor(legacyRevert, "DISPATCH_FINANCIAL_REVERSAL_REQUIRED"));
   });
 
   it("blocks physical reopening and returns-to-stock after financial posting", () => {
-    expect(lifecycle).toContain("hasLiveFinancialTripTx(tx, scope.companyId, scope.orderId, scope.dispatchId)");
-    expect(baleRemoval).toContain("isPostedDispatchBaleTx(tx, companyId, orderId, orderBale.baleId)");
-    expect(manualGuards).toContain("factory_dispatch_guard_posted_physical_evidence");
-    expect(manualGuards).toContain("factory_dispatch_guard_order_bale_evidence");
+    expect(shaped(lifecycle)).toContain(fragmentFor(lifecycle, "hasLiveFinancialTripTx(tx, scope.companyId, scope.orderId, scope.dispatchId)"));
+    expect(shaped(baleRemoval)).toContain(fragmentFor(baleRemoval, "isPostedDispatchBaleTx(tx, companyId, orderId, orderBale.baleId)"));
+    expect(shaped(manualGuards)).toContain(fragmentFor(manualGuards, "factory_dispatch_guard_posted_physical_evidence"));
+    expect(shaped(manualGuards)).toContain(fragmentFor(manualGuards, "factory_dispatch_guard_order_bale_evidence"));
   });
 
   it("requires confirmation, role checks, and an auditable reason before reversal", () => {
-    expect(routes).toContain("Only Admin, Owner or Developer");
-    expect(routes).toContain('input.confirm !== true');
-    expect(routes).toContain("reverseDispatchTripFinancialTx");
-    expect(posting).toContain("TRIP_EXPORTED_LOCKED");
-    expect(posting).toContain("TRIP_SETTLEMENT_LOCKED");
-    expect(posting).toContain("TRIP_CUSTOMER_CREDIT_RECONCILIATION_REQUIRED");
-    expect(posting).toContain('"TRIP_POSTING_REVERSED"');
-    expect(posting).toContain("mirroredUsdLines");
+    expect(shaped(routes)).toContain(fragmentFor(routes, "Only Admin, Owner or Developer"));
+    expect(shaped(routes)).toContain(fragmentFor(routes, 'input.confirm !== true'));
+    expect(shaped(routes)).toContain(fragmentFor(routes, "reverseDispatchTripFinancialTx"));
+    expect(shaped(posting)).toContain(fragmentFor(posting, "TRIP_EXPORTED_LOCKED"));
+    expect(shaped(posting)).toContain(fragmentFor(posting, "TRIP_SETTLEMENT_LOCKED"));
+    expect(shaped(posting)).toContain(fragmentFor(posting, "TRIP_CUSTOMER_CREDIT_RECONCILIATION_REQUIRED"));
+    expect(shaped(posting)).toContain(fragmentFor(posting, '"TRIP_POSTING_REVERSED"'));
+    expect(shaped(posting)).toContain(fragmentFor(posting, "mirroredUsdLines"));
   });
 
   it("blocks generic voucher edits, reversals and retirement of finalized-truck vouchers", () => {
-    expect(voucherOwnership).toContain("isDispatchFinancialVoucherTx");
-    expect(voucherCorrection).toContain("DISPATCH_TRIP_VOUCHER_LOCKED");
-    expect(voucherRetirement).toContain("DISPATCH_TRIP_VOUCHER_LOCKED");
-    expect(manualGuards).toContain("factory_dispatch_source_voucher_guard");
-    expect(manualGuards).toContain("factory_dispatch_source_voucher_entries_guard");
-    expect(manualGuards).toContain("factory_dispatch_source_posting_identity_guard");
-    expect(posting).toContain("assertHardenedFinancialSchemaTx(tx)");
+    expect(shaped(voucherOwnership)).toContain(fragmentFor(voucherOwnership, "isDispatchFinancialVoucherTx"));
+    expect(shaped(voucherCorrection)).toContain(fragmentFor(voucherCorrection, "DISPATCH_TRIP_VOUCHER_LOCKED"));
+    expect(shaped(voucherRetirement)).toContain(fragmentFor(voucherRetirement, "DISPATCH_TRIP_VOUCHER_LOCKED"));
+    expect(shaped(manualGuards)).toContain(fragmentFor(manualGuards, "factory_dispatch_source_voucher_guard"));
+    expect(shaped(manualGuards)).toContain(fragmentFor(manualGuards, "factory_dispatch_source_voucher_entries_guard"));
+    expect(shaped(manualGuards)).toContain(fragmentFor(manualGuards, "factory_dispatch_source_posting_identity_guard"));
+    expect(shaped(posting)).toContain(fragmentFor(posting, "assertHardenedFinancialSchemaTx(tx)"));
   });
 
   it("keeps all new financial tables under explicit company RLS", () => {
-    expect(manualGuards).toContain("FORCE ROW LEVEL SECURITY");
-    expect(manualGuards).toContain("erp_company_scope_matches(company_id)");
-    expect(manualGuards).toContain("factory_dispatch_trip_financials");
-    expect(manualGuards).toContain("factory_dispatch_trip_charges");
-    expect(manualGuards).toContain("factory_dispatch_financial_events");
+    expect(shaped(manualGuards)).toContain(fragmentFor(manualGuards, "FORCE ROW LEVEL SECURITY"));
+    expect(shaped(manualGuards)).toContain(fragmentFor(manualGuards, "erp_company_scope_matches(company_id)"));
+    expect(shaped(manualGuards)).toContain(fragmentFor(manualGuards, "factory_dispatch_trip_financials"));
+    expect(shaped(manualGuards)).toContain(fragmentFor(manualGuards, "factory_dispatch_trip_charges"));
+    expect(shaped(manualGuards)).toContain(fragmentFor(manualGuards, "factory_dispatch_financial_events"));
   });
 });

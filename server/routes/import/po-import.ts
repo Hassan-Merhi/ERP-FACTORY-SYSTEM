@@ -32,16 +32,14 @@ import { supplierService } from "../suppliers/supplierService";
 import { collectPreviewItemErrors, findPreviewContainer, type PoImportPreviewItem } from "./po-import-preview";
 import { allocatePoCharges } from "./poChargeAllocation";
 import { applyExplicitImportCurrency } from "./poImportCurrency";
-import {
-  convertZmwContainerPreview,
-  nativePurchaseOrderFields,
-  splitNativeCharges,
-} from "./poImportZambia";
+import { convertZmwContainerPreview, nativePurchaseOrderFields, splitNativeCharges } from "./poImportZambia";
 import { errorStatus } from "../../lib/httpHandlers";
 import { validateFactoryDispatchPoImport } from "./factoryDispatchPoImportGuard";
 import {
-  FactoryTripPoReceiptError, inspectFactoryTripPoReceipt,
-  reserveFactoryTripPoReceipt, completeFactoryTripPoReceipt,
+  FactoryTripPoReceiptError,
+  inspectFactoryTripPoReceipt,
+  reserveFactoryTripPoReceipt,
+  completeFactoryTripPoReceipt,
   canonicalFactoryTripPayloadFingerprint,
 } from "./factoryDispatchPoImportReceipt";
 
@@ -139,15 +137,20 @@ export function registerPoImportRoutes(app: Express) {
       // This guard is repeated on the import action itself. Never assume the
       // client called Validate, or trust previously-resolved stockItemId.
       const factoryTripCheck = await validateFactoryDispatchPoImport(
-        currentCompanyId, containerPreview, supplier, allStockItems
+        currentCompanyId,
+        containerPreview,
+        supplier,
+        allStockItems
       );
       validationErrors.push(...factoryTripCheck.errors);
       if (factoryTripCheck.identity) {
         const previous = await inspectFactoryTripPoReceipt(currentCompanyId, factoryTripCheck.identity);
         if (previous) {
-          validationErrors.push(previous.status === "IMPORTED"
-            ? "This Factory dispatch truck is already imported into ERP."
-            : "An earlier Factory dispatch PO import needs reconciliation; automatic retry is blocked.");
+          validationErrors.push(
+            previous.status === "IMPORTED"
+              ? "This Factory dispatch truck is already imported into ERP."
+              : "An earlier Factory dispatch PO import needs reconciliation; automatic retry is blocked."
+          );
         }
       }
 
@@ -193,7 +196,8 @@ export function registerPoImportRoutes(app: Express) {
       if (factoryTripCheck.identity && existingContainerCheck) {
         return res.status(409).json({
           code: "FD_PO_CONTAINER_ALREADY_EXISTS",
-          message: "This Factory dispatch trip's ERP container already exists. Inspect that container before posting another PO.",
+          message:
+            "This Factory dispatch trip's ERP container already exists. Inspect that container before posting another PO.",
         });
       }
       // Reserve before the first ERP purchase/container/voucher write. The
@@ -202,17 +206,19 @@ export function registerPoImportRoutes(app: Express) {
       // A failed downstream legacy import leaves a PENDING_REVIEW receipt;
       // never auto-retry a possibly partially posted purchase.
       const factoryTripReceiptId = factoryTripCheck.identity
-        ? await reserveFactoryTripPoReceipt({
-            companyId: currentCompanyId,
-            supplierId,
-            supplierCode: supplier!.code,
-            identity: factoryTripCheck.identity,
-            fileHash, fileName,
-            amount: factoryTripCheck.supplierTotal!,
-            userId: req.session.userId || String(req.session.username || "system"),
-          }, canonicalFactoryTripPayloadFingerprint(
-            factoryTripCheck.identity, containerPreview, supplier!.code
-          ))
+        ? await reserveFactoryTripPoReceipt(
+            {
+              companyId: currentCompanyId,
+              supplierId,
+              supplierCode: supplier!.code,
+              identity: factoryTripCheck.identity,
+              fileHash,
+              fileName,
+              amount: factoryTripCheck.supplierTotal!,
+              userId: req.session.userId || String(req.session.username || "system"),
+            },
+            canonicalFactoryTripPayloadFingerprint(factoryTripCheck.identity, containerPreview, supplier!.code)
+          )
         : null;
       let container: Container;
       if (existingContainerCheck) {
@@ -782,8 +788,10 @@ export function registerPoImportRoutes(app: Express) {
             stockItem = freshStockItems.find((si) => si.name === item.itemName);
           }
           if (factoryTripCheck.identity && !stockItem) {
-            throw new FactoryTripPoReceiptError("FD_PO_ARTICLE_CHANGED",
-              "ERP article alias changed during import. Purchase may have partially posted; reconcile the pending receipt instead of retrying.");
+            throw new FactoryTripPoReceiptError(
+              "FD_PO_ARTICLE_CHANGED",
+              "ERP article alias changed during import. Purchase may have partially posted; reconcile the pending receipt instead of retrying."
+            );
           }
 
           if (stockItem) {
@@ -842,9 +850,7 @@ export function registerPoImportRoutes(app: Express) {
         status: "Success",
       });
       if (factoryTripReceiptId !== null) {
-        await completeFactoryTripPoReceipt(
-          currentCompanyId, factoryTripReceiptId, container.id, importLog.id
-        );
+        await completeFactoryTripPoReceipt(currentCompanyId, factoryTripReceiptId, container.id, importLog.id);
       }
 
       res.json({
@@ -853,15 +859,17 @@ export function registerPoImportRoutes(app: Express) {
         containerNumber: container.containerNumber,
         itemsCount: containerPreview.itemsCount,
         grandTotal: containerPreview.grandTotal,
-        ...(factoryTripCheck.identity ? {
-          factoryDispatchReceipt: {
-            id: factoryTripReceiptId,
-            origin: factoryTripCheck.identity,
-            status: "IMPORTED",
-            supplierId,
-            erpSupplierInvoiceTotal: factoryTripCheck.supplierTotal,
-          },
-        } : {}),
+        ...(factoryTripCheck.identity
+          ? {
+              factoryDispatchReceipt: {
+                id: factoryTripReceiptId,
+                origin: factoryTripCheck.identity,
+                status: "IMPORTED",
+                supplierId,
+                erpSupplierInvoiceTotal: factoryTripCheck.supplierTotal,
+              },
+            }
+          : {}),
       });
     } catch (error: unknown) {
       logger.error("PO Import error:", { error: error });

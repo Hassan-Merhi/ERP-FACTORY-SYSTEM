@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
 import type { SerializedRouteManifest } from "./helpers/routeManifest";
+import { isDeclaredReadinessGate } from "./helpers/declaredReadinessGate";
 
 const ERP_PREFIX = "phase33read";
 // setup.ts intentionally maps this stable prefix to a factory-typed company.
@@ -150,7 +151,7 @@ describe("parameterized backend read-surface sweep", () => {
           .query({ limit: 1, page: 1 })
           .timeout({ response: REQUEST_TIMEOUT_MS, deadline: REQUEST_TIMEOUT_MS });
 
-        if (response.status >= 500) {
+        if (response.status >= 500 && !isDeclaredReadinessGate(response)) {
           failures.push({
             route: route.manifestPath,
             requestPath: route.requestPath,

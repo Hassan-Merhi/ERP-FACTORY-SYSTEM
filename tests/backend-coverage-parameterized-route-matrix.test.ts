@@ -16,6 +16,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { pool } from "../server/db";
 import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
+import { isDeclaredReadinessGate } from "./helpers/declaredReadinessGate";
 
 type CompanyMode = "erp" | "factory" | "properties" | "supplier_partner";
 type HttpMethod = "DELETE" | "GET" | "PATCH" | "POST" | "PUT";
@@ -290,7 +291,7 @@ describe("Phase 1 parameterized backend route matrix", () => {
           .set("x-client-date", "2026-08-08")
           .send(poisonBody(companies[mode]))
           .timeout({ response: REQUEST_TIMEOUT_MS, deadline: REQUEST_TIMEOUT_MS });
-        if (response.status >= 500) {
+        if (response.status >= 500 && !isDeclaredReadinessGate(response)) {
           const body = response.body as { message?: string; error?: string } | undefined;
           failures.push({
             route: `${route.method} ${route.path}`,

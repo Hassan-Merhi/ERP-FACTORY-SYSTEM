@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "description": "Ordered snapshot of every registered Express route (method, path, guard chain) and middleware mount. Regenerate with UPDATE_ROUTE_MANIFEST=1 only when a route change is intended; during a file split the manifest must not change at all.",
-  "routeCount": 2393,
+  "routeCount": 2395,
   "middlewareMountCount": 139,
   "routes": [
     "GET /api/admin/operational-monitoring [requireAuth > <anonymous> > <anonymous>]",
@@ -72,6 +72,8 @@
     "GET /api/factory/customer-orders/:id/loading-dispatches/combined-invoice/preview [requireAuth > <anonymous> > <anonymous>]",
     "POST /api/factory/customer-orders/:id/loading-dispatches/combined-invoice/finalize [requireAuth > <anonymous> > <anonymous>]",
     "GET /api/factory/customer-orders/:id/loading-dispatches/order-overview [requireAuth > <anonymous> > <anonymous>]",
+    "GET /api/factory/customer-orders/:id/loading-dispatches/order-overview/trips/:dispatchId/invoice-lines [requireAuth > <anonymous> > <anonymous>]",
+    "GET /api/factory/customer-orders/:id/loading-dispatches/order-overview/trips/:dispatchId/invoice.xlsx [requireAuth > <anonymous> > <anonymous>]",
     "GET /api/factory/customer-orders/:id/loading-dispatches/order-overview/history [requireAuth > <anonymous> > <anonymous>]",
     "GET /api/factory/customer-orders/:id/loading-dispatches/order-overview/report.xlsx [requireAuth > <anonymous> > <anonymous>]",
     "GET /api/factory/customer-orders/:id/loading-dispatches/release-readiness [requireAuth > <anonymous> > <anonymous>]",

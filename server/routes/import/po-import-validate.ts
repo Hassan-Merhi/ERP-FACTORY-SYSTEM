@@ -5,26 +5,18 @@
  * original order.
  */
 
-
 import type { Express } from "express";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { storage } from "../../storage";
 import { requireAuth } from "../../auth";
 
-
-
-
 import { supplierService } from "../suppliers/supplierService";
 import { collectPreviewItemErrors, findPreviewContainer } from "./po-import-preview";
 import { applyExplicitImportCurrency } from "./poImportCurrency";
-import {
-  validateZmwContainerPreview,
-} from "./poImportZambia";
+import { validateZmwContainerPreview } from "./poImportZambia";
 import { validateFactoryDispatchPoImport } from "./factoryDispatchPoImportGuard";
-import {
-  FactoryTripPoReceiptError, inspectFactoryTripPoReceipt,
-} from "./factoryDispatchPoImportReceipt";
+import { FactoryTripPoReceiptError, inspectFactoryTripPoReceipt } from "./factoryDispatchPoImportReceipt";
 
 export function registerPoImportValidateRoute(app: Express) {
   app.post("/api/po-import/validate", requireAuth, async (req, res) => {
@@ -109,18 +101,21 @@ export function registerPoImportValidateRoute(app: Express) {
         // company-owned stock CODE/ALIAS must match exactly; similar item
         // names are not permitted to silently substitute another article.
         const factoryTripCheck = await validateFactoryDispatchPoImport(
-          req.session.currentCompanyId!, containerPreview, supplier, allStockItems
+          req.session.currentCompanyId!,
+          containerPreview,
+          supplier,
+          allStockItems
         );
         errors.push(...factoryTripCheck.errors);
         if (factoryTripCheck.identity) {
           resolvedItems.splice(0, resolvedItems.length, ...factoryTripCheck.resolvedItems);
-          const previous = await inspectFactoryTripPoReceipt(
-            req.session.currentCompanyId!, factoryTripCheck.identity
-          );
+          const previous = await inspectFactoryTripPoReceipt(req.session.currentCompanyId!, factoryTripCheck.identity);
           if (previous) {
-            errors.push(previous.status === "IMPORTED"
-              ? "This Factory dispatch truck has already been imported into ERP."
-              : "An earlier Factory dispatch PO import requires reconciliation; do not retry or double post.");
+            errors.push(
+              previous.status === "IMPORTED"
+                ? "This Factory dispatch truck has already been imported into ERP."
+                : "An earlier Factory dispatch PO import requires reconciliation; do not retry or double post."
+            );
           }
         }
 
