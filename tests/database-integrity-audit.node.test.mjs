@@ -47,3 +47,10 @@ test("CLI parses only arguments after script name and refuses RLS-hidden incompl
   assert.match(source,/SET LOCAL row_security = off/);
   assert.match(source,/BEGIN READ ONLY/);
 });
+
+test("gross voucher imbalance is review-only pending history and stock exemption analysis",()=>{
+  const result=summarizeIntegrity({metrics:{unbalanced_active_nonoptional_vouchers:3}});
+  assert.equal(result.ok,true);
+  assert.deepEqual(result.metricErrors,[]);
+  assert.ok(result.warnings.some(x=>x.includes("3 gross imbalance")));
+});
