@@ -41,6 +41,25 @@ failure, so a correct document cannot quietly become undiscoverable.
 | Doc | What it covers |
 |---|---|
 | [accounting-flow.md](accounting-flow.md) | Voucher types, posting, the ledger |
+| [accounting/hmd-kinshasa-shop-rent-phase1-audit-2026-11-10.md](accounting/hmd-kinshasa-shop-rent-phase1-audit-2026-11-10.md) | HMD Kinshasa rent source audit |
+| [accounting/hmd-kinshasa-shop-rent-phase2-execution-2026-11-10.md](accounting/hmd-kinshasa-shop-rent-phase2-execution-2026-11-10.md) | HMD Kinshasa rent execution controls |
+| [accounting/hmd-kinshasa-shop-rent-phase3-reconciliation-2026-11-10.md](accounting/hmd-kinshasa-shop-rent-phase3-reconciliation-2026-11-10.md) | HMD Kinshasa rent reconciliation |
+| [accounting/hmd-kinshasa-shop-rent-phase4-permanent-prevention-2026-11-10.md](accounting/hmd-kinshasa-shop-rent-phase4-permanent-prevention-2026-11-10.md) | HMD Kinshasa rent permanent safeguards |
+| [accounting/hadi-lshi-shop-rent-phase1-audit-2026-11-10.md](accounting/hadi-lshi-shop-rent-phase1-audit-2026-11-10.md) | HADI L'SHI rent source audit |
+| [accounting/hadi-lshi-shop-rent-phase2-prepared-2026-11-10.md](accounting/hadi-lshi-shop-rent-phase2-prepared-2026-11-10.md) | HADI L'SHI rent prepared correction |
+| [accounting/hadi-lshi-shop-rent-phase3-permanent-prevention-2026-11-10.md](accounting/hadi-lshi-shop-rent-phase3-permanent-prevention-2026-11-10.md) | HADI L'SHI rent permanent safeguards |
+| [accounting/hadi-lshi-2026-original-dated-monthly-rent-restatement-2026-11-10.md](accounting/hadi-lshi-2026-original-dated-monthly-rent-restatement-2026-11-10.md) | HADI L'SHI original-dated monthly rent restatement |
+| [factory-dispatch-trip-accounting-phase1.md](factory-dispatch-trip-accounting-phase1.md) | Factory dispatch trip accounting Phase 1 reference |
+| [factory-dispatch-trip-accounting-phase2.md](factory-dispatch-trip-accounting-phase2.md) | Factory dispatch trip accounting Phase 2 reference |
+| [factory-dispatch-trip-accounting-phase3.md](factory-dispatch-trip-accounting-phase3.md) | Factory dispatch trip accounting Phase 3 reference |
+| [factory-dispatch-trip-accounting-phase4.md](factory-dispatch-trip-accounting-phase4.md) | Factory dispatch trip accounting Phase 4 reference |
+| [factory-dispatch-trip-accounting-phase5.md](factory-dispatch-trip-accounting-phase5.md) | Factory dispatch trip accounting Phase 5 reference |
+| [factory-dispatch-trip-accounting-phase6.md](factory-dispatch-trip-accounting-phase6.md) | Factory dispatch trip accounting Phase 6 reference |
+| [factory-dispatch-trip-accounting-phase7.md](factory-dispatch-trip-accounting-phase7.md) | Factory dispatch trip accounting Phase 7 reference |
+| [factory-dispatch-trip-accounting-phase8.md](factory-dispatch-trip-accounting-phase8.md) | Factory dispatch trip accounting Phase 8 reference |
+| [factory-dispatch-trip-accounting-phase9.md](factory-dispatch-trip-accounting-phase9.md) | Factory dispatch trip accounting Phase 9 reference |
+| [factory-dispatch-trip-accounting-phase10.md](factory-dispatch-trip-accounting-phase10.md) | Factory dispatch trip accounting Phase 10 reference |
+
 | [accounting-audit-2026-10.md](accounting-audit-2026-10.md) | Accounting audit findings, production evidence and remediation waves |
 | [accounting/factory-rent-open-exception.md](accounting/factory-rent-open-exception.md) | Factory Mode unresolved Warehouse 5001 November rent, preserved prepaid balance and safe-reconciliation rules |
 | [accounting/factory-worker-advance-ledger-audit-2026-11-03.md](accounting/factory-worker-advance-ledger-audit-2026-11-03.md) | Factory Worker Advances production reconciliation, verified accrual repair, and residual historical exceptions |

@@ -35,7 +35,8 @@ export class TripFinancialPostingError extends Error {
     this.name = "TripFinancialPostingError";
   }
 }
-const refuse = (code: string, message: string, status = 409): never => {
+// Explicitly typed so TypeScript narrows after a refusal (an inferred arrow type does not).
+const refuse: (code: string, message: string, status?: number) => never = (code, message, status = 409) => {
   throw new TripFinancialPostingError(code, message, status);
 };
 const rows = async (tx: DbTransaction, q: ReturnType<typeof sql>) => resultRows(await tx.execute(q));
@@ -239,7 +240,7 @@ export async function postDispatchTripFinancialTx(
          AND posting_revision = ${financial.postingRevision} LIMIT 1
     `);
     if (!record || !Array.isArray(record.voucherIds)) {
-      refuse("TRIP_POSTING_INCOMPLETE", "The original financial posting evidence is missing; accounting review required");
+      return refuse("TRIP_POSTING_INCOMPLETE", "The original financial posting evidence is missing; accounting review required");
     }
     if (req.sourceFingerprint !== financial.sourceFingerprint ||
         req.sourceFingerprint !== String(record.sourceFingerprint)) {
@@ -432,7 +433,7 @@ export async function reverseDispatchTripFinancialTx(
   await lockTripOrder(tx, scope);
   const financial = await readFinancial(tx, scope);
   if (!financial || financial.status !== "POSTED") {
-    refuse("TRIP_NOT_POSTED", "Only a financially posted, unconsolidated trip can be reversed");
+    return refuse("TRIP_NOT_POSTED", "Only a financially posted, unconsolidated trip can be reversed");
   }
   const [exported] = await rows(tx, sql`
     SELECT id FROM factory_dispatch_trip_exports WHERE financial_id=${financial.id} LIMIT 1
@@ -474,7 +475,7 @@ export async function reverseDispatchTripFinancialTx(
         AND posting_revision=${financial.postingRevision} AND kind='POST' LIMIT 1
   `);
   if (!original || !Array.isArray(original.voucherIds)) {
-    refuse("TRIP_POSTING_INCOMPLETE", "Original immutable posting evidence is missing");
+    return refuse("TRIP_POSTING_INCOMPLETE", "Original immutable posting evidence is missing");
   }
   const reversedVoucherIds: number[] = [];
   for (const value of original.voucherIds) {

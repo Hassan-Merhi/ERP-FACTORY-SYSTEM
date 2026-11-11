@@ -245,7 +245,24 @@ describe("previously unmounted pages", () => {
       const Component = (module.default ?? module[name]) as React.ComponentType;
       expect(Component, `${name} must export a component`).toBeTypeOf("function");
 
-      renderWithProviders(<Component />);
+      renderWithProviders(
+        <Component />,
+        name === "WipersReEntry"
+          ? {
+              seedQueries: [
+                [
+                  ["/api/factory/my-access", 1],
+                  {
+                    companyId: 1,
+                    hasFactoryAccess: true,
+                    fullAccess: true,
+                    hiddenCostFields: [],
+                  },
+                ],
+              ],
+            }
+          : undefined
+      );
       expect(await screen.findByTestId(landmark)).toBeInTheDocument();
     });
   }

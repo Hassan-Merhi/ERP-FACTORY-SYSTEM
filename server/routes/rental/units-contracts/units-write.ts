@@ -6,7 +6,8 @@
  */
 import type { RentalRoutesContext } from "./_helpers";
 import type { Express, Request, Response } from "express";
-import { getErrorMessage } from "../../../lib/httpHandlers";
+import { getErrorMessage, translateDatabaseError } from "../../../lib/httpHandlers";
+import { logger } from "../../../lib/logger";
 import { getCompanyId } from "../shared";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
@@ -54,7 +55,38 @@ export function registerRentalUnitsWriteRoutes(app: Express, ctx: RentalRoutesCo
       } catch (e: unknown) {
         if (e instanceof z.ZodError)
           return res.status(400).json({ message: e.issues.map((err) => err.message).join(", ") });
-        res.status(500).json({ message: getErrorMessage(e) });
+        const dbError = e && typeof e === "object" && "cause" in e && e.cause
+          ? e.cause
+          : e;
+        const pg = dbError && typeof dbError === "object"
+          ? dbError as { code?: string; constraint?: string; message?: string }
+          : {};
+        // Drizzle's outer "Failed query" message hides the PostgreSQL reason.
+        // Log the inner reason server-side, not the SQL statement in the toast.
+        logger.error("[rental] Could not create rental unit", {
+          module,
+          code: pg.code,
+          constraint: pg.constraint,
+          reason: pg.message ?? getErrorMessage(e),
+        });
+        if (pg.code === "23505" && (pg.constraint === "property_units_pkey" ||
+            pg.constraint === "property_units_company_module_unit_unique")) {
+          return res.status(409).json({
+            message: pg.constraint === "property_units_pkey"
+              ? "The shop ID sequence needs repair. Please contact an administrator."
+              : "A shop with this unit number already exists in this company.",
+          });
+        }
+        if (pg.code === "42703" || pg.code === "42P01") {
+          return res.status(503).json({
+            message: "The rental database schema is out of date. Please deploy the rental schema repair.",
+          });
+        }
+        const translated = translateDatabaseError(e);
+        if (translated) return res.status(translated.statusCode).json({ message: translated.message });
+        res.status(500).json({
+          message: "Could not create the shop. The server logged the database error; please contact an administrator.",
+        });
       }
     }
   );
