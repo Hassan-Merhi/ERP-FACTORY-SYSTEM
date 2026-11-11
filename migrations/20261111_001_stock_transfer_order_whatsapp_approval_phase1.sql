@@ -63,6 +63,7 @@ CREATE TABLE IF NOT EXISTS stock_transfer_order_approval_batch_items (
  batch_id bigint NOT NULL,
  transfer_id integer NOT NULL REFERENCES stock_transfer_vouchers(id) ON DELETE RESTRICT,
  voucher_number_snapshot varchar(100) NOT NULL,
+ item_hash_snapshot varchar(64) NOT NULL,
  reservation_active boolean NOT NULL DEFAULT true,
  created_at timestamptz NOT NULL DEFAULT now(),
  CONSTRAINT sto_wa_items_batch_fk FOREIGN KEY(company_id,batch_id) REFERENCES stock_transfer_order_approval_batches(company_id,id) ON DELETE RESTRICT,
