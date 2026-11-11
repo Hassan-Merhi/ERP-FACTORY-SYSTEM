@@ -1,4 +1,9 @@
 import React from "react";
+
+vi.mock("@/contexts/CompanyContext", () => ({
+  useCompany: () => ({ selectedCompany: { id: 1, name: "Test Factory", companyType: "factory" } }),
+  useOptionalCompany: () => ({ selectedCompany: { id: 1, name: "Test Factory", companyType: "factory" } }),
+}));
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -11,9 +16,7 @@ const harness = vi.hoisted(() => ({
 vi.mock("@tanstack/react-query", () => ({
   useQuery: ({ queryKey }: any) => {
     if (queryKey?.[0] === "/api/factory/my-access") {
-      return {
-        data: { companyId: 4, hasFactoryAccess: true, fullAccess: true, pageKeys: [], hiddenCostFields: [] },
-      };
+      return { data: { companyId: 1, hasFactoryAccess: true, fullAccess: true, pageKeys: [], hiddenCostFields: [] } };
     }
     if (queryKey?.[0] === "/api/factory/bales" && queryKey.length > 2) {
       const today = new Date().toLocaleDateString("en-CA");
@@ -94,12 +97,6 @@ vi.mock("@/hooks/use-admin-override", () => ({
   }),
 }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: harness.toast }) }));
-// The page scopes its queries and its Factory access check to the selected
-// company, so it needs one; the access payload above is granted for the same id.
-vi.mock("@/contexts/CompanyContext", () => ({
-  useCompany: () => ({ selectedCompany: { id: 4 } }),
-  useOptionalCompany: () => ({ selectedCompany: { id: 4 } }),
-}));
 vi.mock("@/contexts/AppModeContext", () => ({ useAppMode: () => "factory" }));
 vi.mock("@/lib/factoryApi", () => ({ getApiRequest: () => harness.apiRequest }));
 vi.mock("@/lib/queryClient", () => ({
