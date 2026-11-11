@@ -20,6 +20,8 @@
     "verify-mobile-responsive-phase1-browser.mjs": "Drives a real browser against a running deployment — requires ERP_SMOKE_USERNAME/ERP_SMOKE_PASSWORD and a reachable ERP_SMOKE_BASE_URL.",
     "verify-mobile-responsive-wave2-browser.mjs": "Drives a real browser against a running deployment — requires ERP_SMOKE_USERNAME/ERP_SMOKE_PASSWORD and a reachable ERP_SMOKE_BASE_URL.",
     "verify-factory-mobile-browser.mjs": "Drives a real browser against a running deployment — requires ERP_SMOKE_USERNAME/ERP_SMOKE_PASSWORD and a reachable ERP_SMOKE_BASE_URL.",
+    "verify-factory-blue-theme-browser.mjs": "Renders production CSS in Chromium; requires npm run build to generate dist/public/assets and a working Puppeteer browser.",
+    "verify-factory-blue-theme-auth-browser.mjs": "Renders authenticated Factory pages; requires a built running test server, disposable PostgreSQL fixture, test company, and ERP_SMOKE_USERNAME/ERP_SMOKE_PASSWORD.",
     "verify-iphone-duo-phase1-browser.mjs": "Drives a real browser against a running deployment — requires ERP_SMOKE_USERNAME/ERP_SMOKE_PASSWORD and a reachable ERP_SMOKE_BASE_URL.",
     "verify-mobile-responsive-wave3-browser.mjs": "Drives a real browser against a running deployment — requires ERP_SMOKE_USERNAME/ERP_SMOKE_PASSWORD and a reachable ERP_SMOKE_BASE_URL.",
     "verify-mobile-responsive-wave4-browser.mjs": "Drives a real browser against a running deployment — requires ERP_SMOKE_USERNAME/ERP_SMOKE_PASSWORD and a reachable ERP_SMOKE_BASE_URL.",
