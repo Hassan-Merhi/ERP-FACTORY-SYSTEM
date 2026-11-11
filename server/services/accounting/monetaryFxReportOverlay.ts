@@ -154,8 +154,8 @@ export function applyVerifiedMonetaryFxOverlay(
   // plus these signed currency deltas equal the same current-rate Net Position
   // as the existing replacement projection; there is no double counting.
   const fxAccountRows = {
-    gain: { total: new Decimal(0), breakdown: [] as Array<{ label: string; native: string; usd: number }> },
-    loss: { total: new Decimal(0), breakdown: [] as Array<{ label: string; native: string; usd: number }> },
+    gain: { total: new Decimal(0), breakdown: [] as Array<{ label: string; native: string; usd: number; sourceKey?: string }> },
+    loss: { total: new Decimal(0), breakdown: [] as Array<{ label: string; native: string; usd: number; sourceKey?: string }> },
   };
   const breakdownDeltas = { forUs: new Map<string, Decimal>(), onUs: new Map<string, Decimal>() };
   const moveBreakdown = (side: PositionSide, category: string | undefined, delta: Decimal) => {
@@ -213,6 +213,7 @@ export function applyVerifiedMonetaryFxOverlay(
           label: `${val.accountKind === "customer" ? "Customer" : val.category === "loan" ? "Loan" : "Account"}: ${oldRow.name}`,
           native,
           usd: Math.abs(visibleDifference),
+          sourceKey: val.accountKey,
         });
       }
       oldRow.currencyRevalued = true;
