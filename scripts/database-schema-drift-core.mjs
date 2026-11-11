@@ -62,7 +62,13 @@ export function compareSchemaDrift(snapshot, { includeControlled = false } = {})
   const expectedIndexes = [...criticalIndexes];
   const expectedConstraints = REQUIRED_CONSTRAINTS.filter(([table])=>includeControlled || table!=="factory_fixed_production_plans");
   if (includeControlled) {
-    expectedTables.push("factory_fixed_production_plans","sp_containers","user_preferences","factory_containers","user_security_permissions","user_language_preferences");
+    expectedTables.push("factory_fixed_production_plans","sp_containers","user_preferences","factory_containers","user_security_permissions","user_language_preferences",
+      "scheduled_whatsapp_occurrences","scheduled_whatsapp_attachments","insurance_member_monthly_amounts");
+    expectedIndexes.push("scheduled_whatsapp_occurrences_retry_idx",
+      "scheduled_whatsapp_occurrences_recipient_idx",
+      "scheduled_whatsapp_attachments_status_idx",
+      "insurance_member_monthly_amounts_member_month_unique",
+      "insurance_member_monthly_amounts_company_month_idx");
     expectedColumns.push(...MULTILINGUAL_COLUMNS,...BILINGUAL_COLUMNS,
       ["customer_order_bales","scanned_at"],["customer_order_bales_history","scanned_at"]);
     expectedIndexes.push("factory_bale_products_company_article_code_normalized_idx");
