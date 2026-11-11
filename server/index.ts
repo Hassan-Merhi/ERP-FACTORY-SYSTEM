@@ -69,6 +69,7 @@ import { ensureFactoryContainerPlannerSchemaOnBoot } from "./startup/factoryCont
 import { ensurePriorityScanSchema } from "./startup/priorityScanSchema";
 import { ensureContainerExtraExpectedLines } from "./startup/ensureContainerExtraExpectedLines";
 import { ensureFactoryLoadingDispatchSchema } from "./startup/ensureFactoryLoadingDispatchSchema";
+import { ensureDispatchLoadingBaleScanGuard } from "./startup/ensureDispatchLoadingBaleScanGuard";
 import { ensureFactoryBaleOrderIntegrity } from "./startup/ensureFactoryBaleOrderIntegrity";
 import { runApprovedLegacyBaleUnitCostRepair } from "./startup/runApprovedLegacyBaleUnitCostRepair";
 import { runApprovedLegacySoldBaleUnitCostRepair } from "./startup/runApprovedLegacySoldBaleUnitCostRepair";
@@ -368,7 +369,10 @@ let migrationsDone = false;
       // Loading-only expected items must exist even when bulk migrations are disabled.
       await ensureContainerExtraExpectedLines(pool);
       await ensureFactoryLoadingDispatchSchema(pool);
-      logger.info("[startup] ✓ Factory loading dispatch schema ensured");
+      // Replace the overbroad Phase 4 guard before the new server accepts scans.
+      // Fatal on failure: never report healthy while normal loading is blocked.
+      await ensureDispatchLoadingBaleScanGuard(pool);
+      logger.info("[startup] ✓ Factory loading dispatch schema and scan guard ensured");
       await ensureFactoryInvoiceDocumentSnapshotStore(pool);
       logger.info("[startup] ✓ Factory invoice document snapshot store ensured");
       try {
