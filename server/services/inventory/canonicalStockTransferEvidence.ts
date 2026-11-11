@@ -233,16 +233,24 @@ export function summarizeCanonicalStockTransferNetEvidence(input: {
       first.stockItemId !== second.stockItemId ||
       first.locationId === second.locationId ||
       !first.quantity.eq(second.quantity.negated()) ||
-      !first.unitCost.eq(second.unitCost) ||
-      Number(first.locationId === batch.destinationLocationId) +
-        Number(second.locationId === batch.destinationLocationId) !== 1
+      !first.unitCost.eq(second.unitCost)
     ) {
       throw new ConvergenceReconciliationError(
         "CONVERGENCE_STOCK_EVIDENCE_UNBALANCED",
         `Canonical transfer ${batch.sourceId} has invalid or unbalanced issue/receipt legs`
       );
     }
-    const destLeg = first.locationId === batch.destinationLocationId ? first : second;
+    // A transfer may have been edited to a NEW destination. Its historical
+    // issue and reversal pairs remain in the append-only journal, but neither
+    // leg contributes to the CURRENT destination. Validate the paired batch
+    // above, then skip it if the old destination is no longer relevant.
+    const destLeg =
+      first.locationId === batch.destinationLocationId
+        ? first
+        : second.locationId === batch.destinationLocationId
+          ? second
+          : null;
+    if (!destLeg) continue;
     const current = byTransfer.get(batch.sourceId) ?? {
       quantity: new Decimal(0),
       value: new Decimal(0),
