@@ -12,7 +12,7 @@ import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { db, type DbTransaction } from "../db";
 import { logger } from "../lib/logger";
-import { logAudit } from "../routes/_helpers";
+import { writeAuditEvent } from "./audit";
 import {
   approveImmutableStockTransferRevision,
   rejectImmutableStockTransferRevision,
@@ -244,7 +244,7 @@ async function executeWithinTransaction(tx: DbTransaction, batchId: number): Pro
   // Audit EACH frozen revision, including revisions merged as superseded by
   // newer edits from the same location. All audit rows share the DB transaction.
   for (const revision of summary.statuses) {
-    await logAudit({
+    await writeAuditEvent({
       userId: reviewerId,
       username: "WhatsApp " + header.authorized_phone_e164,
       companyId,
