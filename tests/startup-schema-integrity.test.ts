@@ -194,7 +194,7 @@ import { stockTransferOrderWaApprovalFoundation } from "../server/startup-schema
  * count from 1480 to 1481 and changing the pre-034 baseline hash. The
  * statement is idempotent and nothing else moved.
  */
-const EXPECTED_STATEMENT_COUNT = 1520; // Reviewed 1481 baseline + 39 additive Stock Transfer Order approval statements
+const EXPECTED_STATEMENT_COUNT = 1525; // Reviewed 1481 baseline + 44 additive Stock Transfer Order approval statements
 const EXPECTED_CONTENT_HASH = "83932076dfc1f98fad41c163f700041aedbc3d69fb74d735a2e98a2de7bead2b";
 /**
  * sha256 of JSON.stringify(startupMigrations) for the reviewed composed array.
@@ -431,8 +431,8 @@ describe("startup schema integrity", () => {
   });
 
   it("appends Stock Transfer Order WhatsApp approval foundation after the previous baseline", () => {
-    expect(stockTransferOrderWaApprovalFoundation).toHaveLength(39);
-    expect(startupMigrations.slice(-39)).toEqual(stockTransferOrderWaApprovalFoundation);
+    expect(stockTransferOrderWaApprovalFoundation).toHaveLength(44);
+    expect(startupMigrations.slice(-44)).toEqual(stockTransferOrderWaApprovalFoundation);
     const sqlText = stockTransferOrderWaApprovalFoundation.join("; ");
     expect(sqlText).toContain("stock_transfer_order_approval_batches");
     expect(sqlText).toContain("stock_transfer_order_approval_batch_revisions");
