@@ -43,7 +43,7 @@ export function registerPermissionBoundaryRoutes(app: Express): void {
     "/api/pending-barcodes",
     "/api/stock-transfers",
     "/api/stock-transfer-orders",
-    "/api/stock-transfer-order",
+    "/api/stock-transfer-order/wa-approval",
     "/api/stock-transfer-revisions",
     "/api/stock-summary",
     "/api/offload-item-search",
