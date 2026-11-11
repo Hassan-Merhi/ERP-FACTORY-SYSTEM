@@ -68,7 +68,7 @@ export function compareDefinitionDrift(snapshot) {
   const constraints=new Map((snapshot.constraints||[]).map(x=>[key(x.table_name,x.constraint_name),x]));
   const triggers=new Map((snapshot.triggers||[]).map(x=>[key(x.table_name,x.trigger_name),x]));
   const functions=new Map((snapshot.functions||[]).map(x=>[x.function_name,x]));
-  const policies=new Map((snapshot.policies||[]).map(x=>[x.table_name,x]));
+  const policies=snapshot.policies||[];
   const blockers=[];
   const warnings=[];
   for(const c of REQUIRED_COLUMN_SHAPES) {
@@ -107,8 +107,9 @@ export function compareDefinitionDrift(snapshot) {
       blockers.push("trigger-definition:"+item);
   }
   for(const table of REQUIRED_RLS_POLICY_TABLES) {
-    const p=policies.get(table);
-    if(!p){blockers.push("rls-table-missing:"+table);continue;}
+    const rows=policies.filter(x=>x.table_name===table);
+    if(!rows.length){blockers.push("rls-table-missing:"+table);continue;}
+    const p=rows.find(x=>x.policy_name===table+"_company_scope_policy")||rows[0];
     if(p.enabled!==true)blockers.push("rls-disabled:"+table);
     if(p.forced!==true)blockers.push("rls-not-forced:"+table);
     if(p.policy_name!==table+"_company_scope_policy" ||
