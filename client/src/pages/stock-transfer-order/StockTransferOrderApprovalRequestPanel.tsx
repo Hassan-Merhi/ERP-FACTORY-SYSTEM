@@ -15,12 +15,13 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { confirmAction } from "@/components/ConfirmHost";
+import { StockTransferOrderWaDeliveryReconciliation } from "./StockTransferOrderWaDeliveryReconciliation";
 import type { useStockTransferOrderModel } from "./useStockTransferOrderModel";
 import type { StockTransferOrderWaSettings } from "../settings/StockTransferOrderApprovalSettings";
 
 type Model = ReturnType<typeof useStockTransferOrderModel>;
 type EligibleOrder = { transferId: number; voucherNumber: string; pendingRevisions: number; reserved: boolean };
-type Delivery = { recipientKind: "approval_group" | "destination"; status: "pending" | "sending" | "accepted" | "failed" | "uncertain"; attemptCount: number; acceptedAt: string | null; lastError: string | null };
+type Delivery = { recipientKind: "approval_group" | "destination"; status: "pending" | "sending" | "accepted" | "failed" | "uncertain" | "verified"; attemptCount: number; acceptedAt: string | null; lastError: string | null };
 type Batch = { id: number; batchKey: string; destinationName: string; orderCount: number; revisionCount: number; status: string; requestedAt: string|null; reviewedAt: string|null; reviewedByPhone: string|null; deliveries?: Delivery[] };
 type RequestOutcome = { ok: boolean; uncertain?: boolean; batchId: number; batchKey?: string; orders?: number; revisions?: number; message: string };
 const base = "/api/stock-transfer-order/wa-approval";
@@ -31,6 +32,7 @@ export function StockTransferOrderApprovalRequestPanel({ model, open }: { model:
   const [destinationId, setDestinationId] = useState<number | null>(null);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [legacyIds, setLegacyIds] = useState<number[]>([]);
+  const [reviewBatchId, setReviewBatchId] = useState<number | null>(null);
   const autoSelected = useRef<number | null>(null);
   const destinationSeededForCompany = useRef<number | null>(null);
   const [result, setResult] = useState<RequestOutcome | null>(null);
@@ -275,6 +277,7 @@ export function StockTransferOrderApprovalRequestPanel({ model, open }: { model:
                         <span key={delivery.recipientKind} className="block">
                           {delivery.recipientKind === "approval_group" ? "Approval group" : "Destination"}:
                           {" "}{delivery.status === "accepted" ? "Accepted by GREEN API" :
+                          delivery.status === "verified" ? "Manually verified in WhatsApp" :
                           delivery.status === "sending" ? "Sending…" :
                           delivery.status === "uncertain" ? "Outcome unknown — verify in WhatsApp; no automatic retry" :
                           delivery.status === "failed" ? "Upload rejected — retry queued if attempts remain" : "Awaiting Excel"}
@@ -286,6 +289,13 @@ export function StockTransferOrderApprovalRequestPanel({ model, open }: { model:
                     </span>
                   )}
                 </span>
+                {config.data?.canConfigure && batch.status === "approved" && (
+                  <Button variant="outline" size="sm"
+                    onClick={()=>setReviewBatchId(current=>current===batch.id ? null : batch.id)}
+                    data-testid={"sto-wa-review-batch-"+batch.id}>
+                    {reviewBatchId === batch.id ? "Close review" : "Reconcile"}
+                  </Button>
+                )}
                 <Badge variant="outline">{batch.status}</Badge>
                 {config.data?.canConfigure && ["draft", "uncertain", "requested", "stale"].includes(batch.status) &&
                   <Button size="sm" variant="ghost" disabled={cancel.isPending}
@@ -299,6 +309,10 @@ export function StockTransferOrderApprovalRequestPanel({ model, open }: { model:
               </div>
             ))}
           </div>
+          {config.data?.canConfigure && reviewBatchId !== null &&
+            recent.data?.batches.some(batch=>batch.id===reviewBatchId && batch.status==="approved") && (
+            <StockTransferOrderWaDeliveryReconciliation key={reviewBatchId} batchId={reviewBatchId}/>
+          )}
         </div>
       )}
     </div>
