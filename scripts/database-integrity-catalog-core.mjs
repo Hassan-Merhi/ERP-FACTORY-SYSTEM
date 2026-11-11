@@ -7,6 +7,10 @@ export const CORE_TABLES = Object.freeze([
   "companies","vouchers","voucher_entries","ledger_accounts","bank_accounts",
   "fixed_assets","stock_adjustment_vouchers","stock_adjustment_items"
 ]);
+export const REQUIRED_RLS_TABLES = Object.freeze([
+  "vouchers","customers","ledger_accounts","bank_accounts","fixed_assets",
+  "stock_groups","stock_items","inventory","voucher_entries"
+]);
 export const CONTROL_TABLES = Object.freeze([
   "user_company_roles","user_locations","user_location_cash_accounts",
   "role_feature_permissions","user_security_permissions","locations","users"
@@ -78,10 +82,19 @@ export function evaluateCatalogIntegrity(snapshot) {
   }
   // Company scope is critical: every present RLS protected table must retain
   // FORCE RLS as well as a policy. No automatic enable or policy replacement.
-  for(const t of (snapshot.rls||[])) {
-    if(!t.enabled)errors.push("rls-disabled:"+t.table_name);
-    if(!t.forced)errors.push("rls-not-forced:"+t.table_name);
-    if(!t.policyCount)errors.push("rls-missing-policy:"+t.table_name);
+  const rlsByTable=new Map((snapshot.rls||[]).map(x=>[x.table_name,x]));
+  for(const table of REQUIRED_RLS_TABLES) {
+    if(!tables.has(table)) continue;
+    const t=rlsByTable.get(table);
+    if(!t || !t.enabled)errors.push("rls-disabled:"+table);
+    if(!t || !t.forced)errors.push("rls-not-forced:"+table);
+    if(!t || !t.policyCount)errors.push("rls-missing-policy:"+table);
+  }
+  // Noncanonical RLS relations are included as a hardening signal, but the
+  // required-list above is what prevents fully disabled RLS from disappearing.
+  for(const t of snapshot.rls||[]) {
+    if(REQUIRED_RLS_TABLES.includes(t.table_name)) continue;
+    if(t.enabled && !t.policyCount)warnings.push("rls-custom-table-no-policy:"+t.table_name);
   }
   return {ok:errors.length===0,mode:"catalog-read-only",summary,errors,warnings};
 }
