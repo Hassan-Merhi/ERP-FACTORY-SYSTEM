@@ -60,7 +60,16 @@ export function registerStockTransferCreateRoutes(app: Express) {
         voucherDate,
         optional,
         clientRequestId,
+        workflowOrigin,
       } = req.body;
+      // Only the dedicated order screen emits this marker. Do not infer it from editable voucher notes.
+      if (workflowOrigin !== undefined && workflowOrigin !== "stock_transfer_order") {
+        return res.status(400).json({ message: "Unsupported stock transfer workflow origin" });
+      }
+      if (workflowOrigin === "stock_transfer_order" &&
+          !/^Stock Transfer Order - [0-9]+ items$/.test(String(notes ?? "").trim())) {
+        return res.status(400).json({ message: "Stock Transfer Order origin requires an order-created document" });
+      }
       const requestId = resolveStockDocumentRequestId(clientRequestId);
 
       // Log if user confirmed negative inventory override
@@ -178,6 +187,7 @@ export function registerStockTransferCreateRoutes(app: Express) {
             optional,
             allowNegativeInventory,
             actorUserId: _uid,
+            workflowOrigin,
           });
           // Factory LAN server during an outage: record the transfer's inputs
           // on the "stock" stream, in this transaction.
