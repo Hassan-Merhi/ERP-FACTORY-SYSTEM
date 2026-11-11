@@ -36,7 +36,16 @@ export async function projectFactoryNetPositionMonetaryFx<T extends FactoryNetPo
   if (scope.isHistorical || Number(scope.sessionCompanyId) !== scope.companyId) return finished;
   try {
     const valuation = await getMonetaryFxValuation(scope.companyId);
-    const projected = applyVerifiedMonetaryFxOverlay(finished as unknown as MonetaryNetPositionPayload, valuation);
+    const walletKeys = new Set(
+      ((finished as { fxAgentWallets?: Array<{ accountId: number; synchronized: boolean; currentUsd: string | null }> }).fxAgentWallets ?? [])
+        .filter((wallet) => wallet.synchronized && wallet.currentUsd !== null)
+        .map((wallet) => `ledger:${wallet.accountId}`)
+    );
+    const projected = applyVerifiedMonetaryFxOverlay(
+      finished as unknown as MonetaryNetPositionPayload,
+      valuation,
+      { showFxAsRows: true, skipAccountKeys: walletKeys }
+    );
     const report = projected.payload as MonetaryNetPositionPayload & { ledgerAssets: number; ledgerLiabilities: number };
     if (projected.appliedKeys.length) {
       report.ledgerAssets = round2(Number(finished.ledgerAssets) + projected.ledgerForUsDelta);
