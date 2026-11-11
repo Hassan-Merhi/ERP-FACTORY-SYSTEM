@@ -37,6 +37,17 @@ Each source bridge retains its legacy compatibility startup behavior by default.
 5. Factory scan timestamps, rental balances, vouchers, payroll, stock and tenant RLS proven unchanged on a restored production-like staging snapshot.
 6. Backups restored and release gate verified against exact commit before promotion.
 
+## Further extraction: controlled migrations 008–009
+
+- `20261111_008_scheduled_whatsapp_delivery.sql`: durable scheduled WhatsApp occurrence/attachment tables, unique constraints and indexes. The always-on `ensureScheduledWhatsAppDeliveryTrackingSchema` now supports `SCHEDULED_WHATSAPP_SCHEMA_MODE=verify-only` for post-migration validation without CREATE TABLE/INDEX.
+- `20261111_009_insurance_monthly_amounts.sql`: additive insurance-member monthly amount table and indexes. **It does not** populate members, alter vouchers, or perform the existing insurance backfill.
+- Both migrations are included in the isolated nine-migration PostgreSQL lifecycle suite. Do not apply them to production until historical startup migration history is reconciled.
+- The startup mutation report now also includes the complete `server/startup-schema/*.ts` SQL module directory. This report flags historical orphan cleanup, tenant permission deduplication, the legacy migration runner and always-on runtime schema as high-risk non-schema operations requiring separate approval.
+
+### Unresolved cutover distinction
+
+Even where these additive schemas have controlled equivalents, the default legacy boot paths **still execute**. Switching the entire server to read-only startup cannot be considered complete until all ordered modules and service-level schema initializers are transitioned, historical cleanup and sequence correction are explicitly owned, and the new runner is reconciled with existing ledgers. The global read-only cutover remains intentionally blocked. This is *not* a green light to merge/deploy or bypass startup safeguards.
+
 ## Extended remaining-surface audit
 
 Run `npm run audit:startup-mutations` for a read-only report of startup mutation candidates, including `server/index.ts`, `server/startup/ensureRuntimeSchema.ts` and the legacy runner. `npm run audit:startup-mutations:strict` deliberately exits nonzero until remaining mutation candidates are reviewed and converted. Static candidates can include commented code, and a `verify-only` string alone does not prove there are no writes.
