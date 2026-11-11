@@ -77,6 +77,7 @@ describe("Stock Transfer Order WhatsApp Phase 4 atomic full-batch execution", ()
     expect(worker).toContain("b.status='requested'");
     expect(worker).toContain("stockTransferOrderWaExecutionEnabled()");
     expect(worker).toContain("shouldStartEdgeBackgroundJobs");
+    expect(worker).toContain('STO_WA_PRODUCTION_ACTIVATED === "true"');
   });
 
   it("exposes reviewer and batch status while forbidding cancellation after DONE/DECLINE", () => {
