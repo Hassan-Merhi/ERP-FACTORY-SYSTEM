@@ -11,7 +11,7 @@ const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"..");
 
 function snapshot(){
   return {
-    tables:[...CORE_TABLES,...CONTROL_TABLES],
+    tables:[...new Set([...CORE_TABLES,...CONTROL_TABLES,...REQUIRED_RLS_TABLES])],
     constraints:[...CORE_CONSTRAINTS,...CONTROL_CONSTRAINTS].map(([table_name,constraint_name])=>({
       table_name,constraint_name,validated:true
     })),
@@ -74,4 +74,12 @@ test("entirely disabled RLS cannot be invisible to catalog checks",()=>{
   const result=evaluateCatalogIntegrity(snap);
   assert.equal(result.ok,false);
   assert.ok(result.errors.includes("rls-disabled:voucher_entries"));
+});
+
+test("missing tenant-control tables are never treated as an optional success",()=>{
+  const snap=snapshot();
+  snap.tables=snap.tables.filter(x=>x!=="user_locations");
+  const result=evaluateCatalogIntegrity(snap);
+  assert.equal(result.ok,false);
+  assert.ok(result.errors.includes("missing-table:user_locations"));
 });
