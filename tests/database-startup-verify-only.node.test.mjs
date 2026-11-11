@@ -182,3 +182,18 @@ test("controlled stock, Supplier Partner and POS legacy schema contain only addi
   assert.match(read(paths[1]),/document_charges_usd NUMERIC\(20, 4\)/);
   assert.match(read(paths[2]),/port_departure_date date/);
 });
+
+test("financial idempotency, presence indexes and valuation history migrations are schema-only",()=>{
+  const files=[
+    "migrations/controlled/20261111_013_financial_operation_requests.sql",
+    "migrations/controlled/20261111_014_user_presence_indexes.sql",
+    "migrations/controlled/20261111_015_inventory_valuation_overrides.sql"
+  ];
+  for(const path of files){
+    const sql=read(path).replace(/^--.*$/gm,"");
+    assert.doesNotMatch(sql,/\b(?:INSERT|UPDATE|DELETE|TRUNCATE|DROP)\s+(?:INTO|FROM|TABLE|INDEX|\w+)/i);
+  }
+  assert.match(read(files[0]),/financial_operation_requests_company_key_unique/);
+  assert.match(read(files[1]),/user_presence_company_last_seen_idx/);
+  assert.match(read(files[2]),/inventory_valuation_overrides_company_item_location_idx/);
+});
