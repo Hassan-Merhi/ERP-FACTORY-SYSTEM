@@ -174,7 +174,7 @@ async function run() {
         VALUES (1,'phase4-user',1,10,202)`);
       await expectRejected(`
         INSERT INTO user_company_roles(id,user_id,company_id,assigned_location_id)
-        VALUES (2,'phase4-user',99,10)`,"23503");
+        VALUES (2,'phase4-user',99,NULL)`,"23503");
       await client.query(`
         INSERT INTO user_company_roles(id,user_id,company_id,assigned_location_id,cash_account_id)
         VALUES (3,'phase4-user',1,10,101);
