@@ -36,6 +36,10 @@ function clean(v: unknown) {
   return String(v ?? "").replace(/[\x00-\x1f\x7f]/g, " ").trim().slice(0, 100);
 }
 function errorResponse(res: Response, e: unknown) {
+  const status = Number((e as { status?: number })?.status ?? 0);
+  if (status === 401 || status === 403) {
+    return res.status(status).json({ message: "Active company permission is no longer valid." });
+  }
   if (e instanceof StockTransferOrderApprovalError) {
     return res.status(e.code === "STO_WA_SCOPE" ? 403 : 409).json({ code: e.code, message: e.message });
   }
@@ -287,7 +291,7 @@ export function registerStockTransferOrderWaApprovalRoutes(app: Express,
   });
 
   app.post("/api/stock-transfer-order/wa-approval/requests",requireAuth,senders,async(req,res)=>{
-    let draftId:number|null=null,accepted=false;
+    let draftId:number|null=null,accepted=false,sendUncertain=false;
     try {
       const a=await actor(req),destinationId=idOf(req.body?.destinationLocationId);
       const transferIds:unknown=req.body?.transferIds;
@@ -325,6 +329,7 @@ export function registerStockTransferOrderWaApprovalRoutes(app: Express,
           return res.status(502).json({message:sent.error||"WhatsApp rejected the approval request."});
         }
         // Preserve draft reservation: a timeout could mean a sent request.
+        sendUncertain=true;
         await pool.query("INSERT INTO stock_transfer_order_approval_events(company_id,batch_id,event_type,details) VALUES($1,$2,'ignored',$3::jsonb)",
           [a.companyId,draft.batchId,JSON.stringify({reason:"request_send_uncertain",detail:sent.error})]);
         draftId=null;
@@ -340,9 +345,14 @@ export function registerStockTransferOrderWaApprovalRoutes(app: Express,
         revisions:draft.revisionCount,messageId:sent.idMessage,
         message:"Approval request sent. Automatic DONE processing is introduced in Phase 3."});
     } catch(e) {
-      if(draftId!==null&&!accepted) {
+      if(draftId!==null&&!accepted&&!sendUncertain) {
         try {const a=await actor(req);await setBatchStatus(a.companyId,draftId,"cancelled");}
         catch(cleanupError){logger.error("[STO WA] Draft cleanup failed",{cleanupError,draftId});}
+      }
+      if(sendUncertain) {
+        logger.error("[STO WA] Uncertain request could not be fully recorded", { error: e, draftId });
+        return res.status(202).json({ ok: false, uncertain: true, batchId: draftId,
+          message: "WhatsApp request outcome is unknown. Check the group before manually cancelling; do not resend." });
       }
       if(accepted) {
         logger.error("[STO WA] Provider accepted request but correlation could not be stored",{error:e,draftId});
