@@ -44,3 +44,31 @@ describe("ERP Phase 3 page-access assignment safety", () => {
     expect(putHandler).toContain('status(404)');
   });
 });
+
+describe("ERP hidden-cost preference route membership", () => {
+  const getHandler = source.slice(
+    source.indexOf('app.get("/api/erp-user-hidden-costs/:userId"'),
+    source.indexOf('app.put("/api/erp-user-hidden-costs/:userId"')
+  );
+  const updateHandler = source.slice(
+    source.indexOf('app.put("/api/erp-user-hidden-costs/:userId"'),
+    source.indexOf('app.get("/api/my-erp-pages"')
+  );
+
+  it("does not reveal a nonmember's global ERP restrictions to a company Admin", () => {
+    expect(getHandler).toContain("userCompanyRoles.companyId");
+    expect(getHandler).toContain("userCompanyRoles.userId");
+    expect(getHandler).toContain('status(404)');
+  });
+
+  it("validates legacy-compatible keys and locks membership before updating user preferences", () => {
+    expect(updateHandler).toContain("parseErpHiddenCostFields(req.body?.hiddenCostFields)");
+    expect(updateHandler).toContain("db.transaction(async (tx)");
+    expect(updateHandler).toContain('for("update")');
+    expect(updateHandler.indexOf("if (!membership) return false")).toBeLessThan(
+      updateHandler.indexOf(".update(users)")
+    );
+    expect(updateHandler).toContain('status(404)');
+    expect(updateHandler).toContain('status(400)');
+  });
+});
