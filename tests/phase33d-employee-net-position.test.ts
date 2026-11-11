@@ -280,7 +280,7 @@ describe("Phase 33D employee/factory net position", () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.body.forUs.accounts).toContainEqual(expect.objectContaining({
-      code: "FX_SUPPLIER_GAIN", value: 459.44,
+      code: "FX_UNREALIZED_GAIN", value: 459.44,
     }));
     expect(res.body.onUs.accounts).toContainEqual(expect.objectContaining({
       code: "SUPPLIER", name: "EUR Supplier", value: 9035.50,
@@ -305,9 +305,9 @@ describe("Phase 33D employee/factory net position", () => {
     await routes.get("GET /api/factory/net-position")!(req(), res);
 
     expect(res.statusCode).toBe(200);
-    expect(res.body.forUs.accounts.some((row: any) => row.code === "FX_SUPPLIER_GAIN")).toBe(false);
+    expect(res.body.forUs.accounts.some((row: any) => row.code === "FX_UNREALIZED_GAIN")).toBe(false);
     expect(res.body.onUs.accounts).toContainEqual(expect.objectContaining({
-      code: "FX_SUPPLIER_LOSS", value: 459.43,
+      code: "FX_UNREALIZED_LOSS", value: 459.43,
     }));
     expect(res.body.onUs.accounts).toContainEqual(expect.objectContaining({
       code: "SUPPLIER", name: "EUR Supplier", value: 9035.50,

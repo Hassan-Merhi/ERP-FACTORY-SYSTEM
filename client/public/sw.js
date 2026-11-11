@@ -10,7 +10,14 @@ const CACHE_PREFIX = "erp-";
 const IOS_FORCE_UPDATE_CAMPAIGN = "ios-pwa-2026-10-28-v3";
 const IOS_FORCE_UPDATE_MARKER_CACHE = `hmd-force-update-${IOS_FORCE_UPDATE_CAMPAIGN}`;
 const IOS_FORCE_UPDATE_MARKER_URL = "/__pwa_force_update_applied__";
-const APP_SHELL = ["/", "/manifest.json"];
+// Versioned branding assets make the new icons available to existing offline installations.
+const APP_SHELL = [
+  "/",
+  "/manifest.json?brand=dakzo-20261111",
+  "/dakzo-favicon-v1.png",
+  "/dakzo-icon-192-v1.png",
+  "/dakzo-icon-512-v1.png",
+];
 const MAX_STATIC_CACHE_ENTRIES = 200;
 const HASHED_ASSET_RE =
   /^\/assets\/[^/]+-[A-Za-z0-9_-]{6,}\.(?:js|css|woff2?|ttf|png|jpe?g|webp|svg|ico)$/i;
@@ -276,7 +283,7 @@ self.addEventListener("push", (event) => {
     event.waitUntil(
       self.registration.showNotification(data.title || "ERP Notification", {
         body: data.body || "",
-        icon: "/favicon.png",
+        icon: "/dakzo-favicon-v1.png",
         tag: data.tag || "erp-notification",
       })
     );

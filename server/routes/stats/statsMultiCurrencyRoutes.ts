@@ -79,7 +79,7 @@ export function registerStatsMultiCurrencyRoutes(app: Express) {
         // The source report is cached and shared. Clone before overlay so that
         // repeated reads never apply the same translation a second time.
         const copy = JSON.parse(JSON.stringify(payload)) as MonetaryNetPositionPayload;
-        const translated = applyVerifiedMonetaryFxOverlay(copy, valuation);
+        const translated = applyVerifiedMonetaryFxOverlay(copy, valuation, { showFxAsRows: true });
         const adjusted = translated.payload;
         if (adjusted.equity && adjusted.equity.includedInNetPosition == null) {
           adjusted.equity.includedInNetPosition = false;

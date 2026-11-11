@@ -281,7 +281,7 @@ export default function FactoryNetPosition() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Side
             label="What We Have"
-            sublabel="Assets owed to us — cash, inventory, receivables, customer balances (Dr)"
+            sublabel="Assets and unrealized FX gains — cash, stock, receivables and orders"
             total={data?.forUs.total ?? 0}
             breakdown={data?.forUs.breakdown ?? []}
             accounts={data?.forUs.accounts ?? []}
@@ -290,7 +290,7 @@ export default function FactoryNetPosition() {
           />
           <Side
             label="What We Owe"
-            sublabel="Liabilities — supplier balances and other payables"
+            sublabel="Liabilities and unrealized FX losses — suppliers, loans and other payables"
             total={data?.onUs.total ?? 0}
             breakdown={data?.onUs.breakdown ?? []}
             accounts={data?.onUs.accounts ?? []}
