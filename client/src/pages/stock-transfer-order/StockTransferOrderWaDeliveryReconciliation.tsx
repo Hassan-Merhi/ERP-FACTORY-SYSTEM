@@ -162,7 +162,7 @@ function DeliveryReviewRow({ batchId, delivery, other, onCompleted }: {
           )}
           <div className="space-y-1">
             <Label>What did you verify? (20–500 characters, saved in audit history)</Label>
-            <Textarea rows={3} value={reason} onChange={setReason}
+            <Textarea rows={3} value={reason} onChange={event=>setReason(event.target.value)}
               placeholder="Where you checked, what batch/file you looked for, and the result"
               data-testid="sto-wa-review-evidence"/>
           </div>
@@ -189,7 +189,6 @@ function DeliveryReviewRow({ batchId, delivery, other, onCompleted }: {
 
 export function StockTransferOrderWaDeliveryReconciliation({ batchId }: { batchId: number }) {
   const { selectedCompany } = useCompany();
-  const { toast } = useToast();
   const details=useQuery<Reconciliation>({
     queryKey: [base + "/requests/" + batchId + "/deliveries",selectedCompany?.id],
     queryFn: async () => (await apiRequest("GET", base + "/requests/" + batchId + "/deliveries")).json(),
