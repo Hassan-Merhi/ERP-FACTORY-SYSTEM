@@ -2452,7 +2452,7 @@
     "USE /api/pending-barcodes [<anonymous>]",
     "USE /api/stock-transfers [<anonymous>]",
     "USE /api/stock-transfer-orders [<anonymous>]",
-    "USE /api/stock-transfer-order [<anonymous>]",
+    "USE /api/stock-transfer-order/wa-approval [<anonymous>]",
     "USE /api/stock-transfer-revisions [<anonymous>]",
     "USE /api/stock-summary [<anonymous>]",
     "USE /api/offload-item-search [<anonymous>]",
