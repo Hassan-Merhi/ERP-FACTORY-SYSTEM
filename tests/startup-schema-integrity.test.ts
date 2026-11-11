@@ -323,7 +323,10 @@ describe("startup schema integrity", () => {
             zambiaHistoricalPurchaseCostSchema.length +
             factoryPressingMachineTrackingSchema.length +
             factoryPressingHistoryReportIndexes.length +
-            (stockTransferOrderWaApprovalFoundation.length + stockTransferOrderWaWebhookIntegrity.length + stockTransferOrderWaDeliverySchema.length + stockTransferOrderWaReconciliationSchema.length)
+            (stockTransferOrderWaApprovalFoundation.length +
+              stockTransferOrderWaWebhookIntegrity.length +
+              stockTransferOrderWaDeliverySchema.length +
+              stockTransferOrderWaReconciliationSchema.length)
           )
         )
       ),
@@ -340,7 +343,10 @@ describe("startup schema integrity", () => {
       zambiaHistoricalPurchaseCostSchema.length +
       factoryPressingMachineTrackingSchema.length +
       factoryPressingHistoryReportIndexes.length +
-      (stockTransferOrderWaApprovalFoundation.length + stockTransferOrderWaWebhookIntegrity.length + stockTransferOrderWaDeliverySchema.length + stockTransferOrderWaReconciliationSchema.length);
+      (stockTransferOrderWaApprovalFoundation.length +
+        stockTransferOrderWaWebhookIntegrity.length +
+        stockTransferOrderWaDeliverySchema.length +
+        stockTransferOrderWaReconciliationSchema.length);
     expect(startupMigrations.slice(-tail, -tail + supplierTrackingShopDutyDefaultsSchema.length)).toEqual(
       supplierTrackingShopDutyDefaultsSchema
     );
@@ -362,11 +368,17 @@ describe("startup schema integrity", () => {
           zambiaHistoricalPurchaseCostSchema.length -
           factoryPressingMachineTrackingSchema.length -
           factoryPressingHistoryReportIndexes.length -
-          (stockTransferOrderWaApprovalFoundation.length + stockTransferOrderWaWebhookIntegrity.length + stockTransferOrderWaDeliverySchema.length + stockTransferOrderWaReconciliationSchema.length),
+          (stockTransferOrderWaApprovalFoundation.length +
+            stockTransferOrderWaWebhookIntegrity.length +
+            stockTransferOrderWaDeliverySchema.length +
+            stockTransferOrderWaReconciliationSchema.length),
         -zambiaHistoricalPurchaseCostSchema.length -
           factoryPressingMachineTrackingSchema.length -
           factoryPressingHistoryReportIndexes.length -
-          (stockTransferOrderWaApprovalFoundation.length + stockTransferOrderWaWebhookIntegrity.length + stockTransferOrderWaDeliverySchema.length + stockTransferOrderWaReconciliationSchema.length)
+          (stockTransferOrderWaApprovalFoundation.length +
+            stockTransferOrderWaWebhookIntegrity.length +
+            stockTransferOrderWaDeliverySchema.length +
+            stockTransferOrderWaReconciliationSchema.length)
       )
     ).toEqual(posPortDepartureDateSchema);
   });
@@ -378,10 +390,16 @@ describe("startup schema integrity", () => {
         -zambiaHistoricalPurchaseCostSchema.length -
           factoryPressingMachineTrackingSchema.length -
           factoryPressingHistoryReportIndexes.length -
-          (stockTransferOrderWaApprovalFoundation.length + stockTransferOrderWaWebhookIntegrity.length + stockTransferOrderWaDeliverySchema.length + stockTransferOrderWaReconciliationSchema.length),
+          (stockTransferOrderWaApprovalFoundation.length +
+            stockTransferOrderWaWebhookIntegrity.length +
+            stockTransferOrderWaDeliverySchema.length +
+            stockTransferOrderWaReconciliationSchema.length),
         -factoryPressingMachineTrackingSchema.length -
           factoryPressingHistoryReportIndexes.length -
-          (stockTransferOrderWaApprovalFoundation.length + stockTransferOrderWaWebhookIntegrity.length + stockTransferOrderWaDeliverySchema.length + stockTransferOrderWaReconciliationSchema.length)
+          (stockTransferOrderWaApprovalFoundation.length +
+            stockTransferOrderWaWebhookIntegrity.length +
+            stockTransferOrderWaDeliverySchema.length +
+            stockTransferOrderWaReconciliationSchema.length)
       )
     ).toEqual(zambiaHistoricalPurchaseCostSchema);
     // Every column statement is an idempotent ADD COLUMN IF NOT EXISTS on one
@@ -406,8 +424,15 @@ describe("startup schema integrity", () => {
       startupMigrations.slice(
         -factoryPressingMachineTrackingSchema.length -
           factoryPressingHistoryReportIndexes.length -
-          (stockTransferOrderWaApprovalFoundation.length + stockTransferOrderWaWebhookIntegrity.length + stockTransferOrderWaDeliverySchema.length + stockTransferOrderWaReconciliationSchema.length),
-        -factoryPressingHistoryReportIndexes.length - (stockTransferOrderWaApprovalFoundation.length + stockTransferOrderWaWebhookIntegrity.length + stockTransferOrderWaDeliverySchema.length + stockTransferOrderWaReconciliationSchema.length)
+          (stockTransferOrderWaApprovalFoundation.length +
+            stockTransferOrderWaWebhookIntegrity.length +
+            stockTransferOrderWaDeliverySchema.length +
+            stockTransferOrderWaReconciliationSchema.length),
+        -factoryPressingHistoryReportIndexes.length -
+          (stockTransferOrderWaApprovalFoundation.length +
+            stockTransferOrderWaWebhookIntegrity.length +
+            stockTransferOrderWaDeliverySchema.length +
+            stockTransferOrderWaReconciliationSchema.length)
       )
     ).toEqual(factoryPressingMachineTrackingSchema);
     const ddl = factoryPressingMachineTrackingSchema.join("; ");
@@ -425,8 +450,18 @@ describe("startup schema integrity", () => {
     expect(factoryPressingHistoryReportIndexes).toHaveLength(1);
     expect(
       startupMigrations.slice(
-        -(stockTransferOrderWaApprovalFoundation.length + stockTransferOrderWaWebhookIntegrity.length + stockTransferOrderWaDeliverySchema.length + stockTransferOrderWaReconciliationSchema.length) - 1,
-        -(stockTransferOrderWaApprovalFoundation.length + stockTransferOrderWaWebhookIntegrity.length + stockTransferOrderWaDeliverySchema.length + stockTransferOrderWaReconciliationSchema.length)
+        -(
+          stockTransferOrderWaApprovalFoundation.length +
+          stockTransferOrderWaWebhookIntegrity.length +
+          stockTransferOrderWaDeliverySchema.length +
+          stockTransferOrderWaReconciliationSchema.length
+        ) - 1,
+        -(
+          stockTransferOrderWaApprovalFoundation.length +
+          stockTransferOrderWaWebhookIntegrity.length +
+          stockTransferOrderWaDeliverySchema.length +
+          stockTransferOrderWaReconciliationSchema.length
+        )
       )
     ).toEqual(factoryPressingHistoryReportIndexes);
     expect(factoryPressingHistoryReportIndexes[0]).toContain("factory_pressing_confirmations_machine_time_idx");
@@ -435,8 +470,17 @@ describe("startup schema integrity", () => {
 
   it("retains Stock Transfer Order approval foundation immediately before the webhook index", () => {
     expect(stockTransferOrderWaApprovalFoundation).toHaveLength(44);
-    expect(startupMigrations.slice(-44 - stockTransferOrderWaWebhookIntegrity.length - stockTransferOrderWaDeliverySchema.length - stockTransferOrderWaReconciliationSchema.length, -stockTransferOrderWaWebhookIntegrity.length - stockTransferOrderWaDeliverySchema.length - stockTransferOrderWaReconciliationSchema.length))
-      .toEqual(stockTransferOrderWaApprovalFoundation);
+    expect(
+      startupMigrations.slice(
+        -44 -
+          stockTransferOrderWaWebhookIntegrity.length -
+          stockTransferOrderWaDeliverySchema.length -
+          stockTransferOrderWaReconciliationSchema.length,
+        -stockTransferOrderWaWebhookIntegrity.length -
+          stockTransferOrderWaDeliverySchema.length -
+          stockTransferOrderWaReconciliationSchema.length
+      )
+    ).toEqual(stockTransferOrderWaApprovalFoundation);
     const sqlText = stockTransferOrderWaApprovalFoundation.join("; ");
     expect(sqlText).toContain("stock_transfer_order_approval_batches");
     expect(sqlText).toContain("stock_transfer_order_approval_batch_revisions");
@@ -446,14 +490,24 @@ describe("startup schema integrity", () => {
 
   it("appends one immutable inbound-decision uniqueness index after Phase 1", () => {
     expect(stockTransferOrderWaWebhookIntegrity).toHaveLength(1);
-    expect(startupMigrations.slice(-1 - stockTransferOrderWaDeliverySchema.length - stockTransferOrderWaReconciliationSchema.length, -stockTransferOrderWaDeliverySchema.length + stockTransferOrderWaReconciliationSchema.length)).toEqual(stockTransferOrderWaWebhookIntegrity);
+    expect(
+      startupMigrations.slice(
+        -1 - stockTransferOrderWaDeliverySchema.length - stockTransferOrderWaReconciliationSchema.length,
+        -stockTransferOrderWaDeliverySchema.length - stockTransferOrderWaReconciliationSchema.length
+      )
+    ).toEqual(stockTransferOrderWaWebhookIntegrity);
     expect(stockTransferOrderWaWebhookIntegrity[0]).toContain("sto_wa_batch_decision_once_uk");
     expect(stockTransferOrderWaWebhookIntegrity[0]).toContain("'done_received','decline_received'");
   });
 
   it("appends the immutable final Excel snapshot schema after all Phase 3 statements", () => {
     expect(stockTransferOrderWaDeliverySchema).toHaveLength(7);
-    expect(startupMigrations.slice(-stockTransferOrderWaDeliverySchema.length - stockTransferOrderWaReconciliationSchema.length, -stockTransferOrderWaReconciliationSchema.length)).toEqual(stockTransferOrderWaDeliverySchema);
+    expect(
+      startupMigrations.slice(
+        -stockTransferOrderWaDeliverySchema.length - stockTransferOrderWaReconciliationSchema.length,
+        -stockTransferOrderWaReconciliationSchema.length
+      )
+    ).toEqual(stockTransferOrderWaDeliverySchema);
     const sql = stockTransferOrderWaDeliverySchema.join("; ");
     expect(sql).toContain("stock_transfer_order_approval_workbooks");
     expect(sql).toContain("sto_wa_workbook_immutable_trg");
@@ -463,9 +517,10 @@ describe("startup schema integrity", () => {
 
   it("appends Stage 042 administrative reconciliation changes after Stage 041", () => {
     expect(stockTransferOrderWaReconciliationSchema).toHaveLength(4);
-    expect(startupMigrations.slice(-stockTransferOrderWaReconciliationSchema.length))
-      .toEqual(stockTransferOrderWaReconciliationSchema);
-    const ddl=stockTransferOrderWaReconciliationSchema.join("; ");
+    expect(startupMigrations.slice(-stockTransferOrderWaReconciliationSchema.length)).toEqual(
+      stockTransferOrderWaReconciliationSchema
+    );
+    const ddl = stockTransferOrderWaReconciliationSchema.join("; ");
     expect(ddl).toContain("manual_retry_count");
     expect(ddl).toContain("delivery_manually_verified");
     expect(ddl).toContain("delivery_manual_retry");
