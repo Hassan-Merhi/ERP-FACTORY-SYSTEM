@@ -435,7 +435,7 @@ describe("startup schema integrity", () => {
 
   it("retains Stock Transfer Order approval foundation immediately before the webhook index", () => {
     expect(stockTransferOrderWaApprovalFoundation).toHaveLength(44);
-    expect(startupMigrations.slice(-44 - stockTransferOrderWaWebhookIntegrity.length - stockTransferOrderWaDeliverySchema.length + stockTransferOrderWaReconciliationSchema.length, -stockTransferOrderWaWebhookIntegrity.length - stockTransferOrderWaDeliverySchema.length + stockTransferOrderWaReconciliationSchema.length))
+    expect(startupMigrations.slice(-44 - stockTransferOrderWaWebhookIntegrity.length - stockTransferOrderWaDeliverySchema.length - stockTransferOrderWaReconciliationSchema.length, -stockTransferOrderWaWebhookIntegrity.length - stockTransferOrderWaDeliverySchema.length - stockTransferOrderWaReconciliationSchema.length))
       .toEqual(stockTransferOrderWaApprovalFoundation);
     const sqlText = stockTransferOrderWaApprovalFoundation.join("; ");
     expect(sqlText).toContain("stock_transfer_order_approval_batches");
@@ -446,7 +446,7 @@ describe("startup schema integrity", () => {
 
   it("appends one immutable inbound-decision uniqueness index after Phase 1", () => {
     expect(stockTransferOrderWaWebhookIntegrity).toHaveLength(1);
-    expect(startupMigrations.slice(-1 - stockTransferOrderWaDeliverySchema.length + stockTransferOrderWaReconciliationSchema.length, -stockTransferOrderWaDeliverySchema.length + stockTransferOrderWaReconciliationSchema.length)).toEqual(stockTransferOrderWaWebhookIntegrity);
+    expect(startupMigrations.slice(-1 - stockTransferOrderWaDeliverySchema.length - stockTransferOrderWaReconciliationSchema.length, -stockTransferOrderWaDeliverySchema.length + stockTransferOrderWaReconciliationSchema.length)).toEqual(stockTransferOrderWaWebhookIntegrity);
     expect(stockTransferOrderWaWebhookIntegrity[0]).toContain("sto_wa_batch_decision_once_uk");
     expect(stockTransferOrderWaWebhookIntegrity[0]).toContain("'done_received','decline_received'");
   });
