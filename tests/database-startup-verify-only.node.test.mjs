@@ -90,3 +90,31 @@ test("multilingual Factory bridge verifies columns without applying French SQL a
   assert.match(sql,/CREATE TABLE IF NOT EXISTS user_language_preferences/);
   assert.doesNotMatch(sql,/UPDATE\s+factory_bales|DELETE\s+FROM/i);
 });
+
+test("Arabic Factory startup supports read-only check and controlled migration",()=>{
+  const bridge=read("server/factoryBilingualSchemaBridge.mjs");
+  const sql=read("migrations/controlled/20261111_006_factory_bilingual_catalog.sql");
+  assert.match(bridge,/FACTORY_BILINGUAL_SCHEMA_MODE/);
+  assert.match(bridge,/BEGIN READ ONLY/);
+  assert.match(sql,/CREATE INDEX IF NOT EXISTS factory_bale_products_company_article_code_normalized_idx/);
+  assert.match(sql,/factory_v3_load_bales/);
+  assert.doesNotMatch(sql,/DELETE\s+FROM|UPDATE\s+factory_bales/i);
+});
+
+test("scan timestamp audit verification checks both triggers read-only",()=>{
+  const bridge=read("server/customerOrderBaleScanAuditBridge.mjs");
+  const sql=read("migrations/controlled/20261111_007_bale_scan_timestamp_audit.sql");
+  assert.match(bridge,/BALE_SCAN_AUDIT_SCHEMA_MODE/);
+  assert.match(bridge,/BEGIN READ ONLY/);
+  assert.match(bridge,/scan timestamps/);
+  assert.match(sql,/CREATE OR REPLACE FUNCTION public\.set_customer_order_bale_scanned_at/);
+  assert.match(sql,/customer_order_bales_history_copy_scanned_at/);
+  assert.doesNotMatch(sql,/UPDATE\s+customer_order_bales|DELETE\s+FROM customer_order_bales/i);
+});
+
+test("legacy startup runner refuses unmapped historical statements in opt-in mode",()=>{
+  const src=read("server/startup/runServerStartupMigrations.ts");
+  assert.match(src,/LEGACY_STARTUP_MIGRATION_MODE/);
+  assert.match(src,/Legacy startup cutover blocked/);
+  assert.match(src,/unversioned startup statements have not been mapped/);
+});
