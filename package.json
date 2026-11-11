@@ -89,10 +89,11 @@
     "db:migrations:plan": "node scripts/run-controlled-migrations.mjs --plan",
     "db:migrations:status": "node scripts/run-controlled-migrations.mjs --status",
     "db:migrations:apply": "node scripts/run-controlled-migrations.mjs --apply",
-    "test:db:migrations": "node --test tests/controlled-migration-runner.node.test.mjs tests/database-startup-verify-only.node.test.mjs tests/database-integrity-audit.node.test.mjs tests/database-schema-drift.node.test.mjs",
+    "test:db:migrations": "node --test tests/controlled-migration-runner.node.test.mjs tests/database-startup-verify-only.node.test.mjs tests/database-integrity-audit.node.test.mjs tests/database-schema-drift.node.test.mjs tests/database-performance-audit.node.test.mjs",
     "audit:database-integrity": "node scripts/audit-database-integrity.mjs --json",
     "db:drift": "node scripts/audit-database-schema-drift.mjs --json",
-    "db:drift:strict": "node scripts/audit-database-schema-drift.mjs --json --require-controlled"
+    "db:drift:strict": "node scripts/audit-database-schema-drift.mjs --json --require-controlled",
+    "db:performance:audit": "node scripts/audit-database-performance.mjs --json"
   },
   "dependencies": {
     "@aparajita/capacitor-biometric-auth": "^10.0.0",
