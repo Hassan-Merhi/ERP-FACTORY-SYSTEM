@@ -12,6 +12,7 @@ import process from "node:process";
 import pg from "pg";
 import { resolveDatabaseSsl } from "../server/lib/databaseSsl.mjs";
 import { compareSchemaDrift, compareMigrationHistory } from "./database-schema-drift-core.mjs";
+import { compareDefinitionDrift } from "./database-schema-definition-core.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const allowed = new Set(["--json","--require-controlled"]);
@@ -35,28 +36,50 @@ async function manifest() {
 }
 
 async function collect(client) {
-  const [tables,columns,indexes,constraints,triggers]=await Promise.all([
+  const [tables,columns,indexes,constraints,triggers,functions,policies]=await Promise.all([
     client.query(`SELECT c.relname AS table_name FROM pg_class c
       JOIN pg_namespace ns ON ns.oid=c.relnamespace
       WHERE ns.nspname='public' AND c.relkind IN ('r','p')`),
-    client.query(`SELECT table_name,column_name FROM information_schema.columns WHERE table_schema='public'`),
-    client.query(`SELECT cls.relname AS index_name,i.indisvalid AS valid,i.indisready AS ready
+    client.query(`SELECT table_name,column_name,data_type,
+      (is_nullable='NO') AS not_null,column_default AS default_expression
+      FROM information_schema.columns WHERE table_schema='public'`),
+    client.query(`SELECT cls.relname AS index_name,tab.relname AS table_name,
+        i.indisvalid AS valid,i.indisready AS ready,i.indisunique AS unique,
+        pg_get_indexdef(i.indexrelid) AS definition,
+        pg_get_expr(i.indpred,i.indrelid) AS predicate,
+        ARRAY(SELECT pg_get_indexdef(i.indexrelid,k,true)
+          FROM generate_series(1,i.indnkeyatts) k ORDER BY k) AS key_columns
       FROM pg_index i JOIN pg_class cls ON cls.oid=i.indexrelid
+      JOIN pg_class tab ON tab.oid=i.indrelid
       JOIN pg_namespace ns ON ns.oid=cls.relnamespace WHERE ns.nspname='public'`),
-    client.query(`SELECT cls.relname AS table_name,con.conname AS constraint_name,con.convalidated AS validated
+    client.query(`SELECT cls.relname AS table_name,con.conname AS constraint_name,con.convalidated AS validated,
+        con.contype AS type,pg_get_constraintdef(con.oid) AS definition
       FROM pg_constraint con JOIN pg_class cls ON cls.oid=con.conrelid
       JOIN pg_namespace ns ON ns.oid=cls.relnamespace WHERE ns.nspname='public'`),
-    client.query(`SELECT cls.relname AS table_name,tr.tgname AS trigger_name,tr.tgenabled AS enabled
+    client.query(`SELECT cls.relname AS table_name,tr.tgname AS trigger_name,tr.tgenabled AS enabled,
+        pg_get_triggerdef(tr.oid) AS definition
       FROM pg_trigger tr JOIN pg_class cls ON cls.oid=tr.tgrelid
       JOIN pg_namespace ns ON ns.oid=cls.relnamespace
-      WHERE ns.nspname='public' AND NOT tr.tgisinternal`)
+      WHERE ns.nspname='public' AND NOT tr.tgisinternal`),
+    client.query(`SELECT p.proname AS function_name,pg_get_functiondef(p.oid) AS definition
+      FROM pg_proc p JOIN pg_namespace ns ON ns.oid=p.pronamespace
+      WHERE ns.nspname='public' AND p.proname IN
+        ('set_customer_order_bale_scanned_at','copy_customer_order_bale_scanned_at_to_history')
+        AND p.pronargs=0`),
+    client.query(`SELECT c.relname AS table_name,c.relrowsecurity AS enabled,
+        c.relforcerowsecurity AS forced,
+        (SELECT count(*)::int FROM pg_policy p WHERE p.polrelid=c.oid) AS policy_count
+      FROM pg_class c JOIN pg_namespace ns ON ns.oid=c.relnamespace
+      WHERE ns.nspname='public' AND c.relkind IN ('r','p')`)
   ]);
   return {
     tables:tables.rows.map(x=>x.table_name),
     columns:columns.rows,
     indexes:indexes.rows,
     constraints:constraints.rows,
-    triggers:triggers.rows
+    triggers:triggers.rows,
+    functions:functions.rows,
+    policies:policies.rows
   };
 }
 
@@ -77,10 +100,12 @@ async function run() {
       :[];
     const migration=compareMigrationHistory(await manifest(),rows,historyExists);
     const schema=compareSchemaDrift(snapshot,{includeControlled:requireControlled});
+    const definitions=requireControlled?compareDefinitionDrift(snapshot):null;
     // History is optional for the baseline report, mandatory for certified cutover.
-    const gate=schema.ok && migration.ok && (!requireControlled || (historyExists && migration.pending.length===0));
+    const gate=schema.ok && migration.ok && (!requireControlled ||
+      (definitions.ok && historyExists && migration.pending.length===0));
     await client.query("ROLLBACK");
-    const output={ok:gate,mode:"read-only",schema,migration,controlledHistoryRequired:requireControlled};
+    const output={ok:gate,mode:"read-only",schema,definitions,migration,controlledHistoryRequired:requireControlled};
     console.log(JSON.stringify(output,null,2));
     if(!gate) process.exitCode=1;
   } catch(error) {
