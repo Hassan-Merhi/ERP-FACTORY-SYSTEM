@@ -49,9 +49,10 @@ function sourceIds(documents: StockTransferDocumentSnapshot[]): string[] {
 
 /**
  * Reads canonical movement evidence only for the authoritative stock-transfer
- * documents supplied by the database document adapter. Keeping the source-id
- * filter in the SQL boundary prevents unrelated, deleted, draft, or another
- * domain's movements from being silently folded into a reconciliation run.
+ * documents supplied by the database document adapter. Ordinary writes are
+ * keyed by transfer ID while both Excel-import writers are keyed by voucher ID.
+ * The explicit requested (transfer, voucher) pairs prevent a cross-document
+ * match and normalize every movement to the transfer document's identity.
  */
 export const loadDatabaseCanonicalStockTransferEvidence: StockTransferMovementEvidenceLoader = async ({
   tx,
@@ -71,22 +72,36 @@ export const loadDatabaseCanonicalStockTransferEvidence: StockTransferMovementEv
   }
 
   const ids = sourceIds(documents);
-  const idList = sql.join(
-    ids.map((id) => sql`${id}`),
+  // The ordinary transfer writer identifies evidence by transfer ID; the two
+  // Excel-import writers identify the same transfer by its voucher ID and a
+  // distinct source type. Normalize all three to the authoritative document's
+  // transfer ID before the balanced-leg summarizer evaluates them.
+  const pairs = sql.join(
+    documents.map((document) =>
+      sql`(${String(positiveInteger(document.transferId, "document.transferId"))}, ${String(positiveInteger(document.voucherId, "document.voucherId"))})`
+    ),
     sql`, `
   );
   const result = await tx.execute(sql`
+    WITH requested(transfer_id, voucher_id) AS (VALUES ${pairs})
     SELECT
-      company_id AS "companyId",
-      source_type AS "sourceType",
-      source_id AS "sourceId",
-      quantity_delta AS "quantityDelta",
-      unit_cost AS "unitCost"
-    FROM canonical_stock_movements
-    WHERE company_id = ${scopedCompanyId}
-      AND source_type = 'stock-transfer'
-      AND source_id IN (${idList})
-    ORDER BY source_id, id
+      movement.company_id AS "companyId",
+      'stock-transfer'::text AS "sourceType",
+      requested.transfer_id AS "sourceId",
+      movement.source_type AS "originalSourceType",
+      movement.quantity_delta AS "quantityDelta",
+      movement.unit_cost AS "unitCost"
+    FROM requested
+    INNER JOIN canonical_stock_movements movement
+      ON movement.company_id = ${scopedCompanyId}
+     AND (
+       (movement.source_type = 'stock-transfer'
+        AND movement.source_id = requested.transfer_id)
+       OR
+       (movement.source_type IN ('stock-transfer-import', 'stock-transfer-import-multi-source')
+        AND movement.source_id = requested.voucher_id)
+     )
+    ORDER BY requested.transfer_id, movement.id
   `);
 
   const rows = resultRows(result);
