@@ -28,3 +28,9 @@ server/routes/factory/customer-orders/loadingDispatchOrderReconciliationRoutes.t
 server/routes/factory/customer-orders/loadingDispatchPoExportModel.ts
 server/services/factory/dispatchInvoiceIntegrity.ts
 server/services/factory/dispatchTripFinancialPosting.ts
+
+# Stock Transfer Order WhatsApp approval sources whose exact text is pinned by
+# the Phase 2–6 contract tests. Reformatting them breaks those contracts.
+server/routes/stockTransferOrderWaApprovalRoutes.ts
+server/services/security/stockTransferOrderWaWebhookAuthentication.ts
+server/services/stockTransferOrderWaReconciliationPolicy.ts
