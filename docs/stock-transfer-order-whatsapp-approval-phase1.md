@@ -16,8 +16,9 @@ the approval group and destination recipient (Phase 5).
 ## Phase 1 storage and migration
 
 - `stock_transfer_vouchers.workflow_origin`: defaults to `stock_transfer`.
-  The dedicated new-order editor explicitly writes
-  `stock_transfer_order`. No historical vouchers are backfilled based only on
+  The dedicated new-order editor calls `POST /api/stock-transfer-orders`,
+  and only this server route writes `stock_transfer_order`. The normal
+  `POST /api/stock-transfers` route cannot accept an origin override. No historical vouchers are backfilled based only on
   their editable description; existing historical Stock Transfer Orders need a
   separately reviewed enrollment path in Phase 2 if they must be included.
 - `stock_transfer_order_approval_settings`: one disabled-by-default approval
