@@ -7,7 +7,7 @@
  * the database uniquely guards both provider message IDs and one decision per
  * approval batch.
  */
-import { createHash, timingSafeEqual } from "node:crypto";
+import { webhookTokenIsConfigured, authorizedStockTransferOrderWaWebhook } from "../services/security/stockTransferOrderWaWebhookAuthentication";
 import type { Express, Request, Response } from "express";
 import { logger } from "../lib/logger";
 import { parseStockTransferOrderWaReply } from "../services/stockTransferOrderWhatsAppReplyParser";
@@ -15,28 +15,6 @@ import { recordStockTransferOrderWaReply } from "../services/stockTransferOrderW
 
 export const STOCK_TRANSFER_ORDER_WA_WEBHOOK_PATH =
   "/api/stock-transfer-order/wa-approval/webhook";
-
-export function webhookTokenIsConfigured(): boolean {
-  const token = process.env.STO_WA_GREEN_API_WEBHOOK_TOKEN;
-  return typeof token === "string" && token.length >= 32 && token.length <= 256 &&
-    !/[\s\x00-\x1f]/.test(token);
-}
-
-/**
- * Compare hashes in constant time even for an incorrect token length. Env
- * holds the raw secret; GREEN API webhookUrlToken must be Bearer <secret>.
- */
-export function authorizedStockTransferOrderWaWebhook(authHeader: unknown): boolean {
-  if (!webhookTokenIsConfigured() || typeof authHeader !== "string" ||
-      !authHeader.startsWith("Bearer ") || authHeader.length > 300) {
-    return false;
-  }
-  const actual = authHeader.slice("Bearer ".length);
-  const expected = process.env.STO_WA_GREEN_API_WEBHOOK_TOKEN!;
-  const a = createHash("sha256").update(actual).digest();
-  const b = createHash("sha256").update(expected).digest();
-  return timingSafeEqual(a, b);
-}
 
 export async function stockTransferOrderWaWebhookHandler(req: Request, res: Response) {
     res.setHeader("Cache-Control", "no-store");
