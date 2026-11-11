@@ -49,6 +49,7 @@ import { posPortDepartureDateSchema } from "./035-pos-port-departure-date";
 import { zambiaHistoricalPurchaseCostSchema } from "./036-zambia-historical-purchase-cost";
 import { factoryPressingMachineTrackingSchema } from "./037-factory-pressing-machine-tracking";
 import { factoryPressingHistoryReportIndexes } from "./038-factory-pressing-history-report";
+import { stockTransferOrderWaApprovalFoundation } from "./039-stock-transfer-order-wa-approval";
 
 export const startupMigrations: string[] = [
   ...coreTablesAndColumns,
@@ -98,6 +99,8 @@ export const startupMigrations: string[] = [
   // Phase 1 physical pressing verification: separate from stock finalization.
   ...factoryPressingMachineTrackingSchema,
   ...factoryPressingHistoryReportIndexes,
+  // Stock Transfer Order approval batches only; no existing balances or vouchers are altered.
+  ...stockTransferOrderWaApprovalFoundation,
 ];
 
 // Re-exported so server/index.ts can bootstrap the journal from the module it
