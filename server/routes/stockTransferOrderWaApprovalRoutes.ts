@@ -6,7 +6,7 @@ import type { Express, Request, Response } from "express";
 import { requireAuth, requireRole } from "../auth";
 import { pool, db } from "../db";
 import { logger } from "../lib/logger";
-import { webhookTokenIsConfigured } from "./stockTransferOrderWaApprovalWebhookRoutes";
+import { webhookTokenIsConfigured } from "../services/security/stockTransferOrderWaWebhookAuthentication";
 import { getActiveCompanyPermissionContext } from "../services/security/activeCompanyPermissionContext";
 import {
   createStockTransferOrderApprovalDraft,
