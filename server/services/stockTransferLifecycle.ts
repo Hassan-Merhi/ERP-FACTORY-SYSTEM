@@ -13,6 +13,7 @@ import { lineValueMoved, reversalDate } from "./inventory/valueExactReversal";
 import { stockTransferNarrationTx } from "./inventory/stockTransferNarration";
 import { locations, stockItems, stockTransferItems, stockTransferVouchers, vouchers } from "@shared/schema";
 import { journalStockTransferLeg, nextStockTransferRevision } from "./inventory/stockTransferJournal";
+import { assertTransferNotAlreadyPostedTx } from "./inventory/transferCanonicalAlreadyPostedGuard";
 import type { DbTransaction } from "../db";
 import { firstRow } from "../lib/queryResult";
 import { MoneyDecimal, lineAmount, toMoney } from "../lib/money";
@@ -378,6 +379,13 @@ export async function saveStockTransferLifecycleTx(
     const voucherId = Number(locked.voucher_id);
     const wasApplied = Boolean(locked.inventory_applied);
     const willBeOptional = Boolean(locked.optional);
+    // A stale unapplied flag is NOT authorization to move the same stock again.
+    // Imported transfer movement evidence may exist even when this header flag
+    // was never updated. The guard also allows a genuinely fully reversed
+    // transfer to post again after its old movement deltas net to zero.
+    if (!wasApplied && !willBeOptional) {
+      await assertTransferNotAlreadyPostedTx(tx, { companyId, transferId, voucherId });
+    }
     const oldDestinationLocationId = Number(locked.destination_location_id);
     const oldRows = await loadTransferItems(tx, transferId);
     const oldItems = oldRows.length
@@ -538,6 +546,7 @@ export async function finalizeOptionalStockTransferTx(
 
     let transition: StockTransferLifecycleResult["transition"] = "post";
     if (!inventoryApplied) {
+      await assertTransferNotAlreadyPostedTx(tx, { companyId, transferId, voucherId });
       const applied = await validateAndApplyItems(tx, companyId, destinationLocationId, items, {
         transferId,
         revision: await nextStockTransferRevision(tx, companyId, transferId),
