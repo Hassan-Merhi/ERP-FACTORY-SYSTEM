@@ -94,7 +94,8 @@
     "db:drift": "node scripts/audit-database-schema-drift.mjs --json",
     "db:drift:strict": "node scripts/audit-database-schema-drift.mjs --json --require-controlled",
     "db:performance:audit": "node scripts/audit-database-performance.mjs --json",
-    "db:restore:preflight": "node scripts/verify-restore-target.mjs"
+    "db:restore:preflight": "node scripts/verify-restore-target.mjs",
+    "test:db:migrations:postgres": "node scripts/test-controlled-migrations-postgres.mjs"
   },
   "dependencies": {
     "@aparajita/capacitor-biometric-auth": "^10.0.0",
