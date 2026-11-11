@@ -118,7 +118,7 @@ export function StockTransferOrderApprovalSettings() {
         <CardDescription>
           Configure the approval group, a single authorized replying phone number, and the WhatsApp
           recipient linked to each destination. Only saved Stock Transfer Orders are eligible.
-          Incoming DONE and DECLINE replies are verified and recorded, but do not approve stock until Phase 4.
+          A verified DONE approves the complete selected order batch. Final Excel delivery to both WhatsApp recipients is tracked separately.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -139,7 +139,7 @@ export function StockTransferOrderApprovalSettings() {
                 Set STO_WA_GREEN_API_WEBHOOK_TOKEN on the ERP server and configure Green API
                 webhookUrlToken using Bearer authentication before sending requests.
               </p>
-            )
+            )}
             <div className="flex items-center justify-between rounded-lg border px-3 py-2">
               <Label htmlFor="sto-wa-enabled">Enable requesting Stock Transfer Order approvals</Label>
               <Switch id="sto-wa-enabled" checked={enabled} disabled={!settings.data?.canConfigure} onCheckedChange={setEnabled}/>
