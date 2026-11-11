@@ -28,6 +28,7 @@ import { companyQueryKey } from "@/lib/companyQueryScope";
 import type { AccountItem, FactoryNetPositionData } from "./factorynetposition/detailsTypes";
 import { shiftDate, formatDateLabel } from "./factorynetposition/utils";
 import { CustomNetPositionView } from "./factorynetposition/components/DetailsCustomNetPositionView";
+import { FxHistoryDialog } from "@/components/netposition/FxHistoryDialog";
 
 function InsuranceSubGroup({
   accounts,
@@ -101,6 +102,7 @@ function CategoryGroup({
   groupKey,
   groupSiblings = [],
   actions,
+  onFxClick,
 }: {
   category: string;
   accounts: AccountItem[];
@@ -110,6 +112,7 @@ function CategoryGroup({
   groupKey?: string | null;
   groupSiblings?: string[];
   actions?: InlineOrderActions;
+  onFxClick?: (side: "gain" | "loss") => void;
 }) {
   const [open, setOpen] = useState(true);
   const total = accounts.reduce((s, a) => s + a.value, 0);
@@ -152,7 +155,13 @@ function CategoryGroup({
               data-testid={`row-account-${i}`}
               {...inlineDrag(acc.id != null ? `ledger:${acc.id}` : null, actions)}
             >
-              {acc.id ? (
+              {(acc.code === "FX_UNREALIZED_GAIN" || acc.code === "FX_UNREALIZED_LOSS") && onFxClick ? (
+                <button type="button" onClick={() => onFxClick(acc.code === "FX_UNREALIZED_GAIN" ? "gain" : "loss")}
+                  className="font-medium text-primary hover:underline text-left flex items-center gap-1"
+                  data-testid={`button-factory-details-fx-history-${acc.code}`}>
+                  {acc.name} <ExternalLink className="h-3.5 w-3.5" />
+                </button>
+              ) : acc.id ? (
                 <button
                   type="button"
                   onClick={() => window.open(`/factory/ledger-monthly/${acc.id}`, "_blank")}
@@ -200,6 +209,7 @@ function CollapsibleSection({
   formatAmount,
   displayLayout,
   orderActions,
+  onFxClick,
 }: {
   id: string;
   title: string;
@@ -214,6 +224,7 @@ function CollapsibleSection({
   formatAmount: (n: number) => string;
   displayLayout?: AccountDisplayLayout;
   orderActions?: InlineOrderActions;
+  onFxClick?: (side: "gain" | "loss") => void;
 }) {
   const [open, setOpen] = useState(true);
 
@@ -286,6 +297,7 @@ function CollapsibleSection({
                   groupKey={labels.has(cat) ? cat.slice("display:".length) : null}
                   groupSiblings={groupKeys}
                   actions={orderActions}
+                   onFxClick={onFxClick}
                   amountColor={amountColor}
                   formatAmount={formatAmount}
                   accentColor={totalColor}
@@ -320,6 +332,7 @@ export default function FactoryNetPositionDetails() {
   // Empty selection means "company business today" resolved by the API.
   // A browser in a different timezone must not pick the accounting cutoff.
   const [asOf, setAsOf] = useState<string>("");
+  const [fxHistorySide, setFxHistorySide] = useState<"gain" | "loss" | null>(null);
   const queryClient = useQueryClient();
   const isToday = !asOf;
   const { prefs, updatePref, isPending: isSavingValuationMode } = useUserPreferences();
@@ -587,6 +600,7 @@ export default function FactoryNetPositionDetails() {
         )}
         <CollapsibleSection
           id="assets"
+          onFxClick={setFxHistorySide}
           title="What We Have"
           subtitle={`${data?.forUs.accounts?.length || 0} asset accounts`}
           accentColor="text-green-600"
@@ -602,6 +616,7 @@ export default function FactoryNetPositionDetails() {
         />
         <CollapsibleSection
           id="liabilities"
+          onFxClick={setFxHistorySide}
           title="What We Owe"
           subtitle={`${data?.onUs.accounts?.length || 0} liability accounts`}
           accentColor="text-red-600"
@@ -617,12 +632,25 @@ export default function FactoryNetPositionDetails() {
         />
       </div>
 
+      {fxHistorySide && data && (
+        <FxHistoryDialog
+          open={true}
+          onOpenChange={(open) => { if (!open) setFxHistorySide(null); }}
+          side={fxHistorySide}
+          amount={(fxHistorySide === "gain" ? data.forUs.accounts : data.onUs.accounts)
+            .find((a) => a.code === (fxHistorySide === "gain" ? "FX_UNREALIZED_GAIN" : "FX_UNREALIZED_LOSS"))?.value ?? 0}
+          sources={(fxHistorySide === "gain" ? data.forUs.accounts : data.onUs.accounts)
+            .find((a) => a.code === (fxHistorySide === "gain" ? "FX_UNREALIZED_GAIN" : "FX_UNREALIZED_LOSS"))?.breakdown}
+          scope="factory" companyId={data.companyId} asOf={displayAsOf}
+        />
+      )}
       {data && (
         <CustomNetPositionView
           key={data.companyId ?? "no-company"}
           data={data}
           formatAmount={formatAmount}
           asOf={displayAsOf}
+          onFxClick={setFxHistorySide}
         />
       )}
     </div>
