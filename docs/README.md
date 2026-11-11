@@ -356,3 +356,10 @@ These current-reference documents are indexed here for audit coverage. Their beh
 | [properties-unification-phases-12-15-tracker.md](properties-unification-phases-12-15-tracker.md) | Properties Mode — Follow-up Unification Execution Tracker (Phases 12–15) |
 | [properties-unification-phases-7-11-tracker.md](properties-unification-phases-7-11-tracker.md) | Properties Mode — Unification Execution Tracker (Phases 7–11) |
 | [factory-unification/phase-2-2026-11-10-continuation.md](factory-unification/phase-2-2026-11-10-continuation.md) | Factory Unification Phase 2 continuation handoff (2026-11-10) |
+| [stock-transfer-order-whatsapp-approval-phase1.md](stock-transfer-order-whatsapp-approval-phase1.md) | Stock Transfer Order → WhatsApp approval — Phase 1 |
+| [stock-transfer-order-whatsapp-approval-phase2.md](stock-transfer-order-whatsapp-approval-phase2.md) | Stock Transfer Order WhatsApp approval — Phase 2 |
+| [stock-transfer-order-whatsapp-approval-phase3.md](stock-transfer-order-whatsapp-approval-phase3.md) | Stock Transfer Order — GREEN API inbound approval (Phase 3) |
+| [stock-transfer-order-whatsapp-approval-phase4.md](stock-transfer-order-whatsapp-approval-phase4.md) | Stock Transfer Order WhatsApp Approval — Phase 4 |
+| [stock-transfer-order-whatsapp-approval-phase5.md](stock-transfer-order-whatsapp-approval-phase5.md) | Stock Transfer Order — WhatsApp approved Excel, Phase 5 |
+| [stock-transfer-order-whatsapp-approval-phase6.md](stock-transfer-order-whatsapp-approval-phase6.md) | Stock Transfer Order WhatsApp approval — Phase 6 |
+| [stock-transfer-order-whatsapp-approval-phase7.md](stock-transfer-order-whatsapp-approval-phase7.md) | Stock Transfer Order WhatsApp — Phase 7 certification and rollout gate |
