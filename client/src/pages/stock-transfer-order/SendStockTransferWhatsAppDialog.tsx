@@ -17,6 +17,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { useStockTransferOrderModel } from "./useStockTransferOrderModel";
+import { StockTransferOrderApprovalRequestPanel } from "./StockTransferOrderApprovalRequestPanel";
 
 type Model = ReturnType<typeof useStockTransferOrderModel>;
 type Group = { id: number; name: string; chatId: string };
@@ -41,6 +42,7 @@ export function SendStockTransferWhatsAppDialog({
   const { toast } = useToast();
   const [selectedGroupIds, setSelectedGroupIds] = useState<number[]>([]);
   const [result, setResult] = useState<SendResult | null>(null);
+  const [mode, setMode] = useState<"manual" | "approval">("manual");
   const url = "/api/stock-transfer-order/whatsapp-groups";
   const groupsQuery = useQuery<Settings>({
     queryKey: [url, selectedCompany?.id],
@@ -80,6 +82,7 @@ export function SendStockTransferWhatsAppDialog({
     if (next) {
       setSelectedGroupIds([]);
       setResult(null);
+      setMode("manual");
     }
     onOpenChange(next);
   }
@@ -97,17 +100,33 @@ export function SendStockTransferWhatsAppDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="sm:max-w-md" data-testid="stock-transfer-wa-dialog">
+      <DialogContent className="sm:max-w-xl" data-testid="stock-transfer-wa-dialog">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <MessageCircle className="h-5 w-5 text-green-600" />
             Send Transfer to WhatsApp
           </DialogTitle>
           <DialogDescription>
-            Send the Stock Transfer Order Excel export <strong>without cost</strong>. Choose one or two groups
-            configured in Settings → Export Center.
+            {mode === "approval"
+              ? "Request one full-batch approval for selected saved Stock Transfer Orders. All pending locations are included."
+              : <>Send the Stock Transfer Order Excel export <strong>without cost</strong>. Choose one or two saved groups.</>}
           </DialogDescription>
         </DialogHeader>
+        <div className="flex gap-2 border-b pb-3">
+          <Button size="sm" variant={mode === "manual" ? "default" : "outline"} disabled={send.isPending}
+            onClick={() => setMode("manual")} data-testid="sto-wa-tab-manual">Send Excel</Button>
+          <Button size="sm" variant={mode === "approval" ? "default" : "outline"} disabled={send.isPending}
+            onClick={() => setMode("approval")} data-testid="sto-wa-tab-request-approval">Request Approval</Button>
+        </div>
+        {mode === "approval" ? (
+          <>
+            <div className="max-h-[65vh] overflow-y-auto pr-1">
+              <StockTransferOrderApprovalRequestPanel model={model} open={open} />
+            </div>
+            <DialogFooter><Button variant="outline" onClick={() => setOpen(false)}>Close</Button></DialogFooter>
+          </>
+        ) : (
+        <>
         <div className="space-y-3">
           {!groupsQuery.data?.connected && !groupsQuery.isLoading && (
             <p className="text-sm text-amber-600">The main WhatsApp instance is not connected and enabled.</p>
@@ -183,6 +202,8 @@ export function SendStockTransferWhatsAppDialog({
             Send to {selectedGroupIds.length || ""} Group{selectedGroupIds.length === 1 ? "" : "s"}
           </Button>
         </DialogFooter>
+        </>
+        )}
       </DialogContent>
     </Dialog>
   );
