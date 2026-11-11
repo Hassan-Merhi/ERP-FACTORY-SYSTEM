@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { stockTransferOrderWaApprovalFoundation } from "../server/startup-schema/039-stock-transfer-order-wa-approval";
+import { stockTransferOrderWaWebhookIntegrity } from "../server/startup-schema/040-stock-transfer-order-wa-webhook";
 
 const root = process.cwd();
 const file = (name: string) => fs.readFileSync(path.join(root, name), "utf8");
@@ -65,10 +66,16 @@ describe("Stock Transfer Order WhatsApp approval — Phase 1 contract", () => {
     expect(batchService).not.toContain("sendWhatsAppFileToChatId");
   });
 
+  it("pins the Phase 3 webhook-decision constraint without rewriting accounting rows", () => {
+    expect(stockTransferOrderWaWebhookIntegrity).toHaveLength(1);
+    expect(stockTransferOrderWaWebhookIntegrity[0]).toContain("sto_wa_batch_decision_once_uk");
+    expect(stockTransferOrderWaWebhookIntegrity[0]).not.toMatch(/\\bUPDATE\\s+vouchers\\b/i);
+  });
+
   it("ensures the additive foundation even when bulk startup migrations are disabled", () => {
     const boot = file("server/index.ts");
     const ensure = file("server/startup/ensureStockTransferOrderWhatsAppApprovalSchema.ts");
     expect(boot).toContain("await ensureStockTransferOrderWhatsAppApprovalSchema(pool);");
-    expect(ensure).toContain("for (const statement of stockTransferOrderWaApprovalFoundation)");
+    expect(ensure).toContain("...stockTransferOrderWaApprovalFoundation, ...stockTransferOrderWaWebhookIntegrity");
   });
 });
