@@ -56,6 +56,7 @@ export function StockTransferOrderApprovalRequestPanel({ model, open }: { model:
     queryKey: [base + "/eligible", selectedCompany?.id, destinationId],
     queryFn: async () => (await apiRequest("GET", base + "/eligible?destinationId=" + destinationId)).json(),
     enabled: open && !!selectedCompany?.id && !!destinationId,
+    refetchInterval: open ? 10_000 : false,
   });
   const legacy = useQuery<{ orders: EligibleOrder[] }>({
     queryKey: [base + "/legacy", selectedCompany?.id, destinationId],
@@ -66,6 +67,8 @@ export function StockTransferOrderApprovalRequestPanel({ model, open }: { model:
     queryKey: [base + "/recent", selectedCompany?.id],
     queryFn: async () => (await apiRequest("GET", base + "/recent")).json(),
     enabled: open && !!selectedCompany?.id,
+    // Show DONE -> approved / DECLINE -> declined without re-opening the dialog.
+    refetchInterval: open ? 5_000 : false,
   });
   useEffect(() => {
     const currentTransferId = model.existingTransfer?.id;
