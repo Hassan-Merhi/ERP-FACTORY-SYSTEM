@@ -58,12 +58,23 @@ export function Side({
 
         {breakdown.length > 0 && (
           <div className="space-y-1.5">
-            {breakdown.map((b, i) => (
-              <div key={i} className="flex justify-between text-sm">
-                <span className="text-muted-foreground">{b.name}</span>
-                <span className={`font-mono font-medium ${colorClass}`}>{fmt(b.value)}</span>
-              </div>
-            ))}
+            {breakdown.map((b, i) => {
+              const fxSide = b.name === "Exchange Rate Gains" ? "gain"
+                : b.name === "Exchange Rate Losses" ? "loss" : null;
+              return fxSide && onFxClick ? (
+                <button key={i} type="button" onClick={() => onFxClick(fxSide)}
+                  className="w-full flex justify-between gap-2 text-sm text-left hover:underline rounded-sm text-primary"
+                  data-testid={`button-fx-breakdown-${fxSide}`}>
+                  <span>{b.name}</span>
+                  <span className={`font-mono font-medium ${colorClass}`}>{fmt(b.value)}</span>
+                </button>
+              ) : (
+                <div key={i} className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">{b.name}</span>
+                  <span className={`font-mono font-medium ${colorClass}`}>{fmt(b.value)}</span>
+                </div>
+              );
+            })}
           </div>
         )}
 
