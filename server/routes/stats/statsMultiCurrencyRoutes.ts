@@ -4,6 +4,7 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { requireAuth, requireNonPOS } from "../../auth";
 import { getMonetaryFxValuation } from "../../services/accounting/monetaryFxValuationService";
+import { loadNetPositionFxActivity } from "../../services/accounting/netPositionFxActivity";
 import { getMonetaryFxHistoricalRatePreview } from "../../services/accounting/monetaryFxHistoricalRatePreview";
 import { MonetaryFxError } from "../../services/accounting/monetaryFxRates";
 import {
@@ -21,6 +22,29 @@ import {
  * not need the separate Analytics-module permission to view cash/bank balances.
  */
 export function registerStatsMultiCurrencyRoutes(app: Express) {
+  // History drill-down shared by ERP and Factory Net Position. Factory scope is
+  // the same pinned company the Factory Net Position report itself uses.
+  // Read-only: never create a voucher for an unrealized FX presentation line.
+  app.get("/api/accounts/multi-currency/fx-activity", requireAuth, requireNonPOS, async (req, res) => {
+    // ERP Accounts scope only. Factory uses /api/factory/net-position/fx-activity,
+    // which is governed by Factory Net Position's own page permission.
+    const companyId = req.session.currentCompanyId;
+    if (!companyId) return res.status(400).json({ message: "No company selected" });
+    res.setHeader("Cache-Control", "private, no-store");
+    try {
+      return res.json(await loadNetPositionFxActivity({
+        companyId, factory: false, from: req.query.from, to: req.query.to,
+      }));
+    } catch (error) {
+      if (error instanceof Error && /Invalid history date|History start date/.test(error.message)) {
+        return res.status(400).json({ message: error.message });
+      }
+      logger.error("FX history evidence failed", { companyId, error });
+      return res.status(500).json({ message: getErrorMessage(error) });
+    }
+  });
+
+
   // Phase 5: audit-friendly effective rates for a selected company-local date.
   // Historical ACCOUNT balances remain booked at their original USD basis.
   // A rate from today must never be applied to today's balances and passed
@@ -79,7 +103,7 @@ export function registerStatsMultiCurrencyRoutes(app: Express) {
         // The source report is cached and shared. Clone before overlay so that
         // repeated reads never apply the same translation a second time.
         const copy = JSON.parse(JSON.stringify(payload)) as MonetaryNetPositionPayload;
-        const translated = applyVerifiedMonetaryFxOverlay(copy, valuation);
+        const translated = applyVerifiedMonetaryFxOverlay(copy, valuation, { showFxAsRows: true });
         const adjusted = translated.payload;
         if (adjusted.equity && adjusted.equity.includedInNetPosition == null) {
           adjusted.equity.includedInNetPosition = false;

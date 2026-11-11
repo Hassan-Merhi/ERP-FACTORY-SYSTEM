@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "description": "Ordered snapshot of every registered Express route (method, path, guard chain) and middleware mount. Regenerate with UPDATE_ROUTE_MANIFEST=1 only when a route change is intended; during a file split the manifest must not change at all.",
-  "routeCount": 2413,
+  "routeCount": 2415,
   "middlewareMountCount": 141,
   "routes": [
     "POST /api/stock-transfer-order/wa-approval/webhook [stockTransferOrderWaWebhookHandler]",
@@ -558,6 +558,7 @@
     "PATCH /api/factory/production-positions/:id [requireAuth > <anonymous>]",
     "DELETE /api/factory/production-positions/:id [requireAuth > <anonymous>]",
     "GET /api/factory/financial-snapshot [requireAuth > <anonymous>]",
+    "GET /api/factory/net-position/fx-activity [requireAuth > <anonymous>]",
     "GET /api/factory/net-position [requireAuth > <anonymous>]",
     "GET /api/factory/net-position/payroll-breakdown [requireAuth > <anonymous>]",
     "GET /api/factory/workers/attendance-report [requireAuth > <anonymous>]",
@@ -1747,6 +1748,7 @@
     "POST /api/pos/customers [requireAuth > <anonymous>]",
     "GET /api/pos/customers/:id/transactions [requireAuth > <anonymous>]",
     "POST /api/pos/send-shift-report [requireAuth > <anonymous>]",
+    "GET /api/accounts/multi-currency/fx-activity [requireAuth > requireNonPOS > <anonymous>]",
     "GET /api/accounts/multi-currency/rates-as-of [requireAuth > requireNonPOS > <anonymous>]",
     "GET /api/accounts/multi-currency/monetary-valuation [requireAuth > requireNonPOS > <anonymous>]",
     "GET /api/accounts/multi-currency/cash-bank-revaluation [requireAuth > requireNonPOS > <anonymous>]",
@@ -2419,6 +2421,9 @@
     "GET /api/transporter-statement/:accountId/statement [requireAuth > requireNonPOS > <anonymous>]"
   ],
   "middlewareMounts": [
+    "USE / [explicitCompanyWriteGuard]",
+    "USE / [phase4WriteGuard]",
+    "USE / [cutoverWriteGuard]",
     "USE / [auditRequestContextMiddleware]",
     "USE / [browserMutationFailClosedBoundary]",
     "USE / [tenantIsolationBoundary]",
@@ -2426,9 +2431,6 @@
     "USE /api/po-import/parse [poImportDatabaseScopeContinuityBoundary]",
     "USE / [<anonymous>]",
     "USE / [<anonymous>]",
-    "USE / [explicitCompanyWriteGuard]",
-    "USE / [phase4WriteGuard]",
-    "USE / [cutoverWriteGuard]",
     "USE / [<anonymous>]",
     "USE /api/vouchers/:id [<anonymous>]",
     "USE /api/voucher-entries/:id [<anonymous>]",

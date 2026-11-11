@@ -44,7 +44,7 @@ export interface NetPositionSupplierContext {
 export interface NetPositionSupplierBalances {
   supplierLockedRateMapNp: Map<number, number>;
   allContainersF: (typeof factoryContainers.$inferSelect)[];
-  supplierItems: { name: string; balanceUsd: number; fxBasisAdjustmentUsd?: number; breakdown?: { label: string; native: string; usd: number }[] }[];
+  supplierItems: { supplierId?: number; name: string; balanceUsd: number; fxBasisAdjustmentUsd?: number; breakdown?: { label: string; native: string; usd: number }[] }[];
   totalSupplierLiabilities: number;
   totalSupplierOverpayments: number;
 }
@@ -178,6 +178,7 @@ export async function computeNetPositionSupplierBalances(
   }
 
   const supplierItems: {
+    supplierId?: number;
     name: string;
     balanceUsd: number;
     fxBasisAdjustmentUsd?: number;
@@ -220,6 +221,7 @@ export async function computeNetPositionSupplierBalances(
             })
           : 0;
         supplierItems.push({
+          supplierId: s.id,
           name: s.name,
           balanceUsd: rounded,
           ...(fxBasisAdjustmentUsd && rounded + fxBasisAdjustmentUsd > 0 ? { fxBasisAdjustmentUsd } : {}),
@@ -251,6 +253,7 @@ export async function computeNetPositionSupplierBalances(
           })
         : 0;
       supplierItems.push({
+        supplierId: s.id,
         name: s.name,
         balanceUsd: balance,
         ...(fxBasisAdjustmentUsd && balance + fxBasisAdjustmentUsd > 0 ? { fxBasisAdjustmentUsd } : {}),
