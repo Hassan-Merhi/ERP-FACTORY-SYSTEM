@@ -11,6 +11,7 @@
  */
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -135,6 +136,58 @@ async function run() {
       assert.equal((await client.query("SELECT to_regprocedure('public.set_customer_order_bale_scanned_at()') IS NOT NULL AS ok")).rows[0].ok,true);
       assert.equal((await client.query("SELECT count(*)::int AS n FROM information_schema.columns WHERE table_name='customer_order_bales' AND column_name='scanned_at'")).rows[0].n,1);
       console.log("PASS: cleaned isolated fixture resumes and completes all controlled migrations");
+
+      // Phase 4: execute the real repository tenant-control migration against
+      // the disposable database. Never apply or test writes on production.
+      await client.query(`
+        ALTER TABLE ledger_accounts ADD COLUMN company_id integer;
+        CREATE TABLE locations (id integer PRIMARY KEY, company_id integer NOT NULL);
+        CREATE TABLE user_company_roles (
+          id integer PRIMARY KEY,user_id varchar,company_id integer,
+          assigned_location_id integer,cash_account_id integer
+        );
+        CREATE TABLE user_locations (
+          id integer PRIMARY KEY,user_id varchar,company_id integer,location_id integer
+        );
+        CREATE TABLE user_location_cash_accounts (
+          id integer PRIMARY KEY,user_id varchar,company_id integer,
+          location_id integer,cash_account_id integer
+        );
+        CREATE TABLE role_feature_permissions (id integer PRIMARY KEY,company_id integer);
+        INSERT INTO companies(id) VALUES (2);
+        INSERT INTO users(id) VALUES ('phase4-user');
+        INSERT INTO locations(id,company_id) VALUES (10,1),(20,2);
+        INSERT INTO ledger_accounts(id,company_id) VALUES (101,1),(202,2);
+      `);
+      const tenantSql=await readFile(path.join(root,"migrations/0013_tenant_control_integrity_guards.sql"),"utf8");
+      await client.query(tenantSql);
+
+      const expectRejected=async (sql,code="23514")=>{
+        await assert.rejects(client.query(sql),error=>error.code===code,
+          "Database must enforce company boundary with SQLSTATE "+code);
+      };
+      await expectRejected(`
+        INSERT INTO user_company_roles(id,user_id,company_id,assigned_location_id)
+        VALUES (1,'phase4-user',1,20)`);
+      await expectRejected(`
+        INSERT INTO user_location_cash_accounts(id,user_id,company_id,location_id,cash_account_id)
+        VALUES (1,'phase4-user',1,10,202)`);
+      await expectRejected(`
+        INSERT INTO user_company_roles(id,user_id,company_id,assigned_location_id)
+        VALUES (2,'phase4-user',99,10)`,"23503");
+      await client.query(`
+        INSERT INTO user_company_roles(id,user_id,company_id,assigned_location_id,cash_account_id)
+        VALUES (3,'phase4-user',1,10,101);
+        INSERT INTO user_locations(id,user_id,company_id,location_id)
+        VALUES (3,'phase4-user',1,10);
+        INSERT INTO user_location_cash_accounts(id,user_id,company_id,location_id,cash_account_id)
+        VALUES (3,'phase4-user',1,10,101)
+      `);
+      await expectRejected("UPDATE locations SET company_id=2 WHERE id=10");
+      await expectRejected("UPDATE ledger_accounts SET company_id=2 WHERE id=101");
+      assert.equal((await client.query("SELECT company_id FROM locations WHERE id=10")).rows[0].company_id,1);
+      assert.equal((await client.query("SELECT company_id FROM ledger_accounts WHERE id=101")).rows[0].company_id,1);
+      console.log("PASS: live tenant-control SQL rejects cross-company assignments and parent-account moves");
 
       // On an up-to-date DB the rerun performs no mutations.
       result=await executeRunner(dbUrl,"--apply");
