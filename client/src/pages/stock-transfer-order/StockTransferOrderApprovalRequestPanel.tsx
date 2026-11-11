@@ -150,6 +150,9 @@ export function StockTransferOrderApprovalRequestPanel({ model, open }: { model:
         </p>
       </div>
       {config.isError && <p className="text-sm text-destructive">Could not load WhatsApp approval settings.</p>}
+      {config.data && !config.data.executionEnabled && (
+        <p className="text-sm text-amber-600">Automatic full-batch approvals are paused on the server.</p>
+      )}
       {config.data && !config.data.webhookConfigured && (
         <p className="text-sm text-amber-600">
           Approval webhook token is not configured yet; requests are disabled until the provider
@@ -226,7 +229,7 @@ export function StockTransferOrderApprovalRequestPanel({ model, open }: { model:
           </Button>
         </div>
       )}
-      <Button className="w-full" disabled={!config.data?.connected || !config.data?.webhookConfigured || !config.data?.settings.enabled ||
+      <Button className="w-full" disabled={!config.data?.connected || !config.data?.webhookConfigured || !config.data?.executionEnabled || !config.data?.settings.enabled ||
           !config.data?.destinations.some(d => d.id === destinationId && d.chatId && d.enabled) ||
           selectedIds.length === 0 || send.isPending || !!result}
         onClick={() => send.mutate()} data-testid="sto-wa-send-approval-request">
