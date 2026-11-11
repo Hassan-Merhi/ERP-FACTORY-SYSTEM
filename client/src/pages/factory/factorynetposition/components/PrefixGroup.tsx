@@ -17,11 +17,13 @@ function PrefixGroup({
   accounts,
   accentClass,
   startIndex,
+  onFxClick,
 }: {
   prefix: string;
   accounts: AccountItem[];
   accentClass: string;
   startIndex: number;
+  onFxClick?: (side: "gain" | "loss") => void;
 }) {
   const [open, setOpen] = useState(false);
   const total = accounts.reduce((s, a) => s + a.value, 0);
@@ -50,7 +52,7 @@ function PrefixGroup({
       {open && (
         <div className="divide-y divide-border bg-muted/10">
           {accounts.map((acc, i) => (
-            <SupplierRow key={i} acc={acc} accentClass={accentClass} index={startIndex + i} />
+            <SupplierRow key={i} acc={acc} accentClass={accentClass} index={startIndex + i} onFxClick={onFxClick} />
           ))}
         </div>
       )}
