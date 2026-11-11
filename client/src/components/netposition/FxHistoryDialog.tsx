@@ -89,12 +89,13 @@ export function FxHistoryDialog({
   const [to, setTo] = useState("");
   const factory = scope === "factory";
   const { data, isLoading, isFetching, error, refetch } = useQuery<FxActivityData>({
-    queryKey: companyQueryKey(factory ? "/api/factory/net-position/fx-activity" : "/api/accounts/multi-currency/fx-activity", companyId, scope, from, to),
+    queryKey: companyQueryKey(factory ? "/api/factory/net-position/fx-activity" : "/api/accounts/multi-currency/fx-activity", companyId, scope, from, to, asOf || ""),
     enabled: open && companyId != null,
     queryFn: async () => {
       const params = new URLSearchParams();
       if (from) params.set("from", from);
       if (to) params.set("to", to);
+      else if (asOf) params.set("to", asOf); // Never show future activity for a dated Factory snapshot.
       const endpoint = factory ? "/api/factory/net-position/fx-activity" : "/api/accounts/multi-currency/fx-activity";
       const response = await fetch(`${endpoint}?${params.toString()}`, {
         credentials: "include",
