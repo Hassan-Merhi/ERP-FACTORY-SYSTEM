@@ -2,7 +2,7 @@ import type { ClientErrorLike } from "@/lib/clientError";
 import { Fragment, useState, useMemo } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest, getAppDate } from "@/lib/queryClient";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -46,6 +46,7 @@ import { useRentalOverview, useGroupedRentalUnits } from "@/properties/hooks/use
 import { getRentalModulePolicy } from "@/properties/config/rentalModulePolicy";
 import { fmtMoneyCurrency } from "./property-rental/utils";
 import { formatMoneyDisplay } from "@/lib/moneyDisplay";
+import { hasSingleUsdBasis, rentalReportingFigure } from "@/properties/config/rentalReportingPresentation";
 import { hasHassanPropertiesHistoricalReportingPolicy } from "@/properties/config/historicalRentReportingPolicy";
 import { ApiBaseCtx } from "./property-rental/shared";
 import { NoteCell } from "./property-rental/components/NoteCell";
@@ -97,11 +98,47 @@ export default function PropertyRentalPage({
   const grouped = useGroupedRentalUnits(units);
   const totals = useRentalOverview(units);
 
+  // HADI L'SHI ERP Shop Rentals: the owner wants the Total Paid tile to equal
+  // the recognized Rent Expense ledger, not the active-contract receipts subtotal.
+  // This is presentation ONLY: no rent payments, vouchers or cash balances change.
+  // Read the same account/date basis as the existing monthly ledger report.
+  const usesRentExpensePaidBasis =
+    rentalModule === "ERP" && unitType === "SHOP" && selectedCompany?.id === 1;
+  const rentalBusinessDay = getAppDate();
+  const { data: rentExpenseSummary } = useQuery<{ grandTotal: { closingBalance: number } }>({
+    queryKey: ["/api/reports/ledger-monthly-summary", 1007, selectedCompany?.id, rentalBusinessDay, "shop-rental-paid-kpi"],
+    queryFn: async () => {
+      const response = await fetch(
+        `/api/reports/ledger-monthly-summary/1007?startDate=${rentalBusinessDay.slice(0, 4)}-01-01&endDate=${rentalBusinessDay}`,
+        { credentials: "include" }
+      );
+      if (!response.ok) throw new Error("Failed to load posted rent expense");
+      return response.json();
+    },
+    enabled: usesRentExpensePaidBasis,
+  });
+  // Monthly ledger closingBalance is CREDIT-positive; expense debit is negative.
+  // Never fall back to contract receipts on query failure: that would show a
+  // misleading mismatched Total Paid value on this specific page.
+  const postedRentExpensePaid =
+    usesRentExpensePaidBasis && typeof rentExpenseSummary?.grandTotal?.closingBalance === "number" &&
+    Number.isFinite(rentExpenseSummary.grandTotal.closingBalance)
+      ? -rentExpenseSummary.grandTotal.closingBalance
+      : null;
+
+  // Contracts carry their own recorded currency. Never label an unconverted
+  // mixture as USD merely because the historical summary defaulted to dollars.
+  const contractTotalsAreUsd = hasSingleUsdBasis(
+    units
+      .filter((unit) => unit.contract && !unit.isInternalLeaseProjection)
+      .map((unit) => ({ currency: unit.contract?.currency }))
+  );
+
   const reconciledAccountTotalsReady =
     showHistoricalPaid &&
     !historicalLoading &&
     !historicalError &&
-    historyReconciliation != null &&
+    historyReconciliation !== null &&
     historyReconciliation.companyId === selectedCompany?.id &&
     !historyReconciliation.loading &&
     historyReconciliation.rentAndCashBalance !== null &&
@@ -114,24 +151,51 @@ export default function PropertyRentalPage({
     ? reconciledAccountTotalsReady
       ? historyReconciliation!.rentAndCashBalance! / 100
       : 0
-    : totals.totalPaid;
+    : usesRentExpensePaidBasis
+      ? (postedRentExpensePaid ?? 0)
+      : totals.totalPaid;
   const summaryGuarantee = showHistoricalPaid
     ? reconciledAccountTotalsReady
       ? historyReconciliation!.depositBalance! / 100
       : 0
     : totals.totalGuarantee;
   const paidLabel = showHistoricalPaid ? "RENT + CASH BALANCES" : "TOTAL PAID";
-  // Aggregated summary figures historically use USD; this is presentation only, never FX conversion.
-  const summaryMoney = (amount: number) => formatMoneyDisplay(amount, { currency: "USD" });
-  const paidValue = !showHistoricalPaid || reconciledAccountTotalsReady ? summaryMoney(summaryPaid) : "Unavailable";
-  const guaranteeValue =
-    !showHistoricalPaid || reconciledAccountTotalsReady ? summaryMoney(summaryGuarantee) : "Unavailable";
+  const paidFigure = rentalReportingFigure(
+    showHistoricalPaid
+      ? reconciledAccountTotalsReady
+        ? summaryPaid
+        : null
+      : usesRentExpensePaidBasis
+        ? postedRentExpensePaid
+        : contractTotalsAreUsd
+          ? summaryPaid
+          : null,
+    showHistoricalPaid
+      ? "reconciled-account-balances"
+      : usesRentExpensePaidBasis ? "posted-ledger-expense" : "contract-paid",
+    usesRentExpensePaidBasis ? rentalBusinessDay : null
+  );
+  const ledgerUsdMoney = (amount: number) => formatMoneyDisplay(amount, { currency: "USD" });
+  const summaryMoney = (amount: number) =>
+    contractTotalsAreUsd ? ledgerUsdMoney(amount) : "Non-USD or unverified currencies — see contracts";
+  const paidValue =
+    paidFigure.amount === null
+      ? showHistoricalPaid || usesRentExpensePaidBasis
+        ? "Unavailable"
+        : "Non-USD or unverified currencies — see contracts"
+      : formatMoneyDisplay(paidFigure.amount, { currency: paidFigure.currency });
+  const guaranteeValue = showHistoricalPaid
+    ? reconciledAccountTotalsReady
+      ? formatMoneyDisplay(summaryGuarantee, { currency: "USD" })
+      : "Unavailable"
+    : summaryMoney(summaryGuarantee);
   const historicalAccountMismatch =
     reconciledAccountTotalsReady &&
     historyReconciliation!.reconciled !== null &&
     historyReconciliation!.difference !== null &&
     Math.abs(historyReconciliation!.difference) > 1;
   const guaranteeLedgerMismatch =
+    contractTotalsAreUsd &&
     reconciledAccountTotalsReady &&
     Math.abs(historyReconciliation!.depositBalance! - Math.round(totals.totalGuarantee * 100)) > 1;
 
@@ -405,15 +469,24 @@ export default function PropertyRentalPage({
             totals; manage payments and accounting from the originating rental module.
           </p>
         )}
+        {!contractTotalsAreUsd && (
+          <p role="status" className="text-xs text-amber-600 dark:text-amber-400">
+            Contract currencies are not all verified as USD. Contract-based overview totals are withheld rather than
+            silently reported in USD. Individual contracts and ledger balances remain unchanged.
+          </p>
+        )}
         {showHistoricalPaid && reconciledAccountTotalsReady && (
           <p className="text-xs text-muted-foreground" data-testid="properties-rent-account-balance-explanation">
             Combined account balances:{" "}
-            <span className="font-semibold tabular-nums">{summaryMoney(historyReconciliation!.accountSum! / 100)}</span>{" "}
-            (rent withdrawal, ALI cash, Properties cashbox if present, and tenant deposits).
+            <span className="font-semibold tabular-nums">
+              {ledgerUsdMoney(historyReconciliation!.accountSum! / 100)}
+            </span>{" "}
+            (historical rent withdrawal through 26 Oct 2026; current ALI cash, Properties cashbox if present, and tenant
+            deposits). These are account balances, not unique rent receipts.
             {historyReconciliation!.guaranteeCashOverlap != null && historyReconciliation!.guaranteeCashOverlap > 0 && (
               <>
                 {" "}
-                Guarantee cash of {summaryMoney(historyReconciliation!.guaranteeCashOverlap / 100)} appears in both a
+                Guarantee cash of {ledgerUsdMoney(historyReconciliation!.guaranteeCashOverlap / 100)} appears in both a
                 cash account and the deposit liability; these are not unique receipts.
               </>
             )}
@@ -456,7 +529,7 @@ export default function PropertyRentalPage({
                 value: guaranteeValue,
                 valueClassName: isPropertiesRental ? "text-red-600 dark:text-red-400" : undefined,
               },
-              { label: paidLabel, value: paidValue },
+              { label: usesRentExpensePaidBasis ? "TOTAL PAID · LEDGER BASIS" : paidLabel, value: paidValue },
             ]}
           />
         ) : (
@@ -547,6 +620,11 @@ export default function PropertyRentalPage({
                 >
                   {paidValue}
                 </div>
+                {usesRentExpensePaidBasis && (
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    Recognized rent · ledger basis, including accruals
+                  </p>
+                )}
               </CardContent>
             </Card>
             <Card

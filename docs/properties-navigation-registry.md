@@ -10,7 +10,7 @@ The audit is navigation-only. It does not change rental, property, voucher, acco
 
 The executable navigation manifest lives in `client/src/properties/config/propertiesNavigation.ts`. It defines canonical route labels, deterministic parents, required capabilities, pinned root order, rental tab names/query URLs and legacy rental redirects. Its capability helpers are consumed by `PropertiesRoutes.tsx`, `PropertiesSidebar.tsx`, `PropertiesRentalsHub.tsx`, command search and the Properties Help & Training catalog.
 
-**Selected-company policy:** where an active Properties company has an assigned role, that role determines frontend visibility; otherwise the active session role (or legacy role fallback) applies. A selected non-Properties company does not receive Properties capability visibility. This policy is strictly client-side and **does not authorize any API write**. Company/session authorization in the backend remains authoritative. The rental-reconciliation backend `currentRole ?? role` compatibility fallback was not modified in this navigation-only phase; its appropriate company-scope handling remains a backend review concern.
+**Selected-company policy:** only an assigned role on the currently selected Properties company determines frontend visibility. Missing company/role assignments fail closed rather than falling back to session-wide privileges. A selected non-Properties company does not receive Properties capability visibility. This policy is strictly client-side and **does not authorize any API write**. Company/session authorization in the backend remains authoritative. The earlier Phase 7 backend rental-reconciliation action now uses the canonical active-company permission context; authorization remains entirely server-owned.
 
 Legacy rental routes keep replacement-history redirects. The Phase 1 Shops tab and `?tab=shops` deep link remain supported. Permission-gated route components are not mounted by the Properties route switch when capability checks fail.
 
@@ -133,3 +133,27 @@ Unauthorized routes must not mount hidden page content before redirecting to a s
 - Verify direct entry, Back, Forward, Escape, visible Back, permissions, and unknown routes.
 - Reconcile the branch with the latest `main`.
 - Confirm the final diff remains navigation-only before merge.
+
+## Unification Phase 10 — compatibility and deep links (2026-11-09)
+
+- **Legacy dashboard retained deliberately.** `/properties/dashboard` is hidden in pinned navigation and command discovery but remains a directly routed, fully functional compatibility screen. Its cash-account and payable-account management actions still exist; do not delete the page, its support components or its related endpoints without a separate feature migration and usage analysis.
+- **Rental bookmarks retained.** The three `/properties/rental/*` aliases are now rendered from `PROPERTIES_LEGACY_RENTAL_REDIRECTS` using `<Redirect replace>` so the canonical path, tabs and route registration cannot silently drift. The canonical hub and its Warehouses, Shops and Payments tabs remain unchanged.
+- **Parameterized deep links.** `findPropertiesNavigationEntry` resolves the canonical registry for concrete voucher-edit, voucher-detail, ledger-monthly and ledger-vouchers URLs, as well as `?tab=shops` and `?tab=payments`. It matches full path segments, not similar-looking prefixes, so absent or extra segments do not grant UI capability visibility.
+- **Sidebar icons.** Pinned icons are bound to canonical path identities, not array positions; the six pinned paths, labels and drag-reorder behavior remain unchanged.
+- **Unknown and forbidden links.** The existing fallback remains `/properties/daybook` with replacement navigation. Selected-company frontend role checks are maintained; server permission and tenant boundaries remain authoritative.
+- **Verification.** `tests/properties-unification-phase10-navigation.test.ts` was committed to cover redirects, deep links, gating, sidebar pins, dashboard reachability and fail-safe unknown paths. This implementation was source-inspected, **not** browser-tested or Vitest-executed. Phase 11 must test actual navigation and account-management actions before any release.
+
+## Unification Phase 13 — deterministic parent routes (2026-11-09)
+
+- `client/src/properties/config/propertiesNavigation.ts` is now the single source for Properties route parents; `getPropertiesParentRoute` resolves concrete route IDs and historical rental aliases.
+- `client/src/lib/parent-routes.ts` delegates Properties Back/Escape targets to that resolver. Factory and ERP parent logic is untouched.
+- Resolved registry drift: `/properties/account-groups` returns to `/properties/accounts`; `/properties/create` returns to the Warehouses tab; ledger voucher details return to the corresponding `/properties/ledger-monthly/:accountId`.
+- Preserved historical one-segment ledger period bookmarks as a parent-navigation compatibility rule and `/properties/rental/*` alias behavior.
+- Dynamic route parents use exact path-segment matching. Unknown and malformed URLs receive no invented parent; root Properties pages still have no deterministic Back target.
+- Added Phase 13 test cases to `tests/properties-parent-routes.test.ts`. **Source authored and inspected, not executed**; browser Escape, Back/Forward and tests require execution before release.
+
+## Unification Phase 14 — selected-company permission visibility (2026-11-09)
+
+- Frontend Properties navigation capabilities now fail closed if no selected Properties company or no active role on that company is available; stale session Developer/Admin roles no longer make hidden Properties routes visible.
+- Client visibility is not a write authorization mechanism. Backend active-company membership and operational permissions remain authoritative, including the explicitly separate server Developer bypass policy.
+- This change does not alter backend assignment records, APIs or session behavior. Live company-switch/revocation and authenticated API checks remain required in Phase 15.

@@ -1,10 +1,11 @@
 import { Link, useLocation } from "wouter";
 import { ShoppingCart, Trash2 } from "lucide-react";
 import { useFactoryNavigationAccess } from "@/hooks/useFactoryNavigationAccess";
+import { FACTORY_SALES_DISPATCH_ROUTES } from "@/factory/config/navigationPresentation";
 
 const DESTINATIONS = [
-  { label: "Factory POS", route: "/factory/pos", icon: ShoppingCart, testId: "switch-factory-pos" },
-  { label: "Waste Dispatch", route: "/factory/waste-dispatch", icon: Trash2, testId: "switch-waste-dispatch" },
+  { label: "Factory POS", route: FACTORY_SALES_DISPATCH_ROUTES.pos, icon: ShoppingCart, testId: "switch-factory-pos" },
+  { label: "Waste Dispatch", route: FACTORY_SALES_DISPATCH_ROUTES.wasteDispatch, icon: Trash2, testId: "switch-waste-dispatch" },
 ] as const;
 
 /** Single in-page switcher for the existing, independently protected workflows. */

@@ -6,6 +6,9 @@ import { factoryApiRequest } from "@/lib/factoryApi";
 import { queryClient } from "@/lib/queryClient";
 import type { FactorySettingsData, Location, RenamePreviewItem, WaChat } from "./types";
 import { defaultSettings } from "./utils";
+import { factoryRenameDefaults, type FactoryCompanyUiSettings } from "@shared/factoryUiDefaults";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 
 type OcContainer = {
   containerId: number;
@@ -32,6 +35,7 @@ type BaleValidationResult = {
 
 export function useFactorySettingsModel() {
   const { toast } = useToast();
+  const { selectedCompany } = useCompany();
   const { data: currentUser } = useQuery<{ role?: string }>({ queryKey: ["/api/auth/me"] });
   const isDeveloper = currentUser?.role === "Developer";
   const [settings, setSettings] = useState<FactorySettingsData>(defaultSettings);
@@ -46,9 +50,10 @@ export function useFactorySettingsModel() {
   const [attendanceWaSearch, setAttendanceWaSearch] = useState("");
   const [attendanceWaPickerOpen, setAttendanceWaPickerOpen] = useState(false);
 
-  const [codePrefix, setCodePrefix] = useState("HMD13");
-  const [findStr, setFindStr] = useState("-");
-  const [replaceStr, setReplaceStr] = useState(" ");
+  const initialRenameDefaults = factoryRenameDefaults();
+  const [codePrefix, setCodePrefix] = useState(initialRenameDefaults.codePrefix);
+  const [findStr, setFindStr] = useState(initialRenameDefaults.find);
+  const [replaceStr, setReplaceStr] = useState(initialRenameDefaults.replace);
   const [renamePreview, setRenamePreview] = useState<RenamePreviewItem[] | null>(null);
 
   const [excelFile, setExcelFile] = useState<File | null>(null);
@@ -259,11 +264,26 @@ export function useFactorySettingsModel() {
     },
   });
 
-  const { data: locations } = useQuery<Location[]>({ queryKey: ["/api/locations"] });
-  const { data, isLoading } = useQuery<FactorySettingsData>({ queryKey: ["/api/factory/settings"] });
+  const { data: locations } = useQuery<Location[]>({ queryKey: companyQueryKey("/api/locations", selectedCompany?.id), enabled: Boolean(selectedCompany?.id) });
+  const { data, isLoading } = useQuery<FactorySettingsData & FactoryCompanyUiSettings>({ queryKey: companyQueryKey("/api/factory/settings", selectedCompany?.id), enabled: Boolean(selectedCompany?.id) });
+
+  useEffect(() => {
+    // Never carry editable rename input or preview from one company to another.
+    const defaults = factoryRenameDefaults();
+    setCodePrefix(defaults.codePrefix);
+    setFindStr(defaults.find);
+    setReplaceStr(defaults.replace);
+    setRenamePreview(null);
+  }, [selectedCompany?.id]);
 
   useEffect(() => {
     if (data) {
+      // Select company-specific rename UI default only if the existing settings API provides it.
+      // Never write a legacy default to stock codes or backfill database settings.
+      setCodePrefix(factoryRenameDefaults(data).codePrefix);
+      setFindStr(factoryRenameDefaults(data).find);
+      setReplaceStr(factoryRenameDefaults(data).replace);
+      setRenamePreview(null);
       // The automatic allocation flag has its own protected editor and must
       // never leak into the generic bulk settings Save payload.
       const { automaticPriorityPrintingEnabled: _automaticMode, ...bulkSettings } = data as FactorySettingsData & {
@@ -277,31 +297,32 @@ export function useFactorySettingsModel() {
   }, [data]);
 
   const { data: waChats = [], isLoading: waChatsLoading } = useQuery<WaChat[]>({
-    queryKey: ["/api/whatsapp/chats/pos"],
+    queryKey: companyQueryKey("/api/whatsapp/chats/pos", selectedCompany?.id),
     queryFn: async () => {
       const res = await factoryApiRequest("GET", "/api/whatsapp/chats/pos");
       if (!res.ok) throw new Error("Failed to load chats");
       return res.json();
     },
-    enabled: prodWaPickerOpen,
+    enabled: prodWaPickerOpen && Boolean(selectedCompany?.id),
     staleTime: 60_000,
     retry: false,
   });
 
   const { data: weeklyWaChats = [], isLoading: weeklyWaChatsLoading } = useQuery<WaChat[]>({
-    queryKey: ["/api/whatsapp/chats"],
+    queryKey: companyQueryKey("/api/whatsapp/chats", selectedCompany?.id),
     queryFn: async () => {
       const res = await factoryApiRequest("GET", "/api/whatsapp/chats");
       if (!res.ok) throw new Error("Failed to load chats");
       return res.json();
     },
-    enabled: weeklyWaPickerOpen,
+    enabled: weeklyWaPickerOpen && Boolean(selectedCompany?.id),
     staleTime: 60_000,
     retry: false,
   });
 
   const { data: attendanceWaSettings } = useQuery<{ attendanceWhatsappGroupId?: string | null }>({
-    queryKey: ["/api/factory/settings?scope=attendance"],
+    queryKey: companyQueryKey("/api/factory/settings?scope=attendance", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const res = await factoryApiRequest("GET", "/api/factory/settings?scope=attendance");
       if (!res.ok) throw new Error("Failed to load Attendance WhatsApp settings");
@@ -311,19 +332,20 @@ export function useFactorySettingsModel() {
   });
 
   const { data: attendanceWaChats = [], isLoading: attendanceWaChatsLoading } = useQuery<WaChat[]>({
-    queryKey: ["/api/whatsapp/chats"],
+    queryKey: companyQueryKey("/api/whatsapp/chats", selectedCompany?.id),
     queryFn: async () => {
       const res = await factoryApiRequest("GET", "/api/whatsapp/chats");
       if (!res.ok) throw new Error("Failed to load chats");
       return res.json();
     },
-    enabled: attendanceWaPickerOpen,
+    enabled: attendanceWaPickerOpen && Boolean(selectedCompany?.id),
     staleTime: 60_000,
     retry: false,
   });
 
   const { data: weeklyWaSettings } = useQuery<{ groupChatId: string; hasCredentials: boolean }>({
-    queryKey: ["/api/factory/weekly-report-wa-settings"],
+    queryKey: companyQueryKey("/api/factory/weekly-report-wa-settings", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
   });
 
   useEffect(() => {

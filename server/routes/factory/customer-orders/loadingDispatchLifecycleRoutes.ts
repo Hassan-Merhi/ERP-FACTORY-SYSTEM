@@ -7,12 +7,14 @@
 import { createHash } from "node:crypto";
 import type { Express, Request, Response } from "express";
 import { sql } from "drizzle-orm";
+import { factoryActionCapabilities } from "@shared/factoryActionCapabilities";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { getFactoryAccessState, requireFactoryTabAccess } from "../../../lib/factoryAccessControl";
 import { parseId } from "../../../lib/parseId";
 import { resultRows } from "../../../lib/queryResult";
 import { logger } from "../../../lib/logger";
+import { hasLiveFinancialTripTx } from "../../../services/factory/dispatchTripFinancialGuards";
 import { compareFactoryLoadingDispatch } from "./loadingDispatchComparison";
 import { assessFactoryLoadingDispatchClose } from "./loadingDispatchClosePolicy";
 import { loadFactoryLoadingDispatchComparisonSnapshot } from "./loadingDispatchComparisonRoutes";
@@ -29,10 +31,10 @@ function refusal(statusCode: number, code: string, message: string): never {
   throw new LifecycleError(statusCode, code, message);
 }
 function supervisor(role: string) {
-  return ["owner", "admin", "developer"].includes(role.trim().toLowerCase());
+  return factoryActionCapabilities({ role })["dispatch.approve-discrepancy"];
 }
 function writable(role: string) {
-  return !["view only", "create only"].includes(role.trim().toLowerCase());
+  return factoryActionCapabilities({ role })["dispatch.close"];
 }
 function rows(result: unknown): Raw[] { return resultRows(result); }
 function reason(raw: unknown, min: number): string | null {
@@ -69,35 +71,23 @@ function evaluate(snapshot: Exclude<LoadedSnapshot, { notFoundTrip: true }>, dis
   const comparison = compareFactoryLoadingDispatch({
     loaded: snapshot.loaded,
     scans: snapshot.scans,
-    expectedBales: snapshot.expectedBales,
-    expectedArticles: snapshot.expectedArticles,
+    expectedBales: [],
+    expectedArticles: [],
     trips: snapshot.trips,
     selectedDispatchId: id,
   });
   const s = comparison.summary;
   const policy = assessFactoryLoadingDispatchClose(comparison);
 
-  // Fingerprint only dependencies relevant to THIS truck. Simultaneous
-  // unrelated scans on other open trucks must not prevent a trip from ending.
-  // The selected truck's own scans, its allocated references, and conflicts
-  // on those references still invalidate a stale confirmation.
-  const plannedIds = new Set(snapshot.expectedBales
-    .filter((b) => b.dispatchId === id).map((b) => b.baleId));
+  // Fingerprint just this trip's physical scan evidence. An unrelated
+  // truck's activity or a removed legacy trip allocation cannot block closure.
   const scannedIds = new Set(snapshot.scans
-    .filter((s) => s.dispatchId === id).map((s) => s.baleId));
-  const relevantIds = new Set([...plannedIds, ...scannedIds]);
+    .filter((scan) => scan.dispatchId === id).map((scan) => scan.baleId));
   const fingerprint = createHash("sha256").update(JSON.stringify({
     order: snapshot.order,
     trip,
-    loaded: snapshot.loaded.filter((b) => relevantIds.has(b.baleId)),
-    scans: snapshot.scans.filter((s) => s.dispatchId === id || plannedIds.has(s.baleId)),
-    expectedBales: snapshot.expectedBales.filter((b) =>
-      b.dispatchId === id || scannedIds.has(b.baleId)),
-    expectedArticles: snapshot.expectedArticles.filter((a) => a.dispatchId === id),
-    relatedTrips: snapshot.trips.filter((t) =>
-      t.id === id || snapshot.expectedBales.some((b) =>
-        b.dispatchId === t.id && scannedIds.has(b.baleId)) ||
-      snapshot.scans.some((s) => s.dispatchId === t.id && plannedIds.has(s.baleId))),
+    loaded: snapshot.loaded.filter((bale) => scannedIds.has(bale.baleId)),
+    scans: snapshot.scans.filter((scan) => scan.dispatchId === id),
   })).digest("hex");
   return {
     dispatchId, dispatchNumber: trip.dispatchNumber, status: trip.status,
@@ -276,12 +266,15 @@ export function registerFactoryLoadingDispatchLifecycleRoutes(app: Express): voi
              actor_user_id, actor_username, event_data)
           VALUES (${scope.companyId}, ${scope.orderId}, ${scope.dispatchId},
                   'DISPATCH_CLOSED', ${scope.userId}, ${scope.username},
-                  jsonb_build_object('closureId', ${String(history.id)}, 'revision', ${revision},
-                    'fingerprint', ${evaluation.fingerprint},
-                    'approvedWithDiscrepancies', ${evaluation.needsApproval},
-                    'reason', ${evaluation.needsApproval ? approvalReason : null},
-                    'summary', ${summaryJson}::jsonb,
-                    'issues', ${issuesJson}::jsonb))
+                  ${JSON.stringify({
+                    closureId: String(history.id),
+                    revision,
+                    fingerprint: evaluation.fingerprint,
+                    approvedWithDiscrepancies: evaluation.needsApproval,
+                    reason: evaluation.needsApproval ? approvalReason : null,
+                    summary: evaluation.summary,
+                    issues: evaluation.issues,
+                  })}::jsonb)
         `);
         return {
           id: closed.id, dispatchNumber: closed.dispatchNumber,
@@ -319,6 +312,12 @@ export function registerFactoryLoadingDispatchLifecycleRoutes(app: Express): voi
         `))[0];
         if (!trip) refusal(404, "DISPATCH_NOT_FOUND", "Dispatch not found");
         if (trip.status !== "CLOSED") refusal(409, "NOT_CLOSED", "Only completed dispatches can be reopened");
+        // A signed trip with a live customer receivable cannot be physically
+        // reopened or rescanned without an approved financial reversal first.
+        if (await hasLiveFinancialTripTx(tx, scope.companyId, scope.orderId, scope.dispatchId)) {
+          refusal(409, "TRIP_FINANCIALLY_POSTED",
+            "Reverse this trip's financial posting before reopening its barcode scans");
+        }
 
         const record = rows(await tx.execute(sql`
           SELECT id, revision FROM factory_loading_dispatch_closure_history
@@ -350,8 +349,7 @@ export function registerFactoryLoadingDispatchLifecycleRoutes(app: Express): voi
              actor_user_id, actor_username, event_data)
           VALUES (${scope.companyId}, ${scope.orderId}, ${scope.dispatchId},
                   'DISPATCH_REOPENED', ${scope.userId}, ${scope.username},
-                  jsonb_build_object('closureId', ${String(record.id)},
-                    'revision', ${record.revision}, 'reason', ${reopenReason}))
+                  ${JSON.stringify({ closureId: String(record.id), revision: record.revision, reason: reopenReason })}::jsonb)
         `);
         return { ...changed, revision: record.revision, reopenedByUsername: scope.username };
       });

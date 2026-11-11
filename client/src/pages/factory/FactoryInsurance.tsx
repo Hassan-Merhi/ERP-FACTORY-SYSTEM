@@ -246,7 +246,7 @@ export default function FactoryInsurance() {
 
   return (
     <div className="space-y-5 px-3 pb-6 pt-3 sm:px-6 sm:pt-5">
-      <section className="relative overflow-hidden rounded-[26px] border border-blue-200/70 bg-gradient-to-br from-white via-blue-50/80 to-slate-50 shadow-sm dark:border-blue-500/25 dark:from-[#101f39] dark:via-[#10264a] dark:to-[#071427]">
+      <section className="relative overflow-hidden rounded-[26px] border border-blue-200/70 bg-gradient-to-br from-white via-blue-50/80 to-slate-50 shadow-sm dark:border-blue-500/25 dark:from-[hsl(var(--factory-hue)_56%_14%)] dark:via-[hsl(var(--factory-hue)_64%_18%)] dark:to-[hsl(var(--factory-hue)_70%_9%)]">
         <div
           aria-hidden="true"
           className="pointer-events-none absolute -right-24 -top-32 h-80 w-96 rounded-full bg-blue-400/15 blur-3xl dark:bg-blue-500/25"
@@ -328,7 +328,7 @@ export default function FactoryInsurance() {
 
       {/* Stats */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Card className="relative overflow-hidden rounded-2xl border-blue-200 bg-gradient-to-br from-blue-50 via-white to-blue-100/70 shadow-sm dark:border-blue-500/40 dark:from-[#133861] dark:via-[#0e2b4e] dark:to-[#0b1e38]">
+        <Card className="relative overflow-hidden rounded-2xl border-blue-200 bg-gradient-to-br from-blue-50 via-white to-blue-100/70 shadow-sm dark:border-blue-500/40 dark:from-[hsl(var(--factory-hue)_67%_23%)] dark:via-[hsl(var(--factory-hue)_70%_18%)] dark:to-[hsl(var(--factory-hue)_67%_13%)]">
           <CardContent className="p-5">
             <div className="flex items-center gap-3">
               <Users className="h-10 w-10 shrink-0 rounded-xl bg-blue-500/15 p-2 text-blue-600 dark:bg-blue-400/20 dark:text-sky-300" />
@@ -342,7 +342,7 @@ export default function FactoryInsurance() {
             </div>
           </CardContent>
         </Card>
-        <Card className="relative overflow-hidden rounded-2xl border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-emerald-100/70 shadow-sm dark:border-emerald-500/40 dark:from-[#0e443f] dark:via-[#0c3335] dark:to-[#0b242f]">
+        <Card className="relative overflow-hidden rounded-2xl border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-emerald-100/70 shadow-sm dark:border-emerald-500/40 dark:from-[#0e443f] dark:via-[#0c3335] dark:to-[hsl(var(--factory-hue)_62%_11%)]">
           <CardContent className="p-5">
             <div className="flex items-center gap-3">
               <UserCheck className="h-10 w-10 shrink-0 rounded-xl bg-emerald-500/15 p-2 text-emerald-600 dark:bg-emerald-400/20 dark:text-emerald-300" />
@@ -356,7 +356,7 @@ export default function FactoryInsurance() {
             </div>
           </CardContent>
         </Card>
-        <Card className="relative overflow-hidden rounded-2xl border-violet-200 bg-gradient-to-br from-violet-50 via-white to-violet-100/70 shadow-sm dark:border-violet-500/40 dark:from-[#3b265e] dark:via-[#2b204c] dark:to-[#171d3b]">
+        <Card className="relative overflow-hidden rounded-2xl border-violet-200 bg-gradient-to-br from-violet-50 via-white to-violet-100/70 shadow-sm dark:border-violet-500/40 dark:from-[hsl(var(--factory-hue)_42%_26%)] dark:via-[hsl(var(--factory-hue)_41%_21%)] dark:to-[hsl(var(--factory-hue)_44%_16%)]">
           <CardContent className="p-5">
             <div className="flex items-center gap-3">
               <DollarSign className="h-10 w-10 shrink-0 rounded-xl bg-violet-500/15 p-2 text-violet-600 dark:bg-violet-400/20 dark:text-violet-300" />
@@ -371,7 +371,7 @@ export default function FactoryInsurance() {
           </CardContent>
         </Card>
         <Card
-          className={`relative overflow-hidden rounded-2xl border-amber-200 bg-gradient-to-br from-amber-50 via-white to-amber-100/70 shadow-sm dark:border-amber-500/40 dark:from-[#573b1d] dark:via-[#3a2b24] dark:to-[#222433] ${insuranceExpenseAccount ? "cursor-pointer transition-all hover:ring-2 hover:ring-amber-500/30" : ""}`}
+          className={`relative overflow-hidden rounded-2xl border-amber-200 bg-gradient-to-br from-amber-50 via-white to-amber-100/70 shadow-sm dark:border-amber-500/40 dark:from-[#573b1d] dark:via-[#3a2b24] dark:to-[hsl(var(--factory-hue)_20%_17%)] ${insuranceExpenseAccount ? "cursor-pointer transition-all hover:ring-2 hover:ring-amber-500/30" : ""}`}
           onClick={() =>
             insuranceExpenseAccount &&
             window.open(`/factory/accounts?accountId=${insuranceExpenseAccount.id}&accountType=ledger`, "_blank")
@@ -403,7 +403,7 @@ export default function FactoryInsurance() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white/80 p-3 shadow-sm dark:border-slate-700/70 dark:bg-[#0e1c31]/85">
+      <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white/80 p-3 shadow-sm dark:border-slate-700/70 dark:bg-[hsl(var(--factory-hue)_56%_12%)]/85">
         <div className="relative min-w-[220px] flex-1">
           <Search
             className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
@@ -431,7 +431,7 @@ export default function FactoryInsurance() {
       </div>
 
       {/* Members Table — cosmetic treatment only; all member actions and data sources are unchanged. */}
-      <Card className="overflow-hidden rounded-2xl border-slate-200 bg-white shadow-sm dark:border-slate-700/70 dark:bg-[#0b1729] dark:shadow-lg dark:shadow-blue-950/20">
+      <Card className="overflow-hidden rounded-2xl border-slate-200 bg-white shadow-sm dark:border-slate-700/70 dark:bg-[hsl(var(--factory-hue)_58%_10%)] dark:shadow-lg dark:shadow-blue-950/20">
         <CardContent className="overflow-x-auto p-0">
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
@@ -464,7 +464,7 @@ export default function FactoryInsurance() {
             </div>
           ) : (
             <Table className="min-w-[1140px]">
-              <TableHeader className="bg-slate-100/90 dark:bg-[#1c2e49]">
+              <TableHeader className="bg-slate-100/90 dark:bg-[hsl(var(--factory-hue)_45%_20%)]">
                 <TableRow className="border-slate-200 hover:bg-transparent dark:border-slate-700/70 dark:hover:bg-transparent">
                   <TableHead className="h-12 whitespace-nowrap text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-200">
                     Name
@@ -499,7 +499,7 @@ export default function FactoryInsurance() {
                 {filteredMembers.map((m) => (
                   <TableRow
                     key={m.id}
-                    className="cursor-pointer border-slate-100 transition-colors even:bg-slate-50/80 hover:bg-blue-50/80 dark:border-slate-700/60 dark:even:bg-[#17263d]/55 dark:hover:bg-blue-900/25"
+                    className="cursor-pointer border-slate-100 transition-colors even:bg-slate-50/80 hover:bg-blue-50/80 dark:border-slate-700/60 dark:even:bg-[hsl(var(--factory-hue)_45%_16%)]/55 dark:hover:bg-blue-900/25"
                     onClick={() => setStatementMember(m)}
                     data-testid={`row-member-${m.id}`}
                   >

@@ -12,8 +12,8 @@ export function LoadingSetupCard({ model }: { model: FactoryContainerLoadingScan
   const { orderId, customerId, activeProformas } = model;
 
   return (
-    <div className="overflow-hidden rounded-[22px] border border-blue-100/90 bg-white shadow-[0_18px_48px_-40px_rgba(30,64,175,0.75)] dark:border-blue-500/25 dark:bg-[#101b30]">
-      <div className="flex items-center gap-3 border-b border-blue-100 bg-gradient-to-r from-blue-50/90 to-white px-4 py-3.5 dark:border-blue-500/20 dark:from-[#132848] dark:to-[#101b30] sm:px-5">
+    <div className="overflow-hidden rounded-[22px] border border-blue-100/90 bg-white shadow-[0_18px_48px_-40px_hsl(var(--factory-hue)_71%_40%_/_0.75)] dark:border-blue-500/25 dark:bg-[hsl(var(--factory-hue)_50%_13%)]">
+      <div className="flex items-center gap-3 border-b border-blue-100 bg-gradient-to-r from-blue-50/90 to-white px-4 py-3.5 dark:border-blue-500/20 dark:from-[hsl(var(--factory-hue)_58%_18%)] dark:to-[hsl(var(--factory-hue)_50%_13%)] sm:px-5">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-indigo-700 text-white shadow-md shadow-blue-500/20">
           <ClipboardList className="h-5 w-5" />
         </div>
@@ -25,7 +25,7 @@ export function LoadingSetupCard({ model }: { model: FactoryContainerLoadingScan
         </div>
       </div>
 
-      <div className="space-y-4 bg-gradient-to-b from-white to-slate-50/30 p-4 dark:from-[#101b30] dark:to-[#0e192d] sm:p-5">
+      <div className="space-y-4 bg-gradient-to-b from-white to-slate-50/30 p-4 dark:from-[hsl(var(--factory-hue)_50%_13%)] dark:to-[hsl(var(--factory-hue)_53%_12%)] sm:p-5">
         <div>
           <label className="mb-1.5 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
             <UserRound className="h-3.5 w-3.5" />
@@ -33,7 +33,7 @@ export function LoadingSetupCard({ model }: { model: FactoryContainerLoadingScan
           </label>
           <Select value={model.selectedCustomerId} onValueChange={model.setSelectedCustomerId} disabled={!!orderId}>
             <SelectTrigger
-              className="h-11 rounded-xl border-blue-200/90 bg-slate-50/60 shadow-sm focus:ring-blue-500/30 dark:border-blue-500/25 dark:bg-[#0b172b]"
+              className="h-11 rounded-xl border-blue-200/90 bg-slate-50/60 shadow-sm focus:ring-blue-500/30 dark:border-blue-500/25 dark:bg-[hsl(var(--factory-hue)_59%_11%)]"
               data-testid="select-customer"
             >
               <SelectValue placeholder={model.tr("selectCustomer")} />
@@ -55,7 +55,7 @@ export function LoadingSetupCard({ model }: { model: FactoryContainerLoadingScan
           </label>
           <Select value={model.selectedLocationId} onValueChange={model.setSelectedLocationId} disabled={!!orderId}>
             <SelectTrigger
-              className="h-11 rounded-xl border-blue-200/90 bg-slate-50/60 shadow-sm focus:ring-blue-500/30 dark:border-blue-500/25 dark:bg-[#0b172b]"
+              className="h-11 rounded-xl border-blue-200/90 bg-slate-50/60 shadow-sm focus:ring-blue-500/30 dark:border-blue-500/25 dark:bg-[hsl(var(--factory-hue)_59%_11%)]"
               data-testid="select-location"
             >
               <SelectValue placeholder={model.tr("selectLocation")} />
@@ -78,7 +78,7 @@ export function LoadingSetupCard({ model }: { model: FactoryContainerLoadingScan
             </label>
             <Select value={model.selectedProformaId} onValueChange={model.setSelectedProformaId}>
               <SelectTrigger
-                className="h-11 rounded-xl border-blue-200/90 bg-slate-50/60 shadow-sm focus:ring-blue-500/30 dark:border-blue-500/25 dark:bg-[#0b172b]"
+                className="h-11 rounded-xl border-blue-200/90 bg-slate-50/60 shadow-sm focus:ring-blue-500/30 dark:border-blue-500/25 dark:bg-[hsl(var(--factory-hue)_59%_11%)]"
                 data-testid="select-proforma"
               >
                 <SelectValue placeholder={model.tr("selectProforma")} />
@@ -116,7 +116,7 @@ export function LoadingSetupCard({ model }: { model: FactoryContainerLoadingScan
                 value={model.loadingNote}
                 onChange={(e) => model.setLoadingNote(e.target.value)}
                 placeholder={model.tr("addLoadingNote")}
-                className="min-h-[88px] resize-none rounded-xl border-blue-200/90 bg-slate-50/60 text-sm shadow-sm focus-visible:ring-blue-500/30 dark:border-blue-500/25 dark:bg-[#0b172b]"
+                className="min-h-[88px] resize-none rounded-xl border-blue-200/90 bg-slate-50/60 text-sm shadow-sm focus-visible:ring-blue-500/30 dark:border-blue-500/25 dark:bg-[hsl(var(--factory-hue)_59%_11%)]"
                 rows={2}
                 readOnly={!model.canChangeExistingRecords}
                 title={model.changeDisabledReason ?? undefined}
@@ -141,7 +141,7 @@ export function LoadingSetupCard({ model }: { model: FactoryContainerLoadingScan
               value={model.loadingNote}
               onChange={(e) => model.setLoadingNote(e.target.value)}
               placeholder={model.tr("optionalNote")}
-              className="min-h-[88px] resize-none rounded-xl border-blue-200/90 bg-slate-50/60 text-sm shadow-sm focus-visible:ring-blue-500/30 dark:border-blue-500/25 dark:bg-[#0b172b]"
+              className="min-h-[88px] resize-none rounded-xl border-blue-200/90 bg-slate-50/60 text-sm shadow-sm focus-visible:ring-blue-500/30 dark:border-blue-500/25 dark:bg-[hsl(var(--factory-hue)_59%_11%)]"
               rows={2}
               data-testid="input-loading-note"
             />

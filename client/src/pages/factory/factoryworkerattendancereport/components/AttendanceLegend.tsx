@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 
 export function AttendanceLegend() {
   return (
-    <div className="flex flex-wrap items-center gap-4 rounded-xl border border-slate-200 bg-white/70 px-4 py-3 text-xs text-muted-foreground dark:border-blue-900/50 dark:bg-[#111f36]/80 print:hidden">
+    <div className="flex flex-wrap items-center gap-4 rounded-xl border border-slate-200 bg-white/70 px-4 py-3 text-xs text-muted-foreground dark:border-blue-900/50 dark:bg-[hsl(var(--factory-hue)_52%_14%)]/80 print:hidden">
       <span className="flex items-center gap-1.5">
         <span className="inline-flex items-center justify-center w-4 h-4 rounded-xs bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 text-[11px] font-bold">
           P

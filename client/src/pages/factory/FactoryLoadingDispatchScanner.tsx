@@ -152,7 +152,7 @@ export default function FactoryLoadingDispatchScanner({
     refetchInterval: 5000,
   });
 
-  const scans = useMemo(() => data?.scans ?? [], [data]);
+  const scans = useMemo(() => data?.scans ?? [], [data?.scans]);
   const active = useMemo(() => scans.filter((item) => !item.removedAt), [scans]);
   const corrected = useMemo(() => scans.filter((item) => Boolean(item.removedAt)), [scans]);
   const filtered = useMemo(() => {
@@ -280,7 +280,7 @@ export default function FactoryLoadingDispatchScanner({
 
   return (
     <div className="space-y-4" data-testid="dispatch-verification-scanner">
-      <Card className="border-blue-200 bg-white dark:border-blue-500/30 dark:bg-[#101c34]">
+      <Card className="border-blue-200 bg-white dark:border-blue-500/30 dark:bg-[hsl(var(--factory-hue)_53%_13%)]">
         <CardContent className="space-y-4 p-4 sm:p-5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
@@ -311,7 +311,7 @@ export default function FactoryLoadingDispatchScanner({
                   autoCorrect="off"
                   spellCheck={false}
                   placeholder="Scan bale reference and press Enter"
-                  className="h-12 bg-white pl-10 font-mono dark:bg-[#0a1629]"
+                  className="h-12 bg-white pl-10 font-mono dark:bg-[hsl(var(--factory-hue)_61%_10%)]"
                   data-testid="input-dispatch-scan"
                 />
               </div>
@@ -373,7 +373,7 @@ export default function FactoryLoadingDispatchScanner({
         </CardContent>
       </Card>
 
-      <Card className="border-slate-200 bg-white dark:border-blue-500/20 dark:bg-[#101c34]">
+      <Card className="border-slate-200 bg-white dark:border-blue-500/20 dark:bg-[hsl(var(--factory-hue)_53%_13%)]">
         <CardContent className="space-y-3 p-4 sm:p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -426,7 +426,7 @@ export default function FactoryLoadingDispatchScanner({
           {visibleScans.length > 0 && (
             <div className="overflow-x-auto rounded-xl border dark:border-slate-700">
               <table className="w-full min-w-[600px] border-collapse text-left text-xs">
-                <thead className="sticky top-0 bg-slate-100 text-muted-foreground dark:bg-[#0b162a]">
+                <thead className="sticky top-0 bg-slate-100 text-muted-foreground dark:bg-[hsl(var(--factory-hue)_58%_10%)]">
                   <tr>
                     <th className="px-3 py-2 font-medium">Reference / Article</th>
                     <th className="px-3 py-2 font-medium">Product</th>
@@ -509,7 +509,7 @@ export default function FactoryLoadingDispatchScanner({
                   {corrected.map((scan) => (
                     <div
                       key={String(scan.id)}
-                      className="flex flex-wrap justify-between gap-2 rounded-lg bg-slate-50 p-2.5 text-xs dark:bg-[#0b162a]"
+                      className="flex flex-wrap justify-between gap-2 rounded-lg bg-slate-50 p-2.5 text-xs dark:bg-[hsl(var(--factory-hue)_58%_10%)]"
                     >
                       <div>
                         <p className="font-mono font-semibold">{scan.baleReference}</p>

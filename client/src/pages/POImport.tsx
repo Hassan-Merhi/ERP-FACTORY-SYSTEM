@@ -37,6 +37,7 @@ interface SupplierComboboxProps {
 
 interface POImportItem {
   poNumber: string;
+  supplierCode?: string;
   barcode?: string | null;
   stockItemId?: number | null;
   itemName: string;
@@ -56,6 +57,7 @@ interface POImportCharges {
 
 interface POImportContainer {
   containerNumber: string;
+  supplierCode?: string;
   itemsCount: number;
   posCount: number;
   itemsTotal: string | number;
@@ -387,8 +389,10 @@ function ErpPOImport() {
         }
       }
       toast({
-        title: "Import successful",
-        description: `Container ${data.containerNumber} imported with ${data.itemsCount} items`,
+        title: data.factoryDispatchReceipt ? "Factory truck PO imported" : "Import successful",
+        description: data.factoryDispatchReceipt
+          ? `Factory dispatch ${data.factoryDispatchReceipt.origin.factoryDispatchId} linked to ERP container ${data.containerNumber}. Supplier purchase recorded through the existing ERP workflow.`
+          : `Container ${data.containerNumber} imported with ${data.itemsCount} items`,
       });
       queryClient.invalidateQueries({ queryKey: ["/api/containers"] });
       navigate("/containers");
@@ -671,6 +675,24 @@ function ErpPOImport() {
 
           {preview && (
             <div className="space-y-4">
+              {selectedContainer && (/^FD-/i.test(selectedContainer.containerNumber) ||
+                selectedContainer.items.some(i => /^FDPO-/i.test(i.poNumber))) && (
+                <div className="rounded-lg border border-blue-300 bg-blue-50/70 p-4 text-sm dark:border-blue-800 dark:bg-blue-950/20" data-testid="factory-trip-po-import-notice">
+                  <p className="font-semibold">Factory Dispatch — manual truck PO import</p>
+                  <p className="mt-1">
+                    This Excel file represents one financially finalized Factory truck.
+                    You must select the exact ERP supplier code {selectedContainer.supplierCode ? (
+                      <strong className="font-mono">{selectedContainer.supplierCode}</strong>
+                    ) : "(shown in the file)"} and validate every article code before importing.
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    ERP articles are matched by exact code or alias, not a similar item name.
+                    If any code is missing, create the correct ERP article/alias first and validate again.
+                    Purchase rates and charges are independently valued for ERP; re-importing the same truck is blocked,
+                    even if its file name or rates change.
+                  </p>
+                </div>
+              )}
               <Label>Step 2: Configure Import Details</Label>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">

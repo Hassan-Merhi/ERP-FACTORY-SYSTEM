@@ -3,6 +3,9 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useAppMode } from "@/contexts/AppModeContext";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
+import type { FactoryMyAccess } from "@shared/apiTypes";
 import { getApiRequest } from "@/lib/factoryApi";
 import { apiRequest } from "@/lib/queryClient";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
@@ -48,6 +51,7 @@ export function useFactoryLocationInventory() {
   const { formatAmount } = useCurrencyContext();
   const { toast } = useToast();
   const appMode = useAppMode();
+  const { selectedCompany } = useCompany();
   const modeApiRequest = getApiRequest(appMode);
   const recordChanges = useExistingRecordChangeAccess();
   const canCreateCustomer = recordChanges.canCreate("POST", "/api/factory/customers");
@@ -117,40 +121,40 @@ export function useFactoryLocationInventory() {
   const handlePrint = useReactToPrint({ contentRef: printRef });
 
   const { data: locations = [], isLoading: locationsLoading } = useQuery<Location[]>({
-    queryKey: ["/api/locations"],
+    queryKey: companyQueryKey("/api/locations", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
   });
 
-  const { data: myAccess } = useQuery<{
-    fullAccess: boolean;
-    pageKeys: string[];
-    hasErpAccess: boolean;
-    hasFactoryAccess: boolean;
-    hiddenCostFields: string[];
-  }>({
-    queryKey: ["/api/factory/my-access"],
+  const { data: myAccess } = useQuery<FactoryMyAccess>({
+    queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
   });
 
   const { data: factorySettingsData } = useQuery<{ hideSellingPrice?: boolean; hideAvgCost?: boolean }>({
-    queryKey: ["/api/factory/settings"],
+    queryKey: companyQueryKey("/api/factory/settings", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const res = await fetch("/api/factory/settings", { credentials: "include" });
       return res.ok ? res.json() : {};
     },
   });
-  const perUserHidden = myAccess?.hiddenCostFields ?? [];
+  // Do not apply permission data from a different selected company.
+  const scopedAccess = myAccess?.companyId === selectedCompany?.id ? myAccess : undefined;
+  const perUserHidden = scopedAccess?.hiddenCostFields ?? [];
+  const noCostAccess = !scopedAccess || !scopedAccess.hasFactoryAccess || scopedAccess.hideAllCosts;
   const hideSellingPrice =
-    !!factorySettingsData?.hideSellingPrice ||
+    noCostAccess || !!factorySettingsData?.hideSellingPrice ||
     perUserHidden.includes("inventory_sell_price") ||
     perUserHidden.includes("inventory_sell_value") ||
     perUserHidden.includes("hide_export_selling_price");
   const hideAvgCost =
-    !!factorySettingsData?.hideAvgCost ||
+    noCostAccess || !!factorySettingsData?.hideAvgCost ||
     perUserHidden.includes("inventory_avg_rate") ||
     perUserHidden.includes("inventory_total_value") ||
     perUserHidden.includes("hide_export_cost_price");
 
   const { data: inventoryData = [], isLoading: inventoryLoading } = useQuery<FactoryBaleProduct[]>({
-    queryKey: selectedLocation ? [`/api/factory/location-inventory/${selectedLocation.id}`] : [],
+    queryKey: companyQueryKey(`/api/factory/location-inventory/${selectedLocation?.id ?? "none"}`, selectedCompany?.id),
     queryFn: async () => {
       const response = await fetch(`/api/factory/location-inventory/${selectedLocation!.id}`, {
         credentials: "include",
@@ -158,11 +162,11 @@ export function useFactoryLocationInventory() {
       if (!response.ok) throw new Error("Failed to fetch factory inventory");
       return response.json();
     },
-    enabled: !!selectedLocation,
+    enabled: !!selectedLocation && Boolean(selectedCompany?.id),
   });
 
   const { data: availableInventoryData = [], isLoading: availableLoading } = useQuery<FactoryBaleProduct[]>({
-    queryKey: selectedLocation ? [`/api/factory/location-inventory/${selectedLocation.id}/available`] : [],
+    queryKey: companyQueryKey(`/api/factory/location-inventory/${selectedLocation?.id ?? "none"}/available`, selectedCompany?.id),
     queryFn: async () => {
       const response = await fetch(`/api/factory/location-inventory/${selectedLocation!.id}/available`, {
         credentials: "include",
@@ -170,7 +174,7 @@ export function useFactoryLocationInventory() {
       if (!response.ok) throw new Error("Failed to fetch available inventory");
       return response.json();
     },
-    enabled: !!selectedLocation && proformaMode,
+    enabled: !!selectedLocation && proformaMode && Boolean(selectedCompany?.id),
   });
 
   const { data: catalogBaleProducts = [] } = useQuery<
@@ -185,17 +189,17 @@ export function useFactoryLocationInventory() {
       active: boolean;
     }>
   >({
-    queryKey: ["/api/factory/bale-products"],
+    queryKey: companyQueryKey("/api/factory/bale-products", selectedCompany?.id),
     queryFn: async () => {
       const res = await fetch("/api/factory/bale-products", { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch bale products catalog");
       return res.json();
     },
-    enabled: proformaMode || showZeroStock,
+    enabled: Boolean(selectedCompany?.id) && (proformaMode || showZeroStock),
   });
 
   const { data: catalogCategories = [] } = useQuery<Array<{ id: number; name: string }>>({
-    queryKey: ["/api/factory/categories"],
+    queryKey: companyQueryKey("/api/factory/categories", selectedCompany?.id),
     queryFn: async () => {
       const res = await fetch("/api/factory/categories", { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch categories");
@@ -227,8 +231,8 @@ export function useFactoryLocationInventory() {
   );
 
   const { data: customers = [] } = useQuery<Customer[]>({
-    queryKey: ["/api/factory/customers"],
-    enabled: finalizeOpen,
+    queryKey: companyQueryKey("/api/factory/customers", selectedCompany?.id),
+    enabled: finalizeOpen && Boolean(selectedCompany?.id),
   });
 
   const createCustomerMutation = useMutation({

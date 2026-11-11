@@ -32,19 +32,14 @@ export default function FactoryContainerLoadingScan() {
     >
       <ScanOverlays model={model} />
 
-      <div className="relative isolate mb-4 overflow-hidden rounded-[22px] border border-blue-200/70 bg-gradient-to-r from-white via-blue-50/80 to-sky-100/70 px-4 py-4 shadow-[0_16px_40px_-32px_rgba(37,99,235,0.65)] dark:border-blue-500/30 dark:from-blue-950 dark:via-blue-900 dark:to-blue-800 sm:px-5 sm:py-5">
+      <div className="relative isolate mb-4 overflow-hidden rounded-[22px] border border-blue-200/70 bg-gradient-to-r from-white via-blue-50/80 to-sky-100/70 px-4 py-4 shadow-[0_16px_40px_-32px_hsl(var(--factory-hue)_83%_53%_/_0.65)] dark:border-blue-500/30 dark:from-blue-950 dark:via-blue-900 dark:to-blue-800 sm:px-5 sm:py-5">
         {/* Decorative freight-container artwork; no loading or scan behavior lives here. */}
         <div
           aria-hidden="true"
           className="pointer-events-none absolute inset-y-0 right-0 hidden w-1/3 overflow-hidden lg:block"
         >
           <div className="absolute inset-0 bg-gradient-to-r from-blue-50/0 via-sky-300/5 to-blue-500/10 dark:from-transparent dark:to-blue-500/20" />
-          <div
-            className="absolute -right-8 top-5 h-24 w-[85%] -skew-x-12 rounded-lg border border-blue-700/20 shadow-[0_18px_40px_rgba(0,37,100,0.25)] dark:border-sky-300/35"
-            style={{
-              backgroundImage: "repeating-linear-gradient(90deg, #0d3f85 0px, #1c66bb 9px, #154c92 14px, #09376d 17px)",
-            }}
-          />
+          <div className="factory-container-stripes absolute -right-8 top-5 h-24 w-[85%] -skew-x-12 rounded-lg border border-blue-700/20 shadow-[0_18px_40px_hsl(var(--factory-hue)_100%_20%_/_0.25)] dark:border-sky-300/35" />
           <div className="absolute -right-5 top-5 h-24 w-[85%] -skew-x-12 rounded-lg bg-gradient-to-t from-blue-950/30 to-sky-300/15" />
         </div>
         <div className="relative z-10 flex min-w-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">

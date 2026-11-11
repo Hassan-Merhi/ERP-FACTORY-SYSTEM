@@ -4,6 +4,8 @@ import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAdminOverride } from "@/hooks/use-admin-override";
 import { queryClient } from "@/lib/queryClient";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import { Plus, Trash2, Gift, Loader2, Banknote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -62,6 +64,7 @@ const today = () => new Date().toLocaleDateString("en-CA");
 export default function FactoryWorkerBonusesTab() {
   const { wrapAdminAction, AdminDialog } = useAdminOverride();
   const { toast } = useToast();
+  const { selectedCompany } = useCompany();
   const recordChanges = useExistingRecordChangeAccess();
   const [workerFilter, setWorkerFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "paid">("all");
@@ -72,7 +75,8 @@ export default function FactoryWorkerBonusesTab() {
   const [payForm, setPayForm] = useState({ cashAccountId: "", paidDate: today() });
 
   const { data: workers = [] } = useQuery<Worker[]>({
-    queryKey: ["/api/factory/workers?profile=picker"],
+    queryKey: companyQueryKey("/api/factory/workers?profile=picker", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const res = await fetch("/api/factory/workers?profile=picker", { credentials: "include" });
       if (!res.ok) throw new Error("Failed");
@@ -83,7 +87,8 @@ export default function FactoryWorkerBonusesTab() {
   });
 
   const { data: cashAccounts = [] } = useQuery<CashAccount[]>({
-    queryKey: ["/api/factory/cash-accounts"],
+    queryKey: companyQueryKey("/api/factory/cash-accounts", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const res = await fetch("/api/factory/cash-accounts", { credentials: "include" });
       if (!res.ok) return [];
@@ -93,10 +98,14 @@ export default function FactoryWorkerBonusesTab() {
     refetchOnWindowFocus: false,
   });
 
-  const qKey = useMemo(() => ["/api/factory/worker-bonuses", workerFilter, statusFilter], [workerFilter, statusFilter]);
+  const qKey = useMemo(
+    () => companyQueryKey("/api/factory/worker-bonuses", selectedCompany?.id, workerFilter, statusFilter),
+    [selectedCompany?.id, workerFilter, statusFilter]
+  );
 
   const { data: bonuses = [], isLoading } = useQuery<BonusRecord[]>({
     queryKey: qKey,
+    enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const params = new URLSearchParams();
       if (workerFilter !== "all") params.set("workerId", workerFilter);
@@ -264,10 +273,7 @@ export default function FactoryWorkerBonusesTab() {
               </TableHeader>
               <TableBody>
                 {bonuses.map((b) => (
-                  <TableRow
-                    key={`${b.source ?? "worker"}-${b.id}`}
-                    data-testid={`row-worker-bonus-${b.source ?? "worker"}-${b.id}`}
-                  >
+                  <TableRow key={`${b.source ?? "worker"}-${b.id}`} data-testid={`row-worker-bonus-${b.source ?? "worker"}-${b.id}`}>
                     <TableCell className="font-medium">{b.workerName}</TableCell>
                     <TableCell className="text-sm">{b.bonusDate}</TableCell>
                     <TableCell className="text-right font-mono">{fmt(b.amount)}</TableCell>
@@ -276,38 +282,31 @@ export default function FactoryWorkerBonusesTab() {
                         {b.status === "paid" ? "Paid" : b.status === "reversed" ? "Reversed" : "Pending"}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-sm text-muted-foreground max-w-32 truncate">
-                      {b.notes || "—"}
-                      {b.voucherId ? ` · Voucher #${b.voucherId}` : ""}
-                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground max-w-32 truncate">{b.notes || "—"}{b.voucherId ? ` · Voucher #${b.voucherId}` : ""}</TableCell>
                     <TableCell>
-                      {recordChanges.allowed && (
-                        <div className="flex gap-1 justify-end">
-                          {b.status === "pending" && (!b.source || b.source === "worker") && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                setPayOpen(b);
-                                setPayForm({ cashAccountId: "", paidDate: today() });
-                              }}
-                              data-testid={`button-pay-bonus-${b.id}`}
-                            >
-                              <Banknote className="h-3 w-3 mr-1" /> Pay
-                            </Button>
-                          )}
-                          {(!b.source || b.source === "worker") && (
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              onClick={() => setDeleteConfirm(b)}
-                              data-testid={`button-delete-worker-bonus-${b.id}`}
-                            >
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          )}
-                        </div>
-                      )}
+                      {recordChanges.allowed && <div className="flex gap-1 justify-end">
+                        {b.status === "pending" && (!b.source || b.source === "worker") && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setPayOpen(b);
+                              setPayForm({ cashAccountId: "", paidDate: today() });
+                            }}
+                            data-testid={`button-pay-bonus-${b.id}`}
+                          >
+                            <Banknote className="h-3 w-3 mr-1" /> Pay
+                          </Button>
+                        )}
+                        {(!b.source || b.source === "worker") && <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => setDeleteConfirm(b)}
+                          data-testid={`button-delete-worker-bonus-${b.id}`}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>}
+                      </div>}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -317,10 +316,7 @@ export default function FactoryWorkerBonusesTab() {
 
           <div className="sm:hidden space-y-2">
             {bonuses.map((b) => (
-              <Card
-                key={`${b.source ?? "worker"}-${b.id}`}
-                data-testid={`card-worker-bonus-${b.source ?? "worker"}-${b.id}`}
-              >
+              <Card key={`${b.source ?? "worker"}-${b.id}`} data-testid={`card-worker-bonus-${b.source ?? "worker"}-${b.id}`}>
                 <CardContent className="p-3 space-y-2">
                   <div className="flex items-start justify-between gap-2">
                     <div>
@@ -335,28 +331,24 @@ export default function FactoryWorkerBonusesTab() {
                     </div>
                   </div>
                   {b.notes && <p className="text-xs text-muted-foreground">{b.notes}</p>}
-                  {recordChanges.allowed && (
-                    <div className="flex gap-2 pt-1">
-                      {b.status === "pending" && (!b.source || b.source === "worker") && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="flex-1"
-                          onClick={() => {
-                            setPayOpen(b);
-                            setPayForm({ cashAccountId: "", paidDate: today() });
-                          }}
-                        >
-                          <Banknote className="h-3 w-3 mr-1" /> Mark Paid
-                        </Button>
-                      )}
-                      {(!b.source || b.source === "worker") && (
-                        <Button size="icon" variant="ghost" onClick={() => setDeleteConfirm(b)}>
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      )}
-                    </div>
-                  )}
+                  {recordChanges.allowed && <div className="flex gap-2 pt-1">
+                    {b.status === "pending" && (!b.source || b.source === "worker") && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() => {
+                          setPayOpen(b);
+                          setPayForm({ cashAccountId: "", paidDate: today() });
+                        }}
+                      >
+                        <Banknote className="h-3 w-3 mr-1" /> Mark Paid
+                      </Button>
+                    )}
+                    {(!b.source || b.source === "worker") && <Button size="icon" variant="ghost" onClick={() => setDeleteConfirm(b)}>
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>}
+                  </div>}
                 </CardContent>
               </Card>
             ))}

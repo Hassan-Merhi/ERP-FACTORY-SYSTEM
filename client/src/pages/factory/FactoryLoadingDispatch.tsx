@@ -44,10 +44,14 @@ import { useToast } from "@/hooks/use-toast";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
+import FactoryDispatchOrderDashboard from "./FactoryDispatchOrderDashboard";
+import { FACTORY_DISPATCH_TRIP_STATUS_LABELS, type FactoryDispatchTripStatus } from "@shared/factoryStatusPresentation";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import FactoryLoadingDispatchScanner from "./FactoryLoadingDispatchScanner";
-import FactoryLoadingDispatchAllocation from "./FactoryLoadingDispatchAllocation";
 import FactoryLoadingDispatchLifecycle from "./FactoryLoadingDispatchLifecycle";
+import FactoryLoadingDispatchFinance from "./FactoryLoadingDispatchFinance";
+import FactoryLoadingDispatchPostingPanel from "./FactoryLoadingDispatchPostingPanel";
+import FactoryLoadingDispatchPoExport from "./FactoryLoadingDispatchPoExport";
 
 interface OrderBale {
   id: number;
@@ -61,7 +65,7 @@ interface LoadingOrder {
   containerNumber?: string | null;
   bales: OrderBale[];
 }
-type TripStatus = "OPEN" | "CLOSED" | "CANCELLED";
+type TripStatus = FactoryDispatchTripStatus;
 interface DispatchTrip {
   id: number;
   orderId: number;
@@ -107,26 +111,38 @@ function printNumber(n: number, digits = 0): string {
 }
 
 async function getJson<T>(url: string): Promise<T> {
-  // Dispatch evidence must never be substituted with the SPA index.html by
-  // a stale browser/proxy cache. Expect the API's JSON response explicitly.
-  const response = await fetch(url, {
-    credentials: "include",
-    cache: "no-store",
-    headers: { Accept: "application/json" },
-  });
-  const contentType = response.headers.get("content-type") || "";
-  if (!contentType.toLowerCase().includes("application/json")) {
-    throw new Error(
-      "Dispatch API returned a webpage instead of data (HTTP " +
-        response.status +
-        "). Check the backend deployment and refresh the page."
-    );
+  // After a rolling deployment some intermediaries can briefly return the
+  // SPA HTML shell for an API GET. Never interpret it as dispatch evidence.
+  // One cache-busted retry allows the client to recover without operator
+  // action while preserving real JSON errors and authorization responses.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const requestUrl = attempt === 0 ? url : url + (url.includes("?") ? "&" : "?") + "_dispatch_retry=" + Date.now();
+    const response = await fetch(requestUrl, {
+      credentials: "include",
+      cache: "no-store",
+      headers: { Accept: "application/json", "Cache-Control": "no-cache" },
+    });
+    const contentType = (response.headers.get("content-type") || "").toLowerCase();
+    if (!contentType.includes("application/json")) {
+      // Retry only successful non-JSON responses. A 401, 403, 404, or 5xx
+      // should not be masked by retrying an unrelated fallback page.
+      if (response.ok && attempt === 0) continue;
+      throw new Error(
+        "Dispatch API returned " +
+          (contentType || "an unknown content type") +
+          " instead of JSON (HTTP " +
+          response.status +
+          "). " +
+          "The server or proxy served an invalid API response; please retry."
+      );
+    }
+    const body = await response.json();
+    if (!response.ok) {
+      throw new Error(body?.message || "Unable to load dispatch information (HTTP " + response.status + ")");
+    }
+    return body as T;
   }
-  const body = await response.json();
-  if (!response.ok) {
-    throw new Error(body?.message || "Unable to load dispatch information (HTTP " + response.status + ")");
-  }
-  return body as T;
+  throw new Error("Dispatch API did not return JSON after retry");
 }
 
 function getError(error: unknown): string {
@@ -149,7 +165,7 @@ function TripStatusBadge({ status }: { status: TripStatus }) {
         : "border-red-300 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/15 dark:text-red-200";
   return (
     <Badge variant="outline" className={statusStyle}>
-      {status === "OPEN" ? "Open" : status === "CLOSED" ? "Closed" : "Cancelled"}
+      {FACTORY_DISPATCH_TRIP_STATUS_LABELS[status]}
     </Badge>
   );
 }
@@ -166,7 +182,7 @@ function StatCard({
   icon: typeof Package;
 }) {
   return (
-    <Card className="border-slate-200/90 bg-white/90 dark:border-blue-500/20 dark:bg-[#101c34]">
+    <Card className="border-slate-200/90 bg-white/90 dark:border-blue-500/20 dark:bg-[hsl(var(--factory-hue)_53%_13%)]">
       <CardContent className="flex items-center justify-between gap-2 p-3 sm:p-4">
         <div className="min-w-0">
           <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
@@ -299,10 +315,12 @@ export default function FactoryLoadingDispatch() {
     refetchInterval: 15000,
   });
 
+  const role = (user?.currentRole ?? user?.role ?? "").toLowerCase();
+  const canViewFinancialDashboard = ["admin","owner","developer"].includes(role);
   const canEdit = !["View Only", "Create Only"].includes(user?.currentRole ?? user?.role ?? "");
   const canCreate = canEdit && activeOrderStatuses.has(orderQuery.data?.status ?? "");
 
-  const trips = useMemo(() => tripsQuery.data?.dispatches ?? [], [tripsQuery.data]);
+  const trips = useMemo(() => tripsQuery.data?.dispatches ?? [], [tripsQuery.data?.dispatches]);
   const loadedQty = orderQuery.data?.bales?.length ?? 0;
   const loadedWeight = (orderQuery.data?.bales ?? []).reduce((sum, bale) => sum + numberValue(bale.weight), 0);
   const verifiedQty = trips.reduce((sum, trip) => sum + numberValue(trip.scannedBales), 0);
@@ -371,11 +389,11 @@ export default function FactoryLoadingDispatch() {
 
   return (
     <div
-      className="flex h-full min-w-0 flex-col overflow-y-auto bg-slate-50/70 dark:bg-[#080f1c]"
+      className="flex h-full min-w-0 flex-col overflow-y-auto bg-slate-50/70 dark:bg-[hsl(var(--factory-hue)_56%_7%)]"
       data-testid="factory-loading-dispatch-page"
     >
       <div className="mx-auto w-full max-w-[1480px] space-y-5 p-3 pb-10 sm:p-5 lg:p-7">
-        <div className="relative overflow-hidden rounded-[22px] border border-blue-200/80 bg-gradient-to-r from-white via-blue-50/90 to-sky-100/80 p-4 shadow-sm dark:border-blue-500/25 dark:from-[#12213e] dark:via-[#102448] dark:to-[#092853] sm:p-5">
+        <div className="relative overflow-hidden rounded-[22px] border border-blue-200/80 bg-gradient-to-r from-white via-blue-50/90 to-sky-100/80 p-4 shadow-sm dark:border-blue-500/25 dark:from-[hsl(var(--factory-hue)_55%_16%)] dark:via-[hsl(var(--factory-hue)_64%_17%)] dark:to-[hsl(var(--factory-hue)_80%_18%)] sm:p-5">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex min-w-0 items-center gap-3">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-lg shadow-blue-500/20">
@@ -390,7 +408,7 @@ export default function FactoryLoadingDispatch() {
                   )}
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground sm:text-sm">
-                  Verify truck trips independently from your main loading record.
+                  Scan actual bales on each trip, then compare all trips against Pending Loading.
                 </p>
               </div>
             </div>
@@ -419,7 +437,7 @@ export default function FactoryLoadingDispatch() {
                 onClick={() => navigate("/factory/sales/loading/dispatch/" + orderId + "/compare")}
                 data-testid="button-compare-all-dispatches"
               >
-                <FileSearch className="mr-1.5 h-4 w-4" /> Compare All
+                <FileSearch className="mr-1.5 h-4 w-4" /> Final Loading Comparison
               </Button>
               <Button
                 size="sm"
@@ -449,8 +467,9 @@ export default function FactoryLoadingDispatch() {
         <div className="flex items-start gap-2 rounded-xl border border-indigo-200 bg-indigo-50/80 p-3 text-xs text-indigo-900 dark:border-indigo-500/25 dark:bg-indigo-500/10 dark:text-indigo-100">
           <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
           <div>
-            <span className="font-semibold">Verification only.</span> A Dispatch never adds bales to Loading, changes
-            inventory or posts financial transactions. Only unique bales from this loading may be verified on trucks.
+            <span className="font-semibold">Scan-only dispatch.</span> No expected targets per truck. Scanning records
+            the actual bales on each trip. After all trips finish, compare against Pending Loading and choose whether to
+            remove unscanned bales.
           </div>
         </div>
 
@@ -470,7 +489,7 @@ export default function FactoryLoadingDispatch() {
           <StatCard label="Open dispatches" value={printNumber(openTrips)} icon={Truck} />
         </div>
 
-        <Card className="border-blue-100 bg-white dark:border-blue-500/20 dark:bg-[#101c34]">
+        <Card className="border-blue-100 bg-white dark:border-blue-500/20 dark:bg-[hsl(var(--factory-hue)_53%_13%)]">
           <CardContent className="space-y-3 p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-sm font-semibold">Overall truck verification</span>
@@ -489,6 +508,18 @@ export default function FactoryLoadingDispatch() {
             </div>
           </CardContent>
         </Card>
+
+        {dispatchId === null && canViewFinancialDashboard && (
+          <ErrorBoundary resetKey={"factory-dispatch-overview-"+orderId}>
+            <FactoryDispatchOrderDashboard
+              orderId={orderId}
+              companyId={companyId}
+              onOpenTrip={(tripId) => navigate(tripPath(orderId, tripId))}
+              onCompareAll={() => navigate("/factory/sales/loading/dispatch/" + orderId + "/compare")}
+              onPhysicalReport={() => navigate("/factory/sales/loading/dispatch/" + orderId + "/report")}
+            />
+          </ErrorBoundary>
+        )}
 
         {dispatchId === null ? (
           <div className="space-y-3">
@@ -515,7 +546,7 @@ export default function FactoryLoadingDispatch() {
               </div>
             )}
             {!tripsQuery.isPending && tripsQuery.isSuccess && visibleTrips.length === 0 && (
-              <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-blue-200 bg-white/80 p-10 text-center dark:border-blue-500/25 dark:bg-[#101c34]">
+              <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-blue-200 bg-white/80 p-10 text-center dark:border-blue-500/25 dark:bg-[hsl(var(--factory-hue)_53%_13%)]">
                 <Truck className="h-9 w-9 text-blue-500" />
                 <p className="font-semibold">
                   {trips.length === 0 ? "No dispatch trips yet" : "No dispatches match this filter"}
@@ -539,7 +570,7 @@ export default function FactoryLoadingDispatch() {
                   type="button"
                   key={trip.id}
                   onClick={() => navigate(tripPath(orderId, trip.id))}
-                  className="group rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition-colors hover:border-blue-400 hover:bg-blue-50/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 dark:border-blue-500/20 dark:bg-[#101c34] dark:hover:border-blue-400"
+                  className="group rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition-colors hover:border-blue-400 hover:bg-blue-50/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 dark:border-blue-500/20 dark:bg-[hsl(var(--factory-hue)_53%_13%)] dark:hover:border-blue-400"
                   data-testid={"dispatch-trip-" + trip.id}
                 >
                   <div className="flex items-start justify-between gap-2">
@@ -554,7 +585,7 @@ export default function FactoryLoadingDispatch() {
                     </div>
                     <TripStatusBadge status={trip.status} />
                   </div>
-                  <div className="mt-4 grid grid-cols-2 gap-2 rounded-xl bg-slate-50 p-3 dark:bg-[#0b162a]">
+                  <div className="mt-4 grid grid-cols-2 gap-2 rounded-xl bg-slate-50 p-3 dark:bg-[hsl(var(--factory-hue)_58%_10%)]">
                     <div>
                       <p className="text-[11px] text-muted-foreground">Bales verified</p>
                       <p className="font-mono font-bold">{printNumber(numberValue(trip.scannedBales))}</p>
@@ -596,7 +627,7 @@ export default function FactoryLoadingDispatch() {
             )}
             {selectedTrip && dispatchId !== null && (
               <div className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(290px,0.7fr)]">
-                <Card className="border-blue-100 dark:border-blue-500/20 dark:bg-[#101c34]">
+                <Card className="border-blue-100 dark:border-blue-500/20 dark:bg-[hsl(var(--factory-hue)_53%_13%)]">
                   <CardContent className="space-y-5 p-4 sm:p-5">
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div>
@@ -645,7 +676,7 @@ export default function FactoryLoadingDispatch() {
                       ))}
                     </div>
                     {selectedTrip.notes && (
-                      <div className="rounded-xl bg-slate-50 p-3 dark:bg-[#0b162a]">
+                      <div className="rounded-xl bg-slate-50 p-3 dark:bg-[hsl(var(--factory-hue)_58%_10%)]">
                         <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Notes</p>
                         <p className="mt-1 whitespace-pre-wrap text-sm">{selectedTrip.notes}</p>
                       </div>
@@ -680,7 +711,7 @@ export default function FactoryLoadingDispatch() {
                   </CardContent>
                 </Card>
                 <div className="space-y-3">
-                  <Card className="border-blue-100 dark:border-blue-500/20 dark:bg-[#101c34]">
+                  <Card className="border-blue-100 dark:border-blue-500/20 dark:bg-[hsl(var(--factory-hue)_53%_13%)]">
                     <CardContent className="space-y-3 p-4">
                       <div className="flex items-center gap-2">
                         <Route className="h-4 w-4 text-blue-500" />
@@ -692,27 +723,25 @@ export default function FactoryLoadingDispatch() {
                       <Badge variant="secondary">Scanner available below</Badge>
                     </CardContent>
                   </Card>
-                  <Card className="border-blue-100 dark:border-blue-500/20 dark:bg-[#101c34]">
+                  <Card className="border-blue-100 dark:border-blue-500/20 dark:bg-[hsl(var(--factory-hue)_53%_13%)]">
                     <CardContent className="space-y-3 p-4">
                       <div className="flex items-center gap-2">
                         <FileSearch className="h-4 w-4 text-blue-500" />
-                        <h3 className="text-sm font-semibold">Trip comparison</h3>
+                        <h3 className="text-sm font-semibold">Final loading comparison</h3>
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        Compare the expected truck load configured below against physically scanned barcodes, missing
-                        references and KG differences.
+                        Compare every trip's scanned bales against Pending Loading. After all trips finish, you may
+                        choose which unscanned bales to remove from the order.
                       </p>
                       <Button
                         type="button"
                         size="sm"
                         variant="outline"
                         className="w-full justify-between"
-                        onClick={() =>
-                          navigate("/factory/sales/loading/dispatch/" + orderId + "/" + dispatchId + "/compare")
-                        }
+                        onClick={() => navigate("/factory/sales/loading/dispatch/" + orderId + "/compare")}
                         data-testid="button-compare-dispatch"
                       >
-                        Compare this trip <ArrowRight className="h-4 w-4" />
+                        Compare all trips <ArrowRight className="h-4 w-4" />
                       </Button>
                     </CardContent>
                   </Card>
@@ -731,20 +760,36 @@ export default function FactoryLoadingDispatch() {
                       }}
                     />
                   </ErrorBoundary>
-                </div>
-                <div className="xl:col-span-2">
-                  <FactoryLoadingDispatchAllocation
-                    orderId={orderId}
-                    dispatchId={dispatchId}
-                    companyId={companyId}
-                    status={selectedTrip.status}
-                    role={user?.currentRole ?? user?.role ?? ""}
-                    onChanged={() => {
-                      void queryClient.invalidateQueries({ queryKey: companyQueryKey(listUrl, companyId) });
-                      if (selectedUrl)
-                        void queryClient.invalidateQueries({ queryKey: companyQueryKey(selectedUrl, companyId) });
-                    }}
-                  />
+                  <ErrorBoundary resetKey={"dispatch-finance-" + dispatchId}>
+                    <FactoryLoadingDispatchFinance
+                      key={dispatchId}
+                      orderId={orderId}
+                      dispatchId={dispatchId}
+                      companyId={companyId}
+                      status={selectedTrip.status}
+                      role={user?.currentRole ?? user?.role ?? ""}
+                    />
+                  </ErrorBoundary>
+                  <ErrorBoundary resetKey={"dispatch-posting-" + dispatchId}>
+                    <FactoryLoadingDispatchPostingPanel
+                      key={dispatchId}
+                      orderId={orderId}
+                      dispatchId={dispatchId}
+                      companyId={companyId}
+                      status={selectedTrip.status}
+                      role={user?.currentRole ?? user?.role ?? ""}
+                    />
+                  </ErrorBoundary>
+                  <ErrorBoundary resetKey={"dispatch-po-export-" + dispatchId}>
+                    <FactoryLoadingDispatchPoExport
+                      key={dispatchId}
+                      orderId={orderId}
+                      dispatchId={dispatchId}
+                      companyId={companyId}
+                      status={selectedTrip.status}
+                      role={user?.currentRole ?? user?.role ?? ""}
+                    />
+                  </ErrorBoundary>
                 </div>
                 <div className="xl:col-span-2">
                   <FactoryLoadingDispatchScanner
@@ -767,7 +812,7 @@ export default function FactoryLoadingDispatch() {
         )}
 
         <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 pt-4 text-xs text-muted-foreground dark:border-slate-700">
-          <ShieldCheck className="h-4 w-4" /> Separate truck records · Same loading order · No stock or accounting
+          <ShieldCheck className="h-4 w-4" /> Separate truck records · Same loading order · Draft charge previews do not post stock or accounting
           changes
         </div>
       </div>

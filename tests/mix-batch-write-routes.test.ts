@@ -86,6 +86,13 @@ async function rawStockUsed(rawStockId: number): Promise<number> {
   return Number(result.rows[0].used_kg);
 }
 
+const WASTE_REASON = "Reviewed remainder written off in test";
+
+/** The explicit, reviewed write-off a finalize needs when kg remain unused. */
+function reviewedWaste(wasteKg: string) {
+  return { confirmRemainderAsWaste: true, wasteKg, wasteReason: WASTE_REASON };
+}
+
 async function batchRow(id: number) {
   const result = await pool.query<{
     status: string;
@@ -134,10 +141,34 @@ afterAll(async () => {
 }, 60000);
 
 describe("POST /api/factory/mix-batches/:id/finalize", () => {
+  it("refuses to write off an unreviewed remainder", async () => {
+    const batchId = await createBatch("750.000");
+
+    // Finalizing with kg still unused would silently turn stock into waste.
+    const bare = await agent.post(`/api/factory/mix-batches/${batchId}/finalize`).send({});
+    expect(bare.status).toBe(409);
+    expect(bare.body.code).toBe("MIX_BATCH_LIFECYCLE_REFUSED");
+
+    // The confirmed kg must equal the remainder read under the row lock.
+    const stale = await agent
+      .post(`/api/factory/mix-batches/${batchId}/finalize`)
+      .send({ confirmRemainderAsWaste: true, wasteKg: "700.000", wasteReason: WASTE_REASON });
+    expect(stale.status).toBe(409);
+
+    const undocumented = await agent
+      .post(`/api/factory/mix-batches/${batchId}/finalize`)
+      .send({ confirmRemainderAsWaste: true, wasteKg: "750.000", wasteReason: "short" });
+    expect(undocumented.status).toBe(400);
+
+    const row = await batchRow(batchId);
+    expect(row?.status).toBe("OPEN");
+    expect(Number(row?.used_kg)).toBeCloseTo(0, 3);
+  });
+
   it("marks the batch complete with its full weight consumed", async () => {
     const batchId = await createBatch("750.000");
 
-    const response = await agent.post(`/api/factory/mix-batches/${batchId}/finalize`).send({});
+    const response = await agent.post(`/api/factory/mix-batches/${batchId}/finalize`).send(reviewedWaste("750.000"));
 
     expect(response.status).toBe(200);
     const row = await batchRow(batchId);
@@ -149,11 +180,13 @@ describe("POST /api/factory/mix-batches/:id/finalize", () => {
 
   it("refuses to finalize a batch that is already finalized", async () => {
     const batchId = await createBatch("400.000");
-    expect((await agent.post(`/api/factory/mix-batches/${batchId}/finalize`).send({})).status).toBe(200);
+    expect(
+      (await agent.post(`/api/factory/mix-batches/${batchId}/finalize`).send(reviewedWaste("400.000"))).status
+    ).toBe(200);
 
-    const second = await agent.post(`/api/factory/mix-batches/${batchId}/finalize`).send({});
+    const second = await agent.post(`/api/factory/mix-batches/${batchId}/finalize`).send(reviewedWaste("400.000"));
 
-    expect(second.status).toBe(400);
+    expect(second.status).toBe(409);
     expect(Number((await batchRow(batchId))?.used_kg)).toBeCloseTo(400, 3);
   });
 
@@ -208,16 +241,20 @@ describe("DELETE /api/factory/mix-batches/:id", () => {
     expect(await rawStockUsed(secondStock)).toBeCloseTo(125, 3);
   });
 
-  it("floors the reversal at zero rather than driving used negative", async () => {
+  it("refuses a reversal larger than the recorded usage instead of clamping it", async () => {
     const rawStockId = await createRawStock("40.000");
     const batchId = await createBatch();
     // More than has ever been used — only possible if usedKg was already
-    // corrupted, but the clamp is what stops one bad row spreading.
+    // corrupted. Clamping to zero would hide that; the delete must refuse and
+    // leave both the stock row and the mix exactly as they were.
     await addSource(batchId, { containerId: await containerIdOf(rawStockId), weightKg: "100.000" });
 
-    expect((await agent.delete(`/api/factory/mix-batches/${batchId}`)).status).toBe(200);
+    const response = await agent.delete(`/api/factory/mix-batches/${batchId}`);
 
-    expect(await rawStockUsed(rawStockId)).toBeCloseTo(0, 3);
+    expect(response.status).toBe(409);
+    expect(response.body.code).toBe("MIX_BATCH_LIFECYCLE_REFUSED");
+    expect(await rawStockUsed(rawStockId)).toBeCloseTo(40, 3);
+    expect((await batchRow(batchId))?.deleted_at).toBeNull();
   });
 
   it("cannot be given a source container from another company at all", async () => {

@@ -101,7 +101,7 @@ export function ProformaLinesTable({
   return (
     <div className="bg-card">
       <Table mobileLayout="cards" wrapperClassName="max-h-[440px] overflow-auto">
-        <TableHeader className="sticky top-0 z-30 bg-violet-50 dark:bg-[#241c3d]">
+        <TableHeader className="sticky top-0 z-30 bg-violet-50 dark:bg-[hsl(var(--factory-hue)_37%_17%)]">
           <TableRow className="border-b border-violet-500/20">
             <TableHead className="text-[11px] uppercase tracking-wider text-violet-800 dark:text-violet-200 font-bold">
               Article Code
@@ -134,7 +134,11 @@ export function ProformaLinesTable({
               const lineTotal = line.quantity * lineWt;
               const isEditingQty = inlineQtyLineId === line.id;
               return (
-                <TableRow key={line.id} className="even:bg-muted/20 hover:bg-violet-500/[0.06] dark:hover:bg-violet-400/[0.08]" data-testid={`row-line-${line.id}`}>
+                <TableRow
+                  key={line.id}
+                  className="even:bg-muted/20 hover:bg-violet-500/[0.06] dark:hover:bg-violet-400/[0.08]"
+                  data-testid={`row-line-${line.id}`}
+                >
                   <TableCell
                     className="py-3 font-mono text-xs text-muted-foreground"
                     data-testid={`text-article-code-${line.id}`}
@@ -144,7 +148,10 @@ export function ProformaLinesTable({
                   <TableCell className="py-3 text-sm font-semibold" data-testid={`text-product-name-${line.id}`}>
                     {line.productName}
                   </TableCell>
-                  <TableCell className="py-3 text-right font-mono tabular-nums" data-testid={`text-quantity-${line.id}`}>
+                  <TableCell
+                    className="py-3 text-right font-mono tabular-nums"
+                    data-testid={`text-quantity-${line.id}`}
+                  >
                     {canEdit && isEditingQty ? (
                       <Input
                         type="number"

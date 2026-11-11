@@ -1,4 +1,4 @@
-import { Suspense, type ReactNode } from "react";
+import { Suspense, useEffect, useState, type ReactNode } from "react";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { LoadingState } from "@/components/ui/page-state";
@@ -55,6 +55,36 @@ export function WorkspaceConsistencyBoundary({
   );
 }
 
+/** A timed recovery action for a lazy module or route that never resolves. */
+function RouteLoadingFallback({ title, description, fill }: { title: string; description: string; fill?: boolean }) {
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSlow(true), 12_000);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  return (
+    <div className={fill ? "h-full" : "p-3 sm:p-6"}>
+      <LoadingState
+        className={fill ? "h-full border-0 bg-transparent" : undefined}
+        title={title}
+        description={slow ? "This page is taking longer than expected. You can reload it safely." : description}
+      />
+      {slow && (
+        <div className="mt-3 flex justify-center">
+          <button
+            type="button"
+            className="rounded-md border border-border bg-background px-4 py-2 text-sm font-medium text-foreground hover:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+            onClick={() => window.location.reload()}
+          >
+            Reload page
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface WorkspaceRouteBoundaryProps extends WorkspaceConsistencyBoundaryProps {
   resetKey: string;
   loadingTitle: string;
@@ -75,13 +105,7 @@ export function WorkspaceRouteBoundary({
         fallback={
           // The workspace padding lives on the route content (not on the scroll container, so
           // sticky headers stick at its true top); the loading card needs the same inset.
-          <div className={fill ? "h-full" : "p-3 sm:p-6"}>
-            <LoadingState
-              className={fill ? "h-full border-0 bg-transparent" : undefined}
-              title={loadingTitle}
-              description={loadingDescription}
-            />
-          </div>
+          <RouteLoadingFallback title={loadingTitle} description={loadingDescription} fill={fill} />
         }
       >
         <WorkspaceConsistencyBoundary className={className} fill={fill} routeKey={resetKey}>

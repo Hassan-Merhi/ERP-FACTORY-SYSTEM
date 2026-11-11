@@ -292,8 +292,12 @@ async function replaceTestIdValue(page, id, text) {
 
 /** Pick an option from an open Radix select with a real pointer click. */
 async function pickOption(page, label) {
-  await page.waitForSelector('[role="option"]', { visible: true, timeout: timeoutMs });
-  for (const option of await page.$$('[role="option"]')) {
+  // Scope to the open Radix select. A bare [role="option"] also matches other
+  // listboxes on the page (the desktop POS product results stay mounted but
+  // hidden at phone width), and waitForSelector only tests the first match.
+  const optionSelector = '[data-radix-select-viewport] [role="option"]';
+  await page.waitForSelector(optionSelector, { visible: true, timeout: timeoutMs });
+  for (const option of await page.$$(optionSelector)) {
     const text = await option.evaluate((element) => element.textContent?.trim());
     if (text === label) {
       await option.click();

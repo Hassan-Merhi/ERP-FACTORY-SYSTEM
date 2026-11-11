@@ -9,16 +9,15 @@ import { ExcelJS, writeFile } from "@/lib/excelHelper";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { factoryApiRequest } from "@/lib/factoryApi";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
+import type { FactoryMyAccess } from "@shared/apiTypes";
 import type { FactoryWorker, FactoryWorkerCategory } from "@shared/schema";
 
 import type { CashAccount } from "./types";
 import { emptyForm } from "./utils";
 interface FactoryWorkerSettings {
   workersTabCategoriesEnabled?: boolean;
-}
-
-interface FactoryWorkerAccess {
-  hiddenCostFields?: string[];
 }
 
 type FactoryWorkerRecord = FactoryWorker & {
@@ -47,8 +46,10 @@ function getErrorMessage(error: unknown): string {
 }
 
 export function useFactoryWorkersModel() {
+  const { selectedCompany } = useCompany();
   const { data: settings } = useQuery<FactoryWorkerSettings>({
-    queryKey: ["/api/factory/settings"],
+    queryKey: companyQueryKey("/api/factory/settings", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const r = await fetch("/api/factory/settings");
       return r.ok ? r.json() : {};
@@ -56,11 +57,14 @@ export function useFactoryWorkersModel() {
     staleTime: 60000,
   });
 
-  const { data: myAccess } = useQuery<FactoryWorkerAccess>({
-    queryKey: ["/api/factory/my-access"],
+  const { data: myAccess } = useQuery<FactoryMyAccess>({
+    queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     staleTime: 5 * 60000,
   });
-  const hiddenTabs = myAccess?.hiddenCostFields ?? [];
+  const hiddenTabs = myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
+    ? myAccess.hiddenCostFields
+    : ["hide_tab_workers_list", "hide_tab_workers_categories"];
   const showWorkersList = !hiddenTabs.includes("hide_tab_workers_list");
 
   const showCategories =
@@ -104,7 +108,8 @@ export function useFactoryWorkersModel() {
   const [endSubmitting, setEndSubmitting] = useState(false);
 
   const { data: cashAccounts } = useQuery<CashAccount[]>({
-    queryKey: ["/api/factory/cash-accounts"],
+    queryKey: companyQueryKey("/api/factory/cash-accounts", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const res = await fetch("/api/factory/cash-accounts", { credentials: "include" });
       return res.json();
@@ -114,7 +119,8 @@ export function useFactoryWorkersModel() {
   });
 
   const { data: workers, isLoading } = useQuery<FactoryWorkerRecord[]>({
-    queryKey: ["/api/factory/workers", "full"],
+    queryKey: companyQueryKey("/api/factory/workers", selectedCompany?.id, "full"),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const res = await fetch("/api/factory/workers?profile=full", { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch workers");
@@ -123,7 +129,8 @@ export function useFactoryWorkersModel() {
   });
 
   const { data: docCounts = {} } = useQuery<Record<number, number>>({
-    queryKey: ["/api/factory/workers/document-counts"],
+    queryKey: companyQueryKey("/api/factory/workers/document-counts", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const res = await fetch("/api/factory/workers/document-counts", { credentials: "include" });
       if (!res.ok) return {};
@@ -133,7 +140,8 @@ export function useFactoryWorkersModel() {
   });
 
   const { data: savedNationalities = [] } = useQuery<string[]>({
-    queryKey: ["/api/factory/workers/nationalities"],
+    queryKey: companyQueryKey("/api/factory/workers/nationalities", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const res = await fetch("/api/factory/workers/nationalities", { credentials: "include" });
       if (!res.ok) return [];
@@ -158,7 +166,8 @@ export function useFactoryWorkersModel() {
       }
     >
   >({
-    queryKey: ["/api/factory/workers/amount-due"],
+    queryKey: companyQueryKey("/api/factory/workers/amount-due", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const res = await fetch("/api/factory/workers/amount-due", { credentials: "include" });
       if (!res.ok) return {};
@@ -175,7 +184,8 @@ export function useFactoryWorkersModel() {
   const [catWorkerIds, setCatWorkerIds] = useState<number[]>([]);
 
   const { data: categories = [] } = useQuery<FactoryWorkerCategory[]>({
-    queryKey: ["/api/factory/worker-categories"],
+    queryKey: companyQueryKey("/api/factory/worker-categories", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const res = await fetch("/api/factory/worker-categories", { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch worker categories");

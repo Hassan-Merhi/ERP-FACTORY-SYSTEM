@@ -70,6 +70,9 @@ describe("Wave 5 Factory permission registry certification", () => {
   it("keeps every used Factory tab in Settings and every Settings tab in active UI", () => {
     const source = [
       readTree("client/src/pages/factory"),
+      // Hub tab keys live in the shared Factory navigation config since the
+      // Factory unification; the hubs read them from there.
+      readTree("client/src/factory"),
       readFileSync("client/src/pages/AccountsLegacy.tsx", "utf8"),
       readFileSync("client/src/pages/Vouchers.tsx", "utf8"),
     ].join("\n");

@@ -1,4 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import { BarChart3, Package, Scale, Boxes, TrendingUp, Calendar } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -49,16 +51,20 @@ function filterBalesByDate(bales: ProductionBaleRow[], startDate: Date) {
 }
 
 export default function ProductionSummary() {
+  const { selectedCompany } = useCompany();
   const { data: balesData, isLoading: balesLoading } = useQuery<ProductionBaleRow[]>({
-    queryKey: ["/api/factory/bales"],
+    queryKey: companyQueryKey("/api/factory/bales", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
   });
 
   const { data: mixBatches, isLoading: batchesLoading } = useQuery<FactoryMixBatch[]>({
-    queryKey: ["/api/factory/mix-batches?profile=summary"],
+    queryKey: companyQueryKey("/api/factory/mix-batches?profile=summary", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
   });
 
   const { data: rawStock, isLoading: rawStockLoading } = useQuery<RawStockRow[]>({
-    queryKey: ["/api/factory/raw-stock"],
+    queryKey: companyQueryKey("/api/factory/raw-stock", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
   });
 
   const isLoading = balesLoading || batchesLoading || rawStockLoading;

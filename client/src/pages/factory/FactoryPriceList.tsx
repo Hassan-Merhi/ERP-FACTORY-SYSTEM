@@ -5,6 +5,8 @@ import { getErrorDetails } from "@shared/errorUtils";
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { getApiRequest } from "@/lib/factoryApi";
 import { useToast } from "@/hooks/use-toast";
@@ -45,6 +47,7 @@ interface FactoryCategory {
 export default function FactoryPriceList() {
   const mhd = useFactoryMhdView();
   const { toast } = useToast();
+  const { selectedCompany } = useCompany();
   const appMode = useAppMode();
   const modeApiRequest = getApiRequest(appMode);
   // Prices are edits to existing products; read-only roles see the list and template only.
@@ -62,6 +65,10 @@ export default function FactoryPriceList() {
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  useEffect(() => {
+    setEditingCell(null);
+  }, [selectedCompany?.id]);
+
   // Focus only when changing cells, not on every digit typed.
   const editingCellKey = editingCell ? `${editingCell.productId}:${editingCell.field}` : null;
   useEffect(() => {
@@ -71,11 +78,13 @@ export default function FactoryPriceList() {
   }, [editingCellKey]);
 
   const { data: products = [], isLoading } = useQuery<FactoryBaleProduct[]>({
-    queryKey: ["/api/factory/bale-products"],
+    queryKey: companyQueryKey("/api/factory/bale-products", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
   });
 
   const { data: categories = [] } = useQuery<FactoryCategory[]>({
-    queryKey: ["/api/factory/categories"],
+    queryKey: companyQueryKey("/api/factory/categories", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
   });
 
   const updatePriceMutation = useMutation({

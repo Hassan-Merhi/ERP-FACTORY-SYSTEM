@@ -189,16 +189,19 @@ describe("Wave H populated factory-invoice detail behavior", () => {
   it("renders finalized invoice lines, charges, logistics metadata, and computed totals", async () => {
     renderWithProviders(<FactoryInvoiceDetail />, {
       seedQueries: [
-        [["/api/factory/customer-orders", 77], finalizedOrder],
+        [["/api/factory/customer-orders", 1, 77], finalizedOrder],
         [
-          ["/api/ledger-accounts?includeHidden=true"],
+          ["/api/ledger-accounts?includeHidden=true", 1],
           [
             { id: 9, name: "Freight Expense", code: "EXP-9" },
             { id: 10, name: "Clearance Expense", code: "EXP-10" },
           ],
         ],
-        [["/api/factory/my-access"], { hiddenCostFields: [], fullAccess: true }],
-        [["/api/factory/customer-proformas", 3], []],
+        [
+          ["/api/factory/my-access", 1],
+          { hiddenCostFields: [], fullAccess: true, hasFactoryAccess: true, hideAllCosts: false, companyId: 1 },
+        ],
+        [["/api/factory/customer-proformas", 1, 3, "summary"], []],
       ],
     });
 

@@ -14,6 +14,7 @@ import { PaginationBar } from "@/components/PaginationBar";
 import { useTablePrefs } from "@/hooks/use-table-prefs";
 import { useClientTablePagination } from "@/hooks/use-client-table-pagination";
 import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -140,7 +141,8 @@ export default function FactoryContacts() {
   const [form, setForm] = useState(EMPTY_FORM);
 
   const { data: contacts = [], isLoading } = useQuery<Contact[]>({
-    queryKey: ["/api/factory/contacts"],
+    queryKey: companyQueryKey("/api/factory/contacts", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const res = await modeApiRequest("GET", "/api/factory/contacts");
       return res.json();

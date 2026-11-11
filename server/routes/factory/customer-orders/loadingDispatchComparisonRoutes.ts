@@ -37,7 +37,7 @@ export async function loadFactoryLoadingDispatchComparisonSnapshot(
   tx: DbTransaction, companyId: number, orderId: number, selectedDispatchId?: number
 ) {
   const orderRows = resultRows(await tx.execute(sql`
-    SELECT id, status, container_number AS "containerNumber",
+    SELECT id, status, invoice_number AS "invoiceNumber", container_number AS "containerNumber",
            deleted_at AS "deletedAt"
       FROM customer_orders
      WHERE id = ${orderId} AND company_id = ${companyId}
@@ -65,7 +65,7 @@ export async function loadFactoryLoadingDispatchComparisonSnapshot(
 
   // Loaded barcode IDs define the current order expectation.
   const loadedRows = resultRows(await tx.execute(sql`
-    SELECT cob.bale_id AS "baleId", cob.bale_reference AS "baleReference",
+    SELECT cob.id AS "orderBaleId", cob.bale_id AS "baleId", cob.bale_reference AS "baleReference",
            cob.article_code AS "articleCode", cob.bale_name AS "productName",
            cob.weight AS "weightKg"
       FROM customer_order_bales cob
@@ -73,6 +73,7 @@ export async function loadFactoryLoadingDispatchComparisonSnapshot(
      ORDER BY cob.id
   `));
   const loaded: ComparisonBale[] = loadedRows.map((row) => ({
+    orderBaleId: numeric(row.orderBaleId),
     baleId: numeric(row.baleId),
     baleReference: stringValue(row.baleReference),
     articleCode: stringValue(row.articleCode),
@@ -195,8 +196,10 @@ async function respondWithComparison(req: Request, res: Response, tripScoped: bo
     const comparison = compareFactoryLoadingDispatch({
       loaded: snapshot.loaded,
       scans: snapshot.scans,
-      expectedBales: snapshot.expectedBales,
-      expectedArticles: snapshot.expectedArticles,
+      // No truck-specific expectations: Pending Loading is the only source
+      // for the final order-wide comparison.
+      expectedBales: [],
+      expectedArticles: [],
       trips: snapshot.trips,
       ...(tripScoped ? { selectedDispatchId: String(dispatchId) } : {}),
     });

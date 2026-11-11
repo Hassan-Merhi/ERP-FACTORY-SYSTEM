@@ -92,6 +92,12 @@ vi.mock("@/contexts/CompanyContext", () => ({
     isLoading: false,
     selectCompany: vi.fn(),
   }),
+  useOptionalCompany: () => ({
+    selectedCompany: { id: 1, name: "Test Co", code: "TC", active: true, companyType: "factory" as const },
+    companies: [],
+    isLoading: false,
+    selectCompany: vi.fn(),
+  }),
   CompanyProvider: ({ children }: any) => <>{children}</>,
 }));
 

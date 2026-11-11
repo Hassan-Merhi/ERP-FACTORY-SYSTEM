@@ -71,9 +71,9 @@ export function ContainerExtraItemsDialog({
     staleTime: 60_000,
   });
   const { data: prices = [] } = useQuery<AgreedPrice[]>({
-    queryKey: ["/api/factory/customer-price-lists", customerId],
+    queryKey: [endpoint, "prices"],
     queryFn: async () => {
-      const response = await fetch(`/api/factory/customer-price-lists/${customerId}`, { credentials: "include" });
+      const response = await fetch(`${endpoint}/prices`, { credentials: "include" });
       if (!response.ok) throw new Error("Could not load saved agreed prices");
       return response.json();
     },

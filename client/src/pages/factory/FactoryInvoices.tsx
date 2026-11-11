@@ -16,6 +16,8 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useState, useCallback, useRef } from "react";
 import { useAppMode } from "@/contexts/AppModeContext";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { getApiRequest } from "@/lib/factoryApi";
 import { Badge } from "@/components/ui/badge";
@@ -66,6 +68,7 @@ const INVOICE_OPTIONAL_COLUMNS: { key: InvoiceColumnKey; label: string }[] = [
 ];
 
 export default function FactoryInvoices() {
+  const { selectedCompany } = useCompany();
   const { toast } = useToast();
   const [, navigate] = useLocation();
   const { formatDisplayDate } = useDateFormat();
@@ -143,14 +146,21 @@ export default function FactoryInvoices() {
     [toast]
   );
 
-  const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: ["/api/factory/my-access"], staleTime: 5 * 60000 });
-  const isAdmin = myAccess?.fullAccess === true;
+  const { data: myAccess } = useQuery<FactoryMyAccess>({
+    queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
+    staleTime: 5 * 60000,
+  });
+  const accessReady = Boolean(myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess);
+  const isAdmin = accessReady && myAccess?.fullAccess === true;
   const recordChanges = useExistingRecordChangeAccess();
   const { data: authUser } = useQuery<AuthMe>({ queryKey: ["/api/auth/me"], staleTime: 5 * 60000 });
-  const showBookingInfo = ["admin", "owner", "developer"].includes(
-    String(authUser?.currentRole || authUser?.role || "").toLowerCase()
-  );
-  const hidden: string[] = myAccess?.hiddenCostFields ?? [];
+  const showBookingInfo =
+    accessReady &&
+    ["admin", "owner", "developer"].includes(String(authUser?.currentRole || authUser?.role || "").toLowerCase());
+  const hidden: string[] = accessReady
+    ? myAccess!.hiddenCostFields
+    : ["hide_invoicing_proforma_col", "hide_invoicing_totals_usd"];
   const hideProformaCol = !isAdmin || hidden.includes("hide_invoicing_proforma_col");
   const hideTotalsUsd = hidden.includes("hide_invoicing_totals_usd");
 
@@ -178,7 +188,8 @@ export default function FactoryInvoices() {
   };
 
   const { data: customers = [] } = useQuery<Customer[]>({
-    queryKey: ["/api/factory/customers"],
+    queryKey: companyQueryKey("/api/factory/customers", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
   });
 
   const queryParams = new URLSearchParams();
@@ -191,7 +202,13 @@ export default function FactoryInvoices() {
     isLoading,
     isError,
   } = useQuery<CustomerOrder[]>({
-    queryKey: [`/api/factory/customer-orders${queryString ? `?${queryString}` : ""}`, customerFilter, showHidden],
+    queryKey: companyQueryKey(
+      `/api/factory/customer-orders${queryString ? `?${queryString}` : ""}`,
+      selectedCompany?.id,
+      customerFilter,
+      showHidden
+    ),
+    enabled: Boolean(selectedCompany?.id),
   });
 
   const changeCustomerMutation = useMutation({

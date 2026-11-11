@@ -3,6 +3,8 @@ import type { ClientErrorLike } from "@/lib/clientError";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import { useToast } from "@/hooks/use-toast";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useDateFormat } from "@/contexts/DateFormatContext";
@@ -43,6 +45,7 @@ import { StatusDiffFooterRow } from "./factorystatusbuilder/components/StatusDif
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export default function FactoryStatusBuilder() {
+  const { selectedCompany } = useCompany();
   // Sheets are shared company records: read-only roles can browse, switch pages, view history and export.
   const recordChanges = useExistingRecordChangeAccess();
   const canEdit = recordChanges.allowed;
@@ -56,6 +59,18 @@ export default function FactoryStatusBuilder() {
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const silentSaveRef = useRef(false);
+  const priorCompanyRef = useRef(selectedCompany?.id);
+  useEffect(() => {
+    if (priorCompanyRef.current === selectedCompany?.id) return;
+    priorCompanyRef.current = selectedCompany?.id;
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    autosaveTimerRef.current = null;
+    silentSaveRef.current = false;
+    setLocalSheets([]);
+    setInitialised(false);
+    setActiveIdx(0);
+    setSavedAt(null);
+  }, [selectedCompany?.id]);
 
   const [linkDialog, setLinkDialog] = useState<LinkDialogState>({
     open: false,
@@ -116,7 +131,8 @@ export default function FactoryStatusBuilder() {
 
   // ── Load ───────────────────────────────────────────────────────────────────
   const { data: apiSheets, isLoading } = useQuery<ApiSheet[]>({
-    queryKey: ["/api/factory/status-builder/sheets"],
+    queryKey: companyQueryKey("/api/factory/status-builder/sheets", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
   });
 
   useEffect(() => {
@@ -144,10 +160,10 @@ export default function FactoryStatusBuilder() {
       createdAt: string;
     }>
   >({
-    queryKey: ["/api/factory/status-builder/log", activeSheet?.id],
+    queryKey: companyQueryKey("/api/factory/status-builder/log", selectedCompany?.id, activeSheet?.id),
     queryFn: () =>
       apiRequest("GET", `/api/factory/status-builder/log?sheetId=${activeSheet?.id}&limit=200`).then((r) => r.json()),
-    enabled: viewMode === "history" && !!activeSheet?.id,
+    enabled: Boolean(selectedCompany?.id) && viewMode === "history" && !!activeSheet?.id,
   });
 
   // ── Helpers ────────────────────────────────────────────────────────────────

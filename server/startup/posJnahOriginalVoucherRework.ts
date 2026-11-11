@@ -12,8 +12,6 @@ import { retireVouchersTx } from "../services/accounting/voucherRetirement";
 import { writeAuditEvent } from "../services/audit";
 import { verifyPosJnahPrepaidMonths, type PosJnahMonth } from "./posJnahPrepaidPlan";
 
-// Advisory lock name, passed as a parameter: hashtext() sees the same text.
-const REPAIR_LOCK_KEY = "pos-jnah-vouchers-20261109";
 const company = 17,
   contract = 36,
   expense = 2139,
@@ -56,7 +54,7 @@ export async function runPosJnahExistingVoucherRepair(): Promise<void> {
     runWithAuditReason("Owner-approved POS Jnah repair using existing vouchers only", () =>
       runInCompanyPostingScope(company, () =>
         db.transaction(async (tx) => {
-          await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${REPAIR_LOCK_KEY}))`);
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('pos-jnah-repair-20261109'), ${company})`);
           const lines = (
             await tx.execute(sql`
 SELECT v.id AS voucher_id,v.voucher_number,v.voucher_date::text AS voucher_date,

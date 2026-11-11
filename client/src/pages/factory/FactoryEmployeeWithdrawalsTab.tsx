@@ -4,6 +4,8 @@ import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAdminOverride } from "@/hooks/use-admin-override";
 import { queryClient } from "@/lib/queryClient";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import { Banknote, Users, Loader2, ArrowDownCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -48,6 +50,7 @@ const today = () => new Date().toLocaleDateString("en-CA");
 export default function FactoryEmployeeWithdrawalsTab() {
   const { wrapAdminAction, AdminDialog } = useAdminOverride();
   const { toast } = useToast();
+  const { selectedCompany } = useCompany();
   const recordChanges = useExistingRecordChangeAccess();
   const [singleOpen, setSingleOpen] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -68,7 +71,8 @@ export default function FactoryEmployeeWithdrawalsTab() {
   const [bulkAmounts, setBulkAmounts] = useState<Record<number, string>>({});
 
   const { data: employees = [] } = useQuery<Employee[]>({
-    queryKey: ["/api/factory/employees"],
+    queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const res = await fetch("/api/factory/employees", { credentials: "include" });
       if (!res.ok) throw new Error("Failed");
@@ -77,7 +81,8 @@ export default function FactoryEmployeeWithdrawalsTab() {
   });
 
   const { data: cashAccounts = [] } = useQuery<CashAccount[]>({
-    queryKey: ["/api/factory/cash-accounts"],
+    queryKey: companyQueryKey("/api/factory/cash-accounts", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const res = await fetch("/api/factory/cash-accounts", { credentials: "include" });
       if (!res.ok) return [];
@@ -111,7 +116,7 @@ export default function FactoryEmployeeWithdrawalsTab() {
       toast({ title: "Withdrawal recorded" });
       setSingleOpen(false);
       setSingleForm({ employeeId: "", amount: "", date: today(), cashAccountId: "", notes: "" });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/employees"] });
+      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id) });
     },
     onError: (e: ClientErrorLike) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
@@ -148,7 +153,7 @@ export default function FactoryEmployeeWithdrawalsTab() {
       setBulkOpen(false);
       setBulkAmounts({});
       setBulkForm({ date: today(), cashAccountId: "", notes: "" });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/employees"] });
+      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id) });
     },
     onError: (e: ClientErrorLike) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });

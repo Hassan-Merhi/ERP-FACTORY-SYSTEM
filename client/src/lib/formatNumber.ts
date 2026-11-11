@@ -13,6 +13,16 @@ export function drCrClass(side: string | null | undefined): string {
 }
 
 /**
+ * Balance amounts in the monthly GL report use a credit-positive signed value.
+ * A negative number is Dr (green), a positive number is Cr (red); zero is neutral.
+ * Use drCrClass directly for reports using debit-positive signs.
+ */
+export function creditPositiveBalanceClass(balance: number): string {
+  if (!Number.isFinite(balance) || balance === 0) return "text-muted-foreground";
+  return drCrClass(balance > 0 ? "Cr" : "Dr");
+}
+
+/**
  * Format a number to remove unnecessary .00 decimals and add comma separators
  * @param num - The number to format
  * @param maxDecimals - Maximum decimal places to show (default 2)

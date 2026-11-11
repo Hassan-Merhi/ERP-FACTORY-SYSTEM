@@ -34,6 +34,8 @@ import {
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { factoryApiRequest } from "@/lib/factoryApi";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import type { ContainerWithSupplier, OtwTrackingTabProps } from "./factoryotwtrackingtab/types";
 import {
   STATUS_ACTIVE,
@@ -52,6 +54,7 @@ import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAc
 import type { AuthMe } from "@shared/apiTypes";
 export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = {}) {
   const { toast } = useToast();
+  const { selectedCompany } = useCompany();
   const tqClient = useTQClient();
   // ETA, docs and notes edit existing containers; read-only roles see them without editors.
   const recordChanges = useExistingRecordChangeAccess();
@@ -66,9 +69,9 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
   const [showFilters, setShowFilters] = useState(false);
   const [detailedView, setDetailedView] = useState(false);
   // Use activeOnly=true so the backend pre-filters to PENDING/IN_TRANSIT/ARRIVED.
-  // The queryKey uses the base path so existing invalidations (prefix-match) still work.
+  // Canonical scoped query key retains the URL-first prefix for invalidations.
   const { data: containers, isLoading } = useQuery<ContainerWithSupplier[]>({
-    queryKey: ["/api/factory/containers", "otw"],
+    queryKey: companyQueryKey("/api/factory/containers", selectedCompany?.id, "otw"),
     queryFn: async () => {
       const res = await fetch("/api/factory/containers?activeOnly=true", { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch containers");
@@ -174,8 +177,9 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
   /** Immediately patch the in-memory cache entry so the UI reflects the new
    *  value without waiting for the background refetch to complete. */
   function patchCacheContainer(id: number, patch: Partial<ContainerWithSupplier>) {
-    tqClient.setQueriesData<ContainerWithSupplier[]>({ queryKey: ["/api/factory/containers"] }, (old) =>
-      old?.map((c) => (c.id === id ? { ...c, ...patch } : c))
+    tqClient.setQueriesData<ContainerWithSupplier[]>(
+      { queryKey: companyQueryKey("/api/factory/containers", selectedCompany?.id) },
+      (old) => old?.map((c) => (c.id === id ? { ...c, ...patch } : c))
     );
   }
   async function saveNote(id: number, val: string) {
@@ -183,7 +187,7 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
     try {
       await factoryApiRequest("PATCH", `/api/factory/containers/${id}`, { otwNote: val || null });
       patchCacheContainer(id, { otwNote: val || null });
-      tqClient.invalidateQueries({ queryKey: ["/api/factory/containers"] });
+      tqClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/containers", selectedCompany?.id) });
     } catch (err) {
       toast({
         title: "Failed to save note",
@@ -197,7 +201,7 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
     try {
       await factoryApiRequest("PATCH", `/api/factory/containers/${id}`, { otwDocsReceived: checked });
       patchCacheContainer(id, { otwDocsReceived: checked });
-      tqClient.invalidateQueries({ queryKey: ["/api/factory/containers"] });
+      tqClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/containers", selectedCompany?.id) });
     } catch (err) {
       toast({
         title: "Failed to update docs",
@@ -220,7 +224,7 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
     },
     onSuccess: (_data, variables) => {
       patchCacheContainer(variables.id, { arrivalDate: variables.arrivalDate });
-      tqClient.invalidateQueries({ queryKey: ["/api/factory/containers"] });
+      tqClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/containers", selectedCompany?.id) });
     },
     onError: (err: ClientErrorLike) => {
       toast({ title: "Failed to update ETA", description: err?.message, variant: "destructive" });
@@ -263,7 +267,7 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
 
   return (
     <div className="flex min-w-0 flex-col gap-4 pb-6">
-      <header className="relative isolate overflow-hidden rounded-2xl border border-blue-200/50 bg-gradient-to-r from-slate-50 via-blue-50/70 to-sky-100/60 p-5 shadow-sm dark:border-blue-400/15 dark:from-[#0c192d] dark:via-[#0e2037] dark:to-[#0b2641] sm:p-6">
+      <header className="relative isolate overflow-hidden rounded-2xl border border-blue-200/50 bg-gradient-to-r from-slate-50 via-blue-50/70 to-sky-100/60 p-5 shadow-sm dark:border-blue-400/15 dark:from-[hsl(var(--factory-hue)_58%_11%)] dark:via-[hsl(var(--factory-hue)_59%_14%)] dark:to-[hsl(var(--factory-hue)_71%_15%)] sm:p-6">
         <div className="pointer-events-none absolute -right-12 -top-12 h-52 w-72 rounded-full bg-blue-500/15 blur-3xl" />
         <Ship
           className="pointer-events-none absolute -bottom-4 right-10 hidden h-36 w-36 text-blue-500/10 lg:block"
@@ -551,7 +555,7 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
         ) : (
           <Table mobileLayout="cards" className="text-xs whitespace-nowrap" wrapperClassName="overflow-x-auto">
             <TableHeader className="sticky top-0 z-10">
-              <TableRow className="bg-slate-100/90 hover:bg-slate-100/90 dark:bg-[#15273e] dark:hover:bg-[#15273e]">
+              <TableRow className="bg-slate-100/90 hover:bg-slate-100/90 dark:bg-[hsl(var(--factory-hue)_49%_16%)] dark:hover:bg-[hsl(var(--factory-hue)_49%_16%)]">
                 <TableHead className="w-10 font-semibold">#</TableHead>
                 <TableHead className="font-semibold">Container #</TableHead>
                 <TableHead className="font-semibold">Supplier</TableHead>

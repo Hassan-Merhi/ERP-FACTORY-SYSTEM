@@ -1,4 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 
 import { fetchAllStockEntryHistoryPages } from "./utils";
 import type { BaleDetail, GroupRow } from "./types";
@@ -14,6 +15,7 @@ interface CreateGroupBaleHelpersInput {
   groupBaleQueries: GroupBaleQueryResult[];
   queryClient: QueryClient;
   params: URLSearchParams;
+  companyId: number | string | null | undefined;
 }
 
 export function groupKey(group: GroupRow) {
@@ -26,6 +28,7 @@ export function createStockEntryHistoryGroupBaleHelpers({
   groupBaleQueries,
   queryClient,
   params,
+  companyId,
 }: CreateGroupBaleHelpersInput) {
   function getGroupBales(group: GroupRow): BaleDetail[] {
     if (!useLite) return group.bales;
@@ -53,7 +56,7 @@ export function createStockEntryHistoryGroupBaleHelpers({
     if (activeSearch) groupParams.set("search", activeSearch);
 
     const rows = await queryClient.fetchQuery<GroupRow[]>({
-      queryKey: ["/api/factory/bales/stock-entry-history/group", groupParams.toString()],
+      queryKey: companyQueryKey("/api/factory/bales/stock-entry-history/group", companyId, groupParams.toString()),
       queryFn: () => fetchAllStockEntryHistoryPages(groupParams),
       staleTime: 5 * 60 * 1000,
     });

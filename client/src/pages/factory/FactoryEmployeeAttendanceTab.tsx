@@ -3,6 +3,8 @@ import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAc
 import { useState, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -75,7 +77,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 const SUMMARY_TONES: Record<string, { card: string; icon: string; glow: string }> = {
   Total: {
-    card: "border-blue-200 bg-gradient-to-br from-blue-50 via-white to-sky-100 dark:border-blue-500/35 dark:from-[#192f5a] dark:via-[#142747] dark:to-[#183f7c]",
+    card: "border-blue-200 bg-gradient-to-br from-blue-50 via-white to-sky-100 dark:border-blue-500/35 dark:from-[hsl(var(--factory-hue)_57%_23%)] dark:via-[hsl(var(--factory-hue)_56%_18%)] dark:to-[hsl(var(--factory-hue)_68%_29%)]",
     icon: "bg-blue-100 text-blue-700 dark:bg-blue-400/20 dark:text-blue-200",
     glow: "bg-blue-400/15 dark:bg-blue-400/25",
   },
@@ -155,6 +157,7 @@ function SummaryCard({
 
 export default function FactoryEmployeeAttendanceTab() {
   const { toast } = useToast();
+  const { selectedCompany } = useCompany();
   const recordChanges = useExistingRecordChangeAccess();
   const [mode, setMode] = useState<ViewMode>("daily");
 
@@ -167,13 +170,21 @@ export default function FactoryEmployeeAttendanceTab() {
   const [notesMap, setNotesMap] = useState<Record<number, string>>({});
 
   const { data, isLoading } = useQuery<{ employees: EmpRow[]; attendance: AttRecord[] }>({
-    queryKey: ["/api/factory/employee-attendance", selectedDate],
+    queryKey: companyQueryKey("/api/factory/employee-attendance", selectedCompany?.id, selectedDate),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const res = await fetch(`/api/factory/employee-attendance?date=${selectedDate}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch");
       return res.json();
     },
   });
+
+  useEffect(() => {
+    setAttendanceMap({});
+    setNotesMap({});
+    setApprovalOpen(false);
+    setPendingApprovalRecords(null);
+  }, [selectedCompany?.id]);
 
   useEffect(() => {
     if (!data) return;
@@ -199,7 +210,9 @@ export default function FactoryEmployeeAttendanceTab() {
     onSuccess: () => {
       setApprovalOpen(false);
       setPendingApprovalRecords(null);
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/employee-attendance", selectedDate] });
+      queryClient.invalidateQueries({
+        queryKey: companyQueryKey("/api/factory/employee-attendance", selectedCompany?.id, selectedDate),
+      });
       toast({ title: "Attendance saved", description: `Saved for ${selectedDate}` });
     },
     onError: (err: ClientErrorLike) => {
@@ -209,7 +222,7 @@ export default function FactoryEmployeeAttendanceTab() {
   });
 
   const handleSave = useCallback(() => {
-    if (!data?.employees?.length) return;
+    if (!selectedCompany?.id || !data?.employees?.length) return;
     const records = data.employees.map((e) => ({
       employeeId: e.id,
       attendanceDate: selectedDate,
@@ -224,10 +237,11 @@ export default function FactoryEmployeeAttendanceTab() {
     } else {
       saveMutation.mutate({ records });
     }
-  }, [data, selectedDate, attendanceMap, notesMap, saveMutation]);
+  }, [data, selectedDate, attendanceMap, notesMap, saveMutation, selectedCompany?.id]);
 
   const approveAttendanceSave = (credentials: AttendanceAdminCredentials) => {
-    if (pendingApprovalRecords) saveMutation.mutate({ records: pendingApprovalRecords, credentials });
+    if (selectedCompany?.id && pendingApprovalRecords)
+      saveMutation.mutate({ records: pendingApprovalRecords, credentials });
   };
 
   const markAll = (status: AttendanceStatus) => {
@@ -257,7 +271,7 @@ export default function FactoryEmployeeAttendanceTab() {
   };
 
   return (
-    <div className="space-y-5 rounded-2xl border border-slate-200/70 bg-gradient-to-b from-slate-50/80 to-white p-3 shadow-sm sm:p-5 dark:border-blue-400/10 dark:from-[#0c1933] dark:via-[#0c1730] dark:to-[#0a1327]">
+    <div className="space-y-5 rounded-2xl border border-slate-200/70 bg-gradient-to-b from-slate-50/80 to-white p-3 shadow-sm sm:p-5 dark:border-blue-400/10 dark:from-[hsl(var(--factory-hue)_62%_12%)] dark:via-[hsl(var(--factory-hue)_60%_12%)] dark:to-[hsl(var(--factory-hue)_59%_10%)]">
       <div className="inline-flex flex-wrap gap-2 rounded-xl border border-slate-200 bg-white/80 p-1.5 shadow-sm dark:border-blue-400/20 dark:bg-slate-900/70">
         <Button
           variant={mode === "daily" ? "default" : "outline"}
@@ -288,10 +302,10 @@ export default function FactoryEmployeeAttendanceTab() {
       </div>
 
       {mode === "perEmployee" ? (
-        <PerEmployeeView />
+        <PerEmployeeView key={selectedCompany?.id ?? "no-company"} />
       ) : (
         <>
-          <Card className="rounded-2xl border-slate-200/90 bg-white/90 shadow-sm dark:border-blue-400/25 dark:bg-[#13223d]/80">
+          <Card className="rounded-2xl border-slate-200/90 bg-white/90 shadow-sm dark:border-blue-400/25 dark:bg-[hsl(var(--factory-hue)_53%_16%)]/80">
             <CardContent className="px-4 py-4 sm:px-5 sm:py-5">
               <div className="flex flex-wrap items-end gap-3 sm:gap-4">
                 <div className="flex flex-col gap-1">
@@ -392,7 +406,7 @@ export default function FactoryEmployeeAttendanceTab() {
             </div>
           )}
 
-          <Card className="overflow-hidden rounded-2xl border-slate-200/90 bg-white/95 shadow-sm dark:border-blue-400/25 dark:bg-[#13223d]/80">
+          <Card className="overflow-hidden rounded-2xl border-slate-200/90 bg-white/95 shadow-sm dark:border-blue-400/25 dark:bg-[hsl(var(--factory-hue)_53%_16%)]/80">
             <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 px-4 pb-3 pt-5 sm:px-5">
               <CardTitle className="flex flex-wrap items-center gap-2 text-base font-semibold sm:text-lg">
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-200">
@@ -424,7 +438,7 @@ export default function FactoryEmployeeAttendanceTab() {
                   <div className="hidden overflow-x-auto rounded-xl border border-slate-200 sm:block dark:border-slate-600/70">
                     <table className="w-full min-w-[760px] text-sm">
                       <thead className="sticky top-0 z-30">
-                        <tr className="border-b border-slate-200 bg-slate-100/90 dark:border-slate-600 dark:bg-[#213353]">
+                        <tr className="border-b border-slate-200 bg-slate-100/90 dark:border-slate-600 dark:bg-[hsl(var(--factory-hue)_43%_23%)]">
                           <th className="text-left px-4 py-3 font-semibold text-slate-600 dark:text-slate-200 w-8">
                             #
                           </th>
@@ -558,6 +572,7 @@ export default function FactoryEmployeeAttendanceTab() {
 
 function PerEmployeeView() {
   const { toast } = useToast();
+  const { selectedCompany } = useCompany();
   const recordChanges = useExistingRecordChangeAccess();
   const [selectedEmpId, setSelectedEmpId] = useState<string>("");
   const [empComboOpen, setEmpComboOpen] = useState(false);
@@ -569,7 +584,8 @@ function PerEmployeeView() {
   const [pendingApprovalRecords, setPendingApprovalRecords] = useState<EmployeeAttendanceBulkRecord[] | null>(null);
 
   const { data: empList } = useQuery<EmpRow[]>({
-    queryKey: ["/api/factory/employees"],
+    queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const res = await fetch("/api/factory/employees", { credentials: "include" });
       if (!res.ok) throw new Error("Failed");
@@ -580,7 +596,13 @@ function PerEmployeeView() {
   const empIdNum = selectedEmpId ? parseInt(selectedEmpId) : null;
 
   const { data: attendanceRecords } = useQuery<AttRecord[]>({
-    queryKey: ["/api/factory/employee-attendance/employee", empIdNum, startDate, endDate],
+    queryKey: companyQueryKey(
+      "/api/factory/employee-attendance/employee",
+      selectedCompany?.id,
+      empIdNum,
+      startDate,
+      endDate
+    ),
     queryFn: async () => {
       if (!empIdNum) return [];
       const res = await fetch(
@@ -590,7 +612,7 @@ function PerEmployeeView() {
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
-    enabled: !!empIdNum && !!startDate && !!endDate,
+    enabled: Boolean(selectedCompany?.id) && !!empIdNum && !!startDate && !!endDate,
   });
 
   useEffect(() => {
@@ -619,7 +641,13 @@ function PerEmployeeView() {
       setApprovalOpen(false);
       setPendingApprovalRecords(null);
       queryClient.invalidateQueries({
-        queryKey: ["/api/factory/employee-attendance/employee", empIdNum, startDate, endDate],
+        queryKey: companyQueryKey(
+          "/api/factory/employee-attendance/employee",
+          selectedCompany?.id,
+          empIdNum,
+          startDate,
+          endDate
+        ),
       });
       toast({ title: "Attendance saved", description: `${dates.length} days saved.` });
     },
@@ -630,7 +658,7 @@ function PerEmployeeView() {
   });
 
   const handleSave = () => {
-    if (!empIdNum) return;
+    if (!selectedCompany?.id || !empIdNum) return;
     const existingStatusMap: Record<string, string> = {};
     if (attendanceRecords) for (const r of attendanceRecords) existingStatusMap[r.attendanceDate] = r.status;
     const records = dates.map((d) => {
@@ -652,7 +680,8 @@ function PerEmployeeView() {
   };
 
   const approveAttendanceSave = (credentials: AttendanceAdminCredentials) => {
-    if (pendingApprovalRecords) saveMutation.mutate({ records: pendingApprovalRecords, credentials });
+    if (selectedCompany?.id && pendingApprovalRecords)
+      saveMutation.mutate({ records: pendingApprovalRecords, credentials });
   };
 
   const selectedEmp = (empList ?? []).find((e) => e.id === empIdNum);

@@ -6,6 +6,8 @@
  * Phase 5 will populate article / exact-bale expected allocations.
  */
 export interface ComparisonBale {
+  // Link ID needed to remove a missing bale from the original loading, not its stock record.
+  orderBaleId?: number;
   baleId: number;
   baleReference: string;
   articleCode: string;

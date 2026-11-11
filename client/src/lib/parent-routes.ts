@@ -1,4 +1,5 @@
 import { FACTORY_ACCESS_REGISTRY, normalizeFactoryAccessPath } from "@shared/factoryAccessRegistry";
+import { getPropertiesParentRoute } from "@/properties/config/propertiesNavigation";
 
 export function getParentRoute(pathname: string): string | null {
   const cleanPath = pathname.split("?")[0].split("#")[0];
@@ -68,34 +69,7 @@ export function getParentRoute(pathname: string): string | null {
   }
 
   if (cleanPath.startsWith("/properties/")) {
-    // Rentals children and compatibility pages → shared Rentals hub.
-    if (cleanPath === "/properties/create") return "/properties/rentals?tab=warehouses";
-    if (cleanPath === "/properties/transfer") return "/properties/rentals";
-    if (cleanPath === "/properties/rental/warehouses") return "/properties/rentals?tab=warehouses";
-    if (cleanPath === "/properties/rental/shops") return "/properties/rentals?tab=shops";
-    if (cleanPath === "/properties/rental/payments") return "/properties/rentals?tab=payments";
-
-    // Accounting detail hierarchy.
-    if (/^\/properties\/voucher-detail\//.test(cleanPath)) return "/properties/vouchers";
-    if (/^\/properties\/vouchers\/\d+\/edit/.test(cleanPath)) return "/properties/vouchers";
-    {
-      const match = cleanPath.match(/^\/properties\/ledger-vouchers\/([^/]+)\//);
-      if (match) return `/properties/ledger-monthly/${match[1]}`;
-    }
-    if (/^\/properties\/ledger-monthly\//.test(cleanPath)) return "/properties/accounts";
-    if (cleanPath === "/properties/account-groups") return "/properties/accounts";
-
-    // Administration children.
-    if (/^\/properties\/net-position-details/.test(cleanPath)) return "/properties/settings";
-    if (/^\/properties\/import-cycle-diagnostics/.test(cleanPath)) return "/properties/settings";
-    if (/^\/properties\/inventory-repair/.test(cleanPath)) return "/properties/settings";
-    if (/^\/properties\/company-data-reset/.test(cleanPath)) return "/properties/settings";
-    if (/^\/properties\/orphaned-records/.test(cleanPath)) return "/properties/settings";
-    if (/^\/properties\/deleted-items/.test(cleanPath)) return "/properties/settings";
-    if (/^\/properties\/chatbot-settings/.test(cleanPath)) return "/properties/settings";
-    if (cleanPath === "/properties/balance-repair") return "/properties/settings";
-
-    return null;
+    return getPropertiesParentRoute(pathname);
   }
 
   // ERP — parties and supplier workflows.
@@ -181,13 +155,11 @@ export function getParentRoute(pathname: string): string | null {
   return null;
 }
 
-// Others (#3050) is a canonical top-level page that shares Overview's access key, so the
-// registry lists it as an alias rather than a route of its own.
-const CANONICAL_ALIAS_TOP_LEVEL_ROUTES = ["/factory/others"];
-
 const FACTORY_TOP_LEVEL_ROUTES: ReadonlySet<string> = new Set([
   ...FACTORY_ACCESS_REGISTRY.map((page) => page.route),
-  ...CANONICAL_ALIAS_TOP_LEVEL_ROUTES,
+  // The Others hub is a canonical top-level page (docs/factory-navigation-registry.md) that shares
+  // Overview's access grant, so the registry lists it as an alias rather than as its own route.
+  "/factory/others",
 ]);
 
 /**

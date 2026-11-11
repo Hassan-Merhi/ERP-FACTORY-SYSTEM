@@ -20,7 +20,7 @@
       "workspace": "properties",
       "companyCode": "PHASE9-PROPERTIES",
       "requiredRole": "Developer",
-      "staticRoutes": 35,
+      "staticRoutes": 32,
       "parameterizedRoutes": 4
     },
     {

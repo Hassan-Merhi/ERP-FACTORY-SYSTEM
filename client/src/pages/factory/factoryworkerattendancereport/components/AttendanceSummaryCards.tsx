@@ -26,7 +26,7 @@ export function AttendanceSummaryCards({
 }) {
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5 print:grid-cols-5">
-      <Card className="relative min-w-0 overflow-hidden rounded-2xl border shadow-sm dark:shadow-[0_12px_25px_rgba(0,0,0,0.22)] print:rounded-none print:border-gray-300 print:bg-white print:bg-none print:shadow-none border-blue-300/70 dark:border-blue-500/60 bg-gradient-to-br from-blue-50 via-blue-50/70 to-white dark:from-[#1a3866] dark:via-[#112848] dark:to-[#0d1b32]">
+      <Card className="relative min-w-0 overflow-hidden rounded-2xl border shadow-sm dark:shadow-[0_12px_25px_rgba(0,0,0,0.22)] print:rounded-none print:border-gray-300 print:bg-white print:bg-none print:shadow-none border-blue-300/70 dark:border-blue-500/60 bg-gradient-to-br from-blue-50 via-blue-50/70 to-white dark:from-[hsl(var(--factory-hue)_59%_25%)] dark:via-[hsl(var(--factory-hue)_62%_17%)] dark:to-[hsl(var(--factory-hue)_59%_12%)]">
         <CardContent className="flex min-h-[106px] items-center gap-3 p-4">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl print:hidden bg-blue-100 text-blue-600 dark:bg-blue-500/25 dark:text-blue-300">
             <UsersRound className="h-6 w-6" />
@@ -70,7 +70,7 @@ export function AttendanceSummaryCards({
           </div>
         </CardContent>
       </Card>
-      <Card className="relative min-w-0 overflow-hidden rounded-2xl border shadow-sm dark:shadow-[0_12px_25px_rgba(0,0,0,0.22)] print:rounded-none print:border-gray-300 print:bg-white print:bg-none print:shadow-none border-violet-300/70 dark:border-violet-500/60 bg-gradient-to-br from-violet-50 via-violet-50/70 to-white dark:from-[#403061] dark:via-[#302448] dark:to-[#1b1a38]">
+      <Card className="relative min-w-0 overflow-hidden rounded-2xl border shadow-sm dark:shadow-[0_12px_25px_rgba(0,0,0,0.22)] print:rounded-none print:border-gray-300 print:bg-white print:bg-none print:shadow-none border-violet-300/70 dark:border-violet-500/60 bg-gradient-to-br from-violet-50 via-violet-50/70 to-white dark:from-[hsl(var(--factory-hue)_34%_28%)] dark:via-[hsl(var(--factory-hue)_33%_21%)] dark:to-[hsl(var(--factory-hue)_37%_16%)]">
         <CardContent className="flex min-h-[106px] items-center gap-3 p-4">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl print:hidden bg-violet-100 text-violet-700 dark:bg-violet-500/25 dark:text-violet-300">
             <Coins className="h-6 w-6" />
@@ -86,7 +86,7 @@ export function AttendanceSummaryCards({
           </div>
         </CardContent>
       </Card>
-      <Card className="relative min-w-0 overflow-hidden rounded-2xl border shadow-sm dark:shadow-[0_12px_25px_rgba(0,0,0,0.22)] print:rounded-none print:border-gray-300 print:bg-white print:bg-none print:shadow-none border-cyan-300/70 dark:border-cyan-500/60 bg-gradient-to-br from-cyan-50 via-cyan-50/70 to-white dark:from-[#0f4654] dark:via-[#103440] dark:to-[#0b2534]">
+      <Card className="relative min-w-0 overflow-hidden rounded-2xl border shadow-sm dark:shadow-[0_12px_25px_rgba(0,0,0,0.22)] print:rounded-none print:border-gray-300 print:bg-white print:bg-none print:shadow-none border-cyan-300/70 dark:border-cyan-500/60 bg-gradient-to-br from-cyan-50 via-cyan-50/70 to-white dark:from-[hsl(var(--factory-hue)_70%_19%)] dark:via-[hsl(var(--factory-hue)_60%_16%)] dark:to-[hsl(var(--factory-hue)_65%_12%)]">
         <CardContent className="flex min-h-[106px] items-center gap-3 p-4">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl print:hidden bg-cyan-100 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-300">
             <HandCoins className="h-6 w-6" />

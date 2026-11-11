@@ -126,8 +126,8 @@ export default function FactoryLoadingDispatchAllocation({
     setBaleIds(data.expectedBales.map((r) => r.baleId));
   }, [allocation.data, dirty]);
 
-  const articles = useMemo(() => allocation.data?.articles ?? [], [allocation.data]);
-  const candidates = useMemo(() => allocation.data?.candidates ?? [], [allocation.data]);
+  const articles = useMemo(() => allocation.data?.articles ?? [], [allocation.data?.articles]);
+  const candidates = useMemo(() => allocation.data?.candidates ?? [], [allocation.data?.candidates]);
   const selected = useMemo(() => new Set(baleIds), [baleIds]);
   const changed = (article: string, value: string) => {
     setTargets((old) => ({ ...old, [article]: value }));
@@ -245,7 +245,7 @@ export default function FactoryLoadingDispatchAllocation({
 
   return (
     <Card
-      className="min-w-0 border-blue-200 bg-white dark:border-blue-500/30 dark:bg-[#101c34]"
+      className="min-w-0 border-blue-200 bg-white dark:border-blue-500/30 dark:bg-[hsl(var(--factory-hue)_53%_13%)]"
       data-testid="dispatch-allocation-planner"
     >
       <CardContent className="space-y-4 p-4 sm:p-5">
@@ -319,7 +319,7 @@ export default function FactoryLoadingDispatchAllocation({
                   ["Selected exact bales", selected.size],
                 ] as const
               ).map(([label, value]) => (
-                <div key={label} className="rounded-xl bg-slate-50 p-3 dark:bg-[#0a172c]">
+                <div key={label} className="rounded-xl bg-slate-50 p-3 dark:bg-[hsl(var(--factory-hue)_63%_11%)]">
                   <p className="text-[11px] text-muted-foreground">{label}</p>
                   <p className="mt-1 font-mono text-lg font-bold">{fmt(value)}</p>
                 </div>
@@ -328,7 +328,7 @@ export default function FactoryLoadingDispatchAllocation({
 
             <div className="overflow-x-auto rounded-xl border dark:border-slate-700">
               <table className="w-full min-w-[640px] text-left text-xs">
-                <thead className="bg-slate-100 dark:bg-[#0b182e]">
+                <thead className="bg-slate-100 dark:bg-[hsl(var(--factory-hue)_61%_11%)]">
                   <tr>
                     <th className="px-3 py-2">Article (proforma order)</th>
                     <th className="px-3 py-2 text-right">Loaded</th>

@@ -9,18 +9,6 @@ import type ExcelJS from "exceljs";
 import { createWorkbook } from "../../../excelHelper";
 import type { DispatchReport } from "./loadingDispatchReportData";
 
-// True when Excel would read the text as a formula: after any leading
-// control or space characters (code <= 0x20) comes = + @ or -, or the
-// leading run itself contains a tab, carriage return or line feed.
-function startsLikeFormula(text: string): boolean {
-  for (let i = 0; i < text.length; i++) {
-    const code = text.charCodeAt(i);
-    if (code === 9 || code === 10 || code === 13) return true;
-    if (code > 0x20) return "=+@-".includes(text[i]);
-  }
-  return false;
-}
-
 function safeCell(input: unknown): string | number | null {
   if (input === null || input === undefined) return null;
   if (typeof input === "number") return Number.isFinite(input) ? input : null;
@@ -28,7 +16,13 @@ function safeCell(input: unknown): string | number | null {
   const text = typeof input === "object" ? JSON.stringify(input) : String(input);
   // Spreadsheet formula injection defense; includes leading whitespace
   // followed by one of Excel's formula/control prefix characters.
-  return startsLikeFormula(text) ? "'" + text : text;
+  // Leading run = every character up to and including U+0020. The value is
+  // formula-like when that run contains a tab/CR/LF, or when the first
+  // character after it is one of = + @ -.
+  let lead = 0;
+  while (lead < text.length && text.charCodeAt(lead) <= 0x20) lead++;
+  const formulaLike = /[\t\r\n]/.test(text.slice(0, lead)) || (lead < text.length && "=+@-".includes(text[lead]));
+  return formulaLike ? "'" + text : text;
 }
 function formattedDate(input: unknown): string | null {
   if (input == null || input === "") return null;
@@ -41,7 +35,6 @@ function round(value: unknown, digits = 3): number | null {
   return Number.isFinite(n) ? Math.round(n * 10 ** digits) / 10 ** digits : null;
 }
 
-// safeCell renders booleans as "Yes" / "No".
 type SheetCell = string | number | boolean | null;
 function makeSheet(
   workbook: ExcelJS.Workbook,

@@ -1,6 +1,8 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,21 +24,28 @@ interface CustomerLogo {
 
 export default function CustomerLogosSettings() {
   const { toast } = useToast();
+  const { selectedCompany } = useCompany();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>("");
   const [renamingId, setRenamingId] = useState<number | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  useEffect(() => {
+    setSelectedCustomerId("");
+    setRenamingId(null);
+    setRenameValue("");
+  }, [selectedCompany?.id]);
 
   const { data: allCustomers = [] } = useQuery<CustomerOption[]>({
-    queryKey: ["/api/factory/customers"],
+    queryKey: companyQueryKey("/api/factory/customers", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: () => fetch("/api/factory/customers", { credentials: "include" }).then((r) => r.json()),
   });
 
   const { data: logos = [], isLoading } = useQuery<CustomerLogo[]>({
-    queryKey: ["/api/factory/customers", selectedCustomerId, "logos"],
+    queryKey: companyQueryKey("/api/factory/customers", selectedCompany?.id, selectedCustomerId, "logos"),
     queryFn: () =>
       fetch(`/api/factory/customers/${selectedCustomerId}/logos`, { credentials: "include" }).then((r) => r.json()),
-    enabled: !!selectedCustomerId,
+    enabled: Boolean(selectedCompany?.id) && !!selectedCustomerId,
   });
 
   const uploadMutation = useMutation({

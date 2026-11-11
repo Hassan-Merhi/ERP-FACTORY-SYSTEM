@@ -9,7 +9,6 @@ import { useMemo, useState } from "react";
 import { useLocation, useParams } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import {
-  AlertCircle,
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
@@ -26,303 +25,41 @@ import {
   Truck,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { TabsList, PillTabButton } from "@/components/ui/tabs";
 import { companyQueryKey } from "@/lib/companyQueryScope";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import FactoryDispatchOrderFinancialReview, {
+  type DispatchOrderReconciliation,
+} from "./FactoryDispatchOrderFinancialReview";
 
-interface TripSummary {
-  id: string;
-  dispatchNumber: number;
-  status: string;
-  truckPlate: string | null;
-  scannedBales: number;
-  scannedWeightKg: number;
-}
-type ArticleStatus = "MATCH" | "MISSING" | "EXTRA" | "BOTH" | "UNPLANNED";
-interface ArticleComparison {
-  articleCode: string;
-  productName: string;
-  expectedQty: number | null;
-  scannedQty: number;
-  matchedQty: number;
-  missingQty: number | null;
-  extraQty: number;
-  expectedWeightKg: number | null;
-  scannedWeightKg: number;
-  priorityRank: number | null;
-  status: ArticleStatus;
-}
-interface BaleFinding {
-  baleId: number;
-  baleReference: string;
-  articleCode: string;
-  productName: string;
-  weightKg: number;
-  reason: string;
-  dispatchId?: string;
-  dispatchNumber?: number;
-  expectedDispatchNumber?: number;
-  scannedBy?: string;
-  scannedAt?: string;
-}
-interface Summary {
-  loadedBales: number;
-  loadedWeightKg: number;
-  expectedBales: number | null;
-  expectedWeightKg: number | null;
-  weightDifferenceKg: number | null;
-  verifiedBales: number;
-  verifiedWeightKg: number;
-  matchedBales: number;
-  missingBales: number | null;
-  unexpectedBales: number;
-  exactMissingBales: number;
-  crossTripMisplacedBales: number;
-  duplicateBales: number;
-  progressPercent: number | null;
-}
-interface Comparison {
-  scope: "overall" | "trip";
-  orderId: number;
-  containerNumber: string | null;
-  loadingStatus: string;
-  generatedAt: string;
-  dispatch: TripSummary | null;
-  planSource: "none" | "article" | "bale" | "mixed" | "loading";
-  hasTripPlan: boolean;
-  summary: Summary;
-  articles: ArticleComparison[];
-  missingBales: BaleFinding[];
-  unexpectedBales: BaleFinding[];
-  crossTripBales: BaleFinding[];
-  duplicateBales: BaleFinding[];
-  trips: TripSummary[];
-}
-
-type Filter = "all" | "missing" | "extra" | "match" | "unplanned";
-type FindingsKind = "missing" | "unexpected" | "cross" | "duplicate";
-const PAGE_SIZE = 80;
-
-function printNumber(value: number | null, digits = 0): string {
-  if (value === null || !Number.isFinite(value)) return "—";
-  return value.toLocaleString(undefined, { maximumFractionDigits: digits });
-}
-function tripLabel(n: number): string {
-  return "Dispatch #" + String(n).padStart(3, "0");
-}
-function dispatchBase(orderId: number): string {
-  return "/factory/sales/loading/dispatch/" + orderId;
-}
-function comparePath(orderId: number, dispatchId?: string): string {
-  return dispatchBase(orderId) + (dispatchId ? "/" + dispatchId : "") + "/compare";
-}
-
-async function getComparison(url: string): Promise<Comparison> {
-  const response = await fetch(url, { credentials: "include" });
-  if (!response.ok) {
-    const body = await response.json().catch(() => null);
-    throw new Error(body?.message || "Unable to calculate truck comparison");
-  }
-  return response.json() as Promise<Comparison>;
-}
-
-function StatusBadge({ value }: { value: ArticleStatus }) {
-  const style =
-    value === "MATCH"
-      ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300"
-      : value === "MISSING"
-        ? "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-200"
-        : value === "EXTRA" || value === "BOTH"
-          ? "border-red-200 bg-red-50 text-red-700 dark:border-red-700 dark:bg-red-950/30 dark:text-red-200"
-          : "border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300";
-  const label = { MATCH: "Match", MISSING: "Missing", EXTRA: "Extra", BOTH: "Difference", UNPLANNED: "No target" }[
-    value
-  ];
-  return (
-    <Badge variant="outline" className={style}>
-      {label}
-    </Badge>
-  );
-}
-
-function Metric({
-  label,
-  value,
-  icon: Icon,
-  unit,
-  emphasis = "default",
-}: {
-  label: string;
-  value: string;
-  icon: typeof Package;
-  unit?: string;
-  emphasis?: "default" | "good" | "warning";
-}) {
-  return (
-    <Card className="border-slate-200 bg-white/95 dark:border-blue-500/20 dark:bg-[#101c34]">
-      <CardContent className="flex items-center justify-between gap-2 p-3 sm:p-4">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
-          <p
-            className={
-              "mt-1 font-mono text-xl font-bold sm:text-2xl " +
-              (emphasis === "warning"
-                ? "text-amber-600 dark:text-amber-300"
-                : emphasis === "good"
-                  ? "text-emerald-700 dark:text-emerald-300"
-                  : "")
-            }
-            data-testid={"compare-" + label.toLowerCase().replace(/\s+/g, "-")}
-          >
-            {value} {unit && <span className="text-xs font-normal text-muted-foreground">{unit}</span>}
-          </p>
-        </div>
-        <span className="rounded-xl bg-blue-50 p-2 text-blue-600 dark:bg-blue-500/10 dark:text-sky-300">
-          <Icon className="h-5 w-5" />
-        </span>
-      </CardContent>
-    </Card>
-  );
-}
-
-function explainReason(reason: string): string {
-  return (
-    (
-      {
-        NOT_VERIFIED_ON_ANY_TRIP: "In main loading, not verified on any truck",
-        EXPECTED_NOT_SCANNED: "Assigned to this trip but not scanned",
-        PLAN_BALE_NO_LONGER_LOADED: "Assigned bale was removed from main loading",
-        NO_LONGER_IN_LOADING: "Verified on a truck, but no longer in main loading",
-        ASSIGNED_TO_ANOTHER_TRIP: "Verified here, allocated to a different trip",
-        SCANNED_DIFFERENT_TRIP: "Bale was assigned to one truck but scanned on another",
-        NOT_IN_TRIP_PLAN: "Verified here, but not assigned to this trip\u0027s article or bale plan",
-        NOT_IN_EXACT_TRIP_PLAN: "Verified here, but not assigned in this trip's exact-bale plan",
-        PLANNED_HERE_SCANNED_ELSEWHERE: "Assigned to this trip, verified on a different one",
-        DUPLICATE_ACTIVE_VERIFICATION: "Unexpected duplicate active verification",
-      } as Record<string, string>
-    )[reason] || reason.replace(/_/g, " ").toLowerCase()
-  );
-}
-
-function Findings({
-  title,
-  subtitle,
-  items,
-  kind,
-  orderId,
-}: {
-  title: string;
-  subtitle: string;
-  items: BaleFinding[];
-  kind: FindingsKind;
-  orderId: number;
-}) {
-  const [, navigate] = useLocation();
-  const [visibleCount, setVisibleCount] = useState(30);
-  const visible = items.slice(0, visibleCount);
-  const icon =
-    kind === "missing" ? (
-      <FileSearch className="h-4 w-4 text-amber-600" />
-    ) : kind === "unexpected" ? (
-      <AlertCircle className="h-4 w-4 text-red-600" />
-    ) : kind === "cross" ? (
-      <Truck className="h-4 w-4 text-blue-500" />
-    ) : (
-      <AlertTriangle className="h-4 w-4 text-red-600" />
-    );
-
-  return (
-    <Card className="min-w-0 border-slate-200 dark:border-blue-500/20 dark:bg-[#101c34]">
-      <CardContent className="space-y-3 p-4">
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <div className="flex min-w-0 items-start gap-2">
-            <span className="mt-0.5">{icon}</span>
-            <div>
-              <h3 className="text-sm font-bold">{title}</h3>
-              <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>
-            </div>
-          </div>
-          <Badge variant="secondary">{printNumber(items.length)}</Badge>
-        </div>
-        {items.length === 0 ? (
-          <div className="rounded-lg bg-slate-50 p-4 text-sm text-muted-foreground dark:bg-[#0b162a]">
-            No{" "}
-            {kind === "missing"
-              ? "missing references"
-              : kind === "unexpected"
-                ? "unexpected verifications"
-                : kind === "cross"
-                  ? "cross-trip allocation mismatches"
-                  : "duplicate records"}{" "}
-            detected.
-          </div>
-        ) : (
-          <>
-            <div className="max-h-[420px] overflow-x-auto overflow-y-auto rounded-lg border dark:border-slate-700">
-              <table className="w-full min-w-[480px] text-left text-xs">
-                <thead className="sticky top-0 bg-slate-100 text-muted-foreground dark:bg-[#0b162a]">
-                  <tr>
-                    <th className="px-3 py-2">Bale reference</th>
-                    <th className="px-3 py-2">Difference</th>
-                    <th className="px-3 py-2 text-right">Kg</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visible.map((finding, i) => (
-                    <tr
-                      key={finding.baleId + ":" + finding.reason + ":" + i}
-                      className="border-t dark:border-slate-700"
-                    >
-                      <td className="px-3 py-2 align-top">
-                        <p className="font-mono font-semibold">{finding.baleReference || "Bale #" + finding.baleId}</p>
-                        <p className="text-[11px] text-muted-foreground">
-                          {finding.articleCode || "No article"} · {finding.productName || "Bale"}
-                        </p>
-                      </td>
-                      <td className="px-3 py-2 align-top">
-                        <p>{explainReason(finding.reason)}</p>
-                        {finding.expectedDispatchNumber && (
-                          <p className="text-[11px] text-blue-600 dark:text-sky-300">
-                            Expected on {tripLabel(finding.expectedDispatchNumber)}
-                          </p>
-                        )}
-                        {finding.dispatchNumber && (
-                          <button
-                            type="button"
-                            className="mt-1 text-[11px] text-blue-600 underline-offset-2 hover:underline dark:text-sky-300"
-                            onClick={() => navigate(dispatchBase(orderId) + "/" + finding.dispatchId)}
-                          >
-                            Scanned on {tripLabel(finding.dispatchNumber)}
-                            {finding.scannedBy ? " by " + finding.scannedBy : ""}
-                          </button>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-right align-top font-mono">{printNumber(finding.weightKg, 3)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {items.length > visibleCount && (
-                <Button size="sm" variant="outline" onClick={() => setVisibleCount((count) => count + 100)}>
-                  Show next {printNumber(Math.min(100, items.length - visibleCount))} references
-                </Button>
-              )}
-              {visibleCount > 30 && (
-                <Button size="sm" variant="ghost" onClick={() => setVisibleCount(30)}>
-                  Show fewer
-                </Button>
-              )}
-            </div>
-          </>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
+import {
+  Comparison,
+  Filter,
+  PAGE_SIZE,
+  printNumber,
+  tripLabel,
+  dispatchBase,
+  comparePath,
+  StatusBadge,
+  Metric,
+  Findings,
+  getComparison,
+} from "./FactoryLoadingDispatchCompareParts";
 
 export default function FactoryLoadingDispatchCompare() {
   const { orderId: orderIdText, dispatchId: dispatchIdText } = useParams<{ orderId: string; dispatchId?: string }>();
@@ -336,7 +73,17 @@ export default function FactoryLoadingDispatchCompare() {
   const [filter, setFilter] = useState<Filter>("all");
   const [search, setSearch] = useState("");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
-  const { data: auth } = useQuery<{ currentCompanyId?: number | null }>({ queryKey: ["/api/auth/me"] });
+  const [selectedMissing, setSelectedMissing] = useState<number[]>([]);
+  const [removeOpen, setRemoveOpen] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const [removalReason, setRemovalReason] = useState("");
+  const [removeConfirmed, setRemoveConfirmed] = useState(false);
+  const { toast } = useToast();
+  const { data: auth } = useQuery<{
+    currentCompanyId?: number | null;
+    currentRole?: string | null;
+    role?: string | null;
+  }>({ queryKey: ["/api/auth/me"] });
   const companyId = auth?.currentCompanyId;
   const url =
     "/api/factory/customer-orders/" +
@@ -350,10 +97,86 @@ export default function FactoryLoadingDispatchCompare() {
     enabled: valid && Boolean(companyId),
     refetchInterval: 5000,
   });
+  const reconciliationUrl = "/api/factory/customer-orders/" + orderId +
+    "/loading-dispatches/order-reconciliation";
+  const financialReconciliation = useQuery<DispatchOrderReconciliation>({
+    queryKey: companyQueryKey(reconciliationUrl, companyId),
+    queryFn: async () => {
+      const response = await fetch(reconciliationUrl, { credentials:"include",cache:"no-store" });
+      const data = await response.json().catch(()=>({}));
+      if(!response.ok) throw new Error(data.message || "Unable to read financial reconciliation");
+      return data as DispatchOrderReconciliation;
+    },
+    enabled: valid && Boolean(companyId) && dispatchId === null,
+    refetchInterval: removeOpen ? false : 10000,
+  });
+  const refreshAllReconciliation = () => {
+    void financialReconciliation.refetch();
+    void comparison.refetch();
+    void queryClient.invalidateQueries({ queryKey: companyQueryKey(reconciliationUrl,companyId) });
+  };
   const result = comparison.data;
   const s = result?.summary;
-  const articles = useMemo(() => result?.articles ?? [], [result]);
+  const articles = useMemo(() => result?.articles ?? [], [result?.articles]);
   const selectedId = dispatchId === null ? undefined : String(dispatchId);
+  const missingFromLoading = (result?.missingBales ?? []).filter(
+    (bale) => Number.isSafeInteger(bale.orderBaleId) && Number(bale.orderBaleId) > 0
+  );
+  const allTripsEnded =
+    Boolean(result?.trips.length) && (result?.trips.every((trip) => trip.status !== "OPEN") ?? false);
+  const isSupervisor = ["admin", "owner", "developer"]
+    .includes((auth?.currentRole ?? auth?.role ?? "").toLowerCase());
+  const canReconcile =
+    !selectedId && allTripsEnded &&
+    ["LOADING", "PENDING_VERIFICATION"].includes(result?.loadingStatus ?? "") &&
+    isSupervisor &&
+    Boolean(financialReconciliation.data) &&
+    !financialReconciliation.data?.approval &&
+    financialReconciliation.data?.fingerprint !== undefined &&
+    (financialReconciliation.data?.summary.unshippedBales ?? 0) > 0 &&
+    financialReconciliation.data?.summary.duplicateScans === 0 &&
+    financialReconciliation.data?.summary.unexpectedScans === 0;
+  const selectedCurrent = selectedMissing.filter((id) => missingFromLoading.some((bale) => bale.orderBaleId === id));
+  const selectedBales = missingFromLoading.filter((bale) => selectedCurrent.includes(bale.orderBaleId!));
+  const selectedKg = selectedBales.reduce((sum, bale) => sum + (Number(bale.weightKg) || 0), 0);
+  const selectAllMissing = () => {
+    setSelectedMissing(
+      selectedCurrent.length === missingFromLoading.length ? [] : missingFromLoading.map((bale) => bale.orderBaleId!)
+    );
+  };
+  const removeSelected = async () => {
+    const fin=financialReconciliation.data;
+    if (!canReconcile || removing || !fin || selectedCurrent.length===0 ||
+        !removeConfirmed || removalReason.trim().length<10) return;
+    setRemoving(true);
+    try {
+      // One signed, all-or-nothing database transaction. Never issue a
+      // sequence of legacy DELETE calls that could partially remove a load.
+      const response=await apiRequest("POST",reconciliationUrl+"/remove-unshipped",{
+        confirm:true,orderBaleIds:selectedCurrent,
+        expectedFingerprint:fin.fingerprint,reason:removalReason.trim(),
+      });
+      const result=await response.json() as {removed:number;remainingUnshipped:number};
+      toast({title:"Unshipped bales reconciled",
+        description:result.removed+" bale(s) returned to stock in one transaction. "+
+          result.remainingUnshipped+" still unshipped."});
+      setSelectedMissing([]);
+      setRemovalReason("");
+      setRemoveConfirmed(false);
+      setRemoveOpen(false);
+      void queryClient.invalidateQueries({
+        queryKey:companyQueryKey("/api/factory/customer-orders/"+orderId,companyId),
+      });
+    } catch(error) {
+      toast({title:"No partial removal committed",
+        description:error instanceof Error?error.message:"Reconciliation failed",
+        variant:"destructive"});
+    } finally {
+      setRemoving(false);
+      refreshAllReconciliation();
+    }
+  };
+
   const rows = useMemo(() => {
     const query = search.trim().toLowerCase();
     return articles.filter((article) => {
@@ -373,11 +196,11 @@ export default function FactoryLoadingDispatchCompare() {
 
   return (
     <div
-      className="h-full min-w-0 overflow-y-auto bg-slate-50/80 p-3 pb-10 dark:bg-[#080f1c] sm:p-5 lg:p-7"
+      className="h-full min-w-0 overflow-y-auto bg-slate-50/80 p-3 pb-10 dark:bg-[hsl(var(--factory-hue)_56%_7%)] sm:p-5 lg:p-7"
       data-testid="factory-dispatch-comparison-page"
     >
       <div className="mx-auto max-w-[1480px] space-y-4">
-        <div className="rounded-2xl border border-blue-200 bg-gradient-to-r from-white via-blue-50 to-sky-100 p-4 dark:border-blue-500/25 dark:from-[#142441] dark:via-[#112848] dark:to-[#0a2952] sm:p-5">
+        <div className="rounded-2xl border border-blue-200 bg-gradient-to-r from-white via-blue-50 to-sky-100 p-4 dark:border-blue-500/25 dark:from-[hsl(var(--factory-hue)_53%_17%)] dark:via-[hsl(var(--factory-hue)_62%_17%)] dark:to-[hsl(var(--factory-hue)_78%_18%)] sm:p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3">
               <div className="rounded-xl bg-blue-600 p-3 text-white">
@@ -433,8 +256,7 @@ export default function FactoryLoadingDispatchCompare() {
         )}
         {comparison.isPending && (
           <div className="flex items-center gap-2 rounded-xl border p-5 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" /> Comparing the loaded bale references against all truck
-            verifications…
+            <Loader2 className="h-4 w-4 animate-spin" /> Comparing Pending Loading with physical truck scans…
           </div>
         )}
 
@@ -472,38 +294,30 @@ export default function FactoryLoadingDispatchCompare() {
               <div className="flex items-start gap-2 rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800 dark:border-blue-500/25 dark:bg-blue-500/10 dark:text-sky-200">
                 <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
                 <p>
-                  The overall expected list is every bale currently in this loading. A bale is missing until it is
-                  verified on any truck trip; corrections and later changes to main loading are reflected on refresh.
+                  Pending Loading is the master bale list. After every trip ends, compare all scanned references against
+                  it and choose which unscanned bales to remove.
                 </p>
               </div>
             ) : !result.hasTripPlan ? (
               <div className="flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-600/30 dark:bg-amber-950/20 dark:text-amber-200">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                 <p>
-                  <strong>No expected allocation for this truck yet.</strong> Verified bales are shown, but expected
-                  quantities and missing counts are deliberately blank—not zero. Phase 5 will assign exact bales or
-                  article targets from loading priorities. Use All trips for an accurate loading-wide missing-reference
-                  comparison now.
+                  No targets are set per truck. This trip shows its physical scans only. Choose{" "}
+                  <strong>All trips</strong> to compare against Pending Loading.
                 </p>
               </div>
             ) : (
               <div className="flex items-start gap-2 rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800 dark:border-blue-500/25 dark:bg-blue-500/10 dark:text-sky-200">
                 <ClipboardCheck className="mt-0.5 h-4 w-4 shrink-0" />
                 <p>
-                  Comparing this truck against its stored{" "}
-                  {result.planSource === "mixed"
-                    ? "article and exact-bale"
-                    : result.planSource === "bale"
-                      ? "exact-bale"
-                      : "article-quantity"}{" "}
-                  allocations. Missing barcodes are listed only where exact bales were assigned; article-only plans
-                  report missing quantities.
+                  This trip shows its physical scans only. The missing-bale comparison comes from all completed trips
+                  versus Pending Loading.
                 </p>
               </div>
             )}
 
             <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
-              <Metric label="Expected" value={printNumber(s?.expectedBales ?? null)} icon={Package} />
+              <Metric label="Pending Loading" value={printNumber(s?.loadedBales ?? null)} icon={Package} />
               <Metric label="Verified" value={printNumber(s?.verifiedBales ?? null)} icon={Truck} />
               <Metric
                 label="Matched"
@@ -525,7 +339,121 @@ export default function FactoryLoadingDispatchCompare() {
               />
             </div>
 
-            <Card className="border-blue-100 bg-white dark:border-blue-500/20 dark:bg-[#101c34]">
+            {!selectedId && (
+              <FactoryDispatchOrderFinancialReview
+                value={financialReconciliation.data ?? null}
+                loading={financialReconciliation.isPending}
+                error={financialReconciliation.isError
+                  ? (financialReconciliation.error instanceof Error
+                    ? financialReconciliation.error.message : "Financial reconciliation unavailable")
+                  : null}
+                orderId={orderId}
+                companyId={companyId}
+                isSupervisor={isSupervisor}
+                onRefresh={refreshAllReconciliation}
+              />
+            )}
+
+            {!selectedId && (
+              <Card
+                className="border-blue-200 bg-white dark:border-blue-500/25 dark:bg-[hsl(var(--factory-hue)_53%_13%)]"
+                data-testid="pending-loading-final-reconciliation"
+              >
+                <CardContent className="space-y-4 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <h2 className="text-base font-bold">Final Pending Loading reconciliation</h2>
+                      <p className="text-xs text-muted-foreground">
+                        These are the exact bales still in Pending Loading but not scanned on any dispatch trip.
+                        Selecting a bale does not change anything until you confirm removal.
+                      </p>
+                    </div>
+                    <Badge variant="outline">{printNumber(missingFromLoading.length)} not scanned</Badge>
+                  </div>
+                  {!allTripsEnded && (
+                    <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-600/30 dark:bg-amber-950/20 dark:text-amber-200">
+                      You can review missing bales now. To remove them from Pending Loading, finish all open dispatch
+                      trips first.
+                    </p>
+                  )}
+                  {missingFromLoading.length === 0 ? (
+                    <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900 dark:border-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-200">
+                      No missing bale references. Every bale in the current loading is verified on a trip.
+                    </p>
+                  ) : (
+                    <>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={selectAllMissing}
+                          disabled={!canReconcile || removing}
+                          data-testid="button-select-all-missing-bales"
+                        >
+                          {selectedCurrent.length === missingFromLoading.length
+                            ? "Clear selection"
+                            : "Select all missing"}
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          disabled={!canReconcile || removing || selectedCurrent.length === 0}
+                          onClick={() => setRemoveOpen(true)}
+                          data-testid="button-remove-selected-missing-bales"
+                        >
+                          Remove {selectedCurrent.length} selected from loading
+                        </Button>
+                      </div>
+                      <div className="max-h-[360px] overflow-auto rounded-lg border dark:border-slate-700">
+                        <table className="w-full min-w-[480px] text-left text-xs">
+                          <thead className="sticky top-0 bg-slate-100 dark:bg-[hsl(var(--factory-hue)_58%_10%)]">
+                            <tr>
+                              <th className="px-3 py-2">Select</th>
+                              <th className="px-3 py-2">Bale reference</th>
+                              <th className="px-3 py-2">Article</th>
+                              <th className="px-3 py-2 text-right">KG</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {missingFromLoading.map((bale) => (
+                              <tr key={bale.orderBaleId} className="border-t dark:border-slate-700">
+                                <td className="px-3 py-2">
+                                  <Checkbox
+                                    checked={selectedCurrent.includes(bale.orderBaleId!)}
+                                    disabled={!canReconcile || removing}
+                                    onCheckedChange={(value) =>
+                                      setSelectedMissing((ids) =>
+                                        value === true
+                                          ? [...ids.filter((id) => id !== bale.orderBaleId), bale.orderBaleId!]
+                                          : ids.filter((id) => id !== bale.orderBaleId)
+                                      )
+                                    }
+                                    aria-label={"Select missing bale " + bale.baleReference}
+                                  />
+                                </td>
+                                <td className="px-3 py-2 font-mono font-semibold">{bale.baleReference}</td>
+                                <td className="px-3 py-2">
+                                  {bale.articleCode} <span className="text-muted-foreground">{bale.productName}</span>
+                                </td>
+                                <td className="px-3 py-2 text-right font-mono">{printNumber(bale.weightKg, 3)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
+                  )}
+                  <p className="text-[11px] text-muted-foreground">
+                    Removal is restricted to Admin, Owner and Developer, requires an approval reason,
+                    and returns only unshipped bales to stock in one atomic transaction. No scanned/posted bale can be removed.
+                    After signing the final order reconciliation, all further removals are locked.
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+
+            <Card className="border-blue-100 bg-white dark:border-blue-500/20 dark:bg-[hsl(var(--factory-hue)_53%_13%)]">
               <CardContent className="space-y-3 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-sm font-bold">Verification progress</p>
@@ -541,7 +469,11 @@ export default function FactoryLoadingDispatchCompare() {
                   />
                 </div>
                 <div className="flex flex-wrap justify-between gap-2 text-xs text-muted-foreground">
-                  <span>Expected weight: {printNumber(s?.expectedWeightKg ?? null, 3)} kg</span>
+                  <span>
+                    {selectedId
+                      ? "Trip scans are recorded without a per-truck target"
+                      : "Pending Loading weight: " + printNumber(s?.expectedWeightKg ?? null, 3) + " kg"}
+                  </span>
                   <span>Scanned weight: {printNumber(s?.verifiedWeightKg ?? null, 3)} kg</span>
                   <span>Weight difference: {printNumber(s?.weightDifferenceKg ?? null, 3)} kg</span>
                   <span>
@@ -549,17 +481,16 @@ export default function FactoryLoadingDispatchCompare() {
                     kg
                   </span>
                 </div>
-                {s && (s.crossTripMisplacedBales > 0 || s.duplicateBales > 0) && (
+                {s && s.duplicateBales > 0 && (
                   <p className="flex items-center gap-2 text-xs font-semibold text-red-600">
                     <AlertTriangle className="h-4 w-4" />
-                    {s.crossTripMisplacedBales} cross-trip allocation mismatches · {s.duplicateBales} active duplicate
-                    anomalies
+                    {s.duplicateBales} active duplicate anomalies
                   </p>
                 )}
               </CardContent>
             </Card>
 
-            <Card className="min-w-0 border-slate-200 bg-white dark:border-blue-500/20 dark:bg-[#101c34]">
+            <Card className="min-w-0 border-slate-200 bg-white dark:border-blue-500/20 dark:bg-[hsl(var(--factory-hue)_53%_13%)]">
               <CardContent className="space-y-3 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
@@ -592,7 +523,6 @@ export default function FactoryLoadingDispatchCompare() {
                           ["missing", "Missing"],
                           ["extra", "Extra"],
                           ["match", "Match"],
-                          ["unplanned", "No target"],
                         ] as const
                       ).map(([value, label]) => (
                         <PillTabButton
@@ -611,14 +541,14 @@ export default function FactoryLoadingDispatchCompare() {
                 </div>
                 <div className="overflow-x-auto rounded-xl border dark:border-slate-700">
                   <table className="w-full min-w-[900px] text-left text-xs">
-                    <thead className="sticky top-0 bg-slate-100 text-muted-foreground dark:bg-[#0c192e]">
+                    <thead className="sticky top-0 bg-slate-100 text-muted-foreground dark:bg-[hsl(var(--factory-hue)_59%_11%)]">
                       <tr>
                         <th className="px-3 py-3 font-semibold">Article</th>
-                        <th className="px-3 py-3 text-right font-semibold">Expected</th>
+                        <th className="px-3 py-3 text-right font-semibold">Pending Loading</th>
                         <th className="px-3 py-3 text-right font-semibold">Scanned</th>
                         <th className="px-3 py-3 text-right font-semibold">Missing</th>
                         <th className="px-3 py-3 text-right font-semibold">Extra</th>
-                        <th className="px-3 py-3 text-right font-semibold">Expected KG</th>
+                        <th className="px-3 py-3 text-right font-semibold">Loading KG</th>
                         <th className="px-3 py-3 text-right font-semibold">Scanned KG</th>
                         <th className="px-3 py-3 text-right font-semibold">KG difference</th>
                         <th className="px-3 py-3 font-semibold">Result</th>
@@ -691,34 +621,25 @@ export default function FactoryLoadingDispatchCompare() {
             </Card>
 
             <div className="grid gap-4 xl:grid-cols-2">
-              <Findings
-                key={"missing-" + selectedId}
-                title="Missing bale references"
-                subtitle={
-                  selectedId
-                    ? "Exact references allocated here, but not physically verified"
-                    : "Loaded bale references that are not verified on any trip"
-                }
-                items={result.missingBales}
-                kind="missing"
-                orderId={orderId}
-              />
+              {selectedId && (
+                <Findings
+                  key={"missing-" + selectedId}
+                  title="Missing bale references"
+                  subtitle="Use All Trips to review the missing bale references from Pending Loading"
+                  items={result.missingBales}
+                  kind="missing"
+                  orderId={orderId}
+                />
+              )}
               <Findings
                 key={"unexpected-" + selectedId}
                 title="Unexpected scanned references"
-                subtitle="Scans no longer in the loading, or conflicting with exact trip allocations"
+                subtitle="Scanned bales that are no longer in Pending Loading"
                 items={result.unexpectedBales}
                 kind="unexpected"
                 orderId={orderId}
               />
-              <Findings
-                key={"cross-" + selectedId}
-                title="Wrong truck allocation"
-                subtitle="Bales assigned to this trip but physically scanned on a different one"
-                items={result.crossTripBales}
-                kind="cross"
-                orderId={orderId}
-              />
+
               {result.duplicateBales.length > 0 && (
                 <Findings
                   title="Duplicate active scan anomalies"
@@ -730,7 +651,7 @@ export default function FactoryLoadingDispatchCompare() {
               )}
             </div>
 
-            <Card className="border-slate-200 dark:border-blue-500/20 dark:bg-[#101c34]">
+            <Card className="border-slate-200 dark:border-blue-500/20 dark:bg-[hsl(var(--factory-hue)_53%_13%)]">
               <CardContent className="space-y-3 p-4">
                 <h3 className="text-sm font-bold">All truck trips</h3>
                 {result.trips.length === 0 ? (
@@ -766,11 +687,54 @@ export default function FactoryLoadingDispatchCompare() {
 
             <div className="flex flex-wrap items-center gap-2 border-t pt-4 text-xs text-muted-foreground dark:border-slate-700">
               <ShieldCheck className="h-4 w-4" />
-              Read-only reconciliation · Updated every 5 seconds · No stock, loading or accounting changes
+              Scans are verification-only. Only a separately confirmed missing-bale removal changes Pending Loading.
             </div>
           </>
         )}
       </div>
+      <Dialog
+        open={removeOpen}
+        onOpenChange={(open) => {
+          if (!removing) setRemoveOpen(open);
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirm missing-bale removal</DialogTitle>
+            <DialogDescription>
+              Remove {selectedCurrent.length} unscanned bale(s), totalling {printNumber(selectedKg, 3)} kg, from Pending
+              Loading? They will return to stock using the existing loading correction process. Dispatch scan history
+              remains unchanged.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="dispatch-shortfall-reason">Reason for removing the unshipped bales</Label>
+            <Textarea id="dispatch-shortfall-reason" rows={3} maxLength={1000}
+              value={removalReason} onChange={e=>setRemovalReason(e.target.value)}
+              placeholder="All trucks are closed; these bales were never physically loaded…" />
+            <label className="flex items-start gap-2 rounded-md border p-3 text-xs">
+              <Checkbox checked={removeConfirmed} onCheckedChange={v=>setRemoveConfirmed(v===true)} />
+              <span>I reviewed the selected exact bale references and authorize returning only
+                unshipped bales to stock as one atomic correction.</span>
+            </label>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" disabled={removing} onClick={() => setRemoveOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={!canReconcile || removing || selectedCurrent.length === 0 ||
+                removalReason.trim().length < 10 || removalReason.trim().length > 1000 || !removeConfirmed}
+              onClick={() => void removeSelected()}
+              data-testid="button-confirm-remove-missing-bales"
+            >
+              {removing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Confirm removal
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

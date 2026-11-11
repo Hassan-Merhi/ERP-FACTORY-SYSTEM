@@ -327,7 +327,7 @@ export default function CustomerLoading() {
       className="mx-auto flex w-full max-w-[1800px] flex-col gap-5 p-4 pb-24 md:p-6 md:pb-24"
       data-testid="customer-loading-page"
     >
-      <section className="relative isolate overflow-hidden rounded-2xl border border-indigo-200/80 bg-gradient-to-r from-slate-50 via-blue-50/70 to-indigo-100/70 p-5 shadow-sm dark:border-indigo-400/25 dark:from-[#101b30] dark:via-[#142644] dark:to-[#172b4b] sm:p-6">
+      <section className="relative isolate overflow-hidden rounded-2xl border border-indigo-200/80 bg-gradient-to-r from-slate-50 via-blue-50/70 to-indigo-100/70 p-5 shadow-sm dark:border-indigo-400/25 dark:from-[hsl(var(--factory-hue)_50%_13%)] dark:via-[hsl(var(--factory-hue)_55%_17%)] dark:to-[hsl(var(--factory-hue)_53%_19%)] sm:p-6">
         <div
           className="pointer-events-none absolute -right-8 -top-20 h-64 w-64 rounded-full bg-indigo-400/10 blur-3xl dark:bg-indigo-400/15"
           aria-hidden="true"
@@ -356,7 +356,7 @@ export default function CustomerLoading() {
         </div>
       </section>
 
-      <Card className="overflow-hidden rounded-2xl border-indigo-200 bg-gradient-to-r from-indigo-50 via-white to-violet-50 shadow-sm dark:border-indigo-400/35 dark:from-[#192f57] dark:via-[#1b2b4e] dark:to-[#29254d]">
+      <Card className="overflow-hidden rounded-2xl border-indigo-200 bg-gradient-to-r from-indigo-50 via-white to-violet-50 shadow-sm dark:border-indigo-400/35 dark:from-[hsl(var(--factory-hue)_55%_22%)] dark:via-[hsl(var(--factory-hue)_49%_21%)] dark:to-[hsl(var(--factory-hue)_35%_22%)]">
         <CardContent className="flex flex-col gap-4 p-4 sm:p-5 xl:flex-row xl:items-end xl:justify-between">
           <div className="flex min-w-0 flex-1 items-center gap-3">
             <div className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-700 dark:bg-blue-400/15 dark:text-blue-200 sm:flex">
@@ -375,7 +375,7 @@ export default function CustomerLoading() {
                 }}
               >
                 <SelectTrigger
-                  className="h-11 w-full border-indigo-200 bg-white/90 font-medium shadow-sm focus:ring-indigo-500 dark:border-indigo-400/50 dark:bg-[#101d36]/90 dark:text-white"
+                  className="h-11 w-full border-indigo-200 bg-white/90 font-medium shadow-sm focus:ring-indigo-500 dark:border-indigo-400/50 dark:bg-[hsl(var(--factory-hue)_54%_14%)]/90 dark:text-white"
                   data-testid="customer-loading-customer-select"
                 >
                   <SelectValue placeholder={customersQuery.isLoading ? "Loading customers…" : "Choose a customer"} />
@@ -421,7 +421,7 @@ export default function CustomerLoading() {
 
       {!customerId ? (
         <Card>
-          <CardContent className="flex min-h-[300px] flex-col items-center justify-center gap-3 rounded-2xl bg-gradient-to-br from-blue-50 to-violet-50 p-8 text-center dark:from-[#12243f] dark:to-[#1f2144]">
+          <CardContent className="flex min-h-[300px] flex-col items-center justify-center gap-3 rounded-2xl bg-gradient-to-br from-blue-50 to-violet-50 p-8 text-center dark:from-[hsl(var(--factory-hue)_56%_16%)] dark:to-[hsl(var(--factory-hue)_37%_19%)]">
             <div className="rounded-full bg-muted p-4">
               <UsersRound className="h-7 w-7 text-muted-foreground" />
             </div>
@@ -445,8 +445,8 @@ export default function CustomerLoading() {
         <>
           <CustomerLoadingSummaryCards summary={summary} formatNumber={formatNumber} />
 
-          <Card className="overflow-hidden rounded-2xl border-slate-200/90 bg-white shadow-sm dark:border-slate-700/70 dark:bg-[#121d30]">
-            <div className="border-b border-slate-200 bg-gradient-to-r from-slate-50 to-indigo-50/60 p-4 dark:border-slate-700/70 dark:from-[#182640] dark:to-[#192343] sm:p-5">
+          <Card className="overflow-hidden rounded-2xl border-slate-200/90 bg-white shadow-sm dark:border-slate-700/70 dark:bg-[hsl(var(--factory-hue)_45%_13%)]">
+            <div className="border-b border-slate-200 bg-gradient-to-r from-slate-50 to-indigo-50/60 p-4 dark:border-slate-700/70 dark:from-[hsl(var(--factory-hue)_45%_17%)] dark:to-[hsl(var(--factory-hue)_46%_18%)] sm:p-5">
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-3">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-100 text-indigo-700 dark:bg-indigo-400/20 dark:text-indigo-200">
@@ -587,11 +587,11 @@ export default function CustomerLoading() {
               </div>
             </div>
 
-            <div className="max-h-[62vh] overflow-auto bg-white dark:bg-[#121d30]">
+            <div className="max-h-[62vh] overflow-auto bg-white dark:bg-[hsl(var(--factory-hue)_45%_13%)]">
               <table className="w-full min-w-[1280px] border-collapse text-sm">
-                <thead className="sticky top-0 z-30 bg-slate-100 shadow-[0_1px_0_hsl(var(--border))] dark:bg-[#263956]">
+                <thead className="sticky top-0 z-30 bg-slate-100 shadow-[0_1px_0_hsl(var(--border))] dark:bg-[hsl(var(--factory-hue)_39%_24%)]">
                   <tr className="text-left text-[11px] font-semibold uppercase tracking-wider text-slate-600 dark:text-blue-100/85">
-                    <th className="sticky left-0 z-40 w-12 bg-slate-100 px-3 py-3 dark:bg-[#263956]">
+                    <th className="sticky left-0 z-40 w-12 bg-slate-100 px-3 py-3 dark:bg-[hsl(var(--factory-hue)_39%_24%)]">
                       <Checkbox
                         checked={allVisibleSelected}
                         onCheckedChange={(checked) => {
@@ -788,7 +788,7 @@ export default function CustomerLoading() {
                 </div>
               )}
             </div>
-            <div className="flex flex-col gap-2 border-t border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-[#17243b] sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-2 border-t border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-[hsl(var(--factory-hue)_44%_16%)] sm:flex-row sm:items-center sm:justify-between">
               <div className="text-xs text-muted-foreground">
                 Showing {filteredProducts.length === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1}–
                 {Math.min(safePage * PAGE_SIZE, filteredProducts.length)} of {filteredProducts.length}
@@ -820,7 +820,7 @@ export default function CustomerLoading() {
       )}
 
       {selectedProductIds.size > 0 && (
-        <div className="fixed inset-x-0 bottom-0 z-50 border-t border-indigo-300 bg-white/95 px-4 py-3 shadow-2xl backdrop-blur-md dark:border-indigo-500/40 dark:bg-[#14213a]/95 md:left-(--sidebar-width,0px)">
+        <div className="fixed inset-x-0 bottom-0 z-50 border-t border-indigo-300 bg-white/95 px-4 py-3 shadow-2xl backdrop-blur-md dark:border-indigo-500/40 dark:bg-[hsl(var(--factory-hue)_49%_15%)]/95 md:left-(--sidebar-width,0px)">
           <div className="mx-auto flex max-w-[1800px] flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
               <span>

@@ -376,7 +376,7 @@ export default function FactoryFinancialSnapshot() {
 
           {/* ── Section 3: Accounts & Finance ────────────────────────────── */}
           <div>
-            <SectionHeader title="Accounts & Finance" color="#6366f1" />
+            <SectionHeader title="Accounts & Finance" color="var(--factory-color-500)" />
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {/* ── Cash & Bank (manual pinned) ── */}
               {allLoading ? (

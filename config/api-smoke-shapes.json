@@ -515,7 +515,7 @@
     },
     "/api/erp/rental/reconciliation": {
       "status": 200,
-      "shape": "{balances:{netOutstanding:scalar,totalAccrualPayablePosted:scalar,totalExpectedAsOf:scalar,totalPostedPaid:scalar,totalScheduledPending:scalar},counts:{A_paidAmountDrift:scalar,B_futurePosted:scalar,C_flagDrift:scalar,D_orphanAccrual:scalar,E_prematureAccrual:scalar,F_scheduledDue:scalar,total:scalar},mismatches:[],totalChecked:{contracts:scalar,ledgerRows:scalar,payments:scalar}}"
+      "shape": "{balances:{landlordRentReceivable:scalar,netOutstanding:scalar,prepaidRentAllocated:scalar,tenantRentPayable:scalar,totalAccrualPayablePosted:scalar,totalAppliedAgainstDueAsOf:scalar,totalExpectedAsOf:scalar,totalPostedPaid:scalar,totalScheduledPending:scalar},counts:{A_paidAmountDrift:scalar,B_futurePosted:scalar,C_flagDrift:scalar,D_orphanAccrual:scalar,E_prematureAccrual:scalar,F_scheduledDue:scalar,G_missingPostedVoucher:scalar,H_unsettledAccrualPayment:scalar,total:scalar},mismatches:[],totalChecked:{contracts:scalar,ledgerRows:scalar,payments:scalar}}"
     },
     "/api/erp/rental/units": {
       "status": 200,
@@ -1795,7 +1795,7 @@
     },
     "/api/properties/rental/reconciliation": {
       "status": 200,
-      "shape": "{balances:{netOutstanding:scalar,totalAccrualPayablePosted:scalar,totalExpectedAsOf:scalar,totalPostedPaid:scalar,totalScheduledPending:scalar},counts:{A_paidAmountDrift:scalar,B_futurePosted:scalar,C_flagDrift:scalar,D_orphanAccrual:scalar,E_prematureAccrual:scalar,F_scheduledDue:scalar,total:scalar},mismatches:[],totalChecked:{contracts:scalar,ledgerRows:scalar,payments:scalar}}"
+      "shape": "{balances:{landlordRentReceivable:scalar,netOutstanding:scalar,prepaidRentAllocated:scalar,tenantRentPayable:scalar,totalAccrualPayablePosted:scalar,totalAppliedAgainstDueAsOf:scalar,totalExpectedAsOf:scalar,totalPostedPaid:scalar,totalScheduledPending:scalar},counts:{A_paidAmountDrift:scalar,B_futurePosted:scalar,C_flagDrift:scalar,D_orphanAccrual:scalar,E_prematureAccrual:scalar,F_scheduledDue:scalar,G_missingPostedVoucher:scalar,H_unsettledAccrualPayment:scalar,total:scalar},mismatches:[],totalChecked:{contracts:scalar,ledgerRows:scalar,payments:scalar}}"
     },
     "/api/properties/rental/units": {
       "status": 200,

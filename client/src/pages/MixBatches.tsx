@@ -16,6 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { CreateMixBatchDialog } from "../components/CreateMixBatchDialog";
 import { EditMixBatchDialog } from "../components/EditMixBatchDialog";
 import { formatNumber } from "@/lib/formatNumber";
+import { recordedMixBatchCost, summarizeRecordedMixBatches } from "@/lib/recordedMixBatchCost";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { getApiRequest } from "@/lib/factoryApi";
 import { useToast } from "@/hooks/use-toast";
@@ -301,7 +302,7 @@ export default function MixBatches() {
                         </TableCell>
                         <TableCell className="text-right font-mono">{formatNumber(total)}</TableCell>
                         <TableCell className="text-right font-mono">
-                          ${parseFloat(batch.costPerKg).toFixed(4)}
+                          ${recordedMixBatchCost(batch).costPerKg.toFixed(4)}
                         </TableCell>
                         <TableCell className="text-muted-foreground text-sm">
                           {formatDisplayDate(batch.batchDate || batch.createdAt)}
@@ -333,12 +334,8 @@ export default function MixBatches() {
                   })}
                 </TableBody>
                 {(() => {
-                  const summaryTotal = filteredBatches.reduce((s, b) => s + parseFloat(b.totalWeightKg || "0"), 0);
-                  const weightedCost = filteredBatches.reduce(
-                    (s, b) => s + parseFloat(b.totalWeightKg || "0") * parseFloat(b.costPerKg || "0"),
-                    0
-                  );
-                  const blendedCost = summaryTotal > 0 ? weightedCost / summaryTotal : 0;
+                  const { totalWeightKg: summaryTotal, costPerKg: blendedCost } =
+                    summarizeRecordedMixBatches(filteredBatches);
                   return (
                     <tfoot className="border-t-2 border-border bg-muted/40">
                       <tr>

@@ -132,6 +132,11 @@ describe("isFactoryTopLevelPath", () => {
     expect(isFactoryTopLevelPath("/factory/payroll-hub?section=workers")).toBe(true);
   });
 
+  it("treats the Others hub as top level although it shares Overview's access entry", () => {
+    expect(isFactoryTopLevelPath("/factory/others")).toBe(true);
+    expect(isFactoryTopLevelPath("/factory/others?tab=product-comparison")).toBe(true);
+  });
+
   it("treats the Others comparison hub as top level, so Escape stays on it", () => {
     expect(isFactoryTopLevelPath("/factory/others")).toBe(true);
     expect(isFactoryTopLevelPath("/factory/others?tab=product-comparison")).toBe(true);
