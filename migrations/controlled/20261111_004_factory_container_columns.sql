@@ -1,0 +1,93 @@
+-- Factory container columns extracted from the legacy compatibility bridge.
+-- Additive only. Does not UPDATE tracking flags or alter existing records.
+-- Production application requires a separate reviewed manual release.
+DO $check$
+BEGIN
+  IF to_regclass('public.factory_containers') IS NULL THEN
+    RAISE EXCEPTION 'Required factory_containers table missing';
+  END IF;
+END
+$check$;
+
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS supplier_id INTEGER;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS origin TEXT;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS total_kg NUMERIC(15,3);
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS rate_per_kg NUMERIC(20,6);
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS declared_kg NUMERIC(15,3);
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS actual_received_kg NUMERIC(15,3);
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS final_payable_amount NUMERIC(20,4);
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS difference_kg NUMERIC(15,3);
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS currency_code VARCHAR(10) NOT NULL DEFAULT 'USD';
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS fx_rate_to_usd NUMERIC(20,8) NOT NULL DEFAULT 1;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS fx_rate_to_usd_import NUMERIC(20,8);
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS fx_rate_to_usd_offload NUMERIC(20,8);
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS fx_rate_source TEXT NOT NULL DEFAULT 'auto';
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS fx_rate_confirmed BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS fx_rate_date_import DATE;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS fx_rate_date_offload DATE;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS rate_per_kg_usd NUMERIC(20,6);
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS final_payable_amount_usd NUMERIC(20,4);
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS arrival_date DATE;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS destination TEXT;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS notes TEXT;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'PENDING';
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS freight NUMERIC(20,2) DEFAULT 0;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS freight_currency_code VARCHAR(10) DEFAULT 'USD';
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS freight_account_id INTEGER;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS freight_supplier_id INTEGER;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS freight_paid_by TEXT DEFAULT 'supplier';
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS freight_own_account_id INTEGER;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS freight_fx_rate_to_usd NUMERIC(20,8);
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS freight_fx_rate_confirmed BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS freight_fx_rate_date DATE;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS other_charges NUMERIC(20,2) DEFAULT 0;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS other_charges_currency_code VARCHAR(10);
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS other_charges_account_id INTEGER;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS other_charges_supplier_id INTEGER;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS commission_amount NUMERIC(20,2) DEFAULT 0;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS commission_currency_code VARCHAR(10) DEFAULT 'USD';
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS commission_account_id INTEGER;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS commission_supplier_id INTEGER;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS commission_notes TEXT;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS commission_fx_rate_to_usd NUMERIC(20,8);
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS commission_fx_rate_confirmed BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS commission_fx_rate_date DATE;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS duty_amount NUMERIC(20,2);
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS duty_account_id INTEGER;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS duty_status TEXT NOT NULL DEFAULT 'NONE';
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS duty_notes TEXT;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS pre_offload_freight NUMERIC(20,2);
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS pre_offload_freight_currency_code VARCHAR(10);
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS pre_offload_freight_account_id INTEGER;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS pre_offload_freight_supplier_id INTEGER;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS pre_offload_other_charges NUMERIC(20,2);
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS pre_offload_other_charges_account_id INTEGER;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS pre_offload_other_charges_supplier_id INTEGER;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS pre_offload_status TEXT;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS pre_offload_commission_amount NUMERIC(20,2);
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS pre_offload_commission_currency_code VARCHAR(10);
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS pre_offload_commission_account_id INTEGER;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS pre_offload_commission_supplier_id INTEGER;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS pre_offload_commission_notes TEXT;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS created_at TIMESTAMP NOT NULL DEFAULT now();
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP NOT NULL DEFAULT now();
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS tracking_enabled BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS tracking_auto_update BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS tracking_carrier_hint TEXT;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS tracking_provider TEXT;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS tracking_last_status TEXT;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS tracking_last_location TEXT;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS tracking_last_checked_at TIMESTAMPTZ;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS tracking_last_event_date TIMESTAMPTZ;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS tracking_last_description TEXT;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS tracking_error TEXT;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS tracking_changed_at TIMESTAMPTZ;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS tracking_detected_carrier TEXT;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS tracking_next_check_at TIMESTAMPTZ;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS tracking_last_skip_reason TEXT;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS json_cargo_last_checked_at TIMESTAMPTZ;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS json_cargo_tracking_status TEXT;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS json_cargo_error TEXT;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS otw_note TEXT;
+ALTER TABLE public.factory_containers ADD COLUMN IF NOT EXISTS otw_docs_received BOOLEAN NOT NULL DEFAULT false;
