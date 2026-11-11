@@ -115,7 +115,12 @@ vi.mock("@/contexts/CursorNavContext", () => ({
  * Deliberately not `text-page-title`: half these pages render one, and a
  * landmark shared by every page proves only that PageHeader still works.
  */
-const PAGES: Array<{ name: string; load: () => Promise<any>; landmark: string }> = [
+const PAGES: Array<{
+  name: string;
+  load: () => Promise<any>;
+  landmark: string;
+  seedQueries?: ReadonlyArray<readonly [readonly unknown[], unknown]>;
+}> = [
   // Stock documents. These two forms are how inventory is adjusted and moved
   // between locations, and neither had been imported by any test.
   {
@@ -172,7 +177,19 @@ const PAGES: Array<{ name: string; load: () => Promise<any>; landmark: string }>
   },
   { name: "FactoryProformas", load: () => import("@/pages/factory/FactoryProformas"), landmark: "select-customer" },
   { name: "FactorySettings", load: () => import("@/pages/factory/FactorySettings"), landmark: "button-enable-all" },
-  { name: "WipersReEntry", load: () => import("@/pages/factory/WipersReEntry"), landmark: "tab-wipers-re-entry" },
+  {
+    name: "WipersReEntry",
+    load: () => import("@/pages/factory/WipersReEntry"),
+    landmark: "tab-wipers-re-entry",
+    // The page fails closed until Factory access is confirmed for the selected
+    // company, and stubFetch() answers every query with [], so seed the grant.
+    seedQueries: [
+      [
+        ["/api/factory/my-access", 1],
+        { companyId: 1, hasFactoryAccess: true, fullAccess: true, pageKeys: [], hiddenCostFields: [] },
+      ],
+    ],
+  },
   { name: "BaleProducts", load: () => import("@/pages/BaleProducts"), landmark: "button-create-product" },
   {
     name: "FactoryInvoiceCreate",
@@ -239,13 +256,13 @@ const PAGES: Array<{ name: string; load: () => Promise<any>; landmark: string }>
 ];
 
 describe("previously unmounted pages", () => {
-  for (const { name, load, landmark } of PAGES) {
+  for (const { name, load, landmark, seedQueries } of PAGES) {
     it(`${name} mounts and renders ${landmark}`, async () => {
       const module = await load();
       const Component = (module.default ?? module[name]) as React.ComponentType;
       expect(Component, `${name} must export a component`).toBeTypeOf("function");
 
-      renderWithProviders(<Component />);
+      renderWithProviders(<Component />, { seedQueries });
       expect(await screen.findByTestId(landmark)).toBeInTheDocument();
     });
   }
