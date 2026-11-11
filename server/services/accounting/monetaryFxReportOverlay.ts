@@ -181,6 +181,10 @@ export function applyVerifiedMonetaryFxOverlay(
       continue;
     }
     const { side: oldSide, row: oldRow } = matches[0];
+    // In itemized mode the original monetary row stays at its book amount,
+    // so balance-matching alone would allow a second projection to post the
+    // same display FX delta again. Enforce read-time idempotence explicitly.
+    if (options.showFxAsRows && oldRow.currencyRevalued) continue;
     const signedOld = new Decimal(oldRow.value).mul(oldSide === "forUs" ? 1 : -1);
     const historical = new Decimal(val.historicalBaseUsd);
     // Net Position can use different book attribution for old unmatched rows
