@@ -60,6 +60,7 @@ import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import { isRetailManualVoucherTabHidden, isRetailManualVoucherTypeHidden } from "@/lib/retailVoucherPolicy";
 import { shouldShowFactoryVoucherTab } from "@/pages/vouchers/factoryVoucherPolicy";
 import type { ErpFeatureAccess } from "@/app/erpAccess";
+import { erpPageAccessQueryOptions } from "@/app/erpAccessQuery";
 
 type VoucherTab = "payment" | "receipt" | "journal" | "transfer" | "transferorder" | "adjustment" | "creditnote";
 
@@ -107,8 +108,7 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
   const printRef = useRef<HTMLDivElement>(null);
   const isPOS = !!posUser;
   const { data: erpPageAccess } = useQuery<ErpFeatureAccess>({
-    queryKey: ["/api/my-erp-pages"],
-    enabled: !isPOS && appMode === "erp",
+    ...erpPageAccessQueryOptions(selectedCompany?.id, !isPOS && appMode === "erp"),
   });
   const showOptionalDrafts =
     !isPOS &&
@@ -532,7 +532,11 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
       className={`space-y-4 md:space-y-5 ${isPOS ? "pos-stock-transfer-page" : ""} ${!isPOS && (activeTab === "payment" || activeTab === "receipt" || activeTab === "journal") ? `voucher-workspace voucher-workspace--${activeTab}` : ""}`}
     >
       {isPOS ? (
-        <PageHeader title="Stock Transfer" subtitle="Transfer stock between locations" icon={<ArrowRightLeft className="h-6 w-6" aria-hidden="true" />} />
+        <PageHeader
+          title="Stock Transfer"
+          subtitle="Transfer stock between locations"
+          icon={<ArrowRightLeft className="h-6 w-6" aria-hidden="true" />}
+        />
       ) : !isFactoryMode ? (
         <PageHeader title="Vouchers" subtitle="Create and manage payment, receipt, and journal entries">
           {showOptionalDrafts && (

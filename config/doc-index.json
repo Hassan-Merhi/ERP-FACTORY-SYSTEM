@@ -156,6 +156,10 @@
     }
   ],
   "classification": {
+    "docs/factory-unification/phase-2-2026-11-10-continuation.md": "reference",
+    "docs/audits/erp-phase3-navigation-permissions-ux-2026-11-11.md": "reference",
+    "docs/accounting/hadi-lshi-rent-monthwise-original-voucher-audit-2026-11-10.md": "reference",
+    "docs/audits/erp-phase1-financial-integrity-2026-11-11.md": "reference",
     "docs/stock-transfer-order-whatsapp-approval-phase7.md": "reference",
     "docs/stock-transfer-order-whatsapp-approval-phase6.md": "reference",
     "docs/stock-transfer-order-whatsapp-approval-phase5.md": "reference",
@@ -392,6 +396,7 @@
     "docs/archive/translation/phases-4-7-current-main-reconciliation.md": "record",
     "docs/archive/translation/phases-8-5-6-plan.md": "record",
     "docs/audit-framework.md": "reference",
+    "docs/audits/erp-phase4-confirmed-defect-remediation-2026-11-11.md": "reference",
     "docs/audits/historical-sold-bale-cost-reconciliation-review.md": "reference",
     "docs/audits/mali-hmd-cost-repair-procedure.md": "reference",
     "docs/automatic-priority-print-loading.md": "reference",

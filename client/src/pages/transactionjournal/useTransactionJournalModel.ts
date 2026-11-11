@@ -13,6 +13,7 @@ import { useLocation } from "wouter";
 import { format, addDays } from "date-fns";
 import { hasAnyOpenDialog } from "@/hooks/use-escape-back";
 import { useCompany } from "@/contexts/CompanyContext";
+import { erpPageAccessQueryOptions } from "@/app/erpAccessQuery";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -81,7 +82,9 @@ export function useTransactionJournalModel() {
   const LIMIT = JOURNAL_PAGE_LIMIT;
 
   // ── Hide amounts toggle (local + user preference) ──
-  const { data: myErpPages } = useQuery<{ hiddenErpCostFields?: string[] }>({ queryKey: ["/api/my-erp-pages"] });
+  const { data: myErpPages } = useQuery<{ hiddenErpCostFields?: string[] }>({
+    ...erpPageAccessQueryOptions(selectedCompany?.id, true),
+  });
   const prefHidden = (myErpPages?.hiddenErpCostFields ?? []).includes("daybook_amounts");
   const [hideAmountsLocal, setHideAmountsLocal] = useState<boolean | null>(null);
   const hideAmounts = hideAmountsLocal !== null ? hideAmountsLocal : prefHidden;
