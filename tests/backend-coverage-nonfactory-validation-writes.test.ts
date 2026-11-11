@@ -134,6 +134,21 @@ function requestFor(route: RouteCase) {
   }
 }
 
+/**
+ * The inbound Stock Transfer Order WhatsApp webhook is token-authenticated and fails
+ * closed: until STO_WA_GREEN_API_WEBHOOK_TOKEN is configured it answers a structured
+ * 503 before reading the body. A test environment has no token, so only this exact
+ * refusal is expected here; any other 5xx on it, and a 503 anywhere else, still fails.
+ */
+function isUnconfiguredWebhookRefusal(method: string, routePath: string, status: number, body: unknown): boolean {
+  return (
+    method === "POST" &&
+    routePath === "/api/stock-transfer-order/wa-approval/webhook" &&
+    status === 503 &&
+    (body as { code?: unknown } | undefined)?.code === "STO_WA_WEBHOOK_NOT_CONFIGURED"
+  );
+}
+
 async function exercise(route: RouteCase): Promise<Failure | null> {
   try {
     const response = await requestFor(route)
@@ -141,6 +156,7 @@ async function exercise(route: RouteCase): Promise<Failure | null> {
       .send({})
       .timeout({ response: REQUEST_TIMEOUT_MS, deadline: REQUEST_TIMEOUT_MS });
 
+    if (isUnconfiguredWebhookRefusal(route.method, route.path, response.status, response.body)) return null;
     if (response.status >= 500) {
       const body = response.body as { message?: string; error?: string } | undefined;
       return {
