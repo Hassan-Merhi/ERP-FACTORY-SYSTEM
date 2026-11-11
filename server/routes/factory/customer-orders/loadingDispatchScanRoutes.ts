@@ -327,6 +327,9 @@ export function registerFactoryLoadingDispatchScanRoutes(app: Express): void {
         if ("status" in outcome && typeof outcome.status === "number") {
           return res.status(outcome.status).json({ message: outcome.message });
         }
+        if (!("count" in outcome) || !("scanIds" in outcome)) {
+          throw new Error("Bulk correction did not return a completed batch");
+        }
         return res.json({ success: true, count: outcome.count, scanIds: outcome.scanIds });
       } catch (error) {
         logger.error("Error bulk correcting truck dispatch scans", { error });
