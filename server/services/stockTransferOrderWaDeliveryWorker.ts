@@ -195,7 +195,7 @@ async function recordSameChatAlias(item: DeliveryRow): Promise<boolean> {
     // Admin supplied independently checked evidence that this ONE physical
     // message reached the shared group/destination chat. Never upload twice.
     await pool.query(
-      "WITH alias AS (UPDATE stock_transfer_order_approval_deliveries " +
+      "WITH alias AS (UPDATE stock_transfer_order_approval_deliveries d " +
         "SET status='verified',last_error=NULL,updated_at=clock_timestamp() " +
         "WHERE d.id=$1 AND d.company_id=$2 AND d.status IN ('pending','failed','uncertain') " +
         "AND EXISTS (SELECT 1 FROM stock_transfer_order_approval_deliveries p " +
@@ -213,7 +213,7 @@ async function recordSameChatAlias(item: DeliveryRow): Promise<boolean> {
   if (primary.status !== "accepted" || !primary.provider_message_id) {
     if (primary.status === "failed" && primary.attempt_count >= MAX_ATTEMPTS) {
       await pool.query(
-        "WITH alias AS (UPDATE stock_transfer_order_approval_deliveries " +
+        "WITH alias AS (UPDATE stock_transfer_order_approval_deliveries d " +
         "SET status='failed',attempt_count=$3,available_at=clock_timestamp()+interval '100 years'," +
         "last_error='Same WhatsApp chat as approval group; its upload exhausted safe retries'," +
         "updated_at=clock_timestamp() " +
@@ -230,7 +230,7 @@ async function recordSameChatAlias(item: DeliveryRow): Promise<boolean> {
     }
     if (primary.status === "uncertain") {
       await pool.query(
-        "WITH alias AS (UPDATE stock_transfer_order_approval_deliveries " +
+        "WITH alias AS (UPDATE stock_transfer_order_approval_deliveries d " +
         "SET status='uncertain',last_error='Same chat as approval group; first send is uncertain'," +
         "updated_at=clock_timestamp() " +
         "WHERE d.id=$1 AND d.company_id=$2 AND d.status IN ('pending','failed') " +
@@ -247,7 +247,7 @@ async function recordSameChatAlias(item: DeliveryRow): Promise<boolean> {
     return true; // Always wait for primary rather than send a duplicate.
   }
   await pool.query(
-    "WITH alias AS (UPDATE stock_transfer_order_approval_deliveries " +
+    "WITH alias AS (UPDATE stock_transfer_order_approval_deliveries d " +
       "SET status='accepted',provider_message_id=$3,workbook_sha256=$4,filename=$5," +
       "workbook_storage_key=$6,accepted_at=clock_timestamp(),updated_at=clock_timestamp() " +
       "WHERE id=$1 AND company_id=$2 AND status IN ('pending','failed') " +
