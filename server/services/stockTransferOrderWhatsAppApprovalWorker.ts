@@ -18,14 +18,14 @@ let timer: NodeJS.Timeout | null = null;
 let sweepRunning = false;
 const backoffUntil = new Map<number, number>();
 
-function executorEnabled(): boolean {
+export function stockTransferOrderWaExecutionEnabled(): boolean {
   return process.env.STO_WA_APPROVAL_EXECUTION_ENABLED !== "false" &&
     process.env.ENABLE_SCHEDULERS !== "false" &&
     shouldStartEdgeBackgroundJobs(readFactoryEdgeConfiguration());
 }
 
 async function processOne(batchId: number): Promise<void> {
-  if (!executorEnabled()) return;
+  if (!stockTransferOrderWaExecutionEnabled()) return;
   try {
     const result = await executeStockTransferOrderWaBatch(batchId);
     backoffUntil.delete(batchId);
@@ -51,14 +51,14 @@ async function processOne(batchId: number): Promise<void> {
 }
 
 export function queueStockTransferOrderWaDecision(batchId: number): void {
-  if (!executorEnabled() || !Number.isSafeInteger(batchId) || batchId <= 0) return;
+  if (!stockTransferOrderWaExecutionEnabled() || !Number.isSafeInteger(batchId) || batchId <= 0) return;
   // Fast path after HTTP webhook ACK. The sweep remains the durable path if
   // the process disappears before this callback is reached.
   setImmediate(() => { void processOne(batchId); });
 }
 
 export async function sweepStockTransferOrderWaDecisions(): Promise<number> {
-  if (!executorEnabled() || sweepRunning) return 0;
+  if (!stockTransferOrderWaExecutionEnabled() || sweepRunning) return 0;
   sweepRunning = true;
   try {
     return await runWithDatabaseMaintenanceScope("sto_whatsapp_decision_worker_scan", async () => {
@@ -94,7 +94,7 @@ export async function sweepStockTransferOrderWaDecisions(): Promise<number> {
 }
 
 export function startStockTransferOrderWaApprovalWorker(): void {
-  if (timer || !executorEnabled()) return;
+  if (timer || !stockTransferOrderWaExecutionEnabled()) return;
   timer = setInterval(() => { void sweepStockTransferOrderWaDecisions(); }, SWEEP_INTERVAL_MS);
   timer.unref();
   void sweepStockTransferOrderWaDecisions();
