@@ -5,6 +5,7 @@
  * Outputs aggregate counts only, not sensitive voucher/customer rows.
  */
 import process from "node:process";
+import { fileURLToPath } from "node:url";
 import pg from "pg";
 import { resolveDatabaseSsl } from "../server/lib/databaseSsl.mjs";
 
@@ -143,6 +144,6 @@ async function main() {
     await client.end().catch(()=>{});
   }
 }
-if(process.argv[1] && import.meta.url===new URL("file://"+process.argv[1]).href) {
+if(process.argv[1] && fileURLToPath(import.meta.url)===process.argv[1]) {
   main().catch(e=>{console.error("Database integrity audit failed:",e.message);process.exitCode=2;});
 }
