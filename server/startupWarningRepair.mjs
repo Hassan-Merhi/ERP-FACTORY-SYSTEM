@@ -192,14 +192,15 @@ async function verifyStartupWarningSchema(client) {
 
 export async function runStartupWarningRepair() {
   const options = connectionOptions();
+  const verifyOnly = process.env.STARTUP_WARNING_SCHEMA_MODE === "verify-only";
   if (!options) {
+    if (verifyOnly) throw new Error("Startup schema verify-only requires a database connection");
     structuredLog("INFO", "Startup warning repair skipped because no database configuration is present");
     return;
   }
 
   const client = new Client(options);
   let transactionStarted = false;
-  const verifyOnly = process.env.STARTUP_WARNING_SCHEMA_MODE === "verify-only";
 
   try {
     await client.connect();
