@@ -76,6 +76,7 @@ export const stockTransferOrderApprovalBatchItems = pgTable(
     batchId: bigint("batch_id", { mode: "number" }).notNull(),
     transferId: integer("transfer_id").notNull().references(() => stockTransferVouchers.id, { onDelete: "restrict" }),
     voucherNumberSnapshot: varchar("voucher_number_snapshot", { length: 100 }).notNull(),
+    itemHashSnapshot: varchar("item_hash_snapshot", { length: 64 }).notNull(),
     reservationActive: boolean("reservation_active").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
