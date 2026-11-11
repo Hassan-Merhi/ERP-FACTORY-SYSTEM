@@ -32,6 +32,7 @@ function log(level, message, extra = {}) {
 export async function ensureCustomerOrderBaleScanAudit(options = {}) {
   const target = options.connectionString ?? connectionString;
   if (!target) {
+    if (process.env.BALE_SCAN_AUDIT_SCHEMA_MODE === "verify-only") throw new Error("Bale scan audit schema verify-only requires database configuration");
     log("WARN", "Scan-audit schema check skipped because no database configuration is available");
     return;
   }
@@ -46,6 +47,53 @@ export async function ensureCustomerOrderBaleScanAudit(options = {}) {
 
   try {
     await client.connect();
+    const verifyOnly = process.env.BALE_SCAN_AUDIT_SCHEMA_MODE === "verify-only";
+    if (verifyOnly) {
+      await client.query("BEGIN READ ONLY");
+      await client.query("SET LOCAL lock_timeout = '5s'");
+      await client.query("SET LOCAL statement_timeout = '45s'");
+      const tables = await client.query(`
+        SELECT to_regclass('public.customer_order_bales') IS NOT NULL AS live,
+               to_regclass('public.customer_order_bales_history') IS NOT NULL AS history
+      `);
+      if (!tables.rows[0]?.live || !tables.rows[0]?.history) {
+        throw new Error("Bale scan audit live/history tables missing; manual controlled schema migration required");
+      }
+      const columns=await client.query(`
+        SELECT table_name,column_name FROM information_schema.columns
+        WHERE table_schema='public' AND table_name IN ('customer_order_bales','customer_order_bales_history')
+          AND column_name='scanned_at'
+      `);
+      const scanColumns=new Set(columns.rows.map(x=>x.table_name));
+      if (!scanColumns.has('customer_order_bales') || !scanColumns.has('customer_order_bales_history')) {
+        throw new Error("Bale scan audit scanned_at timestamp column missing");
+      }
+      const definitions=await client.query(`
+        SELECT p.proname, pg_get_functiondef(p.oid) AS definition
+        FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+        WHERE n.nspname='public'
+          AND p.proname IN ('set_customer_order_bale_scanned_at','copy_customer_order_bale_scanned_at_to_history')
+      `);
+      const foundFunctions=new Set(definitions.rows.map(x=>x.proname));
+      if (!foundFunctions.has('set_customer_order_bale_scanned_at') ||
+          !foundFunctions.has('copy_customer_order_bale_scanned_at_to_history')) {
+        throw new Error("Bale scan audit preservation functions missing");
+      }
+      const triggers=await client.query(`
+        SELECT t.tgname,t.tgenabled,pg_get_triggerdef(t.oid) AS definition
+        FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid
+        WHERE NOT t.tgisinternal AND (
+          (c.relname='customer_order_bales' AND t.tgname='customer_order_bales_set_scanned_at')
+          OR (c.relname='customer_order_bales_history' AND t.tgname='customer_order_bales_history_copy_scanned_at')
+        )
+      `);
+      if (triggers.rows.length!==2 || triggers.rows.some(t=>!['O','A'].includes(t.tgenabled))) {
+        throw new Error("Bale scan audit timestamp triggers missing or disabled");
+      }
+      await client.query("ROLLBACK");
+      log("INFO","Bale scan audit schema verified read-only without modifying scan timestamps");
+      return;
+    }
     await client.query("BEGIN");
     await client.query("SET LOCAL lock_timeout = '10s'");
     await client.query("SET LOCAL statement_timeout = '60s'");
