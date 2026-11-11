@@ -64,6 +64,15 @@ export function compareSchemaDrift(snapshot, { includeControlled = false } = {})
   if (includeControlled) {
     expectedTables.push("factory_fixed_production_plans","sp_containers","user_preferences","factory_containers","user_security_permissions","user_language_preferences",
       "scheduled_whatsapp_occurrences","scheduled_whatsapp_attachments","insurance_member_monthly_amounts");
+    expectedColumns.push(
+      ["stock_items","selling_price"],["stock_items","opening_qty"],
+      ["stock_items","opening_rate"],["stock_items","opening_value"],
+      ["stock_items","reorder_level"],["stock_items","active"],
+      ["sp_containers","surcharge_usd"],["sp_containers","fumigation_usd"],
+      ["sp_containers","document_charges_usd"],
+      ["containers","port_departure_date"]
+    );
+    expectedTables.push("containers","stock_items");
     expectedIndexes.push("scheduled_whatsapp_occurrences_retry_idx",
       "scheduled_whatsapp_occurrences_recipient_idx",
       "scheduled_whatsapp_attachments_status_idx",
