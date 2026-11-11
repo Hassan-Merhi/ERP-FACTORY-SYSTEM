@@ -1,0 +1,79 @@
+name: Database Migration Integration Tests
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "migrations/controlled/**"
+      - "scripts/run-controlled-migrations.mjs"
+      - "scripts/test-controlled-migrations-postgres.mjs"
+      - "scripts/database-*.mjs"
+      - "scripts/verify-restore-target.mjs"
+      - "tests/*migration*.node.test.mjs"
+      - "tests/*database*.node.test.mjs"
+      - ".github/workflows/database-migration-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: database-migration-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  integration:
+    name: Disposable PostgreSQL migration lifecycle
+    runs-on: ubuntu-26.04
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: erp_phase8_harness
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d erp_phase8_harness"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      NODE_ENV: test
+      PGSSLMODE: disable
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/erp_phase8_harness
+      PHASE8_TEST_CONFIRMATION: RUN_DISPOSABLE_PHASE8_MIGRATION_TESTS
+    steps:
+      - name: Checkout reviewed branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node 24
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24.22.2"
+          cache: npm
+
+      - name: Normalize legacy internal npm registry URLs
+        run: sed -i 's#http://package-firewall.replit.local/npm/#https://registry.npmjs.org/#g' package-lock.json
+
+      - name: Install locked dependencies
+        env:
+          SKIP_GIT_HOOKS: "1"
+        run: npm ci --no-audit --bin-links=true
+
+      - name: Run migration and recovery unit tests
+        run: npm run test:db:migrations
+
+      - name: Run migration PostgreSQL integration tests
+        run: npm run test:db:migrations:postgres
+
+      - name: Confirm production boot has no implicit controlled migration hook
+        run: |
+          if grep -E 'run-controlled-migrations|test-controlled-migrations-postgres' server/startupPreload.mjs render.yaml; then
+            echo "::error::Controlled migration execution must not occur during application boot."
+            exit 1
+          fi
