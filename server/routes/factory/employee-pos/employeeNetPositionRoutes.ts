@@ -594,6 +594,7 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
       const fxGainBreakdown = [
         ...supplierItems.filter((item) => (item.fxBasisAdjustmentUsd ?? 0) > 0).map((item) => ({
           label: `Supplier: ${item.name}`, native: "", usd: round2(item.fxBasisAdjustmentUsd ?? 0),
+          sourceKey: item.supplierId ? `supplier:${item.supplierId}` : undefined,
         })),
         ...visibleWalletFx.filter((wallet) => wallet.delta > 0).map((wallet) => ({
           label: `FX Agent: ${wallet.name}`, native: "EUR", usd: wallet.delta,
@@ -602,6 +603,7 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
       const fxLossBreakdown = [
         ...supplierItems.filter((item) => (item.fxBasisAdjustmentUsd ?? 0) < 0).map((item) => ({
           label: `Supplier: ${item.name}`, native: "", usd: round2(-(item.fxBasisAdjustmentUsd ?? 0)),
+          sourceKey: item.supplierId ? `supplier:${item.supplierId}` : undefined,
         })),
         ...visibleWalletFx.filter((wallet) => wallet.delta < 0).map((wallet) => ({
           label: `FX Agent: ${wallet.name}`, native: "EUR", usd: -wallet.delta,
