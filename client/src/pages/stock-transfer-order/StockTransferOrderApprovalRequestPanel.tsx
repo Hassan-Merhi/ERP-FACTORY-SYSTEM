@@ -142,14 +142,20 @@ export function StockTransferOrderApprovalRequestPanel({ model, open }: { model:
     <div className="space-y-4" data-testid="sto-wa-approval-request">
       <div className="rounded-lg border p-3 text-sm space-y-1">
         <p className="font-medium flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-green-600"/>
-          One DONE approves every pending revision in the selected orders
+          One DONE records the full-batch decision for every pending revision in the selected orders
         </p>
         <p className="text-xs text-muted-foreground">
           All source locations are included. This sends one WhatsApp request to the approval group.
-          No final Excel is sent until approval is implemented in later phases.
+          The decision is recorded once. Stock approval and the final Excel delivery are implemented in Phases 4–5.
         </p>
       </div>
       {config.isError && <p className="text-sm text-destructive">Could not load WhatsApp approval settings.</p>}
+      {config.data && !config.data.webhookConfigured && (
+        <p className="text-sm text-amber-600">
+          Approval webhook token is not configured yet; requests are disabled until the provider
+          and ERP have the same Bearer token.
+        </p>
+      )}
       {config.data && (!config.data.settings.enabled || !config.data.connected) &&
         <p className="text-sm text-amber-600">Enable approval settings and connect the main WhatsApp account in Export Center.</p>}
       <div className="space-y-2">
@@ -220,7 +226,7 @@ export function StockTransferOrderApprovalRequestPanel({ model, open }: { model:
           </Button>
         </div>
       )}
-      <Button className="w-full" disabled={!config.data?.connected || !config.data?.settings.enabled ||
+      <Button className="w-full" disabled={!config.data?.connected || !config.data?.webhookConfigured || !config.data?.settings.enabled ||
           !config.data?.destinations.some(d => d.id === destinationId && d.chatId && d.enabled) ||
           selectedIds.length === 0 || send.isPending || !!result}
         onClick={() => send.mutate()} data-testid="sto-wa-send-approval-request">
@@ -245,7 +251,7 @@ export function StockTransferOrderApprovalRequestPanel({ model, open }: { model:
               <div key={batch.id} className="rounded-md border p-2 flex items-center justify-between gap-2 text-xs">
                 <span className="min-w-0 truncate">{batch.destinationName} · {batch.orderCount} orders</span>
                 <Badge variant="outline">{batch.status}</Badge>
-                {config.data?.canConfigure && ["draft", "uncertain", "requested", "stale"].includes(batch.status) &&
+                {config.data?.canConfigure && ["draft", "uncertain", "requested", "stale", "done_received", "decline_received"].includes(batch.status) &&
                   <Button size="sm" variant="ghost" disabled={cancel.isPending}
                     onClick={async () => {
                       if (await confirmAction({title:"Cancel this approval request? Check WhatsApp delivery first.",tone:"destructive"})) {
