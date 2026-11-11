@@ -127,3 +127,11 @@ test("strict legacy startup failures never mark ERP healthy",()=>{
   assert.match(runner,/Legacy startup cutover blocked/);
   assert.match(runner,/Never invoke onComplete\/markStartupMigrationsComplete on a blocked/);
 });
+
+test("partial global read-only startup cutover fails before schema preload imports",()=>{
+  const code=read("server/startupPreload.mjs");
+  const gate=code.indexOf('DATABASE_STARTUP_SCHEMA_MODE === "verify-only"');
+  const bridge=code.indexOf('await import("./customerOrderBaleScanAuditBridge.mjs")');
+  assert.ok(gate>0 && bridge>gate);
+  assert.match(code,/Full read-only database startup cutover is blocked/);
+});
