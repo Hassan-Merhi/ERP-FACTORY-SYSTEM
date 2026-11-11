@@ -85,7 +85,11 @@
     "verify:factory-unification": "node scripts/verify-factory-unification-phase8.mjs",
     "verify:properties-unification": "node scripts/verify-properties-unification-phase11.mjs",
     "audit:database-migrations": "node scripts/audit-database-migration-hygiene.mjs",
-    "audit:database-migrations:strict": "node scripts/audit-database-migration-hygiene.mjs --strict"
+    "audit:database-migrations:strict": "node scripts/audit-database-migration-hygiene.mjs --strict",
+    "db:migrations:plan": "node scripts/run-controlled-migrations.mjs --plan",
+    "db:migrations:status": "node scripts/run-controlled-migrations.mjs --status",
+    "db:migrations:apply": "node scripts/run-controlled-migrations.mjs --apply",
+    "test:db:migrations": "node --test tests/controlled-migration-runner.node.test.mjs"
   },
   "dependencies": {
     "@aparajita/capacitor-biometric-auth": "^10.0.0",
