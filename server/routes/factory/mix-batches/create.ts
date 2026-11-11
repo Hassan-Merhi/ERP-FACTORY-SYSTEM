@@ -36,6 +36,7 @@ import {
   requireMixFifoFullyAllocated,
   requireMixRawStockCapacity,
   availableSupplierAddAllowance,
+  splitSupplierShortfall,
 } from "../../../services/factory/mixRawStockQuantityGuard";
 import { mixKilograms, requireMixLifecycleAvailable } from "../../../services/factory/mixLifecyclePhase6";
 
@@ -176,7 +177,7 @@ export function registerFactoryMixBatchCreateRoutes(app: Express) {
 
           // FIFO allocation of usedKg only — this determines WHICH container rows get
           // debited, never the cost rate itself (that's fixed above).
-          const perRsDeductions: Array<{ containerId: number; deduct: Decimal; adjustmentBacked?: boolean }> = [];
+          const perRsDeductions: Array<{ containerId: number; deduct: Decimal; adjustmentBacked?: boolean; supplierAdvance?: boolean }> = [];
           let remaining = weight;
           for (const rs of supplierRawStocks) {
             if (remaining.lessThanOrEqualTo(0.001)) break;
@@ -193,9 +194,10 @@ export function registerFactoryMixBatchCreateRoutes(app: Express) {
             remaining = remaining.minus(deduct);
           }
 
-          // The system's ADD adjustment ledger represents genuine supplier
-          // stock that is not included in container receivedKg. Permit only
-          // the unused adjustment-backed part, never an unsupported shortage.
+          // Supplier mixes may run ahead of on-hand stock. Record an explicit
+          // advance at the established locked USD rate; a later receipt nets
+          // the supplier's negative aggregate balance. Never invent a receipt
+          // or disguise an advance as a dated ADD adjustment.
           const addAllowance = await availableSupplierAddAllowance(
             tx,
             companyId,
@@ -204,15 +206,27 @@ export function registerFactoryMixBatchCreateRoutes(app: Express) {
             batchDate || getClientDate(req)
           );
           if (supplierRawStocks.length > 0 && remaining.gt(0)) {
-            requireMixFifoFullyAllocated(remaining.toFixed(3), supplierId, addAllowance.toFixed(3));
+            const { adjustmentKg, advanceKg } = splitSupplierShortfall(remaining.toFixed(3), addAllowance.toFixed(3));
+            if (advanceKg.gt(0) && (lockedRate === null || lockedRate.lte(0))) {
+              throw new MixRawStockShortageError(
+                `Supplier #${supplierId} needs a known positive locked USD rate before using stock from a future offload.`
+              );
+            }
             const last = supplierRawStocks[supplierRawStocks.length - 1];
             await tx
               .update(factoryRawStock)
               .set({ usedKg: sql`${factoryRawStock.usedKg} + ${remaining.toFixed(3)}` })
               .where(and(eq(factoryRawStock.id, last.id), eq(factoryRawStock.companyId, companyId)));
-            perRsDeductions.push({ containerId: last.containerId, deduct: remaining, adjustmentBacked: true });
+            if (adjustmentKg.gt(0)) {
+              perRsDeductions.push({ containerId: last.containerId, deduct: adjustmentKg, adjustmentBacked: true });
+            }
+            if (advanceKg.gt(0)) {
+              perRsDeductions.push({ containerId: last.containerId, deduct: advanceKg, supplierAdvance: true });
+            }
           }
           if (supplierRawStocks.length === 0) {
+            // No historical receipt exists to anchor a negative stock
+            // balance. Keep the existing ADD-backed manual-supplier behavior.
             requireMixFifoFullyAllocated(weight.toFixed(3), supplierId, addAllowance.toFixed(3));
           }
 
@@ -243,6 +257,7 @@ export function registerFactoryMixBatchCreateRoutes(app: Express) {
                 supplierId,
                 containerId: d.containerId,
                 adjustmentBacked: d.adjustmentBacked,
+                supplierAdvance: d.supplierAdvance,
                 weightKg: d.deduct.toFixed(),
                 costPerKg: storedRate(rate),
                 totalCost: d.deduct
@@ -373,8 +388,10 @@ export function registerFactoryMixBatchCreateRoutes(app: Express) {
             containerId: sr.containerId || null,
             supplierId: sr.supplierId || null,
             sourceBatchId: sr.sourceBatchId || null,
-            sourceType: sr.adjustmentBacked
-              ? "SUPPLIER_ADJUSTMENT_BACKED"
+            sourceType: sr.supplierAdvance
+              ? "SUPPLIER_ADVANCE"
+              : sr.adjustmentBacked
+                ? "SUPPLIER_ADJUSTMENT_BACKED"
               : sr.sourceBatchId
                 ? "BATCH"
                 : sr.supplierId
