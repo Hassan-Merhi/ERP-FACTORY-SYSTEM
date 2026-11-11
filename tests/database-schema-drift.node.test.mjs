@@ -52,3 +52,11 @@ test("migration history catches edited, unknown, and out-of-order entries",()=>{
   assert.ok(outOfOrder.failures.includes("non-prefix-history"));
   assert.ok(compareMigrationHistory(m,[{migration_name:"unknown.sql",checksum:"a"}],true).failures.includes("unknown:unknown.sql"));
 });
+
+test("controlled schema drift catches missing security and Factory container objects",()=>{
+  const result=compareSchemaDrift(completeSnapshot(),{includeControlled:true});
+  assert.ok(result.blockers.missingTables.includes("user_security_permissions"));
+  assert.ok(result.blockers.missingColumns.includes("user_security_permissions.permission"));
+  assert.ok(result.blockers.missingColumns.includes("factory_containers.json_cargo_error"));
+  assert.ok(result.blockers.missingIndexes.includes("user_security_permissions_unique"));
+});
