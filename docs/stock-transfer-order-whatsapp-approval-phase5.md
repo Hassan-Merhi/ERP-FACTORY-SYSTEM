@@ -79,7 +79,7 @@ than blindly resend.
 The Settings → Export Center page shows delivery-worker readiness. New
 approval requests are prevented when the authoritative delivery worker is
 disabled. Existing queued approved sends are held, not erased, when it is
-paused. Environment kill switch: STO_WA_DELIVERY_ENABLED=false.
+paused. Environment kill switch: STO_WA_DELIVERY_ENABLED=false. Production is also default-denied until STO_WA_PRODUCTION_ACTIVATED=true is deliberately set after certification.
 
 ## Files
 
