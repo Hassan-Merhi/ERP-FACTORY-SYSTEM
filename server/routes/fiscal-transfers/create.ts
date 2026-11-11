@@ -39,7 +39,7 @@ async function resolvePosTransferRecipientLocationId(req: Request): Promise<numb
 
 export function registerStockTransferCreateRoutes(app: Express) {
   // Stock Transfers - POST endpoint (supports both creating new and using existing voucher)
-  app.post("/api/stock-transfers", requireAuth, async (req, res) => {
+  app.post(["/api/stock-transfers", "/api/stock-transfer-orders"], requireAuth, async (req, res) => {
     const _t = Date.now();
     const _uid = req.session.userId;
     const _cid = req.session.currentCompanyId;
@@ -60,16 +60,13 @@ export function registerStockTransferCreateRoutes(app: Express) {
         voucherDate,
         optional,
         clientRequestId,
-        workflowOrigin,
       } = req.body;
-      // Only the dedicated order screen emits this marker. Do not infer it from editable voucher notes.
-      if (workflowOrigin !== undefined && workflowOrigin !== "stock_transfer_order") {
-        return res.status(400).json({ message: "Unsupported stock transfer workflow origin" });
+      // The route, not request body or editable notes, is the provenance authority.
+      // Never permit a regular Stock Transfer caller to forge the order marker.
+      if (req.body?.workflowOrigin !== undefined) {
+        return res.status(400).json({ message: "Workflow origin cannot be set by the client." });
       }
-      if (workflowOrigin === "stock_transfer_order" &&
-          !/^Stock Transfer Order - [0-9]+ items$/.test(String(notes ?? "").trim())) {
-        return res.status(400).json({ message: "Stock Transfer Order origin requires an order-created document" });
-      }
+      const workflowOrigin = req.path === "/api/stock-transfer-orders" ? "stock_transfer_order" : undefined;
       const requestId = resolveStockDocumentRequestId(clientRequestId);
 
       // Log if user confirmed negative inventory override
