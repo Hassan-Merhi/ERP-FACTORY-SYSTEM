@@ -144,7 +144,7 @@ export function registerStockTransferOrderWaApprovalRoutes(app: Express,
       ]);
       const wa = await getWaSettings();
       return res.json({ settings: s.rows[0] || {enabled:false,approvalGroupChatId:null,authorizedPhoneE164:null},
-        destinations: d.rows, groups: g.rows, connected: Boolean(wa?.enabled && wa.instanceId && wa.apiToken) });
+        destinations: d.rows, groups: g.rows, canConfigure: ["Admin","Owner","Developer"].includes(a.role), connected: Boolean(wa?.enabled && wa.instanceId && wa.apiToken) });
     } catch(e) { return errorResponse(res, e); }
   });
 
