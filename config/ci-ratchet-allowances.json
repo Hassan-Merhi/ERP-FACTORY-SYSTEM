@@ -28,7 +28,7 @@
     "server/routes/rental/rentalPaymentsAccrualRoutes.ts": 1027,
     "server/services/rental/rentalPaymentPostingService.ts": 1077
   },
-  "routeManifestAdditions": ["POST /api/offline/browser-sync/operations [requireAuth > <anonymous>]", "POST /api/offline/browser-sync/operations/discard [requireAuth > <anonymous>]", "POST /api/offline/browser-sync/receipts [requireAuth > <anonymous>]"],
+  "routeManifestAdditions": [],
   "routeManifestMountAdditions": [],
   "routeManifestReplacements": [],
   "sourceTextAssertionDelta": {
