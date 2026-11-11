@@ -178,8 +178,8 @@ export async function auditFactoryDispatchInvoiceTx(
     pass("INVENTORY_COGS_JOURNAL","Only the active perpetual-inventory cutover can post a one-time cost journal",
       expectsCost
         ? num(costVoucher?.voucherCount)===1 &&
-          amount(costVoucher?.costDebit).eq(details.inventoryCost) &&
-          amount(costVoucher?.inventoryCredit).eq(details.inventoryCost) &&
+          amount(costVoucher?.costDebit).eq(amount(details.inventoryCost)) &&
+          amount(costVoucher?.inventoryCredit).eq(amount(details.inventoryCost)) &&
           amount(costVoucher?.customerImpact).isZero()
         : num(costVoucher?.voucherCount)===0,
       expectsCost?"One cost journal for "+fixed(details.inventoryCost):"No cost journal",

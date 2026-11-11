@@ -74,7 +74,7 @@ describe("Factory Dispatch Phase 9 — order-wide reporting, immutable history a
     expect(manifest.routes.some(s=>s.includes("/order-overview/history"))).toBe(true);
   });
   it("fixes the pre-existing corrupted duplicate dispatch finance schema section",()=>{
-    expect((schema.match(/export const factoryDispatchFinancialEvents/g)??[]).toHaveLength(1);
+    expect((schema.match(/export const factoryDispatchFinancialEvents/g)??[])).toHaveLength(1);
     expect((schema.match(/export type FactoryDispatchFinancialEvent =/g)??[])).toHaveLength(1);
     expect(schema).toContain("factory_dispatch_order_consolidations_signoff_ck");
     expect(schema).toContain("factory_dispatch_order_consolidations_final_invoice_ck");

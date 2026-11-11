@@ -35,22 +35,22 @@ const refusal=(code:string,message:string,status=409):never=>{throw new OrderRec
 function reason(body:unknown,min=10):string{
   const raw=(body as Record<string,unknown>|null)?.reason;
   if(typeof raw!=="string" || raw.trim().length<min || raw.trim().length>1000){
-    refusal("RECONCILIATION_REASON_REQUIRED","Enter an approval reason of 10–1,000 characters",400);
+    return refusal("RECONCILIATION_REASON_REQUIRED","Enter an approval reason of 10–1,000 characters",400);
   }
   return raw.trim();
 }
 function expected(body:unknown):string{
   const value=(body as Record<string,unknown>|null)?.expectedFingerprint;
   if(typeof value!=="string" || !/^[0-9a-f]{64}$/.test(value)){
-    refusal("RECONCILIATION_PREVIEW_REQUIRED","Refresh the all-trucks reconciliation and confirm its exact fingerprint",400);
+    return refusal("RECONCILIATION_PREVIEW_REQUIRED","Refresh the all-trucks reconciliation and confirm its exact fingerprint",400);
   }
   return value;
 }
 async function scope(req:Request):Promise<OrderReconciliationScope & {role:string}>{
   const state=await getFactoryAccessState(req);
-  if(!state?.hasFactoryAccess) refusal("FACTORY_ACCESS_REQUIRED","Factory access required",403);
+  if(!state?.hasFactoryAccess) return refusal("FACTORY_ACCESS_REQUIRED","Factory access required",403);
   const orderId=parseId(req.params.id);
-  if(orderId===null) refusal("INVALID_ORDER_ID","Invalid Pending Loading",400);
+  if(orderId===null) return refusal("INVALID_ORDER_ID","Invalid Pending Loading",400);
   return {companyId:state.companyId,orderId,userId:String(state.userId),
     username:String(req.session.username||state.userId),role:state.role.toLowerCase()};
 }

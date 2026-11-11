@@ -3,6 +3,14 @@
   "description": "Explicit Phase 4 review registry for legacy data queries that are safe because their caller, ownership join, transaction context, or controlled maintenance context provides the company boundary.",
   "reviews": [
     {
+      "path": "server/routes/import/factoryDispatchPoImportReceipt.ts",
+      "reason": "Global container-number collision check intentionally searches across companies to prevent an ERP PO import from reusing an existing container identity; caller ERP scope, supplier, and receipt creation are company-scoped. It is a read-only existence check returning no cross-company record data."
+    },
+    {
+      "path": "server/services/factory/dispatchTripFinancialPosting.ts",
+      "reason": "The unscoped pg_class/pg_trigger query reads PostgreSQL global schema metadata only to assert financial posting guards exist; all financial record reads and mutation paths are scoped by company_id, order_id and dispatch_id."
+    },
+    {
       "path": "server/chat/reports/implementations/phase3ReportShard.ts",
       "reason": "Report shard receives the already-authorized company context from the chat report orchestrator."
     },
