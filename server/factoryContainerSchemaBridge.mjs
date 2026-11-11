@@ -116,6 +116,7 @@ function log(level, message, extra = {}) {
 
 async function ensureFactoryContainerSchema() {
   if (!connectionString) {
+    if (process.env.FACTORY_CONTAINER_SCHEMA_MODE === "verify-only") throw new Error("Factory container read-only verification requires database configuration");
     log("WARN", "Factory container schema check skipped because no database configuration is available");
     return;
   }
@@ -130,7 +131,8 @@ async function ensureFactoryContainerSchema() {
 
   try {
     await client.connect();
-    await client.query("BEGIN");
+    const verifyOnly = process.env.FACTORY_CONTAINER_SCHEMA_MODE === "verify-only";
+    await client.query(verifyOnly ? "BEGIN READ ONLY" : "BEGIN");
     await client.query("SET LOCAL lock_timeout = '15s'");
     await client.query("SET LOCAL statement_timeout = '90s'");
 
@@ -150,6 +152,28 @@ async function ensureFactoryContainerSchema() {
     const missingCoreColumns = CORE_COLUMNS.filter((columnName) => !existingColumns.has(columnName));
     if (missingCoreColumns.length > 0) {
       throw new Error(`factory_containers is missing core column(s): ${missingCoreColumns.join(", ")}`);
+    }
+
+    if (verifyOnly) {
+      const missing = REQUIRED_COLUMNS.map(([name]) => name).filter((name) => !existingColumns.has(name));
+      if (missing.length) {
+        throw new Error("Factory container schema incomplete; apply controlled migration before verify-only: " + missing.join(", "));
+      }
+      // Older production mode also disables automatic carrier tracking on
+      // every startup. That data rewrite is deliberately NOT performed here.
+      // Fail closed if the existing state still requires such remediation.
+      const flags = await client.query(`
+        SELECT EXISTS(
+          SELECT 1 FROM public.factory_containers
+          WHERE tracking_enabled IS TRUE OR tracking_auto_update IS TRUE
+        ) AS enabled_rows
+      `);
+      if (flags.rows[0]?.enabled_rows === true) {
+        throw new Error("Factory container legacy tracking flags still enabled; review outside startup before cutover");
+      }
+      await client.query("ROLLBACK");
+      log("INFO", "Factory container schema verified read-only (no tracking flag rewrite)");
+      return;
     }
 
     for (const [columnName, definition] of REQUIRED_COLUMNS) {
