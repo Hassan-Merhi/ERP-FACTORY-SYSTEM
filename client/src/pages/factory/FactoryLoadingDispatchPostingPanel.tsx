@@ -166,7 +166,7 @@ export default function FactoryLoadingDispatchPostingPanel({ orderId, dispatchId
 
   return (
     <>
-      <Card className="border-emerald-200 bg-white dark:border-emerald-800/40 dark:bg-[#101c34]" data-testid="dispatch-trip-financial-posting">
+      <Card className="border-emerald-200 bg-white dark:border-emerald-800/40 dark:bg-card" data-testid="dispatch-trip-financial-posting">
         <CardContent className="space-y-3 p-4">
           <div className="flex items-start justify-between gap-2">
             <div className="flex items-start gap-2">

@@ -64,7 +64,7 @@ describe("Factory blue theme Phase 4 rendering contracts", () => {
     expect(shell).toContain("max-sm:[&_input]:min-h-11");
     expect(shell).toContain("max-sm:[&_select]:min-h-11");
     expect(shell).toContain("max-sm:[&_textarea]:min-h-24");
-    expect(shell).toContain("data-factory-workspace=\"true\"");
+    expect(shell).toContain('data-factory-workspace="true"');
     expect(shell).toContain("overflow-y-auto");
   });
 

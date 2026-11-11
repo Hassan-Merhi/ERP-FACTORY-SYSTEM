@@ -21,7 +21,7 @@
  *      — marks the voucher for review; full re-post requires manual confirm
  *   C) paid_amount cache drift vs POSTED payments sum — updates cache column
  *   D) usedPrepaidAccount / usedAdvanceAccount flag drift — updates flags from voucher entries
- *   E) orphan Accrued Rent Payable (accrual voucher with no subsequent payment) — flags for review
+ *   E) deleted/missing accrual voucher links — report only, no automatic clearing
  *   F) SCHEDULED payments whose paymentDate has arrived — triggers posting
  */
 
@@ -357,17 +357,13 @@ async function main() {
         const reason = r.voucher_deleted_at ? `deleted at ${r.voucher_deleted_at}` : "voucher record missing";
         console.log(`    Row #${r.ledger_row_id} | Contract ${r.contract_id} | ${r.year}-${String(r.month).padStart(2,"0")} | AccrualVoucher #${r.accrual_voucher_id} (${reason})`);
       }
+      // Do NOT blindly clear these pointers. The original payment may have
+      // already expensed the month. Clearing its deleted accrual link can make
+      // the next posting run recognize the same expense again. Require a
+      // company-specific, audited repair with a persisted recognition hold.
+      console.log("  ⚠ Report-only: no orphan accrual link was changed.");
       if (!isDryRun) {
-        // Clear the dangling accrual_voucher_id reference from each orphaned ledger row
-        for (const r of orphans) {
-          await pool.query(
-            `UPDATE property_monthly_ledger SET accrual_voucher_id = NULL WHERE id = $1`,
-            [r.ledger_row_id]
-          );
-        }
-        console.log(`  ✓ Cleared accrual_voucher_id on ${orphans.length} orphaned row(s)`);
-        console.log(`    Rows are now eligible to re-accrue via the normal accrual service.`);
-        totalRepaired += orphans.length;
+        console.log("  ⚠ --apply does not clear Type E links; use a reviewed, guarded historical repair instead.");
       }
     }
   }

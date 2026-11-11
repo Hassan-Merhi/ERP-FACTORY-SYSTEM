@@ -116,3 +116,174 @@ The connected browser automation does not expose explicit 390px/768px/1440px vie
 - [ ] Complete actual 390px/768px/1440px mobile/tablet/desktop screenshot acceptance matrix.
 
 Phase 4 **is not fully certified** on this evidence. Do not change the checklist to completed without actual test and browser artifacts.
+
+## Isolated test-and-render verification (2026-11-10, additional pass)
+
+An isolated Vercel sandbox checked out the current public `main` branch and installed locked NPM dependencies using `npm ci --ignore-scripts`. The actual Vitest frontend suite was executed:
+
+```text
+node node_modules/vitest/vitest.mjs run --config vitest.config.frontend.ts client/src/styles/factory-unified-theme.test.ts client/src/styles/factory-unified-theme-phase4.test.ts
+Test Files 2 passed (2)
+Tests      8 passed (8)
+Exit code  0
+```
+
+The initial run exposed four fixed `dark:bg-[#101c34]` surfaces in Factory dispatch finance components newly added after the earlier color migration. The four files were fixed on `main` using `dark:bg-card`:
+- `FactoryDispatchOrderFinancialReview.tsx`
+- `FactoryLoadingDispatchFinance.tsx`
+- `FactoryLoadingDispatchPoExport.tsx`
+- `FactoryLoadingDispatchPostingPanel.tsx`
+
+Focused tests were rerun after these fixes and then again after formatting the Phase 4 test assertion; all 8 passed on both reruns. The Phase 4 test file passes Prettier.
+
+A real headless Chromium run loaded the current `factory-unified-theme.css` into an isolated representative workspace DOM. For **390px**, **768px**, and **1440px**, separately in **light and dark** mode, all 6 combinations confirmed:
+- `--factory-hue` is `217`;
+- workspace computed backgrounds are valid (`rgb(248, 249, 252)` light and `rgb(19, 22, 27)` dark);
+- Factory container stripe gradients resolve;
+- no horizontal overflow **in that isolated workspace fixture**.
+
+These are measured browser rendering results, **not authenticated real-page visual QA**. The fixture does not include actual dynamic Factory pages, dialogs, data tables or mobile navigation. Screenshot files were generated in the isolated sandbox at `/tmp/factory-theme-{mode}-{width}.png`, not promoted as user-visible downloadable artifacts.
+
+`npm run check` (full TypeScript type-check) exited 137 due to sandbox memory exhaustion, so no passing type-check is claimed. This was a separate broad check, not the focused theme test suite.
+
+### Acceptance state
+- [x] Actual Factory theme Vitest suite: 8/8 passing.
+- [x] Fix four newly introduced hardcoded dispatch-finance dark surfaces.
+- [x] Measured 390/768/1440 light/dark **theme CSS fixture** in Chromium.
+- [ ] Authenticated business-page dark-mode screenshot matrix across the representative Factory routes.
+- [ ] Authenticated business-page layout checks at 390/768/1440 including nav, dialogs and tables.
+- [ ] Verify the updated `main` revision on the deployed service.
+
+**Do not mark Phase 4 certified on these isolated fixture results alone.**
+
+## Final focused build verification (2026-11-10)
+
+An isolated Vercel sandbox pulled `main` at `3ba1eee3d658309a6bcb6ff0a890cbb2626cf8c7` and executed `npm run build` (production Vite client, server bundle and runtime dependency checks). **Exit code 0**, including successful transformation of **6,001 modules**. A pre-existing Vite warning about a mixed static/dynamic import in `daybookPaginationClient.ts` was emitted; it was not a build failure.
+
+The same sandbox earlier verified the focused Factory theme Vitest suite at **8/8 passing**. The whole-project TypeScript check was killed for memory (exit 137) and remains unverified. The four newly introduced hardcoded dark card backgrounds were fixed directly on `main`.
+
+A further saved-browser attempt still reached `/login`. The authenticated live Factory route × dark mode × viewport screenshot matrix therefore **remains incomplete** even though the isolated CSS fixture passed all 6 combinations. Production deployment of this revision is separately unverified; do not claim it is live.
+
+**Closing decision:** All accessible Phase 4 source/build/theme-fixture checks completed and passing. Final real-app visual certification remains open until a persistent authorized browser session provides authenticated screenshots at target widths/modes.
+
+## Authenticated dark-mode verification after reauthorization (2026-11-10)
+
+The user reauthorized the saved web browser session. Multiple read-only browser visits confirmed authentication as an Admin in **HMD INT GROUP - BEIRUT**, with actual Factory routes rendered rather than ERP pages.
+
+### Focused toggle diagnosis
+
+- On `/factory/production-report?tab=production`, the real `data-testid="button-theme-toggle"` was clicked successfully.
+- The HTML root changed from `class="light"` to `class="dark"`; the workspace/sidebar/topbar changed to their dark visual surfaces. The earlier broad-run toggle failure was not reproducible in this focused check.
+- One browser run's restoration report was internally inconsistent about the post-restoration mode; do not assert the user's final preference based on that report. A subsequent route run explicitly confirmed `html.dark`.
+
+### Authenticated Factory dark-mode smoke matrix
+
+| Route | Result in live dark-mode browser | Qualification |
+| --- | --- | --- |
+| `/factory/location-inventory` | Rendered; navy/dark-blue cards, readable text, no visible clipping | Browser reported purple-looking sidebar/nav glow, despite blue-themed CSS source; investigate separately if this remains in a newer deployed revision |
+| `/factory/invoicing` | Rendered; dark blue/gray surfaces, no visible clipping | No exact mobile/tablet width check |
+| `/factory/suppliers` → `/factory/parties?tab=suppliers` | Rendered; dark-blue cards and intentionally different green/amber semantic supplier indicators | No exact mobile/tablet width check |
+| `/factory/production-report` | Rendered; production charts, metrics and readable dark surfaces | No exact mobile/tablet width check |
+| `/factory/containers-hub` | Rendered; navy cards and white/light-gray text, blue active accents, no visible overflow | Full page inspected in separate targeted run |
+| `/factory/payroll-hub?section=workers&tab=workers` | Rendered 87-row worker table in dark mode; text and borders readable; vertical scrolling expected, no visible horizontal overflow | Full workers view inspected in separate targeted run |
+
+The earlier multi-route browser run reported a **measured 1069×975 viewport**. A subsequent focused run described desktop width as approximately 1440px without showing an exact measured dimension; do not use that approximation as exact acceptance evidence.
+
+No business records were edited. The inspector reported no major dark-mode card/text contrast failures across these sampled routes. One report described a purple-looking active-navigation glow while the source theme aliases purple/violet utility colors to `--factory-hue`; no hardcoded culprit has been confirmed from that visual description alone.
+
+### Remaining acceptance limits
+
+- The current browser tool does not provide explicit resize to 390px or 768px while preserving the authenticated session; **actual logged-in Factory mobile/tablet route screenshots remain unverified**.
+- Six isolated Chromium tests at 390/768/1440 in light/dark verified only the Factory CSS fixture, not actual authenticated page content.
+- The focused Factory Vitest suite previously passed 8/8 and `npm run build` succeeded. The separate whole-project TypeScript attempt exited 137 (memory); it was not certified as passed.
+- The Render live revision and `main` were not asserted equal; this run does not certify production deployment of the newest source changes.
+
+**Phase 4 disposition:** Source and build verification complete; representative live Factory **desktop dark-mode smoke checks complete**. Exact authenticated mobile/tablet route matrix and full screenshot evidence remain an open acceptance gate. Do not mark Phase 4 fully certified until those checks are performed.
+
+## Actual production-built frontend responsive mock-browser run (2026-11-10)
+
+A **new isolated Vercel sandbox** checked out `main` at `3f9c2cd` and ran `npm ci --ignore-scripts`, successfully built the Vite client, and launched `vite preview` without production databases or credentials. A headless Chromium instance then loaded actual bundled Factory React routes in a read-only mock session. All `/api/*` requests were intercepted and answered with deliberately synthetic test company, Admin user, minimal access data, and mock business records; service-worker interception was explicitly bypassed to prevent cached network responses.
+
+The browser visited six route URLs at 390px, 768px and 1440px in both light and dark mode: **36 route/theme/viewport attempts**, 36 with `html[data-app-shell="factory"]`, 0 document-level horizontal overflow, and no JavaScript page errors observed at the top level. The user-facing route error boundary **must** be counted separately, as described below.
+
+| Factory route | Actual page rendered in all six width/theme combinations? | Observations / caveat |
+| --- | --- | --- |
+| `/factory/location-inventory` | **Yes — 6/6** | Shows one synthetic location named "QA Test Location", mobile nav and responsive empty/detail entry layout; no document horizontal overflow |
+| `/factory/containers-hub` | **Yes — 6/6** | Real Factory Containers Hub with mock "no containers on the way" empty state; no document horizontal overflow |
+| `/factory/invoicing` | No | Page error boundary: "Cannot read properties of undefined (reading 'includes')" from incomplete API fixture |
+| `/factory/parties?tab=suppliers` | No | Same error boundary from incomplete API fixture |
+| `/factory/production-report` | No | Page error boundary: "Cannot read properties of undefined (reading 'statusValue')" from incomplete API fixture |
+| `/factory/payroll-hub?section=workers&tab=workers` | No | Same `includes` error boundary from incomplete API fixture |
+
+**Precise pass count: 12/36 actual route renderings, 24/36 fixture-induced route error boundaries.** The initial count of 36/36 shells was **not** equivalent to 36/36 fully rendered pages. The missing response shapes do not prove that production pages fail; earlier authenticated desktop browser visits rendered all six routes. In these fixture tests, 390/768/1440 light/dark screenshot files were captured for all attempted combinations inside the temporary sandbox, but only the 12 successfully rendered pages are useful visual evidence.
+
+The sandbox uses synthetic mock authentication; it neither stores production login credentials nor edits business data. The previously connected TinyFish plugin remains installed for authenticated live-page smoke testing, but lacks explicit responsive viewport controls. No extra plugin installation was required or discovered as a clear improvement for exact-width authenticated browser testing.
+
+**Disposition:** Meaningful actual React page-level responsive proof at all exact widths exists for Location Inventory and Containers Hub. Other four page-level responsive matrices remain incomplete due to mock-data fidelity, not because a production UI regression was established. Phase 4 should not be falsely closed on the 36 shell loads alone.
+
+## Production-built React responsive mock QA expanded (2026-11-10, latest pass)
+
+A second disposable Vercel sandbox (checked out at `3f9c2cd`) built the **real** Vite client and served it with `vite preview`. Headless Chromium used explicit browser viewports **390px / 768px / 1440px** and theme settings **light / dark**. Synthetic Admin/Factory-company requests were intercepted locally, with real authentication cookies and production API data intentionally excluded. Service workers were bypassed to ensure the intercepted mock responses reached the React application.
+
+Initial minimalist fixture attempts demonstrated why an `html[data-app-shell="factory"]` marker alone is not sufficient evidence: route-level ErrorBoundary pages can still be rendered. Expanding the test fixtures to include `hiddenCostFields: []` in the Factory access object and a synthetic location produced the **last fully captured** matrix:
+
+| Route | Rendered at 390 / 768 / 1440 in both modes |
+| --- | --- |
+| Location Inventory | **6/6** — one synthetic location |
+| Invoicing | **6/6** — empty proforma/customer selection state |
+| Suppliers (`/factory/parties?tab=suppliers`) | **6/6** — empty party table |
+| Containers Hub | **6/6** — no in-transit containers state |
+| Payroll / Workers | **6/6** — no-workers empty table |
+| Production Overview | **0/6** — test fixture lacks complete production/payroll response structure |
+
+**Confirmed total: 30/36 true page renders; zero document-level horizontal overflow in the 36 attempts.** The six production overview attempts were not certified because the mock-only route ErrorBoundary rendered. Browser screenshots were captured in the temporary sandbox for each combination, but are not retained as shareable project artifacts.
+
+Subsequent production fixture investigation correctly identified needed mock response types for `/api/factory/production-value-report`, `/api/factory/workers/attendance-report` and `/api/factory/monthly-salary-summary`. The last test-run log could not be retrieved because the 30-minute sandbox session expired before completion; its result is **unknown**, not a pass.
+
+TinyFish is already installed, as is the Vercel connector; no new connector installation is needed. TinyFish was previously used for authenticated desktop checks and currently does not expose reliable exact-width resizing. Full authenticated production route screenshots at 390px/768px are therefore still a separate gate from this source-build/synthetic-data verification.
+
+**Phase 4 certification:** Focused Vitest (8/8) and production build passed in earlier sessions; real Factory dark-mode routes have been checked at desktop size; 30/36 isolated full-React empty-state mobile/tablet/desktop tests now pass. A production overview mock fixture and the authenticated mobile/tablet visual matrix remain open. Avoid claiming production deployments were updated without checking the Render deployment revision.
+
+## Phase 4 isolated full-React responsive matrix completed — 36/36 (2026-11-10)
+
+The missing synthetic payloads for the Production Overview screen were completed in an isolated non-production Chromium test harness. These responses represent an empty, synthetic Factory company, not real ledger/payroll/stock data. The Production Overview screen then rendered its real React components and production metrics/sections in **all six target viewport/theme combinations**, with no top-level error boundary and no document-level horizontal overflow.
+
+The **complete six-route × three-viewport × two-theme matrix** was rerun against the built application. The result, including the exact viewport values and active HTML theme class for each case, was:
+
+```text
+MATRIX_EXIT:0
+SUMMARY {"total":36,"passed":36,"failures":[]}
+```
+
+A reusable, UTF-8 test harness was committed to `tests/e2e/factory-theme-responsive-phase4.mjs` (commit `043095ae4adc7d85a3d1ebffe4d01563a77034aa`). The harness intercepts `/api/*` with synthetic Admin, Factory company, one mock location, production report, and salary/attendance data; it **bypasses service workers** and verifies that the actual React Factory route renders without route error boundaries at 390/768/1440, in light/dark, with no document-level horizontal overflow. It captures individual Chromium screenshots in the configured scratch output directory, which is not committed as application source.
+
+After committing the harness, it was executed again from the checked-out `main` file and returned:
+
+```text
+FINAL_EXIT:0
+SUMMARY {"passed":36,"total":36,"screenshotDir":"/tmp/factory-phase4-final-36"}
+```
+
+The completed cases cover:
+- Location Inventory: 6/6
+- Invoicing: 6/6
+- Suppliers (Parties): 6/6
+- Production Overview: 6/6
+- Containers Hub: 6/6
+- Payroll/Workers: 6/6
+
+**Distinction:** This fully resolves the previous **isolated mock-browser Phase 4 responsive-matrix gap**. Mocked empty-state screenshots do not prove real production inventory tables, dialogs or long lists at the same viewport sizes.
+
+A separate final authenticated TinyFish attempt explicitly tested availability of 390px / 768px viewport emulation on the live application. The browser agent returned **`unsupported`**, noting no resize/device-emulation control and no means to assert `window.innerWidth` at those requested dimensions. Therefore exact-width **authenticated live production** screenshots are still unverified. Previous authenticated desktop smoke tests covered all six Factory dark-mode pages. Do **not** claim this tool certified the production mobile/tablet layout or that `main` was deployed to Render.
+
+### Phase 4 sign-off scope
+
+- [x] Unified Factory theme source and dark-background fixes on `main`
+- [x] Factory theme Vitest tests: 8/8 (prior executed isolated runs)
+- [x] Vite production build (prior successful isolated run; Vite client built again for final matrix)
+- [x] Full actual-React synthetic-browser responsive matrix: **36/36** passing
+- [x] Authenticated desktop dark-mode smoke checks of six Factory areas
+- [ ] Exact-width authenticated **production-data** page screenshots on 390px and 768px browsers — unsupported by current TinyFish browser
+- [ ] Confirm newest `main` theme fixes deployed to the intended Render production service; deployment remains separate from merging commits.
+
+**Outcome:** The user-requested remaining **isolated responsive testing** is complete. Retain a separate live-production mobile/tablet acceptance gate rather than creating false certification.

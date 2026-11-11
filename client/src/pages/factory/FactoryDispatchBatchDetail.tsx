@@ -1,6 +1,8 @@
 import { visibleTabInterval } from "@/lib/queryPolicies";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import { useState } from "react";
 import { useLocation, useRoute } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -54,6 +56,7 @@ import type { AuditScan, BatchDetail, InvoicePreview } from "./factorydispatchba
 import { BATCH_STATUS_CONFIG, fmt } from "./factorydispatchbatchdetail/utils";
 import { RideStatusBadge } from "./factorydispatchbatchdetail/components/RideStatusBadge";
 export default function FactoryDispatchBatchDetail() {
+  const { selectedCompany } = useCompany();
   const [, navigate] = useLocation();
   const [, params] = useRoute("/factory/dispatch-batches/:id");
   const batchId = params?.id ? parseInt(params.id) : null;
@@ -80,35 +83,35 @@ export default function FactoryDispatchBatchDetail() {
   });
 
   const { data, isLoading, isError, error, refetch } = useQuery<BatchDetail>({
-    queryKey: [`/api/factory/dispatch-batches/${batchId}`],
+    queryKey: companyQueryKey(`/api/factory/dispatch-batches/${batchId}`, selectedCompany?.id),
     queryFn: async () => {
       const res = await fetch(`/api/factory/dispatch-batches/${batchId}`, { credentials: "include" });
       if (!res.ok) throw new Error((await res.json()).message);
       return res.json();
     },
-    enabled: !!batchId,
+    enabled: Boolean(selectedCompany?.id) && !!batchId,
     refetchInterval: visibleTabInterval(15_000),
   });
 
   const { data: preview, isLoading: previewLoading } = useQuery<InvoicePreview>({
-    queryKey: [`/api/factory/dispatch-batches/${batchId}/invoice-preview`],
+    queryKey: companyQueryKey(`/api/factory/dispatch-batches/${batchId}/invoice-preview`, selectedCompany?.id),
     queryFn: async () => {
       const res = await fetch(`/api/factory/dispatch-batches/${batchId}/invoice-preview`, { credentials: "include" });
       if (!res.ok) throw new Error((await res.json()).message);
       return res.json();
     },
-    enabled: !!batchId && previewOpen,
+    enabled: Boolean(selectedCompany?.id) && !!batchId && previewOpen,
     staleTime: 15000,
   });
 
   const { data: auditScans = [] } = useQuery<AuditScan[]>({
-    queryKey: [`/api/factory/dispatch-batches/${batchId}/audit`],
+    queryKey: companyQueryKey(`/api/factory/dispatch-batches/${batchId}/audit`, selectedCompany?.id),
     queryFn: async () => {
       const res = await fetch(`/api/factory/dispatch-batches/${batchId}/audit`, { credentials: "include" });
       if (!res.ok) return [];
       return res.json();
     },
-    enabled: !!batchId && showBales,
+    enabled: Boolean(selectedCompany?.id) && !!batchId && showBales,
   });
 
   const addRideMutation = useMutation({

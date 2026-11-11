@@ -85,6 +85,15 @@ export async function findOrCreateLedgerAccount(
       );
   }
   if (!account) throw new Error(`Ledger account "${name}" could not be found or created`);
+  // Rent controls are balance-sheet accounts. Reusing a retired or retyped
+  // account would silently misstate real payable/prepaid balances. Refuse the
+  // posting; do not auto-restore, rename or change any historic ledger row.
+  const isRentControl = RENAMABLE_RENT_CONTROL_PREFIXES.some((group) => group.includes(codePrefix));
+  if (isRentControl && (!account.active || account.accountType !== accountType)) {
+    throw new Error(
+      `RENTAL_CONTROL_ACCOUNT_INVALID: ${name} (account #${account.id}) is inactive or not a ${accountType}`
+    );
+  }
   if (account.accountType !== accountType || (subType !== undefined && account.subType !== subType)) {
     logger.warn("[rental] existing ledger account has another type; used as it is (not retyped)", {
       companyId,
