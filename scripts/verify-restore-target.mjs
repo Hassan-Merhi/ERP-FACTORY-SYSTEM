@@ -12,6 +12,7 @@
  * provide production credentials as RESTORE_DATABASE_URL.
  */
 import process from "node:process";
+import { lookup } from "node:dns/promises";
 import pg from "pg";
 import { resolveDatabaseSsl } from "../server/lib/databaseSsl.mjs";
 
@@ -61,9 +62,18 @@ async function main() {
               WHERE n.nspname='public' AND c.relkind IN ('r','p','m','S','v','f')) AS object_count`);
     await client.query("ROLLBACK");
     if(info.rows[0]?.db!==target.db) throw new Error("Target connection opened unexpected database");
+    // Resolve aliases such as localhost vs 127.0.0.1 when database names
+    // match; identical physical targets must not slip through hostname spelling.
+    let sourceResolvedAddresses=[];
+    let targetResolvedAddresses=[];
+    if(source.db===target.db && source.port===target.port) {
+      sourceResolvedAddresses=(await lookup(source.hostname,{all:true})).map(x=>x.address);
+      targetResolvedAddresses=(await lookup(target.hostname,{all:true})).map(x=>x.address);
+    }
     const result=validateRestoreTarget({
       source,target,confirmation:process.env.RESTORE_TARGET_CONFIRMATION,
-      tableCount:Number(info.rows[0]?.object_count)
+      tableCount:Number(info.rows[0]?.object_count),
+      sourceResolvedAddresses,targetResolvedAddresses
     });
     console.log(JSON.stringify({ok:result.ok,targetDatabase:result.targetDatabase,publicObjectCount:result.tableCount,errors:result.errors},null,2));
     if(!result.ok) process.exitCode=1;
