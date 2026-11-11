@@ -23,7 +23,10 @@ An authorized user replies **directly to that approval message** with
 4. Confirms the snapshot is still current: all included orders still exist
    in the same company/destination and remain order-origin records, stock
    lines are unchanged, no revisions were added/removed/superseded and the
-   original approval group/phone remain configured.
+   original approval group/phone remain configured. The approved destination
+   WhatsApp recipient is frozen in the immutable batch-creation audit event;
+   any later change to the approval settings or destination mapping makes the
+   old request stale, even when the same phone/group is entered again.
 5. Records the **first valid DONE or DECLINE only**, as immutable
    `done_received` or `decline_received` evidence. Unique partial index
    `sto_wa_batch_decision_once_uk`, plus batch row locks, prevents duplicate
