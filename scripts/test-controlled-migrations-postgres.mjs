@@ -90,8 +90,16 @@ async function run() {
         INSERT INTO exchange_rates VALUES (2,1,'2026-01-01','USD','EUR');
       `);
 
+      // Read-only status on a fresh database must not create migration history.
+      let result=await executeRunner(dbUrl,"--status");
+      assert.equal(result.code,0,result.stderr);
+      assert.equal(JSON.parse(result.stdout).historyExists,false);
+      assert.equal(JSON.parse(result.stdout).pending.length,2);
+      assert.equal((await client.query("SELECT to_regclass('public.erp_controlled_migration_history') AS name")).rows[0].name,null);
+      console.log("PASS: fresh status is read-only and detects both pending migrations");
+
       // The first migration applies; the second must fail safely on duplicates.
-      let result=await executeRunner(dbUrl,"--apply");
+      result=await executeRunner(dbUrl,"--apply");
       assert.notEqual(result.code,0,"duplicate rates must abort the controlled migration");
       assert.match(result.stderr,/20261111_002_startup_warning_schema|duplicate key/i);
       const applied=await client.query("SELECT migration_name FROM erp_controlled_migration_history ORDER BY migration_name");
