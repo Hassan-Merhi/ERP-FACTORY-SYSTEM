@@ -190,11 +190,18 @@ export function auditWriteRouteCoverage(options = {}) {
   // for every registration it makes gives the same answer in one sweep.
   const registrationOwners = new Map();
   const REGISTRATION_PATTERN = /\.(?:get|post|put|patch|delete)\(\s*"([^"]+)"/g;
+  // One handler may be registered for several paths at once: app.post(["/a", "/b"], …).
+  // Every path in the array is owned by the registering file, exactly like a single path.
+  const ARRAY_REGISTRATION_PATTERN = /\.(?:get|post|put|patch|delete)\(\s*\[([^\]]+)\]/g;
+  const recordOwner = (routePath, file) => {
+    const existing = registrationOwners.get(routePath);
+    if (!existing) registrationOwners.set(routePath, [file]);
+    else if (!existing.includes(file)) existing.push(file);
+  };
   for (const [file, source] of sources) {
-    for (const match of source.matchAll(REGISTRATION_PATTERN)) {
-      const existing = registrationOwners.get(match[1]);
-      if (!existing) registrationOwners.set(match[1], [file]);
-      else if (!existing.includes(file)) existing.push(file);
+    for (const match of source.matchAll(REGISTRATION_PATTERN)) recordOwner(match[1], file);
+    for (const match of source.matchAll(ARRAY_REGISTRATION_PATTERN)) {
+      for (const literal of match[1].matchAll(/"([^"]+)"/g)) recordOwner(literal[1], file);
     }
   }
 
