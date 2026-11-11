@@ -160,11 +160,12 @@ export async function createStockTransferOrderApprovalDraft(
     }
 
     const recipient = await tx.execute(sql`
-      SELECT 1 FROM stock_transfer_order_destination_recipients
+      SELECT chat_id FROM stock_transfer_order_destination_recipients
        WHERE company_id=${companyId} AND destination_location_id=${destinationId} AND enabled=true
-       LIMIT 1
+       FOR SHARE
     `);
-    if (!recipient.rows.length) {
+    const recipientChatId = (recipient.rows[0] as { chat_id?: string } | undefined)?.chat_id;
+    if (!recipientChatId) {
       fail("STO_WA_DESTINATION_NOT_CONFIGURED", "The destination has no enabled WhatsApp recipient.");
     }
 
@@ -223,8 +224,9 @@ export async function createStockTransferOrderApprovalDraft(
       `);
     }
     await tx.execute(sql`
-      INSERT INTO stock_transfer_order_approval_events(company_id,batch_id,event_type)
-      VALUES (${companyId},${batchId},'draft_created')
+      INSERT INTO stock_transfer_order_approval_events(company_id,batch_id,event_type,details)
+      VALUES (${companyId},${batchId},'draft_created',
+              ${JSON.stringify({ destinationRecipientChatId: recipientChatId })}::jsonb)
     `);
     return {
       batchId,
@@ -253,14 +255,14 @@ export async function assertStockTransferOrderApprovalBatchCurrent(
   batchId: number
 ): Promise<StockTransferOrderApprovalSnapshot> {
   const headers = await tx.execute(sql`
-    SELECT id,batch_key,destination_location_id,status,approval_group_chat_id,authorized_phone_e164
+    SELECT id,batch_key,destination_location_id,status,approval_group_chat_id,authorized_phone_e164,created_at
       FROM stock_transfer_order_approval_batches
      WHERE company_id=${companyId} AND id=${batchId}
      FOR UPDATE
   `);
   const header = headers.rows[0] as {
     id: number; batch_key: string; destination_location_id: number; status: string;
-    approval_group_chat_id: string; authorized_phone_e164: string
+    approval_group_chat_id: string; authorized_phone_e164: string; created_at: Date
   } | undefined;
   if (!header || !["draft", "requested"].includes(header.status)) {
     fail("STO_WA_BATCH_INACTIVE", "This approval request is no longer pending.");
@@ -311,16 +313,43 @@ export async function assertStockTransferOrderApprovalBatchCurrent(
 
   // Changing or disabling the authorized phone/group invalidates old requests.
   const settings = await tx.execute(sql`
-    SELECT enabled,approval_group_chat_id,authorized_phone_e164
+    SELECT enabled,approval_group_chat_id,authorized_phone_e164,
+           (updated_at <= ${header.created_at}) AS unchanged
       FROM stock_transfer_order_approval_settings
      WHERE company_id=${companyId}
   `);
   const s = settings.rows[0] as {
-    enabled: boolean; approval_group_chat_id: string | null; authorized_phone_e164: string | null
+    enabled: boolean; approval_group_chat_id: string | null; authorized_phone_e164: string | null; unchanged: boolean
   } | undefined;
-  if (!s?.enabled || s.approval_group_chat_id !== header.approval_group_chat_id ||
+  if (!s?.enabled || !s.unchanged ||
+      s.approval_group_chat_id !== header.approval_group_chat_id ||
       s.authorized_phone_e164 !== header.authorized_phone_e164) {
     fail("STO_WA_AUTH_CHANGED", "Approval configuration changed. Send a new approval request.");
+  }
+
+  // Freeze the destination's second WhatsApp recipient in the immutable
+  // draft_created event, and invalidate the request on ANY later routing edit.
+  // Phase 5 must use this pinned recipient, never a silently changed setting.
+  const audit = await tx.execute(sql`
+    SELECT details->>'destinationRecipientChatId' AS destination_chat_id
+      FROM stock_transfer_order_approval_events
+     WHERE company_id=${companyId} AND batch_id=${batchId} AND event_type='draft_created'
+     ORDER BY id LIMIT 1
+  `);
+  const frozenChatId = (audit.rows[0] as { destination_chat_id: string | null } | undefined)?.destination_chat_id;
+  const destination = await tx.execute(sql`
+    SELECT chat_id,enabled,(updated_at <= ${header.created_at}) AS unchanged
+      FROM stock_transfer_order_destination_recipients
+     WHERE company_id=${companyId}
+       AND destination_location_id=${Number(header.destination_location_id)}
+     FOR SHARE
+  `);
+  const currentDestination = destination.rows[0] as {
+    chat_id: string; enabled: boolean; unchanged: boolean
+  } | undefined;
+  if (!frozenChatId || !currentDestination?.enabled || !currentDestination.unchanged ||
+      currentDestination.chat_id !== frozenChatId) {
+    fail("STO_WA_DESTINATION_CHANGED", "Destination WhatsApp recipient changed. Send a new approval request.");
   }
 
   return {
