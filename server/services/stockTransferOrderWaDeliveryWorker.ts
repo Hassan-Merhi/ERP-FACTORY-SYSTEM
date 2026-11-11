@@ -154,6 +154,16 @@ export async function quarantineExpiredStockTransferOrderWaClaims(): Promise<num
 
 async function recordSameChatAlias(item: DeliveryRow): Promise<boolean> {
   if (item.recipient_kind !== "destination") return false;
+  // An alias must still match the immutable destination selected when the
+  // original approval request was created. Never silently redirect an order.
+  const frozen = await pool.query<{ frozen_chat: string | null }>(
+    "SELECT ev.details->>'destinationRecipientChatId' AS frozen_chat " +
+    "FROM stock_transfer_order_approval_events ev " +
+    "WHERE ev.company_id=$1 AND ev.batch_id=$2 AND ev.event_type='draft_created' " +
+    "ORDER BY ev.id LIMIT 1",
+    [item.company_id,item.batch_id]
+  );
+  if (frozen.rows[0]?.frozen_chat !== item.recipient_chat_id) return true;
   const records = await pool.query<{
     recipient_chat_id: string; status: string; provider_message_id: string | null;
     workbook_sha256: string | null; filename: string | null; workbook_storage_key: string | null;
