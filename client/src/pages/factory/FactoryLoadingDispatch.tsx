@@ -23,6 +23,7 @@ import {
   Route,
   ShieldCheck,
   Truck,
+  Trash2,
   Weight,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -281,6 +282,8 @@ export default function FactoryLoadingDispatch() {
   const [filter, setFilter] = useState<TripFilter>("all");
   const [createOpen, setCreateOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteReason, setDeleteReason] = useState("");
   const [newTrip, setNewTrip] = useState<TripForm>(blankForm);
   const [editTrip, setEditTrip] = useState<TripForm>(blankForm);
 
@@ -317,6 +320,7 @@ export default function FactoryLoadingDispatch() {
 
   const role = (user?.currentRole ?? user?.role ?? "").toLowerCase();
   const canViewFinancialDashboard = ["admin","owner","developer"].includes(role);
+  const canDeleteDispatch = ["admin", "owner", "developer"].includes(role);
   const canEdit = !["View Only", "Create Only"].includes(user?.currentRole ?? user?.role ?? "");
   const canCreate = canEdit && activeOrderStatuses.has(orderQuery.data?.status ?? "");
 
@@ -379,6 +383,30 @@ export default function FactoryLoadingDispatch() {
     },
     onError: (error) =>
       toast({ title: "Could not save changes", description: getError(error), variant: "destructive" }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (reason: string) => {
+      if (!selectedUrl || !selectedTrip || selectedTrip.status !== "OPEN") {
+        throw new Error("Only an open dispatch can be deleted");
+      }
+      const response = await apiRequest("POST", selectedUrl + "/cancel", { reason });
+      return response.json() as Promise<{ success: boolean; removedScans: number }>;
+    },
+    onSuccess: (result) => {
+      setDeleteOpen(false);
+      setDeleteReason("");
+      void queryClient.invalidateQueries({ queryKey: companyQueryKey(listUrl, companyId) });
+      if (selectedUrl) void queryClient.invalidateQueries({ queryKey: companyQueryKey(selectedUrl, companyId) });
+      void queryClient.invalidateQueries({ queryKey: companyQueryKey(listUrl + "/comparison", companyId) });
+      toast({
+        title: "Dispatch deleted",
+        description: result.removedScans + " verification scans released. Audit history is preserved.",
+      });
+      navigate(tripPath(orderId));
+    },
+    onError: (error) =>
+      toast({ title: "Could not delete dispatch", description: getError(error), variant: "destructive" }),
   });
 
   const backToLoading = () => navigate("/factory/sales/loading/new?orderId=" + orderId);
@@ -642,6 +670,17 @@ export default function FactoryLoadingDispatch() {
                           {selectedTrip.createdByUsername || "Unknown"}
                         </p>
                       </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                      {canDeleteDispatch && selectedTrip.status === "OPEN" && (
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => { setDeleteReason(""); setDeleteOpen(true); }}
+                          data-testid="button-delete-dispatch"
+                        >
+                          <Trash2 className="mr-1.5 h-4 w-4" /> Delete Dispatch
+                        </Button>
+                      )}
                       {canEdit && selectedTrip.status === "OPEN" && (
                         <Button
                           size="sm"
@@ -655,6 +694,7 @@ export default function FactoryLoadingDispatch() {
                           <Edit3 className="mr-1.5 h-4 w-4" /> Edit details
                         </Button>
                       )}
+                      </div>
                     </div>
                     <div className="grid gap-3 sm:grid-cols-2">
                       {(
@@ -817,6 +857,43 @@ export default function FactoryLoadingDispatch() {
         </div>
       </div>
 
+      <Dialog
+        open={deleteOpen}
+        onOpenChange={(open) => { if (!deleteMutation.isPending) setDeleteOpen(open); }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete Dispatch #{selectedTrip?.dispatchNumber}?</DialogTitle>
+            <DialogDescription>
+              Delete this open dispatch from the active list, release all its verified scans and reservations,
+              and preserve the audit history. The main loading, stock, customer balance and journal vouchers
+              will not be changed. Previously closed or financially recorded trips cannot be deleted.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={deleteReason}
+            rows={3}
+            maxLength={500}
+            placeholder="Required reason for deleting this dispatch"
+            onChange={(event) => setDeleteReason(event.target.value)}
+            data-testid="input-delete-dispatch-reason"
+          />
+          <DialogFooter>
+            <Button variant="outline" disabled={deleteMutation.isPending} onClick={() => setDeleteOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={deleteMutation.isPending || deleteReason.trim().length < 3}
+              onClick={() => deleteMutation.mutate(deleteReason.trim())}
+              data-testid="button-confirm-delete-dispatch"
+            >
+              {deleteMutation.isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+              Delete Dispatch
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <TripEditor
         open={createOpen}
         onOpenChange={(open) => {
