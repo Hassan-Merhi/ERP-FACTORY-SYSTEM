@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useFactoryMhdView } from "@/hooks/use-factory-mhd-view";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import { useLocation, useSearch } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/PageHeader";
@@ -32,6 +34,7 @@ function fmtDate(val: string | null | undefined): string {
 }
 
 export default function FactoryStockBaleList() {
+  const { selectedCompany } = useCompany();
   const mhd = useFactoryMhdView();
   const [, navigate] = useLocation();
   const search = useSearch();
@@ -55,13 +58,13 @@ export default function FactoryStockBaleList() {
   const [weightEditBale, setWeightEditBale] = useState<WeightEditBale | null>(null);
 
   const { data: bales = [], isLoading } = useQuery<StockBale[]>({
-    queryKey: [`/api/factory/bale-stock-list`, articleCode, locationId],
+    queryKey: companyQueryKey("/api/factory/bale-stock-list", selectedCompany?.id, articleCode, locationId),
     queryFn: async () => {
       const res = await fetch(`/api/factory/bale-stock-list?${queryParams}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to load bales");
       return res.json();
     },
-    enabled: !!articleCode,
+    enabled: Boolean(selectedCompany?.id) && !!articleCode,
   });
 
   const available = bales.filter((b) => !b.blockedByOrder);

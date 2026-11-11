@@ -4,6 +4,8 @@ import {
   runWithAutoTransferCounterparties,
 } from "../../services/rental/autoTransferScope";
 import { getErrorMessage } from "../../lib/httpHandlers";
+import { HADI_HISTORICAL_ACCRUAL_GUARD, isHadiHistoricAccrualRepair, isHadiProtectedRentMonth } from "../../services/rental/hadiLinkedRentProtection";
+import { runRentalReconciliation } from "../../services/rental/rentalReconciliationService";
 import { logger } from "../../lib/logger";
 import {
   getCompanyId,
@@ -69,6 +71,12 @@ export function registerRentalAccrualConfigRoutes(
       const companyId = getCompanyId(req);
       if (!companyId) return res.status(400).json({ message: "No company selected" });
 
+      // HADI historical rent is already reconciled in its original vouchers.
+      // Do not create reversal/correction journals or reset any old month links.
+      if (isHadiHistoricAccrualRepair(companyId, module)) {
+        return res.status(409).json(HADI_HISTORICAL_ACCRUAL_GUARD);
+      }
+
       await ensureMonthlyForCompany(companyId, module);
 
       // 1. Find all active SHOP contract IDs for this company (module-aware)
@@ -84,6 +92,16 @@ export function registerRentalAccrualConfigRoutes(
             eq(propertyUnits.unitType, "SHOP")
           )
         );
+
+      // Do not post new corrective journals for months whose accrual links
+      // point to deleted vouchers. Such months may already be fully expensed.
+      const audit = await runRentalReconciliation(companyId, module, new Date().toISOString().slice(0, 10));
+      if (audit.mismatches.some((m) => m.type === "D")) {
+        return res.status(409).json({
+          code: "RENTAL_DANGLING_ACCRUAL_REQUIRES_REVIEW",
+          message: "Deleted accrual voucher links require a historical ledger review before re-accruing.",
+        });
+      }
 
       // 1b. Phantom-accrual repair (ALL months, historical + current).
       //
@@ -506,6 +524,11 @@ export function registerRentalAccrualConfigRoutes(
           )
         );
       if (!row) return res.status(404).json({ message: "Ledger row not found" });
+      // Historical January–November 2026 rent was repaired in the originals.
+      // New rental months may still use the normal reviewed reversal flow.
+      if (isHadiProtectedRentMonth(companyId, module, row.year, row.month)) {
+        return res.status(409).json(HADI_HISTORICAL_ACCRUAL_GUARD);
+      }
       if (!row.accrualVoucherId)
         return res.status(400).json({ message: "This month has no posted accrual to reverse" });
 

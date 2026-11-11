@@ -2,7 +2,7 @@ import "./FactoryLocationInventoryRedesign.css";
 import { Button } from "@/components/ui/button";
 import { SearchField } from "@/components/ui/search-field";
 import { Skeleton } from "@/components/ui/skeleton";
-import { MapPin, Search, FileSpreadsheet, Pencil, ChevronRight } from "lucide-react";
+import { MapPin, FileSpreadsheet, Pencil, ChevronRight } from "lucide-react";
 import { RenameLocationDialog } from "./factory-location-inventory/dialogs/RenameLocationDialog";
 import type { useFactoryLocationInventory } from "./FactoryLocationInventoryModel";
 

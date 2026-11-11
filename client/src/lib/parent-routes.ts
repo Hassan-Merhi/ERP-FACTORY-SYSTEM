@@ -155,7 +155,12 @@ export function getParentRoute(pathname: string): string | null {
   return null;
 }
 
-const FACTORY_TOP_LEVEL_ROUTES: ReadonlySet<string> = new Set(FACTORY_ACCESS_REGISTRY.map((page) => page.route));
+const FACTORY_TOP_LEVEL_ROUTES: ReadonlySet<string> = new Set([
+  ...FACTORY_ACCESS_REGISTRY.map((page) => page.route),
+  // The Others hub is a canonical top-level page (docs/factory-navigation-registry.md) that shares
+  // Overview's access grant, so the registry lists it as an alias rather than as its own route.
+  "/factory/others",
+]);
 
 /**
  * True for a top-level Factory destination (a registry page, any hub section or query state).

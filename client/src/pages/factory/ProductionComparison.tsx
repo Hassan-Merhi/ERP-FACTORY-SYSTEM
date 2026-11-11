@@ -8,7 +8,17 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {} from "@/components/ui/command";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { AlertTriangle, ChevronDown, Package, Scale, BarChart3, TrendingUp, Coins, Download, Layers3 } from "lucide-react";
+import {
+  AlertTriangle,
+  ChevronDown,
+  Package,
+  Scale,
+  BarChart3,
+  TrendingUp,
+  Coins,
+  Download,
+  Layers3,
+} from "lucide-react";
 import React from "react";
 import { cn } from "@/lib/utils";
 import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
@@ -333,7 +343,14 @@ export default function ProductionComparison() {
   /** CSV respects the selected supplier filter and cost-field permissions. */
   function exportSupplierCsv() {
     const header = ["Supplier", labelA + " KG", labelB + " KG", "KG Difference", "KG Change %"];
-    if (!costsHidden) header.push(labelA + " Cost USD", labelA + " Rate/KG", labelB + " Cost USD", labelB + " Rate/KG", "Cost Difference USD");
+    if (!costsHidden)
+      header.push(
+        labelA + " Cost USD",
+        labelA + " Rate/KG",
+        labelB + " Cost USD",
+        labelB + " Rate/KG",
+        "Cost Difference USD"
+      );
     const rows = supplierSummary.map((row) => {
       const values = [
         row.supplier,
@@ -366,13 +383,17 @@ export default function ProductionComparison() {
   return (
     <div className="flex min-w-0 flex-col gap-4 p-3 sm:p-4 lg:p-5" data-testid="production-comparison-dashboard">
       {/* Header + preset buttons */}
-      <div className="relative overflow-hidden rounded-2xl border border-blue-500/20 bg-gradient-to-r from-blue-50 via-slate-50 to-indigo-50 p-4 dark:from-[#101d31] dark:via-[#111b2c] dark:to-[#161c35] sm:p-5">
+      <div className="relative overflow-hidden rounded-2xl border border-blue-500/20 bg-gradient-to-r from-blue-50 via-slate-50 to-indigo-50 p-4 dark:from-[hsl(var(--factory-hue)_51%_13%)] dark:via-[hsl(var(--factory-hue)_44%_12%)] dark:to-[hsl(var(--factory-hue)_41%_15%)] sm:p-5">
         <div className="pointer-events-none absolute -right-10 -top-16 h-48 w-72 rounded-full bg-blue-400/10 blur-3xl" />
         <div className="relative flex min-w-0 items-center gap-3 [&_[data-testid=page-header]]:mb-0 [&_[data-testid=page-header]]:w-full [&_[data-testid=page-header]]:border-none [&_[data-testid=page-header]]:pb-0">
           <PageHeader
             title="Production Comparison"
             subtitle="Compare output, weight, cost and profit across selected periods"
-            icon={<span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-indigo-600 text-white shadow-md shadow-blue-500/20"><BarChart3 className="h-6 w-6" /></span>}
+            icon={
+              <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-indigo-600 text-white shadow-md shadow-blue-500/20">
+                <BarChart3 className="h-6 w-6" />
+              </span>
+            }
           >
             <ComparisonPresetPicker preset={preset} onChange={setPreset} />
           </PageHeader>
@@ -454,7 +475,13 @@ export default function ProductionComparison() {
               range={fmtDateRange(rangeA[0], rangeA[1])}
               bales={totalABales}
               kilograms={totalAKg}
-              products={filtered.map((r) => ({ articleCode: r.articleCode, productName: r.productName, categoryName: r.categoryName, qty: r.aQty, totalWeightKg: r.aKg }))}
+              products={filtered.map((r) => ({
+                articleCode: r.articleCode,
+                productName: r.productName,
+                categoryName: r.categoryName,
+                qty: r.aQty,
+                totalWeightKg: r.aKg,
+              }))}
               tone="blue"
             />
             <PeriodOverviewCard
@@ -462,7 +489,13 @@ export default function ProductionComparison() {
               range={fmtDateRange(rangeB[0], rangeB[1])}
               bales={totalBBales}
               kilograms={totalBKg}
-              products={filtered.map((r) => ({ articleCode: r.articleCode, productName: r.productName, categoryName: r.categoryName, qty: r.bQty, totalWeightKg: r.bKg }))}
+              products={filtered.map((r) => ({
+                articleCode: r.articleCode,
+                productName: r.productName,
+                categoryName: r.categoryName,
+                qty: r.bQty,
+                totalWeightKg: r.bKg,
+              }))}
               tone="violet"
             />
           </div>
@@ -471,20 +504,39 @@ export default function ProductionComparison() {
             <StatCard
               title="Bale Difference"
               value={(baleDiff > 0 ? "+" : "") + fmtNum(baleDiff)}
-              sub={labelA + " vs " + labelB + (totalBBales > 0 ? " · " + ((baleDiff / totalBBales) * 100).toFixed(1) + "%" : "")}
+              sub={
+                labelA +
+                " vs " +
+                labelB +
+                (totalBBales > 0 ? " · " + ((baleDiff / totalBBales) * 100).toFixed(1) + "%" : "")
+              }
               accent={baleDiff > 0 ? "green" : baleDiff < 0 ? "red" : "neutral"}
               tone="emerald"
               icon={<Package className="h-5 w-5" />}
-              valueClass={baleDiff > 0 ? "text-emerald-600 dark:text-emerald-300" : baleDiff < 0 ? "text-red-600 dark:text-red-300" : ""}
+              valueClass={
+                baleDiff > 0
+                  ? "text-emerald-600 dark:text-emerald-300"
+                  : baleDiff < 0
+                    ? "text-red-600 dark:text-red-300"
+                    : ""
+              }
             />
             <StatCard
               title="Kilogram Difference"
               value={(kgDiff > 0 ? "+" : "") + fmtKg(kgDiff) + " kg"}
-              sub={labelA + " vs " + labelB + (totalBKg > 0 ? " · " + ((kgDiff / totalBKg) * 100).toFixed(1) + "%" : "")}
+              sub={
+                labelA + " vs " + labelB + (totalBKg > 0 ? " · " + ((kgDiff / totalBKg) * 100).toFixed(1) + "%" : "")
+              }
               accent={kgDiff > 0 ? "green" : kgDiff < 0 ? "red" : "neutral"}
               tone="blue"
               icon={<Scale className="h-5 w-5" />}
-              valueClass={kgDiff > 0 ? "text-emerald-600 dark:text-emerald-300" : kgDiff < 0 ? "text-red-600 dark:text-red-300" : ""}
+              valueClass={
+                kgDiff > 0
+                  ? "text-emerald-600 dark:text-emerald-300"
+                  : kgDiff < 0
+                    ? "text-red-600 dark:text-red-300"
+                    : ""
+              }
             />
             {!costsHidden && (profitA != null || profitB != null) && (
               <>
@@ -493,8 +545,16 @@ export default function ProductionComparison() {
                   value={profitA != null ? fmtMoney(profitA) : "—"}
                   sub={fmtDateRange(rangeA[0], rangeA[1])}
                   tone="amber"
-                  accent={profitA != null ? profitA > 0 ? "green" : profitA < 0 ? "red" : "neutral" : "neutral"}
-                  valueClass={profitA != null ? profitA > 0 ? "text-emerald-600 dark:text-emerald-300" : profitA < 0 ? "text-red-600 dark:text-red-300" : "" : ""}
+                  accent={profitA != null ? (profitA > 0 ? "green" : profitA < 0 ? "red" : "neutral") : "neutral"}
+                  valueClass={
+                    profitA != null
+                      ? profitA > 0
+                        ? "text-emerald-600 dark:text-emerald-300"
+                        : profitA < 0
+                          ? "text-red-600 dark:text-red-300"
+                          : ""
+                      : ""
+                  }
                   icon={<Coins className="h-5 w-5" />}
                 />
                 <StatCard
@@ -502,17 +562,42 @@ export default function ProductionComparison() {
                   value={profitB != null ? fmtMoney(profitB) : "—"}
                   sub={fmtDateRange(rangeB[0], rangeB[1])}
                   tone="violet"
-                  accent={profitB != null ? profitB > 0 ? "green" : profitB < 0 ? "red" : "neutral" : "neutral"}
-                  valueClass={profitB != null ? profitB > 0 ? "text-emerald-600 dark:text-emerald-300" : profitB < 0 ? "text-red-600 dark:text-red-300" : "" : ""}
+                  accent={profitB != null ? (profitB > 0 ? "green" : profitB < 0 ? "red" : "neutral") : "neutral"}
+                  valueClass={
+                    profitB != null
+                      ? profitB > 0
+                        ? "text-emerald-600 dark:text-emerald-300"
+                        : profitB < 0
+                          ? "text-red-600 dark:text-red-300"
+                          : ""
+                      : ""
+                  }
                   icon={<Coins className="h-5 w-5" />}
                 />
                 <StatCard
                   title="Profit Difference"
                   value={profitDiff != null ? fmtMoney(profitDiff) : "—"}
-                  sub={labelA + " vs " + labelB + (profitDiff != null && profitB != null && profitB !== 0 ? " · " + ((profitDiff / Math.abs(profitB)) * 100).toFixed(1) + "%" : "")}
+                  sub={
+                    labelA +
+                    " vs " +
+                    labelB +
+                    (profitDiff != null && profitB != null && profitB !== 0
+                      ? " · " + ((profitDiff / Math.abs(profitB)) * 100).toFixed(1) + "%"
+                      : "")
+                  }
                   tone="teal"
-                  accent={profitDiff != null ? profitDiff > 0 ? "green" : profitDiff < 0 ? "red" : "neutral" : "neutral"}
-                  valueClass={profitDiff != null ? profitDiff > 0 ? "text-emerald-600 dark:text-emerald-300" : profitDiff < 0 ? "text-red-600 dark:text-red-300" : "" : ""}
+                  accent={
+                    profitDiff != null ? (profitDiff > 0 ? "green" : profitDiff < 0 ? "red" : "neutral") : "neutral"
+                  }
+                  valueClass={
+                    profitDiff != null
+                      ? profitDiff > 0
+                        ? "text-emerald-600 dark:text-emerald-300"
+                        : profitDiff < 0
+                          ? "text-red-600 dark:text-red-300"
+                          : ""
+                      : ""
+                  }
                   icon={<TrendingUp className="h-5 w-5" />}
                 />
               </>
@@ -520,15 +605,23 @@ export default function ProductionComparison() {
           </div>
           {/* Existing batch metrics remain available and keep the same filters. */}
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-border/60 bg-muted/25 px-4 py-3 text-xs text-muted-foreground">
-            <span className="inline-flex items-center gap-2 font-semibold text-foreground"><Layers3 className="h-4 w-4 text-blue-500" /> Mix batches</span>
-            <span><strong className="text-foreground">{labelA}:</strong> {fmtNum(totalABatches)} batches / {fmtKg(totalABatchAmount)} kg</span>
-            <span><strong className="text-foreground">{labelB}:</strong> {fmtNum(totalBBatches)} batches / {fmtKg(totalBBatchAmount)} kg</span>
+            <span className="inline-flex items-center gap-2 font-semibold text-foreground">
+              <Layers3 className="h-4 w-4 text-blue-500" /> Mix batches
+            </span>
+            <span>
+              <strong className="text-foreground">{labelA}:</strong> {fmtNum(totalABatches)} batches /{" "}
+              {fmtKg(totalABatchAmount)} kg
+            </span>
+            <span>
+              <strong className="text-foreground">{labelB}:</strong> {fmtNum(totalBBatches)} batches /{" "}
+              {fmtKg(totalBBatchAmount)} kg
+            </span>
             <span className="sm:ml-auto">Responds to production filters</span>
           </div>
 
           {/* ── Mix by Supplier ── */}
           {(supplierBreakdownA.length > 0 || supplierBreakdownB.length > 0) && (
-            <div className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm dark:bg-[#101a29]">
+            <div className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm dark:bg-[hsl(var(--factory-hue)_44%_11%)]">
               {/* Supplier comparison; all financial fields obey cost visibility. */}
               <div className="flex flex-col gap-3 border-b border-border/70 bg-gradient-to-r from-blue-500/[0.05] to-violet-500/[0.04] px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex min-w-0 items-center gap-3">
@@ -570,15 +663,35 @@ export default function ProductionComparison() {
 
               <Table mobileLayout="cards" className="text-xs" wrapperClassName="overflow-x-auto">
                 <TableHeader>
-                  <TableRow className="bg-slate-100/80 hover:bg-slate-100/80 dark:bg-[#18283e] dark:hover:bg-[#18283e]">
+                  <TableRow className="bg-slate-100/80 hover:bg-slate-100/80 dark:bg-[hsl(var(--factory-hue)_44%_17%)] dark:hover:bg-[hsl(var(--factory-hue)_44%_17%)]">
                     <TableHead className="w-9">#</TableHead>
                     <TableHead className="min-w-[150px] font-semibold">Supplier</TableHead>
-                    <TableHead className="min-w-[105px] text-right font-semibold text-blue-700 dark:text-sky-300">{labelA} · KG</TableHead>
-                    {!costsHidden && <TableHead className="text-right font-semibold text-blue-700 dark:text-sky-300">{labelA} · Cost</TableHead>}
-                    {!costsHidden && <TableHead className="text-right font-semibold text-blue-700 dark:text-sky-300">{labelA} · Rate/kg</TableHead>}
-                    <TableHead className="text-right font-semibold text-violet-700 dark:text-violet-300">{labelB} · KG</TableHead>
-                    {!costsHidden && <TableHead className="text-right font-semibold text-violet-700 dark:text-violet-300">{labelB} · Cost</TableHead>}
-                    {!costsHidden && <TableHead className="text-right font-semibold text-violet-700 dark:text-violet-300">{labelB} · Rate/kg</TableHead>}
+                    <TableHead className="min-w-[105px] text-right font-semibold text-blue-700 dark:text-sky-300">
+                      {labelA} · KG
+                    </TableHead>
+                    {!costsHidden && (
+                      <TableHead className="text-right font-semibold text-blue-700 dark:text-sky-300">
+                        {labelA} · Cost
+                      </TableHead>
+                    )}
+                    {!costsHidden && (
+                      <TableHead className="text-right font-semibold text-blue-700 dark:text-sky-300">
+                        {labelA} · Rate/kg
+                      </TableHead>
+                    )}
+                    <TableHead className="text-right font-semibold text-violet-700 dark:text-violet-300">
+                      {labelB} · KG
+                    </TableHead>
+                    {!costsHidden && (
+                      <TableHead className="text-right font-semibold text-violet-700 dark:text-violet-300">
+                        {labelB} · Cost
+                      </TableHead>
+                    )}
+                    {!costsHidden && (
+                      <TableHead className="text-right font-semibold text-violet-700 dark:text-violet-300">
+                        {labelB} · Rate/kg
+                      </TableHead>
+                    )}
                     <TableHead className="text-right font-semibold">KG Diff</TableHead>
                     {!costsHidden && <TableHead className="text-right font-semibold">Cost Diff</TableHead>}
                     <TableHead className="text-right font-semibold">% Change</TableHead>
@@ -591,25 +704,58 @@ export default function ProductionComparison() {
                     const cd = row.aCost - row.bCost;
                     const percent = row.bKg > 0 ? (kd / row.bKg) * 100 : null;
                     return (
-                      <TableRow key={row.supplier} className="border-border/40 transition-colors hover:bg-blue-500/[0.04] dark:hover:bg-blue-500/[0.08]">
+                      <TableRow
+                        key={row.supplier}
+                        className="border-border/40 transition-colors hover:bg-blue-500/[0.04] dark:hover:bg-blue-500/[0.08]"
+                      >
                         <TableCell className="text-muted-foreground">{index + 1}</TableCell>
                         <TableCell className="font-semibold">{row.supplier}</TableCell>
                         <TableCell className="text-right font-semibold tabular-nums">{fmtKg(row.aKg)} kg</TableCell>
-                        {!costsHidden && <TableCell className="text-right tabular-nums text-muted-foreground">{fmtUsd(row.aCost)}</TableCell>}
-                        {!costsHidden && <TableCell className="text-right tabular-nums text-muted-foreground">{row.aKg > 0 ? "$" + (row.aCost / row.aKg).toFixed(4) : "—"}</TableCell>}
+                        {!costsHidden && (
+                          <TableCell className="text-right tabular-nums text-muted-foreground">
+                            {fmtUsd(row.aCost)}
+                          </TableCell>
+                        )}
+                        {!costsHidden && (
+                          <TableCell className="text-right tabular-nums text-muted-foreground">
+                            {row.aKg > 0 ? "$" + (row.aCost / row.aKg).toFixed(4) : "—"}
+                          </TableCell>
+                        )}
                         <TableCell className="text-right tabular-nums">{fmtKg(row.bKg)} kg</TableCell>
-                        {!costsHidden && <TableCell className="text-right tabular-nums text-muted-foreground">{fmtUsd(row.bCost)}</TableCell>}
-                        {!costsHidden && <TableCell className="text-right tabular-nums text-muted-foreground">{row.bKg > 0 ? "$" + (row.bCost / row.bKg).toFixed(4) : "—"}</TableCell>}
+                        {!costsHidden && (
+                          <TableCell className="text-right tabular-nums text-muted-foreground">
+                            {fmtUsd(row.bCost)}
+                          </TableCell>
+                        )}
+                        {!costsHidden && (
+                          <TableCell className="text-right tabular-nums text-muted-foreground">
+                            {row.bKg > 0 ? "$" + (row.bCost / row.bKg).toFixed(4) : "—"}
+                          </TableCell>
+                        )}
                         <TableCell className="text-right">
                           <DiffCell value={kd} fmt={(n) => (n > 0 ? "+" : "") + fmtKg(n) + " kg"} />
                         </TableCell>
-                        {!costsHidden && <TableCell className="text-right"><DiffCell value={cd} fmt={(n) => (n > 0 ? "+" : "") + fmtUsd(Math.abs(n))} /></TableCell>}
+                        {!costsHidden && (
+                          <TableCell className="text-right">
+                            <DiffCell value={cd} fmt={(n) => (n > 0 ? "+" : "") + fmtUsd(Math.abs(n))} />
+                          </TableCell>
+                        )}
                         <TableCell className="text-right">
                           {percent == null ? (
                             <span className="text-muted-foreground">{row.aKg > 0 ? "New" : "—"}</span>
                           ) : (
-                            <span className={cn("font-semibold tabular-nums", percent > 0 ? "text-emerald-600 dark:text-emerald-300" : percent < 0 ? "text-red-500 dark:text-red-300" : "text-muted-foreground")}>
-                              {percent > 0 ? "+" : ""}{percent.toFixed(1)}%
+                            <span
+                              className={cn(
+                                "font-semibold tabular-nums",
+                                percent > 0
+                                  ? "text-emerald-600 dark:text-emerald-300"
+                                  : percent < 0
+                                    ? "text-red-500 dark:text-red-300"
+                                    : "text-muted-foreground"
+                              )}
+                            >
+                              {percent > 0 ? "+" : ""}
+                              {percent.toFixed(1)}%
                             </span>
                           )}
                         </TableCell>
@@ -621,7 +767,10 @@ export default function ProductionComparison() {
                   })}
                   {supplierSummary.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={costsHidden ? 7 : 12} className="py-8 text-center text-sm text-muted-foreground">
+                      <TableCell
+                        colSpan={costsHidden ? 7 : 12}
+                        className="py-8 text-center text-sm text-muted-foreground"
+                      >
                         {hasSupplierFilter ? "No data for selected suppliers." : "No mix batch data."}
                       </TableCell>
                     </TableRow>
@@ -631,19 +780,41 @@ export default function ProductionComparison() {
                   <TableFooter>
                     <TableRow className="border-t-2 border-blue-500/30 bg-blue-600/10 font-bold hover:bg-blue-600/15 dark:bg-blue-600/20 dark:hover:bg-blue-600/25">
                       <TableCell className="text-blue-700 dark:text-blue-100">∑</TableCell>
-                      <TableCell className="whitespace-nowrap font-bold text-blue-700 dark:text-blue-100">Total ({supplierSummary.length} suppliers)</TableCell>
+                      <TableCell className="whitespace-nowrap font-bold text-blue-700 dark:text-blue-100">
+                        Total ({supplierSummary.length} suppliers)
+                      </TableCell>
                       <TableCell className="text-right font-bold tabular-nums">{fmtKg(totalSupAKg)} kg</TableCell>
-                      {!costsHidden && <TableCell className="text-right font-bold tabular-nums">{fmtUsd(totalSupACost)}</TableCell>}
-                      {!costsHidden && <TableCell className="text-right font-bold tabular-nums">{totalSupAKg > 0 ? "$" + (totalSupACost / totalSupAKg).toFixed(4) : "—"}</TableCell>}
+                      {!costsHidden && (
+                        <TableCell className="text-right font-bold tabular-nums">{fmtUsd(totalSupACost)}</TableCell>
+                      )}
+                      {!costsHidden && (
+                        <TableCell className="text-right font-bold tabular-nums">
+                          {totalSupAKg > 0 ? "$" + (totalSupACost / totalSupAKg).toFixed(4) : "—"}
+                        </TableCell>
+                      )}
                       <TableCell className="text-right font-bold tabular-nums">{fmtKg(totalSupBKg)} kg</TableCell>
-                      {!costsHidden && <TableCell className="text-right font-bold tabular-nums">{fmtUsd(totalSupBCost)}</TableCell>}
-                      {!costsHidden && <TableCell className="text-right font-bold tabular-nums">{totalSupBKg > 0 ? "$" + (totalSupBCost / totalSupBKg).toFixed(4) : "—"}</TableCell>}
-                      <TableCell className="text-right font-bold"><DiffCell value={totalSupKgDiff} fmt={(n) => (n > 0 ? "+" : "") + fmtKg(n) + " kg"} /></TableCell>
-                      {!costsHidden && <TableCell className="text-right font-bold"><DiffCell value={totalSupCostDiff} fmt={(n) => (n > 0 ? "+" : "") + fmtUsd(Math.abs(n))} /></TableCell>}
+                      {!costsHidden && (
+                        <TableCell className="text-right font-bold tabular-nums">{fmtUsd(totalSupBCost)}</TableCell>
+                      )}
+                      {!costsHidden && (
+                        <TableCell className="text-right font-bold tabular-nums">
+                          {totalSupBKg > 0 ? "$" + (totalSupBCost / totalSupBKg).toFixed(4) : "—"}
+                        </TableCell>
+                      )}
+                      <TableCell className="text-right font-bold">
+                        <DiffCell value={totalSupKgDiff} fmt={(n) => (n > 0 ? "+" : "") + fmtKg(n) + " kg"} />
+                      </TableCell>
+                      {!costsHidden && (
+                        <TableCell className="text-right font-bold">
+                          <DiffCell value={totalSupCostDiff} fmt={(n) => (n > 0 ? "+" : "") + fmtUsd(Math.abs(n))} />
+                        </TableCell>
+                      )}
                       <TableCell className="text-right font-bold tabular-nums">
                         {totalSupBKg > 0 ? ((totalSupKgDiff / totalSupBKg) * 100).toFixed(1) + "%" : "—"}
                       </TableCell>
-                      <TableCell className="text-right"><SupplierDailyTrend rows={supplierBreakdownA} increased={totalSupKgDiff >= 0} /></TableCell>
+                      <TableCell className="text-right">
+                        <SupplierDailyTrend rows={supplierBreakdownA} increased={totalSupKgDiff >= 0} />
+                      </TableCell>
                     </TableRow>
                   </TableFooter>
                 )}
@@ -695,21 +866,21 @@ export default function ProductionComparison() {
 
           {/* ── Bale filters ── */}
           <div className="rounded-2xl border border-border/70 bg-card p-3 shadow-sm sm:p-4">
-          <BaleComparisonFilters
-            categories={categories}
-            grades={grades}
-            workerOptions={workerOptions}
-            filterCategories={filterCategories}
-            setFilterCategories={setFilterCategories}
-            filterGrades={filterGrades}
-            setFilterGrades={setFilterGrades}
-            filterWorkers={filterWorkers}
-            setFilterWorkers={setFilterWorkers}
-            filterProduct={filterProduct}
-            setFilterProduct={setFilterProduct}
-            shownCount={filtered.length}
-            totalCount={mergedAll.length}
-          />
+            <BaleComparisonFilters
+              categories={categories}
+              grades={grades}
+              workerOptions={workerOptions}
+              filterCategories={filterCategories}
+              setFilterCategories={setFilterCategories}
+              filterGrades={filterGrades}
+              setFilterGrades={setFilterGrades}
+              filterWorkers={filterWorkers}
+              setFilterWorkers={setFilterWorkers}
+              filterProduct={filterProduct}
+              setFilterProduct={setFilterProduct}
+              shownCount={filtered.length}
+              totalCount={mergedAll.length}
+            />
           </div>
 
           {/* ── Bale comparison table ── */}
@@ -736,7 +907,12 @@ export default function ProductionComparison() {
                   </Button>
                 </div>
               )}
-              <div className={cn("overflow-hidden", !comparisonCards.cards && "rounded-2xl border border-border/70 bg-card shadow-sm")}>
+              <div
+                className={cn(
+                  "overflow-hidden",
+                  !comparisonCards.cards && "rounded-2xl border border-border/70 bg-card shadow-sm"
+                )}
+              >
                 <div className="overflow-x-auto">
                   <table
                     className="w-full border-collapse text-sm"
@@ -745,7 +921,7 @@ export default function ProductionComparison() {
                   >
                     <thead>
                       {/* Group row */}
-                      <tr className="border-b border-border bg-blue-500/[0.055] dark:bg-[#15263b]">
+                      <tr className="border-b border-border bg-blue-500/[0.055] dark:bg-[hsl(var(--factory-hue)_48%_16%)]">
                         <th
                           rowSpan={2}
                           className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-muted-foreground min-w-[200px] border-r border-border/50 align-bottom"
@@ -790,7 +966,7 @@ export default function ProductionComparison() {
                         </th>
                       </tr>
                       {/* Sub-header row */}
-                      <tr className="border-b border-border bg-violet-500/[0.035] dark:bg-[#142238]">
+                      <tr className="border-b border-border bg-violet-500/[0.035] dark:bg-[hsl(var(--factory-hue)_47%_15%)]">
                         <th className="px-4 py-2 text-right text-xs font-semibold text-foreground whitespace-nowrap">
                           {labelA}
                         </th>

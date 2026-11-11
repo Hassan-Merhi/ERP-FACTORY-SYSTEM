@@ -18,13 +18,13 @@ describe("currency display", () => {
   it("uses the symbol each currency is written with", () => {
     expect(currencySymbol("USD")).toBe("$");
     expect(currencySymbol("EUR")).toBe("€");
-    expect(currencySymbol("CFA")).toBe("FC ");
-    expect(currencySymbol("XOF")).toBe("FC ");
+    expect(currencySymbol("CFA")).toBe("CFA ");
+    expect(currencySymbol("XOF")).toBe("CFA ");
   });
 
   it("shows CFA without decimals and dollars with them", () => {
     // CFA has no sub-unit, so decimals there are noise rather than precision.
-    expect(fmtMoneyCurrency(1234.56, "CFA")).toBe("FC 1,235");
+    expect(fmtMoneyCurrency(1234.56, "CFA")).toBe("CFA 1,235");
     expect(fmtMoneyCurrency(1234.56, "USD")).toBe("$1,234.56");
   });
 

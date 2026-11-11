@@ -30,7 +30,9 @@ import {
 } from "./agents/agentStatementMath";
 import { useAgentLedger } from "./agents/useAgentLedger";
 import { AgentListPanel } from "./agents/AgentListPanel";
-const AgentStatementPanel = lazy(() => import("./agents/AgentStatementPanel").then((m) => ({ default: m.AgentStatementPanel })));
+const AgentStatementPanel = lazy(() =>
+  import("./agents/AgentStatementPanel").then((m) => ({ default: m.AgentStatementPanel }))
+);
 const AddAgentDialog = lazy(() => import("./agents/AddAgentDialog").then((m) => ({ default: m.AddAgentDialog })));
 
 export default function Agents() {
@@ -151,65 +153,85 @@ export default function Agents() {
   };
 
   const listPanel = (
-    <div className={isPhone ? "flex w-full min-w-0 flex-col gap-2" : "flex w-80 shrink-0 min-w-0 flex-col gap-2 max-md:w-full"}>
-    {(accountsError || agentsError) && (
-      <div role="alert" className="rounded-xl border border-destructive/40 bg-destructive/5 p-3 text-sm">
-        Unable to load some agent accounts. Check the connection and retry.
-        <button type="button" className="ml-2 font-semibold underline" onClick={() => { if (accountsError) void retryAccounts(); if (agentsError) void retryAgents(); }}>Retry</button>
-      </div>
-    )}
-    <AgentListPanel
-      agentAccounts={agentAccounts}
-      hasAnyAgents={agentIds.size > 0}
-      loading={agentsLoading || accountsLoading}
-      search={agentSearch}
-      onSearchChange={setAgentSearch}
-      selectedAccountId={selectedAccount?.id ?? null}
-      onSelect={setSelectedAccount}
-      onRemove={(accountId) => removeMutation.mutate(accountId)}
-      formatAmount={formatAmount}
-      onOpenAddDialog={() => {
-        setAddSearch("");
-        setAddDialogOpen(true);
-      }}
-      phone={isPhone}
-    />
+    <div
+      className={
+        isPhone ? "flex w-full min-w-0 flex-col gap-2" : "flex w-80 shrink-0 min-w-0 flex-col gap-2 max-md:w-full"
+      }
+      data-testid="agent-list-column"
+    >
+      {(accountsError || agentsError) && (
+        <div role="alert" className="rounded-xl border border-destructive/40 bg-destructive/5 p-3 text-sm">
+          Unable to load some agent accounts. Check the connection and retry.
+          <button
+            type="button"
+            className="ml-2 font-semibold underline"
+            onClick={() => {
+              if (accountsError) void retryAccounts();
+              if (agentsError) void retryAgents();
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      )}
+      <AgentListPanel
+        agentAccounts={agentAccounts}
+        hasAnyAgents={agentIds.size > 0}
+        loading={agentsLoading || accountsLoading}
+        search={agentSearch}
+        onSearchChange={setAgentSearch}
+        selectedAccountId={selectedAccount?.id ?? null}
+        onSelect={setSelectedAccount}
+        onRemove={(accountId) => removeMutation.mutate(accountId)}
+        formatAmount={formatAmount}
+        onOpenAddDialog={() => {
+          setAddSearch("");
+          setAddDialogOpen(true);
+        }}
+        phone={isPhone}
+      />
     </div>
   );
   const statementPanel = selectedAccount ? (
-    <Suspense fallback={<div className="rounded-2xl border border-border bg-card p-6 text-sm text-muted-foreground" role="status">Opening agent statement…</div>}>
-    <AgentStatementPanel
-      companyName={selectedCompany?.name}
-      selectedAccount={selectedAccount}
-      fxWallet={selectedFxWallet}
-      periodFilter={periodFilter}
-      onPeriodChange={handlePeriodChange}
-      transactionsLoading={transactionsLoading}
-      vouchersWithBalance={vouchersWithBalance}
-      openingBalance={openingBalance}
-      periodDebit={periodDebit}
-      periodCredit={periodCredit}
-      closingBalance={closingBalance}
-      onExportExcel={handleExportExcel}
-      onClearAccount={() => setSelectedAccount(null)}
-      formatAmount={formatAmount}
-      formatDisplayDate={formatDisplayDate}
-      phone={isPhone}
-    />
+    <Suspense
+      fallback={
+        <div className="rounded-2xl border border-border bg-card p-6 text-sm text-muted-foreground" role="status">
+          Opening agent statement…
+        </div>
+      }
+    >
+      <AgentStatementPanel
+        companyName={selectedCompany?.name}
+        selectedAccount={selectedAccount}
+        fxWallet={selectedFxWallet}
+        periodFilter={periodFilter}
+        onPeriodChange={handlePeriodChange}
+        transactionsLoading={transactionsLoading}
+        vouchersWithBalance={vouchersWithBalance}
+        openingBalance={openingBalance}
+        periodDebit={periodDebit}
+        periodCredit={periodCredit}
+        closingBalance={closingBalance}
+        onExportExcel={handleExportExcel}
+        onClearAccount={() => setSelectedAccount(null)}
+        formatAmount={formatAmount}
+        formatDisplayDate={formatDisplayDate}
+        phone={isPhone}
+      />
     </Suspense>
   ) : null;
   const addDialog = addDialogOpen ? (
     <Suspense fallback={null}>
-    <AddAgentDialog
-      open={addDialogOpen}
-      onOpenChange={setAddDialogOpen}
-      search={addSearch}
-      onSearchChange={setAddSearch}
-      availableAccounts={availableAccounts}
-      loading={accountsLoading}
-      formatAmount={formatAmount}
-      onAdd={handleAddAgent}
-    />
+      <AddAgentDialog
+        open={addDialogOpen}
+        onOpenChange={setAddDialogOpen}
+        search={addSearch}
+        onSearchChange={setAddSearch}
+        availableAccounts={availableAccounts}
+        loading={accountsLoading}
+        formatAmount={formatAmount}
+        onAdd={handleAddAgent}
+      />
     </Suspense>
   ) : null;
 

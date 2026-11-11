@@ -281,7 +281,10 @@ async function readState(page, route, workspace) {
       const anchor = document.querySelector('[data-testid="button-add-agent"]');
       // Phones render the agent list as its own full-width screen (agents-phone-layout).
       const pane = anchor?.closest('.w-72, [data-testid="agent-list-panel"]');
-      const layout = pane?.parentElement;
+      // The pane sits in its own column (load-error notice above the list);
+      // the page-level row/stack that this smoke certifies is that column's parent.
+      const column = pane?.closest('[data-testid="agent-list-column"]');
+      const layout = (column ?? pane)?.parentElement;
       state.anchorVisible = Boolean(visibleRect(anchor));
       state.paneWidth = visibleRect(pane)?.width ?? null;
       state.flexDirection = layout instanceof HTMLElement ? window.getComputedStyle(layout).flexDirection : null;

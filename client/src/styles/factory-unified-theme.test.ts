@@ -10,11 +10,11 @@ const projectRoot = process.cwd();
 const factoryStyles = join(projectRoot, "client/src/pages/factory");
 const factoryTheme = join(projectRoot, "client/src/styles/factory-unified-theme.css");
 
-function cssFiles(dir: string): string[] {
+function sourceFiles(dir: string, extension: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const path = join(dir, entry.name);
-    if (entry.isDirectory()) return cssFiles(path);
-    return entry.isFile() && entry.name.endsWith(".css") ? [path] : [];
+    if (entry.isDirectory()) return sourceFiles(path, extension);
+    return entry.isFile() && entry.name.endsWith(extension) ? [path] : [];
   });
 }
 
@@ -54,7 +54,7 @@ describe("Factory unified blue theme", () => {
       factoryTheme,
       join(projectRoot, "client/src/factory-mobile-operations.css"),
       join(projectRoot, "client/src/factory-mobile-touch-targets.css"),
-      ...cssFiles(factoryStyles),
+      ...sourceFiles(factoryStyles, ".css"),
     ];
     const colorPattern = /#[a-fA-F0-9]{6}\b|rgba?\(\s*\d+\s*,\s*\d+\s*,\s*\d+(?:\s*,\s*\d*\.?\d+)?\s*\)/g;
     const violations = candidates.flatMap((path) =>
@@ -64,5 +64,58 @@ describe("Factory unified blue theme", () => {
         .map((color) => relative(projectRoot, path) + ": " + color)
     );
     expect(violations).toEqual([]);
+  });
+  it("has no fixed blue or violet card backgrounds, borders or gradients in Factory pages", () => {
+    const colorPattern = /(?:[\w-]+:)*(?:bg|border|from|via|to)-\[(#[a-fA-F0-9]{6})\]/g;
+    const violations = sourceFiles(factoryStyles, ".tsx").flatMap((path) =>
+      [...readFileSync(path, "utf8").matchAll(colorPattern)]
+        .map((match) => match[1])
+        // Attendance absence/leave uses a distinct rose status color.
+        .filter((color) => fixedBrandColor(color) && color !== "#392033")
+        .map((color) => relative(projectRoot, path) + ": " + color)
+    );
+    expect(violations).toEqual([]);
+    for (const page of [
+      "CustomerLoadingSummaryCards.tsx",
+      "FactoryInvoicing.tsx",
+      "FactoryInsurance.tsx",
+      "FactoryWorkerAttendanceReport.tsx",
+    ]) {
+      expect(readFileSync(join(factoryStyles, page), "utf8")).toContain("hsl(var(--factory-hue)_");
+    }
+  });
+
+  it("derives decorative shadows and Container Loading artwork from the Factory hue", () => {
+    const rgbPattern = /rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(?:0?\.\d+|1)\s*\)/g;
+    const violations = sourceFiles(factoryStyles, ".tsx").flatMap((path) =>
+      readFileSync(path, "utf8")
+        .split("\n")
+        .filter((line) => line.includes("shadow-[") || line.includes("bg-["))
+        .flatMap((line) =>
+          [...line.matchAll(rgbPattern)]
+            .filter((match) => {
+              const rgb = match.slice(1, 4).map(Number);
+              // Exclude neutral slate shadows and distinct semantic colors.
+              return fixedBrandColor(match[0]) && Math.max(...rgb) - Math.min(...rgb) > 55;
+            })
+            .map((match) => relative(projectRoot, path) + ": " + match[0])
+        )
+    );
+    expect(violations).toEqual([]);
+
+    const container = readFileSync(join(factoryStyles, "FactoryContainerLoadingScan.tsx"), "utf8");
+    const financial = readFileSync(join(factoryStyles, "FactoryFinancialSnapshot.tsx"), "utf8");
+    const pressing = readFileSync(join(factoryStyles, "PressingHistoryReport.tsx"), "utf8");
+    const theme = readFileSync(factoryTheme, "utf8");
+    const targets = readFileSync(join(factoryStyles, "productiontargets/productionTargetsPremium.css"), "utf8");
+
+    expect(container).toContain("factory-container-stripes");
+    expect(container).not.toMatch(/#[\da-fA-F]{6}\b/);
+    expect(financial).toContain('color="var(--factory-color-500)"');
+    expect(pressing).toContain("shadow-[0_12px_30px_-22px_hsl(var(--factory-hue)_");
+    expect(theme).toContain(':root[data-app-shell="factory"] .factory-container-stripes');
+    expect(theme).toMatch(/background-image:\s*repeating-linear-gradient\(\s*90deg,\s*hsl\(var\(--factory-hue\)/);
+    expect(targets).toContain("color: var(--factory-color-400);");
+    expect(targets).not.toContain("#ff68b0");
   });
 });

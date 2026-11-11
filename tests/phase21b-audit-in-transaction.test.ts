@@ -421,9 +421,10 @@ describe("AT1b factory writers", () => {
   });
 
   it("mix batch delete: the delete and its audit commit together", async () => {
+    // Only an open mix nothing has drawn from can be deleted; completed ones are refused.
     const mixId = (
       await pool.query(
-        `INSERT INTO factory_mix_batches (company_id, batch_code, cost_per_kg, status) VALUES ($1, $2, '0', 'COMPLETED')
+        `INSERT INTO factory_mix_batches (company_id, batch_code, cost_per_kg, status) VALUES ($1, $2, '0', 'OPEN')
          RETURNING id`,
         [factory.companyId, nextName("mix")]
       )

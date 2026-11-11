@@ -294,3 +294,14 @@
 :root[data-app-shell="factory"] .production-targets-modern .pt-staff-table .pt-worker-row:hover {
   background: hsl(var(--factory-hue) 43% 24%);
 }
+
+/* Decorative Container Loading artwork follows the Factory hue, not fixed blue pixels. */
+:root[data-app-shell="factory"] .factory-container-stripes {
+  background-image: repeating-linear-gradient(
+    90deg,
+    hsl(var(--factory-hue) 82% 29%) 0px,
+    hsl(var(--factory-hue) 74% 42%) 9px,
+    hsl(var(--factory-hue) 75% 33%) 14px,
+    hsl(var(--factory-hue) 85% 23%) 17px
+  );
+}

@@ -13,6 +13,8 @@ import { buildAuditChanges } from "../services/audit";
 
 import { readExcel, sheetToJson } from "../excelHelper";
 import { parsePoImportSheetRows } from "./import/poImportExcelParser";
+import { parseFactoryTripPoIdentity } from "./import/factoryDispatchPoImportGuard";
+import { FactoryTripPoReceiptError, inspectFactoryTripPoReceipt } from "./import/factoryDispatchPoImportReceipt";
 import { toMoney } from "../lib/money";
 
 export const FIXED_ASSET_HAS_OPENING_CODE = "FIXED_ASSET_HAS_OPENING" as const;
@@ -247,6 +249,37 @@ export function registerBankAssetRoutes(app: Express) {
       }
       const preview = parsed.preview;
 
+      // Exact Factory dispatch PO identities are checked at the very first
+      // upload stage. Changing file names or one worksheet value never
+      // sidesteps a previously recorded truck import receipt.
+      for (const candidate of preview) {
+        const origin = parseFactoryTripPoIdentity(
+          candidate.containerNumber, candidate.items.map(i => i.poNumber)
+        );
+        if (origin.errors.length) {
+          return res.status(400).json({ code: "FD_PO_IDENTITY_INVALID", message: origin.errors.join(" ") });
+        }
+        if (origin.identity) {
+          if (preview.length !== 1) {
+            return res.status(400).json({
+              code: "FD_PO_ONE_TRIP_PER_FILE",
+              message: "One Factory dispatch truck must be imported in its own ERP PO Excel file.",
+            });
+          }
+          const existing = await inspectFactoryTripPoReceipt(
+            req.session.currentCompanyId!, origin.identity
+          );
+          if (existing) {
+            return res.status(409).json({
+              code: "FD_PO_DUPLICATE",
+              message: existing.status === "IMPORTED"
+                ? "This Factory dispatch truck was already imported into ERP; a renamed Excel file is not a new purchase."
+                : "A previous Factory dispatch PO import needs reconciliation before this truck can be retried.",
+            });
+          }
+        }
+      }
+
       res.json({
         fileHash,
         fileName: req.file.originalname,
@@ -254,6 +287,9 @@ export function registerBankAssetRoutes(app: Express) {
         preview,
       });
     } catch (error: unknown) {
+      if (error instanceof FactoryTripPoReceiptError) {
+        return res.status(error.status).json({ code: error.code, message: error.message });
+      }
       logger.error("PO Import parse error:", { error: error });
       res.status(500).json({ message: getErrorMessage(error) });
     }

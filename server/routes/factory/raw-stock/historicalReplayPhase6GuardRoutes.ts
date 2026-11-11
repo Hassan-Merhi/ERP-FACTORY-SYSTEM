@@ -227,6 +227,14 @@ export function registerHistoricalReplayPhase6GuardRoutes(app: Express): void {
     if (!companyId) return res.status(400).json({ message: "No company selected" });
     const adjustmentId = Number(req.params.id);
     const valuationBasis = String(req.body?.valuationBasis || "").toUpperCase();
+    const basisEvidence = typeof req.body?.basisEvidence === "string" ? req.body.basisEvidence.trim() : "";
+    if (basisEvidence.length < 20 || basisEvidence.length > 1000) {
+      return res.status(400).json({
+        code: "HISTORICAL_ADJUSTMENT_EVIDENCE_REQUIRED",
+        message:
+          "Explain the documentary evidence and original valuation basis (20–1000 characters) before classification.",
+      });
+    }
     const allowed = new Set(["QUANTITY_ONLY", "VALUED_TRANSFER", "OPENING_BALANCE"]);
     if (!Number.isInteger(adjustmentId) || adjustmentId <= 0) {
       return res.status(400).json({ message: "Invalid adjustment id" });
@@ -300,6 +308,7 @@ export function registerHistoricalReplayPhase6GuardRoutes(app: Express): void {
           JSON.stringify({
             before: row.valuation_basis,
             after: valuationBasis,
+            basisEvidence,
             currencyCode: row.currency_code || "USD",
             costPerKg: row.cost_per_kg,
           }),
@@ -367,6 +376,14 @@ export function registerHistoricalReplayPhase6GuardRoutes(app: Express): void {
       const originalJson = res.json.bind(res);
       res.json = (payload) => {
         if (!payload?.dryRun) return originalJson(payload);
+        if (payload.downstreamSafety?.safeToApply === false) {
+          return originalJson({
+            ...payload,
+            financialImpact: undefined,
+            projectionError:
+              "Downstream production/COGS/GL safeguards blocked this historical replay. Review downstreamSafety.blockers before preparing another scope.",
+          });
+        }
         const expandedSupplierIds = parsePositiveIntegerIds(payload.safeSupplierIds) ?? supplierIds;
         let batchIds: number[];
         try {

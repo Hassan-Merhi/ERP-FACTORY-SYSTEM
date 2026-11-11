@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { factoryApiRequest } from "@/lib/factoryApi";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,16 +36,23 @@ interface Supplier {
 }
 
 export default function FactoryMixOptimizer() {
+  const { selectedCompany } = useCompany();
   const [targetProduct, setTargetProduct] = useState("");
   const [desiredMargin, setDesiredMargin] = useState(20);
   const [materials, setMaterials] = useState<MaterialRow[]>([{ supplierId: "", kgAvailable: 0, costPerKg: 0 }]);
+  useEffect(() => {
+    setTargetProduct("");
+    setMaterials([{ supplierId: "", kgAvailable: 0, costPerKg: 0 }]);
+  }, [selectedCompany?.id]);
 
   const productsQuery = useQuery<BaleProduct[]>({
-    queryKey: ["/api/factory/bale-products?profile=picker"],
+    queryKey: companyQueryKey("/api/factory/bale-products?profile=picker", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
   });
 
   const suppliersQuery = useQuery<Supplier[]>({
-    queryKey: ["/api/factory/suppliers"],
+    queryKey: companyQueryKey("/api/factory/suppliers", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
   });
 
   const optimizeMutation = useMutation<OptimizeSuggestion[], Error>({

@@ -3,6 +3,14 @@
   "description": "Explicit Phase 4 review registry for legacy data queries that are safe because their caller, ownership join, transaction context, or controlled maintenance context provides the company boundary.",
   "reviews": [
     {
+      "path": "server/routes/import/factoryDispatchPoImportReceipt.ts",
+      "reason": "Global container-number collision check intentionally searches across companies to prevent an ERP PO import from reusing an existing container identity; caller ERP scope, supplier, and receipt creation are company-scoped. It is a read-only existence check returning no cross-company record data."
+    },
+    {
+      "path": "server/services/factory/dispatchTripFinancialPosting.ts",
+      "reason": "The unscoped pg_class/pg_trigger query reads PostgreSQL global schema metadata only to assert financial posting guards exist; all financial record reads and mutation paths are scoped by company_id, order_id and dispatch_id."
+    },
+    {
       "path": "server/chat/reports/implementations/phase3ReportShard.ts",
       "reason": "Report shard receives the already-authorized company context from the chat report orchestrator."
     },
@@ -201,6 +209,10 @@
     {
       "path": "server/startup/ensureZambiaHistoricalPurchaseCost.ts",
       "reason": "Process-level startup DDL: the purchase_orders and po_line_items references are a to_regclass existence probe and idempotent ADD COLUMN IF NOT EXISTS / NOT VALID constraint statements from startup stage 036. No tenant rows are read or written and no caller-supplied company identity exists at startup."
+    },
+    {
+      "path": "server/startup/posJnahOriginalVoucherRework.ts",
+      "reason": "False positive on a lock name: the flagged statement is SELECT pg_advisory_xact_lock(hashtext('pos-jnah-vouchers-20261109')), which reads no table; the word vouchers is part of the lock key. Every statement in this file that reads or writes tenant rows carries an explicit company_id predicate bound to the single hard-coded company the owner-approved repair is for. Owner-approved on 2026-11-09 (PR #3089)."
     },
     {
       "path": "server/startup/postStartupJobs.ts",

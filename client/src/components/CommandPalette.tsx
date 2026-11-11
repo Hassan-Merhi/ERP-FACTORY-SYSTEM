@@ -702,10 +702,11 @@ export function CommandPalette({
         : []),
       ...(canAdmin ? PROPERTIES_ADMIN_EXTRAS : []),
     ];
-    return buildEntries(getPropertiesVisibleNavSections(canDeveloper), candidateExtras.filter(
-      (entry) => canNavigateProperties(entry.path, user, selectedCompany)
-    ));
-  }, [user?.role, user?.currentRole, selectedCompany?.role, selectedCompany?.companyType]);
+    return buildEntries(
+      getPropertiesVisibleNavSections(canDeveloper),
+      candidateExtras.filter((entry) => canNavigateProperties(entry.path, user, selectedCompany))
+    );
+  }, [user, selectedCompany]);
 
   const showErp = !isPOS && hasErpAccess;
   const showFactory = !isPOS && hasFactoryAccess;

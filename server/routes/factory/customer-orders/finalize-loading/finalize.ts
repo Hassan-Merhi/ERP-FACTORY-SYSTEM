@@ -36,6 +36,7 @@ import {
   customerLedgerAccountTx,
 } from "../../../../services/accounting/perpetualInventory/factoryInvoice";
 import { toMoney } from "../../../../lib/money";
+import { hasAnyPhysicalDispatchTx } from "../../../../services/factory/dispatchTripFinancialGuards";
 import {
   sendVoucherCorrectionRefusal,
   editPostedFactoryVoucherTx,
@@ -67,6 +68,12 @@ export function registerOrderFinalizeRoutes(app: Express) {
           .where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId)))
           .for("update");
         if (!order) throw new Error("Order not found");
+        // The legacy finalize path writes a full SALE/INVOICE cache row and
+        // the full invoice journal. On dispatch-managed orders it would bypass
+        // trip reconciliation and debit receivables a second time.
+        if (await hasAnyPhysicalDispatchTx(tx, companyId, orderId)) {
+          throw new Error("DISPATCH_CONSOLIDATION_REQUIRED: This loading has dispatch trips. Finalize all trip financials and use the consolidated invoice workflow.");
+        }
         if (!["DRAFT", "VERIFIED"].includes(order.status))
           throw new Error("Only DRAFT or VERIFIED orders can be finalized");
 

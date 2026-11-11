@@ -22,6 +22,8 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import { factoryApiRequest } from "@/lib/factoryApi";
 import { formatNumber } from "@/lib/formatNumber";
 
@@ -50,6 +52,7 @@ interface FactorySupplier {
 const CURRENCIES = ["USD", "EUR", "GBP", "AED", "KWD", "SAR", "OMR", "BHD", "QAR", "JOD"];
 
 export default function FactoryOpeningBalanceEdit() {
+  const { selectedCompany } = useCompany();
   const { id } = useParams<{ id: string }>();
   const [, navigate] = useLocation();
   useEscapeToParent("/factory/raw-materials");
@@ -67,7 +70,7 @@ export default function FactoryOpeningBalanceEdit() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const { data: record, isLoading } = useQuery<OBRecord>({
-    queryKey: ["/api/factory/raw-stock/opening-balance", id],
+    queryKey: companyQueryKey("/api/factory/raw-stock/opening-balance", selectedCompany?.id, id),
     queryFn: async () => {
       const res = await factoryApiRequest("GET", `/api/factory/raw-stock/opening-balance/${id}`);
       if (!res.ok) {
@@ -76,11 +79,12 @@ export default function FactoryOpeningBalanceEdit() {
       }
       return res.json();
     },
-    enabled: !!id,
+    enabled: Boolean(selectedCompany?.id) && !!id,
   });
 
   const { data: suppliers } = useQuery<FactorySupplier[]>({
-    queryKey: ["/api/factory/suppliers"],
+    queryKey: companyQueryKey("/api/factory/suppliers", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
   });
 
   useEffect(() => {
