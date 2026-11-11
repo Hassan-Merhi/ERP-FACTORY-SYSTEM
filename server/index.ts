@@ -68,6 +68,7 @@ import { ensureFactoryContainerPlannerSchemaOnBoot } from "./startup/factoryCont
 import { ensurePriorityScanSchema } from "./startup/priorityScanSchema";
 import { ensureContainerExtraExpectedLines } from "./startup/ensureContainerExtraExpectedLines";
 import { ensureFactoryLoadingDispatchSchema } from "./startup/ensureFactoryLoadingDispatchSchema";
+import { ensureStockTransferOrderWhatsAppApprovalSchema } from "./startup/ensureStockTransferOrderWhatsAppApprovalSchema";
 import { ensureFactoryBaleOrderIntegrity } from "./startup/ensureFactoryBaleOrderIntegrity";
 import { runApprovedLegacyBaleUnitCostRepair } from "./startup/runApprovedLegacyBaleUnitCostRepair";
 import { runApprovedLegacySoldBaleUnitCostRepair } from "./startup/runApprovedLegacySoldBaleUnitCostRepair";
@@ -363,6 +364,10 @@ let migrationsDone = false;
       await ensureContainerExtraExpectedLines(pool);
       await ensureFactoryLoadingDispatchSchema(pool);
       logger.info("[startup] ✓ Factory loading dispatch schema ensured");
+      // Fatal on failure: Stock Transfer Order saves use workflow_origin; never
+      // serve requests against a database lacking its approval foundation.
+      await ensureStockTransferOrderWhatsAppApprovalSchema(pool);
+      logger.info("[startup] ✓ Stock Transfer Order WhatsApp approval foundation ensured");
       await ensureFactoryInvoiceDocumentSnapshotStore(pool);
       logger.info("[startup] ✓ Factory invoice document snapshot store ensured");
       try {
