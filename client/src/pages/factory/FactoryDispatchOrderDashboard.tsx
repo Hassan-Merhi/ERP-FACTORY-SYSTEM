@@ -55,7 +55,7 @@ interface ReleaseGate {
   reconciliation:{ready:boolean;missing:string[];checkedAt:string};
   invoice:{ready:boolean;missing:string[];checkedAt:string};
   integrity:null|{
-    finalized:boolean;passed:boolean;verifiedAt:string;
+    finalized:boolean;signedReconciliation:boolean;passed:boolean;verifiedAt:string;
     checks:Array<{code:string;state:"PASS"|"BLOCK"|"INFO"|"NOT_APPLICABLE";
       message:string;expected?:string;observed?:string}>;
   };
@@ -236,10 +236,16 @@ export default function FactoryDispatchOrderDashboard({
                       <div className="space-y-1">
                         <p className={gate.data.integrity.passed?"text-emerald-700 dark:text-emerald-300":"text-amber-700 dark:text-amber-300"}>
                           Accounting integrity: {gate.data.integrity.passed
-                            ? gate.data.integrity.finalized?"Final invoice verified":"Current accounting checks passed; invoice not yet finalized"
+                            ? gate.data.integrity.finalized
+                                ? "Final invoice verified"
+                                : gate.data.integrity.signedReconciliation
+                                  ? "Signed reconciliation verified; invoice not yet finalized"
+                                  : "Posted trips verified; reconciliation not yet signed"
                             : gate.data.integrity.finalized
                               ? "Finalized invoice mismatches detected"
-                              : "Unresolved financial postings"}
+                              : gate.data.integrity.signedReconciliation
+                                ? "Signed reconciliation discrepancies detected"
+                                : "Unresolved posted trip discrepancies"}
                         </p>
                         {gate.data.integrity.checks.some(check=>check.state==="BLOCK")&&(
                           <details>
