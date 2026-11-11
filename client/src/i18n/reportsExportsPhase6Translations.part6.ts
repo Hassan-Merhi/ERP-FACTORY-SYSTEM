@@ -279,6 +279,22 @@ export const reportsExportsPhase6TranslationsPart6: readonly Phase6ReportsExport
     ar: "تمت استعادة البالة المحذوفة. تم الحفاظ على كمية مخزون ERP الحالية دون إدخال مكرر.",
     fr: "Balle supprimée restaurée. La quantité de stock ERP existante a été conservée sans réception en double.",
   },
+  // Company page-access and hidden-cost assignment refusals (#3140).
+  {
+    en: "User is not assigned to this company",
+    ar: "المستخدم غير معيّن لهذه الشركة",
+    fr: "L’utilisateur n’est pas affecté à cette société",
+  },
+  {
+    en: "pageKeys must be a unique list of recognized ERP features",
+    ar: "يجب أن تكون pageKeys قائمة فريدة من ميزات ERP المعترف بها",
+    fr: "pageKeys doit être une liste unique de fonctionnalités ERP reconnues",
+  },
+  {
+    en: "hiddenCostFields must contain unique recognized ERP restrictions",
+    ar: "يجب أن يحتوي hiddenCostFields على قيود ERP فريدة ومعترف بها",
+    fr: "hiddenCostFields doit contenir des restrictions ERP uniques et reconnues",
+  },
   {
     en: "Enable at least one weekday",
     ar: "فعّل يومًا واحدًا على الأقل من أيام الأسبوع",
