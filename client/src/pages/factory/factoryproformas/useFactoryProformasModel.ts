@@ -598,9 +598,12 @@ export function useFactoryProformasModel() {
     },
     onSuccess: (result) => {
       invalidateCustomerProformas();
+      const matched = result.updated + result.unchanged;
       toast({
-        title: "Saved Agreed Prices Applied",
-        description: `${result.updated} line(s) updated for ${result.destination}. ${result.unchanged} already current, ${result.skipped} without saved prices, ${result.fixed} locked.`,
+        title: result.updated > 0
+          ? "Saved Agreed Prices Applied"
+          : matched > 0 ? "Saved Agreed Prices Already Current" : "No Matching Saved Agreed Prices",
+        description: `${matched} matched for ${result.destination}. ${result.updated} updated, ${result.unchanged} already current, ${result.skipped} without saved prices, ${result.fixed} locked.`,
       });
     },
     onError: (error: Error) => {

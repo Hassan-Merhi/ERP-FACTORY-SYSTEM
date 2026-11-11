@@ -234,7 +234,8 @@ export function registerFactoryCustomerProformaBulkPricingRoutes(app: Express) {
         if (!proformaResult.rows.length) return res.status(404).json({ message: "Proforma not found" });
 
         const { customer_id: customerId } = proformaResult.rows[0];
-        const destination = normalizeProformaDestination(proformaResult.rows[0].destination);
+        const storedDestination = proformaResult.rows[0].destination;
+        const destination = normalizeProformaDestination(storedDestination);
         if (!destination) {
           return res.status(400).json({ message: "Assign a destination before applying saved agreed prices" });
         }
@@ -262,7 +263,7 @@ export function registerFactoryCustomerProformaBulkPricingRoutes(app: Express) {
              FROM customer_proforma_lines line
              JOIN customer_proformas proforma ON proforma.id = line.proforma_id
              WHERE proforma.id = $1 AND proforma.company_id = $2
-               AND proforma.customer_id = $3 AND proforma.destination = $4
+               AND proforma.customer_id = $3 AND proforma.destination = $5
                AND proforma.deleted_at IS NULL
            ),
            applied AS (
@@ -287,7 +288,7 @@ export function registerFactoryCustomerProformaBulkPricingRoutes(app: Express) {
                     AND (saved_price IS NULL OR saved_price <= 0))::integer AS skipped,
                   ((SELECT COUNT(*) FROM candidates WHERE price_fixed IS NOT TRUE
                     AND saved_price > 0) - (SELECT COUNT(*) FROM applied))::integer AS unchanged`,
-          [id, companyId, customerId, destination]
+          [id, companyId, customerId, destination, storedDestination]
         );
 
         res.json({ ...result.rows[0], destination });
