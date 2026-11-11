@@ -84,6 +84,7 @@ export function FxHistoryDialog({
   open, onOpenChange, side, amount, sources = [], scope, companyId, asOf,
 }: FxHistoryDialogProps) {
   const [filter, setFilter] = useState<"all" | "voucher" | "rate" | "supplier">("all");
+  const [relatedOnly, setRelatedOnly] = useState(true);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const factory = scope === "factory";
@@ -108,11 +109,19 @@ export function FxHistoryDialog({
     staleTime: 30_000,
     refetchOnWindowFocus: false,
   });
-  const entries = useMemo(() => (data?.entries ?? []).filter((entry) => {
-    if (filter === "all") return true;
-    if (filter === "supplier") return ["container", "supplier_payment", "supplier_transfer"].includes(entry.kind);
-    return entry.kind === filter;
-  }), [data?.entries, filter]);
+  const entries = useMemo(() => {
+    const keys = new Set(sources.map((source) => source.sourceKey).filter(Boolean));
+    const currencies = new Set(
+      sources.flatMap((source) => (source.native || "").toUpperCase().match(/\\b[A-Z]{3}\\b/g) || [])
+    );
+    return (data?.entries ?? []).filter((entry) => {
+      if (filter === "supplier" && !["container", "supplier_payment", "supplier_transfer"].includes(entry.kind)) return false;
+      if (filter !== "all" && filter !== "supplier" && entry.kind !== filter) return false;
+      if (!relatedOnly || keys.size === 0) return true;
+      if (entry.kind === "rate") return currencies.size === 0 || currencies.has(entry.currency);
+      return entry.sourceKey != null && keys.has(entry.sourceKey);
+    });
+  }, [data?.entries, filter, relatedOnly, sources]);
   const title = side === "gain" ? "FX Gains" : "FX Losses";
   const amountColor = side === "gain"
     ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400";
@@ -173,6 +182,10 @@ export function FxHistoryDialog({
               </Button>
             </div>
             <div className="flex gap-2 flex-wrap items-center">
+              <Button type="button" size="sm" variant={relatedOnly ? "secondary" : "outline"} onClick={() => setRelatedOnly((value) => !value)}
+                data-testid="button-fx-related-only">
+                {relatedOnly ? "Related accounts" : "All company activity"}
+              </Button>
               {(["all", "voucher", "rate", "supplier"] as const).filter((kind) => factory || kind !== "supplier").map((kind) => (
                 <Button key={kind} type="button" size="sm" variant={filter === kind ? "secondary" : "outline"} onClick={() => setFilter(kind)}>
                   {kind === "all" ? "All activity" : kind === "voucher" ? "Vouchers" : kind === "rate" ? "FX rates" : "Suppliers"}
@@ -240,7 +253,9 @@ export function FxHistoryDialog({
                       })}
                     </tbody>
                   </table>
-                  {!entries.length && <div className="py-8 text-center text-sm text-muted-foreground">No recorded activity in this selection.</div>}
+                  {!entries.length && <div className="py-8 text-center text-sm text-muted-foreground">
+                    No recorded activity for these filters. Choose All company activity to browse other foreign-currency records.
+                  </div>}
                 </div>
                 {data?.truncated && <p className="text-xs text-amber-700 dark:text-amber-400">Showing the latest 300 history entries. Set a shorter From/To range to inspect older records.</p>}
               </>
