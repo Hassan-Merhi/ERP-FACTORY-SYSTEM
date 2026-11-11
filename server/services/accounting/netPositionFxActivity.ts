@@ -103,13 +103,21 @@ export async function loadNetPositionFxActivity(input: {
       ve.historical_exchange_rate::text AS rate,
       v.id AS voucher_id,
       CASE
+        WHEN cx.id IS NOT NULL THEN 'customer:' || cx.id::text
         WHEN ve.ledger_account_id IS NOT NULL THEN 'ledger:' || ve.ledger_account_id::text
         WHEN ve.bank_account_id IS NOT NULL THEN 'bank:' || ve.bank_account_id::text
+        WHEN ve.factory_supplier_id IS NOT NULL THEN 'supplier:' || ve.factory_supplier_id::text
         WHEN ve.customer_id IS NOT NULL THEN 'customer:' || ve.customer_id::text
         ELSE NULL
       END AS source_key
     FROM voucher_entries ve
     JOIN vouchers v ON v.id = ve.voucher_id
+    LEFT JOIN LATERAL (
+      SELECT customer.id FROM customers customer
+      WHERE customer.company_id = v.company_id
+        AND customer.ledger_account_id = ve.ledger_account_id
+      ORDER BY customer.id LIMIT 1
+    ) cx ON TRUE
     WHERE v.company_id = ${companyId}
       AND v.deleted_at IS NULL AND v.optional = false
       AND (UPPER(COALESCE(ve.transaction_currency, v.currency, 'USD')) <> 'USD')
@@ -138,7 +146,10 @@ export async function loadNetPositionFxActivity(input: {
         SELECT id, effective_date::text AS date, NULL::text AS recorded_at,
           from_currency || ' → ' || to_currency AS reference,
           'Saved accounting FX rate (quoted currency pair)' AS description,
-          UPPER(to_currency) AS currency,
+          CASE WHEN UPPER(from_currency) = 'USD'
+            THEN CASE WHEN UPPER(to_currency) = 'XOF' THEN 'CFA' ELSE UPPER(to_currency) END
+            ELSE CASE WHEN UPPER(from_currency) = 'XOF' THEN 'CFA' ELSE UPPER(from_currency) END
+          END AS currency,
           NULL::text AS native_amount, NULL::text AS usd_amount,
           rate::text AS rate, NULL::integer AS voucher_id,
           NULL::text AS source_key
