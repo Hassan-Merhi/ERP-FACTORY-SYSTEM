@@ -67,9 +67,17 @@ async function collect(client) {
         ('set_customer_order_bale_scanned_at','copy_customer_order_bale_scanned_at_to_history')
         AND p.pronargs=0`),
     client.query(`SELECT c.relname AS table_name,c.relrowsecurity AS enabled,
-        c.relforcerowsecurity AS forced,
-        (SELECT count(*)::int FROM pg_policy p WHERE p.polrelid=c.oid) AS policy_count
+        c.relforcerowsecurity AS forced,p.polname AS policy_name,
+        p.polpermissive AS permissive,
+        CASE WHEN p.polcmd='*' THEN 'ALL' WHEN p.polcmd='r' THEN 'SELECT'
+          WHEN p.polcmd='a' THEN 'INSERT' WHEN p.polcmd='w' THEN 'UPDATE'
+          WHEN p.polcmd='d' THEN 'DELETE' ELSE p.polcmd::text END AS policy_command,
+        ARRAY(SELECT CASE WHEN role_oid=0 THEN 'public' ELSE role_oid::regrole::text END
+          FROM unnest(p.polroles) AS role_oid) AS roles,
+        pg_get_expr(p.polqual,p.polrelid) AS using_expression,
+        pg_get_expr(p.polwithcheck,p.polrelid) AS check_expression
       FROM pg_class c JOIN pg_namespace ns ON ns.oid=c.relnamespace
+      LEFT JOIN pg_policy p ON p.polrelid=c.oid AND p.polname=c.relname||'_company_scope_policy'
       WHERE ns.nspname='public' AND c.relkind IN ('r','p')`)
   ]);
   return {
