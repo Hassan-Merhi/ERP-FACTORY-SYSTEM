@@ -336,7 +336,8 @@ describe("startup schema integrity", () => {
       posPortDepartureDateSchema.length +
       zambiaHistoricalPurchaseCostSchema.length +
       factoryPressingMachineTrackingSchema.length +
-      factoryPressingHistoryReportIndexes.length;
+      factoryPressingHistoryReportIndexes.length +
+      stockTransferOrderWaApprovalFoundation.length;
     expect(startupMigrations.slice(-tail, -tail + supplierTrackingShopDutyDefaultsSchema.length)).toEqual(
       supplierTrackingShopDutyDefaultsSchema
     );
@@ -357,10 +358,12 @@ describe("startup schema integrity", () => {
         -1 -
           zambiaHistoricalPurchaseCostSchema.length -
           factoryPressingMachineTrackingSchema.length -
-          factoryPressingHistoryReportIndexes.length,
+          factoryPressingHistoryReportIndexes.length -
+          stockTransferOrderWaApprovalFoundation.length,
         -zambiaHistoricalPurchaseCostSchema.length -
           factoryPressingMachineTrackingSchema.length -
-          factoryPressingHistoryReportIndexes.length
+          factoryPressingHistoryReportIndexes.length -
+          stockTransferOrderWaApprovalFoundation.length
       )
     ).toEqual(posPortDepartureDateSchema);
   });
@@ -371,8 +374,11 @@ describe("startup schema integrity", () => {
       startupMigrations.slice(
         -zambiaHistoricalPurchaseCostSchema.length -
           factoryPressingMachineTrackingSchema.length -
-          factoryPressingHistoryReportIndexes.length,
-        -factoryPressingMachineTrackingSchema.length - factoryPressingHistoryReportIndexes.length
+          factoryPressingHistoryReportIndexes.length -
+          stockTransferOrderWaApprovalFoundation.length,
+        -factoryPressingMachineTrackingSchema.length -
+          factoryPressingHistoryReportIndexes.length -
+          stockTransferOrderWaApprovalFoundation.length
       )
     ).toEqual(zambiaHistoricalPurchaseCostSchema);
     // Every column statement is an idempotent ADD COLUMN IF NOT EXISTS on one
@@ -395,8 +401,10 @@ describe("startup schema integrity", () => {
     expect(factoryPressingMachineTrackingSchema).toHaveLength(37);
     expect(
       startupMigrations.slice(
-        -factoryPressingMachineTrackingSchema.length - factoryPressingHistoryReportIndexes.length,
-        -factoryPressingHistoryReportIndexes.length
+        -factoryPressingMachineTrackingSchema.length -
+          factoryPressingHistoryReportIndexes.length -
+          stockTransferOrderWaApprovalFoundation.length,
+        -factoryPressingHistoryReportIndexes.length - stockTransferOrderWaApprovalFoundation.length
       )
     ).toEqual(factoryPressingMachineTrackingSchema);
     const ddl = factoryPressingMachineTrackingSchema.join("; ");
@@ -410,9 +418,14 @@ describe("startup schema integrity", () => {
     expect(ddl).not.toMatch(/INSERT\\s+INTO\\s+(?:stock_movements|voucher_entries)/i);
   });
 
-  it("appends the idempotent Phase 6 pressing reporting index last", () => {
+  it("keeps the idempotent Phase 6 pressing reporting index immediately before stage 039", () => {
     expect(factoryPressingHistoryReportIndexes).toHaveLength(1);
-    expect(startupMigrations.slice(-stockTransferOrderWaApprovalFoundation.length - 1, -stockTransferOrderWaApprovalFoundation.length)).toEqual(factoryPressingHistoryReportIndexes);
+    expect(
+      startupMigrations.slice(
+        -stockTransferOrderWaApprovalFoundation.length - 1,
+        -stockTransferOrderWaApprovalFoundation.length
+      )
+    ).toEqual(factoryPressingHistoryReportIndexes);
     expect(factoryPressingHistoryReportIndexes[0]).toContain("factory_pressing_confirmations_machine_time_idx");
     expect(factoryPressingHistoryReportIndexes[0]).toContain("WHERE voided_at IS NULL");
   });
