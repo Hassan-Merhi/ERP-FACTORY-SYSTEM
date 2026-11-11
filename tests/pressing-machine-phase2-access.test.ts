@@ -42,7 +42,8 @@ describe("Simple pressing access — page-authorized user controls", () => {
     );
     expect(page).toContain("if (active && access.data && validCompany && !assignment && canScan) void activate()");
     expect(page).toContain("{canScan && !assignment && !access.isLoading");
-    expect(page).toContain("{canScan && <div");
+    // Formatter-tolerant: the guarded element may be wrapped in parentheses and split across lines.
+    expect(page).toMatch(/\{canScan && \(?\s*<div/);
     expect(page).toContain("fullControls || viewOnly");
     expect(page).toContain('data-testid="pressing-view-only-notice"');
     expect(report).toContain('ctx.role === "View Only"');

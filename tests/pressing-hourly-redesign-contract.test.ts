@@ -20,7 +20,8 @@ describe("Pressing dashboard redesign", () => {
   it("lets supervisors edit each day's ten hours independently", () => {
     expect(hourly).toContain('aria-label={"Hourly target for " + hourLabel(hour)}');
     expect(hourly).toContain("body: JSON.stringify({ day: data.day, hour: localHour(hour), targetKgPerHour })");
-    expect(hourly).toContain("{data.canEdit && <Button");
+    // Formatter-tolerant: the guarded element may be wrapped in parentheses and split across lines.
+    expect(hourly).toMatch(/\{data\.canEdit && \(?\s*<Button/);
     expect(hourly).toContain("setDrafts");
     expect(hourly).toContain("Math.min(100, Math.max(0, percent))");
     expect(hourly).toContain("status");
@@ -29,7 +30,7 @@ describe("Pressing dashboard redesign", () => {
     expect(hourly).toContain('if (!started) return "upcoming"');
     expect(hourly).toContain('if (!bales) return "none"');
     expect(hourly).toContain("localHour(hour) >= 7 && localHour(hour) < 17");
-    expect(hourly).toContain("const target = scheduled ? hourTarget ?? worker.targetKgPerHour : 0");
+    expect(hourly).toMatch(/const target = scheduled \? \(?hourTarget \?\? worker\.targetKgPerHour\)? : 0/);
     expect(hourly).toContain("Asia/Beirut");
   });
   it("preserves scanning, user permissions, worker KPI counts and navigation", () => {

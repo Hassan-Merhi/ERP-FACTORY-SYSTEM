@@ -239,7 +239,7 @@ export function registerOrderBaleRemovalRoutes(app: Express) {
             SELECT COUNT(*)::integer AS "totalTrips",
                    COUNT(*) FILTER (WHERE status = 'OPEN')::integer AS "openTrips"
               FROM factory_loading_dispatches
-             WHERE company_id = ${companyId} AND order_id = ${orderId}
+             WHERE status <> 'CANCELLED' AND company_id = ${companyId} AND order_id = ${orderId}
           `);
           const tripCounts = resultRows(tripRows)[0];
           if (Number(tripCounts?.totalTrips ?? 0) === 0 || Number(tripCounts?.openTrips ?? 0) > 0) {
