@@ -12,6 +12,7 @@ import type { Express, Request, Response } from "express";
 import { logger } from "../lib/logger";
 import { parseStockTransferOrderWaReply } from "../services/stockTransferOrderWhatsAppReplyParser";
 import { recordStockTransferOrderWaReply } from "../services/stockTransferOrderWhatsAppInbound";
+import { queueStockTransferOrderWaDecision } from "../services/stockTransferOrderWhatsAppApprovalWorker";
 
 export const STOCK_TRANSFER_ORDER_WA_WEBHOOK_PATH =
   "/api/stock-transfer-order/wa-approval/webhook";
@@ -33,9 +34,12 @@ export async function stockTransferOrderWaWebhookHandler(req: Request, res: Resp
       // Acknowledge provider redeliveries with HTTP 200, not an error that
       // would trigger further retries. Phase 4 consumes the staged event.
       if (result.outcome === "accepted") {
+        // Persisted before this line. The worker executes it outside webhook
+        // latency limits, and the durable sweep replays after any restart.
+        queueStockTransferOrderWaDecision(result.batchId);
         return res.status(200).json({
           accepted: true, decisionRecorded: true, approvalExecuted: false,
-          batchId: result.batchId, command: result.command,
+          executionQueued: true, batchId: result.batchId, command: result.command,
         });
       }
       return res.status(200).json({ accepted: false, outcome: result.outcome });
