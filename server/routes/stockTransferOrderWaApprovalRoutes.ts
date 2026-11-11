@@ -43,7 +43,12 @@ function idOf(v: unknown) {
   return Number.isSafeInteger(id) && id > 0 ? id : null;
 }
 function clean(v: unknown) {
-  return String(v ?? "").replace(/[\x00-\x1f\x7f]/g, " ").trim().slice(0, 100);
+  // Replace ASCII control characters (U+0000–U+001F, U+007F) with spaces.
+  const text = Array.from(String(v ?? ""), (ch) => {
+    const code = ch.charCodeAt(0);
+    return ch.length === 1 && (code <= 0x1f || code === 0x7f) ? " " : ch;
+  }).join("");
+  return text.trim().slice(0, 100);
 }
 function errorResponse(res: Response, e: unknown) {
   const status = Number((e as { status?: number })?.status ?? 0);
@@ -63,6 +68,7 @@ function errorResponse(res: Response, e: unknown) {
   return res.status(500).json({ message: "Stock Transfer Order WhatsApp operation failed." });
 }
 
+const BATCH_STATE_CHANGED = "Approval batch changed during delivery";
 async function setBatchStatus(companyId: number, batchId: number, status: "cancelled" | "requested",
   values?: { instanceId: string; messageId: string; groupId: string }) {
   // The reservation release and event must commit together with state.
@@ -83,7 +89,7 @@ async function setBatchStatus(companyId: number, batchId: number, status: "cance
           "AND ev.event_type IN ('done_received','decline_received')) RETURNING id",
           [companyId, batchId]
         );
-    if (result.rowCount !== 1) throw new Error("Approval batch changed during delivery");
+    if (result.rowCount !== 1) throw new Error(BATCH_STATE_CHANGED);
     if (status === "cancelled") {
       await client.query(
         "UPDATE stock_transfer_order_approval_batch_items SET reservation_active=false " +
@@ -502,6 +508,13 @@ export function registerStockTransferOrderWaApprovalRoutes(app: Express,
       if(!batchId)return res.status(400).json({message:"Invalid batch."});
       await setBatchStatus(a.companyId,batchId,"cancelled");
       return res.json({ok:true});
-    } catch(e) {return errorResponse(res,e);}
+    } catch(e) {
+      // No row matched: the batch does not exist in this company, was already decided,
+      // or is no longer cancellable. That is a refusal, not a server fault.
+      if (e instanceof Error && e.message === BATCH_STATE_CHANGED) {
+        return res.status(409).json({ message: "This approval request cannot be cancelled." });
+      }
+      return errorResponse(res,e);
+    }
   });
 }
