@@ -180,3 +180,41 @@ ALTER TABLE stock_transfer_order_approval_deliveries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE stock_transfer_order_approval_deliveries FORCE ROW LEVEL SECURITY;
 
 DO $sto_policy$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname=current_schema() AND tablename='stock_transfer_order_approval_deliveries' AND policyname='sto_wa_company_scope') THEN CREATE POLICY sto_wa_company_scope ON stock_transfer_order_approval_deliveries USING (current_setting('app.company_scope_maintenance',true)='on' OR company_id = NULLIF(current_setting('app.current_company_id',true),'')::integer) WITH CHECK (current_setting('app.company_scope_maintenance',true)='on' OR company_id = NULLIF(current_setting('app.current_company_id',true),'')::integer); END IF; END $sto_policy$;
+
+-- Immutable revision snapshots and append-only audit events; reservation state may be released.
+CREATE OR REPLACE FUNCTION sto_wa_prevent_immutable_changes() RETURNS trigger LANGUAGE plpgsql AS $$
+ BEGIN RAISE EXCEPTION 'Stock Transfer Order WhatsApp approval evidence is immutable'; END $$;
+
+DO $sto_evt_guard$ BEGIN
+ IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='sto_wa_events_immutable_trg' AND tgrelid='stock_transfer_order_approval_events'::regclass) THEN
+  CREATE TRIGGER sto_wa_events_immutable_trg BEFORE UPDATE OR DELETE ON stock_transfer_order_approval_events
+   FOR EACH ROW EXECUTE FUNCTION sto_wa_prevent_immutable_changes();
+ END IF;
+ END $sto_evt_guard$;
+
+DO $sto_rev_guard$ BEGIN
+ IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='sto_wa_revisions_immutable_trg' AND tgrelid='stock_transfer_order_approval_batch_revisions'::regclass) THEN
+  CREATE TRIGGER sto_wa_revisions_immutable_trg BEFORE UPDATE OR DELETE ON stock_transfer_order_approval_batch_revisions
+   FOR EACH ROW EXECUTE FUNCTION sto_wa_prevent_immutable_changes();
+ END IF;
+ END $sto_rev_guard$;
+
+CREATE OR REPLACE FUNCTION sto_wa_batch_item_identity_guard() RETURNS trigger LANGUAGE plpgsql AS $$
+ BEGIN
+  IF TG_OP='DELETE' THEN RAISE EXCEPTION 'Frozen approval batch items cannot be deleted'; END IF;
+  IF NEW.id IS DISTINCT FROM OLD.id OR NEW.company_id IS DISTINCT FROM OLD.company_id OR
+     NEW.batch_id IS DISTINCT FROM OLD.batch_id OR NEW.transfer_id IS DISTINCT FROM OLD.transfer_id OR
+     NEW.voucher_number_snapshot IS DISTINCT FROM OLD.voucher_number_snapshot OR
+     NEW.item_hash_snapshot IS DISTINCT FROM OLD.item_hash_snapshot OR
+     NEW.created_at IS DISTINCT FROM OLD.created_at THEN
+    RAISE EXCEPTION 'Frozen approval batch item evidence cannot be changed';
+  END IF;
+  RETURN NEW;
+ END $$;
+
+DO $sto_item_guard$ BEGIN
+ IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='sto_wa_batch_items_guard_trg' AND tgrelid='stock_transfer_order_approval_batch_items'::regclass) THEN
+  CREATE TRIGGER sto_wa_batch_items_guard_trg BEFORE UPDATE OR DELETE ON stock_transfer_order_approval_batch_items
+   FOR EACH ROW EXECUTE FUNCTION sto_wa_batch_item_identity_guard();
+ END IF;
+ END $sto_item_guard$;
