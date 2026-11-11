@@ -571,6 +571,27 @@ describe("M2: recorded dated factory rates", () => {
       created.body.id,
     ]);
     expect(Number(unchanged.rows[0].fx_rate)).toBe(1.2);
+
+    const offloaded = await agent.post("/api/factory/raw-stock/offload").send({
+      containerId: String(created.body.id),
+      receivedKg: "100",
+      costPerKg: "0.36",
+      currencyCode: currency,
+      fxRateToUsd: "1.20",
+      offloadDate: date,
+    });
+    expect(offloaded.status, JSON.stringify(offloaded.body)).toBe(200);
+    const fxAtOffload = await pool.query(
+      `SELECT fx_rate_to_usd_offload::numeric AS offload_fx, fx_rate_confirmed
+         FROM factory_containers WHERE id = $1`,
+      [created.body.id]
+    );
+    expect(Number(fxAtOffload.rows[0].offload_fx)).toBe(1.2);
+    expect(fxAtOffload.rows[0].fx_rate_confirmed).toBe(true);
+    expect((await pool.query(
+      `SELECT id FROM factory_fx_rates WHERE company_id = $1 AND currency_code = $2 AND effective_date <= $3`,
+      [ctx.companyId, currency, date]
+    )).rows).toHaveLength(0);
   }, 60_000);
 
   it("container Excel import reports a row with no recorded rate and creates nothing", async () => {
