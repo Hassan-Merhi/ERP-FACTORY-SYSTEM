@@ -4,7 +4,12 @@
  * and Settings-assignable) and stale hidden-field cleanup.
  */
 import { describe, expect, it } from "vitest";
-import { FACTORY_ACCESS_REGISTRY, FACTORY_SETTINGS_PAGES, factoryPageAllowsRole, resolveFactoryPage } from "../shared/factoryAccessRegistry";
+import {
+  FACTORY_ACCESS_REGISTRY,
+  FACTORY_SETTINGS_PAGES,
+  factoryPageAllowsRole,
+  resolveFactoryPage,
+} from "../shared/factoryAccessRegistry";
 import {
   canonicalFactoryPageKey,
   FACTORY_TAB_GRANT_KEYS,
