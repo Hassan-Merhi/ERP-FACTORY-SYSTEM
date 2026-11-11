@@ -11,7 +11,10 @@ Normal Stock Transfers and all unrelated ERP workflows are unchanged.
 
 1. Phase 3 verifies the main WhatsApp instance, group, authorized sender and
    the exact quoted approval-message ID, then commits one immutable decision.
-2. The executor locks the batch and rechecks all frozen orders, pending revisions,
+2. Even after Phase 3 verified the webhook, Phase 4 checks the stored
+   authenticated decision again against the exact outbound WhatsApp instance,
+   group, authorized phone and quoted message ID inside its transaction.
+3. The executor locks the batch and rechecks all frozen orders, pending revisions,
    existing stock-line fingerprints, approval settings and the destination
    WhatsApp recipient in one PostgreSQL transaction.
 3. For each selected Stock Transfer Order, the existing approval lifecycle
