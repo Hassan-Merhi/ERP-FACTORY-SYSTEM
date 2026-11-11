@@ -23,12 +23,14 @@ describe("ERP stock-adjustment edit lifecycle reconciliation", () => {
       execute: async (statement: Parameters<PgDialect["sqlToQuery"]>[0]) => {
         queries.push(new PgDialect().sqlToQuery(statement));
         return {
-          rows: [{
-            sourceId: "251",
-            companyId: 1,
-            movementQuantity: "34.000000",
-            movementValue: "4461.040000",
-          }],
+          rows: [
+            {
+              sourceId: "251",
+              companyId: 1,
+              movementQuantity: "34.000000",
+              movementValue: "4461.040000",
+            },
+          ],
         };
       },
     };
@@ -37,13 +39,16 @@ describe("ERP stock-adjustment edit lifecycle reconciliation", () => {
       companyId: 1,
       documents: [document],
     });
-    expect(evidence).toEqual([{
-      sourceType: "stock-adjustment",
-      sourceId: "251",
-      companyId: 1,
-      movementQuantity: "34.000000",
-      movementValue: "4461.040000",
-    }]);
+    expect(evidence).toEqual([
+      {
+        sourceType: "stock-adjustment",
+        sourceId: "251",
+        companyId: 1,
+        // The adapter normalises database numerics to canonical decimal text.
+        movementQuantity: "34",
+        movementValue: "4461.04",
+      },
+    ]);
     expect(queries).toHaveLength(1);
     expect(queries[0].sql).toContain("max(e.created_at)");
     expect(queries[0].sql).toContain("stock_adjustment_edit_apply");
@@ -55,24 +60,28 @@ describe("ERP stock-adjustment edit lifecycle reconciliation", () => {
   });
 
   it("fails closed when original evidence is missing instead of allowing an edited document to look clean", () => {
-    expect(() => mergeStockAdjustmentConvergenceEvidence({
-      companyId: 1,
-      documents: [document],
-      evidence: [],
-    })).toThrowError(expect.objectContaining({ code: "CONVERGENCE_STOCK_EVIDENCE_MISSING" }));
+    expect(() =>
+      mergeStockAdjustmentConvergenceEvidence({
+        companyId: 1,
+        documents: [document],
+        evidence: [],
+      })
+    ).toThrowError(expect.objectContaining({ code: "CONVERGENCE_STOCK_EVIDENCE_MISSING" }));
   });
 
   it("keeps mismatched inventory movement values visible to the convergence engine", () => {
     const [snapshot] = mergeStockAdjustmentConvergenceEvidence({
       companyId: 1,
       documents: [document],
-      evidence: [{
-        sourceType: "stock-adjustment",
-        sourceId: "251",
-        companyId: 1,
-        movementQuantity: "35",
-        movementValue: "4555.24",
-      }],
+      evidence: [
+        {
+          sourceType: "stock-adjustment",
+          sourceId: "251",
+          companyId: 1,
+          movementQuantity: "35",
+          movementValue: "4555.24",
+        },
+      ],
     });
     expect(snapshot.documentQuantity).toBe("34");
     expect(snapshot.movementQuantity).toBe("35");
