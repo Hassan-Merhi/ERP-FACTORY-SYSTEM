@@ -15,18 +15,17 @@ export async function runStartupMigrations(migrations: readonly string[], onComp
       ? [{sql:"legacy-startup-migration-list",error:`${migrations.length} unversioned startup statements have not been mapped to controlled migrations`}]
       : [];
     recordStartupMigrationFailures(failures);
-    try {
-      if (failures.length) {
-        throw new Error(
-          "Legacy startup cutover blocked: " + failures[0].error +
-          ". Reconcile statements and operational data repairs before enabling read-only startup."
-        );
-      }
-      logger.info("Legacy startup migrations verified: no unversioned startup statements or repair writes executed.");
-    } finally {
-      onComplete();
-      markStartupMigrationsComplete();
+    if (failures.length) {
+      // Never invoke onComplete/markStartupMigrationsComplete on a blocked
+      // cutover: the /api/health/db readiness gate must remain closed.
+      throw new Error(
+        "Legacy startup cutover blocked: " + failures[0].error +
+        ". Reconcile statements and operational data repairs before enabling read-only startup."
+      );
     }
+    logger.info("Legacy startup migration list empty; read-only cutover check passed.");
+    onComplete();
+    markStartupMigrationsComplete();
     return;
   }
   // Use a dedicated single Client for migrations — completely separate from the
