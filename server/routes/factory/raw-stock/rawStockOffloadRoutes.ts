@@ -10,6 +10,7 @@ import { applyOffloadMovingAverage } from "../../../services/factory/rawStockLoc
 import { resolveStoredFxRateOrThrow } from "../../../services/factory/currencyConversion";
 import { writeDaybookEntry } from "../_helpers";
 import { FactoryFxRateRequiredError, factoryDocumentRate } from "../../../services/factory/factoryDocumentFxRate";
+import { CONTAINER_MANUAL_FX_INVALID, parseContainerManualFxRate } from "../../../services/factory/containerManualFxRate";
 import { postFactoryVoucherTx } from "../../../services/factory/factoryVoucherPosting";
 import { closedPeriodErrorResponse } from "../../../lib/closedPeriodError";
 import {
@@ -125,21 +126,33 @@ export function registerRawStockOffloadRoutes(app: Express) {
       const offloadDate = reqOffloadDate || today;
       const mixBatchAllocationsArr = Array.isArray(reqMixBatchAllocations) ? reqMixBatchAllocations : [];
 
-      // Phase 19 C (M2): a non-USD offload is posted at the recorded factory rate
-      // on or before the offload date (manual, else recorded auto); a rate entered
-      // on the offload is used only where such a rate exists. With none it is
-      // refused (409 FACTORY_FX_RATE_REQUIRED). It used to fetch an external rate
-      // (never recorded) and fall back to the container's rate.
+      // Offloading a container with a confirmed operator-entered manual goods rate
+      // must not require a separate company-wide dated FX row. Restrict this
+      // exception to that exact container and currency; other factory documents
+      // and auto-rate containers still follow the dated-rate accounting rule.
+      const ownsConfirmedManualFx =
+        container.fxRateSource === "manual" &&
+        container.fxRateConfirmed === true &&
+        currencyCode.toUpperCase() === (container.currencyCode || "USD").toUpperCase();
       let fxRate: number;
       let fxRateText: string;
-      try {
-        const ownRate =
-          reqFxRate && requestNumber(reqFxRate) > 0 ? { rate: String(reqFxRate), confirmed: true } : undefined;
-        fxRateText = (await factoryDocumentRate(db, companyId, currencyCode, offloadDate, ownRate)).rate;
-        fxRate = requestNumber(fxRateText);
-      } catch (rateError) {
-        if (rateError instanceof FactoryFxRateRequiredError) return res.status(409).json(rateError.body);
-        throw rateError;
+      if (ownsConfirmedManualFx) {
+        const manualRate = parseContainerManualFxRate(
+          reqFxRate ?? container.fxRateToUsd, currencyCode
+        );
+        if (!manualRate) return res.status(400).json({ message: CONTAINER_MANUAL_FX_INVALID });
+        fxRateText = manualRate.toFixed();
+        fxRate = manualRate.toNumber();
+      } else {
+        try {
+          const ownRate =
+            reqFxRate && requestNumber(reqFxRate) > 0 ? { rate: String(reqFxRate), confirmed: true } : undefined;
+          fxRateText = (await factoryDocumentRate(db, companyId, currencyCode, offloadDate, ownRate)).rate;
+          fxRate = requestNumber(fxRateText);
+        } catch (rateError) {
+          if (rateError instanceof FactoryFxRateRequiredError) return res.status(409).json(rateError.body);
+          throw rateError;
+        }
       }
 
       const declaredKg = container.totalKg || "0";
