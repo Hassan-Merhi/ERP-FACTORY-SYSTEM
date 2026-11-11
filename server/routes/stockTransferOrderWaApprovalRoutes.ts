@@ -26,6 +26,12 @@ const senders = requireRole("Admin", "Owner", "Developer", "Manager");
 async function actor(req: Request) {
   const a = await getActiveCompanyPermissionContext(req);
   if (!Number.isSafeInteger(a.companyId) || a.companyId <= 0) throw new Error("Active company required");
+  const onlyAdmins = req.method === "PUT" || /\/(?:legacy|enroll-legacy|cancel)$/.test(req.path);
+  const roles = onlyAdmins ? ["Admin", "Owner", "Developer"] : ["Admin", "Owner", "Developer", "Manager"];
+  if (!roles.includes(a.role)) {
+    const error = Object.assign(new Error("Active company does not permit this approval action"), { status: 403 });
+    throw error;
+  }
   return a;
 }
 function idOf(v: unknown) {
@@ -279,7 +285,13 @@ export function registerStockTransferOrderWaApprovalRoutes(app: Express,
     try {
       const a=await actor(req);
       const result=await pool.query(
-        'SELECT b.id,b.batch_key AS "batchKey",b.status,b.requested_at AS "requestedAt",' +
+        'SELECT b.id,b.batch_key AS "batchKey",' +
+        "CASE WHEN b.status='draft' AND EXISTS (" +
+        "SELECT 1 FROM stock_transfer_order_approval_events ev " +
+        "WHERE ev.company_id=b.company_id AND ev.batch_id=b.id " +
+        "AND ev.event_type='ignored' AND ev.details->>'reason'='request_send_uncertain' " +
+        ") THEN 'uncertain' ELSE b.status END AS status," +
+        'b.requested_at AS "requestedAt",' +
         'd.name AS "destinationName",COUNT(DISTINCT bi.transfer_id)::int AS "orderCount" ' +
         'FROM stock_transfer_order_approval_batches b ' +
         'JOIN locations d ON d.id=b.destination_location_id AND d.company_id=b.company_id ' +
