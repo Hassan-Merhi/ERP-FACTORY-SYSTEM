@@ -18,6 +18,7 @@ import {
   Package,
   Pencil,
   Plus,
+  RefreshCw,
   Star,
   Trash2,
   Truck,
@@ -69,6 +70,7 @@ interface ProformaCardProps {
   // "Add Item" wiring (dialog state lives in the page model)
   onAddLine: () => void;
   saveAgreedPricesMutation: ProformaMutationLike<number>;
+  applyAgreedPricesMutation: ProformaMutationLike<number>;
   applyProductionPricesMutation: ProformaMutationLike<number>;
   applyCatalogPricesMutation: ProformaMutationLike<number>;
   // Inline quantity editing
@@ -106,6 +108,7 @@ export function ProformaCard(props: ProformaCardProps) {
     setPendingDelete,
     onAddLine,
     saveAgreedPricesMutation,
+    applyAgreedPricesMutation,
     applyProductionPricesMutation,
     applyCatalogPricesMutation,
     inlineQtyLineId,
@@ -327,6 +330,23 @@ export function ProformaCard(props: ProformaCardProps) {
             >
               <BookmarkCheck className="mr-1.5 h-3.5 w-3.5" />
               Save as Agreed Prices
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => applyAgreedPricesMutation.mutate(proforma.id)}
+              disabled={applyAgreedPricesMutation.isPending || !proforma.destination || !recordChanges.allowed}
+              className="h-9 rounded-xl border-border/70 bg-background/70 px-3 shadow-sm"
+              data-testid={`button-apply-agreed-prices-${proforma.id}`}
+              title={
+                recordChangeReason ??
+                (proforma.destination
+                  ? `Apply saved agreed prices for ${proforma.destination} to matching unlocked lines`
+                  : "Assign a destination first")
+              }
+            >
+              <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+              Apply Saved Agreed Price
             </Button>
             <Button
               size="sm"
