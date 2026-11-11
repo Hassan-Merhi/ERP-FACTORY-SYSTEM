@@ -63,9 +63,16 @@ export function useFactoryWorkerDetailModel() {
     enabled: Boolean(selectedCompany?.id),
     staleTime: 5 * 60000,
   });
-  const hiddenTabs = myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
-    ? myAccess.hiddenCostFields
-    : ["hide_tab_workerdetail_profile", "hide_tab_workerdetail_statement", "hide_tab_workerdetail_advances", "hide_tab_workerdetail_bales", "hide_tab_workerdetail_documents"];
+  const hiddenTabs =
+    myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
+      ? myAccess.hiddenCostFields
+      : [
+          "hide_tab_workerdetail_profile",
+          "hide_tab_workerdetail_statement",
+          "hide_tab_workerdetail_advances",
+          "hide_tab_workerdetail_bales",
+          "hide_tab_workerdetail_documents",
+        ];
   const showProfile = !hiddenTabs.includes("hide_tab_workerdetail_profile");
 
   const showStatement =

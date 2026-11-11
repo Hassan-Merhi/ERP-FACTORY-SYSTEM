@@ -213,7 +213,9 @@ export function useFactoryInvoiceDetailModel() {
   });
 
   const accessReady = myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true;
-  const hideExportSelling = !accessReady || myAccess?.hideAllCosts === true ||
+  const hideExportSelling =
+    !accessReady ||
+    myAccess?.hideAllCosts === true ||
     myAccess?.hiddenCostFields.includes("hide_export_selling_price") === true;
   const isAdmin = accessReady && myAccess?.fullAccess === true;
 

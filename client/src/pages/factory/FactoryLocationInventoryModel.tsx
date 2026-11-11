@@ -143,12 +143,14 @@ export function useFactoryLocationInventory() {
   const perUserHidden = scopedAccess?.hiddenCostFields ?? [];
   const noCostAccess = !scopedAccess || !scopedAccess.hasFactoryAccess || scopedAccess.hideAllCosts;
   const hideSellingPrice =
-    noCostAccess || !!factorySettingsData?.hideSellingPrice ||
+    noCostAccess ||
+    !!factorySettingsData?.hideSellingPrice ||
     perUserHidden.includes("inventory_sell_price") ||
     perUserHidden.includes("inventory_sell_value") ||
     perUserHidden.includes("hide_export_selling_price");
   const hideAvgCost =
-    noCostAccess || !!factorySettingsData?.hideAvgCost ||
+    noCostAccess ||
+    !!factorySettingsData?.hideAvgCost ||
     perUserHidden.includes("inventory_avg_rate") ||
     perUserHidden.includes("inventory_total_value") ||
     perUserHidden.includes("hide_export_cost_price");
@@ -166,7 +168,10 @@ export function useFactoryLocationInventory() {
   });
 
   const { data: availableInventoryData = [], isLoading: availableLoading } = useQuery<FactoryBaleProduct[]>({
-    queryKey: companyQueryKey(`/api/factory/location-inventory/${selectedLocation?.id ?? "none"}/available`, selectedCompany?.id),
+    queryKey: companyQueryKey(
+      `/api/factory/location-inventory/${selectedLocation?.id ?? "none"}/available`,
+      selectedCompany?.id
+    ),
     queryFn: async () => {
       const response = await fetch(`/api/factory/location-inventory/${selectedLocation!.id}/available`, {
         credentials: "include",

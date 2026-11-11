@@ -100,9 +100,10 @@ export default function FactoryDispatchBatches() {
     enabled: Boolean(selectedCompany?.id),
     staleTime: 5 * 60000,
   });
-  const hiddenTabs = myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
-    ? myAccess.hiddenCostFields
-    : ["hide_tab_dispatch_batches", "hide_tab_dispatch_reports"];
+  const hiddenTabs =
+    myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
+      ? myAccess.hiddenCostFields
+      : ["hide_tab_dispatch_batches", "hide_tab_dispatch_reports"];
   const showBatches = !hiddenTabs.includes("hide_tab_dispatch_batches");
   const showReports = !hiddenTabs.includes("hide_tab_dispatch_reports");
   const effectiveActiveTab =
@@ -173,10 +174,16 @@ export default function FactoryDispatchBatches() {
     refetchIntervalInBackground: false,
   });
 
-  const { data: customers = [] } = useQuery<Customer[]>({ queryKey: companyQueryKey("/api/factory/customers", selectedCompany?.id), enabled: Boolean(selectedCompany?.id) });
+  const { data: customers = [] } = useQuery<Customer[]>({
+    queryKey: companyQueryKey("/api/factory/customers", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
+  });
 
   const { data: proformas = [] } = useQuery<Proforma[]>({
-    queryKey: companyQueryKey(`/api/factory/customer-proformas?customerId=${form.customerId}&profile=summary&pageSize=250`, selectedCompany?.id),
+    queryKey: companyQueryKey(
+      `/api/factory/customer-proformas?customerId=${form.customerId}&profile=summary&pageSize=250`,
+      selectedCompany?.id
+    ),
     queryFn: async () => {
       if (!form.customerId) return [];
       const res = await fetch(

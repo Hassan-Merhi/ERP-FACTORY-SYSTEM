@@ -94,16 +94,20 @@ export function useBaleProductsModel() {
       return res.ok ? res.json() : {};
     },
   });
-  const accessReady = Boolean(selectedCompany?.id && myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true);
+  const accessReady = Boolean(
+    selectedCompany?.id && myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
+  );
   const perUserHiddenBP = accessReady ? (myAccess?.hiddenCostFields ?? []) : [];
   const hideAvgRate =
-    !accessReady || myAccess?.hideAllCosts === true ||
+    !accessReady ||
+    myAccess?.hideAllCosts === true ||
     perUserHiddenBP.includes("inventory_avg_rate") ||
     perUserHiddenBP.includes("inventory_total_value") ||
     !!factorySettingsData?.hideAvgCost ||
     perUserHiddenBP.includes("hide_export_cost_price");
   const hideSellingPriceBP =
-    !accessReady || myAccess?.hideAllCosts === true ||
+    !accessReady ||
+    myAccess?.hideAllCosts === true ||
     !!factorySettingsData?.hideSellingPrice ||
     perUserHiddenBP.includes("inventory_sell_price") ||
     perUserHiddenBP.includes("inventory_sell_value") ||

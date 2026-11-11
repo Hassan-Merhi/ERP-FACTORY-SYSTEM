@@ -139,7 +139,9 @@ export function EditMixBatchDialog({
           existing.weightKg += srcWeight;
           existing.totalCost = isCompleted ? existing.totalCost + savedUsd : existing.weightKg * currentRate;
           existing.costPerKg = isCompleted
-            ? (existing.weightKg > 0 ? existing.totalCost / existing.weightKg : 0)
+            ? existing.weightKg > 0
+              ? existing.totalCost / existing.weightKg
+              : 0
             : currentRate;
           existing.availableKg = currentRemaining + existing.weightKg;
         } else {
@@ -693,7 +695,11 @@ export function EditMixBatchDialog({
                               <span
                                 className="font-mono text-xs text-muted-foreground"
                                 data-testid={`text-cost-per-kg-${sel.type}-${sel.sourceId}`}
-                                title={historicalSourcesLocked ? "Recorded weighted-average supplier rate at the time of the mix" : "Current supplier rate, used only for an edit estimate"}
+                                title={
+                                  historicalSourcesLocked
+                                    ? "Recorded weighted-average supplier rate at the time of the mix"
+                                    : "Current supplier rate, used only for an edit estimate"
+                                }
                               >
                                 ${sel.costPerKg.toFixed(4)}
                               </span>

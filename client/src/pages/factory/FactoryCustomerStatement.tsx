@@ -49,9 +49,10 @@ export default function FactoryCustomerStatement() {
     enabled: Boolean(selectedCompany?.id),
     staleTime: 5 * 60000,
   });
-  const hiddenTabs = myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
-    ? myAccess.hiddenCostFields
-    : ["hide_tab_customer_statement", "hide_tab_customer_pricelist"];
+  const hiddenTabs =
+    myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
+      ? myAccess.hiddenCostFields
+      : ["hide_tab_customer_statement", "hide_tab_customer_pricelist"];
   const showStatementTab = !hiddenTabs.includes("hide_tab_customer_statement");
   const showPriceListTab = !hiddenTabs.includes("hide_tab_customer_pricelist");
   const visibleCustomerTabs = [showStatementTab ? "statement" : null, showPriceListTab ? "pricelist" : null].filter(
@@ -85,7 +86,14 @@ export default function FactoryCustomerStatement() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: statement, isLoading } = useQuery<StatementData>({
-    queryKey: companyQueryKey("/api/factory/customers", selectedCompany?.id, customerId, "statement", filterDateFrom, filterDateTo),
+    queryKey: companyQueryKey(
+      "/api/factory/customers",
+      selectedCompany?.id,
+      customerId,
+      "statement",
+      filterDateFrom,
+      filterDateTo
+    ),
     queryFn: async () => {
       // Re-group at each date boundary: a late charge must never shift into
       // a different accounting period when filtering the statement.

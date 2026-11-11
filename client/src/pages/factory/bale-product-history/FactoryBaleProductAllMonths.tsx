@@ -42,13 +42,23 @@ export function FactoryBaleProductAllMonths() {
     queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
     enabled: Boolean(selectedCompany?.id),
   });
-  const accessReady = Boolean(selectedCompany?.id && myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true);
-  const hiddenCost = accessReady && myAccess?.hideAllCosts !== true
-    ? (myAccess?.hiddenCostFields ?? [])
-    : ["bale_history_cost_per_kg", "bale_history_total_cost"];
+  const accessReady = Boolean(
+    selectedCompany?.id && myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
+  );
+  const hiddenCost =
+    accessReady && myAccess?.hideAllCosts !== true
+      ? (myAccess?.hiddenCostFields ?? [])
+      : ["bale_history_cost_per_kg", "bale_history_total_cost"];
 
   const { data: responseData, isLoading } = useQuery<{ bales: BaleItem[]; sellingPrice?: string }>({
-    queryKey: companyQueryKey("/api/factory/bale-product-history", selectedCompany?.id, productId, locationId, year, "all"),
+    queryKey: companyQueryKey(
+      "/api/factory/bale-product-history",
+      selectedCompany?.id,
+      productId,
+      locationId,
+      year,
+      "all"
+    ),
     queryFn: async () => {
       const response = await fetch(
         `/api/factory/bale-product-history/${productId}/${locationId}/all-bales?year=${year}`,
@@ -82,9 +92,18 @@ export function FactoryBaleProductAllMonths() {
 
   const handleWeightSuccess = () => {
     queryClient.invalidateQueries({
-      queryKey: companyQueryKey("/api/factory/bale-product-history", selectedCompany?.id, productId, locationId, year, "all"),
+      queryKey: companyQueryKey(
+        "/api/factory/bale-product-history",
+        selectedCompany?.id,
+        productId,
+        locationId,
+        year,
+        "all"
+      ),
     });
-    queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/bale-product-history", selectedCompany?.id, productId, locationId, year) });
+    queryClient.invalidateQueries({
+      queryKey: companyQueryKey("/api/factory/bale-product-history", selectedCompany?.id, productId, locationId, year),
+    });
   };
 
   if (isLoading) {

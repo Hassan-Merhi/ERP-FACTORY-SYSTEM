@@ -155,7 +155,10 @@ export function useBalesHistoryModel() {
   // View Only / Create Only company roles never change existing bales: the page
   // hides repack and delete (fullAccess-gated) and ignores rename, weight edit
   // and bulk-selection gestures. The server refuses the same writes.
-  const scopedAccess = selectedCompany?.id && factoryAccess?.companyId === selectedCompany.id && factoryAccess.hasFactoryAccess === true ? factoryAccess : undefined;
+  const scopedAccess =
+    selectedCompany?.id && factoryAccess?.companyId === selectedCompany.id && factoryAccess.hasFactoryAccess === true
+      ? factoryAccess
+      : undefined;
   const myAccess = scopedAccess && !recordChanges.allowed ? { ...scopedAccess, fullAccess: false } : scopedAccess;
 
   const { data: balesResponse, isLoading } = useQuery<BalesPage>({
@@ -166,7 +169,7 @@ export function useBalesHistoryModel() {
       currentPage,
       statusFilter !== "all" ? statusFilter : undefined,
       batchFilter !== "all" ? batchFilter : undefined,
-      debouncedSearch || undefined,
+      debouncedSearch || undefined
     ),
     queryFn: async () => {
       const params = new URLSearchParams();

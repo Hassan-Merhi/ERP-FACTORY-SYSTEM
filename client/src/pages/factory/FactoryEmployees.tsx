@@ -160,7 +160,9 @@ export default function FactoryEmployees() {
     },
     onSuccess: (emp: Employee) => {
       queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id) });
-      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id, emp.id) });
+      queryClient.invalidateQueries({
+        queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id, emp.id),
+      });
       toast({ title: "Employee updated" });
       setEditingEmployee(null);
     },
