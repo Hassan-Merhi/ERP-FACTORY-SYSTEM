@@ -45,8 +45,9 @@ describe("Stock Transfer Order WhatsApp approval — Phase 1 contract", () => {
     const ui = file("client/src/pages/stock-transfer-order/useStockTransferOrderModel.tsx");
     const route = file("server/routes/fiscal-transfers/create.ts");
     const service = file("server/services/inventory/createStockTransfer.ts");
-    expect(ui).toContain('workflowOrigin: "stock_transfer_order"');
-    expect(route).toContain('workflowOrigin === "stock_transfer_order"');
+    expect(ui).toContain('apiRequest("POST", "/api/stock-transfer-orders"');
+    expect(route).toContain('req.path === "/api/stock-transfer-orders"');
+    expect(route).toContain('req.body?.workflowOrigin !== undefined');
     expect(route).toContain('workflowOrigin,');
     expect(service).toContain('workflowOrigin === "stock_transfer_order" ? "stock_transfer_order" : "stock_transfer"');
   });
