@@ -15,6 +15,7 @@ export interface AccountItem {
   value: number;
   category: string;
   balanceSide?: "Dr" | "Cr";
+  breakdown?: Array<{ label: string; native?: string; usd: number; sourceKey?: string }>;
 }
 
 export interface BreakdownItem {
