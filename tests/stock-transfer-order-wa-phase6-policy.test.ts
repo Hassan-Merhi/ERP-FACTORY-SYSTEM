@@ -58,6 +58,16 @@ describe("Stock Transfer Order Phase 6 administrator reconciliation policy", () 
     })).toThrow();
   });
 
+  it("cannot claim a file was both found and missing", () => {
+    expect(() => parseStockTransferOrderDeliveryReconciliation({
+      ...evidence, confirmedNotDelivered: true,
+    })).toThrow();
+    expect(() => parseStockTransferOrderDeliveryReconciliation({
+      ...evidence, action: "authorize_retry",
+      confirmedDelivered: true, confirmedNotDelivered: true, acknowledgeDuplicateRisk: true,
+    })).toThrow();
+  });
+
   it("rejects missing/short/oversized notes and control character injection", () => {
     expect(() => parseStockTransferOrderDeliveryReconciliation({ ...evidence, reason: "checked" }))
       .toThrow();
