@@ -196,6 +196,7 @@ export function seededRecord(i: number) {
   return {
     id: i,
     name: `Name ${i}`,
+    legalName: `Cust ${i}`,
     code: `C${i}`,
     companyId: 1,
     locationId: 1,

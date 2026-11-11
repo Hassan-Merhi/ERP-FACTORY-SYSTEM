@@ -1,5 +1,7 @@
 import type { ClientErrorLike } from "@/lib/clientError";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAdminOverride } from "@/hooks/use-admin-override";
 import { queryClient } from "@/lib/queryClient";
@@ -84,6 +86,7 @@ function AccountSelect({
 // CHARGE DIALOG
 // ─────────────────────────────────────────────────────────────
 function ChargeDialog({ transporterId, open, onClose }: { transporterId: number; open: boolean; onClose: () => void }) {
+  const { selectedCompany } = useCompany();
   const { wrapAdminAction, AdminDialog } = useAdminOverride();
   const { toast } = useToast();
   const [amount, setAmount] = useState("");
@@ -92,8 +95,8 @@ function ChargeDialog({ transporterId, open, onClose }: { transporterId: number;
   const [expenseAccountId, setExpenseAccountId] = useState("");
 
   const { data: accounts = [] } = useQuery<LedgerAccount[]>({
-    queryKey: ["/api/factory/transporter-accounts"],
-    enabled: open,
+    queryKey: companyQueryKey("/api/factory/transporter-accounts", selectedCompany?.id),
+    enabled: open && Boolean(selectedCompany?.id),
   });
 
   const charge = useMutation({
@@ -107,7 +110,7 @@ function ChargeDialog({ transporterId, open, onClose }: { transporterId: number;
     onSuccess: () => {
       toast({ title: "Charge recorded" });
       queryClient.invalidateQueries({ queryKey: [API] });
-      queryClient.invalidateQueries({ queryKey: [API, transporterId] });
+      queryClient.invalidateQueries({ queryKey: companyQueryKey(API, selectedCompany?.id, transporterId) });
       setAmount("");
       setDescription("");
       onClose();
@@ -195,6 +198,7 @@ function PaymentDialog({
   open: boolean;
   onClose: () => void;
 }) {
+  const { selectedCompany } = useCompany();
   const { wrapAdminAction, AdminDialog } = useAdminOverride();
   const { toast } = useToast();
   const [amount, setAmount] = useState("");
@@ -203,8 +207,8 @@ function PaymentDialog({
   const [cashAccountId, setCashAccountId] = useState("");
 
   const { data: accounts = [] } = useQuery<LedgerAccount[]>({
-    queryKey: ["/api/factory/transporter-accounts"],
-    enabled: open,
+    queryKey: companyQueryKey("/api/factory/transporter-accounts", selectedCompany?.id),
+    enabled: open && Boolean(selectedCompany?.id),
   });
 
   const pay = useMutation({
@@ -218,7 +222,7 @@ function PaymentDialog({
     onSuccess: () => {
       toast({ title: "Payment recorded" });
       queryClient.invalidateQueries({ queryKey: [API] });
-      queryClient.invalidateQueries({ queryKey: [API, transporterId] });
+      queryClient.invalidateQueries({ queryKey: companyQueryKey(API, selectedCompany?.id, transporterId) });
       setAmount("");
       setDescription("");
       onClose();
@@ -298,6 +302,7 @@ function PaymentDialog({
 // STATEMENT VIEW (detail page)
 // ─────────────────────────────────────────────────────────────
 function TransporterStatement({ transporterId, onBack }: { transporterId: number; onBack: () => void }) {
+  const { selectedCompany } = useCompany();
   const { wrapAdminAction, AdminDialog } = useAdminOverride();
   const { toast } = useToast();
   const [chargeOpen, setChargeOpen] = useState(false);
@@ -308,7 +313,8 @@ function TransporterStatement({ transporterId, onBack }: { transporterId: number
   const recordChanges = useExistingRecordChangeAccess();
 
   const { data, isLoading } = useQuery<TransporterDetail>({
-    queryKey: [API, transporterId],
+    queryKey: companyQueryKey(API, selectedCompany?.id, transporterId),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: () => fetch(`${API}/${transporterId}`, { credentials: "include" }).then((r) => r.json()),
   });
 
@@ -320,7 +326,7 @@ function TransporterStatement({ transporterId, onBack }: { transporterId: number
     onSuccess: () => {
       toast({ title: "Entry deleted" });
       queryClient.invalidateQueries({ queryKey: [API] });
-      queryClient.invalidateQueries({ queryKey: [API, transporterId] });
+      queryClient.invalidateQueries({ queryKey: companyQueryKey(API, selectedCompany?.id, transporterId) });
     },
     onError: (e: ClientErrorLike) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
@@ -595,13 +601,19 @@ function AddTransporterDialog({ open, onClose }: { open: boolean; onClose: () =>
 // MAIN PAGE — list
 // ─────────────────────────────────────────────────────────────
 export default function FactoryTransporters() {
+  const { selectedCompany } = useCompany();
   const { AdminDialog } = useAdminOverride();
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const canAddTransporter = useExistingRecordChangeAccess().canCreate("POST", API);
+  useEffect(() => {
+    setSelectedId(null);
+    setAddOpen(false);
+  }, [selectedCompany?.id]);
 
   const { data: transporters = [], isLoading } = useQuery<Transporter[]>({
-    queryKey: [API],
+    queryKey: companyQueryKey(API, selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
   });
 
   if (selectedId !== null) {

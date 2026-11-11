@@ -97,15 +97,15 @@ export function CreateMixBatchDialog({ open, onOpenChange, onCreated }: CreateMi
     enabled: open,
   });
 
-  // Only show suppliers that still have raw stock available to add to a mix batch.
-  const availableSuppliers = supplierStock?.filter((s) => {
-    const remaining = parseFloat(s.remainingKg);
-    return (
+  // A supplier with an established USD cost may be used while its stock is
+  // temporarily negative: the next same-supplier offload nets the shortage.
+  // Do not hide suppliers merely because remainingKg is zero or negative.
+  const availableSuppliers = supplierStock?.filter(
+    (s) =>
       s.supplierId !== null &&
-      remaining > 0 &&
+      getSupplierRate(s) > 0 &&
       !selectedSources.some((sel) => sel.type === "supplier" && sel.sourceId === s.supplierId!)
-    );
-  });
+  );
 
   const availableBatchesForSource = existingBatches?.filter((b) => {
     const remaining = parseFloat(b.totalWeightKg) - parseFloat(b.usedKg);
@@ -295,9 +295,8 @@ export function CreateMixBatchDialog({ open, onOpenChange, onCreated }: CreateMi
       const available = parseFloat(stock.remainingKg);
       // Over-use allowed: no guard on weight > available
 
-      // Use the same true remaining-value rate as the Raw Stock card (valueRemainingUsd ÷
-      // freeKg), not the received-weighted costPerKgUsd — otherwise this preview (and the
-      // batch actually created from it) can diverge from what the Raw Stock card shows.
+      // Preview the persisted supplier USD rate. Negative stock must not
+      // create a zero-rate or client-supplied historical cost.
       const costPerKg = getSupplierRate(stock);
       setSelectedSources((prev) => [
         ...prev,

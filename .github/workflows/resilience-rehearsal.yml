@@ -137,6 +137,10 @@ jobs:
           RESTORE_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/heliumdb_restore
           dropdb --if-exists -h localhost -U postgres heliumdb_restore
           createdb -h localhost -U postgres heliumdb_restore
+          SOURCE_DATABASE_URL="$DATABASE_URL" \
+          RESTORE_DATABASE_URL="$RESTORE_DATABASE_URL" \
+          RESTORE_TARGET_CONFIRMATION=ISOLATED_EMPTY_RESTORE \
+            node scripts/verify-restore-target.mjs
           started_at=$(date +%s)
           pg_restore \
             --exit-on-error \

@@ -24,6 +24,7 @@ import { isAbortError } from "./abortError";
 import { getRealtimeClientId } from "./realtimeClientIdentity";
 import { factoryPageOwnsAccountsAllRead, factoryPageOwnsSharedAccountingRead } from "./factoryClientAccess";
 import { coldStartReadOnlyActive, coldStartReadOnlyResponse } from "./offline/coldStartState";
+import { isKnownOffline } from "./offline/connectivityState";
 
 /** Session writes a read-only cold-start viewer may still make (sign in / out). */
 const COLD_START_ALLOWED_WRITES = new Set(["/api/auth/login", "/api/auth/logout", "/api/csrf-token"]);
@@ -591,6 +592,17 @@ export async function apiRequest(
     }
     const { submitDurableVoucherWithEntries } = await import("./offline/voucherCapture");
     return submitDurableVoucherWithEntries({ companyId, userId: String(user.id) }, data, getAppDate());
+  }
+  if (
+    OFFLINE_MODE_ENABLED &&
+    !["GET", "HEAD", "OPTIONS"].includes(method.toUpperCase()) &&
+    (isKnownOffline() || coldStartReadOnlyActive())
+  ) {
+    // Standalone offline mode: known to be offline BEFORE sending. Supported
+    // writes are saved on this device for later delivery to the cloud; every
+    // other write is refused with its reason. Never after a send was cut off.
+    const { captureOfflineWriteForSignedInUser } = await import("./offline/browserCapture");
+    return captureOfflineWriteForSignedInUser(queryClient.getQueryData(["/api/auth/me"]), method, url, data);
   }
   const prepared = await prepareApiRequest(method, url, data, timeoutMs);
 

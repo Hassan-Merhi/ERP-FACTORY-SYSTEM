@@ -1,6 +1,7 @@
 import { useState, type MouseEvent } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useCompany } from "@/contexts/CompanyContext";
+import { erpPageAccessQueryOptions } from "@/app/erpAccessQuery";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -10,12 +11,14 @@ import { PAGE_SIZE } from "./utils";
 import { useStockItemsFilters } from "./useStockItemsFilters";
 
 export function useStockItems() {
-  const { data: myErpPages } = useQuery<{ hiddenErpCostFields?: string[] }>({ queryKey: ["/api/my-erp-pages"] });
+  const { selectedCompany } = useCompany();
+  const { data: myErpPages } = useQuery<{ hiddenErpCostFields?: string[] }>({
+    ...erpPageAccessQueryOptions(selectedCompany?.id, true),
+  });
   const hideStockRates = (myErpPages?.hiddenErpCostFields ?? []).includes("stock_rates");
 
   // Filters persist per company for the session and reset pagination on every
   // change; the debounce lives inside the hook.
-  const { selectedCompany } = useCompany();
   const {
     filters: { searchTerm, selectedGroupFilter, selectedGradeFilter, selectedCategoryFilter },
     page: currentPage,

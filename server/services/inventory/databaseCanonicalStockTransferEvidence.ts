@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { ConvergenceReconciliationError } from "../accounting/convergenceReconciliation";
-import { summarizeCanonicalStockTransferEvidence } from "./canonicalStockTransferEvidence";
+import { summarizeCanonicalStockTransferNetEvidence } from "./canonicalStockTransferEvidence";
 import type {
   StockTransferDocumentSnapshot,
   StockTransferMovementEvidence,
@@ -49,9 +49,14 @@ function sourceIds(documents: StockTransferDocumentSnapshot[]): string[] {
 
 /**
  * Reads canonical movement evidence only for the authoritative stock-transfer
- * documents supplied by the database document adapter. Keeping the source-id
- * filter in the SQL boundary prevents unrelated, deleted, draft, or another
- * domain's movements from being silently folded into a reconciliation run.
+ * documents supplied by the database document adapter. Ordinary writes are
+ * keyed by transfer ID while both Excel imports and voucher-level edit routes
+ * are keyed by voucher ID.
+ * The explicit requested triples (transfer, voucher, destination) prevent
+ * cross-document matches and normalize every movement to the transfer ID.
+ * Full edits reverse and reissue while approval revisions move only DELTAS;
+ * the signed net movement at the destination handles both without discarding
+ * the canonical audit history.
  */
 export const loadDatabaseCanonicalStockTransferEvidence: StockTransferMovementEvidenceLoader = async ({
   tx,
@@ -71,22 +76,46 @@ export const loadDatabaseCanonicalStockTransferEvidence: StockTransferMovementEv
   }
 
   const ids = sourceIds(documents);
-  const idList = sql.join(
-    ids.map((id) => sql`${id}`),
+  // Ordinary transfers are identified by transfer ID; spreadsheet imports
+  // use voucher ID. All journal generations, including reversals and delta
+  // revisions, must be read to derive the current signed stock quantity.
+  const pairs = sql.join(
+    documents.map(
+      (document) => sql`(
+        ${String(positiveInteger(document.transferId, "document.transferId"))},
+        ${String(positiveInteger(document.voucherId, "document.voucherId"))},
+        ${positiveInteger(document.destinationLocationId, "document.destinationLocationId")}
+      )`
+    ),
     sql`, `
   );
   const result = await tx.execute(sql`
+    WITH requested(transfer_id, voucher_id, destination_location_id) AS (VALUES ${pairs})
     SELECT
-      company_id AS "companyId",
-      source_type AS "sourceType",
-      source_id AS "sourceId",
-      quantity_delta AS "quantityDelta",
-      unit_cost AS "unitCost"
-    FROM canonical_stock_movements
-    WHERE company_id = ${scopedCompanyId}
-      AND source_type = 'stock-transfer'
-      AND source_id IN (${idList})
-    ORDER BY source_id, id
+      movement.company_id AS "companyId",
+      'stock-transfer'::text AS "sourceType",
+      requested.transfer_id AS "sourceId",
+      movement.stock_item_id AS "stockItemId",
+      movement.location_id AS "locationId",
+      requested.destination_location_id AS "destinationLocationId",
+      movement.idempotency_key AS "idempotencyKey",
+      movement.quantity_delta AS "quantityDelta",
+      movement.unit_cost AS "unitCost"
+    FROM requested
+    INNER JOIN canonical_stock_movements movement
+      ON movement.company_id = ${scopedCompanyId}
+     AND (
+       (movement.source_type = 'stock-transfer'
+        AND movement.source_id = requested.transfer_id)
+       OR
+       (movement.source_type IN (
+          'stock-transfer-import',
+          'stock-transfer-import-multi-source',
+          'voucher_stock_transfer_edit_reverse',
+          'voucher_stock_transfer_edit_apply'
+        ) AND movement.source_id = requested.voucher_id)
+     )
+    ORDER BY requested.transfer_id, movement.id
   `);
 
   const rows = resultRows(result);
@@ -116,7 +145,7 @@ export const loadDatabaseCanonicalStockTransferEvidence: StockTransferMovementEv
     }
   }
 
-  return summarizeCanonicalStockTransferEvidence({
+  return summarizeCanonicalStockTransferNetEvidence({
     companyId: scopedCompanyId,
     rows: rows.map((row: Record<string, unknown>) => ({
       // Each row was validated in the loop above; these repeat the same
@@ -126,6 +155,10 @@ export const loadDatabaseCanonicalStockTransferEvidence: StockTransferMovementEv
       sourceId: String(row.sourceId ?? "").trim(),
       quantityDelta: String(row.quantityDelta),
       unitCost: String(row.unitCost),
+      idempotencyKey: String(row.idempotencyKey ?? ""),
+      stockItemId: positiveInteger(row.stockItemId, "movement.stockItemId"),
+      locationId: positiveInteger(row.locationId, "movement.locationId"),
+      destinationLocationId: positiveInteger(row.destinationLocationId, "movement.destinationLocationId"),
     })),
   });
 };

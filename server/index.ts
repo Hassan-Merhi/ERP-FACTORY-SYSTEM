@@ -535,6 +535,14 @@ let migrationsDone = false;
         try {
           await runMigrations();
         } catch (err: unknown) {
+          if (process.env.LEGACY_STARTUP_MIGRATION_MODE === "verify-only") {
+            // A strict migration cutover must never fall back to the old
+            // nonfatal readiness behavior. Keep prior Render instance alive.
+            logger.error("Strict legacy migration verification blocked boot", {
+              error: getErrorMessage(err) ?? err,
+            });
+            throw err;
+          }
           logger.error("Migration error (non-fatal — server will still start):", {
             error: getErrorMessage(err) ?? err,
           });

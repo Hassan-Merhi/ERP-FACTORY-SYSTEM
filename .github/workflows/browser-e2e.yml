@@ -9,6 +9,7 @@ on:
       - "shared/**"
       - "scripts/prepare-phase7-browser-e2e-fixture.mjs"
       - "scripts/run-phase7-browser-e2e.mjs"
+      - "scripts/verify-factory-blue-theme-browser.mjs"
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/browser-e2e.yml"
@@ -84,6 +85,8 @@ jobs:
           node scripts/build-server.mjs
           node scripts/verify-server-bundle.mjs
           node scripts/verify-runtime-dependencies.mjs
+      - name: Factory blue-theme Chromium render smoke (light/dark)
+        run: node scripts/verify-factory-blue-theme-browser.mjs
       - name: Prepare disposable transactional fixture
         run: |
           node node_modules/drizzle-kit/bin.cjs push --force
@@ -127,5 +130,6 @@ jobs:
           path: |
             artifacts/phase7-browser-e2e
             artifacts/phase7-browser-startup
+            artifacts/factory-theme-phase4
           if-no-files-found: warn
           retention-days: 14

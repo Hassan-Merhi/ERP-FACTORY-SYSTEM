@@ -20,6 +20,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAppMode, useModePrefix } from "@/contexts/AppModeContext";
 import { getApiRequest } from "@/lib/factoryApi";
 import { useCompany } from "@/contexts/CompanyContext";
+import { erpPageAccessQueryOptions } from "@/app/erpAccessQuery";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useDateJump } from "@/hooks/use-date-jump";
@@ -94,7 +95,9 @@ export function useAccountsLegacyModel() {
   function formatAmountForAccount(amount: number, _accountType?: string): string {
     return formatHistoricalBaseAmount(amount);
   }
-  const { data: myErpPages } = useQuery<{ hiddenErpCostFields?: string[] }>({ queryKey: ["/api/my-erp-pages"] });
+  const { data: myErpPages } = useQuery<{ hiddenErpCostFields?: string[] }>({
+    ...erpPageAccessQueryOptions(selectedCompany?.id, true),
+  });
   const hideBalances = (myErpPages?.hiddenErpCostFields ?? []).includes("accounts_balances");
   const appMode = useAppMode();
   const accountsListUrl = appMode === "factory" ? "/api/factory/accounts/list" : "/api/accounts/all";

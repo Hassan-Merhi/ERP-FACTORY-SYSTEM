@@ -43,6 +43,7 @@ import { isBlockingQueryError } from "@/lib/abortError";
 import { useDateJump } from "@/hooks/use-date-jump";
 import { createVoucherSchema } from "./daybook/types";
 import type {
+import { erpPageAccessQueryOptions } from "@/app/erpAccessQuery";
   LedgerAccount,
   BankAccount,
   Supplier,
@@ -79,7 +80,9 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
   const { formatDisplayDate, formatDisplayTime } = useDateFormat();
   const { formatHistoricalBaseAmount: formatAmount, formatTransactionAmount } = useCurrencyContext();
   const [, navigate] = useLocation();
-  const { data: myErpPages } = useQuery<{ hiddenErpCostFields?: string[] }>({ queryKey: ["/api/my-erp-pages"] });
+  const { data: myErpPages } = useQuery<{ hiddenErpCostFields?: string[] }>({
+    ...erpPageAccessQueryOptions(selectedCompany?.id, true),
+  });
   const hiddenErpCosts = myErpPages?.hiddenErpCostFields ?? [];
   const hideAmounts = hiddenErpCosts.includes("daybook_amounts");
   const [activeDaybookTab, setActiveDaybookTab] = useState<"transactions" | "activity">("transactions");

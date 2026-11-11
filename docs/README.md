@@ -369,6 +369,20 @@ These current-reference documents are indexed here for audit coverage. Their beh
 | [properties-unification-phase6-handoff.md](properties-unification-phase6-handoff.md) | Properties Unification — Phase 6 Parity Audit and Claude Merge Handoff |
 | [properties-unification-phases-12-15-tracker.md](properties-unification-phases-12-15-tracker.md) | Properties Mode — Follow-up Unification Execution Tracker (Phases 12–15) |
 | [properties-unification-phases-7-11-tracker.md](properties-unification-phases-7-11-tracker.md) | Properties Mode — Unification Execution Tracker (Phases 7–11) |
+| [database-migration-modernization-2026-11-11.md](database-migration-modernization-2026-11-11.md) | Database and migrations modernization — baseline and rollout |
+| [database-phase3-continued-inventory.md](database-phase3-continued-inventory.md) | Phase 3 continued — Startup mutation inventory and safe extraction |
+| [database-phase3-startup-cutover.md](database-phase3-startup-cutover.md) | Phase 3 — Startup DDL extraction and verification-only cutover |
+| [database-phase4-integrity-hardening.md](database-phase4-integrity-hardening.md) | Phase 4 — Database constraints and integrity |
+| [database-phase5-schema-drift.md](database-phase5-schema-drift.md) | Phase 5 — Schema drift detection and reference certification |
+| [database-phase6-performance.md](database-phase6-performance.md) | Phase 6 — Database performance and index optimization |
+| [database-phase7-disaster-recovery.md](database-phase7-disaster-recovery.md) | Phase 7 — Backup and disaster recovery verification |
+| [database-phase8-migration-testing.md](database-phase8-migration-testing.md) | Phase 8 — Automated database migration testing |
+| [database-phase9-production-rollout.md](database-phase9-production-rollout.md) | Phase 9 — Production rollout and certification gate |
+| [factory-unification/phase-2-2026-11-10-continuation.md](factory-unification/phase-2-2026-11-10-continuation.md) | Factory Unification Phase 2 continuation handoff (2026-11-10) |
+| [audits/erp-phase3-navigation-permissions-ux-2026-11-11.md](audits/erp-phase3-navigation-permissions-ux-2026-11-11.md) | ERP Phase 3 navigation, permissions and company page grant audit |
+| [audits/erp-phase4-confirmed-defect-remediation-2026-11-11.md](audits/erp-phase4-confirmed-defect-remediation-2026-11-11.md) | ERP Phase 4 stock transfer convergence defect remediation |
+| [accounting/hadi-lshi-rent-monthwise-original-voucher-audit-2026-11-10.md](accounting/hadi-lshi-rent-monthwise-original-voucher-audit-2026-11-10.md) | HADI L'SHI rent month-by-month original voucher audit |
+| [audits/erp-phase1-financial-integrity-2026-11-11.md](audits/erp-phase1-financial-integrity-2026-11-11.md) | ERP Phase 1 financial integrity audit (stock adjustment lifecycle) |
 | [stock-transfer-order-whatsapp-approval-phase1.md](stock-transfer-order-whatsapp-approval-phase1.md) | Stock Transfer Order → WhatsApp approval — Phase 1 |
 | [stock-transfer-order-whatsapp-approval-phase2.md](stock-transfer-order-whatsapp-approval-phase2.md) | Stock Transfer Order WhatsApp approval — Phase 2 |
 | [stock-transfer-order-whatsapp-approval-phase3.md](stock-transfer-order-whatsapp-approval-phase3.md) | Stock Transfer Order — GREEN API inbound approval (Phase 3) |

@@ -47,13 +47,22 @@ try {
   await client.end().catch(() => {});
 }
 
-if (companyRows > 0 && process.env.DB_PUSH_ALLOW_NONEMPTY !== "1") {
+// Production is never a supported target for schema push: use reviewed migrations.
+if (process.env.NODE_ENV === "production" || process.env.RENDER === "true") {
+  console.error("db:push guard: production/Render environments are not disposable. Use versioned migrations.");
+  process.exit(1);
+}
+
+if (companyRows > 0 && (
+  process.env.DB_PUSH_ALLOW_NONEMPTY !== "1" ||
+  process.env.DB_PUSH_ACK_DATA_LOSS !== "I_UNDERSTAND"
+)) {
   console.error(
     [
       `db:push guard: refusing to push to a database that holds data (${companyRows} companies).`,
       "drizzle-kit push can drop tables and sequences that are created at runtime rather than declared",
       "in shared/schema. Use it only on a disposable database. If you are certain, set",
-      "DB_PUSH_ALLOW_NONEMPTY=1 for this one command.",
+      "DB_PUSH_ALLOW_NONEMPTY=1 and DB_PUSH_ACK_DATA_LOSS=I_UNDERSTAND for this one command.",
     ].join("\n")
   );
   process.exit(1);

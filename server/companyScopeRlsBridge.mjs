@@ -154,6 +154,9 @@ async function missingRlsReadiness(client, migrationSql) {
 export async function ensureCompanyScopeRlsReadiness() {
   const connectionString = resolveConnectionString();
   if (!connectionString) {
+    if (process.env.COMPANY_SCOPE_RLS_MODE === "verify-only") {
+      throw new Error("Company RLS read-only verification requires database configuration");
+    }
     log("WARN", "Company-scope RLS migration check skipped because no database configuration is available");
     return;
   }
@@ -170,12 +173,20 @@ export async function ensureCompanyScopeRlsReadiness() {
 
   try {
     await client.connect();
-    await client.query("BEGIN");
+    const verifyOnly = process.env.COMPANY_SCOPE_RLS_MODE === "verify-only";
+    await client.query(verifyOnly ? "BEGIN READ ONLY" : "BEGIN");
     await client.query("SET LOCAL lock_timeout = '15s'");
     await client.query("SET LOCAL statement_timeout = '90s'");
-    await client.query("SELECT pg_advisory_xact_lock($1)", [STARTUP_LOCK_KEY]);
+    if (!verifyOnly) await client.query("SELECT pg_advisory_xact_lock($1)", [STARTUP_LOCK_KEY]);
     const missing = await missingRlsReadiness(client, migrationSql);
     if (missing.length > 0) {
+      if (verifyOnly) {
+        throw new Error(
+          "Company-scope RLS schema drift: " +
+            missing.join(", ") +
+            ". Restore reviewed RLS migration manually before enabling verify-only."
+        );
+      }
       log("INFO", "Applying company-scope RLS readiness migration", { missing });
       await client.query(migrationSql);
     }
@@ -320,13 +331,14 @@ export async function ensureCompanyScopeRlsReadiness() {
       throw new Error("Voucher-entry company scope is out of sync with parent vouchers.");
     }
 
-    await client.query("COMMIT");
+    await client.query(verifyOnly ? "ROLLBACK" : "COMMIT");
     log("INFO", "Company-scope RLS fail-closed readiness verified", {
       tablesPresent: existingTables.length,
       policiesPresent: policyCheck.rows.length,
       forcedTables: existingTables.length,
       voucherEntryFastPath: true,
-      migrationApplied: missing.length > 0,
+      migrationApplied: !verifyOnly && missing.length > 0,
+      readOnlyVerification: verifyOnly,
       startupMigrationsEnabled: process.env.RUN_STARTUP_MIGRATIONS !== "false",
     });
   } catch (error) {
@@ -356,4 +368,6 @@ if (!globalThis[INSTALL_KEY]) {
 //
 // Wave 6 inventory repair is separately env-gated and fail-closed. It runs
 // after company-scope RLS readiness so the tenant-scoped transaction is valid.
-await import("./inventoryValuationWave6RepairBridge.mjs");
+if (process.env.COMPANY_SCOPE_RLS_MODE !== "verify-only") {
+  await import("./inventoryValuationWave6RepairBridge.mjs");
+}
