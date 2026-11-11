@@ -113,6 +113,107 @@ describe("Phase 6 signed net-position reconciliation", () => {
     expect(twice.payload.netPosition).toBe(815);
   });
 
+  it("shows one FX Gain and Loss account row across verified cash, EUR customers, and loans without changing historical book rows", () => {
+    const payload: MonetaryNetPositionPayload = {
+      forUs: {
+        total: 1318,
+        accounts: [
+          { id: 11, name: "EUR Cash", code: "CASH", category: "Cash", value: 118 },
+          { partyKind: "customer", partyId: 12, name: "AUD Customer", category: "Customer", value: 200 },
+          { code: "INVENTORY", name: "Finished stock", value: 1000, category: "Inventory" },
+        ],
+        breakdown: [{ name: "Cash", value: 118 }, { name: "Customer", value: 200 }, { name: "Inventory", value: 1000 }],
+      },
+      onUs: {
+        total: 70,
+        accounts: [{ id: 13, name: "EUR loan", code: "LOAN", category: "Loans", value: 70 }],
+        breakdown: [{ name: "Loans", value: 70 }],
+      },
+      netPosition: 1248,
+    };
+    const result = applyVerifiedMonetaryFxOverlay(
+      payload,
+      valuation([
+        { ...account("ledger:11", "118", "112"), nativeBalancesByCurrency: { EUR: "100" } },
+        { ...account("customer:12", "200", "210", "customer"), nativeBalancesByCurrency: { AUD: "300" } },
+        { ...account("ledger:13", "-70", "-65", "loan"), nativeBalancesByCurrency: { EUR: "-60" } },
+      ]),
+      { showFxAsRows: true }
+    );
+    const gain = result.payload.forUs?.accounts.find((a) => a.code === "FX_UNREALIZED_GAIN");
+    const loss = result.payload.onUs?.accounts.find((a) => a.code === "FX_UNREALIZED_LOSS");
+    // Gains: customer +10 and payable loan +5; loss: cash -6.
+    expect(gain?.value).toBe(15);
+    expect(loss?.value).toBe(6);
+    expect(result.payload.forUsTotal).toBe(1333);
+    expect(result.payload.onUsTotal).toBe(76);
+    expect(result.payload.netPosition).toBe(1257);
+    expect(result.payload.forUs?.accounts.find((a) => a.id === 11)?.value).toBe(118);
+    expect(result.payload.forUs?.accounts.find((a) => a.code === "INVENTORY")?.value).toBe(1000);
+    expect(result.payload.onUs?.accounts.find((a) => a.id === 13)?.value).toBe(70);
+    expect(gain?.breakdown).toHaveLength(2);
+    const second = applyVerifiedMonetaryFxOverlay(result.payload, valuation([
+      account("ledger:11", "118", "112"),
+      account("customer:12", "200", "210", "customer"),
+      account("ledger:13", "-70", "-65", "loan"),
+    ]), { showFxAsRows: true });
+    expect(second.appliedKeys).toEqual([]);
+    expect(second.payload.netPosition).toBe(1257);
+    expect(second.payload.forUs?.accounts.find((a) => a.code === "FX_UNREALIZED_GAIN")?.value).toBe(15);
+  });
+
+  it("combines monetary FX with pre-existing supplier FX gain, preserving the historical supplier amount", () => {
+    const payload: MonetaryNetPositionPayload = {
+      forUs: {
+        total: 459.44,
+        accounts: [{
+          name: "Unrealized FX Gains", code: "FX_UNREALIZED_GAIN",
+          category: "Exchange Rate Gains", value: 459.44,
+          breakdown: [{ label: "Supplier: Euro Imports", native: "EUR", usd: 459.44 }],
+        }],
+        breakdown: [{ name: "Exchange Rate Gains", value: 459.44 }],
+      },
+      onUs: {
+        total: 9135.5,
+        accounts: [
+          { code: "SUPPLIER", name: "Euro Imports", category: "Supplier", value: 9035.5 },
+          { id: 4, name: "Bank EUR payable", category: "Bank", value: 100 },
+        ],
+        breakdown: [{ name: "Suppliers", value: 9035.5 }, { name: "Bank", value: 100 }],
+      },
+      netPosition: -8676.06,
+    };
+    const result = applyVerifiedMonetaryFxOverlay(payload, valuation([
+      { ...account("ledger:4", "-100", "-110"), nativeBalancesByCurrency: { EUR: "-90" } },
+    ]), { showFxAsRows: true });
+    expect(result.payload.forUs?.accounts.filter((a) => a.code === "FX_UNREALIZED_GAIN")).toHaveLength(1);
+    expect(result.payload.forUs?.accounts.find((a) => a.code === "FX_UNREALIZED_GAIN")?.value).toBe(459.44);
+    expect(result.payload.onUs?.accounts.find((a) => a.code === "FX_UNREALIZED_LOSS")?.value).toBe(10);
+    expect(result.payload.netPosition).toBe(-8686.06);
+    expect(result.payload.onUs?.accounts.find((a) => a.code === "SUPPLIER")?.value).toBe(9035.5);
+  });
+
+  it("does not revalue missing, ambiguous, or separately managed wallet accounts", () => {
+    const payload: MonetaryNetPositionPayload = {
+      forUs: {
+        total: 200,
+        accounts: [
+          { id: 30, name: "Wallet", category: "Cash", value: 100 },
+          { id: 31, name: "Unknown currency", category: "Loan Deposits", value: 100 },
+        ],
+      },
+      onUs: { total: 0, accounts: [] },
+      netPosition: 200,
+    };
+    const result = applyVerifiedMonetaryFxOverlay(payload, valuation([
+      account("ledger:30", "100", "110"),
+      account("ledger:31", "100", null, "loan", true),
+    ]), { showFxAsRows: true, skipAccountKeys: new Set(["ledger:30"]) });
+    expect(result.appliedKeys).toEqual([]);
+    expect(result.payload.netPosition).toBe(200);
+    expect(result.payload.forUs?.accounts.some((a) => a.code === "FX_UNREALIZED_GAIN")).toBe(false);
+  });
+
   it("moves a signed loan receivable to the payable side without duplicating it", () => {
     const p: MonetaryNetPositionPayload = {
       forUs: { total: 100, accounts: [{ id: 8, name: "Loan", category: "Loan Deposits", value: 100 }] },

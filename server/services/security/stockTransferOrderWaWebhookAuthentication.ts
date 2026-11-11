@@ -8,7 +8,8 @@ import { createHash, timingSafeEqual } from "node:crypto";
 export function webhookTokenIsConfigured(): boolean {
   const token = process.env.STO_WA_GREEN_API_WEBHOOK_TOKEN;
   return typeof token === "string" && token.length >= 32 && token.length <= 256 &&
-    !/[\s\x00-\x1f]/.test(token);
+    // No whitespace and no ASCII control characters (U+0000–U+001F).
+    !Array.from(token).some((ch) => /\s/.test(ch) || ch.charCodeAt(0) <= 0x1f);
 }
 
 export function authorizedStockTransferOrderWaWebhook(authHeader: unknown): boolean {

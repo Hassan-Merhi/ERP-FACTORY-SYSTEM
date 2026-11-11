@@ -38,6 +38,7 @@ import type { NotInLedgerSectionData } from "@/components/netposition/NotInLedge
 import { useAccountDisplayOrder } from "@/hooks/useAccountDisplayOrder";
 import type { InlineOrderActions } from "@/components/accounts/InlineOrderButtons";
 import { SidePanel, type AccountItem, type BreakdownItem } from "./netprofitdetails/NetPositionSidePanel";
+import { FxHistoryDialog } from "@/components/netposition/FxHistoryDialog";
 
 interface NetProfitData {
   totalIncome: number;
@@ -91,6 +92,7 @@ export default function NetProfitDetails() {
   const { toast } = useToast();
   const [fromDate, setFromDate] = useState<string>("");
   const [toDate, setToDate] = useState<string>("");
+  const [fxHistorySide, setFxHistorySide] = useState<"gain" | "loss" | null>(null);
 
   const toIsoDate = (date: Date) =>
     [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join(
@@ -524,6 +526,7 @@ export default function NetProfitDetails() {
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
         <SidePanel
           id="assets"
+          onFxClick={setFxHistorySide}
           title="What We Have"
           subtitle={`${data?.forUs.accounts?.length || 0} asset accounts`}
           side="asset"
@@ -535,6 +538,7 @@ export default function NetProfitDetails() {
         />
         <SidePanel
           id="liabilities"
+          onFxClick={setFxHistorySide}
           title="What We Owe"
           subtitle={`${data?.onUs.accounts?.length || 0} liability accounts`}
           side="liability"
@@ -545,6 +549,20 @@ export default function NetProfitDetails() {
           orderActions={orderActions}
         />
       </div>
+
+      {fxHistorySide && data && (
+        <FxHistoryDialog
+          open={true}
+          onOpenChange={(open) => { if (!open) setFxHistorySide(null); }}
+          side={fxHistorySide}
+          amount={(fxHistorySide === "gain" ? data.forUs.accounts : data.onUs.accounts)
+            .find((a) => a.code === (fxHistorySide === "gain" ? "FX_UNREALIZED_GAIN" : "FX_UNREALIZED_LOSS"))?.value ?? 0}
+          sources={(fxHistorySide === "gain" ? data.forUs.accounts : data.onUs.accounts)
+            .find((a) => a.code === (fxHistorySide === "gain" ? "FX_UNREALIZED_GAIN" : "FX_UNREALIZED_LOSS"))?.breakdown}
+          scope="erp"
+          companyId={selectedCompany?.id}
+        />
+      )}
 
       {/* ── Amounts not yet in the ledger (never in the totals) ── */}
 

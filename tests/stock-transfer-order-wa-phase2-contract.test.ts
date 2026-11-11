@@ -16,7 +16,10 @@ const settings = read("client/src/pages/settings/StockTransferOrderApprovalSetti
 const transferCreate = read("server/routes/fiscal-transfers/create.ts");
 const permissionBoundary = read("server/routes/core/permissionBoundaryRoutes.ts");
 const routeManifest = JSON.parse(read("config/route-manifest.json")) as {
-  routeCount: number; middlewareMountCount: number; routes: string[]; middlewareMounts: string[];
+  routeCount: number;
+  middlewareMountCount: number;
+  routes: string[];
+  middlewareMounts: string[];
 };
 
 describe("Stock Transfer Order WhatsApp approval Phase 2", () => {
@@ -60,12 +63,15 @@ describe("Stock Transfer Order WhatsApp approval Phase 2", () => {
   });
 
   it("sends from the exact configured WhatsApp instance and saves the returned message ID", () => {
-    const sender = messageSender.slice(messageSender.indexOf("export async function sendStockTransferOrderApprovalRequest"));
+    const sender = messageSender.slice(
+      messageSender.indexOf("export async function sendStockTransferOrderApprovalRequest")
+    );
     expect(sender).toContain('"sendMessage"');
     expect(sender).toContain("idMessage");
     expect(sender).toContain('outcome: "uncertain"');
-    expect(sender.split("/** Send a plain text message to one specific chatId */")[0])
-      .not.toContain("fetchGreenApiWithAuthFallback");
+    expect(sender.split("/** Send a plain text message to one specific chatId */")[0]).not.toContain(
+      "fetchGreenApiWithAuthFallback"
+    );
     expect(server).toContain("sent.idMessage");
     expect(server).toContain("request_sent");
   });
@@ -73,7 +79,8 @@ describe("Stock Transfer Order WhatsApp approval Phase 2", () => {
   it("holds uncertain sends and never approves revisions during Phase 2", () => {
     expect(server).toContain('sent.outcome==="failed"');
     expect(server).toContain('reason:"request_send_uncertain"');
-    expect(server).toContain("Do not");
+    // The operator guidance for an uncertain send: never resend the same batch.
+    expect(server).toMatch(/do not send this batch again/i);
     expect(server).not.toContain("approveImmutableStockTransferRevision");
     expect(server).not.toContain("sendWhatsAppFileToChatId");
     expect(server).not.toContain("UPDATE stock_transfer_revisions SET status");
@@ -82,9 +89,7 @@ describe("Stock Transfer Order WhatsApp approval Phase 2", () => {
   it("pins the new route and permission boundaries in the reviewed manifest", () => {
     expect(routeManifest.routeCount).toBe(routeManifest.routes.length);
     expect(routeManifest.middlewareMountCount).toBe(routeManifest.middlewareMounts.length);
-    expect(routeManifest.routes).toContain(
-      "POST /api/stock-transfer-orders [requireAuth > <anonymous>]"
-    );
+    expect(routeManifest.routes).toContain("POST /api/stock-transfer-orders [requireAuth > <anonymous>]");
     expect(routeManifest.routes).toContain(
       "POST /api/stock-transfer-order/wa-approval/requests [requireAuth > <anonymous> > <anonymous>]"
     );
