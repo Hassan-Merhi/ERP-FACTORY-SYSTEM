@@ -44,6 +44,13 @@ Each source bridge retains its legacy compatibility startup behavior by default.
 - Both migrations are included in the isolated nine-migration PostgreSQL lifecycle suite. Do not apply them to production until historical startup migration history is reconciled.
 - The startup mutation report now also includes the complete `server/startup-schema/*.ts` SQL module directory. This report flags historical orphan cleanup, tenant permission deduplication, the legacy migration runner and always-on runtime schema as high-risk non-schema operations requiring separate approval.
 
+### More additive schema extracted: controlled migrations 010–012
+
+- `20261111_010_stock_item_columns.sql`: eleven idempotent `stock_items` columns required by PO Import and full-row stock readers.
+- `20261111_011_sp_invoice_charges.sql`: three Supplier Partner freight/surcharge-related invoice charge columns; no existing freight or landed-cost vouchers are adjusted.
+- `20261111_012_pos_port_departure.sql`: nullable POS container port departure date.
+- All three files are deliberately **schema-only** and included in the 12-migration scratch PostgreSQL lifecycle. They must not be applied to production until old history and startup dependencies have been reconciled.
+
 ### Unresolved cutover distinction
 
 Even where these additive schemas have controlled equivalents, the default legacy boot paths **still execute**. Switching the entire server to read-only startup cannot be considered complete until all ordered modules and service-level schema initializers are transitioned, historical cleanup and sequence correction are explicitly owned, and the new runner is reconciled with existing ledgers. The global read-only cutover remains intentionally blocked. This is *not* a green light to merge/deploy or bypass startup safeguards.
