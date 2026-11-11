@@ -161,7 +161,12 @@ export function registerFactoryMixBatchTopUpRoutes(app: Express) {
             // containers. Unallocated weight must fail the whole transaction:
             // never push excess onto the last container.
             let toDeduct = weight;
-            const taken: Array<{ containerId: number; kg: Decimal; adjustmentBacked?: boolean; supplierAdvance?: boolean }> = [];
+            const taken: Array<{
+              containerId: number;
+              kg: Decimal;
+              adjustmentBacked?: boolean;
+              supplierAdvance?: boolean;
+            }> = [];
             for (const rs of supplierRawStocks) {
               if (toDeduct.lessThanOrEqualTo(0.001)) break;
               const avail = MoneyDecimal.max(0, toMoney(rs.receivedKg).minus(toMoney(rs.usedKg)));
@@ -343,13 +348,13 @@ export function registerFactoryMixBatchTopUpRoutes(app: Express) {
               ? "SUPPLIER_ADVANCE"
               : sr.adjustmentBacked
                 ? "SUPPLIER_ADJUSTMENT_BACKED"
-              : sr.sourceBatchId
-                ? "BATCH"
-                : sr.supplierId
-                  ? sr.containerId
-                    ? "SUPPLIER_FIFO"
-                    : "SUPPLIER"
-                  : "CONTAINER_DIRECT",
+                : sr.sourceBatchId
+                  ? "BATCH"
+                  : sr.supplierId
+                    ? sr.containerId
+                      ? "SUPPLIER_FIFO"
+                      : "SUPPLIER"
+                    : "CONTAINER_DIRECT",
             sourceId: sr.supplierId || sr.containerId || sr.sourceBatchId || null,
             weightKg: sr.weightKg,
             quantityKg: sr.weightKg,

@@ -177,7 +177,12 @@ export function registerFactoryMixBatchCreateRoutes(app: Express) {
 
           // FIFO allocation of usedKg only — this determines WHICH container rows get
           // debited, never the cost rate itself (that's fixed above).
-          const perRsDeductions: Array<{ containerId: number; deduct: Decimal; adjustmentBacked?: boolean; supplierAdvance?: boolean }> = [];
+          const perRsDeductions: Array<{
+            containerId: number;
+            deduct: Decimal;
+            adjustmentBacked?: boolean;
+            supplierAdvance?: boolean;
+          }> = [];
           let remaining = weight;
           for (const rs of supplierRawStocks) {
             if (remaining.lessThanOrEqualTo(0.001)) break;
@@ -392,13 +397,13 @@ export function registerFactoryMixBatchCreateRoutes(app: Express) {
               ? "SUPPLIER_ADVANCE"
               : sr.adjustmentBacked
                 ? "SUPPLIER_ADJUSTMENT_BACKED"
-              : sr.sourceBatchId
-                ? "BATCH"
-                : sr.supplierId
-                  ? sr.containerId
-                    ? "SUPPLIER_FIFO"
-                    : "SUPPLIER"
-                  : "CONTAINER_DIRECT",
+                : sr.sourceBatchId
+                  ? "BATCH"
+                  : sr.supplierId
+                    ? sr.containerId
+                      ? "SUPPLIER_FIFO"
+                      : "SUPPLIER"
+                    : "CONTAINER_DIRECT",
             sourceId: sr.supplierId || sr.containerId || sr.sourceBatchId || null,
             weightKg: sr.weightKg,
             quantityKg: sr.weightKg,
