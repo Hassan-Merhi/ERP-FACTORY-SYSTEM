@@ -44,6 +44,7 @@ interface ContainerFormBodyProps {
   fxRateSource: "auto" | "manual";
   setFxRateSource: (v: "auto" | "manual") => void;
   fxEffectiveDate: string;
+  fxIsSuggestion: boolean;
   otherChargeLines: OtherChargeLine[];
   setOtherChargeLines: React.Dispatch<React.SetStateAction<OtherChargeLine[]>>;
   activeSuppliers: FactorySupplier[];
@@ -63,6 +64,7 @@ export function ContainerFormBody({
   fxRateSource,
   setFxRateSource,
   fxEffectiveDate,
+  fxIsSuggestion,
   otherChargeLines,
   setOtherChargeLines,
   activeSuppliers,
@@ -326,6 +328,12 @@ export function ContainerFormBody({
             />
           </div>
         </div>
+        {currency !== "USD" && fxRateSource === "auto" && fxIsSuggestion && (
+          <p className="text-xs text-amber-600 dark:text-amber-400" data-testid="container-auto-fx-suggestion">
+            This is a suggested dated FX quote, not yet a recorded rate. Create/Update will confirm and audit
+            the rate before saving. Admin or Owner permission is required.
+          </p>
+        )}
         {currency !== "USD" && fxRate && parseFloat(fxRate) > 0 && (
           <div className="text-sm text-muted-foreground">
             1 {currency} = {formatNumber(parseFloat(fxRate))} USD &nbsp;&nbsp;·&nbsp;&nbsp; 1 USD ={" "}

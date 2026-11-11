@@ -145,6 +145,17 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
         getConfigFx,
       });
 
+      // Reclassify verified unpaid foreign-currency supplier payables from their
+      // current-rate balance into historic-rate suppliers + actual FX display rows.
+      // Both sides receive the same offset: the real Net Position is unchanged.
+      const fxGainUsd = round2(supplierItems.reduce(
+        (sum, item) => sum + Math.max(0, item.fxBasisAdjustmentUsd ?? 0), 0
+      ));
+      const fxLossUsd = round2(supplierItems.reduce(
+        (sum, item) => sum + Math.max(0, -(item.fxBasisAdjustmentUsd ?? 0)), 0
+      ));
+      const supplierLiabilitiesAtHistoricBasis = round2(totalSupplierLiabilities + fxGainUsd - fxLossUsd);
+
       // ── 2. ERP ledger account balances for the factory company ──────────
       const factoryAccounts = await db
         .select()
@@ -634,12 +645,13 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
           totalSupplierOverpaymentsRounded +
           prepaidRent +
           employeeReceivablesTotal +
-          workerAdvancesValue
+          workerAdvancesValue +
+          fxGainUsd
       );
 
       // onUsTotal: ledger liabilities + supplier balances + customer credit balances (CR) + employee salaries + rent payable
       const onUsTotal = round2(
-        ledgerOnUsTotal + totalSupplierLiabilities + totalCustomerCr + employeeSalariesPayable + rentPayable
+        ledgerOnUsTotal + supplierLiabilitiesAtHistoricBasis + fxLossUsd + totalCustomerCr + employeeSalariesPayable + rentPayable
       );
       const netPosition = round2(forUsTotal - onUsTotal);
 
@@ -689,6 +701,12 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
         ...(stockOtwValue > 0 ? [factoryStockOtwEntry] : []),
         ...(verifiedOrders.length > 0 ? [verifiedOrderEntry] : []),
         ...(loadingOrders.length > 0 ? [loadingOrderEntry] : []),
+        ...(fxGainUsd > 0 ? [{
+          name: "Unrealized FX Gain (Supplier Payables)",
+          code: "FX_SUPPLIER_GAIN",
+          value: fxGainUsd,
+          category: "Exchange Rate Gains",
+        }] : []),
         ...cleanLedgerForUs.sort((a, b) => b.value - a.value).map((a) => ({ ...a, value: round2(a.value) })),
         ...customerDrItems
           .sort((a, b) => b.balanceUsd - a.balanceUsd)
@@ -756,10 +774,16 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
           .map((s) => ({
             name: s.name,
             code: "SUPPLIER",
-            value: round2(s.balanceUsd),
+            value: round2(s.balanceUsd + (s.fxBasisAdjustmentUsd ?? 0)),
             category: "Supplier",
             breakdown: s.breakdown,
           })),
+        ...(fxLossUsd > 0 ? [{
+          name: "Unrealized FX Loss (Supplier Payables)",
+          code: "FX_SUPPLIER_LOSS",
+          value: fxLossUsd,
+          category: "Exchange Rate Losses",
+        }] : []),
         ...ledgerOnUs.sort((a, b) => b.value - a.value).map((a) => ({ ...a, value: round2(a.value) })),
         {
           name: "Payroll Payable",
@@ -799,7 +823,8 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
         (mergedLedgerOnUsGrouped["Liability"] || 0) + employeeSalariesPayable
       );
       const onUsBreakdown = [
-        ...(totalSupplierLiabilities > 0 ? [{ name: "Suppliers", value: round2(totalSupplierLiabilities) }] : []),
+        ...(supplierLiabilitiesAtHistoricBasis > 0 ? [{ name: "Suppliers", value: supplierLiabilitiesAtHistoricBasis }] : []),
+        ...(fxLossUsd > 0 ? [{ name: "Exchange Rate Losses", value: fxLossUsd }] : []),
         ...Object.entries(mergedLedgerOnUsGrouped)
           .map(([name, value]) => ({ name, value: round2(value) }))
           .sort((a, b) => b.value - a.value),
@@ -817,7 +842,10 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
         netPositionLabel: netPosition >= 0 ? "We have more than we owe" : "We owe more than we have",
         forUs: { total: forUsTotal, breakdown: forUsBreakdown, accounts: forUsAccounts },
         onUs: { total: onUsTotal, breakdown: onUsBreakdown, accounts: onUsAccounts },
-        supplierLiabilities: round2(totalSupplierLiabilities),
+        supplierLiabilities: supplierLiabilitiesAtHistoricBasis,
+        supplierLiabilitiesCurrentRate: round2(totalSupplierLiabilities),
+        supplierFxGain: fxGainUsd,
+        supplierFxLoss: fxLossUsd,
         supplierOverpayments: round2(totalSupplierOverpayments),
         stockOtwValue,
         inventoryValue: baleInventoryValue,
