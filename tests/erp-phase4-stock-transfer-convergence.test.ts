@@ -161,6 +161,10 @@ describe("ERP Phase 4 canonical transfer import and edit convergence", () => {
     const [evidence] = summarizeCanonicalStockTransferNetEvidence({
       companyId: 9,
       rows: [
+        // A prior destination may be completely absent from the current
+        // document; its issue/reversal pair must still be validated.
+        ...batch("old-dest:issue", 7, 1, 3),
+        ...batch("old-dest:reverse", 7, 3, 1),
         ...batch("rev0:issue", 10, 1, 2),
         ...batch("rev1:issue", 2, 1, 2),
         ...batch("rev2:reverse", 3, 2, 1),
@@ -193,6 +197,17 @@ describe("ERP Phase 4 canonical transfer import and edit convergence", () => {
       summarizeCanonicalStockTransferNetEvidence({
         companyId: 9,
         rows: [first, { ...second, quantityDelta: "99" }],
+      })
+    ).toThrowError(expect.objectContaining({ code: "CONVERGENCE_STOCK_EVIDENCE_UNBALANCED" }));
+    // Even an OLD-destination batch contributes zero to current stock only
+    // after its two movement legs are independently proved to balance.
+    expect(() =>
+      summarizeCanonicalStockTransferNetEvidence({
+        companyId: 9,
+        rows: [
+          { ...first, locationId: 3 },
+          { ...second, locationId: 4, quantityDelta: "100" },
+        ],
       })
     ).toThrowError(expect.objectContaining({ code: "CONVERGENCE_STOCK_EVIDENCE_UNBALANCED" }));
   });
