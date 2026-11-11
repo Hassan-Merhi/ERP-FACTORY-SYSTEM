@@ -19,6 +19,7 @@ export type StockTransferOrderWaSettings = {
   settings: { enabled: boolean; approvalGroupChatId: string | null; authorizedPhoneE164: string | null };
   connected: boolean;
   webhookConfigured: boolean;
+  executionEnabled: boolean;
   canConfigure: boolean;
   groups: Array<{ id: number; name: string; chatId: string }>;
   destinations: Array<{ id: number; name: string; chatId: string | null; enabled: boolean }>;
@@ -129,6 +130,9 @@ export function StockTransferOrderApprovalSettings() {
             </Badge>
             <Badge variant={settings.data?.webhookConfigured ? "secondary" : "outline"}>
               {settings.data?.webhookConfigured ? "Protected inbound webhook configured" : "Webhook token not configured"}
+            </Badge>
+            <Badge variant={settings.data?.executionEnabled ? "secondary" : "outline"}>
+              {settings.data?.executionEnabled ? "Automatic batch approval processor enabled" : "Automatic batch approval processor paused"}
             </Badge>
             {!settings.data?.webhookConfigured && (
               <p className="text-xs text-amber-600">
