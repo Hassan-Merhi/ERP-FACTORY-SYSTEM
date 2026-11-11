@@ -586,7 +586,7 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
       );
       const visibleWalletFx = [...walletFxDifferences.entries()]
         .filter(([id]) => presentedLedgerIds.has(id))
-        .map(([, movement]) => movement);
+        .map(([id, movement]) => ({ ...movement, sourceKey: `ledger:${id}` }));
       const walletFxGainUsd = round2(visibleWalletFx.reduce((sum, wallet) => sum + Math.max(0, wallet.delta), 0));
       const walletFxLossUsd = round2(visibleWalletFx.reduce((sum, wallet) => sum + Math.max(0, -wallet.delta), 0));
       const fxGainUsd = round2(supplierFxGainUsd + walletFxGainUsd);
@@ -598,6 +598,7 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
         })),
         ...visibleWalletFx.filter((wallet) => wallet.delta > 0).map((wallet) => ({
           label: `FX Agent: ${wallet.name}`, native: "EUR", usd: wallet.delta,
+          sourceKey: wallet.sourceKey,
         })),
       ];
       const fxLossBreakdown = [
@@ -607,6 +608,7 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
         })),
         ...visibleWalletFx.filter((wallet) => wallet.delta < 0).map((wallet) => ({
           label: `FX Agent: ${wallet.name}`, native: "EUR", usd: -wallet.delta,
+          sourceKey: wallet.sourceKey,
         })),
       ];
 
