@@ -364,3 +364,10 @@ These current-reference documents are indexed here for audit coverage. Their beh
 | [database-phase7-disaster-recovery.md](database-phase7-disaster-recovery.md) | Phase 7 — Backup and disaster recovery verification |
 | [database-phase8-migration-testing.md](database-phase8-migration-testing.md) | Phase 8 — Automated database migration testing |
 | [database-phase9-production-rollout.md](database-phase9-production-rollout.md) | Phase 9 — Production rollout and certification gate |
+| [stock-transfer-order-whatsapp-approval-phase1.md](stock-transfer-order-whatsapp-approval-phase1.md) | Stock Transfer Order → WhatsApp approval — Phase 1 |
+| [stock-transfer-order-whatsapp-approval-phase2.md](stock-transfer-order-whatsapp-approval-phase2.md) | Stock Transfer Order WhatsApp approval — Phase 2 |
+| [stock-transfer-order-whatsapp-approval-phase3.md](stock-transfer-order-whatsapp-approval-phase3.md) | Stock Transfer Order — GREEN API inbound approval (Phase 3) |
+| [stock-transfer-order-whatsapp-approval-phase4.md](stock-transfer-order-whatsapp-approval-phase4.md) | Stock Transfer Order WhatsApp Approval — Phase 4 |
+| [stock-transfer-order-whatsapp-approval-phase5.md](stock-transfer-order-whatsapp-approval-phase5.md) | Stock Transfer Order — WhatsApp approved Excel, Phase 5 |
+| [stock-transfer-order-whatsapp-approval-phase6.md](stock-transfer-order-whatsapp-approval-phase6.md) | Stock Transfer Order WhatsApp approval — Phase 6 |
+| [stock-transfer-order-whatsapp-approval-phase7.md](stock-transfer-order-whatsapp-approval-phase7.md) | Stock Transfer Order WhatsApp — Phase 7 certification and rollout gate |
