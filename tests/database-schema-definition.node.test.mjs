@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   REQUIRED_COLUMN_SHAPES, REQUIRED_INDEX_SHAPES, REQUIRED_CONSTRAINT_SHAPES,
-  REQUIRED_TRIGGER_SHAPES, REQUIRED_FUNCTION_SHAPES, compareDefinitionDrift
+  REQUIRED_TRIGGER_SHAPES, REQUIRED_FUNCTION_SHAPES,REQUIRED_RLS_POLICY_TABLES, compareDefinitionDrift
 } from "../scripts/database-schema-definition-core.mjs";
 
 function complete(){
@@ -26,6 +26,13 @@ function complete(){
     })),
     functions:REQUIRED_FUNCTION_SHAPES.map(x=>({
       function_name:x.name,definition:x.fragments.join(" ")
+    })),
+    policies:REQUIRED_RLS_POLICY_TABLES.map(table_name=>({
+      table_name,enabled:true,forced:true,
+      policy_name:table_name+"_company_scope_policy",
+      policy_command:"ALL",permissive:true,roles:["public"],
+      using_expression:"erp_company_scope_matches(company_id)",
+      check_expression:"erp_company_scope_matches(company_id)"
     }))
   };
 }
@@ -76,4 +83,23 @@ test("historical unvalidated constraints are warnings while definitions remain i
   const result=compareDefinitionDrift(data);
   assert.equal(result.ok,true);
   assert.equal(result.warnings.length,1);
+});
+
+test("RLS disabled or wrong tenant predicate is detected even if named policy exists",()=>{
+  const data=complete();
+  const p=data.policies.find(x=>x.table_name==="vouchers");
+  p.enabled=false;
+  p.check_expression="true";
+  const report=compareDefinitionDrift(data);
+  assert.equal(report.ok,false);
+  assert.ok(report.blockers.includes("rls-disabled:vouchers"));
+  assert.ok(report.blockers.includes("rls-policy-definition:vouchers"));
+});
+test("missing tenant policy and unexpected role restrictions fail closed",()=>{
+  const data=complete();
+  data.policies=data.policies.filter(x=>x.table_name!=="inventory");
+  data.policies[0].roles=["erp_user"];
+  const report=compareDefinitionDrift(data);
+  assert.ok(report.blockers.includes("rls-table-missing:inventory"));
+  assert.ok(report.blockers.some(x=>x.startsWith("rls-policy-roles:")));
 });
