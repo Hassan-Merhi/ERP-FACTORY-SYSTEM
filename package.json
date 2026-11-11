@@ -89,7 +89,7 @@
     "db:migrations:plan": "node scripts/run-controlled-migrations.mjs --plan",
     "db:migrations:status": "node scripts/run-controlled-migrations.mjs --status",
     "db:migrations:apply": "node scripts/run-controlled-migrations.mjs --apply",
-    "test:db:migrations": "node --test tests/controlled-migration-runner.node.test.mjs"
+    "test:db:migrations": "node --test tests/controlled-migration-runner.node.test.mjs tests/database-startup-verify-only.node.test.mjs"
   },
   "dependencies": {
     "@aparajita/capacitor-biometric-auth": "^10.0.0",
