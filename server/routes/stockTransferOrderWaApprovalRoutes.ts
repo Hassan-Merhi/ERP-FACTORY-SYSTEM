@@ -137,7 +137,8 @@ async function makeMessage(companyId: number, batchId: number, key: string, dest
     ),
     "", "Reply directly to THIS message: DONE approves ALL included revisions at once.",
     "DECLINE rejects the whole batch.",
-    "DONE/DECLINE replies are recorded, but no order is approved until Phase 4.",
+    "One valid DONE approves the exact full batch; DECLINE rejects the exact full batch.",
+    "Approved quantities are exported to both configured WhatsApp recipients without cost.",
     "Any newly saved revisions invalidate this request.",
   ];
   const message = lines.join("\n");
@@ -475,7 +476,7 @@ export function registerStockTransferOrderWaApprovalRoutes(app: Express,
       draftId=null;
       return res.json({ok:true,batchId:draft.batchId,batchKey:draft.batchKey,orders:draft.transferCount,
         revisions:draft.revisionCount,messageId:sent.idMessage,
-        message:"Approval request sent. DONE/DECLINE replies are now verified and recorded; approval execution comes in Phase 4."});
+        message:"Approval request sent. One authorized DONE will approve the entire frozen batch, then send the no-cost Excel to both recipients."});
     } catch(e) {
       if(draftId!==null&&!accepted&&!sendUncertain) {
         try {const a=await actor(req);await setBatchStatus(a.companyId,draftId,"cancelled");}
