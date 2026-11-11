@@ -110,6 +110,8 @@ describe("ERP Phase 4 canonical transfer import and edit convergence", () => {
     expect(query.sql).toContain("WITH requested(transfer_id, voucher_id, destination_location_id)");
     expect(query.sql).toContain("stock-transfer-import-multi-source");
     expect(query.sql).toContain("stock-transfer-import'");
+    expect(query.sql).toContain("voucher_stock_transfer_edit_reverse");
+    expect(query.sql).toContain("voucher_stock_transfer_edit_apply");
     expect(query.sql).toContain("movement.source_id = requested.transfer_id");
     expect(query.sql).toContain("movement.source_id = requested.voucher_id");
     expect(query.params).toEqual(expect.arrayContaining(["866", "15358", 2, 9]));
