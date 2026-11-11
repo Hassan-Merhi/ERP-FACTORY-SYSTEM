@@ -8,7 +8,7 @@ import { logAudit } from "../_helpers";
 import { closedPeriodErrorResponse } from "../../lib/closedPeriodError";
 import { sessionRetirementActor } from "../../services/accounting/voucherRetirement";
 import { effectiveErpPageKeys } from "../../services/security/erpViewerPagePolicy";
-import { parseErpPageGrantKeys } from "@shared/erpPageGrantInput";
+import { parseErpHiddenCostFields, parseErpPageGrantKeys } from "@shared/erpPageGrantInput";
 import {
   LegacyEmployeeAccountRefusal,
   migrateLegacyEmployeeAccountTx,
@@ -24,6 +24,7 @@ import {
   ledgerAccounts,
   userCompanyRoles,
   erpUserPageAccess,
+  users,
   FEATURE_KEYS,
   salaryAdvances,
 } from "@shared/schema";
@@ -637,6 +638,15 @@ export function registerUserManagementRoutes(app: Express) {
 
   app.get("/api/erp-user-hidden-costs/:userId", requireAuth, requireRole("Admin"), async (req, res) => {
     try {
+      const companyId = req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
+      const [membership] = await db
+        .select({ id: userCompanyRoles.id })
+        .from(userCompanyRoles)
+        .where(and(eq(userCompanyRoles.companyId, companyId), eq(userCompanyRoles.userId, req.params.userId)))
+        .limit(1);
+      if (!membership) return res.status(404).json({ message: "User is not assigned to this company" });
+
       const fields = await storage.getErpUserHiddenCostFields(req.params.userId);
       res.json({ hiddenCostFields: fields });
     } catch (error: unknown) {
@@ -646,11 +656,32 @@ export function registerUserManagementRoutes(app: Express) {
 
   app.put("/api/erp-user-hidden-costs/:userId", requireAuth, requireRole("Admin"), async (req, res) => {
     try {
-      const { hiddenCostFields } = req.body;
-      if (!Array.isArray(hiddenCostFields))
-        return res.status(400).json({ message: "hiddenCostFields must be an array" });
-      await storage.setErpUserHiddenCostFields(req.params.userId, hiddenCostFields);
-      res.json({ message: "Cost visibility updated", hiddenCostFields });
+      const companyId = req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
+      const hiddenCostFields = parseErpHiddenCostFields(req.body?.hiddenCostFields);
+      if (hiddenCostFields === null) {
+        return res.status(400).json({ message: "hiddenCostFields must contain unique recognized ERP restrictions" });
+      }
+
+      const assigned = await db.transaction(async (tx) => {
+        const [membership] = await tx
+          .select({ id: userCompanyRoles.id })
+          .from(userCompanyRoles)
+          .where(and(eq(userCompanyRoles.companyId, companyId), eq(userCompanyRoles.userId, req.params.userId)))
+          .for("update")
+          .limit(1);
+        if (!membership) return false;
+
+        const [updated] = await tx
+          .update(users)
+          .set({ hiddenErpCostFields: hiddenCostFields })
+          .where(eq(users.id, req.params.userId))
+          .returning({ id: users.id });
+        return Boolean(updated);
+      });
+
+      if (!assigned) return res.status(404).json({ message: "User is not assigned to this company" });
+      res.json({ message: "ERP cost field restrictions updated", hiddenCostFields });
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
     }
