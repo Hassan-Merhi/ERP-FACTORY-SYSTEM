@@ -21,6 +21,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -137,6 +138,10 @@ export default function FactoryLoadingDispatchScanner({
   const [correction, setCorrection] = useState<DispatchScan | null>(null);
   const [correctionReason, setCorrectionReason] = useState("");
   const [correcting, setCorrecting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [bulkMode, setBulkMode] = useState<"selected" | "all" | null>(null);
+  const [bulkReason, setBulkReason] = useState("");
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const { data, isLoading, isError, error, refetch } = useQuery<ScanHistoryResponse>({
     queryKey: scanKey,
@@ -165,6 +170,61 @@ export default function FactoryLoadingDispatchScanner({
     );
   }, [active, filterText]);
   const visibleScans = filtered.slice(0, visibleCount);
+  const activeSelection = useMemo(
+    () => active.map((scan) => String(scan.id)).filter((id) => selectedIds.has(id)),
+    [active, selectedIds]
+  );
+  const allFilteredSelected = filtered.length > 0 &&
+    filtered.every((scan) => selectedIds.has(String(scan.id)));
+  const toggleSelection = (id: string, checked: boolean) =>
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  const selectAllFiltered = (checked: boolean) =>
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      filtered.forEach((scan) => {
+        if (checked) next.add(String(scan.id));
+        else next.delete(String(scan.id));
+      });
+      return next;
+    });
+
+  const removeBulk = async () => {
+    if (!bulkMode || !canCorrect || bulkBusy || pendingCount > 0) return;
+    const reason = bulkReason.trim();
+    if (reason.length < 3 || reason.length > 500) return;
+    if (bulkMode === "selected" && !activeSelection.length) return;
+    setBulkBusy(true);
+    try {
+      const response = await apiRequest("POST", scansUrl + "/bulk-remove", {
+        reason,
+        ...(bulkMode === "all" ? { all: true } : { scanIds: activeSelection }),
+      });
+      const result: { count: number } = await response.json();
+      setBulkMode(null);
+      setBulkReason("");
+      setSelectedIds(new Set<string>());
+      void queryClient.invalidateQueries({ queryKey: scanKey });
+      void queryClient.invalidateQueries({ queryKey: loadingListKey });
+      onChanged();
+      toast({
+        title: result.count + " scan" + (result.count === 1 ? "" : "s") + " removed",
+        description: "Scans remain in correction history. Main loading and inventory are unchanged.",
+      });
+    } catch (error) {
+      toast({
+        title: "Unable to remove dispatch scans",
+        description: error instanceof Error ? error.message : "Unknown error",
+        variant: "destructive",
+      });
+    } finally {
+      setBulkBusy(false);
+    }
+  };
 
   const flushQueue = useCallback(async () => {
     if (processingRef.current) return;
@@ -263,6 +323,7 @@ export default function FactoryLoadingDispatchScanner({
       await apiRequest("POST", scansUrl + "/" + correction.id + "/remove", { reason });
       setCorrection(null);
       setCorrectionReason("");
+      setSelectedIds((previous) => { const next = new Set(previous); next.delete(String(correction.id)); return next; });
       void queryClient.invalidateQueries({ queryKey: scanKey });
       void queryClient.invalidateQueries({ queryKey: loadingListKey });
       onChanged();
@@ -405,6 +466,44 @@ export default function FactoryLoadingDispatchScanner({
               data-testid="input-search-dispatch-scans"
             />
           </div>
+          {canCorrect && (
+            <div className="flex flex-wrap items-center gap-2" data-testid="dispatch-bulk-scan-controls">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={filtered.length === 0 || correcting || bulkBusy}
+                onClick={() => selectAllFiltered(!allFilteredSelected)}
+                data-testid="button-select-filtered-dispatch-scans"
+              >
+                {allFilteredSelected ? "Deselect filtered" : "Select all filtered"} ({filtered.length})
+              </Button>
+              <span className="text-xs text-muted-foreground">{activeSelection.length} selected</span>
+              {activeSelection.length > 0 && (
+                <Button size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())}>
+                  Clear selection
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="destructive"
+                disabled={activeSelection.length === 0 || correcting || bulkBusy || pendingCount > 0}
+                onClick={() => { setBulkReason(""); setBulkMode("selected"); }}
+                data-testid="button-delete-selected-dispatch-scans"
+              >
+                <Trash2 className="mr-1.5 h-4 w-4" /> Delete selected ({activeSelection.length})
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-red-300 text-red-700 hover:bg-red-50 dark:text-red-300"
+                disabled={active.length === 0 || correcting || bulkBusy || pendingCount > 0}
+                onClick={() => { setBulkReason(""); setBulkMode("all"); }}
+                data-testid="button-delete-all-dispatch-scans"
+              >
+                <Trash2 className="mr-1.5 h-4 w-4" /> Delete all ({active.length})
+              </Button>
+            </div>
+          )}
           {isLoading && (
             <div className="flex items-center gap-2 p-3 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" /> Loading verified bales…
@@ -428,6 +527,16 @@ export default function FactoryLoadingDispatchScanner({
               <table className="w-full min-w-[600px] border-collapse text-left text-xs">
                 <thead className="sticky top-0 bg-slate-100 text-muted-foreground dark:bg-[hsl(var(--factory-hue)_58%_10%)]">
                   <tr>
+                    {canCorrect && (
+                      <th className="w-10 px-3 py-2">
+                        <Checkbox
+                          checked={allFilteredSelected}
+                          disabled={filtered.length === 0 || correcting || bulkBusy}
+                          onCheckedChange={(checked) => selectAllFiltered(checked === true)}
+                          aria-label="Select all filtered verified bales"
+                        />
+                      </th>
+                    )}
                     <th className="px-3 py-2 font-medium">Reference / Article</th>
                     <th className="px-3 py-2 font-medium">Product</th>
                     <th className="px-3 py-2 text-right font-medium">Kg</th>
@@ -442,6 +551,17 @@ export default function FactoryLoadingDispatchScanner({
                       className="border-t dark:border-slate-700"
                       data-testid={"dispatch-scan-" + scan.id}
                     >
+                      {canCorrect && (
+                        <td className="px-3 py-2">
+                          <Checkbox
+                            checked={selectedIds.has(String(scan.id))}
+                            disabled={correcting || bulkBusy}
+                            onCheckedChange={(checked) => toggleSelection(String(scan.id), checked === true)}
+                            aria-label={"Select bale " + scan.baleReference}
+                            data-testid={"checkbox-dispatch-scan-" + scan.id}
+                          />
+                        </td>
+                      )}
                       <td className="px-3 py-2">
                         <p className="font-mono font-semibold">{scan.baleReference}</p>
                         <p className="text-[11px] text-muted-foreground">{scan.articleCode || "—"}</p>
@@ -531,6 +651,43 @@ export default function FactoryLoadingDispatchScanner({
           )}
         </CardContent>
       </Card>
+
+      <Dialog
+        open={bulkMode !== null}
+        onOpenChange={(open) => { if (!open && !bulkBusy) setBulkMode(null); }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{bulkMode === "all" ? "Delete all verified scans?" : "Delete selected verified scans?"}</DialogTitle>
+            <DialogDescription>
+              {bulkMode === "all"
+                ? "This removes all " + active.length + " active scans from this dispatch, including scans not currently visible or filtered."
+                : "This removes " + activeSelection.length + " selected active scans from this dispatch."}
+              {" "}The operation is atomic and keeps permanent correction history. It does not remove bales from the main loading.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={bulkReason}
+            rows={3}
+            maxLength={500}
+            placeholder="Required reason for deleting these scans"
+            onChange={(event) => setBulkReason(event.target.value)}
+            data-testid="input-bulk-dispatch-removal-reason"
+          />
+          <DialogFooter>
+            <Button variant="outline" disabled={bulkBusy} onClick={() => setBulkMode(null)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              disabled={bulkBusy || bulkReason.trim().length < 3 || pendingCount > 0}
+              onClick={() => void removeBulk()}
+              data-testid="button-confirm-bulk-dispatch-removal"
+            >
+              {bulkBusy && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+              {bulkMode === "all" ? "Delete all scans" : "Delete selected scans"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={Boolean(correction)}

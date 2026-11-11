@@ -38,6 +38,7 @@ export async function hasAnyPhysicalDispatchTx(
     SELECT EXISTS (
       SELECT 1 FROM factory_loading_dispatches
        WHERE company_id = ${companyId} AND order_id = ${orderId}
+         AND status <> 'CANCELLED'
     ) AS found
   `));
   return row?.found === true;
