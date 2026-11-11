@@ -12,7 +12,7 @@ import { storage } from "../../storage";
 import { requireAuth } from "../../auth";
 import { getClientDate } from "../../lib/dateUtils";
 import { logger } from "../../lib/logger";
-import { inventory, locations } from "@shared/schema";
+import { inventory, locations, companies } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 import { parseMoneyInput, toMoney } from "../../lib/money";
 import { allStockItemsOwned, ownLocationIds } from "../helpers/companyOwnership";
@@ -76,6 +76,17 @@ export function registerStockTransferCreateRoutes(app: Express) {
         );
       }
       const companyId = req.session.currentCompanyId;
+      if (workflowOrigin === "stock_transfer_order") {
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const [company] = await db.select({ companyType: companies.companyType })
+          .from(companies).where(eq(companies.id, companyId)).limit(1);
+        if (company?.companyType === "retail") {
+          return res.status(403).json({
+            code: "RETAIL_MANUAL_VOUCHER_TYPE_BLOCKED",
+            message: "Stock Transfer Orders cannot be created manually in Retail mode.",
+          });
+        }
+      }
 
       // Branch: Create new transfer from scratch (sourceLocationId provided, no voucherId)
       if (
