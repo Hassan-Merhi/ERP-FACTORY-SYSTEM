@@ -49,8 +49,19 @@ export function validateApprovedOrderNoCostSnapshot(raw: unknown): ApprovedOrder
   return s as ApprovedOrderNoCostSnapshot;
 }
 
+/** PostgreSQL jsonb reorders object keys: hash canonical object keys, not JS insertion order. */
+function canonical(value: unknown): string {
+  if (Array.isArray(value)) return "[" + value.map(canonical).join(",") + "]";
+  if (value && typeof value === "object") {
+    const entry = value as Record<string, unknown>;
+    return "{" + Object.keys(entry).sort().map(key =>
+      JSON.stringify(key) + ":" + canonical(entry[key])
+    ).join(",") + "}";
+  }
+  return JSON.stringify(value);
+}
 export function snapshotSha256(snapshot: ApprovedOrderNoCostSnapshot): string {
-  return createHash("sha256").update(JSON.stringify(snapshot)).digest("hex");
+  return createHash("sha256").update(canonical(snapshot)).digest("hex");
 }
 
 export async function freezeApprovedStockTransferOrderWorkbookTx(
@@ -106,7 +117,7 @@ export async function freezeApprovedStockTransferOrderWorkbookTx(
     throw new StockTransferOrderApprovalError("STO_WA_EXPORT_INVALID",
       "The approved batch has no positive stock quantities or exceeds the workbook size limit.");
   }
-  const now = new Intl.DateTimeFormat("en-CA", {
+  const now = new Intl.DateTimeFormat("sv-SE", {
     timeZone: "Asia/Beirut", year: "numeric", month: "2-digit", day: "2-digit",
   }).format(new Date());
   const snapshot = validateApprovedOrderNoCostSnapshot({
