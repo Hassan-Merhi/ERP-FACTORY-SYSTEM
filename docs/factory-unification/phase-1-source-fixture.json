@@ -291,8 +291,8 @@
     {
       "key": "factory/rental/payments",
       "route": "/factory/rental/payments",
-      "accessLevel": "developer",
-      "sidebar": true,
+      "accessLevel": "admin",
+      "sidebar": false,
       "pinned": false
     },
     {

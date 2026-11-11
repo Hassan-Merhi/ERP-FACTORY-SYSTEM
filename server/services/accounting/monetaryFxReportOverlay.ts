@@ -133,7 +133,8 @@ export interface MonetaryReportOverlayResult {
 /** Mutates only the caller's disposable/JSON-cloned report, not its cached source. */
 export function applyVerifiedMonetaryFxOverlay(
   payload: MonetaryNetPositionPayload,
-  valuation: MonetaryFxValuationResult
+  valuation: MonetaryFxValuationResult,
+  options: { showFxAsRows?: boolean; skipAccountKeys?: ReadonlySet<string> } = {}
 ): MonetaryReportOverlayResult {
   const appliedKeys: string[] = [];
   const skipped: MonetaryReportOverlayDiagnostic[] = [];
@@ -148,12 +149,21 @@ export function applyVerifiedMonetaryFxOverlay(
   let appliedDifference = new Decimal(0);
   let ledgerForUsDelta = new Decimal(0);
   let ledgerOnUsDelta = new Decimal(0);
+  // The Net Position option exposes one actual FX Gain/Loss account row per
+  // side, keeping the historic original accounts untouched. Source balances
+  // plus these signed currency deltas equal the same current-rate Net Position
+  // as the existing replacement projection; there is no double counting.
+  const fxAccountRows = {
+    gain: { total: new Decimal(0), breakdown: [] as Array<{ label: string; native: string; usd: number; sourceKey?: string }> },
+    loss: { total: new Decimal(0), breakdown: [] as Array<{ label: string; native: string; usd: number; sourceKey?: string }> },
+  };
   const breakdownDeltas = { forUs: new Map<string, Decimal>(), onUs: new Map<string, Decimal>() };
   const moveBreakdown = (side: PositionSide, category: string | undefined, delta: Decimal) => {
     const name = category || "Other";
     breakdownDeltas[side].set(name, (breakdownDeltas[side].get(name) ?? new Decimal(0)).plus(delta));
   };
   for (const val of valuation.accounts) {
+    if (options.skipAccountKeys?.has(val.accountKey)) continue;
     if (val.eligibility === "needs_review") continue;
     const current = val.currentTranslatedUsd;
     if (val.provisional || current === null || val.historicalBaseUsd === null) {
@@ -171,6 +181,10 @@ export function applyVerifiedMonetaryFxOverlay(
       continue;
     }
     const { side: oldSide, row: oldRow } = matches[0];
+    // In itemized mode the original monetary row stays at its book amount,
+    // so balance-matching alone would allow a second projection to post the
+    // same display FX delta again. Enforce read-time idempotence explicitly.
+    if (options.showFxAsRows && oldRow.currencyRevalued) continue;
     const signedOld = new Decimal(oldRow.value).mul(oldSide === "forUs" ? 1 : -1);
     const historical = new Decimal(val.historicalBaseUsd);
     // Net Position can use different book attribution for old unmatched rows
@@ -182,6 +196,34 @@ export function applyVerifiedMonetaryFxOverlay(
     const translated = new Decimal(current);
     if (!translated.isFinite()) {
       skipped.push({ key: val.accountKey, reason: "unresolved" });
+      continue;
+    }
+    if (options.showFxAsRows) {
+      // Delta is versus the *visible* posted USD book row, which may differ
+      // by a few cents from the 6dp base history after voucher rounding.
+      const visibleDifference = money(translated.minus(signedOld));
+      if (Math.abs(visibleDifference) >= 0.005) {
+        const gain = visibleDifference > 0;
+        const bucket = gain ? fxAccountRows.gain : fxAccountRows.loss;
+        bucket.total = bucket.total.plus(Math.abs(visibleDifference));
+        const native = Object.entries(val.nativeBalancesByCurrency)
+          .filter(([currency, amount]) => currency !== "USD" && !new Decimal(amount).isZero())
+          .map(([currency, amount]) => `${amount} ${currency}`).join(", ");
+        bucket.breakdown.push({
+          label: `${val.accountKind === "customer" ? "Customer" : val.category === "loan" ? "Loan" : "Account"}: ${oldRow.name}`,
+          native,
+          usd: Math.abs(visibleDifference),
+          sourceKey: val.accountKey,
+        });
+      }
+      oldRow.currencyRevalued = true;
+      oldRow.monetaryFxCategory = val.category;
+      oldRow.nativeBalancesByCurrency = val.nativeBalancesByCurrency;
+      oldRow.historicalBaseBalance = val.historicalBaseUsd;
+      oldRow.currentTranslatedBaseBalance = current;
+      oldRow.translationDifference = val.translationDifferenceUsd;
+      appliedDifference = appliedDifference.plus(translated.minus(historical));
+      appliedKeys.push(val.accountKey);
       continue;
     }
     sides[oldSide].accounts = sides[oldSide].accounts.filter((row) => row !== oldRow);
@@ -221,6 +263,27 @@ export function applyVerifiedMonetaryFxOverlay(
   // specialized operational breakdowns, labels and signed category rules.
   if (appliedKeys.length === 0) {
     return { payload, appliedKeys, skipped, currentMonetaryTranslationDifferenceUsd: "0.000000", ledgerForUsDelta: 0, ledgerOnUsDelta: 0 };
+  }
+  if (options.showFxAsRows) {
+    for (const [side, bucket, code, name, category] of [
+      ["forUs", fxAccountRows.gain, "FX_UNREALIZED_GAIN", "Unrealized FX Gains", "Exchange Rate Gains"],
+      ["onUs", fxAccountRows.loss, "FX_UNREALIZED_LOSS", "Unrealized FX Losses", "Exchange Rate Losses"],
+    ] as const) {
+      const amount = money(bucket.total);
+      if (amount < 0.005) continue;
+      const existing = sides[side].accounts.find((row) => row.code === code);
+      if (existing) {
+        existing.value = money(new Decimal(existing.value).plus(amount));
+        const previous = Array.isArray(existing.breakdown)
+          ? existing.breakdown as Array<{ label: string; native: string; usd: number }>
+          : [];
+        existing.breakdown = [...previous, ...bucket.breakdown];
+      } else {
+        sides[side].accounts.push({ name, code, category, value: amount, breakdown: bucket.breakdown });
+      }
+      totals[side] = totals[side].plus(amount);
+      moveBreakdown(side, category, new Decimal(amount));
+    }
   }
   for (const side of ["forUs", "onUs"] as const) {
     const entry = sides[side];

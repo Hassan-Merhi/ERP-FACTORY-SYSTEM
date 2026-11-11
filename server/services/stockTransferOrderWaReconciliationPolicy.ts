@@ -1,4 +1,12 @@
 /** Pure, testable administrator evidence policy for approved WhatsApp Excel delivery. */
+/** True when the text contains an ASCII control character (U+0000–U+001F or U+007F). */
+function hasAsciiControlCharacter(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code <= 0x1f || code === 0x7f) return true;
+  }
+  return false;
+}
 export type ReconciliationAction = "verify_delivered" | "authorize_retry";
 export type DeliveryRecipientKind = "approval_group" | "destination";
 type Verification = {
@@ -31,7 +39,7 @@ export function parseStockTransferOrderDeliveryReconciliation(body: unknown): Ve
   const reason = typeof value.reason === "string" ? value.reason.trim() : "";
   if ((action !== "verify_delivered" && action !== "authorize_retry") ||
       (expectedStatus !== "uncertain" && expectedStatus !== "failed") ||
-      reason.length < 20 || reason.length > 500 || /[\u0000-\u001f\u007f]/.test(reason)) {
+      reason.length < 20 || reason.length > 500 || hasAsciiControlCharacter(reason)) {
     return reject(400,"Choose the exact failed/uncertain record and give a review note of 20–500 characters.");
   }
   if (value.checkedWhatsApp !== true || value.checkedProvider !== true) {
