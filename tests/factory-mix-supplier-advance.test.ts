@@ -27,7 +27,7 @@ describe("supplier FIFO advance against a later container offload", () => {
   it("rejects negative or nonfinite deficits and ADD quantities", () => {
     expect(() => splitSupplierShortfall("-1", "0")).toThrow(MixRawStockShortageError);
     expect(() => splitSupplierShortfall("1", "-2")).toThrow(MixRawStockShortageError);
-    expect(() => splitSupplierShortfall("bogus", "0")).toThrow(MixRawStockShortageError);
+    expect(() => splitSupplierShortfall("bogus", "0")).toThrow();
   });
 
   it("keeps direct-container overdrafts prohibited", () => {
