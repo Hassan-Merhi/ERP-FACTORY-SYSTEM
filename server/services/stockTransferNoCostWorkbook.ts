@@ -84,14 +84,14 @@ export async function createNoCostExcel(params: {
     grouped.set(item.sourceLocationName, [...(grouped.get(item.sourceLocationName) || []), item]);
   for (const [location, items] of grouped) {
     for (const item of items) {
-      const row = sheet.addRow([item.stockItemName, location, item.quantity]);
+      const row = sheet.addRow([excelText(item.stockItemName), excelText(location), item.quantity]);
       row.height = 22;
       row.getCell(1).alignment = { horizontal: "left", vertical: "middle" };
       row.getCell(2).alignment = row.getCell(3).alignment = { horizontal: "center", vertical: "middle" };
       borderRow(row);
     }
     const sum = items.reduce((total, x) => total + x.quantity, 0);
-    const sub = sheet.addRow(["TOTAL " + location.toUpperCase(), "", sum]);
+    const sub = sheet.addRow(["TOTAL " + excelText(location.toUpperCase()), "", sum]);
     sub.height = 24;
     sheet.mergeCells("A" + sub.number + ":B" + sub.number);
     for (let c = 1; c <= 3; c++) {
