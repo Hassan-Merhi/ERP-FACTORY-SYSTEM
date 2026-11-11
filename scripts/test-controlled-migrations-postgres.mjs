@@ -91,6 +91,7 @@ async function run() {
       // Minimal legacy schema required by the two controlled migrations.
       await client.query(`
         CREATE TABLE companies (id integer PRIMARY KEY);
+        CREATE TABLE insurance_members (id integer PRIMARY KEY);
         CREATE TABLE users (id varchar PRIMARY KEY);
         CREATE TABLE factory_containers (id integer PRIMARY KEY, company_id integer, container_number text);
         CREATE TABLE factory_categories (id integer PRIMARY KEY);
@@ -122,7 +123,7 @@ async function run() {
       let result=await executeRunner(dbUrl,"--status");
       assert.equal(result.code,0,result.stderr);
       assert.equal(JSON.parse(result.stdout).historyExists,false);
-      assert.equal(JSON.parse(result.stdout).pending.length,7);
+      assert.equal(JSON.parse(result.stdout).pending.length,9);
       assert.equal((await client.query("SELECT to_regclass('public.erp_controlled_migration_history') AS name")).rows[0].name,null);
       console.log("PASS: fresh status is read-only and detects all pending migrations");
 
@@ -142,7 +143,7 @@ async function run() {
       result=await executeRunner(dbUrl,"--apply");
       assert.equal(result.code,0,result.stderr);
       const history=await client.query("SELECT migration_name, checksum FROM erp_controlled_migration_history ORDER BY migration_name");
-      assert.equal(history.rows.length,7);
+      assert.equal(history.rows.length,9);
       assert.equal((await client.query("SELECT to_regclass('public.factory_fixed_production_plans') IS NOT NULL AS ok")).rows[0].ok,true);
       assert.equal((await client.query("SELECT to_regclass('public.exchange_rates_company_date_pair_unique') IS NOT NULL AS ok")).rows[0].ok,true);
       assert.equal((await client.query("SELECT to_regclass('public.user_security_permissions_unique') IS NOT NULL AS ok")).rows[0].ok,true);
@@ -151,6 +152,9 @@ async function run() {
       assert.equal((await client.query("SELECT to_regclass('public.factory_bale_products_company_article_code_normalized_idx') IS NOT NULL AS ok")).rows[0].ok,true);
       assert.equal((await client.query("SELECT to_regprocedure('public.set_customer_order_bale_scanned_at()') IS NOT NULL AS ok")).rows[0].ok,true);
       assert.equal((await client.query("SELECT count(*)::int AS n FROM information_schema.columns WHERE table_name='customer_order_bales' AND column_name='scanned_at'")).rows[0].n,1);
+      assert.equal((await client.query("SELECT to_regclass('public.scheduled_whatsapp_occurrences') IS NOT NULL AS ok")).rows[0].ok,true);
+      assert.equal((await client.query("SELECT to_regclass('public.scheduled_whatsapp_attachments') IS NOT NULL AS ok")).rows[0].ok,true);
+      assert.equal((await client.query("SELECT to_regclass('public.insurance_member_monthly_amounts') IS NOT NULL AS ok")).rows[0].ok,true);
       console.log("PASS: cleaned isolated fixture resumes and completes all controlled migrations");
 
       // Phase 4: execute the real repository tenant-control migration against
@@ -225,7 +229,7 @@ async function run() {
       result=await executeRunner(dbUrl,"--apply");
       assert.equal(result.code,0,result.stderr);
       assert.match(result.stdout,/already up to date/);
-      assert.equal((await client.query("SELECT count(*)::int AS n FROM erp_controlled_migration_history")).rows[0].n,7);
+      assert.equal((await client.query("SELECT count(*)::int AS n FROM erp_controlled_migration_history")).rows[0].n,9);
       console.log("PASS: repeat apply is idempotent");
 
       result=await executeRunner(dbUrl,"--status");
