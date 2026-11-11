@@ -191,6 +191,22 @@ async function recordSameChatAlias(item: DeliveryRow): Promise<boolean> {
   );
   const primary = records.rows[0];
   if (!primary || primary.recipient_chat_id !== item.recipient_chat_id) return false;
+  if (primary.status === "verified") {
+    // Admin supplied independently checked evidence that this ONE physical
+    // message reached the shared group/destination chat. Never upload twice.
+    await pool.query(
+      "WITH alias AS (UPDATE stock_transfer_order_approval_deliveries " +
+        "SET status='verified',last_error=NULL,updated_at=clock_timestamp() " +
+        "WHERE id=$1 AND company_id=$2 AND status IN ('pending','failed','uncertain') " +
+        "RETURNING id,company_id,batch_id) " +
+        "INSERT INTO stock_transfer_order_approval_events(company_id,batch_id,event_type,details) " +
+        "SELECT company_id,batch_id,'delivery_manually_verified'," +
+        "jsonb_build_object('deliveryId',id,'recipientKind','destination'," +
+        "'sameChatDeduplicated',true,'source','approval_group_manual_verification') FROM alias",
+      [item.id,item.company_id]
+    );
+    return true;
+  }
   if (primary.status !== "accepted" || !primary.provider_message_id) {
     if (primary.status === "failed" && primary.attempt_count >= MAX_ATTEMPTS) {
       await pool.query(
