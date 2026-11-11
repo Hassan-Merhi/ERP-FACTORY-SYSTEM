@@ -50,6 +50,7 @@ import { zambiaHistoricalPurchaseCostSchema } from "./036-zambia-historical-purc
 import { factoryPressingMachineTrackingSchema } from "./037-factory-pressing-machine-tracking";
 import { factoryPressingHistoryReportIndexes } from "./038-factory-pressing-history-report";
 import { stockTransferOrderWaApprovalFoundation } from "./039-stock-transfer-order-wa-approval";
+import { stockTransferOrderWaWebhookIntegrity } from "./040-stock-transfer-order-wa-webhook";
 
 export const startupMigrations: string[] = [
   ...coreTablesAndColumns,
@@ -101,6 +102,7 @@ export const startupMigrations: string[] = [
   ...factoryPressingHistoryReportIndexes,
   // Stock Transfer Order approval batches only; no existing balances or vouchers are altered.
   ...stockTransferOrderWaApprovalFoundation,
+  ...stockTransferOrderWaWebhookIntegrity,
 ];
 
 // Re-exported so server/index.ts can bootstrap the journal from the module it
