@@ -1,4 +1,6 @@
 import { useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { authenticatedUserQueryOptions } from "@/contracts/sessionQueryContracts";
 import { useMixIntegrityAudits } from "./useMixIntegrityAudits";
 import { MixIntegrityAuditControls } from "./MixIntegrityAuditControls";
 import { MixIntegrityAuditResults } from "./MixIntegrityAuditResults";
@@ -101,10 +103,9 @@ export function MixBatchList({
   const recordChanges = useExistingRecordChangeAccess();
   const recordChangeReason = recordChanges.reason ?? undefined;
   const selectedCompany = useOptionalCompany()?.selectedCompany;
-  const selectedRole = String(selectedCompany?.role ?? "")
-    .trim()
-    .toLowerCase();
-  const canAuditHistoricalMixes = ["admin", "owner", "developer", "dev"].includes(selectedRole);
+  // These diagnostic panels are for Developer accounts only; routine mix operations stay available.
+  const { data: currentUser } = useQuery(authenticatedUserQueryOptions());
+  const canAuditHistoricalMixes = currentUser?.role === "Developer";
   const monitorCompanyId = selectedCompany?.id ?? null;
   const [showAllMixBatches, setShowAllMixBatches] = useState(false);
   const [isExportingExcel, setIsExportingExcel] = useState(false);

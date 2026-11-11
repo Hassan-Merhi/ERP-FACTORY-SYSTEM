@@ -16,6 +16,8 @@ export function MixIntegrityAuditResults({ audits }: { audits: MixIntegrityAudit
     isRefreshingMonitor,
     handleRefreshMonitor,
   } = audits;
+  // Do not show previously loaded audit results if the active account is not a Developer.
+  if (!canAuditHistoricalMixes) return null;
   return (
     <>
       {canAuditHistoricalMixes && (
