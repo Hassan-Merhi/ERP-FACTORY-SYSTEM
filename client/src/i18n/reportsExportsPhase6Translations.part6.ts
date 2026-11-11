@@ -294,6 +294,7 @@ export const reportsExportsPhase6TranslationsPart6: readonly Phase6ReportsExport
     en: "hiddenCostFields must contain unique recognized ERP restrictions",
     ar: "يجب أن يحتوي hiddenCostFields على قيود ERP فريدة ومعترف بها",
     fr: "hiddenCostFields doit contenir des restrictions ERP uniques et reconnues",
+  },
   // Factory Rentals "Add Shop" refusals (#3158).
   {
     en: "The rental database schema is out of date. Please deploy the rental schema repair.",
