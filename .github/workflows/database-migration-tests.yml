@@ -65,6 +65,18 @@ jobs:
           SKIP_GIT_HOOKS: "1"
         run: npm ci --no-audit --bin-links=true
 
+      - name: Inventory remaining startup mutation candidates (report only)
+        run: npm run audit:startup-mutations > "$RUNNER_TEMP/startup-mutation-inventory.json"
+
+      - name: Upload startup mutation inventory
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: startup-mutation-inventory
+          path: ${{ runner.temp }}/startup-mutation-inventory.json
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Run migration and recovery unit tests
         run: npm run test:db:migrations
 
