@@ -45,6 +45,10 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [accounting/hmd-kinshasa-shop-rent-phase2-execution-2026-11-10.md](accounting/hmd-kinshasa-shop-rent-phase2-execution-2026-11-10.md) | HMD Kinshasa rent execution controls |
 | [accounting/hmd-kinshasa-shop-rent-phase3-reconciliation-2026-11-10.md](accounting/hmd-kinshasa-shop-rent-phase3-reconciliation-2026-11-10.md) | HMD Kinshasa rent reconciliation |
 | [accounting/hmd-kinshasa-shop-rent-phase4-permanent-prevention-2026-11-10.md](accounting/hmd-kinshasa-shop-rent-phase4-permanent-prevention-2026-11-10.md) | HMD Kinshasa rent permanent safeguards |
+| [accounting/hadi-lshi-shop-rent-phase1-audit-2026-11-10.md](accounting/hadi-lshi-shop-rent-phase1-audit-2026-11-10.md) | HADI L'SHI rent source audit |
+| [accounting/hadi-lshi-shop-rent-phase2-prepared-2026-11-10.md](accounting/hadi-lshi-shop-rent-phase2-prepared-2026-11-10.md) | HADI L'SHI rent prepared correction |
+| [accounting/hadi-lshi-shop-rent-phase3-permanent-prevention-2026-11-10.md](accounting/hadi-lshi-shop-rent-phase3-permanent-prevention-2026-11-10.md) | HADI L'SHI rent permanent safeguards |
+| [accounting/hadi-lshi-2026-original-dated-monthly-rent-restatement-2026-11-10.md](accounting/hadi-lshi-2026-original-dated-monthly-rent-restatement-2026-11-10.md) | HADI L'SHI original-dated monthly rent restatement |
 | [factory-dispatch-trip-accounting-phase1.md](factory-dispatch-trip-accounting-phase1.md) | Factory dispatch trip accounting Phase 1 reference |
 | [factory-dispatch-trip-accounting-phase2.md](factory-dispatch-trip-accounting-phase2.md) | Factory dispatch trip accounting Phase 2 reference |
 | [factory-dispatch-trip-accounting-phase3.md](factory-dispatch-trip-accounting-phase3.md) | Factory dispatch trip accounting Phase 3 reference |

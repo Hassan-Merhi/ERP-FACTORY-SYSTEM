@@ -10,7 +10,7 @@ import type { DbTransaction } from "../../db";
 import { resultRows } from "../../lib/queryResult";
 import { MoneyDecimal } from "../../lib/money";
 import { inspectDispatchTripPostingSnapshot } from "./dispatchIntegritySnapshot";
-import type { DispatchIntegrityCheck } from "./dispatchIntegritySnapshot";
+import type { DispatchIntegrityCheck, DispatchPostingRow } from "./dispatchIntegritySnapshot";
 export type { DispatchIntegrityCheck,DispatchIntegrityState } from "./dispatchIntegritySnapshot";
 
 export interface DispatchInvoiceIntegrityReport {
@@ -79,7 +79,8 @@ export async function auditFactoryDispatchInvoiceTx(
   // reconciled_at exists. Finalized invoices must always be fully audited,
   // even when a damaged historical row has lost its signoff timestamp.
   const signedReconciliation=Boolean(order.reconciledAt)||finalized;
-  const snapshot=inspectDispatchTripPostingSnapshot(trips,{
+  // Type-only: the SELECT above returns exactly the DispatchPostingRow columns.
+  const snapshot=inspectDispatchTripPostingSnapshot(trips as unknown as DispatchPostingRow[],{
     isSigned:signedReconciliation,
     postingIds:order.postingIds,
     goods:order.signedGoods,
