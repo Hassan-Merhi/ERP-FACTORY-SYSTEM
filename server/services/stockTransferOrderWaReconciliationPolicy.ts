@@ -37,6 +37,10 @@ export function parseStockTransferOrderDeliveryReconciliation(body: unknown): Ve
   if (value.checkedWhatsApp !== true || value.checkedProvider !== true) {
     return reject(400,"Verify the exact batch and recipient in WhatsApp AND GREEN API history.");
   }
+  if ((action === "verify_delivered" && value.confirmedNotDelivered === true) ||
+      (action === "authorize_retry" && value.confirmedDelivered === true)) {
+    return reject(400,"The file cannot be both found and missing. Choose one verified outcome.");
+  }
   if (action === "verify_delivered" && value.confirmedDelivered !== true) {
     return reject(400,"Confirm you personally verified that this exact file appears in the recipient chat.");
   }
