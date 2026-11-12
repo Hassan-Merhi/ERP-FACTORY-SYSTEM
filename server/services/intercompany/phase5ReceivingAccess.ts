@@ -48,12 +48,12 @@ export async function requireReceivingPairPermission(trade: ReceivingTradePair, 
   await withTradeScope(identity, [trade.destinationCompanyId], async () => {
     const [source, destination, membership] = await Promise.all([
       db
-        .select({ id: companies.id, companyType: companies.companyType })
+        .select({ id: companies.id, companyType: companies.companyType, active: companies.active })
         .from(companies)
         .where(eq(companies.id, trade.sourceCompanyId))
         .limit(1),
       db
-        .select({ id: companies.id, companyType: companies.companyType })
+        .select({ id: companies.id, companyType: companies.companyType, active: companies.active })
         .from(companies)
         .where(eq(companies.id, trade.destinationCompanyId))
         .limit(1),
@@ -68,6 +68,13 @@ export async function requireReceivingPairPermission(trade: ReceivingTradePair, 
         )
         .limit(1),
     ]);
+    if (!source[0]?.active || !destination[0]?.active) {
+      throw new IntercompanyEditError(
+        "IC_RECEIPT_DESTINATION_INACTIVE",
+        "Both the Properties owner and the receiving ERP company must be active",
+        403
+      );
+    }
     if (
       !mayReceiveFromProperties(
         trade,
