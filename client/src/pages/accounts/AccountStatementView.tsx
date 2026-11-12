@@ -28,6 +28,7 @@ import type { PeriodFilterValue } from "@/components/ui/period-filter";
 import type { Account, Transaction, WaRule } from "./accountTypes";
 import { AccountTransactionRows } from "./AccountTransactionRows";
 import { AccountStatementCards } from "./AccountStatementCards";
+import { PropertiesWhatsAppStatement } from "./PropertiesWhatsAppStatement";
 import { FxAgentNativeBalance } from "./FxAgentNativeBalance";
 import { FxAgentEurStatement, fxEurStatementUrl } from "./FxAgentEurStatement";
 import { ErpMobileActionsMenu, ErpMobileSummaryGrid } from "@/components/ui/erp-mobile-records";
@@ -379,6 +380,16 @@ export function AccountStatementView({
                   <p className="font-mono text-xs text-muted-foreground">#{selectedAccount.accountId}</p>
                 )}
               </div>
+              {appMode === "properties" && selectedAccount.type === "ledger" && canChangeExistingRecords && !isEurTab && (
+                <PropertiesWhatsAppStatement
+                  key={selectedAccount.accountId}
+                  accountId={selectedAccount.accountId}
+                  accountName={selectedAccount.name}
+                  fromDate={periodFilter.fromDate}
+                  toDate={periodFilter.toDate}
+                  compact
+                />
+              )}
               <ErpMobileActionsMenu
                 iconOnly
                 data-testid="button-statement-actions"
@@ -551,6 +562,15 @@ export function AccountStatementView({
                     </Button>
                   )}
                 </>
+              )}
+              {appMode === "properties" && selectedAccount.type === "ledger" && canChangeExistingRecords && !isEurTab && (
+                <PropertiesWhatsAppStatement
+                  key={selectedAccount.accountId}
+                  accountId={selectedAccount.accountId}
+                  accountName={selectedAccount.name}
+                  fromDate={periodFilter.fromDate}
+                  toDate={periodFilter.toDate}
+                />
               )}
               {selectedAccount &&
                 ["ledger", "bank-account", "bank", "supplier", "employee"].includes(selectedAccount.type) && (
