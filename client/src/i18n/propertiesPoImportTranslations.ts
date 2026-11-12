@@ -74,7 +74,8 @@ const en = {
   stockReviewTitle: "Verified destination stock",
   stockCreatedCount: "New items to be created",
   stockReusedCount: "Existing item lines verified",
-  stockReviewDetails: "Missing ERP items will be created from verified Properties stock with zero opening quantity and value when you confirm the import.",
+  stockReviewDetails:
+    "Missing ERP items will be created from verified Properties stock with zero opening quantity and value when you confirm the import.",
   stockAction: "Stock action",
   stockCreate: "Create item",
   stockReuse: "Reuse item",
@@ -153,7 +154,8 @@ const strings: Record<ApplicationLanguage, Labels> = {
     stockReviewTitle: "Articles ERP vérifiés",
     stockCreatedCount: "Nouveaux articles à créer",
     stockReusedCount: "Lignes d'articles existants vérifiées",
-    stockReviewDetails: "Les articles ERP manquants seront créés à partir des articles Propriétés vérifiés, avec quantités et valeurs initiales nulles, lors de la confirmation.",
+    stockReviewDetails:
+      "Les articles ERP manquants seront créés à partir des articles Propriétés vérifiés, avec quantités et valeurs initiales nulles, lors de la confirmation.",
     stockAction: "Action article",
     stockCreate: "Créer l'article",
     stockReuse: "Réutiliser l'article",
@@ -224,7 +226,8 @@ const strings: Record<ApplicationLanguage, Labels> = {
     stockReviewTitle: "الأصناف المستلمة التي تم التحقق منها",
     stockCreatedCount: "أصناف جديدة سيتم إنشاؤها",
     stockReusedCount: "أسطر أصناف موجودة تم التحقق منها",
-    stockReviewDetails: "عند تأكيد الاستيراد، سينشئ النظام الأصناف الناقصة اعتماداً على أصناف العقارات الموثقة بأرصدة افتتاحية صفرية.",
+    stockReviewDetails:
+      "عند تأكيد الاستيراد، سينشئ النظام الأصناف الناقصة اعتماداً على أصناف العقارات الموثقة بأرصدة افتتاحية صفرية.",
     stockAction: "إجراء الصنف",
     stockCreate: "إنشاء الصنف",
     stockReuse: "استخدام الصنف الموجود",

@@ -123,9 +123,9 @@ describe("Phase 4 verified destination stock mapping", () => {
       "Properties stock item"
     );
     const otherSource = source({ id: 12, code: "BAL-002" });
-    expect(() => plan({ items: [source(), otherSource], lines: [row({ barcode: "", itemName: "Cotton Grade A" })] })).toThrow(
-      "multiple items"
-    );
+    expect(() =>
+      plan({ items: [source(), otherSource], lines: [row({ barcode: "", itemName: "Cotton Grade A" })] })
+    ).toThrow("multiple items");
     expect(() => plan({ lines: [row({ itemName: "Different Cotton" })] })).toThrow("conflicts");
   });
 
@@ -160,9 +160,7 @@ describe("Phase 4 verified destination stock mapping", () => {
   });
 
   it("does not allow cross-company alias pointers", () => {
-    expect(() =>
-      plan({ aliases: [{ companyId: 2, stockItemId: 11, aliasCode: "COTTON-A" }] })
-    ).toThrow("conflicts");
+    expect(() => plan({ aliases: [{ companyId: 2, stockItemId: 11, aliasCode: "COTTON-A" }] })).toThrow("conflicts");
   });
 
   it("refuses any unauthorized target company or duplicated workbook row", () => {
@@ -174,14 +172,8 @@ describe("Phase 4 verified destination stock mapping", () => {
   it("rejects batch-local case-colliding codes before creating any destination items", () => {
     expect(() =>
       plan({
-        items: [
-          source(),
-          source({ id: 12, code: "bal-001", name: "Cotton Grade B" }),
-        ],
-        lines: [
-          row(),
-          row({ rowNum: 13, barcode: "bal-001", itemName: "Cotton Grade B" }),
-        ],
+        items: [source(), source({ id: 12, code: "bal-001", name: "Cotton Grade B" })],
+        lines: [row(), row({ rowNum: 13, barcode: "bal-001", itemName: "Cotton Grade B" })],
       })
     ).toThrow();
   });
@@ -189,10 +181,7 @@ describe("Phase 4 verified destination stock mapping", () => {
   it("rejects batch-local duplicate names with distinct source codes", () => {
     expect(() =>
       plan({
-        items: [
-          source(),
-          source({ id: 12, code: "BAL-002" }),
-        ],
+        items: [source(), source({ id: 12, code: "BAL-002" })],
         lines: [row(), row({ rowNum: 13, barcode: "BAL-002" })],
       })
     ).toThrow(/conflicts/);

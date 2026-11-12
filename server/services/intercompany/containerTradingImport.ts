@@ -29,11 +29,7 @@ import { db } from "../../db";
 import { sumMoney } from "../../lib/money";
 import { postErpVoucherTx, type ErpVoucherLine } from "../accounting/erpVoucherPosting";
 import { destinationContainerGitPostingLines } from "./containerDestinationPosting";
-import {
-  finalizedStockItemId,
-  planDestinationStockMapping,
-  verifiedStockRowKey,
-} from "./destinationStockMapping";
+import { finalizedStockItemId, planDestinationStockMapping, verifiedStockRowKey } from "./destinationStockMapping";
 import { logAudit } from "../../routes/_helpers";
 import { autoAllocateNewTradeCreditTx } from "./paymentAllocationCore";
 import {
@@ -538,7 +534,10 @@ export async function postIntercompanyImport(args: {
         const policy = policies.find((p) => p.id === plan.relationshipId)!;
         const items = plan.lines.map((line) => {
           const verified = plannedRows.get(verifiedStockRowKey(plan.containerNumber, line.rowNum));
-          assert(verified && verified.destinationCompanyId === policy.destinationCompanyId, "Verified stock row is missing");
+          assert(
+            verified && verified.destinationCompanyId === policy.destinationCompanyId,
+            "Verified stock row is missing"
+          );
           return {
             line,
             sourceItemId: verified.sourceItemId,

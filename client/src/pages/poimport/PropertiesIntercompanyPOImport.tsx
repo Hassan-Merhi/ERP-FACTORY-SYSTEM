@@ -189,8 +189,13 @@ export default function PropertiesIntercompanyPOImport() {
 
   const verifyStockMutation = useMutation({
     mutationFn: async ({ requestedCompanyId, signature }: { requestedCompanyId: number; signature: string }) => {
-      if (requestedCompanyId !== activeCompanyId.current || !file || !preview ||
-          previewCompanyId !== requestedCompanyId || !setup) {
+      if (
+        requestedCompanyId !== activeCompanyId.current ||
+        !file ||
+        !preview ||
+        previewCompanyId !== requestedCompanyId ||
+        !setup
+      ) {
         throw new Error(copy.stale);
       }
       const verified = validatePropertiesImportSelections(
@@ -220,7 +225,8 @@ export default function PropertiesIntercompanyPOImport() {
         requestedCompanyId !== activeCompanyId.current ||
         preview?.sha256 !== result.fileSha256 ||
         signature !== stockSignature
-      ) return;
+      )
+        return;
       setStockReview({ signature, data: result });
     },
     onError: (error: Error) => {
@@ -570,7 +576,9 @@ export default function PropertiesIntercompanyPOImport() {
                   type="button"
                   variant="outline"
                   disabled={!readyToPost || verifyStockMutation.isPending}
-                  onClick={() => verifyStockMutation.mutate({ requestedCompanyId: companyId, signature: stockSignature })}
+                  onClick={() =>
+                    verifyStockMutation.mutate({ requestedCompanyId: companyId, signature: stockSignature })
+                  }
                   data-testid="button-verify-destination-stock"
                 >
                   <ShieldCheck className="mr-2 h-4 w-4" />

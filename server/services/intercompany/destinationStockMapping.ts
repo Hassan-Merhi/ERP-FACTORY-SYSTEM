@@ -188,8 +188,10 @@ export function planDestinationStockMapping(input: {
       const nameKey = line.destinationCompanyId + ":" + normName(source.name);
       const codeOwner = pendingCodes.get(codeKey);
       const nameOwner = pendingNames.get(nameKey);
-      if ((codeOwner !== undefined && codeOwner !== source.id) ||
-          (nameOwner !== undefined && nameOwner !== source.id)) {
+      if (
+        (codeOwner !== undefined && codeOwner !== source.id) ||
+        (nameOwner !== undefined && nameOwner !== source.id)
+      ) {
         throw new StockMappingError(label + ": " + messages.destinationMismatch);
       }
       pendingCodes.set(codeKey, source.id);
@@ -225,10 +227,7 @@ export function planDestinationStockMapping(input: {
 }
 
 /** Reconcile a preflight plan with IDs returned by transactional inserts. */
-export function finalizedStockItemId(
-  assignment: VerifiedStockAssignment,
-  newIds: ReadonlyMap<string, number>
-): number {
+export function finalizedStockItemId(assignment: VerifiedStockAssignment, newIds: ReadonlyMap<string, number>): number {
   const id = assignment.destinationItemId ?? (assignment.creationKey ? newIds.get(assignment.creationKey) : null);
   if (!Number.isSafeInteger(id) || !id || id <= 0) {
     throw new StockMappingError(messages.missingMapping);

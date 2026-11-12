@@ -41,7 +41,8 @@ export async function previewDestinationStock(args: {
   const lines: IncomingStockLine[] = [];
   for (const container of preview.containers) {
     const companyId = selectedByContainer.get(container.containerNumber.trim().toUpperCase());
-    if (!companyId) throw new TradingImportError(400, "Missing destination company for container " + container.containerNumber);
+    if (!companyId)
+      throw new TradingImportError(400, "Missing destination company for container " + container.containerNumber);
     for (const line of container.items) {
       lines.push({
         containerNumber: container.containerNumber,
