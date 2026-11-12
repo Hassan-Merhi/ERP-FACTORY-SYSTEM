@@ -12,6 +12,7 @@ import {
 import { db } from "../../db";
 import { MoneyDecimal } from "../../lib/money";
 import { accessiblePaymentPair } from "./paymentSync";
+import { canAccessPairedCash, pairedCashMemberships } from "./pairedPaymentAuthorization";
 import { type EditIdentity, rejectEdit, withTradeScope } from "./tradeSync";
 import { cents } from "./tradeRevisionMath";
 import { pairCreditsTx, paymentAvailableTx, tradeAppliedTx } from "./paymentAllocationCore";
@@ -30,14 +31,19 @@ export async function listPaymentRelationships(actor: EditIdentity) {
           eq(intercompanyRelationshipPolicies.relationshipType, "container_trade")
         )
       );
-    return {
-      relationships: relationships.map((p) => ({
-        relationshipId: p.id,
-        sourceCompanyId: p.sourceCompanyId,
-        destinationCompanyId: p.destinationCompanyId,
-        tradeEnabled: p.tradeEnabled,
-      })),
-    };
+    const eligible = [];
+    for (const pair of relationships) {
+      const membership = await pairedCashMemberships(pair, actor);
+      if (canAccessPairedCash(pair, actor, membership)) {
+        eligible.push({
+          relationshipId: pair.id,
+          sourceCompanyId: pair.sourceCompanyId,
+          destinationCompanyId: pair.destinationCompanyId,
+          tradeEnabled: pair.tradeEnabled,
+        });
+      }
+    }
+    return { relationships: eligible };
   });
 }
 export async function getPairPaymentSetup(relationshipId: number, actor: EditIdentity) {
