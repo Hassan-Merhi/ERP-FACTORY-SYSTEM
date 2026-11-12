@@ -59,6 +59,8 @@ jobs:
             tests/stock-transfer-order-wa-phase6-contract.test.ts \
             tests/stock-transfer-order-wa-phase6-policy.test.ts \
             tests/stock-transfer-order-wa-request-db-error-regression.test.ts \
+            tests/stock-transfer-order-wa-main-connection-contract.test.ts \
+            tests/whatsapp-service-green-api.test.ts \
             tests/startup-schema-integrity.test.ts
       - name: Verify migration registry (database startup tested in PostgreSQL job)
         run: npm run verify:migrations
