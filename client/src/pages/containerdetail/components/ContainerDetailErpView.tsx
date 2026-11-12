@@ -38,6 +38,7 @@ import { ContainerDetailDialog1 } from "./ContainerDetailDialog1";
 import { ContainerDetailPriceImportDialog } from "./ContainerDetailPriceImportDialog";
 import type { useContainerDetailModel } from "../useContainerDetailModel";
 import { compareItemNamesAZ } from "@/lib/itemNameSort";
+import PropertiesIntercompanyContainerWorkflow from "../PropertiesIntercompanyContainerWorkflow";
 
 type Model = ReturnType<typeof useContainerDetailModel>;
 export function ContainerDetailErpView({ model }: { model: Model }) {
@@ -237,6 +238,10 @@ export function ContainerDetailErpView({ model }: { model: Model }) {
         )}
       </PageHeader>
 
+      {isPropertiesContainer && (
+        <PropertiesIntercompanyContainerWorkflow containerId={container.id} />
+      )}
+
       {containerSale && (
         <Card className="border-green-500">
           <CardHeader>
@@ -343,7 +348,7 @@ export function ContainerDetailErpView({ model }: { model: Model }) {
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-sm font-semibold tabular-nums">{formatAmount(po.itemsTotal)}</span>
-                  {canChangeExistingRecords && (
+                  {!isPropertiesContainer && canChangeExistingRecords && (
                     <>
                       <Button
                         variant="ghost"
@@ -496,13 +501,13 @@ export function ContainerDetailErpView({ model }: { model: Model }) {
         </div>
       </div>
 
-      <OffloadDialog
+      {!isPropertiesContainer && <OffloadDialog
         open={showOffloadDialog}
         onOpenChange={setShowOffloadDialog}
         containerId={parseInt(containerId!)}
         containerNumber={container.containerNumber}
         totalBales={totalBales}
-      />
+      />}
 
       <Dialog open={showSellDialog} onOpenChange={setShowSellDialog}>
         <DialogContent data-testid="dialog-sell-container">
@@ -669,7 +674,7 @@ export function ContainerDetailErpView({ model }: { model: Model }) {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showFreightDialog} onOpenChange={setShowFreightDialog}>
+      <Dialog open={!isPropertiesContainer && showFreightDialog} onOpenChange={setShowFreightDialog}>
         <DialogContent data-testid="dialog-add-freight">
           <DialogHeader>
             <DialogTitle>Add Freight Charge</DialogTitle>
