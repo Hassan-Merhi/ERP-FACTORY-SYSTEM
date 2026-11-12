@@ -116,9 +116,7 @@ export function PropertiesRoutes({ user }: PropertiesRoutesProps) {
       <Route path="/properties/master-data" component={AccountingCreate} />
 
       {canTrade && (
-        <Route path="/properties/container-trading">
-          {() => <Redirect replace to="/properties/po-import" />}
-        </Route>
+        <Route path="/properties/container-trading">{() => <Redirect replace to="/properties/po-import" />}</Route>
       )}
       {canTrade && <Route path="/properties/linked-trades" component={LinkedTradesEditor} />}
       {canTrade && <Route path="/properties/intercompany-payments" component={IntercompanyPayments} />}
