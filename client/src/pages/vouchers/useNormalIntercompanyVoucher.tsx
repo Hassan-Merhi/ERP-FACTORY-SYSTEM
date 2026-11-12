@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { useApplicationLanguageCode } from "@/contexts/ApplicationLanguageContext";
+import { intercompanyVoucherText } from "@/i18n/intercompanyVoucherTranslations";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -41,6 +43,7 @@ export function useNormalIntercompanyVoucher(options: {
   entries: VoucherFormData["entries"];
 }) {
   const { companyId, voucherType, paymentAccountType, paymentAccountId, entries, enabled } = options;
+  const copy = intercompanyVoucherText(useApplicationLanguageCode());
   const [counterpart, setCounterpart] = useState("");
   const [reference, setReference] = useState("");
   const [evidence, setEvidence] = useState("");
@@ -53,8 +56,7 @@ export function useNormalIntercompanyVoucher(options: {
   );
   const signature = JSON.stringify(accountKeys);
   const shouldCheck = enabled && companyId > 0 && paymentAccountId > 0 &&
-    (accountKeys.some((row) => row.accountId > 0 && ["ledger", "supplier"].includes(row.accountType)) ||
-     (paymentAccountId > 0 && ["ledger", "supplier"].includes(paymentAccountType)));
+    accountKeys.some((row) => row.accountId > 0 && ["ledger", "supplier"].includes(row.accountType));
   const previewQuery = useQuery<Preview>({
     queryKey: [PREVIEW, companyId, voucherType, paymentAccountType, paymentAccountId, signature],
     enabled: shouldCheck,
@@ -115,7 +117,7 @@ export function useNormalIntercompanyVoucher(options: {
   const Details = () => {
     if (!enabled || !shouldCheck) return null;
     if (previewQuery.isPending || previewQuery.isFetching) {
-      return <p className="text-sm text-muted-foreground" data-testid="ic-normal-checking">Checking linked accounts…</p>;
+      return <p className="text-sm text-muted-foreground" data-testid="ic-normal-checking">{copy.linkedChecking}</p>;
     }
     if (previewQuery.isError) {
       return <p role="alert" className="text-sm text-destructive" data-testid="ic-normal-error">{previewQuery.error.message}</p>;
@@ -124,20 +126,18 @@ export function useNormalIntercompanyVoucher(options: {
     return (
       <div className="space-y-3 rounded-lg border p-4" data-testid="normal-voucher-intercompany">
         <div className="space-y-1">
-          <h3 className="font-semibold">Linked intercompany account detected</h3>
+          <h3 className="font-semibold">{copy.linkedDetected}</h3>
           <p className="text-sm text-muted-foreground">
-            This normal {voucherType} will automatically post the matching
-            {voucherType === "Payment" ? " Receipt in Properties" : " Payment in the destination ERP"}.
-            It will not also post a standalone voucher.
+            {voucherType === "Payment" ? copy.linkedPaymentInfo : copy.linkedReceiptInfo}
           </p>
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1">
-            <Label htmlFor="ic-normal-counterpart">Linked company's actual bank/cash account</Label>
+            <Label htmlFor="ic-normal-counterpart">{copy.linkedCounterpart}</Label>
             <select id="ic-normal-counterpart" value={selection}
               className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
               onChange={(event) => setCounterpart(event.target.value)}>
-              <option value="">Choose actual bank/cash account</option>
+              <option value="">{copy.linkedSelectCash}</option>
               {optionsForOtherCompany.map((account) => (
                 <option key={`${account.type}:${account.id}`} value={`${account.type}:${account.id}`}>
                   {account.name} ({account.type})
@@ -146,29 +146,29 @@ export function useNormalIntercompanyVoucher(options: {
             </select>
           </div>
           <div className="space-y-1">
-            <Label htmlFor="ic-normal-ref">Real transfer reference</Label>
+            <Label htmlFor="ic-normal-ref">{copy.linkedReference}</Label>
             <Input id="ic-normal-ref" value={reference} onChange={(event) => setReference(event.target.value)}
-              placeholder="Bank transfer or cash receipt reference" />
+              placeholder={copy.linkedReference} />
           </div>
           <div className="space-y-1">
-            <Label htmlFor="ic-normal-evidence">Proof both sides moved money</Label>
+            <Label htmlFor="ic-normal-evidence">{copy.linkedEvidence}</Label>
             <Input id="ic-normal-evidence" value={evidence} onChange={(event) => setEvidence(event.target.value)}
-              placeholder="Two bank statement / cash receipt references" />
+              placeholder={copy.linkedEvidence} />
           </div>
           <div className="space-y-1">
-            <Label htmlFor="ic-normal-reason">Transfer reason</Label>
+            <Label htmlFor="ic-normal-reason">{copy.linkedReason}</Label>
             <Input id="ic-normal-reason" value={reason} onChange={(event) => setReason(event.target.value)}
-              placeholder="Settlement for intercompany purchases" />
+              placeholder={copy.linkedReason} />
           </div>
         </div>
         {(match.purchaseOrders ?? []).length > 0 && (
           <div className="space-y-2">
-            <p className="text-sm font-medium">Optional allocation to linked POs</p>
-            <p className="text-xs text-muted-foreground">Unallocated money remains a credit with the same company pair.</p>
+            <p className="text-sm font-medium">{copy.linkedAllocation}</p>
+            <p className="text-xs text-muted-foreground">{copy.linkedCredit}</p>
             <div className="grid gap-2 sm:grid-cols-2">
               {match.purchaseOrders.map((po) => (
                 <Label key={po.tradeId} className="flex items-center justify-between gap-2">
-                  <span className="truncate">{po.containerNumber} (due {po.unpaid})</span>
+                  <span className="truncate">{po.containerNumber} ({copy.linkedDue} {po.unpaid})</span>
                   <Input aria-label={`Allocate to PO ${po.containerNumber}`} className="max-w-32"
                     value={allocations[po.tradeId] ?? ""}
                     onChange={(event) => setAllocations((current) => ({
@@ -182,7 +182,7 @@ export function useNormalIntercompanyVoucher(options: {
         )}
         <Label className="flex items-center gap-2 font-normal">
           <Checkbox checked={confirmed} onCheckedChange={(checked) => setConfirmed(checked === true)}/>
-          I confirm the actual payment and receipt in both companies, with no duplicate bank/cash movement.
+          {copy.linkedConfirm}
         </Label>
       </div>
     );
