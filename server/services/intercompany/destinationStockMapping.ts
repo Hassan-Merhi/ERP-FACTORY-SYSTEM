@@ -139,6 +139,8 @@ export function planDestinationStockMapping(input: {
 
   const assignments: VerifiedStockAssignment[] = [];
   const creations = new Map<string, DestinationStockCreation>();
+  const pendingCodes = new Map<string, number>();
+  const pendingNames = new Map<string, number>();
   const seenRows = new Set<string>();
   for (const line of lines) {
     const label = line.containerNumber + " row " + line.rowNum;
@@ -179,6 +181,19 @@ export function planDestinationStockMapping(input: {
 
     const creationKey = destination ? null : line.destinationCompanyId + ":" + source.id;
     if (creationKey && !creations.has(creationKey)) {
+      // Unique source identity does not imply unique destination naming:
+      // two source codes can differ only by case, and source items can share
+      // names. Refuse a batch that would create either ambiguity.
+      const codeKey = line.destinationCompanyId + ":" + normCode(source.code);
+      const nameKey = line.destinationCompanyId + ":" + normName(source.name);
+      const codeOwner = pendingCodes.get(codeKey);
+      const nameOwner = pendingNames.get(nameKey);
+      if ((codeOwner !== undefined && codeOwner !== source.id) ||
+          (nameOwner !== undefined && nameOwner !== source.id)) {
+        throw new StockMappingError(label + ": " + messages.destinationMismatch);
+      }
+      pendingCodes.set(codeKey, source.id);
+      pendingNames.set(nameKey, source.id);
       creations.set(creationKey, {
         key: creationKey,
         companyId: line.destinationCompanyId,
