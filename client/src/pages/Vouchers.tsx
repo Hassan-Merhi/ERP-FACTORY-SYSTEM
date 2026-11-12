@@ -343,6 +343,17 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
   const paymentAccountType = form.watch("paymentAccountType");
   const paymentAccountId = form.watch("paymentAccountId");
   const paymentAccountName = form.watch("paymentAccountName");
+  // Normal Payment/Receipt detects only verified intercompany account IDs.
+  // Any paired posting uses the existing atomic, two-company service.
+  const normalIntercompany = useNormalIntercompanyVoucher({
+    companyId: selectedCompany?.id ?? 0,
+    enabled: canUseIntercompanyVouchers && !isPOS && !voucherIdToEdit &&
+      (activeTab === "payment" || activeTab === "receipt"),
+    voucherType: activeTab === "receipt" ? "Receipt" : "Payment",
+    paymentAccountType,
+    paymentAccountId,
+    entries,
+  });
 
   const { filteredSidebarAccounts, selectedAccount } = useSidebarSync({
     sidebarAccounts,
@@ -532,8 +543,31 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
       });
       return;
     }
+    let intercompanyMirror;
+    try {
+      intercompanyMirror = normalIntercompany.buildMirror();
+    } catch (error) {
+      toast({
+        title: "Verify linked company transfer",
+        description: error instanceof Error ? error.message : "Verify the actual bank/cash accounts.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (intercompanyMirror && isWalletPayment) {
+      toast({
+        title: "Choose a normal bank/cash account",
+        description: "FX wallet settlement cannot also post a paired intercompany cash transfer.",
+        variant: "destructive",
+      });
+      return;
+    }
     if (isWalletPayment && !confirmWalletPayment(validEntries, toast)) return;
-    saveMutation.mutate({ ...data, entries: validEntries });
+    saveMutation.mutate({
+      ...data,
+      entries: validEntries,
+      ...(intercompanyMirror ? { intercompanyMirror } : {}),
+    });
   };
 
   return (
