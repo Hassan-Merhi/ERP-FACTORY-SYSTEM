@@ -7,6 +7,8 @@ import { logger } from "../../lib/logger";
 import { containers, intercompanyTrades, intercompanyImportBatchContainers } from "@shared/schema";
 import { upload } from "../_helpers";
 import { autoProvisionTradingRelationship } from "../../services/intercompany/tradingAccountProvisioning";
+import { previewDestinationStock } from "../../services/intercompany/destinationStockPreview";
+import { StockMappingError } from "../../services/intercompany/destinationStockMapping";
 import {
   getTradingSetup,
   importInputSchema,
@@ -18,6 +20,9 @@ import {
 } from "../../services/intercompany/containerTradingImport";
 
 function sendError(res: import("express").Response, error: unknown) {
+  if (error instanceof StockMappingError) {
+    return res.status(error.status).json({ code: error.code, message: error.message });
+  }
   if (error instanceof TradingImportError) {
     return res.status(error.status).json({ code: error.code, message: error.message });
   }
@@ -126,6 +131,50 @@ export function registerIntercompanyContainerTradingRoutes(app: Express) {
           rowCount: parsed.rowCount,
           containers: parsed.containers,
         });
+      } catch (error) {
+        return sendError(res, error);
+      }
+    }
+  );
+
+  // Read-only stock verification for the normal Properties Import PO preview.
+  // It uses the uploaded bytes, authenticated company assignments and the
+  // exact same fail-closed resolver as the eventual transaction.
+  app.post(
+    "/api/intercompany-container-trading/stock-preview",
+    requireAuth,
+    requireRole("Owner", "Developer"),
+    upload.single("file"),
+    async (req, res) => {
+      try {
+        const { companyId, userId, role } = companyFromSession(req);
+        if (!req.file) throw new TradingImportError(400, "Select the original Excel workbook");
+        let raw: unknown;
+        try {
+          raw = JSON.parse(String(req.body.selections ?? "null"));
+        } catch {
+          throw new TradingImportError(400, "Invalid stock preview destination selections");
+        }
+        const selections = z
+          .array(
+            z.object({
+              containerNumber: z.string().trim().min(1).max(100),
+              destinationCompanyId: z.number().int().positive(),
+            })
+          )
+          .min(1)
+          .max(100)
+          .parse(raw);
+        const preview = await parseIntercompanyWorkbook(req.file.buffer, req.file.originalname, companyId);
+        return res.json(
+          await previewDestinationStock({
+            sourceCompanyId: companyId,
+            userId,
+            role,
+            preview,
+            selections,
+          })
+        );
       } catch (error) {
         return sendError(res, error);
       }
