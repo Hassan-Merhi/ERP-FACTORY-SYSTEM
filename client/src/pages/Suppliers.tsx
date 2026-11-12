@@ -77,9 +77,7 @@ export default function Suppliers() {
   // authorized cross-company row is opened, use that company's shell.
   const partyPath = (companyId: number | null | undefined, path: string) => {
     const company = companies.find((entry) => entry.id === companyId);
-    return (company?.companyType === "properties" || (!company && isProperties)
-      ? "/properties"
-      : "") + path;
+    return (company?.companyType === "properties" || (!company && isProperties) ? "/properties" : "") + path;
   };
 
   const handleTransactionClick = async (txn: SupplierLedgerRow) => {
@@ -194,11 +192,17 @@ export default function Suppliers() {
         subtitle="Manage supplier accounts and track container shipments"
         showBackButton={false}
       >
-        {isProperties && ["Owner", "Developer", "Admin", "Create Only"].includes(selectedCompany?.role || "") && (
-          <Button type="button" variant="outline" onClick={() => navigate("/properties/master-data?entity=supplier")} data-testid="button-properties-add-supplier">
-            <Plus className="h-4 w-4 mr-2" /> Add Supplier
-          </Button>
-        )}
+        {isProperties &&
+          ["Owner", "Developer", "Admin", "Create Only"].includes(selectedCompany?.role || "") && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => navigate("/properties/master-data?entity=supplier")}
+              data-testid="button-properties-add-supplier"
+            >
+              <Plus className="h-4 w-4 mr-2" /> Add Supplier
+            </Button>
+          )}
       </PageHeader>
 
       {/* Stat cards */}
