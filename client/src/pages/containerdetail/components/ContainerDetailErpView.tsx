@@ -43,6 +43,9 @@ type Model = ReturnType<typeof useContainerDetailModel>;
 export function ContainerDetailErpView({ model }: { model: Model }) {
   // prettier-ignore
   const { formatDisplayDate, containerId, showOffloadDialog, setShowOffloadDialog, showSellDialog, setShowSellDialog, pendingDelete, setPendingDelete, setLocation, formatAmount, isDeveloper, containerData, suppliers, customers, incomeAccounts, containerSale, docsData, showUploadDialog, setShowUploadDialog, showFreightDialog, setShowFreightDialog, uploadDocTypeId, setUploadDocTypeId, uploadFile, setUploadFile, fileInputRef, setShowPriceImportDialog, setPriceImportPreview, setPriceImportError, uploadDocMutation, freightForm, addFreightMutation, handleExportContainer, handleExportContainerNoCost, backUrl, form, deletePOMutation, deleteContainerMutation, syncVoucherMutation, reverseOffloadMutation, sellContainerMutation, handleDeletePO, handleDeleteContainer, handleSellSubmit, handlePrint, saleCustomer, canChangeExistingRecords, canCreate } = model;
+  // Properties owns the canonical physical container; receiving and sale are
+  // intercompany workflows, not legacy ERP offload/sell/delete actions.
+  const isPropertiesContainer = backUrl.startsWith("/properties");
   // Defensive guard: by this point isSupplierPartner is false (handled above) and the
   // earlier `!containerData && !isSupplierPartner` check already returned if missing,
   // but TS can't infer that across the two branches — this re-confirms it for display only.
@@ -121,7 +124,7 @@ export function ContainerDetailErpView({ model }: { model: Model }) {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
-            {isDeveloper && canChangeExistingRecords && (
+            {!isPropertiesContainer && isDeveloper && canChangeExistingRecords && (
               <>
                 <DropdownMenuItem
                   onClick={() => syncVoucherMutation.mutate()}
@@ -141,19 +144,19 @@ export function ContainerDetailErpView({ model }: { model: Model }) {
               <FileText className="w-4 h-4 mr-2" />
               Verify
             </DropdownMenuItem>
-            {!containerSale && canCreate("POST", "/api/container-sales") && (
+            {!isPropertiesContainer && !containerSale && canCreate("POST", "/api/container-sales") && (
               <DropdownMenuItem onClick={() => setShowSellDialog(true)} data-testid="button-sell-container">
                 <HandCoins className="w-4 h-4 mr-2" />
                 Sell Container
               </DropdownMenuItem>
             )}
-            {canChangeExistingRecords && container.status !== "OFFLOADED" && (
+            {!isPropertiesContainer && canChangeExistingRecords && container.status !== "OFFLOADED" && (
               <DropdownMenuItem onClick={() => setShowOffloadDialog(true)} data-testid="button-offload-container">
                 <Truck className="w-4 h-4 mr-2" />
                 Offload Container
               </DropdownMenuItem>
             )}
-            {canChangeExistingRecords && container.status === "OFFLOADED" && (
+            {!isPropertiesContainer && canChangeExistingRecords && container.status === "OFFLOADED" && (
               <>
                 <DropdownMenuItem onClick={() => setShowOffloadDialog(true)} data-testid="button-edit-offload">
                   <Edit className="w-4 h-4 mr-2" />
@@ -194,8 +197,8 @@ export function ContainerDetailErpView({ model }: { model: Model }) {
               <Printer className="w-4 h-4 mr-2" />
               Export PDF
             </DropdownMenuItem>
-            {canChangeExistingRecords && <DropdownMenuSeparator />}
-            {canChangeExistingRecords && (
+            {!isPropertiesContainer && canChangeExistingRecords && <DropdownMenuSeparator />}
+            {!isPropertiesContainer && canChangeExistingRecords && (
               <DropdownMenuItem
                 onClick={() => {
                   setPriceImportPreview(null);
@@ -211,7 +214,7 @@ export function ContainerDetailErpView({ model }: { model: Model }) {
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {canChangeExistingRecords && (
+        {!isPropertiesContainer && canChangeExistingRecords && (
           <Button
             variant="destructive"
             onClick={handleDeleteContainer}
