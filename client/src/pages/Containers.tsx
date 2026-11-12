@@ -89,7 +89,10 @@ export default function Containers() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      <PageHeader title={isProperties ? "Containers" : "Container Tracking"} subtitle="Track containers and manage offloading">
+      <PageHeader
+        title={isProperties ? "Containers" : "Container Tracking"}
+        subtitle="Track containers and manage offloading"
+      >
         <ContainerToolbar
           onExportExcel={importExport.exportToExcel}
           onExportAllFull={importExport.exportAllContainersFull}
