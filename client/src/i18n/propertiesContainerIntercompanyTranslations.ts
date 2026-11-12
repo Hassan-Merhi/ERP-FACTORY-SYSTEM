@@ -18,6 +18,8 @@ const en = {
   canceled: "Canceled",
   status: "Trade status",
   closed: "Linked purchase order edits and freight changes are locked after receiving or cancellation.",
+  receivingOptionsFailed: "Unable to load the verified receiving options.",
+  noActiveLinked: "No active linked purchase order exists for this physical container.",
   confirm:
     "All cross-company ledger entries are validated together. Receiving never duplicates the physical Properties container.",
 } as const;
@@ -43,6 +45,8 @@ const translations: Record<ApplicationLanguage, Labels> = {
     canceled: "Annulé",
     status: "Statut de l'échange",
     closed: "Les modifications des BC liés et du fret sont bloquées après réception ou annulation.",
+    receivingOptionsFailed: "Impossible de charger les options de réception vérifiées.",
+    noActiveLinked: "Aucun bon de commande intersociétés actif n'est lié à ce conteneur physique.",
     confirm:
       "Les écritures des deux sociétés sont validées ensemble. La réception ne duplique pas le conteneur physique dans Propriétés.",
   },
@@ -64,6 +68,8 @@ const translations: Record<ApplicationLanguage, Labels> = {
     canceled: "تم الإلغاء",
     status: "حالة التعامل",
     closed: "لا يمكن تعديل أوامر الشراء والشحن بعد الاستلام أو الإلغاء.",
+    receivingOptionsFailed: "تعذر تحميل خيارات الاستلام التي تم التحقق منها.",
+    noActiveLinked: "لا يوجد أمر شراء مرتبط نشط لهذه الحاوية الفعلية.",
     confirm: "يتم التحقق من قيود الشركتين معاً. لا ينشئ الاستلام حاوية فعلية مكررة في العقارات.",
   },
 };
