@@ -11,13 +11,14 @@ import { stockTransferOrderWaExecutionEnabled } from "../services/stockTransferO
 import { stockTransferOrderWaDeliveryEnabled, queueStockTransferOrderWaDeliveries } from "../services/stockTransferOrderWaDeliveryWorker";
 import { reconcileStockTransferOrderWaDelivery, StockTransferOrderDeliveryReconciliationError } from "../services/stockTransferOrderWaDeliveryReconciliation";
 import { getActiveCompanyPermissionContext } from "../services/security/activeCompanyPermissionContext";
+import { createTenantDatabaseScope, runWithDatabaseScopeRuntimeContext } from "../services/security/databaseScopeRuntimeContext";
 import {
   createStockTransferOrderApprovalDraft,
   assertStockTransferOrderApprovalBatchCurrent,
   StockTransferOrderApprovalError,
 } from "../services/stockTransferOrderWhatsAppApprovalBatch";
 import {
-  getWaSettings, getGreenInstanceState, fetchGreenApiChats,
+  getWaSettings, getStrictGreenMainInstanceState, getStrictGreenMainWebhookReadiness, fetchStrictGreenMainChats,
   sendStockTransferOrderApprovalRequest,
 } from "../services/whatsappService";
 
@@ -66,6 +67,43 @@ function errorResponse(res: Response, e: unknown) {
   }
   logger.error("[STO WA] Phase 2 failed", { error: e });
   return res.status(500).json({ message: "Stock Transfer Order WhatsApp operation failed." });
+}
+
+/**
+ * Drizzle wraps PostgreSQL driver errors and logs the SQL text. For production
+ * debugging return ONLY driver metadata (SQLSTATE, table and constraint), not
+ * SQL text, parameters, group IDs, tokens or the WhatsApp message.
+ */
+function stockTransferApprovalSqlFailure(error: unknown): {
+  sqlState: string | null; table: string | null; constraint: string | null;
+  dataType: string | null; column: string | null; routine: string | null;
+  position: number | null; step: string | null;
+} {
+  const step = error && typeof error === "object" &&
+    typeof (error as { stoApprovalStep?: unknown }).stoApprovalStep === "string"
+      ? String((error as { stoApprovalStep: string }).stoApprovalStep).slice(0, 80) : null;
+  let next: unknown = error;
+  for (let depth = 0; depth < 5; depth++) {
+    if (!next || typeof next !== "object") break;
+    const item = next as {
+      code?: unknown; table?: unknown; constraint?: unknown; cause?: unknown;
+      dataType?: unknown; column?: unknown; routine?: unknown; position?: unknown;
+    };
+    if (typeof item.code === "string" && /^[A-Z0-9]{5}$/.test(item.code)) {
+      return {
+        sqlState: item.code,
+        table: typeof item.table === "string" ? item.table.slice(0, 100) : null,
+        constraint: typeof item.constraint === "string" ? item.constraint.slice(0, 100) : null,
+        dataType: typeof item.dataType === "string" ? item.dataType.slice(0, 80) : null,
+        column: typeof item.column === "string" ? item.column.slice(0, 100) : null,
+        routine: typeof item.routine === "string" ? item.routine.slice(0, 100) : null,
+        position: Number.isSafeInteger(Number(item.position)) ? Number(item.position) : null,
+        step,
+      };
+    }
+    next = item.cause;
+  }
+  return { sqlState: null, table: null, constraint: null, dataType: null, column: null, routine: null, position: null, step };
 }
 
 const BATCH_STATE_CHANGED = "Approval batch changed during delivery";
@@ -174,6 +212,61 @@ export function registerStockTransferOrderWaApprovalRoutes(app: Express,
         destinations: d.rows, groups: g.rows, canConfigure: ["Admin","Owner","Developer"].includes(a.role), connected: Boolean(wa?.enabled && wa.instanceId && wa.apiToken), webhookConfigured: webhookTokenIsConfigured(), executionEnabled: stockTransferOrderWaExecutionEnabled(), deliveryEnabled: stockTransferOrderWaDeliveryEnabled() });
     } catch(e) { return errorResponse(res, e); }
   });
+
+  // Admin-only, read-only provider check. The presence of an ERP webhook
+  // secret does NOT mean GREEN API points to this endpoint or sends events.
+  // Never expose the main credentials, provider webhook token or linked phone.
+  app.get("/api/stock-transfer-order/wa-approval/webhook-readiness",
+    requireAuth, admins, async(req,res)=>{
+      try {
+        const a = await actor(req);
+        const instance = await getWaSettings();
+        if(!instance?.enabled || !instance.instanceId || !instance.apiToken) {
+          return res.json({ready:false,mainConfigured:false,providerChecked:false,
+            message:"Main WhatsApp credentials are missing or sending is disabled."});
+        }
+        const settings = await pool.query<{ authorized_phone_e164: string | null }>(
+          "SELECT authorized_phone_e164 FROM stock_transfer_order_approval_settings WHERE company_id=$1",
+          [a.companyId]
+        );
+        let provider;
+        try {
+          provider = await getStrictGreenMainWebhookReadiness(instance.instanceId,instance.apiToken);
+        } catch {
+          return res.json({ready:false,mainConfigured:true,providerChecked:false,
+            message:"Could not read MAIN GREEN API webhook settings. Check its instance status and API token."});
+        }
+        const authorized = settings.rows[0]?.authorized_phone_e164;
+        const selfApproval = Boolean(authorized && provider.mainAccountChatId &&
+          provider.mainAccountChatId === authorized.slice(1) + "@c.us");
+        const eventTypeEnabled = selfApproval
+          ? provider.outgoingPhoneWebhookEnabled
+          : provider.incomingWebhookEnabled;
+        const ready = webhookTokenIsConfigured() &&
+          provider.webhookEndpointMatches && provider.webhookTokenMatches && eventTypeEnabled;
+        return res.json({
+          ready,mainConfigured:true,providerChecked:true,
+          webhookUrlConfigured:provider.webhookUrlConfigured,
+          endpointMatches:provider.webhookEndpointMatches,
+          webhookHost:provider.webhookHost,
+          tokenMatches:provider.webhookTokenMatches,
+          incomingWebhookEnabled:provider.incomingWebhookEnabled,
+          outgoingPhoneWebhookEnabled:provider.outgoingPhoneWebhookEnabled,
+          selfApprovalAccount:selfApproval,
+          expectedPath:"/api/stock-transfer-order/wa-approval/webhook",
+          message:ready?"Main GREEN API webhook is configured for the authorized approval mode.":
+            !provider.webhookEndpointMatches
+              ? "GREEN API is not sending callbacks to this Stock Transfer Order webhook. Check its existing URL before changing it."
+              : !provider.webhookTokenMatches
+                ? "GREEN API callback bearer does not match the ERP webhook secret."
+                : selfApproval && !provider.outgoingPhoneWebhookEnabled
+                  ? "The authorized phone is the linked WhatsApp account. Enable outgoingMessageWebhook for phone/web replies."
+                  : !selfApproval && !provider.incomingWebhookEnabled
+                    ? "Enable GREEN API incomingWebhook to receive replies from the authorized supervisor."
+                    : "Main webhook setup is incomplete.",
+        });
+      }catch(e){return errorResponse(res,e);}
+    });
 
   app.put("/api/stock-transfer-order/wa-approval/settings", requireAuth, admins, async(req,res) => {
     try {
@@ -418,6 +511,7 @@ export function registerStockTransferOrderWaApprovalRoutes(app: Express,
 
   app.post("/api/stock-transfer-order/wa-approval/requests",requireAuth,senders,async(req,res)=>{
     let draftId:number|null=null,accepted=false,sendUncertain=false;
+    let stage = "request_validation";
     try {
       const a=await actor(req),destinationId=idOf(req.body?.destinationLocationId);
       const transferIds:unknown=req.body?.transferIds;
@@ -439,27 +533,65 @@ export function registerStockTransferOrderWaApprovalRoutes(app: Express,
       if(!webhookTokenIsConfigured()) {
         return res.status(409).json({message:"Configure the protected GREEN API approval webhook token before sending requests."});
       }
+      stage="main_whatsapp_state";
       const wa=await getWaSettings();
-      if(!wa?.enabled||!wa.instanceId||!wa.apiToken||
-        (await getGreenInstanceState(wa.instanceId,wa.apiToken))!=="authorized") {
-        return res.status(409).json({message:"Connect the main WhatsApp account first."});
+      if(!wa?.enabled||!wa.instanceId||!wa.apiToken) {
+        return res.status(409).json({
+          code:"STO_WA_MAIN_NOT_CONFIGURED",
+          message:"Main WhatsApp sending is disabled or its credentials are missing. " +
+            "Open Settings → Export Center → Daily Export → WhatsApp Export.",
+        });
       }
+      // Strict: never mistake an authorized POS/backup session for the MAIN
+      // account. All approval requests and quoted DONE replies use MAIN only.
+      const mainState = await getStrictGreenMainInstanceState(wa.instanceId,wa.apiToken);
+      if(mainState!=="authorized") {
+        const guidance = mainState==="invalidCredentials"
+          ? "GREEN API rejected the MAIN WhatsApp instance ID or API token (401/403). " +
+            "Update MAIN credentials in Settings → Export Center → Daily Export → WhatsApp Export. " +
+            "The POS connection is separate."
+          : mainState==="notAuthorized"
+            ? "The MAIN WhatsApp instance is disconnected. Reauthorize it in the GREEN API console."
+            : mainState==="unknown"
+              ? "Unable to verify the MAIN WhatsApp instance. Check its status in Export Center and retry."
+              : "The MAIN WhatsApp instance is not ready (" + mainState + "). Check GREEN API.";
+        return res.status(mainState==="unknown"?503:409).json({
+          code:"STO_WA_MAIN_NOT_AUTHORIZED",
+          state:mainState, message:guidance,
+        });
+      }
+      stage="approval_group";
       const settings=await pool.query("SELECT approval_group_chat_id FROM stock_transfer_order_approval_settings WHERE company_id=$1 AND enabled=true",[a.companyId]);
       const group=String(settings.rows[0]?.approval_group_chat_id??"");
       if(!groupPattern.test(group))return res.status(409).json({message:"Configure the approval group first."});
-      const chats=await fetchGreenApiChats(wa.instanceId,wa.apiToken);
+      stage="approval_group_visibility";
+      const chats=await fetchStrictGreenMainChats(wa.instanceId,wa.apiToken);
       if(!chats.some(c=>c.id===group&&c.id.endsWith("@g.us"))) {
         return res.status(409).json({message:"The approval group is not visible to the linked WhatsApp."});
       }
+      stage="receiving_destination";
       const dest=await pool.query("SELECT name FROM locations WHERE company_id=$1 AND id=$2",[a.companyId,destinationId]);
       if(!dest.rowCount)return res.status(404).json({message:"Destination not found."});
-      const draft=await createStockTransferOrderApprovalDraft({
-        companyId:a.companyId,destinationLocationId:destinationId,transferIds:transferIds as number[],
-        actorUserId:String(a.userId),
-      });
+      // Freshly pin the canonical authenticated company for this transaction.
+      // The outbound GREEN API lookups may cross async network boundaries;
+      // never rely on an unscoped pooled connection for frozen approval rows.
+      const tenantScope = createTenantDatabaseScope(a.companyId);
+      stage="freeze_order_revision_snapshot";
+      const draft=await runWithDatabaseScopeRuntimeContext(tenantScope,
+        () => createStockTransferOrderApprovalDraft({
+          companyId:a.companyId,destinationLocationId:destinationId,transferIds:transferIds as number[],
+          actorUserId:String(a.userId),
+        }));
       draftId=draft.batchId;
-      await db.transaction(async(tx)=>{await assertStockTransferOrderApprovalBatchCurrent(tx,a.companyId,draft.batchId);});
-      const message=await makeMessage(a.companyId,draft.batchId,draft.batchKey,dest.rows[0].name);
+      stage="verify_immutable_batch";
+      await runWithDatabaseScopeRuntimeContext(tenantScope,
+        () => db.transaction(async(tx)=>{
+          await assertStockTransferOrderApprovalBatchCurrent(tx,a.companyId,draft.batchId);
+        }));
+      stage="format_approval_message";
+      const message=await runWithDatabaseScopeRuntimeContext(tenantScope,
+        () => makeMessage(a.companyId,draft.batchId,draft.batchKey,dest.rows[0].name));
+      stage="send_approval_message";
       const sent=await sendStockTransferOrderApprovalRequest(draft.approvalGroupChatId,message);
       if(sent.outcome!=="accepted"||!sent.idMessage) {
         if(sent.outcome==="failed") {
@@ -476,6 +608,7 @@ export function registerStockTransferOrderWaApprovalRoutes(app: Express,
           message:"Delivery outcome uncertain. Check the group; do not send this batch again."});
       }
       accepted=true;
+      stage="save_provider_message_id";
       await setBatchStatus(a.companyId,draft.batchId,"requested",{
         instanceId:sent.instanceId,messageId:sent.idMessage,groupId:draft.approvalGroupChatId,
       });
@@ -484,6 +617,18 @@ export function registerStockTransferOrderWaApprovalRoutes(app: Express,
         revisions:draft.revisionCount,messageId:sent.idMessage,
         message:"Approval request sent. One authorized DONE will approve the entire frozen batch, then send the no-cost Excel to both recipients."});
     } catch(e) {
+      const sqlFailure=stockTransferApprovalSqlFailure(e);
+      logger.error(
+        "[STO WA] Approval request failed before completion: " +
+        "stage=" + stage + " step=" + (sqlFailure.step || "unknown") +
+        " sqlState=" + (sqlFailure.sqlState || "unknown") +
+        " dataType=" + (sqlFailure.dataType || "unknown") +
+        " column=" + (sqlFailure.column || "unknown") +
+        " table=" + (sqlFailure.table || "unknown") +
+        " routine=" + (sqlFailure.routine || "unknown") +
+        " position=" + (sqlFailure.position ?? "unknown") +
+        " draftCreated=" + (draftId!==null) + " whatsappAccepted=" + accepted
+      );
       if(draftId!==null&&!accepted&&!sendUncertain) {
         try {const a=await actor(req);await setBatchStatus(a.companyId,draftId,"cancelled");}
         catch(cleanupError){logger.error("[STO WA] Draft cleanup failed",{cleanupError,draftId});}
@@ -497,6 +642,13 @@ export function registerStockTransferOrderWaApprovalRoutes(app: Express,
         logger.error("[STO WA] Provider accepted request but correlation could not be stored",{error:e,draftId});
         return res.status(202).json({ok:false,uncertain:true,batchId:draftId,
           message:"WhatsApp accepted the request but ERP could not save the message ID. Contact an administrator; do not resend."});
+      }
+      if(sqlFailure.sqlState) {
+        return res.status(500).json({
+          code:"STO_WA_APPROVAL_DB_FAILURE",
+          message:"Could not prepare the WhatsApp approval request. No message was sent. Reference: " +
+            stage + (sqlFailure.step ? "/" + sqlFailure.step : "") + " (" + sqlFailure.sqlState + ").",
+        });
       }
       return errorResponse(res,e);
     }

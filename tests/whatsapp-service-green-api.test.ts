@@ -274,6 +274,30 @@ describe("Green API read requests", () => {
     await expect(wa.fetchGreenApiChats("1101", "tok")).rejects.toThrow("Green API getChats error 403: denied");
   });
 
+  it("never treats the POS backup as the main Stock Transfer Order authorization", async () => {
+    deps.settings.set(1, settingsRow());
+    deps.settings.set(2, settingsRow({ instance_id: "2202", api_token: "tok-pos" }));
+    https({ status: 401, body: "wrong token" });
+    await expect(wa.getStrictGreenMainInstanceState("1101", "tok-main"))
+      .resolves.toBe("invalidCredentials");
+    expect(httpsCalls()).toHaveLength(1);
+    expect(String(httpsCalls()[0].url)).toContain("waInstance1101/getStateInstance/tok-main");
+    expect(String(httpsCalls()[0].url)).not.toContain("2202");
+
+    https({ status: 401, body: "wrong token" });
+    await expect(wa.fetchStrictGreenMainChats("1101", "tok-main"))
+      .rejects.toThrow("Main WhatsApp credentials are rejected");
+    expect(httpsCalls()).toHaveLength(2);
+    expect(httpsCalls().every(c => String(c.url).includes("waInstance1101/"))).toBe(true);
+
+    https({ status: 200, body: JSON.stringify({ stateInstance: "notAuthorized" }) });
+    await expect(wa.getStrictGreenMainInstanceState("1101", "tok-main"))
+      .resolves.toBe("notAuthorized");
+    https({ status: 200, body: JSON.stringify({ stateInstance: "authorized" }) });
+    await expect(wa.getStrictGreenMainInstanceState("1101", "tok-main"))
+      .resolves.toBe("authorized");
+  });
+
   it("retries a 401 read with the other enabled instance", async () => {
     deps.settings.set(1, settingsRow());
     deps.settings.set(2, settingsRow({ instance_id: "2202", api_token: "tok-pos" }));

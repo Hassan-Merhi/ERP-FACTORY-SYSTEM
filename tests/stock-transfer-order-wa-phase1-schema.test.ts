@@ -58,7 +58,10 @@ describe("Stock Transfer Order WhatsApp approval — Phase 1 contract", () => {
     expect(batchService).toContain('t.workflow_origin=\'stock_transfer_order\'');
     expect(batchService).toContain("v.company_id=");
     expect(batchService).toContain("r.status='pending'");
-    expect(batchService).toContain("FOR UPDATE OF t,v");
+    // Only the stock transfer row is locked. Locking posted vouchers needlessly
+    // crosses financial row-update policies during a read-only approval request.
+    expect(batchService).toContain("FOR UPDATE OF t");
+    expect(batchService).not.toContain("FOR UPDATE OF t,v");
     expect(batchService).toContain("item_hash_snapshot");
     expect(batchService).toContain("payload_hash_snapshot");
     expect(batchService).toContain("STO_WA_BATCH_STALE");

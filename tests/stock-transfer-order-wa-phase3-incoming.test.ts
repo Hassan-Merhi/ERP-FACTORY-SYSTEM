@@ -54,6 +54,47 @@ describe("Stock Transfer Order GREEN API reply validation", () => {
     expect(parseStockTransferOrderWaReply(modified)?.quotedMessageId).toBe(quotedId);
   });
 
+  it("accepts a quoted DONE sent from the authorized linked phone, never an API message", () => {
+    const incoming = groupReply();
+    const linkedSender = "96170999999@c.us";
+    const outgoing = {
+      ...incoming,
+      typeWebhook: "outgoingMessageReceived",
+      senderData: {
+        chatId: incoming.senderData.chatId,
+        sender: linkedSender,
+        senderName: "Connected phone",
+      },
+      messageData: {
+        typeMessage: "quotedMessage",
+        extendedTextMessageData: {
+          text: "DONE",
+          stanzaId: incoming.messageData.quotedMessage.stanzaId,
+          participant: linkedSender,
+        },
+      },
+    };
+    expect(parseStockTransferOrderWaReply(outgoing)).toMatchObject({
+      senderChatId: linkedSender,
+      senderE164: "+96170999999",
+      command: "DONE",
+      quotedMessageId: incoming.messageData.quotedMessage.stanzaId,
+    });
+    expect(parseStockTransferOrderWaReply({
+      ...outgoing, typeWebhook: "outgoingAPIMessageReceived",
+    })).toBeNull();
+    expect(parseStockTransferOrderWaReply({
+      ...outgoing, senderData: { ...outgoing.senderData, sender: "96170123456@c.us" },
+    })).toBeNull();
+    expect(parseStockTransferOrderWaReply({
+      ...outgoing, instanceData: { ...outgoing.instanceData, wid: "96170123456@c.us" },
+    })).toBeNull();
+    expect(parseStockTransferOrderWaReply({
+      ...outgoing,
+      messageData: { typeMessage: "textMessage", textMessageData: { textMessage: "DONE" } },
+    })).toBeNull();
+  });
+
   it("ignores general chat chatter, unquoted commands and unexpected message types", () => {
     const payload = groupReply();
     expect(parseStockTransferOrderWaReply({
