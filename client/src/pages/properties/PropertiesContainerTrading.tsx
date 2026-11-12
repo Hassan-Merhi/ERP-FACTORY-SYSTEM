@@ -171,7 +171,7 @@ export default function PropertiesContainerTrading() {
   } = useQuery<Setup>({
     queryKey: companyQueryKey(ENDPOINT + "/setup", selectedCompany?.id),
     enabled: Boolean(selectedCompany?.id),
-    queryFn: () => apiJson<Setup>(ENDPOINT + "/setup"),
+    queryFn: (): Promise<Setup> => apiJson(ENDPOINT + "/setup"),
     staleTime: 0,
   });
 
