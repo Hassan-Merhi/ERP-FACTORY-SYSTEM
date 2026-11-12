@@ -91,6 +91,7 @@ describe("Properties normal PO Import intercompany destinations", () => {
     const route = "/properties/po-import";
     expect(findPropertiesNavigationEntry(route)?.capability).toBe("trading");
     expect(getPropertiesParentRoute(route)).toBe("/properties/containers");
+    expect(getPropertiesParentRoute("/properties/container-trading")).toBe("/properties/po-import");
     expect(canNavigateProperties(route, null, { companyType: "properties", role: "Owner" })).toBe(true);
     expect(canNavigateProperties(route, null, { companyType: "properties", role: "Developer" })).toBe(true);
     expect(canNavigateProperties(route, null, { companyType: "properties", role: "View Only" })).toBe(false);
