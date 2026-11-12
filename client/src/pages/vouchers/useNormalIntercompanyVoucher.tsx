@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useCompany } from "@/contexts/CompanyContext";
 import { apiRequest } from "@/lib/queryClient";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -189,5 +188,5 @@ export function useNormalIntercompanyVoucher(options: {
     );
   };
 
-  return { match, previewQuery, buildMirror, Details };
+  return { match, previewQuery, buildMirror, details: Details() };
 }
