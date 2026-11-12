@@ -79,7 +79,7 @@ async function json<T>(url: string, options?: RequestInit): Promise<T> {
   return payload as T;
 }
 const toCents = (value: string) => Math.round(Number(value || 0) * 100);
-export default function LinkedTradesEditor({
+export function LinkedTradesEditorContent({
   physicalContainerId,
   embedded = false,
 }: { physicalContainerId?: number; embedded?: boolean } = {}) {
@@ -687,4 +687,9 @@ export default function LinkedTradesEditor({
       </Card>
     </div>
   );
+}
+
+/** Route-level wrapper stays compatible with wouter RouteComponentProps. */
+export default function LinkedTradesEditor() {
+  return <LinkedTradesEditorContent />;
 }
