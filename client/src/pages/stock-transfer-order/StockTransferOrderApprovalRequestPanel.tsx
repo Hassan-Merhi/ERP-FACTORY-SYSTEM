@@ -42,6 +42,13 @@ export function StockTransferOrderApprovalRequestPanel({ model, open }: { model:
     queryFn: async () => (await apiRequest("GET", base + "/settings")).json(),
     enabled: open && !!selectedCompany?.id,
   });
+  const mainConnection = useQuery<{ state: string }>({
+    queryKey: ["/api/whatsapp/instance-state/main", selectedCompany?.id],
+    queryFn: async () => (await apiRequest("GET", "/api/whatsapp/instance-state/main")).json(),
+    enabled: open && !!selectedCompany?.id && !!config.data?.connected,
+    staleTime: 15_000,
+    retry: false,
+  });
   useEffect(() => {
     if (!open) {
       destinationSeededForCompany.current = null;
@@ -172,6 +179,14 @@ export function StockTransferOrderApprovalRequestPanel({ model, open }: { model:
       )}
       {config.data && (!config.data.settings.enabled || !config.data.connected) &&
         <p className="text-sm text-amber-600">Enable approval settings and connect the main WhatsApp account in Export Center.</p>}
+      {config.data?.connected && mainConnection.data?.state !== "authorized" && (
+        <p className="text-sm text-amber-600" data-testid="sto-wa-main-authorization-warning">
+          {mainConnection.isFetching ? "Checking main WhatsApp authorization…" :
+            mainConnection.data?.state === "invalidCredentials"
+              ? "Main WhatsApp credentials were rejected (401/403). Update them in Settings → Export Center → Daily Export → WhatsApp Export. POS authorization does not count."
+              : "Main WhatsApp must be authorized before sending an approval request. Check Main WhatsApp in Export Center."}
+        </p>
+      )}
       <div className="space-y-2">
         <Label>Destination (one destination per approval batch)</Label>
         <Select value={destinationId?.toString() || ""} onValueChange={selectDestination}>
@@ -240,7 +255,7 @@ export function StockTransferOrderApprovalRequestPanel({ model, open }: { model:
           </Button>
         </div>
       )}
-      <Button className="w-full" disabled={!config.data?.connected || !config.data?.webhookConfigured || !config.data?.executionEnabled || !config.data?.deliveryEnabled || !config.data?.settings.enabled ||
+      <Button className="w-full" disabled={mainConnection.data?.state !== "authorized" || !config.data?.connected || !config.data?.webhookConfigured || !config.data?.executionEnabled || !config.data?.deliveryEnabled || !config.data?.settings.enabled ||
           !config.data?.destinations.some(d => d.id === destinationId && d.chatId && d.enabled) ||
           selectedIds.length === 0 || send.isPending || !!result}
         onClick={() => send.mutate()} data-testid="sto-wa-send-approval-request">
