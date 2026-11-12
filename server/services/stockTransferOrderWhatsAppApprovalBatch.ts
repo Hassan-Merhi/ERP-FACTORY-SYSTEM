@@ -149,7 +149,10 @@ export async function createStockTransferOrderApprovalDraft(
     fail("STO_WA_INVALID_CONTEXT", "Company, destination and authenticated user are required.");
   }
 
-  return db.transaction(async (tx) => {
+  let failedStep = "transaction_start";
+  try {
+    return await db.transaction(async (tx) => {
+    failedStep = "read_approval_settings";
     const config = await tx.execute(sql`
       SELECT enabled, approval_group_chat_id, authorized_phone_e164
         FROM stock_transfer_order_approval_settings
@@ -163,6 +166,7 @@ export async function createStockTransferOrderApprovalDraft(
       fail("STO_WA_NOT_CONFIGURED", "Configure the approval WhatsApp group and authorized phone first.");
     }
 
+    failedStep = "read_destination_recipient";
     const recipient = await tx.execute(sql`
       SELECT chat_id FROM stock_transfer_order_destination_recipients
        WHERE company_id=${companyId} AND destination_location_id=${destinationId} AND enabled=true
@@ -173,11 +177,13 @@ export async function createStockTransferOrderApprovalDraft(
       fail("STO_WA_DESTINATION_NOT_CONFIGURED", "The destination has no enabled WhatsApp recipient.");
     }
 
+    failedStep = "lock_and_read_eligible_orders";
     const orders = await loadEligibleOrders(tx, companyId, destinationId, ids, true);
     if (orders.length !== ids.length) {
       fail("STO_WA_SCOPE", "Only existing Stock Transfer Orders from the selected company and destination may be included.");
     }
 
+    failedStep = "check_active_reservations";
     const conflicts = await tx.execute(sql`
       SELECT transfer_id FROM stock_transfer_order_approval_batch_items
        WHERE company_id=${companyId} AND transfer_id=ANY(${ids}::integer[])
@@ -188,6 +194,7 @@ export async function createStockTransferOrderApprovalDraft(
       fail("STO_WA_ALREADY_RESERVED", "An included order is already part of an active approval request.");
     }
 
+    failedStep = "read_pending_revisions";
     const revisions = await loadPendingRevisions(tx, ids);
     if (!revisions.length) {
       fail("STO_WA_NO_REVISIONS", "The selected orders have no pending revisions to approve.");
@@ -196,11 +203,13 @@ export async function createStockTransferOrderApprovalDraft(
       fail("STO_WA_TOO_MANY_REVISIONS", "This request has too many revisions. Use a smaller batch.");
     }
 
+    failedStep = "read_current_stock_transfer_lines";
     const hashes = await loadLines(tx, ids);
     if (orders.some((order) => !hashes.has(Number(order.transfer_id)))) {
       fail("STO_WA_EMPTY_ORDER", "Every selected order must contain stored stock lines.");
     }
 
+    failedStep = "insert_batch_header";
     const inserted = await tx.execute(sql`
       INSERT INTO stock_transfer_order_approval_batches
         (company_id,destination_location_id,approval_group_chat_id,authorized_phone_e164,created_by,created_at)
@@ -211,6 +220,7 @@ export async function createStockTransferOrderApprovalDraft(
     const header = inserted.rows[0] as { id: number | string; batch_key: string };
     const batchId = Number(header.id);
     for (const order of orders) {
+      failedStep = "insert_batch_order_item";
       await tx.execute(sql`
         INSERT INTO stock_transfer_order_approval_batch_items
           (company_id,batch_id,transfer_id,voucher_number_snapshot,item_hash_snapshot)
@@ -219,6 +229,7 @@ export async function createStockTransferOrderApprovalDraft(
       `);
     }
     for (const revision of revisions) {
+      failedStep = "insert_batch_revision";
       await tx.execute(sql`
         INSERT INTO stock_transfer_order_approval_batch_revisions
           (company_id,batch_id,transfer_id,revision_id,revision_number_snapshot,payload_hash_snapshot)
@@ -227,11 +238,13 @@ export async function createStockTransferOrderApprovalDraft(
                 ${revision.payload_hash})
       `);
     }
+    failedStep = "insert_draft_audit_event";
     await tx.execute(sql`
       INSERT INTO stock_transfer_order_approval_events(company_id,batch_id,event_type,details)
       VALUES (${companyId},${batchId},'draft_created',
               ${JSON.stringify({ destinationRecipientChatId: recipientChatId })}::jsonb)
     `);
+    failedStep = "commit_snapshot_transaction";
     return {
       batchId,
       batchKey: String(header.batch_key),
@@ -240,7 +253,13 @@ export async function createStockTransferOrderApprovalDraft(
       revisionCount: revisions.length,
       approvalGroupChatId: setting.approval_group_chat_id,
     };
-  });
+    });
+  } catch (error) {
+    if (error && typeof error === "object") {
+      try { (error as { stoApprovalStep?: string }).stoApprovalStep = failedStep; } catch { /* preserve original database error */ }
+    }
+    throw error;
+  }
 }
 
 export type StockTransferOrderApprovalSnapshot = {
