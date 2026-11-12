@@ -13,6 +13,7 @@ import { describe, expect, it } from "vitest";
 const read = (p: string) => fs.readFileSync(path.join(process.cwd(), p), "utf8");
 const batch = read("server/services/stockTransferOrderWhatsAppApprovalBatch.ts");
 const route = read("server/routes/stockTransferOrderWaApprovalRoutes.ts");
+const workbook = read("server/services/stockTransferOrderApprovedWorkbookSnapshot.ts");
 
 describe("Stock Transfer Order WhatsApp approval request fix", () => {
   it("locks only the transfer row and keeps the company / voucher identity checks", () => {
@@ -24,6 +25,13 @@ describe("Stock Transfer Order WhatsApp approval request fix", () => {
     expect(batch).toContain("t.destination_location_id=");
     expect(batch).toContain("item_hash_snapshot");
     expect(batch).toContain("payload_hash_snapshot");
+    expect(batch).toContain("export function stockTransferOrderIntegerIdArray(ids: readonly number[])");
+    expect(batch).toContain("ARRAY[");
+    expect(batch).toContain("sql.join(ids.map((id) => sql`");
+    expect(batch).not.toContain("ANY(${transferIds}::integer[])");
+    expect(batch).not.toContain("ANY(${ids}::integer[])");
+    expect(workbook).toContain("stockTransferOrderIntegerIdArray(transferIds)");
+    expect(workbook).not.toContain("ANY(${transferIds}::integer[])");
   });
 
   it("pins the verified active-company context when freezing the batch and reading the message", () => {
@@ -35,9 +43,19 @@ describe("Stock Transfer Order WhatsApp approval request fix", () => {
     expect(route).toContain("getActiveCompanyPermissionContext(req)");
   });
 
-  it("logs SQLSTATE and exact failed stage without disclosing SQL or WhatsApp credentials", () => {
+  it("labels every snapshot database operation and logs safe PostgreSQL type diagnostics", () => {
+    for (const step of [
+      "read_approval_settings", "read_destination_recipient", "lock_and_read_eligible_orders",
+      "check_active_reservations", "read_pending_revisions", "read_current_stock_transfer_lines",
+      "insert_batch_header", "insert_batch_order_item", "insert_batch_revision",
+      "insert_draft_audit_event", "commit_snapshot_transaction",
+    ]) expect(batch).toContain("failedStep = \"" + step + "\"");
     expect(route).toContain("function stockTransferApprovalSqlFailure(error: unknown)");
-    expect(route).toContain("sqlState:sqlFailure.sqlState");
+    expect(route).toContain("sqlFailure.sqlState");
+    expect(route).toContain("sqlFailure.dataType");
+    expect(route).toContain("sqlFailure.routine");
+    expect(route).toContain('sqlFailure.step ? "/" + sqlFailure.step : ""');
+    expect(route).not.toContain("internalQuery:");
     expect(route).toContain('stage="freeze_order_revision_snapshot"');
     expect(route).toContain('stage="verify_immutable_batch"');
     expect(route).toContain('stage="format_approval_message"');
