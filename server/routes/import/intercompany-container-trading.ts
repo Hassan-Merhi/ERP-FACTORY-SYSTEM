@@ -6,6 +6,7 @@ import { db } from "../../db";
 import { logger } from "../../lib/logger";
 import { containers, intercompanyTrades, intercompanyImportBatchContainers } from "@shared/schema";
 import { upload } from "../_helpers";
+import { autoProvisionTradingRelationship } from "../../services/intercompany/tradingAccountProvisioning";
 import {
   getTradingSetup,
   importInputSchema,
@@ -74,6 +75,30 @@ export function registerIntercompanyContainerTradingRoutes(app: Express) {
           destinationCompanyId: saved.destinationCompanyId,
           tradeEnabled: saved.tradeEnabled,
         });
+      } catch (error) {
+        return sendError(res, error);
+      }
+    }
+  );
+
+  // One-click, company-scoped setup: provision only missing master data and
+  // verified mappings. No historical balances, vouchers, or cash are changed.
+  app.post(
+    "/api/intercompany-container-trading/relationships/auto",
+    requireAuth,
+    requireRole("Owner", "Developer"),
+    async (req, res) => {
+      try {
+        const { companyId, userId, role } = companyFromSession(req);
+        const { destinationCompanyId } = z.object({ destinationCompanyId: z.number().int().positive() }).parse(req.body);
+        const configured = await autoProvisionTradingRelationship({
+          sourceCompanyId: companyId,
+          destinationCompanyId,
+          userId,
+          username: req.session.username || "unknown",
+          role,
+        });
+        return res.status(configured.status === "configured" ? 201 : 200).json(configured);
       } catch (error) {
         return sendError(res, error);
       }
