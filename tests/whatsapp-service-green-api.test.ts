@@ -192,7 +192,7 @@ describe("Green API read requests", () => {
     expect(httpsCalls()[0].options).toMatchObject({ method: "GET", family: 4 });
 
     https({ status: 200, body: JSON.stringify({ stateInstance: "blocked" }) });
-    await expect(wa.getGreenInstanceState("1101", "tok")).resolves.toBe("unknown");
+    await expect(wa.getGreenInstanceState("1101", "tok")).resolves.toBe("blocked");
 
     https({ status: 200, body: "not json" });
     await expect(wa.getGreenInstanceState("1101", "tok")).resolves.toBe("unknown");
@@ -610,6 +610,42 @@ describe("file uploads", () => {
 
     https({ status: 500, body: "x" }, { status: 500, body: "y" });
     await expect(wa.sendWhatsAppFile(pdf, "n.xlsx", "")).resolves.toMatchObject({ success: false, sent: 0, failed: 2 });
+  });
+});
+
+describe("POS dedicated GREEN-API host and status", () => {
+  it("routes the correct POS instance to its console API/media host", async () => {
+    const keys = ["GREEN_API_POS_INSTANCE_ID", "GREEN_API_POS_API_URL", "GREEN_API_POS_MEDIA_URL"] as const;
+    const previous = keys.map((key) => process.env[key]);
+    try {
+      process.env.GREEN_API_POS_INSTANCE_ID = "7107601769";
+      process.env.GREEN_API_POS_API_URL = "https://7107.api.greenapi.com";
+      process.env.GREEN_API_POS_MEDIA_URL = "https://7107.api.greenapi.com";
+      deps.settings.set(1, settingsRow());
+      deps.settings.set(2, settingsRow({ instance_id: "7107601769", api_token: "pos-token" }));
+      https({ status: 200, body: JSON.stringify({ stateInstance: "authorized" }) });
+      await expect(wa.getStrictGreenMainInstanceState("7107601769", "pos-token")).resolves.toBe("authorized");
+      expect(String(httpsCalls()[0].url)).toBe("https://7107.api.greenapi.com/waInstance7107601769/getStateInstance/pos-token");
+
+      https({ status: 200, body: "{}" });
+      await expect(wa.sendWhatsAppFileByUploadPos("123@g.us", Buffer.from("PDF"), "invoice.pdf", ""))
+        .resolves.toMatchObject({ success: true });
+      expect(String(httpsCalls()[1].url)).toBe("https://7107.api.greenapi.com/waInstance7107601769/sendFileByUpload/pos-token");
+
+      expect(wa.getGreenApiHost("1101")).toBe("https://api.greenapi.com");
+      https({ status: 200, body: JSON.stringify({ stateInstance: "suspended" }) });
+      await expect(wa.getStrictGreenMainInstanceState("7107601769", "pos-token")).resolves.toBe("suspended");
+
+      https({ status: 401, body: "rejected" });
+      await expect(wa.getStrictGreenMainInstanceState("7107601769", "pos-token")).resolves.toBe("invalidCredentials");
+      expect(httpsCalls()).toHaveLength(4);
+      expect(httpsCalls().every((c) => !String(c.url).includes("waInstance1101/"))).toBe(true);
+    } finally {
+      keys.forEach((key, i) => {
+        if (previous[i] === undefined) delete process.env[key];
+        else process.env[key] = previous[i];
+      });
+    }
   });
 });
 
