@@ -201,7 +201,7 @@ describe("Phase 4 verified destination stock mapping", () => {
   it("preserves the all-or-nothing posting boundary and zero opening balances", () => {
     const sourceCode = readFileSync("server/services/intercompany/containerTradingImport.ts", "utf8");
     expect(sourceCode).toContain("planDestinationStockMapping({");
-    expect(sourceCode).toContain("tx\n          .insert(stockItems)");
+    expect(sourceCode).toMatch(/tx\s*\.insert\(stockItems\)/);
     expect(sourceCode).toContain('openingQty: "0"');
     expect(sourceCode).toContain('openingValue: "0"');
     expect(sourceCode).toContain('sellingPrice: "0"');
