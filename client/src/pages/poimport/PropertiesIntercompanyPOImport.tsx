@@ -104,8 +104,9 @@ export default function PropertiesIntercompanyPOImport() {
   const [defaultDestinationId, setDefaultDestinationId] = useState("");
   const [destinations, setDestinations] = useState<PropertiesContainerDestinations>({});
   const [outcome, setOutcome] = useState<ImportOutcome | null>(null);
+  const [fileInputVersion, setFileInputVersion] = useState(0);
 
-  const { data: setup, isPending: setupLoading, error: setupError, refetch: refetchSetup } = useQuery<TradingSetup>({
+  const { data: setup, isPending: setupLoading, error: setupError } = useQuery<TradingSetup>({
     queryKey: companyQueryKey(`${API}/setup`, companyId),
     enabled: companyId > 0 && selectedCompany?.companyType === "properties",
     queryFn: async () => {
@@ -200,6 +201,7 @@ export default function PropertiesIntercompanyPOImport() {
       setOutcome(result);
       setPreview(null);
       setFile(null);
+      setFileInputVersion((version) => version + 1);
       setDestinations({});
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: companyQueryKey(`${API}/setup`, companyId) }),
@@ -267,7 +269,7 @@ export default function PropertiesIntercompanyPOImport() {
               <Label htmlFor="properties-po-file">{copy.chooseFile}</Label>
               <Input
                 id="properties-po-file"
-                key={previewCompanyId ?? companyId}
+                key={`${companyId}:${fileInputVersion}`}
                 type="file"
                 accept=".xlsx"
                 data-testid="input-file-upload"
