@@ -10,6 +10,7 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { apiRequestPrivileged } from "@/lib/queryClient";
 
 interface PropertiesWaSettings {
   chatId: string;
@@ -44,11 +45,11 @@ const defaults: PropertiesWaSettings = {
 const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 async function jsonRequest(url: string, method = "GET", body?: unknown) {
-  const response = await fetch(url, {
-    method, credentials: "include",
-    headers: method === "GET" ? undefined : { "Content-Type": "application/json" },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
+  // All state-changing requests use the shared CSRF-aware transport and never
+  // enter an offline write queue (WhatsApp sends must not replay later).
+  const response = method === "GET"
+    ? await fetch(url, { credentials: "include" })
+    : await apiRequestPrivileged(method, url, body);
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data?.message || `WhatsApp request failed (${response.status})`);
   return data;
