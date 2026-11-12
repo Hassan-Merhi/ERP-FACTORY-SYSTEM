@@ -542,13 +542,17 @@ export function registerStockTransferOrderWaApprovalRoutes(app: Express,
         message:"Approval request sent. One authorized DONE will approve the entire frozen batch, then send the no-cost Excel to both recipients."});
     } catch(e) {
       const sqlFailure=stockTransferApprovalSqlFailure(e);
-      logger.error("[STO WA] Approval request failed before completion", {
-        stage, step:sqlFailure.step, sqlState:sqlFailure.sqlState,
-        table:sqlFailure.table, constraint:sqlFailure.constraint,
-        dataType:sqlFailure.dataType, column:sqlFailure.column,
-        routine:sqlFailure.routine, position:sqlFailure.position,
-        draftCreated:draftId!==null, whatsappAccepted:accepted,
-      });
+      logger.error(
+        "[STO WA] Approval request failed before completion: " +
+        "stage=" + stage + " step=" + (sqlFailure.step || "unknown") +
+        " sqlState=" + (sqlFailure.sqlState || "unknown") +
+        " dataType=" + (sqlFailure.dataType || "unknown") +
+        " column=" + (sqlFailure.column || "unknown") +
+        " table=" + (sqlFailure.table || "unknown") +
+        " routine=" + (sqlFailure.routine || "unknown") +
+        " position=" + (sqlFailure.position ?? "unknown") +
+        " draftCreated=" + (draftId!==null) + " whatsappAccepted=" + accepted
+      );
       if(draftId!==null&&!accepted&&!sendUncertain) {
         try {const a=await actor(req);await setBatchStatus(a.companyId,draftId,"cancelled");}
         catch(cleanupError){logger.error("[STO WA] Draft cleanup failed",{cleanupError,draftId});}
