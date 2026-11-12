@@ -6,9 +6,7 @@ import {
   canUsePropertiesCapability,
   PROPERTIES_LEGACY_RENTAL_REDIRECTS,
 } from "@/properties/config/propertiesNavigation";
-import LinkedTradesEditor from "@/pages/intercompany/LinkedTradesEditor";
-import IntercompanyPayments from "@/pages/intercompany/IntercompanyPayments";
-import IntercompanyLifecycle from "@/pages/intercompany/IntercompanyLifecycle";
+import { legacyPropertiesIntercompanyDestination } from "@/pages/intercompany/intercompanyLegacyNavigation";
 import { AccountingToolbox } from "@/lazyPages";
 
 const PropertiesHelpTraining = lazy(() =>
@@ -118,9 +116,32 @@ export function PropertiesRoutes({ user }: PropertiesRoutesProps) {
       {canTrade && (
         <Route path="/properties/container-trading">{() => <Redirect replace to="/properties/po-import" />}</Route>
       )}
-      {canTrade && <Route path="/properties/linked-trades" component={LinkedTradesEditor} />}
-      {canTrade && <Route path="/properties/intercompany-payments" component={IntercompanyPayments} />}
-      {canTrade && <Route path="/properties/intercompany-lifecycle" component={IntercompanyLifecycle} />}
+      {/* Phase 7: preserve bookmarked URLs without rendering duplicate editors. */}
+      {canTrade && (
+        <Route path="/properties/linked-trades">
+          {() => (
+            <Redirect
+              replace
+              to={legacyPropertiesIntercompanyDestination("linked-trades", window.location.search)}
+            />
+          )}
+        </Route>
+      )}
+      {canTrade && (
+        <Route path="/properties/intercompany-payments">
+          {() => <Redirect replace to={legacyPropertiesIntercompanyDestination("intercompany-payments")} />}
+        </Route>
+      )}
+      {canTrade && (
+        <Route path="/properties/intercompany-lifecycle">
+          {() => (
+            <Redirect
+              replace
+              to={legacyPropertiesIntercompanyDestination("intercompany-lifecycle", window.location.search)}
+            />
+          )}
+        </Route>
+      )}
       <Route path="/properties/rentals" component={PropertiesRentalsHub} />
       {Object.entries(PROPERTIES_LEGACY_RENTAL_REDIRECTS).map(([from, to]) => (
         <Route key={from} path={from}>
