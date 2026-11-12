@@ -9,8 +9,12 @@ import { useApplicationLanguageCode } from "@/contexts/ApplicationLanguageContex
 import { companyQueryKey } from "@/lib/companyQueryScope";
 import { propertiesContainerIntercompanyText } from "@/i18n/propertiesContainerIntercompanyTranslations";
 
-const LinkedTradesEditor = lazy(() => import("../intercompany/LinkedTradesEditor"));
-const IntercompanyLifecycle = lazy(() => import("../intercompany/IntercompanyLifecycle"));
+const LinkedTradesEditor = lazy(() =>
+  import("../intercompany/LinkedTradesEditor").then((module) => ({ default: module.LinkedTradesEditorContent }))
+);
+const IntercompanyLifecycle = lazy(() =>
+  import("../intercompany/IntercompanyLifecycle").then((module) => ({ default: module.IntercompanyLifecycleContent }))
+);
 const API = "/api/intercompany-container-trading/lifecycle";
 type Trade = {
   tradeId: number;
