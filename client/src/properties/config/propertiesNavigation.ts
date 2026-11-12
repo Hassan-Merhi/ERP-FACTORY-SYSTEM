@@ -97,10 +97,10 @@ export const PROPERTIES_NAVIGATION: readonly NavEntry[] = [
   },
   {
     path: "/properties/container-trading",
-    label: "Container Trading",
-    parent: null,
+    label: "Import PO (legacy route)",
+    parent: "/properties/po-import",
     capability: "trading",
-    navigation: "tool",
+    navigation: "hidden",
   },
   {
     path: "/properties/linked-trades",
