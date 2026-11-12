@@ -6,8 +6,10 @@ import {
   SlidersHorizontal,
   FileText,
   ClipboardList,
+  Landmark,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { INTERCOMPANY_VOUCHER_EN } from "@/i18n/intercompanyVoucherTranslations";
 
 export type VoucherSidebarGroup = {
   label: string;
@@ -16,13 +18,14 @@ export type VoucherSidebarGroup = {
 };
 
 /** Voucher type navigation groups. Returns a fresh array on every call (the page rebuilds it each render). */
-export function buildVoucherSidebarGroups(): VoucherSidebarGroup[] {
+export function buildVoucherSidebarGroups(includeIntercompany = false, transferLabel = INTERCOMPANY_VOUCHER_EN.tab): VoucherSidebarGroup[] {
   return [
     {
       label: "Financial",
       color: "#3b82f6",
       items: [
         { key: "payment", label: "Payment", icon: ArrowDownCircle },
+        ...(includeIntercompany ? [{ key: "intercompany", label: transferLabel, icon: Landmark }] : []),
         { key: "receipt", label: "Receipt", icon: ArrowUpCircle },
         { key: "journal", label: "Journal", icon: BookOpen },
       ],
