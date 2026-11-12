@@ -1,5 +1,6 @@
 import type { ClientErrorLike } from "@/lib/clientError";
 import SpPOImport from "./SpPOImport";
+import PropertiesIntercompanyPOImport from "./poimport/PropertiesIntercompanyPOImport";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
@@ -894,5 +895,6 @@ function ErpPOImport() {
 // while keeping their separate accounting and import endpoints.
 export default function POImport() {
   const { selectedCompany } = useCompany();
+  if (selectedCompany?.companyType === "properties") return <PropertiesIntercompanyPOImport />;
   return selectedCompany?.companyType === "supplier_partner" ? <SpPOImport /> : <ErpPOImport />;
 }
