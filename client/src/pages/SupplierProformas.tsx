@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams, useSearch } from "wouter";
 import { useBackToParent } from "@/hooks/use-back-to-parent";
+import { useCompany } from "@/contexts/CompanyContext";
 import { useEscapeToParent } from "@/hooks/use-escape-to-parent";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -61,7 +62,8 @@ export default function SupplierProformas() {
   const searchString = useSearch();
   const requestedProformaId = new URLSearchParams(searchString).get("proformaId");
   const fileInputRef = useRef<HTMLInputElement>(null);
-  useEscapeToParent("/suppliers");
+  const { selectedCompany } = useCompany();
+  useEscapeToParent(selectedCompany?.companyType === "properties" ? "/properties/suppliers" : "/suppliers");
 
   const [selectedProformaId, setSelectedProformaId] = useState<number | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
