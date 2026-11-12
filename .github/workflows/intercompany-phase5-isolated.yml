@@ -94,6 +94,13 @@ jobs:
             client/src/pages/poimport/PropertiesIntercompanyPOImport.tsx \
             client/src/i18n/propertiesPoImportTranslations.ts \
             tests/intercompany-phase4-auto-stock.test.ts \
+            server/services/intercompany/phase5ReceivingAccess.ts \
+            client/src/pages/intercompany/LinkedTradesEditor.tsx \
+            client/src/pages/containerdetail/components/ContainerDetailErpView.tsx \
+            client/src/pages/containerdetail/PropertiesIntercompanyContainerWorkflow.tsx \
+            client/src/i18n/propertiesContainerIntercompanyTranslations.ts \
+            server/routes/import/intercompany-phase3.ts \
+            tests/intercompany-phase5-properties-container-integration.test.ts \
             tests/intercompany-phase5-database-guards.test.ts \
             tests/intercompany-phase5-lifecycle-math.test.ts \
             tests/intercompany-phase5-mirrored-lines.test.ts
@@ -118,6 +125,7 @@ jobs:
             tests/intercompany-phase4-auto-stock.test.ts \
             tests/intercompany-phase4-database-guards.test.ts \
             tests/intercompany-phase4-payment-money.test.ts \
+            tests/intercompany-phase5-properties-container-integration.test.ts \
             tests/intercompany-phase5-database-guards.test.ts \
             tests/intercompany-phase5-lifecycle-math.test.ts \
             tests/intercompany-phase5-mirrored-lines.test.ts
