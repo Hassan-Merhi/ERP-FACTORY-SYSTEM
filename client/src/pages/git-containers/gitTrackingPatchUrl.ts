@@ -6,7 +6,7 @@ export function gitTrackingPatchUrl(id: number): string {
     : `/api/containers/${id}/tracking`;
 }
 
-export function gitContainerDetailPath(id: number): string {
+export function gitContainerDetailPath(id: number, propertiesMode = false): string {
   if (!Number.isSafeInteger(id) || id === 0) throw new Error("Invalid tracking container id");
-  return `/containers/${Math.abs(id)}`;
+  return `${propertiesMode ? "/properties" : ""}/containers/${Math.abs(id)}`;
 }
