@@ -65,8 +65,27 @@ interface AutoRelationship {
   destinationCompanyId: number;
   tradeEnabled: boolean;
 }
+interface StockVerification {
+  fileSha256: string;
+  sourceCompanyId: number;
+  verifiedRows: number;
+  createdItemCount: number;
+  reusedLineCount: number;
+  rows: Array<{
+    containerNumber: string;
+    destinationCompanyId: number;
+    excelRow: number;
+    code: string;
+    name: string;
+    uom: string;
+    sourceStockItemId: number;
+    destinationStockItemId: number | null;
+    action: "create" | "reuse";
+  }>;
+}
 interface ImportOutcome {
   batchId: number;
+  createdDestinationStockItems: number;
   containerCount: number;
   totalIntercompanyCost: string;
   containers: Array<{
@@ -105,6 +124,15 @@ export default function PropertiesIntercompanyPOImport() {
   const [destinations, setDestinations] = useState<PropertiesContainerDestinations>({});
   const [outcome, setOutcome] = useState<ImportOutcome | null>(null);
   const [fileInputVersion, setFileInputVersion] = useState(0);
+  const [stockReview, setStockReview] = useState<{ signature: string; data: StockVerification } | null>(null);
+  const stockSignature = JSON.stringify({
+    companyId,
+    fileSha256: preview?.sha256 ?? "",
+    destinations: Object.entries(destinations)
+      .map(([containerNumber, selection]) => [containerNumber, selection.destinationCompanyId])
+      .sort(([a], [b]) => String(a).localeCompare(String(b))),
+  });
+  const currentStockReview = stockReview?.signature === stockSignature ? stockReview.data : null;
 
   const {
     data: setup,
@@ -134,6 +162,7 @@ export default function PropertiesIntercompanyPOImport() {
     setDefaultDestinationId("");
     setDestinations({});
     setOutcome(null);
+    setStockReview(null);
   }, [companyId]);
 
   const previewMutation = useMutation({
@@ -156,6 +185,48 @@ export default function PropertiesIntercompanyPOImport() {
       toast({ title: copy.parsed, description: [parsed.containers.length, copy.container.toLowerCase()].join(" ") });
     },
     onError: (error: Error) => toast({ title: copy.failure, description: error.message, variant: "destructive" }),
+  });
+
+  const verifyStockMutation = useMutation({
+    mutationFn: async ({ requestedCompanyId, signature }: { requestedCompanyId: number; signature: string }) => {
+      if (requestedCompanyId !== activeCompanyId.current || !file || !preview ||
+          previewCompanyId !== requestedCompanyId || !setup) {
+        throw new Error(copy.stale);
+      }
+      const verified = validatePropertiesImportSelections(
+        preview.containers,
+        destinations,
+        new Set(setup.destinations.map((destination) => destination.id))
+      );
+      const body = new FormData();
+      body.append("file", file);
+      body.append(
+        "selections",
+        JSON.stringify(
+          verified.map((row) => ({
+            containerNumber: row.containerNumber,
+            destinationCompanyId: row.destinationCompanyId,
+          }))
+        )
+      );
+      return {
+        signature,
+        requestedCompanyId,
+        result: await postForm<StockVerification>(`${API}/stock-preview`, body),
+      };
+    },
+    onSuccess: ({ signature, requestedCompanyId, result }) => {
+      if (
+        requestedCompanyId !== activeCompanyId.current ||
+        preview?.sha256 !== result.fileSha256 ||
+        signature !== stockSignature
+      ) return;
+      setStockReview({ signature, data: result });
+    },
+    onError: (error: Error) => {
+      setStockReview(null);
+      toast({ title: copy.stockReviewFailed, description: error.message, variant: "destructive" });
+    },
   });
 
   const importMutation = useMutation({
@@ -218,6 +289,7 @@ export default function PropertiesIntercompanyPOImport() {
       setFile(null);
       setFileInputVersion((version) => version + 1);
       setDestinations({});
+      setStockReview(null);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: companyQueryKey(`${API}/setup`, companyId) }),
         queryClient.invalidateQueries({ queryKey: ["/api/containers"] }),
@@ -230,6 +302,7 @@ export default function PropertiesIntercompanyPOImport() {
 
   const changeFile = (next: File | null) => {
     setFile(next);
+    setStockReview(null);
     setPreview(null);
     setPreviewCompanyId(null);
     setDestinations({});
@@ -245,6 +318,7 @@ export default function PropertiesIntercompanyPOImport() {
     Boolean(setup?.destinations.length) &&
     !importMutation.isPending &&
     !previewMutation.isPending &&
+    !verifyStockMutation.isPending &&
     !setupLoading;
   const readyToPost = (() => {
     if (!canPost || !preview || !setup) return false;
@@ -490,6 +564,62 @@ export default function PropertiesIntercompanyPOImport() {
                 </TableBody>
               </Table>
             </div>
+            <div className="space-y-3 rounded-md border p-3" data-testid="properties-po-stock-review">
+              <div className="flex flex-wrap items-center gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={!readyToPost || verifyStockMutation.isPending}
+                  onClick={() => verifyStockMutation.mutate({ requestedCompanyId: companyId, signature: stockSignature })}
+                  data-testid="button-verify-destination-stock"
+                >
+                  <ShieldCheck className="mr-2 h-4 w-4" />
+                  {verifyStockMutation.isPending ? copy.verifyingStock : copy.verifyStock}
+                </Button>
+                {currentStockReview && (
+                  <div className="text-sm" data-testid="stock-review-counts">
+                    {copy.stockCreatedCount}: <strong>{currentStockReview.createdItemCount}</strong> ·{" "}
+                    {copy.stockReusedCount}: <strong>{currentStockReview.reusedLineCount}</strong>
+                  </div>
+                )}
+              </div>
+              {currentStockReview && (
+                <>
+                  <p className="text-xs text-muted-foreground">{copy.stockReviewDetails}</p>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>{copy.container}</TableHead>
+                          <TableHead>{copy.destination}</TableHead>
+                          <TableHead>{copy.code}</TableHead>
+                          <TableHead>{copy.stockAction}</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {currentStockReview.rows.slice(0, 30).map((row) => (
+                          <TableRow key={`${row.containerNumber}:${row.excelRow}`}>
+                            <TableCell>{row.containerNumber}</TableCell>
+                            <TableCell>
+                              {setup?.destinations.find((company) => company.id === row.destinationCompanyId)?.name ??
+                                row.destinationCompanyId}
+                            </TableCell>
+                            <TableCell>
+                              {row.code} — {row.name} ({row.uom})
+                            </TableCell>
+                            <TableCell>{row.action === "create" ? copy.stockCreate : copy.stockReuse}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  {currentStockReview.rows.length > 30 && (
+                    <p className="text-xs text-muted-foreground">{copy.stockReviewMore}</p>
+                  )}
+                </>
+              )}
+            </div>
+
             <div className="flex flex-wrap items-center justify-between gap-3">
               <Button
                 variant="outline"
@@ -534,6 +664,9 @@ export default function PropertiesIntercompanyPOImport() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <p className="text-sm" data-testid="imported-stock-item-count">
+              {copy.importedStockCount}: <strong>{outcome.createdDestinationStockItems ?? 0}</strong>
+            </p>
             <Table>
               <TableHeader>
                 <TableRow>
