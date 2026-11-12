@@ -86,6 +86,14 @@ jobs:
             client/src/app/PropertiesRoutes.tsx \
             client/src/components/PropertiesSidebar.tsx \
             client/src/pages/containers/ContainerToolbar.tsx \
+            server/services/intercompany/destinationStockMapping.ts \
+            server/services/intercompany/stockMatchingMessages.ts \
+            server/services/intercompany/destinationStockPreview.ts \
+            server/services/intercompany/containerTradingImport.ts \
+            server/routes/import/intercompany-container-trading.ts \
+            client/src/pages/poimport/PropertiesIntercompanyPOImport.tsx \
+            client/src/i18n/propertiesPoImportTranslations.ts \
+            tests/intercompany-phase4-auto-stock.test.ts \
             tests/intercompany-phase5-database-guards.test.ts \
             tests/intercompany-phase5-lifecycle-math.test.ts \
             tests/intercompany-phase5-mirrored-lines.test.ts
@@ -107,6 +115,7 @@ jobs:
             tests/intercompany-phase2-destination-supplier.test.ts \
             tests/intercompany-phase3-database-guards.test.ts \
             tests/intercompany-phase3-pricing.test.ts \
+            tests/intercompany-phase4-auto-stock.test.ts \
             tests/intercompany-phase4-database-guards.test.ts \
             tests/intercompany-phase4-payment-money.test.ts \
             tests/intercompany-phase5-database-guards.test.ts \
