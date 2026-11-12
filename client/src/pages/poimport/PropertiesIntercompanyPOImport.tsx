@@ -14,7 +14,7 @@ import { useApplicationLanguageCode } from "@/contexts/ApplicationLanguageContex
 import { useToast } from "@/hooks/use-toast";
 import { companyQueryKey } from "@/lib/companyQueryScope";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { propertiesPoImportText } from "@/i18n/propertiesPoImportTranslations";
+import { propertiesPoImportText, PROPERTIES_PO_IMPORT_ERRORS } from "@/i18n/propertiesPoImportTranslations";
 import {
   initializePropertiesDestinations,
   updatePropertiesDefaultDestination,
@@ -81,8 +81,8 @@ interface ImportOutcome {
 async function postForm<T>(url: string, body: FormData): Promise<T> {
   const response = await fetch(url, { method: "POST", body, credentials: "include" });
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: "Unable to process Excel file" }));
-    throw new Error(error.message || "Unable to process Excel file");
+    const error = await response.json().catch(() => ({ message: PROPERTIES_PO_IMPORT_ERRORS.fileProcessing }));
+    throw new Error(error.message || PROPERTIES_PO_IMPORT_ERRORS.fileProcessing);
   }
   return (await response.json()) as T;
 }
@@ -112,8 +112,8 @@ export default function PropertiesIntercompanyPOImport() {
     queryFn: async () => {
       const response = await fetch(`${API}/setup`, { credentials: "include" });
       if (!response.ok) {
-        const error = await response.json().catch(() => ({ message: "Unable to read authorized destinations" }));
-        throw new Error(error.message || "Unable to read authorized destinations");
+        const error = await response.json().catch(() => ({ message: PROPERTIES_PO_IMPORT_ERRORS.setupUnavailable }));
+        throw new Error(error.message || PROPERTIES_PO_IMPORT_ERRORS.setupUnavailable);
       }
       return (await response.json()) as TradingSetup;
     },
@@ -146,7 +146,7 @@ export default function PropertiesIntercompanyPOImport() {
         initializePropertiesDestinations(parsed.containers.map((container) => container.containerNumber), defaultDestinationId)
       );
       setOutcome(null);
-      toast({ title: copy.parsed, description: `${parsed.containers.length} ${copy.container.toLowerCase()}` });
+      toast({ title: copy.parsed, description: [parsed.containers.length, copy.container.toLowerCase()].join(" ") });
     },
     onError: (error: Error) => toast({ title: copy.failure, description: error.message, variant: "destructive" }),
   });
