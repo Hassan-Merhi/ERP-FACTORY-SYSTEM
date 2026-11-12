@@ -6,7 +6,7 @@
 import { createHash } from "node:crypto";
 import { sql } from "drizzle-orm";
 import type { DbTransaction } from "../db";
-import { StockTransferOrderApprovalError } from "./stockTransferOrderWhatsAppApprovalBatch";
+import { StockTransferOrderApprovalError, stockTransferOrderIntegerIdArray } from "./stockTransferOrderWhatsAppApprovalBatch";
 
 export type ApprovedOrderNoCostRow = {
   stockItemName: string;
@@ -85,7 +85,7 @@ export async function freezeApprovedStockTransferOrderWorkbookTx(
     SELECT bi.voucher_number_snapshot
       FROM stock_transfer_order_approval_batch_items bi
      WHERE bi.company_id=${companyId} AND bi.batch_id=${batchId}
-       AND bi.transfer_id=ANY(${transferIds}::integer[])
+       AND bi.transfer_id=ANY(${stockTransferOrderIntegerIdArray(transferIds)})
      ORDER BY bi.transfer_id
   `);
   if (orders.rows.length !== transferIds.length) {
@@ -105,7 +105,7 @@ export async function freezeApprovedStockTransferOrderWorkbookTx(
       JOIN stock_items i ON i.id=ti.stock_item_id AND i.company_id=bi.company_id
       LEFT JOIN locations src ON src.id=ti.source_location_id AND src.company_id=bi.company_id
      WHERE bi.company_id=${companyId} AND bi.batch_id=${batchId}
-       AND bi.transfer_id=ANY(${transferIds}::integer[])
+       AND bi.transfer_id=ANY(${stockTransferOrderIntegerIdArray(transferIds)})
        AND v.deleted_at IS NULL
        AND t.workflow_origin='stock_transfer_order'
        AND t.destination_location_id=${destinationLocationId}
