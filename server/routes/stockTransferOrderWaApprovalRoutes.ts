@@ -18,7 +18,7 @@ import {
   StockTransferOrderApprovalError,
 } from "../services/stockTransferOrderWhatsAppApprovalBatch";
 import {
-  getWaSettings, getStrictGreenMainInstanceState, fetchStrictGreenMainChats,
+  getWaSettings, getStrictGreenMainInstanceState, getStrictGreenMainWebhookReadiness, fetchStrictGreenMainChats,
   sendStockTransferOrderApprovalRequest,
 } from "../services/whatsappService";
 
@@ -212,6 +212,61 @@ export function registerStockTransferOrderWaApprovalRoutes(app: Express,
         destinations: d.rows, groups: g.rows, canConfigure: ["Admin","Owner","Developer"].includes(a.role), connected: Boolean(wa?.enabled && wa.instanceId && wa.apiToken), webhookConfigured: webhookTokenIsConfigured(), executionEnabled: stockTransferOrderWaExecutionEnabled(), deliveryEnabled: stockTransferOrderWaDeliveryEnabled() });
     } catch(e) { return errorResponse(res, e); }
   });
+
+  // Admin-only, read-only provider check. The presence of an ERP webhook
+  // secret does NOT mean GREEN API points to this endpoint or sends events.
+  // Never expose the main credentials, provider webhook token or linked phone.
+  app.get("/api/stock-transfer-order/wa-approval/webhook-readiness",
+    requireAuth, admins, async(req,res)=>{
+      try {
+        const a = await actor(req);
+        const instance = await getWaSettings();
+        if(!instance?.enabled || !instance.instanceId || !instance.apiToken) {
+          return res.json({ready:false,mainConfigured:false,providerChecked:false,
+            message:"Main WhatsApp credentials are missing or sending is disabled."});
+        }
+        const settings = await pool.query<{ authorized_phone_e164: string | null }>(
+          "SELECT authorized_phone_e164 FROM stock_transfer_order_approval_settings WHERE company_id=$1",
+          [a.companyId]
+        );
+        let provider;
+        try {
+          provider = await getStrictGreenMainWebhookReadiness(instance.instanceId,instance.apiToken);
+        } catch {
+          return res.json({ready:false,mainConfigured:true,providerChecked:false,
+            message:"Could not read MAIN GREEN API webhook settings. Check its instance status and API token."});
+        }
+        const authorized = settings.rows[0]?.authorized_phone_e164;
+        const selfApproval = Boolean(authorized && provider.mainAccountChatId &&
+          provider.mainAccountChatId === authorized.slice(1) + "@c.us");
+        const eventTypeEnabled = selfApproval
+          ? provider.outgoingPhoneWebhookEnabled
+          : provider.incomingWebhookEnabled;
+        const ready = webhookTokenIsConfigured() &&
+          provider.webhookEndpointMatches && provider.webhookTokenMatches && eventTypeEnabled;
+        return res.json({
+          ready,mainConfigured:true,providerChecked:true,
+          webhookUrlConfigured:provider.webhookUrlConfigured,
+          endpointMatches:provider.webhookEndpointMatches,
+          webhookHost:provider.webhookHost,
+          tokenMatches:provider.webhookTokenMatches,
+          incomingWebhookEnabled:provider.incomingWebhookEnabled,
+          outgoingPhoneWebhookEnabled:provider.outgoingPhoneWebhookEnabled,
+          selfApprovalAccount:selfApproval,
+          expectedPath:"/api/stock-transfer-order/wa-approval/webhook",
+          message:ready?"Main GREEN API webhook is configured for the authorized approval mode.":
+            !provider.webhookEndpointMatches
+              ? "GREEN API is not sending callbacks to this Stock Transfer Order webhook. Check its existing URL before changing it."
+              : !provider.webhookTokenMatches
+                ? "GREEN API callback bearer does not match the ERP webhook secret."
+                : selfApproval && !provider.outgoingPhoneWebhookEnabled
+                  ? "The authorized phone is the linked WhatsApp account. Enable outgoingMessageWebhook for phone/web replies."
+                  : !selfApproval && !provider.incomingWebhookEnabled
+                    ? "Enable GREEN API incomingWebhook to receive replies from the authorized supervisor."
+                    : "Main webhook setup is incomplete.",
+        });
+      }catch(e){return errorResponse(res,e);}
+    });
 
   app.put("/api/stock-transfer-order/wa-approval/settings", requireAuth, admins, async(req,res) => {
     try {
