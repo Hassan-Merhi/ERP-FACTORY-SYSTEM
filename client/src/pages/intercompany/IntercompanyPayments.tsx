@@ -267,7 +267,10 @@ export function IntercompanyPaymentsContent({ embedded = false }: { embedded?: b
   const chosen = setup.data?.purchaseOrders || [];
   const availableCredit = setup.data?.credits.reduce((n, c) => n + Number(c.available), 0) || 0;
   return (
-    <div className={embedded ? "space-y-4" : "mx-auto max-w-6xl space-y-6 pb-10"} data-testid="intercompany-mirrored-payments">
+    <div
+      className={embedded ? "space-y-4" : "mx-auto max-w-6xl space-y-6 pb-10"}
+      data-testid="intercompany-mirrored-payments"
+    >
       {!embedded && (
         <PageHeader
           title="Intercompany Payments & Credits"
@@ -540,7 +543,8 @@ export function IntercompanyPaymentsContent({ embedded = false }: { embedded?: b
                               className="text-primary underline-offset-2 hover:underline"
                               data-testid={`intercompany-voucher-link-${row.id}`}
                             >
-                              {voucherCopy.viewVoucher} #{selectedCompany?.companyType === "properties"
+                              {voucherCopy.viewVoucher} #
+                              {selectedCompany?.companyType === "properties"
                                 ? row.sourceVoucherId
                                 : row.destinationVoucherId}
                             </Link>

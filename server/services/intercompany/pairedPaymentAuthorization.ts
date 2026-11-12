@@ -44,10 +44,7 @@ export async function pairedCashMemberships(
   );
 }
 
-export async function requirePairedCashAuthorization(
-  pair: PaymentPairIdentity,
-  actor: EditIdentity
-): Promise<void> {
+export async function requirePairedCashAuthorization(pair: PaymentPairIdentity, actor: EditIdentity): Promise<void> {
   const memberships = await pairedCashMemberships(pair, actor);
   if (!canAccessPairedCash(pair, actor, memberships)) {
     rejectEdit(

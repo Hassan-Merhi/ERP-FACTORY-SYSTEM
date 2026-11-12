@@ -32,11 +32,10 @@ describe("Phase 6 — normal Vouchers intercompany payment isolation", () => {
     expect(canAccessPairedCash(pair, actor(), memberships)).toBe(true);
     expect(canAccessPairedCash(pair, actor(20, "Admin"), memberships)).toBe(true);
     expect(
-      canAccessPairedCash(
-        pair,
-        actor(10, "Developer"),
-        [{ companyId: 10, role: "Developer" }, { companyId: 20, role: "Developer" }]
-      )
+      canAccessPairedCash(pair, actor(10, "Developer"), [
+        { companyId: 10, role: "Developer" },
+        { companyId: 20, role: "Developer" },
+      ])
     ).toBe(true);
   });
 
@@ -47,19 +46,25 @@ describe("Phase 6 — normal Vouchers intercompany payment isolation", () => {
     expect(canAccessPairedCash(pair, actor(10, "Admin"), memberships)).toBe(false);
     expect(canAccessPairedCash(pair, actor(10, "View Only"), memberships)).toBe(false);
     expect(canAccessPairedCash(pair, actor(20, "Worker"), memberships)).toBe(false);
-    expect(canAccessPairedCash(pair, actor(20, "Admin"), [
-      { companyId: 10, role: "Admin" },
-      { companyId: 20, role: "Admin" },
-    ])).toBe(false);
-    expect(canAccessPairedCash(pair, actor(20, "Admin"), [
-      { companyId: 10, role: "Owner" },
-      { companyId: 20, role: "View Only" },
-    ])).toBe(false);
+    expect(
+      canAccessPairedCash(pair, actor(20, "Admin"), [
+        { companyId: 10, role: "Admin" },
+        { companyId: 20, role: "Admin" },
+      ])
+    ).toBe(false);
+    expect(
+      canAccessPairedCash(pair, actor(20, "Admin"), [
+        { companyId: 10, role: "Owner" },
+        { companyId: 20, role: "View Only" },
+      ])
+    ).toBe(false);
   });
 
   it("exposes the transfer only to finance-capable Properties/ERP users, never POS or read-only", () => {
     expect(canOpenIntercompanyVoucherTransfer({ companyType: "properties", role: "Owner" }, false, false)).toBe(true);
-    expect(canOpenIntercompanyVoucherTransfer({ companyType: "properties", role: "Developer" }, false, false)).toBe(true);
+    expect(canOpenIntercompanyVoucherTransfer({ companyType: "properties", role: "Developer" }, false, false)).toBe(
+      true
+    );
     expect(canOpenIntercompanyVoucherTransfer({ companyType: "properties", role: "Admin" }, false, false)).toBe(false);
     expect(canOpenIntercompanyVoucherTransfer({ companyType: "erp", role: "Admin" }, false, false)).toBe(true);
     expect(canOpenIntercompanyVoucherTransfer({ companyType: "erp", role: "Owner" }, false, false)).toBe(true);
@@ -72,10 +77,8 @@ describe("Phase 6 — normal Vouchers intercompany payment isolation", () => {
   });
 
   it("links only to the actual signed-in company's own posted voucher", () => {
-    expect(intercompanyVoucherDetailPath("properties", 10, 20, 10, 51, 62))
-      .toBe("/properties/voucher-detail/51");
-    expect(intercompanyVoucherDetailPath("erp", 10, 20, 20, 51, 62))
-      .toBe("/voucher-detail/62");
+    expect(intercompanyVoucherDetailPath("properties", 10, 20, 10, 51, 62)).toBe("/properties/voucher-detail/51");
+    expect(intercompanyVoucherDetailPath("erp", 10, 20, 20, 51, 62)).toBe("/voucher-detail/62");
     expect(intercompanyVoucherDetailPath("erp", 10, 20, 10, 51, 62)).toBeNull();
     expect(intercompanyVoucherDetailPath("properties", 10, 20, 20, 51, 62)).toBeNull();
     expect(intercompanyVoucherDetailPath("erp", 10, 20, 20, 51, 0)).toBeNull();
@@ -91,8 +94,8 @@ describe("Phase 6 — normal Vouchers intercompany payment isolation", () => {
     expect(vouchers).toContain('activeTab !== "payment" && activeTab !== "receipt"');
     expect(vouchers).not.toContain('apiRequest("POST", "/api/intercompany-container-trading/payments/confirm"');
     expect(payments).toContain('BASE + "/confirm"');
-    expect(payments).toContain('sourceReceiptAccount: parseCash(sourceCash)');
-    expect(payments).toContain('destinationPaymentAccount: parseCash(destinationCash)');
+    expect(payments).toContain("sourceReceiptAccount: parseCash(sourceCash)");
+    expect(payments).toContain("destinationPaymentAccount: parseCash(destinationCash)");
     expect(payments).toContain("confirmedSourceReceipt: sourceConfirmed");
     expect(payments).toContain("confirmedDestinationPayment: destConfirmed");
   });
@@ -122,16 +125,17 @@ describe("Phase 6 — normal Vouchers intercompany payment isolation", () => {
       [new MoneyDecimal("40"), new MoneyDecimal("80")]
     );
     expect(() =>
-      exactManualAllocation(
-        new MoneyDecimal("50"),
-        [new MoneyDecimal("41.00")],
-        [new MoneyDecimal("40")]
-      )
+      exactManualAllocation(new MoneyDecimal("50"), [new MoneyDecimal("41.00")], [new MoneyDecimal("40")])
     ).toThrow();
-    expect(oldestAvailableCredits(
-      [{ id: 4, available: new MoneyDecimal("10") }, { id: 9, available: new MoneyDecimal("20") }],
-      new MoneyDecimal("15")
-    ).map((x) => x.amount.toFixed(2))).toEqual(["10.00", "5.00"]);
+    expect(
+      oldestAvailableCredits(
+        [
+          { id: 4, available: new MoneyDecimal("10") },
+          { id: 9, available: new MoneyDecimal("20") },
+        ],
+        new MoneyDecimal("15")
+      ).map((x) => x.amount.toFixed(2))
+    ).toEqual(["10.00", "5.00"]);
   });
 
   it("keeps paired voucher history and the supplier payment distinction visible", () => {
@@ -140,7 +144,7 @@ describe("Phase 6 — normal Vouchers intercompany payment isolation", () => {
     expect(page).toContain("row.sourceVoucherId");
     expect(page).toContain("row.destinationVoucherId");
     expect(page).toContain("setRequestKey(newKey())");
-    expect(page).toContain("setTransferReference(\"\")");
+    expect(page).toContain('setTransferReference("")');
     expect(INTERCOMPANY_VOUCHER_EN.supplierExplanation).toContain("Normal supplier payments");
     expect(INTERCOMPANY_VOUCHER_EN.transferSafety).toContain("cannot be posted twice");
   });

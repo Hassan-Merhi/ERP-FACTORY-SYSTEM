@@ -18,7 +18,10 @@ export type VoucherSidebarGroup = {
 };
 
 /** Voucher type navigation groups. Returns a fresh array on every call (the page rebuilds it each render). */
-export function buildVoucherSidebarGroups(includeIntercompany = false, transferLabel = INTERCOMPANY_VOUCHER_EN.tab): VoucherSidebarGroup[] {
+export function buildVoucherSidebarGroups(
+  includeIntercompany = false,
+  transferLabel = INTERCOMPANY_VOUCHER_EN.tab
+): VoucherSidebarGroup[] {
   return [
     {
       label: "Financial",

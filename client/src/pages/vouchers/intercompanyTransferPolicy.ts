@@ -3,10 +3,13 @@
  * company membership, company pair, actual cash evidence and idempotency.
  * A normal Supplier Payment must never be reclassified as a mirrored transfer.
  */
-export type VoucherTransferCompany = {
-  companyType: string;
-  role?: string | null;
-} | null | undefined;
+export type VoucherTransferCompany =
+  | {
+      companyType: string;
+      role?: string | null;
+    }
+  | null
+  | undefined;
 
 export function canOpenIntercompanyVoucherTransfer(
   company: VoucherTransferCompany,

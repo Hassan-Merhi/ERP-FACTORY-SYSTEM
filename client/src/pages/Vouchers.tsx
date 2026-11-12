@@ -68,10 +68,13 @@ import type { ErpFeatureAccess } from "@/app/erpAccess";
 import { erpPageAccessQueryOptions } from "@/app/erpAccessQuery";
 
 const IntercompanyVoucherTransfer = lazy(() =>
-  import("@/pages/intercompany/IntercompanyPayments").then((module) => ({ default: module.IntercompanyPaymentsContent }))
+  import("@/pages/intercompany/IntercompanyPayments").then((module) => ({
+    default: module.IntercompanyPaymentsContent,
+  }))
 );
 
-type VoucherTab = "payment" | "intercompany" | "receipt" | "journal" | "transfer" | "transferorder" | "adjustment" | "creditnote";
+type VoucherTab =
+  "payment" | "intercompany" | "receipt" | "journal" | "transfer" | "transferorder" | "adjustment" | "creditnote";
 
 const FACTORY_VOUCHER_HIDDEN_KEYS: Record<VoucherTab, string> = {
   payment: "hide_tab_vouchers_payment",
@@ -176,8 +179,7 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
   const allowedVoucherTabs = canUseIntercompanyVouchers
     ? ALL_VOUCHER_TABS
     : ALL_VOUCHER_TABS.filter((tab) => tab !== "intercompany");
-  const effectiveVoucherTabs =
-    (isFactoryMode || isRetailCompany) && !isPOS ? visibleVoucherTabs : allowedVoucherTabs;
+  const effectiveVoucherTabs = (isFactoryMode || isRetailCompany) && !isPOS ? visibleVoucherTabs : allowedVoucherTabs;
   const [activeTab, setActiveTab] = useHubQueryState<VoucherTab>({
     key: "tab",
     allowedValues: effectiveVoucherTabs,
