@@ -1,5 +1,5 @@
 import type { ClientErrorLike } from "@/lib/clientError";
-import { useState, useRef, useEffect, useMemo } from "react";
+import { lazy, Suspense, useState, useRef, useEffect, useMemo } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import { zodResolver } from "@/lib/form-resolver";
@@ -51,6 +51,14 @@ import { useAccountBalance } from "@/pages/vouchers/useAccountBalance";
 import { useVoucherHydration } from "@/pages/vouchers/useVoucherHydration";
 import { PaymentDraftAndRateBar } from "@/pages/vouchers/PaymentDraftAndRateBar";
 import { buildVoucherSidebarGroups } from "@/pages/vouchers/voucherSidebarGroups";
+import { canOpenIntercompanyVoucherTransfer } from "@/pages/vouchers/intercompanyTransferPolicy";
+import { useApplicationLanguageCode } from "@/contexts/ApplicationLanguageContext";
+import { intercompanyVoucherText } from "@/i18n/intercompanyVoucherTranslations";
+import { Button } from "@/components/ui/button";
+
+const IntercompanyVoucherTransfer = lazy(() =>
+  import("@/pages/intercompany/IntercompanyPayments").then((module) => ({ default: module.IntercompanyPaymentsContent }))
+);
 import type { VoucherSidebarGroup } from "@/pages/vouchers/voucherSidebarGroups";
 import { exportVoucherHelper } from "@/pages/vouchers/voucherActions";
 import { voucherFormSchema } from "@/pages/vouchers/voucherTypes";
@@ -62,10 +70,11 @@ import { shouldShowFactoryVoucherTab } from "@/pages/vouchers/factoryVoucherPoli
 import type { ErpFeatureAccess } from "@/app/erpAccess";
 import { erpPageAccessQueryOptions } from "@/app/erpAccessQuery";
 
-type VoucherTab = "payment" | "receipt" | "journal" | "transfer" | "transferorder" | "adjustment" | "creditnote";
+type VoucherTab = "payment" | "intercompany" | "receipt" | "journal" | "transfer" | "transferorder" | "adjustment" | "creditnote";
 
 const FACTORY_VOUCHER_HIDDEN_KEYS: Record<VoucherTab, string> = {
   payment: "hide_tab_vouchers_payment",
+  intercompany: "hide_tab_vouchers_intercompany",
   receipt: "hide_tab_vouchers_receipt",
   journal: "hide_tab_vouchers_journal",
   transfer: "hide_tab_vouchers_transfer",
@@ -75,6 +84,7 @@ const FACTORY_VOUCHER_HIDDEN_KEYS: Record<VoucherTab, string> = {
 };
 const ALL_VOUCHER_TABS: readonly VoucherTab[] = [
   "payment",
+  "intercompany",
   "receipt",
   "journal",
   "transfer",
@@ -95,6 +105,12 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
   const isFactoryCompany = selectedCompany?.companyType === "factory";
   const isRetailCompany = selectedCompany?.companyType === "retail";
   const isPropertiesCompany = selectedCompany?.companyType === "properties";
+  const icVoucherCopy = intercompanyVoucherText(useApplicationLanguageCode());
+  const canUseIntercompanyVouchers = canOpenIntercompanyVoucherTransfer(
+    selectedCompany,
+    Boolean(posUser),
+    Boolean(new URLSearchParams(window.location.search).get("edit"))
+  );
   const [isAutoCreating, setIsAutoCreating] = useState(false);
   const {
     formatHistoricalBaseAmount: formatAmount,
@@ -117,7 +133,7 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
     (erpPageAccess?.fullAccess === true || erpPageAccess?.pageKeys.includes("optional_vouchers") === true);
   const posLocationId = posUser?.assignedLocationId;
 
-  const sidebarGroups: VoucherSidebarGroup[] = buildVoucherSidebarGroups();
+  const sidebarGroups: VoucherSidebarGroup[] = buildVoucherSidebarGroups(canUseIntercompanyVouchers, icVoucherCopy.tab);
 
   const searchParams = new URLSearchParams(window.location.search);
   const editParam = searchParams.get("edit");
@@ -156,10 +172,14 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
   const fallbackVoucherTab = visibleVoucherTabs[0] ?? null;
   const canShowVoucherTab = (tab: VoucherTab) =>
     isPOS || (!isFactoryMode && !isRetailCompany) || visibleVoucherTabs.includes(tab);
-  const allowedVoucherTabs = (isFactoryMode || isRetailCompany) && !isPOS ? visibleVoucherTabs : ALL_VOUCHER_TABS;
+  const allowedVoucherTabs = canUseIntercompanyVouchers
+    ? ALL_VOUCHER_TABS
+    : ALL_VOUCHER_TABS.filter((tab) => tab !== "intercompany");
+  const effectiveVoucherTabs =
+    (isFactoryMode || isRetailCompany) && !isPOS ? visibleVoucherTabs : allowedVoucherTabs;
   const [activeTab, setActiveTab] = useHubQueryState<VoucherTab>({
     key: "tab",
-    allowedValues: allowedVoucherTabs,
+    allowedValues: effectiveVoucherTabs,
     knownValues: ALL_VOUCHER_TABS,
     defaultValue: fallbackVoucherTab ?? "payment",
   });
@@ -613,6 +633,21 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
           )}
           {!isPOS && canShowVoucherTab("payment") && activeTab === "payment" && (
             <div className="space-y-4">
+              {canUseIntercompanyVouchers && (
+                <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+                  <p className="max-w-2xl text-muted-foreground" data-testid="normal-supplier-payment-separation">
+                    {icVoucherCopy.supplierExplanation}
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setActiveTab("intercompany")}
+                    data-testid="button-open-intercompany-vouchers"
+                  >
+                    {icVoucherCopy.openTransfer}
+                  </Button>
+                </div>
+              )}
               <PaymentDraftAndRateBar
                 draftAge={hasPaymentDraft && !voucherIdToEdit ? paymentDraftAge : null}
                 draftLabel="Unsaved payment draft found"
@@ -673,6 +708,12 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
                 onEffectiveDateChange={setVoucherEffectiveDate}
               />
             </div>
+          )}
+
+          {!isPOS && canUseIntercompanyVouchers && activeTab === "intercompany" && (
+            <Suspense fallback={<p className="text-sm text-muted-foreground">{icVoucherCopy.tab}</p>}>
+              <IntercompanyVoucherTransfer embedded />
+            </Suspense>
           )}
 
           {!isPOS && canShowVoucherTab("receipt") && activeTab === "receipt" && (
