@@ -138,7 +138,16 @@ export function registerNormalIntercompanyVoucherRoutes(app: Express): void {
   app.post("/api/vouchers/payment-receipt", requireAuth, requireNonPOS, async (req, res, next: NextFunction) => {
     try {
       const { identity, match } = await inspect(req);
-      if (!match) return next();
+      if (!match) {
+        if (req.body?.intercompanyMirror != null) {
+          throw new NormalVoucherMirrorError(
+            "IC_VOUCHER_UNMATCHED",
+            "Selected voucher account is no longer linked to the expected company. No voucher was posted.",
+            409
+          );
+        }
+        return next();
+      }
       if (isPhase9LanPrimary()) {
         throw new NormalVoucherMirrorError(
           "IC_VOUCHER_OFFLINE",
