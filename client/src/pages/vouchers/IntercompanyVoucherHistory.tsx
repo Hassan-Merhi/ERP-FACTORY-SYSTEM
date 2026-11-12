@@ -27,7 +27,8 @@ type PaymentHistory = {
 const BASE = "/api/intercompany-container-trading/payments";
 const makeKey = () =>
   typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-    ? crypto.randomUUID() : `ic-reversal-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    ? crypto.randomUUID()
+    : `ic-reversal-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 const today = () => new Date().toLocaleDateString("en-CA");
 
 /** History and coordinated reversal stay accessible inside the normal voucher.
@@ -98,15 +99,23 @@ export default function IntercompanyVoucherHistory({
         queryClient.invalidateQueries({
           queryKey: companyQueryKey(`${BASE}/pairs/${relationshipId}/history`, companyId),
         }),
-        ...["/api/vouchers", "/api/accounts", "/api/ledger-accounts", "/api/suppliers", "/api/daybook",
-          "/api/bank-accounts", "/api/net-position"].map((key) => invalidateApiFamily(queryClient, key)),
+        ...[
+          "/api/vouchers",
+          "/api/accounts",
+          "/api/ledger-accounts",
+          "/api/suppliers",
+          "/api/daybook",
+          "/api/bank-accounts",
+          "/api/net-position",
+        ].map((key) => invalidateApiFamily(queryClient, key)),
       ]);
     },
-    onError: (error: Error) => toast({
-      title: "Paired reversal not posted",
-      description: error.message,
-      variant: "destructive",
-    }),
+    onError: (error: Error) =>
+      toast({
+        title: "Paired reversal not posted",
+        description: error.message,
+        variant: "destructive",
+      }),
   });
   return (
     <div className="space-y-3 rounded-md border p-3" data-testid="normal-intercompany-history">
@@ -116,31 +125,54 @@ export default function IntercompanyVoucherHistory({
       {expanded && (
         <div className="space-y-3">
           {history.isLoading && <p className="text-sm text-muted-foreground">Loading linked vouchers…</p>}
-          {history.isError && <p role="alert" className="text-sm text-destructive">{history.error.message}</p>}
+          {history.isError && (
+            <p role="alert" className="text-sm text-destructive">
+              {history.error.message}
+            </p>
+          )}
           {history.data?.history.length === 0 && (
             <p className="text-sm text-muted-foreground">No linked payments recorded for this company pair.</p>
           )}
           {history.data?.history.map((entry) => {
             const href = intercompanyVoucherDetailPath(
               selectedCompany?.companyType ?? "",
-              sourceCompanyId, destinationCompanyId, companyId,
-              entry.sourceVoucherId, entry.destinationVoucherId
+              sourceCompanyId,
+              destinationCompanyId,
+              companyId,
+              entry.sourceVoucherId,
+              entry.destinationVoucherId
             );
             return (
-              <div key={entry.id} className="flex flex-wrap items-center justify-between gap-2 rounded border p-2 text-sm">
-                <span>{entry.paymentDate} · {entry.transferReference} · {entry.nativeAmount} {entry.currency}
-                  {" · "}{entry.status} · Remaining credit: {entry.credit} USD
+              <div
+                key={entry.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded border p-2 text-sm"
+              >
+                <span>
+                  {entry.paymentDate} · {entry.transferReference} · {entry.nativeAmount} {entry.currency}
+                  {" · "}
+                  {entry.status} · Remaining credit: {entry.credit} USD
                 </span>
                 <div className="flex gap-2">
-                  {href && <Link href={href} className="text-primary underline">Open voucher</Link>}
+                  {href && (
+                    <Link href={href} className="text-primary underline">
+                      Open voucher
+                    </Link>
+                  )}
                   {entry.status === "confirmed" && (
-                    <Button variant="outline" type="button" size="sm" onClick={() => {
-                      setReversingId(entry.id);
-                      setReason("");
-                      setSourceReversed(false);
-                      setDestReversed(false);
-                      setRequestKey(makeKey());
-                    }}>Reverse both</Button>
+                    <Button
+                      variant="outline"
+                      type="button"
+                      size="sm"
+                      onClick={() => {
+                        setReversingId(entry.id);
+                        setReason("");
+                        setSourceReversed(false);
+                        setDestReversed(false);
+                        setRequestKey(makeKey());
+                      }}
+                    >
+                      Reverse both
+                    </Button>
                   )}
                 </div>
               </div>
@@ -155,13 +187,20 @@ export default function IntercompanyVoucherHistory({
               <div className="grid gap-2 sm:grid-cols-2">
                 <div className="space-y-1">
                   <Label htmlFor="ic-normal-reversal-date">Reversal date</Label>
-                  <Input id="ic-normal-reversal-date" type="date" value={postingDate}
-                    onChange={(event) => setPostingDate(event.target.value)} />
+                  <Input
+                    id="ic-normal-reversal-date"
+                    type="date"
+                    value={postingDate}
+                    onChange={(event) => setPostingDate(event.target.value)}
+                  />
                 </div>
                 <div className="space-y-1">
                   <Label htmlFor="ic-normal-reversal-reason">Reversal reason</Label>
-                  <Input id="ic-normal-reversal-reason" value={reason}
-                    onChange={(event) => setReason(event.target.value)} />
+                  <Input
+                    id="ic-normal-reversal-reason"
+                    value={reason}
+                    onChange={(event) => setReason(event.target.value)}
+                  />
                 </div>
               </div>
               <Label className="flex items-center gap-2">
@@ -173,11 +212,20 @@ export default function IntercompanyVoucherHistory({
                 Destination ERP payment actually reversed
               </Label>
               <div className="flex gap-2">
-                <Button type="button" variant="destructive" disabled={reverse.isPending || !sourceReversed ||
-                  !destReversed || reason.trim().length < 3} onClick={() => reverse.mutate()}>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  disabled={reverse.isPending || !sourceReversed || !destReversed || reason.trim().length < 3}
+                  onClick={() => reverse.mutate()}
+                >
                   Post coordinated reversal
                 </Button>
-                <Button type="button" variant="outline" disabled={reverse.isPending} onClick={() => setReversingId(null)}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={reverse.isPending}
+                  onClick={() => setReversingId(null)}
+                >
                   Cancel
                 </Button>
               </div>
