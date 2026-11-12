@@ -53,7 +53,7 @@ async function load(companyId: number): Promise<Lifecycle> {
   return value as Lifecycle;
 }
 
-export default function IntercompanyLifecycle({
+export function IntercompanyLifecycleContent({
   physicalContainerId,
   embedded = false,
 }: { physicalContainerId?: number; embedded?: boolean } = {}) {
@@ -287,7 +287,7 @@ export default function IntercompanyLifecycle({
                           onClick={() => {
                             setSelectedTradeId(row.tradeId);
                             setLocationId("");
-                            setInventoryAccountId("");
+                            
                             setEvidence("");
                             setReason("");
                             setArrivalVerified(false);
@@ -444,4 +444,9 @@ export default function IntercompanyLifecycle({
       )}
     </div>
   );
+}
+
+/** Route-level wrapper stays compatible with wouter RouteComponentProps. */
+export default function IntercompanyLifecycle() {
+  return <IntercompanyLifecycleContent />;
 }
