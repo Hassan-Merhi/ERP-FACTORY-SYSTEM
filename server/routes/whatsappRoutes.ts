@@ -25,7 +25,6 @@ import {
   fetchGreenApiChats,
   sendWhatsAppFile,
   sendWhatsAppFileToChatId,
-  getGreenInstanceState,
   getStrictGreenMainInstanceState,
 } from "../services/whatsappService";
 import { generateNetPositionExcel, generateMonthEnds } from "../helpers/generateNetPositionExcel";
