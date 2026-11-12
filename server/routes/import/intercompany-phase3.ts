@@ -132,6 +132,10 @@ export function registerIntercompanyPhase3Routes(app: Express) {
   app.get("/api/intercompany-container-trading/linked-trades", requireAuth, async (req, res) => {
     try {
       const actor = identity(req);
+      const physicalContainerId =
+        req.query.physicalContainerId === undefined
+          ? undefined
+          : z.coerce.number().int().positive().parse(req.query.physicalContainerId);
       if (!["Owner", "Admin", "Developer"].includes(actor.actorRole)) {
         return res.status(403).json({ message: "Financial edit permission required" });
       }
@@ -144,7 +148,8 @@ export function registerIntercompanyPhase3Routes(app: Express) {
               eq(intercompanyTrades.sourceCompanyId, actor.initiatingCompanyId),
               eq(intercompanyTrades.destinationCompanyId, actor.initiatingCompanyId)
             ),
-            eq(intercompanyTrades.state, "active")
+            eq(intercompanyTrades.state, "active"),
+            physicalContainerId ? eq(intercompanyTrades.physicalContainerId, physicalContainerId) : undefined
           )
         )
         .limit(200);
