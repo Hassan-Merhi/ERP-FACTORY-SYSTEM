@@ -118,6 +118,7 @@ jobs:
             server/routes/vouchers/normalIntercompanyVoucherRoutes.ts \
             server/routes/voucherRoutes.ts \
             client/src/pages/vouchers/useNormalIntercompanyVoucher.tsx \
+            client/src/pages/vouchers/IntercompanyVoucherHistory.tsx \
             client/src/pages/vouchers/useVoucherSaveMutation.ts \
             client/src/pages/Vouchers.tsx \
             tests/intercompany-normal-voucher-auto-mirror.test.ts \
