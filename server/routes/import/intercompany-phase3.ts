@@ -180,6 +180,7 @@ export function registerIntercompanyPhase3Routes(app: Express) {
           return res.json({
             trades: trades.map((t) => ({
               tradeId: t.id,
+              physicalContainerId: t.physicalContainerId,
               version: t.version,
               sourceCompanyId: t.sourceCompanyId,
               destinationCompanyId: t.destinationCompanyId,
