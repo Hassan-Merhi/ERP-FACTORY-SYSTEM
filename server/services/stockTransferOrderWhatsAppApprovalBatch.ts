@@ -46,7 +46,7 @@ function fail(code: string, message: string): never {
  * PostgreSQL then receives e.g. "944" for an integer[] cast and raises 22P02.
  * Build a parameterized ARRAY constructor so every ID is sent as an integer.
  */
-function integerIdArray(ids: readonly number[]) {
+export function stockTransferOrderIntegerIdArray(ids: readonly number[]) {
   if (!ids.length) fail("STO_WA_BAD_SELECTION", "At least one transfer order is required.");
   return sql`ARRAY[${sql.join(ids.map((id) => sql`${id}`), sql`, `)}]::integer[]`;
 }
@@ -85,7 +85,7 @@ async function loadLines(tx: DbTransaction, transferIds: number[]): Promise<Map<
            ti.quantity::text AS quantity, ti.rate::text AS rate,
            ti.total_amount::text AS total_amount
       FROM stock_transfer_items ti
-     WHERE ti.transfer_id = ANY(${integerIdArray(transferIds)})
+     WHERE ti.transfer_id = ANY(${stockTransferOrderIntegerIdArray(transferIds)})
      ORDER BY ti.transfer_id, ti.stock_item_id, ti.source_location_id, ti.id
   `);
   return lineHashes(result.rows as LineRow[]);
@@ -101,7 +101,7 @@ async function loadEligibleOrders(tx: DbTransaction, companyId: number, destinat
        AND v.voucher_type='Stock Transfer'
        AND t.workflow_origin='stock_transfer_order'
        AND t.destination_location_id=${destinationId}
-       AND t.id=ANY(${integerIdArray(transferIds)})
+       AND t.id=ANY(${stockTransferOrderIntegerIdArray(transferIds)})
      ORDER BY t.id
   `;
   // Consistent lock order keeps concurrent batch creation serialized. The
@@ -119,7 +119,7 @@ async function loadPendingRevisions(tx: DbTransaction, transferIds: number[]): P
     SELECT r.transfer_id, r.id AS revision_id, r.revision_number,
            r.payload_hash
       FROM stock_transfer_revisions r
-     WHERE r.transfer_id=ANY(${integerIdArray(transferIds)})
+     WHERE r.transfer_id=ANY(${stockTransferOrderIntegerIdArray(transferIds)})
        AND r.status='pending'
      ORDER BY r.transfer_id, r.revision_number, r.id
   `);
@@ -196,7 +196,7 @@ export async function createStockTransferOrderApprovalDraft(
     failedStep = "check_active_reservations";
     const conflicts = await tx.execute(sql`
       SELECT transfer_id FROM stock_transfer_order_approval_batch_items
-       WHERE company_id=${companyId} AND transfer_id=ANY(${integerIdArray(ids)})
+       WHERE company_id=${companyId} AND transfer_id=ANY(${stockTransferOrderIntegerIdArray(ids)})
          AND reservation_active=true
        LIMIT 1
     `);
