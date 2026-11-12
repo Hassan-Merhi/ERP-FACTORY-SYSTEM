@@ -656,21 +656,7 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
           )}
           {!isPOS && canShowVoucherTab("payment") && activeTab === "payment" && (
             <div className="space-y-4">
-              {canUseIntercompanyVouchers && (
-                <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
-                  <p className="max-w-2xl text-muted-foreground" data-testid="normal-supplier-payment-separation">
-                    {icVoucherCopy.supplierExplanation}
-                  </p>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setActiveTab("intercompany")}
-                    data-testid="button-open-intercompany-vouchers"
-                  >
-                    {icVoucherCopy.openTransfer}
-                  </Button>
-                </div>
-              )}
+              {normalIntercompany.details}
               <PaymentDraftAndRateBar
                 draftAge={hasPaymentDraft && !voucherIdToEdit ? paymentDraftAge : null}
                 draftLabel="Unsaved payment draft found"
@@ -733,14 +719,9 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
             </div>
           )}
 
-          {!isPOS && canUseIntercompanyVouchers && activeTab === "intercompany" && (
-            <Suspense fallback={<p className="text-sm text-muted-foreground">{icVoucherCopy.tab}</p>}>
-              <IntercompanyVoucherTransfer embedded />
-            </Suspense>
-          )}
-
           {!isPOS && canShowVoucherTab("receipt") && activeTab === "receipt" && (
             <div className="space-y-4">
+              {normalIntercompany.details}
               <PaymentDraftAndRateBar
                 draftAge={hasPaymentDraft && !voucherIdToEdit ? paymentDraftAge : null}
                 draftLabel="Unsaved receipt draft found"
