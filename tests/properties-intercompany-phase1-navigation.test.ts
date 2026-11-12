@@ -18,7 +18,7 @@ describe("Properties intercompany trading Phase 1 navigation", () => {
       expect(canNavigateProperties(route, owner, owner)).toBe(true);
       expect(canNavigateProperties(route, viewer, viewer)).toBe(true);
       expect(canNavigateProperties(route, erp, erp)).toBe(false);
-    },
+    }
   );
 
   it.each([

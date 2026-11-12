@@ -84,14 +84,19 @@ export function propertiesSupplierCode(sourceId: number, destinationId: number):
 }
 
 export function normalizedTradingName(value: string): string {
-  return value.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
 }
 
 export function uniquePropertiesSupplier<T extends { legalName: string; active: boolean; deletedAt: Date | null }>(
   suppliers: T[],
   sourceName: string
 ): T | undefined {
-  const matches = suppliers.filter((supplier) => normalizedTradingName(supplier.legalName) === normalizedTradingName(sourceName));
+  const matches = suppliers.filter(
+    (supplier) => normalizedTradingName(supplier.legalName) === normalizedTradingName(sourceName)
+  );
   if (matches.length > 1) throw new Error(tradingProvisioningMessages.duplicateSupplier);
   const supplier = matches[0];
   if (supplier && (!supplier.active || supplier.deletedAt)) {

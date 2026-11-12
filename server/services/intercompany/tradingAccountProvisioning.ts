@@ -38,18 +38,14 @@ const invalid = (message: string) => new TradingImportError(409, message, "INTER
 function usableAccount(account: AccountRow | undefined, spec: TradingAccountSpec): account is AccountRow {
   return Boolean(
     account &&
-      account.companyId === spec.companyId &&
-      account.deletedAt === null &&
-      account.active &&
-      classifyAccountType(account.accountType, account.subType) === spec.accountType.toLowerCase()
+    account.companyId === spec.companyId &&
+    account.deletedAt === null &&
+    account.active &&
+    classifyAccountType(account.accountType, account.subType) === spec.accountType.toLowerCase()
   );
 }
 
-function validatedMappedAccount(
-  accounts: AccountRow[],
-  spec: TradingAccountSpec,
-  id: number
-): AccountRow {
+function validatedMappedAccount(accounts: AccountRow[], spec: TradingAccountSpec, id: number): AccountRow {
   const account = accounts.find((entry) => entry.id === id);
   if (!usableAccount(account, spec)) {
     throw invalid(`Mapped ${spec.field} account is inactive, misclassified, or belongs to another company`);
@@ -59,7 +55,12 @@ function validatedMappedAccount(
 
 function supplierForPolicy(suppliers: SupplierRow[], policy: Policy, sourceName: string): SupplierRow {
   const supplier = suppliers.find((entry) => entry.id === policy.destinationSupplierId);
-  if (!supplier || !supplier.active || supplier.deletedAt || normalizedTradingName(supplier.legalName) !== normalizedTradingName(sourceName)) {
+  if (
+    !supplier ||
+    !supplier.active ||
+    supplier.deletedAt ||
+    normalizedTradingName(supplier.legalName) !== normalizedTradingName(sourceName)
+  ) {
     throw invalid("Existing destination Properties supplier is missing, inactive, or has a different name");
   }
   return supplier;
@@ -87,11 +88,18 @@ export async function autoProvisionTradingRelationship(args: {
         tx.select().from(companies).where(eq(companies.id, sourceCompanyId)),
         tx.select().from(companies).where(eq(companies.id, destinationCompanyId)),
       ]).then(([sources, destinations]) => [sources[0], destinations[0]]);
-      if (!source?.active || source.companyType !== "properties" || !destination?.active || destination.companyType !== "erp") {
+      if (
+        !source?.active ||
+        source.companyType !== "properties" ||
+        !destination?.active ||
+        destination.companyType !== "erp"
+      ) {
         throw invalid("Trading requires an active Properties company and an active ERP destination");
       }
-      if ((source.baseCurrency || "USD").toUpperCase() !== "USD" ||
-          (destination.baseCurrency || "USD").toUpperCase() !== "USD") {
+      if (
+        (source.baseCurrency || "USD").toUpperCase() !== "USD" ||
+        (destination.baseCurrency || "USD").toUpperCase() !== "USD"
+      ) {
         throw invalid("Intercompany container setup currently supports USD-base companies only");
       }
       if (!normalizedTradingName(source.name)) throw invalid("The Properties company must have a valid legal name");
@@ -119,8 +127,11 @@ export async function autoProvisionTradingRelationship(args: {
 
       // Completed mappings are immutable through the auto-provisioning action.
       // A repeated click must never rewrite a historical mapping or create an audit version.
-      if (existing?.tradeEnabled && specs.every((spec) => existing[spec.field] !== null) &&
-          existing.destinationSupplierId !== null) {
+      if (
+        existing?.tradeEnabled &&
+        specs.every((spec) => existing[spec.field] !== null) &&
+        existing.destinationSupplierId !== null
+      ) {
         for (const spec of specs) validatedMappedAccount(accounts, spec, existing[spec.field]!);
         const supplier = supplierForPolicy(suppliers, existing, source.name);
         return {
@@ -228,7 +239,13 @@ export async function autoProvisionTradingRelationship(args: {
       const [policy] = existing
         ? await tx
             .update(intercompanyRelationshipPolicies)
-            .set({ ...mapping, tradeEnabled: true, baseCurrency: "USD", version: existing.version + 1, updatedAt: new Date() })
+            .set({
+              ...mapping,
+              tradeEnabled: true,
+              baseCurrency: "USD",
+              version: existing.version + 1,
+              updatedAt: new Date(),
+            })
             .where(eq(intercompanyRelationshipPolicies.id, existing.id))
             .returning()
         : await tx

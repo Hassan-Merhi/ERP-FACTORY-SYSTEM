@@ -53,8 +53,8 @@ describe("automatic Properties to ERP container trading setup", () => {
     const duplicate = { id: 2, legalName: "Test-Properties", active: true, deletedAt: null };
     expect(() => uniquePropertiesSupplier([active, duplicate], source.name)).toThrow("Multiple Properties-named");
     expect(() => uniquePropertiesSupplier([{ ...active, active: false }], source.name)).toThrow("inactive or deleted");
-    expect(() =>
-      uniquePropertiesSupplier([{ ...active, deletedAt: new Date("2026-01-01") }], source.name)
-    ).toThrow("inactive or deleted");
+    expect(() => uniquePropertiesSupplier([{ ...active, deletedAt: new Date("2026-01-01") }], source.name)).toThrow(
+      "inactive or deleted"
+    );
   });
 });

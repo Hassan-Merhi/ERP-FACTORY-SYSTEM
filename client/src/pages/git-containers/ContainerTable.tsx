@@ -85,12 +85,8 @@ export function ContainerTable({
                 )}
                 {colVis.truckNo && <TableHead className="w-[100px] font-bold h-9 text-white">Truck #</TableHead>}
                 {colVis.location && <TableHead className="w-[110px] font-bold h-9 text-white">Location</TableHead>}
-                {colVis.borderDate && (
-                  <TableHead className="w-[100px] font-bold h-9 text-white">Border Date</TableHead>
-                )}
-                {colVis.maxOffload && (
-                  <TableHead className="w-[100px] font-bold h-9 text-white">Max Offload</TableHead>
-                )}
+                {colVis.borderDate && <TableHead className="w-[100px] font-bold h-9 text-white">Border Date</TableHead>}
+                {colVis.maxOffload && <TableHead className="w-[100px] font-bold h-9 text-white">Max Offload</TableHead>}
                 {colVis.delayed && (
                   <TableHead className="w-[70px] font-bold text-center h-9 text-white">Delayed</TableHead>
                 )}

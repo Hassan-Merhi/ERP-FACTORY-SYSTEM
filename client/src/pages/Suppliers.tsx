@@ -6,7 +6,16 @@ import { useDebounce } from "@/hooks/use-debounce";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import { PageHeader } from "@/components/PageHeader";
-import { ErpListFilters, ErpConfirmDialog, ErpRecordAction, erpReportFileName, exportErpReportRowsExcel, useErpCan as useCan, erpCanDenialMessage as canDenialMessage, useErpRecordChangeAccess as useExistingRecordChangeAccess } from "@/erp-core";
+import {
+  ErpListFilters,
+  ErpConfirmDialog,
+  ErpRecordAction,
+  erpReportFileName,
+  exportErpReportRowsExcel,
+  useErpCan as useCan,
+  erpCanDenialMessage as canDenialMessage,
+  useErpRecordChangeAccess as useExistingRecordChangeAccess,
+} from "@/erp-core";
 import { erpCompanyDataKey, invalidateErpDataFamilies } from "@/erp-core/erpData";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -16,7 +25,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useApplicationLanguageCode } from "@/contexts/ApplicationLanguageContext";
 import { intercompanyTradingSetupText } from "@/i18n/intercompanyTradingSetupTranslations";
-
 
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { suppliersApi } from "@/api/suppliersApi";
@@ -195,17 +203,16 @@ export default function Suppliers() {
         subtitle="Manage supplier accounts and track container shipments"
         showBackButton={false}
       >
-        {isProperties &&
-          ["Owner", "Developer", "Admin", "Create Only"].includes(selectedCompany?.role || "") && (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => navigate("/properties/master-data?entity=supplier")}
-              data-testid="button-properties-add-supplier"
-            >
-              <Plus className="h-4 w-4 mr-2" /> {tradingCopy.addSupplier}
-            </Button>
-          )}
+        {isProperties && ["Owner", "Developer", "Admin", "Create Only"].includes(selectedCompany?.role || "") && (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => navigate("/properties/master-data?entity=supplier")}
+            data-testid="button-properties-add-supplier"
+          >
+            <Plus className="h-4 w-4 mr-2" /> {tradingCopy.addSupplier}
+          </Button>
+        )}
       </PageHeader>
 
       {/* Stat cards */}
@@ -301,7 +308,11 @@ export default function Suppliers() {
           </div>
           <div>
             <p className="text-sm font-medium">No suppliers found</p>
-            <p className="text-xs text-muted-foreground mt-0.5">{isProperties ? "Use Add Supplier above to create your first supplier" : "Create suppliers in the Master Data page"}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {isProperties
+                ? "Use Add Supplier above to create your first supplier"
+                : "Create suppliers in the Master Data page"}
+            </p>
           </div>
         </div>
       ) : sortedSuppliers.length === 0 ? (
@@ -404,7 +415,8 @@ export default function Suppliers() {
                   variant="ghost"
                   size="icon"
                   onClick={() => {
-                    if (recordChanges.allowed) navigate(`${isProperties ? "/properties" : ""}/suppliers/${supplier.id}/edit`);
+                    if (recordChanges.allowed)
+                      navigate(`${isProperties ? "/properties" : ""}/suppliers/${supplier.id}/edit`);
                   }}
                   permitted={recordChanges.allowed}
                   deniedReason={recordChanges.reason}
@@ -451,7 +463,11 @@ export default function Suppliers() {
         open={supplierToDelete !== null}
         onOpenChange={(open) => !open && setSupplierToDelete(null)}
         title="Delete Supplier"
-        description={<>Are you sure you want to delete <strong>{supplierToDelete?.name}</strong>? This action cannot be undone.</>}
+        description={
+          <>
+            Are you sure you want to delete <strong>{supplierToDelete?.name}</strong>? This action cannot be undone.
+          </>
+        }
         tone="destructive"
         confirmText="Delete"
         confirmButtonTestId="button-confirm-delete-supplier"

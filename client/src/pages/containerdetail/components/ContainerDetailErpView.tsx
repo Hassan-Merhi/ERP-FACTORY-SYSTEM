@@ -109,7 +109,9 @@ export function ContainerDetailErpView({ model }: { model: Model }) {
             variant="outline"
             className="gap-2"
             onClick={() =>
-              setLocation(`${backUrl.startsWith("/properties") ? "/properties" : ""}/offloads/${containerData.offloadId}`)
+              setLocation(
+                `${backUrl.startsWith("/properties") ? "/properties" : ""}/offloads/${containerData.offloadId}`
+              )
             }
             data-testid="button-view-offload"
           >
@@ -141,7 +143,9 @@ export function ContainerDetailErpView({ model }: { model: Model }) {
             )}
             <DropdownMenuItem
               onClick={() =>
-                setLocation(`${backUrl.startsWith("/properties") ? "/properties" : ""}/containers/${containerId}/verification`)
+                setLocation(
+                  `${backUrl.startsWith("/properties") ? "/properties" : ""}/containers/${containerId}/verification`
+                )
               }
               data-testid="button-verify-container"
             >
@@ -345,7 +349,9 @@ export function ContainerDetailErpView({ model }: { model: Model }) {
                         variant="ghost"
                         size="icon"
                         onClick={() =>
-                          setLocation(`${backUrl.startsWith("/properties") ? "/properties" : ""}/purchase-orders/${po.id}/edit`)
+                          setLocation(
+                            `${backUrl.startsWith("/properties") ? "/properties" : ""}/purchase-orders/${po.id}/edit`
+                          )
                         }
                         data-testid={`button-edit-po-${po.id}`}
                       >

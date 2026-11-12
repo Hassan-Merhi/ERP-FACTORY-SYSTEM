@@ -90,7 +90,9 @@ export function registerIntercompanyContainerTradingRoutes(app: Express) {
     async (req, res) => {
       try {
         const { companyId, userId, role } = companyFromSession(req);
-        const { destinationCompanyId } = z.object({ destinationCompanyId: z.number().int().positive() }).parse(req.body);
+        const { destinationCompanyId } = z
+          .object({ destinationCompanyId: z.number().int().positive() })
+          .parse(req.body);
         const configured = await autoProvisionTradingRelationship({
           sourceCompanyId: companyId,
           destinationCompanyId,

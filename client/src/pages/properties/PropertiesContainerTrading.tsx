@@ -272,9 +272,7 @@ export default function PropertiesContainerTrading() {
               <CardTitle className="flex items-center gap-2">
                 <Link2 className="h-5 w-5" /> {copy.partnerSetup}
               </CardTitle>
-              <CardDescription>
-                {copy.partnerDescription}
-              </CardDescription>
+              <CardDescription>{copy.partnerDescription}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
@@ -297,11 +295,7 @@ export default function PropertiesContainerTrading() {
                 <div className="space-y-1.5">
                   <Label>{copy.setupLabel}</Label>
                   <p className="flex h-10 items-center rounded-md border px-3 text-sm" data-testid="ic-setup-status">
-                    {!target
-                      ? copy.chooseDestinationStatus
-                      : selectedPolicy
-                        ? copy.ready
-                        : copy.notConfigured}
+                    {!target ? copy.chooseDestinationStatus : selectedPolicy ? copy.ready : copy.notConfigured}
                   </p>
                 </div>
               </div>
@@ -310,20 +304,17 @@ export default function PropertiesContainerTrading() {
                 disabled={!target || configure.isPending}
                 data-testid="button-ic-configure"
               >
-                {configure.isPending
-                  ? copy.settingUp
-                  : selectedPolicy
-                    ? copy.verifySetup
-                    : copy.enableTrading}
+                {configure.isPending ? copy.settingUp : selectedPolicy ? copy.verifySetup : copy.enableTrading}
               </Button>
-              <p className="text-xs text-muted-foreground">
-                {copy.payableExplanation}
-              </p>
+              <p className="text-xs text-muted-foreground">{copy.payableExplanation}</p>
               <p className="text-xs text-muted-foreground" data-testid="ic-enabled-pairs">
                 {copy.readyDestinations}{" "}
                 {enabledPairs.length
                   ? enabledPairs
-                      .map((policy) => setup.destinations.find((company) => company.id === policy.destinationCompanyId)?.name)
+                      .map(
+                        (policy) =>
+                          setup.destinations.find((company) => company.id === policy.destinationCompanyId)?.name
+                      )
                       .join(", ")
                   : copy.none}
               </p>

@@ -123,7 +123,8 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
   const restrictedToCurrentCompany = isTester || isViewOnly || isProperties;
 
   const { data, isLoading, isError, error, refetch, loadContainerDetail } = usePaginatedGITContainers({
-    companyIdentity: !isProperties && allCompanies ? `all:${user?.id ?? "unknown"}` : (selectedCompany?.id ?? "no-company"),
+    companyIdentity:
+      !isProperties && allCompanies ? `all:${user?.id ?? "unknown"}` : (selectedCompany?.id ?? "no-company"),
     allCompanies: isProperties ? false : allCompanies,
     pageSize: CONTAINER_CHUNK_SIZE,
     companyFilter,
