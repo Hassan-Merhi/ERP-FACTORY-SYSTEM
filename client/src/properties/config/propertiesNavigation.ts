@@ -1,4 +1,5 @@
 import type { Company } from "@/contexts/CompanyContext";
+import { INTERCOMPANY_TRADING_EN } from "@/i18n/intercompanyTradingSetupTranslations";
 
 export type PropertiesCapability = "workspace" | "admin" | "developer" | "personal" | "trading";
 export const PROPERTIES_RENTAL_TABS = [
@@ -25,7 +26,7 @@ export const PROPERTIES_NAVIGATION: readonly NavEntry[] = [
   { path: "/properties/suppliers", label: "Suppliers", parent: null, capability: "workspace", navigation: "tool" },
   {
     path: "/properties/containers/:id",
-    label: "Container Details",
+    label: INTERCOMPANY_TRADING_EN.containerDetails,
     parent: "/properties/containers",
     capability: "workspace",
     navigation: "hidden",
@@ -39,7 +40,7 @@ export const PROPERTIES_NAVIGATION: readonly NavEntry[] = [
   },
   {
     path: "/properties/offloads/:id",
-    label: "Offload Details",
+    label: INTERCOMPANY_TRADING_EN.offloadDetails,
     parent: "/properties/containers",
     capability: "workspace",
     navigation: "hidden",
