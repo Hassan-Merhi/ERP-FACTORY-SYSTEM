@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useApplicationLanguageCode } from "@/contexts/ApplicationLanguageContext";
+import { intercompanyTradingSetupText } from "@/i18n/intercompanyTradingSetupTranslations";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { companyQueryKey } from "@/lib/companyQueryScope";
@@ -106,6 +108,7 @@ async function apiJson<T>(url: string, init?: RequestInit): Promise<T> {
 
 export default function PropertiesContainerTrading() {
   const { selectedCompany } = useCompany();
+  const copy = intercompanyTradingSetupText(useApplicationLanguageCode());
   const { toast } = useToast();
   const [target, setTarget] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -143,7 +146,7 @@ export default function PropertiesContainerTrading() {
 
   const configure = useMutation({
     mutationFn: async () => {
-      if (!target) throw new Error("Choose an ERP destination company");
+      if (!target) throw new Error(copy.chooseDestination);
       const res = await apiRequest("POST", ENDPOINT + "/relationships/auto", {
         destinationCompanyId: Number(target),
       });
@@ -151,17 +154,17 @@ export default function PropertiesContainerTrading() {
     },
     onSuccess: async (data) => {
       toast({
-        title: data.status === "already_ready" ? "Accounting setup verified" : "Trading partner ready",
+        title: data.status === "already_ready" ? copy.setupVerified : copy.tradingReady,
         description:
           data.status === "already_ready"
-            ? "Existing company-pair accounts and supplier were reused."
-            : `${data.createdAccounts} account(s) created and ${data.reusedAccounts} reused. ${data.createdSupplier ? "Properties supplier created." : "Existing Properties supplier reused."}`,
+            ? copy.reused
+            : `${data.createdAccounts} ${copy.createdAccounts} ${data.reusedAccounts} ${copy.reusedAccounts}. ${data.createdSupplier ? copy.supplierCreated : copy.supplierReused}`,
       });
       await queryClient.invalidateQueries({ queryKey: companyQueryKey(ENDPOINT + "/setup", selectedCompany?.id) });
       await refetch();
     },
     onError: (error: Error) =>
-      toast({ title: "Automatic setup rejected", description: error.message, variant: "destructive" }),
+      toast({ title: copy.automaticSetupRejected, description: error.message, variant: "destructive" }),
   });
   const previewMutation = useMutation({
     mutationFn: async () => {
@@ -267,24 +270,23 @@ export default function PropertiesContainerTrading() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Link2 className="h-5 w-5" /> Automatic partner setup
+                <Link2 className="h-5 w-5" /> {copy.partnerSetup}
               </CardTitle>
               <CardDescription>
-                Choose an ERP destination. The system automatically reuses verified company accounts and the Properties
-                supplier, creating any missing master data with zero opening balances. No vouchers or cash are posted.
+                {copy.partnerDescription}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-1.5">
-                  <Label htmlFor="ic-target">Destination company</Label>
+                  <Label htmlFor="ic-target">{copy.destinationCompany}</Label>
                   <select
                     id="ic-target"
                     className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
                     value={target}
                     onChange={(e) => setTarget(e.target.value)}
                   >
-                    <option value="">Choose company</option>
+                    <option value="">{copy.chooseCompany}</option>
                     {setup.destinations.map((company) => (
                       <option value={company.id} key={company.id}>
                         {company.name}
@@ -293,13 +295,13 @@ export default function PropertiesContainerTrading() {
                   </select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Accounting setup</Label>
+                  <Label>{copy.setupLabel}</Label>
                   <p className="flex h-10 items-center rounded-md border px-3 text-sm" data-testid="ic-setup-status">
                     {!target
-                      ? "Choose a destination"
+                      ? copy.chooseDestinationStatus
                       : selectedPolicy
-                        ? "Ready — accounts and supplier linked"
-                        : "Not configured — automatic setup available"}
+                        ? copy.ready
+                        : copy.notConfigured}
                   </p>
                 </div>
               </div>
@@ -309,22 +311,21 @@ export default function PropertiesContainerTrading() {
                 data-testid="button-ic-configure"
               >
                 {configure.isPending
-                  ? "Setting up company pair…"
+                  ? copy.settingUp
                   : selectedPolicy
-                    ? "Verify automatic setup"
-                    : "Enable intercompany trading"}
+                    ? copy.verifySetup
+                    : copy.enableTrading}
               </Button>
               <p className="text-xs text-muted-foreground">
-                The destination's actual payable is held once in its Properties supplier subledger. Mapping accounts
-                support reconciliation without creating a second payable or stock movement.
+                {copy.payableExplanation}
               </p>
               <p className="text-xs text-muted-foreground" data-testid="ic-enabled-pairs">
-                Ready destinations:{" "}
+                {copy.readyDestinations}{" "}
                 {enabledPairs.length
                   ? enabledPairs
                       .map((policy) => setup.destinations.find((company) => company.id === policy.destinationCompanyId)?.name)
                       .join(", ")
-                  : "None yet"}
+                  : copy.none}
               </p>
             </CardContent>
           </Card>
