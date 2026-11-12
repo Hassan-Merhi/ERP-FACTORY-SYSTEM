@@ -50,6 +50,7 @@ import { registerTicketRoutes } from "./ticketRoutes";
 import { registerPasskeyRoutes } from "./passkeyRoutes";
 import { registerPosRoutes } from "./posRoutes";
 import { registerPropertiesRentalRoutes } from "./propertiesRentalRoutes";
+import { registerPropertiesAccountStatementWhatsAppRoutes } from "./propertiesAccountStatementWhatsAppRoutes";
 import { registerRemoteControlSessionRoutes } from "./remoteControlSessionRoutes";
 import { registerRemoteKeyboardControlRoutes } from "./remoteKeyboardControlRoutes";
 import { registerRemoteSupportAuditRoutes } from "./remoteSupportAuditRoutes";
@@ -199,6 +200,7 @@ export async function registerApplicationRoutes(app: Express): Promise<Server> {
   // Must be mounted eagerly: production GIT lazy routes only match /api/git.
   registerStockTransferExportWhatsAppRoutes(app);
   registerScheduledWhatsAppMessageRoutes(app);
+  registerPropertiesAccountStatementWhatsAppRoutes(app);
   await registerLazyRouteModule(app, {
     prefixes: ["/api/export"],
     load: async () => (await import("./exportRoutes")).registerExportRoutes,
