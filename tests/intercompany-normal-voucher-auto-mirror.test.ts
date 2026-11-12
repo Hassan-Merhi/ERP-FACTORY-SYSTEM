@@ -99,7 +99,7 @@ describe("Phase 6 normal voucher linked-account auto-mirror", () => {
     expect(registry.indexOf("registerNormalIntercompanyVoucherRoutes(app);")).toBeLessThan(
       registry.indexOf("registerVoucherPaymentRoutes(app);")
     );
-    expect(route).toContain("confirmMirroredPayment({");
+    expect(route).toMatch(/confirmMirroredPayment\s*\(\s*\{/);
     expect(route).toContain("isPhase9LanPrimary()");
     expect(route).toContain("req.body.optional === true");
     expect(route).toContain('sourceModule === "INTERCOMPANY_CONTAINER"');
