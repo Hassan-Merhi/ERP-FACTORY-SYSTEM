@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useCompany } from "@/contexts/CompanyContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
+import { invalidateApiFamily } from "@/lib/frontendDataArchitecture";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { PageHeader } from "@/components/PageHeader";
@@ -156,8 +157,16 @@ export function IntercompanyPaymentsContent({ embedded = false }: { embedded?: b
   const refresh = () => {
     // Refresh both the source-side receipt and destination-side payment
     // vouchers from the active company's ordinary Vouchers page.
-    for (const key of ["/api/vouchers", "/api/accounts", "/api/bank-accounts", "/api/suppliers"]) {
-      void queryClient.invalidateQueries({ queryKey: [key] });
+    for (const family of [
+      "/api/vouchers",
+      "/api/accounts",
+      "/api/ledger-accounts",
+      "/api/bank-accounts",
+      "/api/suppliers",
+      "/api/daybook",
+      "/api/net-position",
+    ]) {
+      void invalidateApiFamily(queryClient, family);
     }
     queryClient.invalidateQueries({
       queryKey: companyQueryKey(BASE + "/pairs/" + relationshipId + "/setup", companyId),
