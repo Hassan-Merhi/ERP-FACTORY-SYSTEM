@@ -43,12 +43,14 @@ function matchingPolicy(
     companyId === policy.sourceCompanyId &&
     account.accountType === "ledger" &&
     account.accountId === policy.sourceReceivableAccountId
-  ) return "source";
+  )
+    return "source";
   if (
     companyId === policy.destinationCompanyId &&
     ((account.accountType === "supplier" && account.accountId === policy.destinationSupplierId) ||
       (account.accountType === "ledger" && account.accountId === policy.destinationPayableAccountId))
-  ) return "destination";
+  )
+    return "destination";
   return null;
 }
 

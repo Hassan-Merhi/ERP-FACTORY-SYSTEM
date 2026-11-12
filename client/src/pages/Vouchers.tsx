@@ -65,8 +65,7 @@ import { shouldShowFactoryVoucherTab } from "@/pages/vouchers/factoryVoucherPoli
 import type { ErpFeatureAccess } from "@/app/erpAccess";
 import { erpPageAccessQueryOptions } from "@/app/erpAccessQuery";
 
-type VoucherTab =
-  "payment" | "receipt" | "journal" | "transfer" | "transferorder" | "adjustment" | "creditnote";
+type VoucherTab = "payment" | "receipt" | "journal" | "transfer" | "transferorder" | "adjustment" | "creditnote";
 
 const FACTORY_VOUCHER_HIDDEN_KEYS: Record<VoucherTab, string> = {
   payment: "hide_tab_vouchers_payment",
@@ -347,8 +346,8 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
   // Any paired posting uses the existing atomic, two-company service.
   const normalIntercompany = useNormalIntercompanyVoucher({
     companyId: selectedCompany?.id ?? 0,
-    enabled: canUseIntercompanyVouchers && !isPOS && !voucherIdToEdit &&
-      (activeTab === "payment" || activeTab === "receipt"),
+    enabled:
+      canUseIntercompanyVouchers && !isPOS && !voucherIdToEdit && (activeTab === "payment" || activeTab === "receipt"),
     voucherType: activeTab === "receipt" ? "Receipt" : "Payment",
     paymentAccountType,
     paymentAccountId,

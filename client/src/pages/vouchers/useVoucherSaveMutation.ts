@@ -89,7 +89,8 @@ export function useVoucherSaveMutation({
         effectiveDate: voucherEffectiveDate || null,
       };
       if (formData.intercompanyMirror) {
-        if (isEditMode) throw new Error("Paired vouchers must be reversed together; they cannot be edited individually.");
+        if (isEditMode)
+          throw new Error("Paired vouchers must be reversed together; they cannot be edited individually.");
         // Do not queue the two-company bank/cash movement offline. Preserve a
         // stable request identity across an uncertain network outcome, and let
         // the server's existing paired-payment idempotency reject duplicates.
@@ -120,9 +121,16 @@ export function useVoucherSaveMutation({
           : `${activeTab === "payment" ? "Payment" : "Receipt"} voucher ${isEditMode ? "updated" : "created"} successfully`,
       });
       if (mirrored) {
-        for (const family of ["/api/vouchers", "/api/accounts", "/api/bank-accounts",
-          "/api/ledger-accounts", "/api/suppliers", "/api/daybook", "/api/net-position",
-          "/api/intercompany-container-trading/payments"]) {
+        for (const family of [
+          "/api/vouchers",
+          "/api/accounts",
+          "/api/bank-accounts",
+          "/api/ledger-accounts",
+          "/api/suppliers",
+          "/api/daybook",
+          "/api/net-position",
+          "/api/intercompany-container-trading/payments",
+        ]) {
           void invalidateApiFamily(queryClient, family);
         }
       }

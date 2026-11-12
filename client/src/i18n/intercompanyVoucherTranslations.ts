@@ -18,8 +18,10 @@ const en = {
   voucherHistory: "Posted vouchers",
   voucherUnavailable: "No matching voucher in this company",
   linkedDetected: "Linked intercompany account detected",
-  linkedPaymentInfo: "This Payment automatically creates the matching Properties Receipt. No standalone voucher will be posted.",
-  linkedReceiptInfo: "This Receipt automatically creates the matching ERP Payment. No standalone voucher will be posted.",
+  linkedPaymentInfo:
+    "This Payment automatically creates the matching Properties Receipt. No standalone voucher will be posted.",
+  linkedReceiptInfo:
+    "This Receipt automatically creates the matching ERP Payment. No standalone voucher will be posted.",
   linkedCounterpart: "Linked company's actual bank/cash account",
   linkedSelectCash: "Choose actual bank/cash account",
   linkedReference: "Actual transfer reference",
@@ -56,7 +58,8 @@ const translations: Record<ApplicationLanguage, Labels> = {
     voucherHistory: "Pièces comptabilisées",
     voucherUnavailable: "Aucune pièce correspondante dans cette société",
     linkedDetected: "Compte intersociétés lié détecté",
-    linkedPaymentInfo: "Ce paiement crée automatiquement l'encaissement correspondant dans Propriétés, sans pièce autonome.",
+    linkedPaymentInfo:
+      "Ce paiement crée automatiquement l'encaissement correspondant dans Propriétés, sans pièce autonome.",
     linkedReceiptInfo: "Cet encaissement crée automatiquement le paiement correspondant dans ERP, sans pièce autonome.",
     linkedCounterpart: "Compte réel banque/caisse de la société liée",
     linkedSelectCash: "Choisir le compte banque/caisse",

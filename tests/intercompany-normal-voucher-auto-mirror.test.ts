@@ -7,12 +7,20 @@ import {
 import { INTERCOMPANY_CANONICAL_DESTINATIONS } from "../client/src/pages/intercompany/intercompanyLegacyNavigation";
 
 const pair: NormalVoucherPolicy = {
-  id: 44, relationshipType: "container_trade",
-  sourceCompanyId: 10, destinationCompanyId: 20, tradeEnabled: true,
-  sourceReceivableAccountId: 101, destinationPayableAccountId: 202, destinationSupplierId: 303,
+  id: 44,
+  relationshipType: "container_trade",
+  sourceCompanyId: 10,
+  destinationCompanyId: 20,
+  tradeEnabled: true,
+  sourceReceivableAccountId: 101,
+  destinationPayableAccountId: 202,
+  destinationSupplierId: 303,
 };
 function matching(
-  companyId: number, voucherType: string, accountType: string, accountId: number,
+  companyId: number,
+  voucherType: string,
+  accountType: string,
+  accountId: number,
   overrides: {
     policies?: NormalVoucherPolicy[];
     entries?: { accountType: string; accountId: number }[];
@@ -20,7 +28,8 @@ function matching(
   } = {}
 ) {
   return matchNormalIntercompanyVoucher({
-    companyId, voucherType,
+    companyId,
+    voucherType,
     paymentAccount: overrides.paymentAccount ?? { accountType: "bank", accountId: 888 },
     entries: overrides.entries ?? [{ accountType, accountId }],
     policies: overrides.policies ?? [pair],
@@ -34,7 +43,10 @@ describe("Phase 6 normal voucher linked-account auto-mirror", () => {
   });
   it("detects Properties linked receivable on a normal Receipt", () => {
     expect(matching(10, "Receipt", "ledger", 101)).toEqual({
-      relationshipId: 44, sourceCompanyId: 10, destinationCompanyId: 20, role: "source-receipt",
+      relationshipId: 44,
+      sourceCompanyId: 10,
+      destinationCompanyId: 20,
+      role: "source-receipt",
     });
   });
   it("leaves non-linked suppliers and unrelated companies alone", () => {
@@ -46,33 +58,47 @@ describe("Phase 6 normal voucher linked-account auto-mirror", () => {
   it("refuses opposite-direction or ambiguous postings", () => {
     expect(() => matching(20, "Receipt", "supplier", 303)).toThrow("Reverse an existing transfer");
     expect(() => matching(10, "Payment", "ledger", 101)).toThrow("Reverse an existing transfer");
-    expect(() => matching(20, "Payment", "supplier", 303, { policies: [pair, { ...pair, id: 45 }] }))
-      .toThrow("exactly one linked company entry");
+    expect(() => matching(20, "Payment", "supplier", 303, { policies: [pair, { ...pair, id: 45 }] })).toThrow(
+      "exactly one linked company entry"
+    );
   });
   it("requires actual bank/cash and forbids multiple entries in a single mirrored transfer", () => {
-    expect(() => matching(20, "Payment", "supplier", 303, {
-      paymentAccount: { accountType: "ledger", accountId: 202 },
-    })).toThrow("cash or bank account");
-    expect(() => matching(20, "Payment", "supplier", 303, {
-      entries: [{ accountType: "supplier", accountId: 303 }, { accountType: "supplier", accountId: 999 }],
-    })).toThrow("exactly one linked company entry");
-    expect(() => matching(20, "Payment", "supplier", 303, {
-      paymentAccount: { accountType: "supplier", accountId: 777 },
-    })).toThrow("actual active cash ledger or bank");
+    expect(() =>
+      matching(20, "Payment", "supplier", 303, {
+        paymentAccount: { accountType: "ledger", accountId: 202 },
+      })
+    ).toThrow("cash or bank account");
+    expect(() =>
+      matching(20, "Payment", "supplier", 303, {
+        entries: [
+          { accountType: "supplier", accountId: 303 },
+          { accountType: "supplier", accountId: 999 },
+        ],
+      })
+    ).toThrow("exactly one linked company entry");
+    expect(() =>
+      matching(20, "Payment", "supplier", 303, {
+        paymentAccount: { accountType: "supplier", accountId: 777 },
+      })
+    ).toThrow("actual active cash ledger or bank");
   });
   it("never falls through when the mapped trading relation was disabled", () => {
-    expect(() => matching(20, "Payment", "supplier", 303, {
-      policies: [{ ...pair, tradeEnabled: false }],
-    })).toThrow("disabled");
+    expect(() =>
+      matching(20, "Payment", "supplier", 303, {
+        policies: [{ ...pair, tradeEnabled: false }],
+      })
+    ).toThrow("disabled");
   });
   it("intercepts before both ordinary endpoints and blocks offline or partial posting", () => {
     const registry = readFileSync("server/routes/voucherRoutes.ts", "utf8");
     const route = readFileSync("server/routes/vouchers/normalIntercompanyVoucherRoutes.ts", "utf8");
     const save = readFileSync("client/src/pages/vouchers/useVoucherSaveMutation.ts", "utf8");
-    expect(registry.indexOf("registerNormalIntercompanyVoucherRoutes(app);"))
-      .toBeLessThan(registry.indexOf("registerCentralPaymentReceiptCreateRoute(app);"));
-    expect(registry.indexOf("registerNormalIntercompanyVoucherRoutes(app);"))
-      .toBeLessThan(registry.indexOf("registerVoucherPaymentRoutes(app);"));
+    expect(registry.indexOf("registerNormalIntercompanyVoucherRoutes(app);")).toBeLessThan(
+      registry.indexOf("registerCentralPaymentReceiptCreateRoute(app);")
+    );
+    expect(registry.indexOf("registerNormalIntercompanyVoucherRoutes(app);")).toBeLessThan(
+      registry.indexOf("registerVoucherPaymentRoutes(app);")
+    );
     expect(route).toContain("confirmMirroredPayment({");
     expect(route).toContain("isPhase9LanPrimary()");
     expect(route).toContain("req.body.optional === true");
