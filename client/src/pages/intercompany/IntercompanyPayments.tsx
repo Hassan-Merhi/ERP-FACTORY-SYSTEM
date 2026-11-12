@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "wouter";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useCompany } from "@/contexts/CompanyContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
@@ -11,6 +12,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useApplicationLanguageCode } from "@/contexts/ApplicationLanguageContext";
+import { intercompanyVoucherText } from "@/i18n/intercompanyVoucherTranslations";
+import { intercompanyVoucherDetailPath } from "@/pages/vouchers/intercompanyTransferPolicy";
 
 const BASE = "/api/intercompany-container-trading/payments";
 const newKey = () => {
@@ -73,8 +77,9 @@ const parseCash = (value: string): CashRef => {
   }
   return { type, id: Number(id) };
 };
-export default function IntercompanyPayments() {
+export function IntercompanyPaymentsContent({ embedded = false }: { embedded?: boolean } = {}) {
   const { selectedCompany } = useCompany();
+  const voucherCopy = intercompanyVoucherText(useApplicationLanguageCode());
   const { toast } = useToast();
   const companyId = Number(selectedCompany?.id || 0);
   const [relationshipId, setRelationshipId] = useState<number | null>(null);
@@ -106,6 +111,17 @@ export default function IntercompanyPayments() {
     setSourceConfirmed(false);
     setDestConfirmed(false);
     setReversing(null);
+    setNativeAmount("");
+    setHistoricalRate("1");
+    setCurrency("USD");
+    setPaymentDate(dateNow());
+    setTransferReference("");
+    setEvidence("");
+    setRequestKey(newKey());
+    setReversalKey(newKey());
+    setReversalReason("");
+    setReverseReceipt(false);
+    setReversePayment(false);
   }, [companyId]);
   const pairs = useQuery<{ relationships: Pair[] }>({
     queryKey: companyQueryKey(BASE + "/relationships", companyId),
@@ -131,8 +147,18 @@ export default function IntercompanyPayments() {
     setAllocation({});
     setSourceConfirmed(false);
     setDestConfirmed(false);
+    setNativeAmount("");
+    setTransferReference("");
+    setEvidence("");
+    setRequestKey(newKey());
+    setReversing(null);
   }, [relationshipId]);
   const refresh = () => {
+    // Refresh both the source-side receipt and destination-side payment
+    // vouchers from the active company's ordinary Vouchers page.
+    for (const key of ["/api/vouchers", "/api/accounts", "/api/bank-accounts", "/api/suppliers"]) {
+      void queryClient.invalidateQueries({ queryKey: [key] });
+    }
     queryClient.invalidateQueries({
       queryKey: companyQueryKey(BASE + "/pairs/" + relationshipId + "/setup", companyId),
     });
@@ -241,11 +267,20 @@ export default function IntercompanyPayments() {
   const chosen = setup.data?.purchaseOrders || [];
   const availableCredit = setup.data?.credits.reduce((n, c) => n + Number(c.available), 0) || 0;
   return (
-    <div className="mx-auto max-w-6xl space-y-6 pb-10" data-testid="intercompany-mirrored-payments">
-      <PageHeader
-        title="Intercompany Payments & Credits"
-        subtitle="Actual paired bank/cash movements, explicit purchase-order allocations and credit held by each company pair."
-      />
+    <div className={embedded ? "space-y-4" : "mx-auto max-w-6xl space-y-6 pb-10"} data-testid="intercompany-mirrored-payments">
+      {!embedded && (
+        <PageHeader
+          title="Intercompany Payments & Credits"
+          subtitle="Actual paired bank/cash movements, explicit purchase-order allocations and credit held by each company pair."
+        />
+      )}
+      {embedded && (
+        <div className="space-y-2 text-sm" data-testid="intercompany-voucher-transfer-explanation">
+          <h2 className="font-semibold">{voucherCopy.transferVoucher}</h2>
+          <p className="text-muted-foreground">{voucherCopy.transferExplanation}</p>
+          <p className="text-muted-foreground">{voucherCopy.transferSafety}</p>
+        </div>
+      )}
       <Card>
         <CardHeader>
           <CardTitle>Select the company pair</CardTitle>
@@ -474,6 +509,7 @@ export default function IntercompanyPayments() {
                     <TableHead>Historical payment</TableHead>
                     <TableHead>USD</TableHead>
                     <TableHead>Unused credit</TableHead>
+                    <TableHead>{voucherCopy.currentVoucher}</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Action</TableHead>
                   </TableRow>
@@ -488,6 +524,31 @@ export default function IntercompanyPayments() {
                       </TableCell>
                       <TableCell>{money(row.baseAmount)}</TableCell>
                       <TableCell>{money(row.credit)}</TableCell>
+                      <TableCell>
+                        {(() => {
+                          const href = intercompanyVoucherDetailPath(
+                            selectedCompany?.companyType ?? "",
+                            setup.data?.sourceCompanyId ?? 0,
+                            setup.data?.destinationCompanyId ?? 0,
+                            companyId,
+                            row.sourceVoucherId,
+                            row.destinationVoucherId
+                          );
+                          return href ? (
+                            <Link
+                              href={href}
+                              className="text-primary underline-offset-2 hover:underline"
+                              data-testid={`intercompany-voucher-link-${row.id}`}
+                            >
+                              {voucherCopy.viewVoucher} #{selectedCompany?.companyType === "properties"
+                                ? row.sourceVoucherId
+                                : row.destinationVoucherId}
+                            </Link>
+                          ) : (
+                            <span className="text-muted-foreground">{voucherCopy.voucherUnavailable}</span>
+                          );
+                        })()}
+                      </TableCell>
                       <TableCell>{row.status}</TableCell>
                       <TableCell>
                         {row.status === "confirmed" && (
@@ -565,4 +626,9 @@ export default function IntercompanyPayments() {
       )}
     </div>
   );
+}
+
+/** Maintain the existing standalone compatibility route until Phase 7 cleanup. */
+export default function IntercompanyPayments() {
+  return <IntercompanyPaymentsContent />;
 }
