@@ -195,7 +195,7 @@ describe("Phase 4 verified destination stock mapping", () => {
     expect(sourceCode).toContain('openingValue: "0"');
     expect(sourceCode).toContain('sellingPrice: "0"');
     expect(sourceCode).toContain("postErpVoucherTx(tx");
-    expect(sourceCode).toContain("destinationStockItemAutoCreated");
+    expect(sourceCode).toContain("destinationItemAutoCreated");
     expect(sourceCode).toContain("await logAudit(");
     expect(sourceCode).toContain("autoCreatedDestinationStockItemIds:");
   });
