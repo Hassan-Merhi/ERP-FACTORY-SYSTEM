@@ -1,3 +1,5 @@
+import { tradingProvisioningMessages } from "./tradingProvisioningMessages";
+
 /**
  * Stable identities for automatically provisioned at-cost Properties -> ERP
  * container trading. Never guess an existing ledger by name alone: only a
@@ -90,10 +92,10 @@ export function uniquePropertiesSupplier<T extends { legalName: string; active: 
   sourceName: string
 ): T | undefined {
   const matches = suppliers.filter((supplier) => normalizedTradingName(supplier.legalName) === normalizedTradingName(sourceName));
-  if (matches.length > 1) throw new Error("Multiple Properties-named suppliers exist in destination; resolve duplicates before setup");
+  if (matches.length > 1) throw new Error(tradingProvisioningMessages.duplicateSupplier);
   const supplier = matches[0];
   if (supplier && (!supplier.active || supplier.deletedAt)) {
-    throw new Error("Properties-named destination supplier is inactive or deleted; reactivate it before setup");
+    throw new Error(tradingProvisioningMessages.inactiveSupplier);
   }
   return supplier;
 }
