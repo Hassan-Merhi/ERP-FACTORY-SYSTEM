@@ -88,6 +88,13 @@ export function StockTransferOrderApprovalSettings() {
     queryFn: async () => (await apiRequest("GET", endpoint)).json(),
     enabled: !!selectedCompany?.id,
   });
+  const mainConnection = useQuery<{ state: string }>({
+    queryKey: ["/api/whatsapp/instance-state/main", selectedCompany?.id],
+    queryFn: async () => (await apiRequest("GET", "/api/whatsapp/instance-state/main")).json(),
+    enabled: !!selectedCompany?.id && !!settings.data?.connected,
+    staleTime: 15_000,
+    retry: false,
+  });
   useEffect(() => {
     if (!settings.data) return;
     setEnabled(settings.data.settings.enabled);
@@ -127,8 +134,34 @@ export function StockTransferOrderApprovalSettings() {
          settings.isLoading ? <p className="text-sm text-muted-foreground">Loading approval settings…</p> : (
           <>
             <Badge variant={settings.data?.connected ? "secondary" : "outline"}>
-              {settings.data?.connected ? "Main WhatsApp configured" : "Main WhatsApp not enabled"}
+              {settings.data?.connected ? "Main credentials saved" : "Main WhatsApp not configured"}
             </Badge>
+            {settings.data?.connected && (
+              <>
+                <Badge variant={mainConnection.data?.state === "authorized" ? "secondary" : "outline"}>
+                  {mainConnection.isFetching ? "Checking main WhatsApp…" :
+                    mainConnection.data?.state === "authorized" ? "Main WhatsApp authorized" :
+                    mainConnection.data?.state === "invalidCredentials" ? "Main credentials rejected (401/403)" :
+                    mainConnection.data?.state === "notAuthorized" ? "Main WhatsApp disconnected" :
+                    mainConnection.data?.state ? "Main WhatsApp unavailable: " + mainConnection.data.state :
+                    "Main connection not verified"}
+                </Badge>
+                <Button size="sm" variant="outline"
+                  disabled={mainConnection.isFetching}
+                  onClick={() => { void mainConnection.refetch(); }}
+                  data-testid="sto-wa-check-main-connection">
+                  {mainConnection.isFetching ? <Loader2 className="h-4 w-4 mr-2 animate-spin"/> : null}
+                  Check main WhatsApp
+                </Button>
+                {mainConnection.data?.state && mainConnection.data.state !== "authorized" && (
+                  <p className="text-xs text-amber-600">
+                    {mainConnection.data.state === "invalidCredentials"
+                      ? "GREEN API rejected the main instance ID or API token. Update MAIN credentials in Settings → Export Center → Daily Export → WhatsApp Export, then check status. The POS instance is separate."
+                      : "The main WhatsApp instance is not authorized. Reconnect it in GREEN API, then check status before requesting an approval."}
+                  </p>
+                )}
+              </>
+            )}
             <Badge variant={settings.data?.webhookConfigured ? "secondary" : "outline"}>
               {settings.data?.webhookConfigured ? "Protected inbound webhook configured" : "Webhook token not configured"}
             </Badge>
