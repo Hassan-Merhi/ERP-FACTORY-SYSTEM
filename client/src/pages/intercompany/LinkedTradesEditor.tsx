@@ -117,9 +117,10 @@ export function LinkedTradesEditorContent({
   }, [companyId, physicalContainerId]);
 
   const list = useQuery<{ trades: TradeRow[] }>({
-    queryKey: companyQueryKey(BASE + "/linked-trades", companyId),
+    queryKey: companyQueryKey(BASE + "/linked-trades", companyId, physicalContainerId ?? "all"),
     enabled: companyId > 0,
-    queryFn: () => json(BASE + "/linked-trades"),
+    queryFn: () =>
+      json(BASE + "/linked-trades" + (physicalContainerId ? "?physicalContainerId=" + physicalContainerId : "")),
     retry: false,
   });
   const activeScopedTrades = physicalContainerId
