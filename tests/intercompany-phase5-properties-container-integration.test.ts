@@ -36,6 +36,9 @@ describe("Phase 5 Properties container workflow", () => {
     const linked = readFileSync("server/routes/import/intercompany-phase3.ts", "utf8");
     expect(lifecycle).toContain("physicalContainerId: trade.physicalContainerId");
     expect(linked).toContain("physicalContainerId: t.physicalContainerId");
+    expect(linked).toContain("req.query.physicalContainerId");
+    const editor = readFileSync("client/src/pages/intercompany/LinkedTradesEditor.tsx", "utf8");
+    expect(editor).toContain('"?physicalContainerId=" + physicalContainerId');
   });
   it("uses the existing protected receipt/cancel endpoints from the embedded lifecycle", () => {
     const lifecycle = readFileSync("client/src/pages/intercompany/IntercompanyLifecycle.tsx", "utf8");
