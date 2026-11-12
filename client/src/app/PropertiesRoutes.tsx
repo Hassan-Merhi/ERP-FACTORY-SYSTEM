@@ -52,6 +52,7 @@ import {
   PropertiesVouchers,
   TrackingHub,
   ContainersPage,
+  POImport,
   ContainerDetailPage,
   ContainerVerification,
   Suppliers,
@@ -103,6 +104,7 @@ export function PropertiesRoutes({ user }: PropertiesRoutesProps) {
       <Route path="/properties/daybook" component={PropertiesDaybook} />
 
       {/* Phase 1: expose existing company-scoped logistics and supplier screens in Properties. */}
+      {canTrade && <Route path="/properties/po-import" component={POImport} />}
       <Route path="/properties/tracking" component={TrackingHub} />
       <Route path="/properties/containers/:containerId/verification" component={ContainerVerification} />
       <Route path="/properties/containers/:id" component={ContainerDetailPage} />
