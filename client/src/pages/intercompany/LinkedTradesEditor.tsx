@@ -15,6 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableRow, TableHeader } from "@
 const BASE = "/api/intercompany-container-trading";
 interface TradeRow {
   tradeId: number;
+  physicalContainerId: number;
   version: number;
   containerNumber: string;
   landedCost: string | null;
@@ -78,7 +79,7 @@ async function json<T>(url: string, options?: RequestInit): Promise<T> {
   return payload as T;
 }
 const toCents = (value: string) => Math.round(Number(value || 0) * 100);
-export default function LinkedTradesEditor() {
+export default function LinkedTradesEditor({ physicalContainerId, embedded = false }: { physicalContainerId?: number; embedded?: boolean } = {}) {
   const { selectedCompany } = useCompany();
   const { toast } = useToast();
   const companyId = Number(selectedCompany?.id || 0);
@@ -110,7 +111,7 @@ export default function LinkedTradesEditor() {
     setLookupId(null);
     setInvoiceNumber("");
     setGrantee("");
-  }, [companyId]);
+  }, [companyId, physicalContainerId]);
 
   const list = useQuery<{ trades: TradeRow[] }>({
     queryKey: companyQueryKey(BASE + "/linked-trades", companyId),
@@ -118,9 +119,18 @@ export default function LinkedTradesEditor() {
     queryFn: () => json(BASE + "/linked-trades"),
     retry: false,
   });
+  const activeScopedTrades = physicalContainerId
+    ? (list.data?.trades ?? []).filter((row) => row.physicalContainerId === physicalContainerId)
+    : (list.data?.trades ?? []);
+  useEffect(() => {
+    if (!physicalContainerId || !list.data) return;
+    setSelected(list.data.trades.find((row) => row.physicalContainerId === physicalContainerId)?.tradeId ?? null);
+  }, [physicalContainerId, list.data]);
+  const validScopedSelection = !physicalContainerId || activeScopedTrades.some((row) => row.tradeId === selected);
+
   const detail = useQuery<TradeDetail>({
     queryKey: companyQueryKey(BASE + "/linked-trades/" + selected, companyId),
-    enabled: companyId > 0 && selected != null,
+    enabled: companyId > 0 && selected != null && validScopedSelection,
     queryFn: () => json(BASE + "/linked-trades/" + selected),
     retry: false,
   });
@@ -147,7 +157,7 @@ export default function LinkedTradesEditor() {
 
   const editMutation = useMutation({
     mutationFn: async () => {
-      if (!selected || !detail.data) throw new Error("Select a linked container");
+      if (!selected || !detail.data || !validScopedSelection) throw new Error("Select a verified linked container");
       const response = await apiRequest("PATCH", BASE + "/linked-trades/" + selected, {
         expectedVersion: detail.data.version,
         requestKey: key(),
@@ -256,17 +266,20 @@ export default function LinkedTradesEditor() {
     onError: (e: Error) => toast({ title: "Permission not granted", description: e.message, variant: "destructive" }),
   });
   const trades = list.data?.trades ?? [];
+  const editTrades = physicalContainerId ? activeScopedTrades : trades;
   const proposedTotal = proposal ? proposal.allocations.reduce((s, a) => s + toCents(manual[a.tradeId] || "0"), 0) : 0;
   const reallocatedTotal = invoice.data
     ? invoice.data.allocations.reduce((s, a) => s + toCents(newAmounts[a.tradeId] ?? a.amount), 0)
     : 0;
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 pb-12" data-testid="intercompany-linked-editor">
-      <PageHeader
-        title="Linked Container POs & Shared Charges"
-        subtitle="Price edits and confirmed costs remain synchronized between Properties and the destination ERP company."
-      />
+    <div className={embedded ? "space-y-4" : "mx-auto max-w-6xl space-y-6 pb-12"} data-testid="intercompany-linked-editor">
+      {!embedded && (
+        <PageHeader
+          title="Linked Container POs & Shared Charges"
+          subtitle="Price edits and confirmed costs remain synchronized between Properties and the destination ERP company."
+        />
+      )}
       <p className="text-sm text-muted-foreground">
         Each edit is a single audited transaction. Original supplier vouchers remain unchanged. Offloaded or sold
         containers are protected until the inventory adjustment workflow is available.
@@ -287,8 +300,13 @@ export default function LinkedTradesEditor() {
               editors can use the invoice section below.
             </p>
           )}
-          <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
-            {trades.map((t) => (
+          {embedded && list.isSuccess && editTrades.length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              No active linked purchase order exists for this physical container.
+            </p>
+          )}
+          {!embedded && <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
+            {editTrades.map((t) => (
               <Button
                 key={t.tradeId}
                 type="button"
@@ -298,13 +316,13 @@ export default function LinkedTradesEditor() {
                 {t.containerNumber} · {money(t.landedCost)}
               </Button>
             ))}
-          </div>
+          </div>}
           {detail.isError && (
             <p role="alert" className="text-destructive">
               Could not load the linked PO; refresh the company and container selection.
             </p>
           )}
-          {detail.data && (
+          {validScopedSelection && detail.data && (
             <>
               <div className="rounded-md border p-3 text-sm">
                 <strong>{detail.data.containerNumber}</strong> · Revision {detail.data.version} · Confirmed landed cost{" "}
