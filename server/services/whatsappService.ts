@@ -272,6 +272,67 @@ export async function getGreenInstanceState(instanceId: string, apiToken: string
   }
 }
 
+/**
+ * Security boundary for Stock Transfer Order approvals and the MAIN instance
+ * status indicator. Never substitute the POS/backup credentials on HTTP 401:
+ * quoted DONE replies must be tied to the instance that sent the request.
+ */
+export type GreenMainInstanceState = GreenInstanceState | "invalidCredentials";
+
+export async function getStrictGreenMainInstanceState(
+  instanceId: string,
+  apiToken: string
+): Promise<GreenMainInstanceState> {
+  if (!cleanGreenApiCredential(instanceId) || !cleanGreenApiCredential(apiToken)) {
+    return "invalidCredentials";
+  }
+  try {
+    const response = await fetchGreenApiReadOnly({ instanceId, apiToken }, "getStateInstance", {
+      method: "GET",
+      signal: AbortSignal.timeout(8000),
+    });
+    if (response.status === 401 || response.status === 403) return "invalidCredentials";
+    if (!response.ok) return "unknown";
+    const body = await response.json().catch(() => null) as { stateInstance?: unknown } | null;
+    const state = body?.stateInstance;
+    const allowed: GreenInstanceState[] = [
+      "authorized", "notAuthorized", "sleepMode", "starting", "yellowCard",
+    ];
+    return typeof state === "string" && allowed.includes(state as GreenInstanceState)
+      ? state as GreenInstanceState : "unknown";
+  } catch {
+    // Do not log the provider URL or credentials (GREEN API uses token-in-URL).
+    logger.warn("[STO WA] Main WhatsApp authorization check unavailable");
+    return "unknown";
+  }
+}
+
+/** Read only chats from the exact main instance, without POS fallback. */
+export async function fetchStrictGreenMainChats(
+  instanceId: string,
+  apiToken: string
+): Promise<GreenChat[]> {
+  const response = await fetchGreenApiReadOnly({ instanceId, apiToken }, "getChats", {
+    method: "GET",
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!response.ok) {
+    throw new Error(response.status === 401 || response.status === 403
+      ? "Main WhatsApp credentials are rejected by GREEN API."
+      : "Unable to verify the approval group on the main WhatsApp instance.");
+  }
+  const data: unknown = await response.json().catch(() => null);
+  if (!Array.isArray(data)) throw new Error("Main WhatsApp returned an invalid chat list.");
+  return data.filter((c): c is { id: string; name?: string; type?: string } =>
+    c !== null && typeof c === "object" &&
+    typeof (c as { id?: unknown }).id === "string"
+  ).map(c => ({
+    id: c.id,
+    name: typeof c.name === "string" && c.name ? c.name : c.id,
+    type: c.id.endsWith("@g.us") ? "group" : (typeof c.type === "string" ? c.type : "contact"),
+  }));
+}
+
 export async function fetchGreenApiChats(instanceId: string, apiToken: string): Promise<GreenChat[]> {
   const response = await fetchGreenApiWithAuthFallback({ instanceId, apiToken }, "getChats", { method: "GET" });
   if (!response.ok) {
