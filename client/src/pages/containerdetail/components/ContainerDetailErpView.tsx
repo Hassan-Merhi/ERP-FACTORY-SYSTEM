@@ -108,7 +108,9 @@ export function ContainerDetailErpView({ model }: { model: Model }) {
           <Button
             variant="outline"
             className="gap-2"
-            onClick={() => setLocation(`${backUrl.startsWith("/properties") ? "/properties" : ""}/offloads/${containerData.offloadId}`)}
+            onClick={() =>
+              setLocation(`${backUrl.startsWith("/properties") ? "/properties" : ""}/offloads/${containerData.offloadId}`)
+            }
             data-testid="button-view-offload"
           >
             <ExternalLink className="w-4 h-4" />
@@ -138,7 +140,9 @@ export function ContainerDetailErpView({ model }: { model: Model }) {
               </>
             )}
             <DropdownMenuItem
-              onClick={() => setLocation(`${backUrl.startsWith("/properties") ? "/properties" : ""}/containers/${containerId}/verification`)}
+              onClick={() =>
+                setLocation(`${backUrl.startsWith("/properties") ? "/properties" : ""}/containers/${containerId}/verification`)
+              }
               data-testid="button-verify-container"
             >
               <FileText className="w-4 h-4 mr-2" />
@@ -340,7 +344,9 @@ export function ContainerDetailErpView({ model }: { model: Model }) {
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => setLocation(`${backUrl.startsWith("/properties") ? "/properties" : ""}/purchase-orders/${po.id}/edit`)}
+                        onClick={() =>
+                          setLocation(`${backUrl.startsWith("/properties") ? "/properties" : ""}/purchase-orders/${po.id}/edit`)
+                        }
                         data-testid={`button-edit-po-${po.id}`}
                       >
                         <Edit className="h-4 w-4" />
