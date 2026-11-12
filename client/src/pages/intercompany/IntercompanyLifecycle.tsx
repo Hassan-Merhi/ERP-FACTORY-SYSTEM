@@ -319,9 +319,7 @@ export function IntercompanyLifecycleContent({
         </p>
       )}
       {embedded && !query.isLoading && !query.isError && visibleTrades.length === 0 && (
-        <p className="text-sm text-muted-foreground">
-          {copy.unlinked}
-        </p>
+        <p className="text-sm text-muted-foreground">{copy.unlinked}</p>
       )}
       {trade && (
         <Card>

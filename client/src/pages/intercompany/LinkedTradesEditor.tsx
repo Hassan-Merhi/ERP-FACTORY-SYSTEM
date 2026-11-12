@@ -316,9 +316,7 @@ export function LinkedTradesEditorContent({
             </p>
           )}
           {embedded && list.isSuccess && editTrades.length === 0 && (
-            <p className="text-sm text-muted-foreground">
-              {copy.noActiveLinked}
-            </p>
+            <p className="text-sm text-muted-foreground">{copy.noActiveLinked}</p>
           )}
           {!embedded && (
             <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
