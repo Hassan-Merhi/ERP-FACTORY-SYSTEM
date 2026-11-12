@@ -132,6 +132,8 @@ export default function PropertiesIntercompanyPOImport() {
       .map(([containerNumber, selection]) => [containerNumber, selection.destinationCompanyId])
       .sort(([a], [b]) => String(a).localeCompare(String(b))),
   });
+  const activeStockSignature = useRef(stockSignature);
+  activeStockSignature.current = stockSignature;
   const currentStockReview = stockReview?.signature === stockSignature ? stockReview.data : null;
 
   const {
@@ -224,7 +226,7 @@ export default function PropertiesIntercompanyPOImport() {
       if (
         requestedCompanyId !== activeCompanyId.current ||
         preview?.sha256 !== result.fileSha256 ||
-        signature !== stockSignature
+        signature !== activeStockSignature.current
       )
         return;
       setStockReview({ signature, data: result });
