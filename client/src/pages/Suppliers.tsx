@@ -11,7 +11,7 @@ import { erpCompanyDataKey, invalidateErpDataFamilies } from "@/erp-core/erpData
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Edit, Eye, EyeOff, FileText, Search, Truck, Users, Container, DollarSign } from "lucide-react";
+import { Edit, Eye, EyeOff, FileText, Search, Truck, Users, Container, DollarSign, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useCompany } from "@/contexts/CompanyContext";
 
@@ -34,6 +34,7 @@ export default function Suppliers() {
   useEscapeBack(selectedSupplier ? () => setSelectedSupplier(null) : null);
 
   const { selectedCompany, selectCompany } = useCompany();
+  const isProperties = selectedCompany?.companyType === "properties";
   const { formatAmount: legacyFormatAmount, formatHistoricalBaseAmount } = useCurrencyContext();
   // Keep lightweight page-test providers and older embedded consumers working
   // while production uses the historical-base formatter.
@@ -48,7 +49,7 @@ export default function Suppliers() {
     setCompanyFilter,
     setDateFilter,
     setHidePayments,
-  } = useSuppliersFilters(selectedCompany?.id);
+  } = useSuppliersFilters(selectedCompany?.id, isProperties);
   const debouncedSearch = useDebounce(searchTerm, 300);
   const mayDeleteSupplier = useCan("erp.suppliers", "delete", { legacyAllowed: selectedCompany?.role !== "POS" });
   const mayExportSupplier = useCan("erp.suppliers", "export", { legacyAllowed: true, featureKey: "exp_excel" });
@@ -72,6 +73,15 @@ export default function Suppliers() {
     },
   });
 
+  // Keep Properties supplier drilldowns in the Properties shell. When an
+  // authorized cross-company row is opened, use that company's shell.
+  const partyPath = (companyId: number | null | undefined, path: string) => {
+    const company = companies.find((entry) => entry.id === companyId);
+    return (company?.companyType === "properties" || (!company && isProperties)
+      ? "/properties"
+      : "") + path;
+  };
+
   const handleTransactionClick = async (txn: SupplierLedgerRow) => {
     const targetCompany = companies.find((c) => c.id === txn.companyId);
     if (targetCompany && (!selectedCompany || selectedCompany.id !== txn.companyId)) {
@@ -81,9 +91,9 @@ export default function Suppliers() {
     setSelectedSupplier(null);
     const tabName = voucherTabForType(txn.voucherType);
     if (tabName) {
-      navigate(`/vouchers?edit=${txn.voucherId}&tab=${tabName}`);
+      navigate(partyPath(txn.companyId, `/vouchers?edit=${txn.voucherId}&tab=${tabName}`));
     } else {
-      navigate(`/voucher-detail/${txn.voucherId}`);
+      navigate(partyPath(txn.companyId, `/voucher-detail/${txn.voucherId}`));
     }
   };
 
@@ -146,7 +156,7 @@ export default function Suppliers() {
       selectCompany(targetCompany);
     }
     setSelectedSupplier(null);
-    navigate(`/purchase-orders/${po.id}/edit`);
+    navigate(partyPath(po.companyId, `/purchase-orders/${po.id}/edit`));
   };
 
   const handleContainerClick = async (po: { companyId: number | null; containerId?: number | null }) => {
@@ -157,7 +167,7 @@ export default function Suppliers() {
       selectCompany(targetCompany);
     }
     setSelectedSupplier(null);
-    navigate(`/containers/${po.containerId}`);
+    navigate(partyPath(po.companyId, `/containers/${po.containerId}`));
   };
 
   const handleExportToExcel = async () => {
@@ -183,7 +193,13 @@ export default function Suppliers() {
         title="Suppliers"
         subtitle="Manage supplier accounts and track container shipments"
         showBackButton={false}
-      />
+      >
+        {isProperties && ["Owner", "Developer", "Admin", "Create Only"].includes(selectedCompany?.role || "") && (
+          <Button type="button" variant="outline" onClick={() => navigate("/properties/master-data?entity=supplier")} data-testid="button-properties-add-supplier">
+            <Plus className="h-4 w-4 mr-2" /> Add Supplier
+          </Button>
+        )}
+      </PageHeader>
 
       {/* Stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -278,7 +294,7 @@ export default function Suppliers() {
           </div>
           <div>
             <p className="text-sm font-medium">No suppliers found</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Create suppliers in the Master Data page</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{isProperties ? "Use Add Supplier above to create your first supplier" : "Create suppliers in the Master Data page"}</p>
           </div>
         </div>
       ) : sortedSuppliers.length === 0 ? (
@@ -371,7 +387,7 @@ export default function Suppliers() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={() => navigate(`/suppliers/${supplier.id}/proformas`)}
+                  onClick={() => navigate(`${isProperties ? "/properties" : ""}/suppliers/${supplier.id}/proformas`)}
                   data-testid={`button-proformas-supplier-${supplier.id}`}
                   title="Proformas"
                 >
@@ -381,7 +397,7 @@ export default function Suppliers() {
                   variant="ghost"
                   size="icon"
                   onClick={() => {
-                    if (recordChanges.allowed) navigate(`/suppliers/${supplier.id}/edit`);
+                    if (recordChanges.allowed) navigate(`${isProperties ? "/properties" : ""}/suppliers/${supplier.id}/edit`);
                   }}
                   permitted={recordChanges.allowed}
                   deniedReason={recordChanges.reason}
