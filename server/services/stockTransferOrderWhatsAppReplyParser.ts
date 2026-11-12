@@ -30,7 +30,14 @@ function cleanId(value: unknown): string | null {
 
 export function parseStockTransferOrderWaReply(payload: unknown): StockTransferOrderWaReply | null {
   const root = record(payload);
-  if (!root || root.typeWebhook !== "incomingMessageReceived") return null;
+  // A supervisor may reply from the WhatsApp account attached to GREEN API.
+  // That is an outgoing phone/web message, not an incoming notification.
+  // Never accept outgoingAPIMessageReceived: API-originated messages must not
+  // authorize stock movements. All branches still require exact sender/group/
+  // quote/instance checks in the immutable decision recorder.
+  if (!root || (root.typeWebhook !== "incomingMessageReceived" &&
+                root.typeWebhook !== "outgoingMessageReceived")) return null;
+  const fromLinkedPhone = root.typeWebhook === "outgoingMessageReceived";
 
   const instance = record(root.instanceData);
   const sender = record(root.senderData);
@@ -45,6 +52,14 @@ export function parseStockTransferOrderWaReply(payload: unknown): StockTransferO
       typeof chatId !== "string" || !/^[0-9]{5,25}@g[.]us$/.test(chatId) ||
       typeof senderChatId !== "string" || !/^[1-9][0-9]{6,14}@c[.]us$/.test(senderChatId) ||
       !incomingMessageId) return null;
+  if (fromLinkedPhone) {
+    // GREEN API signs this event at the webhook transport; verify the
+    // platform's own linked WhatsApp ID matches the purported sender.
+    // A forged / relayed group sender cannot approve a transfer.
+    if (typeof instance.wid !== "string" ||
+        !/^[1-9][0-9]{6,14}@c[.]us$/.test(instance.wid) ||
+        instance.wid !== senderChatId) return null;
+  }
 
   let text: unknown;
   let quote: unknown;
