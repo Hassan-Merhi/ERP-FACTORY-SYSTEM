@@ -14,6 +14,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Edit, Eye, EyeOff, FileText, Search, Truck, Users, Container, DollarSign, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useApplicationLanguageCode } from "@/contexts/ApplicationLanguageContext";
+import { intercompanyTradingSetupText } from "@/i18n/intercompanyTradingSetupTranslations";
 
 
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
@@ -35,6 +37,7 @@ export default function Suppliers() {
 
   const { selectedCompany, selectCompany } = useCompany();
   const isProperties = selectedCompany?.companyType === "properties";
+  const tradingCopy = intercompanyTradingSetupText(useApplicationLanguageCode());
   const { formatAmount: legacyFormatAmount, formatHistoricalBaseAmount } = useCurrencyContext();
   // Keep lightweight page-test providers and older embedded consumers working
   // while production uses the historical-base formatter.
@@ -200,7 +203,7 @@ export default function Suppliers() {
               onClick={() => navigate("/properties/master-data?entity=supplier")}
               data-testid="button-properties-add-supplier"
             >
-              <Plus className="h-4 w-4 mr-2" /> Add Supplier
+              <Plus className="h-4 w-4 mr-2" /> {tradingCopy.addSupplier}
             </Button>
           )}
       </PageHeader>
