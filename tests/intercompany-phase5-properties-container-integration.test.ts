@@ -17,7 +17,7 @@ describe("Phase 5 Properties container workflow", () => {
   });
   it.each(["View Only", "Tester", "Create Only", "Admin", "Worker"])(
     "denies Properties role %s without cross-company receipt approval",
-    role => {
+    (role) => {
       expect(mayReceiveFromProperties(pair, actor(10, role), "properties", "erp", "Owner")).toBe(false);
     }
   );
@@ -41,7 +41,7 @@ describe("Phase 5 Properties container workflow", () => {
     const lifecycle = readFileSync("client/src/pages/intercompany/IntercompanyLifecycle.tsx", "utf8");
     const receipt = readFileSync("server/services/intercompany/phase5Receipt.ts", "utf8");
     const permissions = readFileSync("server/services/intercompany/phase5ReceivingAccess.ts", "utf8");
-    expect(lifecycle).toContain('physicalContainerId?: number; embedded?: boolean');
+    expect(lifecycle).toContain("physicalContainerId?: number; embedded?: boolean");
     expect(lifecycle).toContain('"/receiving-options"');
     expect(lifecycle).toContain('"/receive"');
     expect(lifecycle).toContain('"/cancel"');
@@ -51,10 +51,10 @@ describe("Phase 5 Properties container workflow", () => {
   });
   it("automatically selects only a unique verified INVENTORY asset account in the correct ERP company", () => {
     const routes = readFileSync("server/routes/import/intercompany-phase5.ts", "utf8");
-    expect(routes).toContain('lifecycle/:tradeId/receiving-options');
-    expect(routes).toContain('eq(ledgerAccounts.companyId, trade.destinationCompanyId)');
+    expect(routes).toContain("lifecycle/:tradeId/receiving-options");
+    expect(routes).toContain("eq(ledgerAccounts.companyId, trade.destinationCompanyId)");
     expect(routes).toContain('eq(ledgerAccounts.code, "INVENTORY")');
-    expect(routes).toContain('eligible.length === 1 ? eligible[0].id : null');
+    expect(routes).toContain("eligible.length === 1 ? eligible[0].id : null");
     expect(routes).toContain("await requireReceivingPairPermission(trade, identity)");
     const screen = readFileSync("client/src/pages/intercompany/IntercompanyLifecycle.tsx", "utf8");
     expect(screen).toContain("receivingOptions.data?.inventoryAccountId");

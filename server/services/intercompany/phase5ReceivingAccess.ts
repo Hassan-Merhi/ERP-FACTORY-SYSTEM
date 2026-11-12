@@ -47,23 +47,36 @@ export async function requireReceivingPairPermission(trade: ReceivingTradePair, 
   // only the two companies involved in this specific verified trade.
   await withTradeScope(identity, [trade.destinationCompanyId], async () => {
     const [source, destination, membership] = await Promise.all([
-      db.select({ id: companies.id, companyType: companies.companyType })
-        .from(companies).where(eq(companies.id, trade.sourceCompanyId)).limit(1),
-      db.select({ id: companies.id, companyType: companies.companyType })
-        .from(companies).where(eq(companies.id, trade.destinationCompanyId)).limit(1),
-      db.select({ role: userCompanyRoles.role }).from(userCompanyRoles)
-        .where(and(
-          eq(userCompanyRoles.userId, identity.actorUserId),
-          eq(userCompanyRoles.companyId, trade.destinationCompanyId)
-        )).limit(1),
+      db
+        .select({ id: companies.id, companyType: companies.companyType })
+        .from(companies)
+        .where(eq(companies.id, trade.sourceCompanyId))
+        .limit(1),
+      db
+        .select({ id: companies.id, companyType: companies.companyType })
+        .from(companies)
+        .where(eq(companies.id, trade.destinationCompanyId))
+        .limit(1),
+      db
+        .select({ role: userCompanyRoles.role })
+        .from(userCompanyRoles)
+        .where(
+          and(
+            eq(userCompanyRoles.userId, identity.actorUserId),
+            eq(userCompanyRoles.companyId, trade.destinationCompanyId)
+          )
+        )
+        .limit(1),
     ]);
-    if (!mayReceiveFromProperties(
-      trade,
-      identity,
-      source[0]?.companyType ?? null,
-      destination[0]?.companyType ?? null,
-      membership[0]?.role ?? null
-    )) {
+    if (
+      !mayReceiveFromProperties(
+        trade,
+        identity,
+        source[0]?.companyType ?? null,
+        destination[0]?.companyType ?? null,
+        membership[0]?.role ?? null
+      )
+    ) {
       throw new IntercompanyEditError(
         "IC_RECEIPT_DESTINATION_ACCESS",
         "Destination ERP Owner/Admin/Developer access is required to receive from Properties",

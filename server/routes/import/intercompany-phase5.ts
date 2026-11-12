@@ -18,7 +18,12 @@ import { logger } from "../../lib/logger";
 import { cancelUnreceivedTrade } from "../../services/intercompany/phase5Cancel";
 import { receiveLinkedTrade } from "../../services/intercompany/phase5Receipt";
 import { requireReceivingPairPermission } from "../../services/intercompany/phase5ReceivingAccess";
-import { assertTradeAccess, IntercompanyEditError, type EditIdentity, withTradeScope } from "../../services/intercompany/tradeSync";
+import {
+  assertTradeAccess,
+  IntercompanyEditError,
+  type EditIdentity,
+  withTradeScope,
+} from "../../services/intercompany/tradeSync";
 
 const id = z.number().int().positive();
 const routeId = z.coerce.number().int().positive();
@@ -206,23 +211,31 @@ export function registerIntercompanyPhase5Routes(app: Express) {
       return res.json(
         await withTradeScope(identity, [trade.sourceCompanyId, trade.destinationCompanyId], async () => {
           const [warehouses, inventoryAccounts] = await Promise.all([
-            db.select({ id: locations.id, name: locations.name })
+            db
+              .select({ id: locations.id, name: locations.name })
               .from(locations)
-              .where(and(
-                eq(locations.companyId, trade.destinationCompanyId),
-                eq(locations.active, true),
-                isNull(locations.deletedAt)
-              )),
-            db.select({ id: ledgerAccounts.id, name: ledgerAccounts.name, accountType: ledgerAccounts.accountType })
+              .where(
+                and(
+                  eq(locations.companyId, trade.destinationCompanyId),
+                  eq(locations.active, true),
+                  isNull(locations.deletedAt)
+                )
+              ),
+            db
+              .select({ id: ledgerAccounts.id, name: ledgerAccounts.name, accountType: ledgerAccounts.accountType })
               .from(ledgerAccounts)
-              .where(and(
-                eq(ledgerAccounts.companyId, trade.destinationCompanyId),
-                eq(ledgerAccounts.code, "INVENTORY"),
-                eq(ledgerAccounts.active, true),
-                isNull(ledgerAccounts.deletedAt)
-              )),
+              .where(
+                and(
+                  eq(ledgerAccounts.companyId, trade.destinationCompanyId),
+                  eq(ledgerAccounts.code, "INVENTORY"),
+                  eq(ledgerAccounts.active, true),
+                  isNull(ledgerAccounts.deletedAt)
+                )
+              ),
           ]);
-          const eligible = inventoryAccounts.filter(account => ["Asset", "Current Asset"].includes(account.accountType));
+          const eligible = inventoryAccounts.filter((account) =>
+            ["Asset", "Current Asset"].includes(account.accountType)
+          );
           return {
             tradeId: trade.id,
             destinationCompanyId: trade.destinationCompanyId,

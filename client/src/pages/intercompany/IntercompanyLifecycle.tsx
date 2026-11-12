@@ -53,7 +53,10 @@ async function load(companyId: number): Promise<Lifecycle> {
   return value as Lifecycle;
 }
 
-export default function IntercompanyLifecycle({ physicalContainerId, embedded = false }: { physicalContainerId?: number; embedded?: boolean } = {}) {
+export default function IntercompanyLifecycle({
+  physicalContainerId,
+  embedded = false,
+}: { physicalContainerId?: number; embedded?: boolean } = {}) {
   const { selectedCompany } = useCompany();
   const companyId = Number(selectedCompany?.id || 0);
   const { toast } = useToast();
@@ -87,8 +90,13 @@ export default function IntercompanyLifecycle({ physicalContainerId, embedded = 
     inventoryAccountStatus: "ready" | "ambiguous" | "missing";
   }>({
     queryKey: companyQueryKey(API + "/" + trade?.tradeId + "/receiving-options", companyId),
-    enabled: Boolean(trade && trade.state === "active" && !trade.received && !trade.canceled &&
-      (selectedCompany?.companyType !== "properties" || ["Owner", "Developer"].includes(selectedCompany?.role ?? ""))),
+    enabled: Boolean(
+      trade &&
+      trade.state === "active" &&
+      !trade.received &&
+      !trade.canceled &&
+      (selectedCompany?.companyType !== "properties" || ["Owner", "Developer"].includes(selectedCompany?.role ?? ""))
+    ),
     queryFn: async () => {
       const response = await fetch(API + "/" + trade!.tradeId + "/receiving-options", { credentials: "include" });
       const value = await response.json().catch(() => ({ message: "Cannot load receiving options" }));
@@ -221,85 +229,92 @@ export default function IntercompanyLifecycle({ physicalContainerId, embedded = 
   );
 
   return (
-    <div className={embedded ? "space-y-4" : "mx-auto max-w-6xl space-y-6 pb-10"} data-testid="intercompany-phase5-lifecycle">
+    <div
+      className={embedded ? "space-y-4" : "mx-auto max-w-6xl space-y-6 pb-10"}
+      data-testid="intercompany-phase5-lifecycle"
+    >
       {!embedded && (
         <PageHeader
           title="Intercompany Receiving & Cancellation"
           subtitle="Receive into the actual destination ERP, or reverse an unreceived internal sale. The original physical container and cash transfers are never duplicated."
         />
       )}
-      {!embedded && <Card>
-        <CardHeader>
-          <CardTitle>Linked container lifecycle</CardTitle>
-          <CardDescription>
-            No action here changes or removes a physical Properties container. Received stock cannot be canceled without
-            a separate audited inventory and COGS correction.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {query.isError && (
-            <p role="alert" className="text-destructive">
-              Cannot access the verified linked trade records.
-            </p>
-          )}
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Container</TableHead>
-                  <TableHead>ERP destination</TableHead>
-                  <TableHead>Confirmed cost</TableHead>
-                  <TableHead>State</TableHead>
-                  <TableHead>Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {visibleTrades.map((row) => (
-                  <TableRow key={row.tradeId}>
-                    <TableCell>{row.containerNumber}</TableCell>
-                    <TableCell>Company #{row.destinationCompanyId}</TableCell>
-                    <TableCell>{money(row.landedCost)}</TableCell>
-                    <TableCell>
-                      {row.canceled
-                        ? "Canceled " + row.canceled.date
-                        : row.received
-                          ? "Received " + row.received.date
-                          : row.state === "active"
-                            ? "In transit"
-                            : row.state}
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setSelectedTradeId(row.tradeId);
-                          setLocationId("");
-                          setInventoryAccountId("");
-                          setEvidence("");
-                          setReason("");
-                          setArrivalVerified(false);
-                          setCostVerified(false);
-                          setGoodsNotReceived(false);
-                          setCashUnchanged(false);
-                          setRedistributed(false);
-                          setReceiptKey(newKey());
-                          setCancelKey(newKey());
-                        }}
-                      >
-                        Review
-                      </Button>
-                    </TableCell>
+      {!embedded && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Linked container lifecycle</CardTitle>
+            <CardDescription>
+              No action here changes or removes a physical Properties container. Received stock cannot be canceled
+              without a separate audited inventory and COGS correction.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {query.isError && (
+              <p role="alert" className="text-destructive">
+                Cannot access the verified linked trade records.
+              </p>
+            )}
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Container</TableHead>
+                    <TableHead>ERP destination</TableHead>
+                    <TableHead>Confirmed cost</TableHead>
+                    <TableHead>State</TableHead>
+                    <TableHead>Action</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>}
+                </TableHeader>
+                <TableBody>
+                  {visibleTrades.map((row) => (
+                    <TableRow key={row.tradeId}>
+                      <TableCell>{row.containerNumber}</TableCell>
+                      <TableCell>Company #{row.destinationCompanyId}</TableCell>
+                      <TableCell>{money(row.landedCost)}</TableCell>
+                      <TableCell>
+                        {row.canceled
+                          ? "Canceled " + row.canceled.date
+                          : row.received
+                            ? "Received " + row.received.date
+                            : row.state === "active"
+                              ? "In transit"
+                              : row.state}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedTradeId(row.tradeId);
+                            setLocationId("");
+                            setInventoryAccountId("");
+                            setEvidence("");
+                            setReason("");
+                            setArrivalVerified(false);
+                            setCostVerified(false);
+                            setGoodsNotReceived(false);
+                            setCashUnchanged(false);
+                            setRedistributed(false);
+                            setReceiptKey(newKey());
+                            setCancelKey(newKey());
+                          }}
+                        >
+                          Review
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
       {embedded && query.isLoading && <p className="text-sm text-muted-foreground">Loading linked container status…</p>}
       {embedded && query.isError && (
-        <p role="alert" className="text-sm text-destructive">Cannot load the linked container lifecycle.</p>
+        <p role="alert" className="text-sm text-destructive">
+          Cannot load the linked container lifecycle.
+        </p>
       )}
       {embedded && !query.isLoading && !query.isError && visibleTrades.length === 0 && (
         <p className="text-sm text-muted-foreground">
@@ -350,7 +365,9 @@ export default function IntercompanyLifecycle({ physicalContainerId, embedded = 
                       Reclassifies only the verified linked cost from Goods in Transit into the ERP INVENTORY account.
                       Existing negative-stock or residual-value situations are refused.
                     </p>
-                    <Label htmlFor="ic-phase5-location">Actual receiving warehouse in ERP #{trade.destinationCompanyId}</Label>
+                    <Label htmlFor="ic-phase5-location">
+                      Actual receiving warehouse in ERP #{trade.destinationCompanyId}
+                    </Label>
                     <select
                       id="ic-phase5-location"
                       value={locationId}

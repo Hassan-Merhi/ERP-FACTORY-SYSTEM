@@ -238,9 +238,7 @@ export function ContainerDetailErpView({ model }: { model: Model }) {
         )}
       </PageHeader>
 
-      {isPropertiesContainer && (
-        <PropertiesIntercompanyContainerWorkflow containerId={container.id} />
-      )}
+      {isPropertiesContainer && <PropertiesIntercompanyContainerWorkflow containerId={container.id} />}
 
       {containerSale && (
         <Card className="border-green-500">
@@ -501,13 +499,15 @@ export function ContainerDetailErpView({ model }: { model: Model }) {
         </div>
       </div>
 
-      {!isPropertiesContainer && <OffloadDialog
-        open={showOffloadDialog}
-        onOpenChange={setShowOffloadDialog}
-        containerId={parseInt(containerId!)}
-        containerNumber={container.containerNumber}
-        totalBales={totalBales}
-      />}
+      {!isPropertiesContainer && (
+        <OffloadDialog
+          open={showOffloadDialog}
+          onOpenChange={setShowOffloadDialog}
+          containerId={parseInt(containerId!)}
+          containerNumber={container.containerNumber}
+          totalBales={totalBales}
+        />
+      )}
 
       <Dialog open={showSellDialog} onOpenChange={setShowSellDialog}>
         <DialogContent data-testid="dialog-sell-container">

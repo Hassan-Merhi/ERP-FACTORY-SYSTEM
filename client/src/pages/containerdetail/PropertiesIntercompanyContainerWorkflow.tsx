@@ -42,8 +42,8 @@ export default function PropertiesIntercompanyContainerWorkflow({ containerId }:
     },
     retry: false,
   });
-  const trade = query.data?.trades.find((candidate) =>
-    candidate.physicalContainerId === containerId && candidate.sourceCompanyId === companyId
+  const trade = query.data?.trades.find(
+    (candidate) => candidate.physicalContainerId === containerId && candidate.sourceCompanyId === companyId
   );
   const closed = Boolean(trade && (trade.received || trade.canceled || trade.state !== "active"));
 
@@ -66,7 +66,9 @@ export default function PropertiesIntercompanyContainerWorkflow({ containerId }:
         {!canRead && <p className="text-sm text-muted-foreground">{copy.unauthorized}</p>}
         {canRead && query.isLoading && <p className="text-sm text-muted-foreground">{copy.loading}</p>}
         {canRead && query.isError && (
-          <p role="alert" className="text-sm text-destructive">{copy.failed}</p>
+          <p role="alert" className="text-sm text-destructive">
+            {copy.failed}
+          </p>
         )}
         {canRead && !query.isLoading && !query.isError && !trade && (
           <div className="flex flex-wrap items-center justify-between gap-3" data-testid="properties-no-linked-trade">
@@ -80,16 +82,32 @@ export default function PropertiesIntercompanyContainerWorkflow({ containerId }:
         )}
         {canRead && trade && (
           <>
-            <div className="grid gap-2 rounded-md border p-3 text-sm sm:grid-cols-3" data-testid="properties-trade-summary">
-              <div><span className="text-muted-foreground">{copy.destination}</span><p className="font-semibold">#{trade.destinationCompanyId}</p></div>
-              <div><span className="text-muted-foreground">{copy.landed}</span><p className="font-semibold">{Number(trade.landedCost).toFixed(2)} USD</p></div>
-              <div><span className="text-muted-foreground">{copy.status}</span><p className="font-semibold">{status}</p></div>
+            <div
+              className="grid gap-2 rounded-md border p-3 text-sm sm:grid-cols-3"
+              data-testid="properties-trade-summary"
+            >
+              <div>
+                <span className="text-muted-foreground">{copy.destination}</span>
+                <p className="font-semibold">#{trade.destinationCompanyId}</p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">{copy.landed}</span>
+                <p className="font-semibold">{Number(trade.landedCost).toFixed(2)} USD</p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">{copy.status}</span>
+                <p className="font-semibold">{status}</p>
+              </div>
             </div>
             <p className="text-xs text-muted-foreground">{closed ? copy.closed : copy.confirm}</p>
             <Tabs value={tab} onValueChange={setTab}>
               <TabsList className="flex h-auto flex-wrap">
-                <TabsTrigger value="linked" disabled={closed} data-testid="tab-properties-linked-po">{copy.linkedTab}</TabsTrigger>
-                <TabsTrigger value="lifecycle" data-testid="tab-properties-receive-cancel">{copy.lifecycleTab}</TabsTrigger>
+                <TabsTrigger value="linked" disabled={closed} data-testid="tab-properties-linked-po">
+                  {copy.linkedTab}
+                </TabsTrigger>
+                <TabsTrigger value="lifecycle" data-testid="tab-properties-receive-cancel">
+                  {copy.lifecycleTab}
+                </TabsTrigger>
               </TabsList>
               <TabsContent value="linked">
                 {!closed && (

@@ -79,7 +79,10 @@ async function json<T>(url: string, options?: RequestInit): Promise<T> {
   return payload as T;
 }
 const toCents = (value: string) => Math.round(Number(value || 0) * 100);
-export default function LinkedTradesEditor({ physicalContainerId, embedded = false }: { physicalContainerId?: number; embedded?: boolean } = {}) {
+export default function LinkedTradesEditor({
+  physicalContainerId,
+  embedded = false,
+}: { physicalContainerId?: number; embedded?: boolean } = {}) {
   const { selectedCompany } = useCompany();
   const { toast } = useToast();
   const companyId = Number(selectedCompany?.id || 0);
@@ -126,7 +129,7 @@ export default function LinkedTradesEditor({ physicalContainerId, embedded = fal
     if (!physicalContainerId || !list.data) return;
     const matching = list.data.trades.find((row) => row.physicalContainerId === physicalContainerId);
     setSelected(matching?.tradeId ?? null);
-    if (matching) setChosen((previous) => previous.length ? previous : [matching.tradeId]);
+    if (matching) setChosen((previous) => (previous.length ? previous : [matching.tradeId]));
   }, [physicalContainerId, list.data]);
   const validScopedSelection = !physicalContainerId || activeScopedTrades.some((row) => row.tradeId === selected);
 
@@ -278,7 +281,10 @@ export default function LinkedTradesEditor({ physicalContainerId, embedded = fal
     : 0;
 
   return (
-    <div className={embedded ? "space-y-4" : "mx-auto max-w-6xl space-y-6 pb-12"} data-testid="intercompany-linked-editor">
+    <div
+      className={embedded ? "space-y-4" : "mx-auto max-w-6xl space-y-6 pb-12"}
+      data-testid="intercompany-linked-editor"
+    >
       {!embedded && (
         <PageHeader
           title="Linked Container POs & Shared Charges"
@@ -310,18 +316,20 @@ export default function LinkedTradesEditor({ physicalContainerId, embedded = fal
               No active linked purchase order exists for this physical container.
             </p>
           )}
-          {!embedded && <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
-            {editTrades.map((t) => (
-              <Button
-                key={t.tradeId}
-                type="button"
-                variant={selected === t.tradeId ? "default" : "outline"}
-                onClick={() => setSelected(t.tradeId)}
-              >
-                {t.containerNumber} · {money(t.landedCost)}
-              </Button>
-            ))}
-          </div>}
+          {!embedded && (
+            <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
+              {editTrades.map((t) => (
+                <Button
+                  key={t.tradeId}
+                  type="button"
+                  variant={selected === t.tradeId ? "default" : "outline"}
+                  onClick={() => setSelected(t.tradeId)}
+                >
+                  {t.containerNumber} · {money(t.landedCost)}
+                </Button>
+              ))}
+            </div>
+          )}
           {detail.isError && (
             <p role="alert" className="text-destructive">
               Could not load the linked PO; refresh the company and container selection.
