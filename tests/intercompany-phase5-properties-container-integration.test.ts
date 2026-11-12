@@ -51,7 +51,7 @@ describe("Phase 5 Properties container workflow", () => {
   });
   it("automatically selects only a unique verified INVENTORY asset account in the correct ERP company", () => {
     const routes = readFileSync("server/routes/import/intercompany-phase5.ts", "utf8");
-    expect(routes).toContain('"/receiving-options"');
+    expect(routes).toContain('lifecycle/:tradeId/receiving-options');
     expect(routes).toContain('eq(ledgerAccounts.companyId, trade.destinationCompanyId)');
     expect(routes).toContain('eq(ledgerAccounts.code, "INVENTORY")');
     expect(routes).toContain('eligible.length === 1 ? eligible[0].id : null');
@@ -68,7 +68,7 @@ describe("Phase 5 Properties container workflow", () => {
     expect(panel).toContain("<LinkedTradesEditor physicalContainerId={containerId} embedded />");
     expect(panel).toContain("<IntercompanyLifecycle physicalContainerId={containerId} embedded />");
     expect(panel).toContain("candidate.physicalContainerId === containerId");
-    expect(panel).toContain("trade.sourceCompanyId");
+    expect(panel).toContain("candidate.sourceCompanyId");
   });
   it("keeps the original financial reversal and freight allocation services intact", () => {
     const cancel = readFileSync("server/services/intercompany/phase5Cancel.ts", "utf8");
