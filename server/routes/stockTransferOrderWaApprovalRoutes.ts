@@ -76,21 +76,34 @@ function errorResponse(res: Response, e: unknown) {
  */
 function stockTransferApprovalSqlFailure(error: unknown): {
   sqlState: string | null; table: string | null; constraint: string | null;
+  dataType: string | null; column: string | null; routine: string | null;
+  position: number | null; step: string | null;
 } {
+  const step = error && typeof error === "object" &&
+    typeof (error as { stoApprovalStep?: unknown }).stoApprovalStep === "string"
+      ? String((error as { stoApprovalStep: string }).stoApprovalStep).slice(0, 80) : null;
   let next: unknown = error;
-  for (let depth = 0; depth < 4; depth++) {
+  for (let depth = 0; depth < 5; depth++) {
     if (!next || typeof next !== "object") break;
-    const item = next as { code?: unknown; table?: unknown; constraint?: unknown; cause?: unknown };
+    const item = next as {
+      code?: unknown; table?: unknown; constraint?: unknown; cause?: unknown;
+      dataType?: unknown; column?: unknown; routine?: unknown; position?: unknown;
+    };
     if (typeof item.code === "string" && /^[A-Z0-9]{5}$/.test(item.code)) {
       return {
         sqlState: item.code,
         table: typeof item.table === "string" ? item.table.slice(0, 100) : null,
         constraint: typeof item.constraint === "string" ? item.constraint.slice(0, 100) : null,
+        dataType: typeof item.dataType === "string" ? item.dataType.slice(0, 80) : null,
+        column: typeof item.column === "string" ? item.column.slice(0, 100) : null,
+        routine: typeof item.routine === "string" ? item.routine.slice(0, 100) : null,
+        position: Number.isSafeInteger(Number(item.position)) ? Number(item.position) : null,
+        step,
       };
     }
     next = item.cause;
   }
-  return { sqlState: null, table: null, constraint: null };
+  return { sqlState: null, table: null, constraint: null, dataType: null, column: null, routine: null, position: null, step };
 }
 
 const BATCH_STATE_CHANGED = "Approval batch changed during delivery";
@@ -530,8 +543,10 @@ export function registerStockTransferOrderWaApprovalRoutes(app: Express,
     } catch(e) {
       const sqlFailure=stockTransferApprovalSqlFailure(e);
       logger.error("[STO WA] Approval request failed before completion", {
-        stage, sqlState:sqlFailure.sqlState,
+        stage, step:sqlFailure.step, sqlState:sqlFailure.sqlState,
         table:sqlFailure.table, constraint:sqlFailure.constraint,
+        dataType:sqlFailure.dataType, column:sqlFailure.column,
+        routine:sqlFailure.routine, position:sqlFailure.position,
         draftCreated:draftId!==null, whatsappAccepted:accepted,
       });
       if(draftId!==null&&!accepted&&!sendUncertain) {
@@ -552,7 +567,7 @@ export function registerStockTransferOrderWaApprovalRoutes(app: Express,
         return res.status(500).json({
           code:"STO_WA_APPROVAL_DB_FAILURE",
           message:"Could not prepare the WhatsApp approval request. No message was sent. Reference: " +
-            stage + " (" + sqlFailure.sqlState + ").",
+            stage + (sqlFailure.step ? "/" + sqlFailure.step : "") + " (" + sqlFailure.sqlState + ").",
         });
       }
       return errorResponse(res,e);
