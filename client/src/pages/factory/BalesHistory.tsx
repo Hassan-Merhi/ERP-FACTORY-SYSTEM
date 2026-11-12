@@ -20,10 +20,6 @@ import {
   ShieldAlert,
   FileSpreadsheet,
   Upload,
-  Boxes,
-  Weight,
-  PackageCheck,
-  Shirt,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -54,6 +50,7 @@ import { formatLabelNum } from "@/lib/labelHtml";
 import { BaleWeightEditDialog } from "@/components/BaleWeightEditDialog";
 import { BALE_STATUS_COLORS } from "./baleshistory/pagePolicies";
 import { useBalesHistoryModel } from "./baleshistory/useBalesHistoryModel";
+import { BalesHistoryOverview } from "./baleshistory/components/BalesHistoryOverview";
 import { BalesHistoryDialog1 } from "./baleshistory/components/BalesHistoryDialog1";
 import { BalesHistoryDialog2 } from "./baleshistory/components/BalesHistoryDialog2";
 import { BalesHistoryDialog3 } from "./baleshistory/components/BalesHistoryDialog3";
@@ -66,7 +63,6 @@ export default function BalesHistory() {
   const {
     wrapAdminAction,
     AdminDialog,
-    setShowExportDialog,
     searchTerm,
     setSearchTerm,
     statusFilter,
@@ -122,18 +118,9 @@ export default function BalesHistory() {
     toggleSelectAll,
     handleReprint,
     filtered,
-    totalWeight,
-    totalBales,
     groupedFiltered,
     toggleGroup,
-    todayStr,
-    summaryDate,
-    regularQty,
-    regularKg,
-    garbageQty,
-    garbageKg,
-    wipersQty,
-    wipersKg,
+    canChangeExistingRecords,
   } = model;
 
   if (isLoading) {
@@ -151,108 +138,7 @@ export default function BalesHistory() {
 
   return (
     <div className="bales-history-modern">
-      {/* ── Inventory overview: counts still come directly from the existing model ── */}
-      <div className="bales-modern-summary-card">
-        <div className="bales-modern-heading">
-          <div className="bales-modern-heading-icon">
-            <Package className="h-5 w-5" aria-hidden="true" />
-          </div>
-          <div>
-            <h1 className="text-lg font-bold leading-tight">Bales</h1>
-            <p className="text-xs text-muted-foreground leading-tight">Stock history, status management and removal</p>
-          </div>
-        </div>
-        <div className="bales-modern-actions">
-          <div className="bales-modern-kpi">
-            <span className="bales-modern-kpi-icon">
-              <Boxes className="h-4 w-4" aria-hidden="true" />
-            </span>
-            <div>
-              <Badge
-                variant="secondary"
-                data-testid="badge-total-bales"
-                className="bales-modern-kpi-value border-0 bg-transparent px-0 py-0 text-foreground shadow-none"
-              >
-                {totalBales} bales
-              </Badge>
-              <div className="bales-modern-kpi-caption">Bales</div>
-            </div>
-          </div>
-          <div className="bales-modern-kpi">
-            <span className="bales-modern-kpi-icon weight">
-              <Weight className="h-4 w-4" aria-hidden="true" />
-            </span>
-            <div>
-              <Badge
-                variant="outline"
-                data-testid="badge-total-weight"
-                className="bales-modern-kpi-value border-0 bg-transparent px-0 py-0 text-foreground shadow-none"
-              >
-                {formatLabelNum(totalWeight)} kg
-              </Badge>
-              <div className="bales-modern-kpi-caption">Total weight</div>
-            </div>
-          </div>
-          <Button
-            size="sm"
-            variant="outline"
-            className="bales-modern-export"
-            onClick={() => setShowExportDialog(true)}
-            data-testid="button-export-stock-register"
-          >
-            <Download className="h-3.5 w-3.5 mr-1.5" />
-            Export Register
-          </Button>
-        </div>
-      </div>
-
-      {/* ── Date stats strip ── */}
-      <div className="bales-modern-date-strip">
-        <Input
-          type="date"
-          value={summaryDate}
-          onChange={(e) => setDateFilter(e.target.value || todayStr)}
-          className="h-8 w-36 text-xs"
-          data-testid="input-summary-date"
-          aria-label="Bale summary date"
-        />
-        <div className="bales-modern-stat">
-          <span className="bales-modern-stat-icon stock">
-            <PackageCheck className="h-4 w-4" aria-hidden="true" />
-          </span>
-          <span className="bales-modern-stat-label">In Stock</span>
-          <span className="bales-modern-stat-value" data-testid="text-today-qty">
-            {regularQty}
-          </span>
-          <span className="bales-modern-stat-unit" data-testid="text-today-kg">
-            {formatLabelNum(regularKg)} kg
-          </span>
-        </div>
-        <div className="bales-modern-stat">
-          <span className="bales-modern-stat-icon garbage">
-            <Trash2 className="h-4 w-4" aria-hidden="true" />
-          </span>
-          <span className="bales-modern-stat-label">Garbage</span>
-          <span className="bales-modern-stat-value" data-testid="text-today-garbage-qty">
-            {garbageQty}
-          </span>
-          <span className="bales-modern-stat-unit" data-testid="text-today-garbage-kg">
-            {formatLabelNum(garbageKg)} kg
-          </span>
-        </div>
-        <div className="bales-modern-stat">
-          <span className="bales-modern-stat-icon wipers">
-            <Shirt className="h-4 w-4" aria-hidden="true" />
-          </span>
-          <span className="bales-modern-stat-label">Wipers</span>
-          <span className="bales-modern-stat-value" data-testid="text-today-wipers-qty">
-            {wipersQty}
-          </span>
-          <span className="bales-modern-stat-unit" data-testid="text-today-wipers-kg">
-            {formatLabelNum(wipersKg)} kg
-          </span>
-        </div>
-      </div>
+      <BalesHistoryOverview model={model} />
 
       {/* ── Main table card ── */}
       <div className="bales-modern-table-card">
@@ -340,14 +226,16 @@ export default function BalesHistory() {
                 <FileSpreadsheet className="h-4 w-4 mr-2" />
                 Export Bales ({dateFilter || "Today"})
               </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => reimportFileRef.current?.click()}
-                disabled={reimportMutation.isPending || reimporting}
-                data-testid="button-reimport-bales"
-              >
-                <Upload className="h-4 w-4 mr-2" />
-                {reimportMutation.isPending ? "Reimporting..." : "Reimport Bales"}
-              </DropdownMenuItem>
+              {canChangeExistingRecords && (
+                <DropdownMenuItem
+                  onClick={() => reimportFileRef.current?.click()}
+                  disabled={reimportMutation.isPending || reimporting}
+                  data-testid="button-reimport-bales"
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  {reimportMutation.isPending ? "Reimporting..." : "Reimport Bales"}
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={() => window.open("/api/factory/bales/export-names.xlsx", "_blank")}
@@ -356,14 +244,16 @@ export default function BalesHistory() {
                 <Download className="h-4 w-4 mr-2" />
                 Export Names
               </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => namesFileRef.current?.click()}
-                disabled={bulkUpdateNamesMutation.isPending || importingNames}
-                data-testid="button-import-bale-names"
-              >
-                <Upload className="h-4 w-4 mr-2" />
-                {bulkUpdateNamesMutation.isPending ? "Importing..." : "Import Names"}
-              </DropdownMenuItem>
+              {canChangeExistingRecords && (
+                <DropdownMenuItem
+                  onClick={() => namesFileRef.current?.click()}
+                  disabled={bulkUpdateNamesMutation.isPending || importingNames}
+                  data-testid="button-import-bale-names"
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  {bulkUpdateNamesMutation.isPending ? "Importing..." : "Import Names"}
+                </DropdownMenuItem>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
           <input
@@ -403,50 +293,54 @@ export default function BalesHistory() {
           <div className="bales-modern-selection flex items-center gap-3 px-3 py-2 flex-wrap">
             <CheckSquare className="h-4 w-4 text-muted-foreground shrink-0" />
             <span className="text-sm font-medium">{selectedIds.size} selected</span>
-            <Select value={bulkStatus} onValueChange={setBulkStatus}>
-              <SelectTrigger className="w-[170px] h-7 text-xs" data-testid="select-bulk-status">
-                <SelectValue placeholder="Change status to..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="PENDING_PRESSING">Pending Pressing</SelectItem>
-                <SelectItem value="LABEL_PRINTED">Label Printed</SelectItem>
-                <SelectItem value="PRESSED">Pressed</SelectItem>
-                <SelectItem value="FINALIZED">Finalized</SelectItem>
-                <SelectItem value="IN_STOCK">In Stock</SelectItem>
-                <SelectItem value="RESERVED">Reserved</SelectItem>
-                <SelectItem value="SOLD">Sold</SelectItem>
-                <SelectItem value="REPACKED">Repacked</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button
-              size="sm"
-              disabled={!bulkStatus || bulkUpdateStatus.isPending}
-              onClick={() =>
-                wrapAdminAction(
-                  () => bulkUpdateStatus.mutate({ ids: Array.from(selectedIds), status: bulkStatus }),
-                  "Bulk Update Status"
-                )
-              }
-              data-testid="button-bulk-update"
-            >
-              {bulkUpdateStatus.isPending ? "Updating..." : "Apply"}
-            </Button>
-            {inStockSelectedCount > 0 && (
-              <Button
-                size="sm"
-                variant="destructive"
-                onClick={() => {
-                  setRemoveDialogOpen(true);
-                  setSupervisorUsername("");
-                  setSupervisorPassword("");
-                  setRemovalReason("");
-                  setAuthError("");
-                }}
-                data-testid="button-remove-bales"
-              >
-                <ShieldAlert className="h-3.5 w-3.5 mr-1.5" />
-                Remove ({inStockSelectedCount})
-              </Button>
+            {canChangeExistingRecords && (
+              <>
+                <Select value={bulkStatus} onValueChange={setBulkStatus}>
+                  <SelectTrigger className="w-[170px] h-7 text-xs" data-testid="select-bulk-status">
+                    <SelectValue placeholder="Change status to..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="PENDING_PRESSING">Pending Pressing</SelectItem>
+                    <SelectItem value="LABEL_PRINTED">Label Printed</SelectItem>
+                    <SelectItem value="PRESSED">Pressed</SelectItem>
+                    <SelectItem value="FINALIZED">Finalized</SelectItem>
+                    <SelectItem value="IN_STOCK">In Stock</SelectItem>
+                    <SelectItem value="RESERVED">Reserved</SelectItem>
+                    <SelectItem value="SOLD">Sold</SelectItem>
+                    <SelectItem value="REPACKED">Repacked</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button
+                  size="sm"
+                  disabled={!bulkStatus || bulkUpdateStatus.isPending}
+                  onClick={() =>
+                    wrapAdminAction(
+                      () => bulkUpdateStatus.mutate({ ids: Array.from(selectedIds), status: bulkStatus }),
+                      "Bulk Update Status"
+                    )
+                  }
+                  data-testid="button-bulk-update"
+                >
+                  {bulkUpdateStatus.isPending ? "Updating..." : "Apply"}
+                </Button>
+                {inStockSelectedCount > 0 && (
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={() => {
+                      setRemoveDialogOpen(true);
+                      setSupervisorUsername("");
+                      setSupervisorPassword("");
+                      setRemovalReason("");
+                      setAuthError("");
+                    }}
+                    data-testid="button-remove-bales"
+                  >
+                    <ShieldAlert className="h-3.5 w-3.5 mr-1.5" />
+                    Remove ({inStockSelectedCount})
+                  </Button>
+                )}
+              </>
             )}
             <Button
               size="sm"
@@ -641,7 +535,10 @@ export default function BalesHistory() {
                                   ) : (
                                     <div
                                       className="flex items-center gap-1 group cursor-pointer text-sm text-muted-foreground"
-                                      onClick={() => startEditName(bale.id, product?.name || bale.productName || "")}
+                                      onClick={() => {
+                                        if (canChangeExistingRecords)
+                                          startEditName(bale.id, product?.name || bale.productName || "");
+                                      }}
                                       data-testid={`text-product-name-${bale.id}`}
                                     >
                                       <span>
@@ -650,7 +547,9 @@ export default function BalesHistory() {
                                           product?.name || bale.productName || "-"
                                         )}
                                       </span>
-                                      <Pencil className="h-3 w-3 text-muted-foreground visible md:invisible md:group-hover:visible touch:visible" />
+                                      {canChangeExistingRecords && (
+                                        <Pencil className="h-3 w-3 text-muted-foreground visible md:invisible md:group-hover:visible touch:visible" />
+                                      )}
                                     </div>
                                   )}
                                 </TableCell>
@@ -661,6 +560,7 @@ export default function BalesHistory() {
                                 <TableCell className="text-right font-mono">
                                   <button
                                     className="group flex items-center gap-1 ml-auto hover:text-foreground"
+                                    disabled={!canChangeExistingRecords}
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       setWeightEditBale({
@@ -669,15 +569,18 @@ export default function BalesHistory() {
                                         weightKg: bale.weightKg,
                                       });
                                     }}
-                                    title="Correct weight"
+                                    title={canChangeExistingRecords ? "Correct weight" : undefined}
                                   >
                                     {formatLabelNum(bale.weightKg)}
-                                    <Pencil className="h-3 w-3 opacity-0 group-hover:opacity-60 shrink-0" />
+                                    {canChangeExistingRecords && (
+                                      <Pencil className="h-3 w-3 opacity-0 group-hover:opacity-60 shrink-0" />
+                                    )}
                                   </button>
                                 </TableCell>
                                 <TableCell>
                                   <Select
                                     value={bale.status}
+                                    disabled={!canChangeExistingRecords}
                                     onValueChange={(val) =>
                                       wrapAdminAction(
                                         () => updateStatus.mutate({ id: bale.id, status: val }),
@@ -728,20 +631,21 @@ export default function BalesHistory() {
                                 </TableCell>
                                 <TableCell className="text-right">
                                   <div className="flex items-center justify-end gap-1">
-                                    {(bale.status === "RESERVED_FOR_ORDER" ||
-                                      bale.status === "RESERVED" ||
-                                      bale.status === "SOLD") && (
-                                      <Button
-                                        size="icon"
-                                        variant="ghost"
-                                        onClick={() => setReturnToStockBale(row)}
-                                        title="Return bale to stock"
-                                        data-testid={`button-return-to-stock-${bale.id}`}
-                                      >
-                                        <Undo2 className="h-4 w-4 text-blue-500" />
-                                      </Button>
-                                    )}
-                                    {myAccess?.fullAccess && (
+                                    {canChangeExistingRecords &&
+                                      (bale.status === "RESERVED_FOR_ORDER" ||
+                                        bale.status === "RESERVED" ||
+                                        bale.status === "SOLD") && (
+                                        <Button
+                                          size="icon"
+                                          variant="ghost"
+                                          onClick={() => setReturnToStockBale(row)}
+                                          title="Return bale to stock"
+                                          data-testid={`button-return-to-stock-${bale.id}`}
+                                        >
+                                          <Undo2 className="h-4 w-4 text-blue-500" />
+                                        </Button>
+                                      )}
+                                    {canChangeExistingRecords && myAccess?.fullAccess && (
                                       <Button
                                         size="icon"
                                         variant="ghost"
@@ -753,15 +657,17 @@ export default function BalesHistory() {
                                         <RefreshCw className="h-4 w-4" />
                                       </Button>
                                     )}
-                                    <Button
-                                      size="icon"
-                                      variant="ghost"
-                                      onClick={() => handleReprint(row)}
-                                      data-testid={`button-reprint-${bale.id}`}
-                                    >
-                                      <Printer className="h-4 w-4" />
-                                    </Button>
-                                    {myAccess?.fullAccess && (
+                                    {canChangeExistingRecords && (
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        onClick={() => handleReprint(row)}
+                                        data-testid={`button-reprint-${bale.id}`}
+                                      >
+                                        <Printer className="h-4 w-4" />
+                                      </Button>
+                                    )}
+                                    {canChangeExistingRecords && myAccess?.fullAccess && (
                                       <Button
                                         size="icon"
                                         variant="ghost"

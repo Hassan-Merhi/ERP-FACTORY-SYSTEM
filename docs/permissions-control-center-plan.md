@@ -1,5 +1,5 @@
 # Permissions Control Center — ERP + Factory
-Status: Phases 1–8 source merged to main in shadow mode (2026-11-06). Create Only enforcement, assignment switch, frontend gating and verification added 2026-11-07 (see permissions-control-center-activation.md). Create Only assignment stays switched off; release gates other than handler-review remain blocked.
+Status: Phases 1–8 source merged to main in shadow mode (2026-11-06). Create Only enforcement, assignment switch, frontend gating and verification added 2026-11-07 (see permissions-control-center-activation.md). Create Only assignment stays switched off; release gates other than handler-review remain blocked. V2 completion work added 2026-11-07: frontend page catalog and route gate, effective permission engine with per-company activation (off), role security matrix, staging certification tooling and permission monitoring (see permissions-v2-effective-engine.md).
 Branch: `feature/permissions-control-center`
 
 ## Goal

@@ -14,6 +14,7 @@ export function TabLabel({
   onRename,
   onDelete,
   canDelete,
+  canRename = true,
 }: {
   name: string;
   active: boolean;
@@ -21,6 +22,8 @@ export function TabLabel({
   onRename: (v: string) => void;
   onDelete: () => void;
   canDelete: boolean;
+  /** False for read-only company roles: the page name cannot be edited. */
+  canRename?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(name);
@@ -52,7 +55,7 @@ export function TabLabel({
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
           onActivate();
-        } else if (event.key === "F2") {
+        } else if (event.key === "F2" && canRename) {
           // Keyboard equivalent of double-click rename.
           event.preventDefault();
           setEditing(true);
@@ -60,6 +63,7 @@ export function TabLabel({
         }
       }}
       onDoubleClick={() => {
+        if (!canRename) return;
         setEditing(true);
         setDraft(name);
       }}

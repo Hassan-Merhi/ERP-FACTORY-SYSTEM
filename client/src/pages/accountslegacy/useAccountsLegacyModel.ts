@@ -15,10 +15,12 @@ import { useForm, type SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@/lib/form-resolver";
 import { useReactToPrint } from "react-to-print";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAppMode, useModePrefix } from "@/contexts/AppModeContext";
 import { getApiRequest } from "@/lib/factoryApi";
 import { useCompany } from "@/contexts/CompanyContext";
+import { erpPageAccessQueryOptions } from "@/app/erpAccessQuery";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useDateJump } from "@/hooks/use-date-jump";
@@ -83,6 +85,8 @@ interface VoucherNavigationRow {
 export function useAccountsLegacyModel() {
   const { selectedCompany } = useCompany();
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
+  const canCreateBankAccount = recordChanges.canCreate("POST", "/api/bank-accounts");
   const { formatDisplayDate } = useDateFormat();
   const { formatAmount, formatHistoricalBaseAmount, isMultiCurrency } = useCurrencyContext();
 
@@ -91,7 +95,9 @@ export function useAccountsLegacyModel() {
   function formatAmountForAccount(amount: number, _accountType?: string): string {
     return formatHistoricalBaseAmount(amount);
   }
-  const { data: myErpPages } = useQuery<{ hiddenErpCostFields?: string[] }>({ queryKey: ["/api/my-erp-pages"] });
+  const { data: myErpPages } = useQuery<{ hiddenErpCostFields?: string[] }>({
+    ...erpPageAccessQueryOptions(selectedCompany?.id, true),
+  });
   const hideBalances = (myErpPages?.hiddenErpCostFields ?? []).includes("accounts_balances");
   const appMode = useAppMode();
   const accountsListUrl = appMode === "factory" ? "/api/factory/accounts/list" : "/api/accounts/all";
@@ -169,7 +175,10 @@ export function useAccountsLegacyModel() {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
 
   const bulkDeleteMutation = useMutation({
-    mutationFn: async (ids: number[]) => apiRequest("POST", "/api/vouchers/bulk-delete", { voucherIds: ids }),
+    mutationFn: async (ids: number[]) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
+      return apiRequest("POST", "/api/vouchers/bulk-delete", { voucherIds: ids });
+    },
     onSuccess: (_, ids) => {
       toast({ title: `Deleted ${ids.length} voucher(s)` });
       setSelectedVoucherIds(new Set());
@@ -207,6 +216,7 @@ export function useAccountsLegacyModel() {
 
   const deleteLedgerMutation = useMutation({
     mutationFn: async (id: number) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await apiRequest("DELETE", `/api/ledger-accounts/${id}`);
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -237,6 +247,7 @@ export function useAccountsLegacyModel() {
       active?: boolean;
       parentId?: number | null | undefined;
     }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const { id, ...rest } = data;
       return apiRequest("PUT", `/api/ledger-accounts/${id}`, rest);
     },
@@ -251,6 +262,7 @@ export function useAccountsLegacyModel() {
 
   const updateBankMutation = useMutation({
     mutationFn: async (data: { id: number } & Record<string, unknown>) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const { id, ...rest } = data;
       const res = await apiRequest("PUT", `/api/bank-accounts/${id}`, rest);
       if (!res.ok) {
@@ -273,6 +285,7 @@ export function useAccountsLegacyModel() {
 
   const deleteBankMutation = useMutation({
     mutationFn: async (id: number) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await apiRequest("DELETE", `/api/bank-accounts/${id}`);
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -376,6 +389,7 @@ export function useAccountsLegacyModel() {
 
   const saveWaRuleMutation = useMutation({
     mutationFn: async (rule: WaRule) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await apiRequest("PUT", `${waRuleBase}/${selectedAccountId}/whatsapp-rule`, rule);
       if (!res.ok) throw new Error(await res.text());
       return res.json();
@@ -392,6 +406,7 @@ export function useAccountsLegacyModel() {
 
   const sendWaStatementMutation = useMutation({
     mutationFn: async ({ accountId, month }: { accountId: number; month: string }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const url =
         appMode === "factory"
           ? `/api/factory/accounts/${accountId}/send-statement-whatsapp`
@@ -549,8 +564,8 @@ export function useAccountsLegacyModel() {
         debitAmount: row.debitAmount,
         creditAmount: row.creditAmount,
       }));
-    return [...posted, ...historical].sort((a, b) =>
-      a.voucherDate.localeCompare(b.voucherDate) || a.entryId - b.entryId
+    return [...posted, ...historical].sort(
+      (a, b) => a.voucherDate.localeCompare(b.voucherDate) || a.entryId - b.entryId
     );
   }, [rawTransactionData]);
 
@@ -559,8 +574,10 @@ export function useAccountsLegacyModel() {
   // reliably identify it. Passing this value as a prop avoids reading a
   // non-subscribed query-cache snapshot in AccountStatementView.
   const statementCustomerId: number | null =
-    rawTransactionData && !Array.isArray(rawTransactionData) &&
-    Number.isSafeInteger(rawTransactionData.customerId) && rawTransactionData.customerId > 0
+    rawTransactionData &&
+    !Array.isArray(rawTransactionData) &&
+    Number.isSafeInteger(rawTransactionData.customerId) &&
+    rawTransactionData.customerId > 0
       ? rawTransactionData.customerId
       : null;
 
@@ -590,16 +607,21 @@ export function useAccountsLegacyModel() {
     });
   }, [transactions, broughtForwardBalance]);
 
-  const vouchersWithBalance = useMemo(() => allVouchersWithBalance.filter((row) =>
-    !isInternalHistoricalSupplierRoutineRow({
-      companyId: row.companyId ?? selectedCompany?.id,
-      voucherId: row.voucherId,
-      voucherDate: row.voucherDate,
-      voucherNumber: row.voucherNumber,
-      voucherDescription: row.voucherDescription,
-      createdAt: row.createdAt,
-    })
-  ), [allVouchersWithBalance, selectedCompany?.id]);
+  const vouchersWithBalance = useMemo(
+    () =>
+      allVouchersWithBalance.filter(
+        (row) =>
+          !isInternalHistoricalSupplierRoutineRow({
+            companyId: row.companyId ?? selectedCompany?.id,
+            voucherId: row.voucherId,
+            voucherDate: row.voucherDate,
+            voucherNumber: row.voucherNumber,
+            voucherDescription: row.voucherDescription,
+            createdAt: row.createdAt,
+          })
+      ),
+    [allVouchersWithBalance, selectedCompany?.id]
+  );
 
   const closingBalance = useMemo(() => {
     if (allVouchersWithBalance.length > 0) {
@@ -707,6 +729,7 @@ export function useAccountsLegacyModel() {
 
   /** Opens the alter/edit dialog pre-filled from an account table row. */
   const openEditAccountDialog = (account: Account) => {
+    if (!recordChanges.allowed) return;
     setAlterSelectedAccount(account);
     const accountType = updateLedgerAccountSchema.shape.accountType.safeParse(account.accountType || account.type);
     editForm.reset({
@@ -833,6 +856,8 @@ export function useAccountsLegacyModel() {
     createBankMutation,
     saveWaRuleMutation,
     sendWaStatementMutation,
+    canChangeExistingRecords: recordChanges.allowed,
+    canCreateBankAccount,
   };
 }
 

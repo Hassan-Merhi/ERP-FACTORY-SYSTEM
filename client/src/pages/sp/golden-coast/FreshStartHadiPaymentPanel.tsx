@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { releaseDebtEnglish } from "@/i18n/finalCloseoutTranslations";
 import { apiRequest } from "@/lib/queryClient";
 import { PHASE7_READINESS, type CashAccountOption, type CompanyKey, type Phase7Readiness } from "./contracts";
@@ -50,6 +51,7 @@ interface FreshStartHadiReadiness {
 
 export function FreshStartHadiPaymentPanel({ companyKey }: { companyKey: CompanyKey }) {
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
   const queryClient = useQueryClient();
   const invalidateReadiness = useReadinessInvalidation();
   const [paymentDate, setPaymentDate] = useState(todayIso);
@@ -89,6 +91,7 @@ export function FreshStartHadiPaymentPanel({ companyKey }: { companyKey: Company
 
   const mutation = useMutation({
     mutationFn: async () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       if (!targetCompanyId || !selectedHadiAccount) {
         throw new Error(releaseDebtEnglish("Fresh Start payment routing is not ready."));
       }
@@ -253,18 +256,20 @@ export function FreshStartHadiPaymentPanel({ companyKey }: { companyKey: Company
           </div>
         </div>
 
-        <Button
-          onClick={() => mutation.mutate()}
-          disabled={!canSubmit || mutation.isPending}
-          data-testid="button-gc-fs-hadi-submit"
-        >
-          {mutation.isPending ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <HandCoins className="mr-2 h-4 w-4" />
-          )}
-          {releaseDebtEnglish("Post Fresh Start payment")}
-        </Button>
+        {recordChanges.allowed && (
+          <Button
+            onClick={() => mutation.mutate()}
+            disabled={!canSubmit || mutation.isPending}
+            data-testid="button-gc-fs-hadi-submit"
+          >
+            {mutation.isPending ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <HandCoins className="mr-2 h-4 w-4" />
+            )}
+            {releaseDebtEnglish("Post Fresh Start payment")}
+          </Button>
+        )}
       </CardContent>
     </Card>
   );

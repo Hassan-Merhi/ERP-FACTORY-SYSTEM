@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { cn } from "@/lib/utils";
 import type { InventoryLocation } from "./locationInventoryTypes";
 
@@ -108,6 +109,7 @@ export function LocationWhatsappScheduleDialog({
   canSendWithCost,
 }: LocationWhatsappScheduleDialogProps) {
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
   const [open, setOpen] = useState(false);
   const [enabled, setEnabled] = useState(false);
   const [frequency, setFrequency] = useState<ScheduleFrequency>("daily");
@@ -180,6 +182,7 @@ export function LocationWhatsappScheduleDialog({
 
   const saveMutation = useMutation({
     mutationFn: async () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const response = await apiRequest("PUT", `/api/locations/${location.id}/whatsapp-schedule`, {
         enabled,
         frequency,
@@ -532,7 +535,8 @@ export function LocationWhatsappScheduleDialog({
             </Button>
             <Button
               onClick={() => saveMutation.mutate()}
-              disabled={saveDisabled || scheduleQuery.isError}
+              disabled={saveDisabled || scheduleQuery.isError || !recordChanges.allowed}
+              title={recordChanges.reason ?? undefined}
               data-testid="button-save-location-stock-schedule"
             >
               {saveMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

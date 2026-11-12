@@ -1,4 +1,5 @@
 import type { ClientErrorLike } from "@/lib/clientError";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
@@ -72,6 +73,7 @@ const today = () => new Date().toLocaleDateString("en-CA");
 export default function FactoryEmployeeAdvancesTab() {
   const { toast } = useToast();
   const { selectedCompany } = useCompany();
+  const recordChanges = useExistingRecordChangeAccess();
   const [statusFilter, setStatusFilter] = useState<"all" | "open" | "paid">("open");
   const [empFilter, setEmpFilter] = useState<string>("all");
   const [addOpen, setAddOpen] = useState(false);
@@ -109,7 +111,10 @@ export default function FactoryEmployeeAdvancesTab() {
     refetchOnWindowFocus: false,
   });
 
-  const qKey = useMemo(() => companyQueryKey("/api/factory/employee-advances", selectedCompany?.id, statusFilter, empFilter), [selectedCompany?.id, statusFilter, empFilter]);
+  const qKey = useMemo(
+    () => companyQueryKey("/api/factory/employee-advances", selectedCompany?.id, statusFilter, empFilter),
+    [selectedCompany?.id, statusFilter, empFilter]
+  );
 
   const { data: advances = [], isLoading } = useQuery<AdvanceRecord[]>({
     queryKey: qKey,
@@ -158,13 +163,16 @@ export default function FactoryEmployeeAdvancesTab() {
       toast({ title: "Advance recorded" });
       setAddOpen(false);
       setAddForm({ employeeId: "", advanceDate: today(), amount: "", cashAccountId: "", notes: "" });
-      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employee-advances", selectedCompany?.id) });
+      queryClient.invalidateQueries({
+        queryKey: companyQueryKey("/api/factory/employee-advances", selectedCompany?.id),
+      });
     },
     onError: (e: ClientErrorLike) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
   const repayMutation = useMutation({
     mutationFn: async () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       if (!repayOpen) return;
       const res = await fetch(`/api/factory/employee-advances/${repayOpen.id}/repay`, {
         method: "POST",
@@ -187,14 +195,19 @@ export default function FactoryEmployeeAdvancesTab() {
       toast({ title: "Repayment recorded" });
       setRepayOpen(null);
       setRepayForm({ repaymentDate: today(), amount: "", cashAccountId: "", notes: "" });
-      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employee-advances", selectedCompany?.id) });
-      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employee-advance-repayments", selectedCompany?.id) });
+      queryClient.invalidateQueries({
+        queryKey: companyQueryKey("/api/factory/employee-advances", selectedCompany?.id),
+      });
+      queryClient.invalidateQueries({
+        queryKey: companyQueryKey("/api/factory/employee-advance-repayments", selectedCompany?.id),
+      });
     },
     onError: (e: ClientErrorLike) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await fetch(`/api/factory/employee-advances/${id}`, { method: "DELETE", credentials: "include" });
       if (!res.ok) {
         const e = await res.json();
@@ -204,7 +217,9 @@ export default function FactoryEmployeeAdvancesTab() {
     onSuccess: () => {
       toast({ title: "Advance deleted" });
       setDeleteConfirm(null);
-      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employee-advances", selectedCompany?.id) });
+      queryClient.invalidateQueries({
+        queryKey: companyQueryKey("/api/factory/employee-advances", selectedCompany?.id),
+      });
     },
     onError: (e: ClientErrorLike) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
@@ -251,9 +266,11 @@ export default function FactoryEmployeeAdvancesTab() {
             <span className="font-semibold font-mono text-amber-700 dark:text-amber-300">${fmt(totalOutstanding)}</span>
           </div>
         )}
-        <Button onClick={() => setAddOpen(true)} className="ml-auto" data-testid="button-add-advance">
-          <Plus className="h-4 w-4 mr-2" /> Add Advance
-        </Button>
+        {recordChanges.canCreate("POST", "/api/factory/employee-advances") && (
+          <Button onClick={() => setAddOpen(true)} className="ml-auto" data-testid="button-add-advance">
+            <Plus className="h-4 w-4 mr-2" /> Add Advance
+          </Button>
+        )}
       </div>
 
       {/* Table */}
@@ -342,34 +359,36 @@ export default function FactoryEmployeeAdvancesTab() {
                     {adv.notes || "—"}
                   </TableCell>
                   <TableCell className="py-3">
-                    <div className="flex gap-1 justify-end">
-                      {!adv.fullyPaid && (
+                    {recordChanges.allowed && (
+                      <div className="flex gap-1 justify-end">
+                        {!adv.fullyPaid && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setRepayOpen(adv);
+                              setRepayForm({
+                                repaymentDate: today(),
+                                amount: adv.remainingBalance,
+                                cashAccountId: "",
+                                notes: "",
+                              });
+                            }}
+                            data-testid={`button-repay-${adv.id}`}
+                          >
+                            <RotateCcw className="h-3 w-3 mr-1" /> Repay
+                          </Button>
+                        )}
                         <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            setRepayOpen(adv);
-                            setRepayForm({
-                              repaymentDate: today(),
-                              amount: adv.remainingBalance,
-                              cashAccountId: "",
-                              notes: "",
-                            });
-                          }}
-                          data-testid={`button-repay-${adv.id}`}
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => setDeleteConfirm(adv)}
+                          data-testid={`button-delete-advance-${adv.id}`}
                         >
-                          <RotateCcw className="h-3 w-3 mr-1" /> Repay
+                          <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
-                      )}
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => setDeleteConfirm(adv)}
-                        data-testid={`button-delete-advance-${adv.id}`}
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </div>
+                      </div>
+                    )}
                   </TableCell>
                 </TableRow>
               ))

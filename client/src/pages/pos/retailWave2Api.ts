@@ -15,6 +15,14 @@ import type {
   RetailStockCountVarianceReport,
 } from "./retailWave2Types";
 import type { RetailSale } from "./retailPosTypes";
+import type { ExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
+
+/** The caller's useExistingRecordChangeAccess(); when given and denied, the change is never sent. */
+type WriteAccess = Pick<ExistingRecordChangeAccess, "allowed" | "reason">;
+
+function ensureWriteAllowed(access?: WriteAccess): void {
+  if (access && !access.allowed) throw new Error(access.reason ?? "");
+}
 
 export interface CartRequestLine {
   variantId: number;
@@ -71,7 +79,11 @@ export async function fetchRetailSellingSettings(): Promise<RetailSellingSetting
   return json<RetailSellingSettings>(response);
 }
 
-export async function saveRetailSellingSettings(patch: Partial<RetailSellingSettings>): Promise<RetailSellingSettings> {
+export async function saveRetailSellingSettings(
+  patch: Partial<RetailSellingSettings>,
+  access?: WriteAccess
+): Promise<RetailSellingSettings> {
+  ensureWriteAllowed(access);
   const response = await apiRequest("PUT", "/api/pos/retail/settings", patch);
   return json<RetailSellingSettings>(response);
 }
@@ -135,7 +147,8 @@ export async function createRetailPromotion(input: {
   return json<RetailPromotion>(response);
 }
 
-export async function deactivateRetailPromotion(id: number): Promise<RetailPromotion> {
+export async function deactivateRetailPromotion(id: number, access?: WriteAccess): Promise<RetailPromotion> {
+  ensureWriteAllowed(access);
   const response = await apiRequest("DELETE", `/api/retail/promotions/${id}`);
   return json<RetailPromotion>(response);
 }
@@ -172,8 +185,10 @@ export async function fetchRetailStockCountSession(id: number): Promise<RetailSt
 
 export async function scanRetailStockCount(
   id: number,
-  input: { barcode?: string; variantId?: number; quantity?: number; mode?: "increment" | "set"; note?: string | null }
+  input: { barcode?: string; variantId?: number; quantity?: number; mode?: "increment" | "set"; note?: string | null },
+  access?: WriteAccess
 ): Promise<{ session: RetailStockCountSession }> {
+  ensureWriteAllowed(access);
   const response = await apiRequest("POST", `/api/pos/retail/stock-counts/${id}/scan`, input);
   return json<{ session: RetailStockCountSession }>(response);
 }
@@ -181,8 +196,10 @@ export async function scanRetailStockCount(
 export async function updateRetailStockCountLine(
   sessionId: number,
   lineId: number,
-  patch: { countedQuantity?: number; recountRequired?: boolean; notes?: string | null }
+  patch: { countedQuantity?: number; recountRequired?: boolean; notes?: string | null },
+  access?: WriteAccess
 ): Promise<RetailStockCountSession> {
+  ensureWriteAllowed(access);
   const response = await apiRequest("PATCH", `/api/pos/retail/stock-counts/${sessionId}/lines/${lineId}`, patch);
   return json<RetailStockCountSession>(response);
 }
@@ -190,8 +207,10 @@ export async function updateRetailStockCountLine(
 export async function transitionRetailStockCount(
   id: number,
   action: "start" | "review" | "recount" | "finalize" | "cancel",
-  body: Record<string, unknown> = {}
+  body: Record<string, unknown> = {},
+  access?: WriteAccess
 ): Promise<{ session: RetailStockCountSession }> {
+  ensureWriteAllowed(access);
   const response = await apiRequest("POST", `/api/pos/retail/stock-counts/${id}/${action}`, body);
   return json<{ session: RetailStockCountSession }>(response);
 }

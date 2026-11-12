@@ -5,6 +5,7 @@
  * discovered from compiler errors rather than guessed.
  */
 import type { useAdvancesModel } from "../advances/useAdvancesModel";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 
 type AdvancesModel = ReturnType<typeof useAdvancesModel>;
 import { Loader2 } from "lucide-react";
@@ -34,6 +35,7 @@ export function ReconcileBalancesDialog({
   reconcilePreviewLoading: AdvancesModel["reconcilePreviewLoading"];
   setReconcileOpen: AdvancesModel["setReconcileOpen"];
 }) {
+  const recordChanges = useExistingRecordChangeAccess();
   return (
     <Dialog open={reconcileOpen} onOpenChange={setReconcileOpen}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -122,26 +124,28 @@ export function ReconcileBalancesDialog({
           <Button variant="outline" onClick={() => setReconcileOpen(false)} data-testid="button-cancel-reconcile">
             Cancel
           </Button>
-          <Button
-            onClick={() => reconcileMutation.mutate()}
-            disabled={
-              reconcileMutation.isPending ||
-              reconcilePreviewLoading ||
-              reconcilePreview?.changes.filter((c) => c.changed).length === 0
-            }
-            data-testid="button-confirm-reconcile"
-          >
-            {reconcileMutation.isPending ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Reconciling…
-              </>
-            ) : reconcilePreview?.changes.filter((c) => c.changed).length === 0 ? (
-              "Nothing to Change"
-            ) : (
-              `Confirm — Update ${reconcilePreview?.changes.filter((c) => c.changed).length ?? "…"} Record(s)`
-            )}
-          </Button>
+          {recordChanges.allowed && (
+            <Button
+              onClick={() => reconcileMutation.mutate()}
+              disabled={
+                reconcileMutation.isPending ||
+                reconcilePreviewLoading ||
+                reconcilePreview?.changes.filter((c) => c.changed).length === 0
+              }
+              data-testid="button-confirm-reconcile"
+            >
+              {reconcileMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Reconciling…
+                </>
+              ) : reconcilePreview?.changes.filter((c) => c.changed).length === 0 ? (
+                "Nothing to Change"
+              ) : (
+                `Confirm — Update ${reconcilePreview?.changes.filter((c) => c.changed).length ?? "…"} Record(s)`
+              )}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

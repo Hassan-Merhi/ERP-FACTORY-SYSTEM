@@ -16,10 +16,12 @@ export function CategoryGroup({
   title,
   accounts,
   accentClass,
+  onFxClick,
 }: {
   title: string;
   accounts: AccountItem[];
   accentClass: string;
+  onFxClick?: (side: "gain" | "loss") => void;
 }) {
   const [open, setOpen] = useState(false);
   const total = accounts.reduce((s, a) => s + a.value, 0);
@@ -72,7 +74,7 @@ export function CategoryGroup({
       {open && (
         <div className="divide-y divide-border">
           {multiPrefixes.map(([prefix, accs], gi) => (
-            <PrefixGroup key={prefix} prefix={prefix} accounts={accs} accentClass={accentClass} startIndex={gi * 100} />
+            <PrefixGroup key={prefix} prefix={prefix} accounts={accs} accentClass={accentClass} startIndex={gi * 100} onFxClick={onFxClick} />
           ))}
           {plainAccounts.map((acc, i) => (
             <SupplierRow
@@ -80,6 +82,7 @@ export function CategoryGroup({
               acc={acc}
               accentClass={accentClass}
               index={i}
+              onFxClick={onFxClick}
             />
           ))}
         </div>

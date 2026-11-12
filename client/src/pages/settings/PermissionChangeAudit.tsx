@@ -10,7 +10,7 @@ import { permissionAuditDiff, type AuditRule } from "./permissionAuditDiff";
 type AuditRecord = {
   revision: string | number;
   actorId: string;
-  subjectType: "role" | "user";
+  subjectType: "role" | "user" | "policy_mode";
   subjectKey: string;
   beforeRules: AuditRule[];
   afterRules: AuditRule[];

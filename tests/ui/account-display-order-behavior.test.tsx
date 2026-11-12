@@ -11,9 +11,13 @@ import { queryClient } from "@/lib/queryClient";
 import { useAccountDisplayOrder, type DisplayNode } from "@/hooks/useAccountDisplayOrder";
 import { installFakeApi, respond, type FakeApi } from "./fakeApi";
 
-const harness = vi.hoisted(() => ({ mode: "erp", toast: vi.fn() }));
+const harness = vi.hoisted(() => ({ mode: "erp", toast: vi.fn(), companyRole: null as string | null }));
 
-vi.mock("@/contexts/CompanyContext", () => ({ useCompany: () => ({ selectedCompany: { id: 4 } }) }));
+vi.mock("@/contexts/CompanyContext", () => ({
+  // No company role by default: the shared change-access helper leaves controls as they are.
+  useOptionalCompany: () => (harness.companyRole ? { selectedCompany: { id: 4, role: harness.companyRole } } : null),
+  useCompany: () => ({ selectedCompany: { id: 4 } }),
+}));
 vi.mock("@/contexts/AppModeContext", () => ({ useAppMode: () => harness.mode }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: harness.toast }) }));
 
@@ -67,6 +71,7 @@ async function renderArranger() {
 beforeEach(() => {
   harness.mode = "erp";
   harness.toast.mockReset();
+  harness.companyRole = null;
   queryClient.clear();
 });
 
@@ -84,6 +89,22 @@ describe("useAccountDisplayOrder", () => {
       unmount();
     }
   });
+
+  it.each(["View Only", "Create Only"])(
+    "never saves the shared layout for an Admin whose company role is %s",
+    async (companyRole) => {
+      harness.companyRole = companyRole;
+      serve("Admin");
+      const { result } = await renderArranger();
+
+      expect(result.current.canArrange).toBe(false);
+      act(() => result.current.swap("l:cash", "l:bank"));
+      act(() => result.current.move("l:cash", "g:income"));
+
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(api.callsTo("PUT", "/api/accounts/display-layout")).toHaveLength(0);
+    }
+  );
 
   it("reads the Factory layout in Factory mode", async () => {
     harness.mode = "factory";

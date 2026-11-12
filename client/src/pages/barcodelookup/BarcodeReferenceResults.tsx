@@ -63,11 +63,13 @@ export function BarcodeReferenceResults({ model }: { model: BarcodeLookupModel }
       <section className="overflow-hidden rounded-2xl border border-indigo-200/80 bg-white shadow-[0_12px_38px_-24px_rgba(30,64,175,0.35)] dark:border-indigo-400/25 dark:bg-[#111b31] dark:shadow-[0_16px_44px_-25px_rgba(79,70,229,0.45)]">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-indigo-100 bg-linear-to-r from-indigo-50 via-blue-50/65 to-white px-4 py-4 dark:border-indigo-300/20 dark:from-[#202b52] dark:via-[#172447] dark:to-[#111b31] sm:px-5">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300"><Layers className="h-5 w-5" aria-hidden="true" /></span>
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300">
+              <Layers className="h-5 w-5" aria-hidden="true" />
+            </span>
             <h3 className="text-base font-bold tracking-tight sm:text-lg">Bale Reference Details</h3>
             {baleInfo && <BaleStatusBadge status={baleInfo.status} />}
           </div>
-          {model.isAdmin && (
+          {model.isAdmin && model.canChangeExistingRecords && (
             <div className="flex flex-wrap items-center gap-2">
               {(baleInfo?.status === "DELETED" || baleInfo?.status === "REMOVED") && (
                 <Button
@@ -85,7 +87,13 @@ export function BarcodeReferenceResults({ model }: { model: BarcodeLookupModel }
               {(baleInfo?.status === "RESERVED_FOR_ORDER" ||
                 baleInfo?.status === "RESERVED" ||
                 baleInfo?.status === "SOLD") && (
-                <Button size="sm" variant="outline" className="h-9 rounded-lg border-amber-400/60 bg-amber-50/70 font-medium hover:bg-amber-100 dark:border-amber-500/50 dark:bg-amber-500/10 dark:hover:bg-amber-500/20" onClick={openSwap} data-testid="button-swap-bale">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-9 rounded-lg border-amber-400/60 bg-amber-50/70 font-medium hover:bg-amber-100 dark:border-amber-500/50 dark:bg-amber-500/10 dark:hover:bg-amber-500/20"
+                  onClick={openSwap}
+                  data-testid="button-swap-bale"
+                >
                   <ArrowLeftRight className="h-3.5 w-3.5 mr-1 text-amber-500" />
                   Swap Bale
                 </Button>
@@ -102,7 +110,13 @@ export function BarcodeReferenceResults({ model }: { model: BarcodeLookupModel }
                   Return to Stock
                 </Button>
               )}
-              <Button size="sm" variant="outline" className="h-9 rounded-lg border-slate-300 bg-white/70 font-medium dark:border-slate-500/50 dark:bg-slate-900/50" onClick={openProductChange} data-testid="button-change-product">
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-9 rounded-lg border-slate-300 bg-white/70 font-medium dark:border-slate-500/50 dark:bg-slate-900/50"
+                onClick={openProductChange}
+                data-testid="button-change-product"
+              >
                 <Pencil className="h-3.5 w-3.5 mr-1" />
                 Change Product
               </Button>
@@ -123,14 +137,24 @@ export function BarcodeReferenceResults({ model }: { model: BarcodeLookupModel }
         <div className="space-y-4 p-3 sm:p-5">
           <div className="grid grid-cols-2 gap-4 rounded-xl border border-slate-200/80 bg-slate-50/70 p-4 shadow-inner shadow-slate-100 dark:border-slate-600/30 dark:bg-slate-900/60 dark:shadow-none lg:grid-cols-4 lg:gap-5 lg:p-5">
             <div>
-              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.09em] text-slate-500 dark:text-slate-400">Reference Number</p>
-              <p className="break-all font-mono text-lg font-extrabold tracking-tight text-slate-900 dark:text-slate-50 sm:text-xl" data-testid="text-reference-number">
+              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.09em] text-slate-500 dark:text-slate-400">
+                Reference Number
+              </p>
+              <p
+                className="break-all font-mono text-lg font-extrabold tracking-tight text-slate-900 dark:text-slate-50 sm:text-xl"
+                data-testid="text-reference-number"
+              >
                 {labelPrint.referenceNumber}
               </p>
             </div>
             <div>
-              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.09em] text-slate-500 dark:text-slate-400">Article Code</p>
-              <p className="break-all font-mono text-base font-bold text-slate-900 dark:text-slate-50" data-testid="text-ref-article-code">
+              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.09em] text-slate-500 dark:text-slate-400">
+                Article Code
+              </p>
+              <p
+                className="break-all font-mono text-base font-bold text-slate-900 dark:text-slate-50"
+                data-testid="text-ref-article-code"
+              >
                 {labelPrint.articleCode || "—"}
               </p>
               <p
@@ -142,8 +166,13 @@ export function BarcodeReferenceResults({ model }: { model: BarcodeLookupModel }
               </p>
             </div>
             <div>
-              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.09em] text-slate-500 dark:text-slate-400">Product Name</p>
-              <p className="font-bold leading-snug text-slate-900 dark:text-slate-50" data-testid="text-bale-product-name">
+              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.09em] text-slate-500 dark:text-slate-400">
+                Product Name
+              </p>
+              <p
+                className="font-bold leading-snug text-slate-900 dark:text-slate-50"
+                data-testid="text-bale-product-name"
+              >
                 {baleInfo?.productName || result.product?.name || "—"}
               </p>
               <p
@@ -155,14 +184,21 @@ export function BarcodeReferenceResults({ model }: { model: BarcodeLookupModel }
               </p>
             </div>
             <div>
-              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.09em] text-slate-500 dark:text-slate-400">Pieces</p>
-              <p className="font-mono text-xl font-bold text-slate-900 dark:text-slate-50" data-testid="text-ref-pieces">
+              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.09em] text-slate-500 dark:text-slate-400">
+                Pieces
+              </p>
+              <p
+                className="font-mono text-xl font-bold text-slate-900 dark:text-slate-50"
+                data-testid="text-ref-pieces"
+              >
                 {labelPrint.pieces ?? 1}
               </p>
             </div>
             {baleInfo?.workerName && (
               <div>
-                <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.09em] text-slate-500 dark:text-slate-400">Worker</p>
+                <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.09em] text-slate-500 dark:text-slate-400">
+                  Worker
+                </p>
                 <p className="flex items-center gap-1 font-semibold" data-testid="text-bale-worker-name">
                   <User className="h-3.5 w-3.5 text-muted-foreground" />
                   {baleInfo.workerName}
@@ -176,7 +212,7 @@ export function BarcodeReferenceResults({ model }: { model: BarcodeLookupModel }
               <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.09em] text-slate-500 dark:text-slate-400">
                 {baleInfo ? "Actual Weight" : "Approx. Weight"}
               </p>
-              {baleInfo ? (
+              {baleInfo && model.canChangeExistingRecords ? (
                 <button
                   className="group flex items-center gap-2 rounded-md text-left transition-colors hover:text-blue-600 focus-visible:outline-2 focus-visible:outline-blue-500 dark:hover:text-blue-300"
                   onClick={() =>
@@ -188,16 +224,22 @@ export function BarcodeReferenceResults({ model }: { model: BarcodeLookupModel }
                   }
                   title="Correct weight"
                 >
-                  <span className="font-mono text-xl font-extrabold tracking-tight">{model.smartNum(baleInfo.weightKg)} KG</span>
+                  <span className="font-mono text-xl font-extrabold tracking-tight">
+                    {model.smartNum(baleInfo.weightKg)} KG
+                  </span>
                   <Pencil className="h-3.5 w-3.5 opacity-0 group-hover:opacity-60 shrink-0" />
                 </button>
               ) : (
-                <span className="font-mono text-xl font-extrabold tracking-tight">{model.smartNum(labelPrint.approxWeightKg)} KG</span>
+                <span className="font-mono text-xl font-extrabold tracking-tight">
+                  {model.smartNum(baleInfo ? baleInfo.weightKg : labelPrint.approxWeightKg)} KG
+                </span>
               )}
             </div>
             {baleInfo?.grade && (
               <div>
-                <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.09em] text-slate-500 dark:text-slate-400">Grade</p>
+                <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.09em] text-slate-500 dark:text-slate-400">
+                  Grade
+                </p>
                 <p className="font-semibold">{baleInfo.grade}</p>
               </div>
             )}
@@ -212,7 +254,7 @@ export function BarcodeReferenceResults({ model }: { model: BarcodeLookupModel }
                 <CheckCircle2 className="h-4 w-4 text-green-500" />
                 Scanned {model.formatDateOnly(labelPrint.scannedAt)}
               </div>
-            ) : (
+            ) : model.canChangeExistingRecords ? (
               <div className="ml-auto">
                 <Button
                   size="sm"
@@ -225,7 +267,7 @@ export function BarcodeReferenceResults({ model }: { model: BarcodeLookupModel }
                   {model.markScanned.isPending ? "Scanning..." : "Mark as Scanned"}
                 </Button>
               </div>
-            )}
+            ) : null}
           </div>
 
           {baleInfo && (

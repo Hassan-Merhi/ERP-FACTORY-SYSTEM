@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { QueryClient } from "@tanstack/react-query";
 
 import {
   ERP_ADMIN_ONLY_ROUTES,
@@ -53,7 +54,9 @@ describe("ERP role and navigation policy", () => {
     expect(isErpNavigationItemVisible({ role: "Create Only", path: "/financial-overview" })).toBe(false);
     expect(isErpRouteRoleAllowed("/transaction-journal", "ERP Tester")).toBe(false);
     expect(isErpRouteRoleAllowed("/my-settings", "ERP Tester")).toBe(false);
-    expect(isErpNavigationItemVisible({ role: "POS", path: "/pos-item-replacement", access: ordinary.access })).toBe(false);
+    expect(isErpNavigationItemVisible({ role: "POS", path: "/pos-item-replacement", access: ordinary.access })).toBe(
+      false
+    );
     expect(isErpNavigationItemVisible({ role: "POS", path: "/pos" })).toBe(true);
     expect(isErpNavigationItemVisible({ role: "POS", path: "/pos-import" })).toBe(false);
     expect(isErpNavigationItemVisible({ role: "POS", path: "/pos-import", posExcelImportEnabled: true })).toBe(true);
@@ -62,10 +65,36 @@ describe("ERP role and navigation policy", () => {
   it("keeps retail menu exclusions and company feature grants", () => {
     expect(ERP_RETAIL_HIDDEN_ROUTES.has("/stock")).toBe(true);
     expect(isErpNavigationItemVisible({ role: "Admin", companyType: "retail", path: "/stock" })).toBe(false);
-    expect(isErpNavigationItemVisible({ role: "Normal User", companyType: "erp", path: "/item-market-analysis", access: { fullAccess: false, pageKeys: ["sales_report"] } })).toBe(true);
-    expect(isErpNavigationItemVisible({ role: "Normal User", companyType: "factory", path: "/item-market-analysis", access: { fullAccess: false, pageKeys: ["sales_report"] } })).toBe(false);
-    expect(isErpNavigationItemVisible({ role: "Normal User", path: "/inventory", access: { fullAccess: false, pageKeys: ["containers"] } })).toBe(true);
-    expect(isErpNavigationItemVisible({ role: "Normal User", path: "/inventory", access: { fullAccess: false, pageKeys: [] } })).toBe(false);
+    expect(
+      isErpNavigationItemVisible({
+        role: "Normal User",
+        companyType: "erp",
+        path: "/item-market-analysis",
+        access: { fullAccess: false, pageKeys: ["sales_report"] },
+      })
+    ).toBe(true);
+    expect(
+      isErpNavigationItemVisible({
+        role: "Normal User",
+        companyType: "factory",
+        path: "/item-market-analysis",
+        access: { fullAccess: false, pageKeys: ["sales_report"] },
+      })
+    ).toBe(false);
+    expect(
+      isErpNavigationItemVisible({
+        role: "Normal User",
+        path: "/inventory",
+        access: { fullAccess: false, pageKeys: ["containers"] },
+      })
+    ).toBe(true);
+    expect(
+      isErpNavigationItemVisible({
+        role: "Normal User",
+        path: "/inventory",
+        access: { fullAccess: false, pageKeys: [] },
+      })
+    ).toBe(false);
   });
 
   it("builds mobile destinations only from registered desktop ERP navigation metadata", () => {
@@ -87,5 +116,18 @@ describe("ERP role and navigation policy", () => {
     expect(erpPageAccessQueryOptions(12, true).enabled).toBe(true);
     expect(erpPageAccessQueryOptions(undefined, true).enabled).toBe(false);
     expect(erpPageAccessQueryOptions(12, false).enabled).toBe(false);
+  });
+  it("isolates page grants and hidden-cost settings between companies", () => {
+    const client = new QueryClient();
+    const alphaKey = erpPageAccessQueryOptions(12, true).queryKey;
+    const betaKey = erpPageAccessQueryOptions(13, true).queryKey;
+    const alpha = { fullAccess: false, pageKeys: ["accounts"], hiddenErpCostFields: ["daybook_amounts"] };
+    const beta = { fullAccess: false, pageKeys: ["stock_items"], hiddenErpCostFields: ["stock_rates"] };
+    client.setQueryData(alphaKey, alpha);
+    client.setQueryData(betaKey, beta);
+    expect(client.getQueryData(alphaKey)).toEqual(alpha);
+    expect(client.getQueryData(betaKey)).toEqual(beta);
+    expect(client.getQueryData(["/api/my-erp-pages"])).toBeUndefined();
+    client.clear();
   });
 });

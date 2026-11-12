@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { SearchField } from "@/components/ui/search-field";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useCompany } from "@/contexts/CompanyContext";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { money } from "./retailPosTypes";
@@ -27,6 +28,7 @@ export function RetailCustomerPicker({
 }) {
   const { toast } = useToast();
   const { selectedCompany } = useCompany();
+  const canCreateCustomer = useExistingRecordChangeAccess().canCreate("POST", "/api/pos/retail/customers");
   const customerPickerId = useId();
   const [open, setOpen] = useState(false);
   const [term, setTerm] = useState("");
@@ -205,7 +207,7 @@ export function RetailCustomerPicker({
               </div>
             )}
           </div>
-          {creating ? (
+          {!canCreateCustomer ? null : creating ? (
             <div className="space-y-2 rounded-sm border bg-muted/20 p-2">
               <div>
                 <Label htmlFor="retail-new-customer-name">Customer name</Label>

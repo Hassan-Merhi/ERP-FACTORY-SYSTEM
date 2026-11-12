@@ -5,6 +5,7 @@ import { poImportDatabaseScopeContinuityBoundary } from "../middleware/poImportD
 import { tenantCompanyParamBoundary, tenantIsolationBoundary } from "../middleware/tenantIsolationBoundary";
 import { enforcePrivilegedMaintenanceScope } from "../middleware/privilegedMaintenanceScope";
 import { browserMutationFailClosedBoundary } from "../security/browserMutationBoundary";
+import { permissionsV2Enforcement } from "../middleware/permissionsV2Enforcement";
 
 /**
  * Installs the canonical tenant and mutation boundaries (security headers are
@@ -22,6 +23,9 @@ export function registerTenantIsolationBoundary(app: Express): void {
   app.use(auditRequestContextMiddleware);
   app.use(browserMutationFailClosedBoundary);
   app.use(tenantIsolationBoundary);
+  // Deny-only V2 matrix for companies an administrator has activated; a no-op
+  // until the operator sets PERMISSIONS_V2_ENFORCEMENT=enabled.
+  app.use(permissionsV2Enforcement);
   app.use(enforcePrivilegedMaintenanceScope);
   app.use("/api/po-import/parse", poImportDatabaseScopeContinuityBoundary);
   app.param("companyId", tenantCompanyParamBoundary);

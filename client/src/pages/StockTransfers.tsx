@@ -14,6 +14,7 @@ import { ArrowRight, ExternalLink, Pencil, Save, X, ArrowLeftRight, Package, Dol
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { PageHeader } from "@/components/PageHeader";
 import { ErpListFilters, ErpListTable, ErpField, ErpFormActions, ErpPendingButton, useErpDateFormat } from "@/erp-core";
 import { erpCompanyDataKey, erpRequestUrl, invalidateErpDataFamilies } from "@/erp-core/erpData";
@@ -56,6 +57,7 @@ export default function StockTransfers({ hideVoucherNotes = false }: StockTransf
   const { formatShortDate: formatDate } = useErpDateFormat();
   const { toast } = useToast();
   const { selectedCompany } = useCompany();
+  const recordChanges = useExistingRecordChangeAccess();
 
   const {
     filters: { period, search },
@@ -220,7 +222,11 @@ export default function StockTransfers({ hideVoucherNotes = false }: StockTransf
           {/* Desktop table */}
           <div className="hidden md:block phone-land:hidden border rounded-xl overflow-hidden">
             <div className="table-responsive">
-              <ErpListTable pageKey="stock-transfers" companyId={selectedCompany?.id} scrollLabel="Stock transfer history">
+              <ErpListTable
+                pageKey="stock-transfers"
+                companyId={selectedCompany?.id}
+                scrollLabel="Stock transfer history"
+              >
                 <TableHeader>
                   <TableRow className="bg-muted/40 hover:bg-muted/40">
                     {!hideVoucherNotes && <TableHead className="text-xs whitespace-nowrap">Voucher</TableHead>}
@@ -299,15 +305,17 @@ export default function StockTransfers({ hideVoucherNotes = false }: StockTransf
                       )}
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            title="Edit notes"
-                            onClick={() => startEdit(t)}
-                            data-testid={`button-edit-${t.transferId}`}
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
+                          {recordChanges.allowed && (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              title="Edit notes"
+                              onClick={() => startEdit(t)}
+                              data-testid={`button-edit-${t.transferId}`}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
                           <Button
                             size="icon"
                             variant="ghost"
@@ -373,15 +381,17 @@ export default function StockTransfers({ hideVoucherNotes = false }: StockTransf
                       {!hideVoucherNotes && t.notes && <span className="ml-1 italic">{t.notes}</span>}
                     </div>
                     <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        title="Edit notes"
-                        onClick={() => startEdit(t)}
-                        data-testid={`button-edit-mobile-${t.transferId}`}
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
+                      {recordChanges.allowed && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          title="Edit notes"
+                          onClick={() => startEdit(t)}
+                          data-testid={`button-edit-mobile-${t.transferId}`}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
                       <Button
                         size="icon"
                         variant="ghost"
@@ -397,15 +407,17 @@ export default function StockTransfers({ hideVoucherNotes = false }: StockTransf
                 {(t.stockItemNames ?? []).length === 0 && (hideVoucherNotes || !t.notes) && (
                   <div className="mt-2 flex justify-end" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center gap-1">
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        title="Edit notes"
-                        onClick={() => startEdit(t)}
-                        data-testid={`button-edit-mobile-${t.transferId}`}
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
+                      {recordChanges.allowed && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          title="Edit notes"
+                          onClick={() => startEdit(t)}
+                          data-testid={`button-edit-mobile-${t.transferId}`}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
                       <Button
                         size="icon"
                         variant="ghost"

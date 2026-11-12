@@ -120,11 +120,13 @@ function FullConnectivityProvider({ children }: Props) {
       const { getQueue } = await import("@/lib/offlineQueue");
       const { getVerifiedOfflineReadScope } = await import("@/lib/offline/offlineReadCache");
       const { listOfflineOperations } = await import("@/lib/offline/durableOutbox");
+      const { countBrowserOperations } = await import("@/lib/offline/browserOutbox");
       const actor = getVerifiedOfflineReadScope();
-      const [legacyIdbCount, conflicts, durable] = await Promise.all([
+      const [legacyIdbCount, conflicts, durable, browser] = await Promise.all([
         db.syncQueue.count(),
         getConflictCount(),
         actor ? listOfflineOperations(actor) : Promise.resolve([]),
+        countBrowserOperations(actor),
       ]);
       const currentActor = getVerifiedOfflineReadScope();
       // Discard stale async counts if a company switch or logout occurred.
@@ -140,9 +142,10 @@ function FullConnectivityProvider({ children }: Props) {
         // Legacy records must NEVER appear as "pending sync": only the vetted
         // actor-scoped outbox is auto-replayable. Keep the old count visible as
         // blocked for supervised recovery, without exposing record content.
-        setPendingCount(pending);
-        setFailedCount(review + blockedLegacy);
-        setConflictCount(conflicts + owned.filter((item) => item.state === "conflict").length);
+        const laptop = sameScope ? browser : { savedLocally: 0, pendingSync: 0, failed: 0, conflicts: 0 };
+        setPendingCount(pending + laptop.savedLocally + laptop.pendingSync);
+        setFailedCount(review + blockedLegacy + laptop.failed);
+        setConflictCount(conflicts + owned.filter((item) => item.state === "conflict").length + laptop.conflicts);
       }
     } catch {
       // Offline queue counts are advisory and must never block the app shell.
@@ -168,6 +171,7 @@ function FullConnectivityProvider({ children }: Props) {
       const changed = onlineRef.current !== alive;
       onlineRef.current = alive;
       setIsOnline(alive);
+      void import("@/lib/offline/connectivityState").then(({ setKnownOffline }) => setKnownOffline(!alive));
       if (!changed) return;
 
       if (alive) {
@@ -286,8 +290,14 @@ function FullConnectivityProvider({ children }: Props) {
       }
       void refreshCounts();
     };
+    // Records saved on, or delivered from, this laptop change the counters.
+    const browserChanged = () => void refreshCounts();
     window.addEventListener("erp:sync", handler);
-    return () => window.removeEventListener("erp:sync", handler);
+    window.addEventListener("erp:browser-sync-changed", browserChanged);
+    return () => {
+      window.removeEventListener("erp:sync", handler);
+      window.removeEventListener("erp:browser-sync-changed", browserChanged);
+    };
   }, [refreshCounts]);
 
   const status: ConnectivityStatus = !isOnline ? "offline" : isSyncing ? "syncing" : "online";

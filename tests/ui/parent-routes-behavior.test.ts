@@ -137,6 +137,12 @@ describe("isFactoryTopLevelPath", () => {
     expect(isFactoryTopLevelPath("/factory/others?tab=product-comparison")).toBe(true);
   });
 
+  it("treats the Others comparison hub as top level, so Escape stays on it", () => {
+    expect(isFactoryTopLevelPath("/factory/others")).toBe(true);
+    expect(isFactoryTopLevelPath("/factory/others?tab=product-comparison")).toBe(true);
+    expect(getParentRoute("/factory/others")).toBeNull();
+  });
+
   it("does not treat detail pages or ERP pages as Factory top level", () => {
     expect(isFactoryTopLevelPath("/factory/vouchers/55/edit")).toBe(false);
     expect(isFactoryTopLevelPath("/vouchers")).toBe(false);

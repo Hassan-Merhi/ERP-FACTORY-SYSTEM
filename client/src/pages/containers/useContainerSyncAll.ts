@@ -3,14 +3,17 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import type { ContainerSyncAllResponse } from "./types";
 
 export function useContainerSyncAll() {
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
   const [syncAllConfirmOpen, setSyncAllConfirmOpen] = useState(false);
 
   const syncAllMutation = useMutation({
     mutationFn: async () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await apiRequest("POST", "/api/containers/sync-all-vouchers", {});
       return res.json() as Promise<ContainerSyncAllResponse>;
     },
@@ -54,5 +57,10 @@ export function useContainerSyncAll() {
     },
   });
 
-  return { syncAllMutation, syncAllConfirmOpen, setSyncAllConfirmOpen };
+  return {
+    syncAllMutation,
+    syncAllConfirmOpen,
+    setSyncAllConfirmOpen,
+    canChangeExistingRecords: recordChanges.allowed,
+  };
 }

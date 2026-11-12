@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { getApiRequest } from "@/lib/factoryApi";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { isZebraMode, printRawZpl } from "@/lib/zebraPrint";
 import { buildZplBatch } from "@/lib/zplBuilder";
 import { getPaperFormat } from "@/components/LabelPrintSettings";
@@ -42,6 +43,8 @@ export function useFactoryLocationReprint(selectedLocation: Location | null) {
   const appMode = useAppMode();
   const modeApiRequest = getApiRequest(appMode);
   const { toast } = useToast();
+  // A reprint records a new print against existing bales; read-only roles never reprint.
+  const recordChanges = useExistingRecordChangeAccess();
   const [reprintDialogOpen, setReprintDialogOpen] = useState(false);
   const [reprintProduct, setReprintProduct] = useState<FactoryBaleProduct | null>(null);
   const [reprintBales, setReprintBales] = useState<ReprintBaleRow[]>([]);
@@ -96,7 +99,7 @@ export function useFactoryLocationReprint(selectedLocation: Location | null) {
   };
 
   const handleReprintProduct = async (product: FactoryBaleProduct) => {
-    if (!selectedLocation) return;
+    if (!selectedLocation || !recordChanges.allowed) return;
     setReprintProduct(product);
     setReprintBales([]);
     setReprintLoading(true);
@@ -117,7 +120,7 @@ export function useFactoryLocationReprint(selectedLocation: Location | null) {
   };
 
   const handleDoPrint = async () => {
-    if (reprintBales.length === 0) return;
+    if (reprintBales.length === 0 || !recordChanges.allowed) return;
     let labels: LabelData[] = reprintBales.map((row) => ({
       referenceNumber: row.bale.referenceNumber || row.bale.baleCode || "",
       articleCode: row.product?.articleCode || row.bale.articleCode || row.bale.category || "",
@@ -160,6 +163,7 @@ export function useFactoryLocationReprint(selectedLocation: Location | null) {
   };
 
   return {
+    canReprint: recordChanges.allowed,
     reprintDialogOpen,
     setReprintDialogOpen,
     reprintProduct,

@@ -211,13 +211,17 @@ export async function runSync(): Promise<void> {
       // protection and may have no trustworthy actor identity.
       const { deliverOfflineOperations } = await import("./offline/durableOutbox");
       const result = await deliverOfflineOperations();
+      // Standalone browser offline mode: operations saved on this laptop go
+      // straight to the cloud, each confirmed by its own receipt.
+      const { syncBrowserOperations } = await import("./offline/browserSync");
+      const browser = await syncBrowserOperations();
       // The device's HTTP 2xx only confirms an approved LAN/cloud server
       // accepted the voucher request. It does NOT prove Phase 8 cloud apply.
       // Never stamp the global "last synced" field until a separately
       // verified, scoped cloud-applied receipt establishes that fact.
       emitSyncEvent({
         syncing: false,
-        conflictDetected: result.conflicts > 0,
+        conflictDetected: result.conflicts > 0 || browser.conflicts > 0,
       });
     } catch (error) {
       emitSyncEvent({

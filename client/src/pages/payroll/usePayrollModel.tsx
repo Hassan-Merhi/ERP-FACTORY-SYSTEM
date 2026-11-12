@@ -2,6 +2,7 @@ import { confirmAction } from "@/components/ConfirmHost";
 import { useMemo, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@/lib/form-resolver";
@@ -32,6 +33,10 @@ export function usePayrollModel() {
   const modeApiRequest = getApiRequest(appMode);
   const { toast } = useToast();
   const { selectedCompany, companies } = useCompany();
+  const recordChanges = useExistingRecordChangeAccess();
+  const assertCanChangeRecords = () => {
+    if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
+  };
   const showError = (error: unknown) =>
     toast({ title: "Error", description: errorMessage(error), variant: "destructive" });
 
@@ -267,6 +272,7 @@ export function usePayrollModel() {
   // Mutations (Logic simplified for orchestrator)
   const depositMutation = useMutation({
     mutationFn: async (data: DepositFormData) => {
+      assertCanChangeRecords();
       if (!selectedEmployee) throw new Error("No employee selected");
       return await modeApiRequest("POST", "/api/payroll/deposit-employee", {
         employeeId: selectedEmployee.id,
@@ -286,6 +292,7 @@ export function usePayrollModel() {
 
   const withdrawalMutation = useMutation({
     mutationFn: async (data: WithdrawalFormData) => {
+      assertCanChangeRecords();
       if (!selectedEmployee) throw new Error("No employee selected");
       return await modeApiRequest("POST", "/api/payroll/withdraw-employee", {
         employeeId: selectedEmployee.id,
@@ -437,6 +444,7 @@ export function usePayrollModel() {
 
   const bonusMutation = useMutation({
     mutationFn: async ({ employeeId, amount }: { employeeId: number; amount: number }) => {
+      assertCanChangeRecords();
       return await modeApiRequest("POST", "/api/payroll/bonus-employee", {
         employeeId,
         amount: amount.toFixed(2),
@@ -507,6 +515,7 @@ export function usePayrollModel() {
 
   const bulkDepositMutation = useMutation({
     mutationFn: async () => {
+      assertCanChangeRecords();
       const deposits = validSelectedEmployees.map((employee) => ({
         employeeId: employee.id,
         amount: getBulkDepositAmount(employee),
@@ -529,6 +538,7 @@ export function usePayrollModel() {
 
   const bulkWithdrawalMutation = useMutation({
     mutationFn: async () => {
+      assertCanChangeRecords();
       const withdrawals = Object.entries(bulkWithdrawalAmounts)
         .filter(([, amt]) => parseFloat(amt) > 0)
         .map(([empId, amount]) => ({ employeeId: parseInt(empId), amount }));
@@ -552,6 +562,7 @@ export function usePayrollModel() {
 
   const bulkBonusMutation = useMutation({
     mutationFn: async () => {
+      assertCanChangeRecords();
       const bonuses = Object.entries(bulkBonusAmounts)
         .filter(([, amt]) => parseFloat(amt) > 0)
         .map(([empId, amount]) => ({ employeeId: parseInt(empId), amount }));
@@ -576,6 +587,7 @@ export function usePayrollModel() {
 
   const bulkPaymentMutation = useMutation({
     mutationFn: async (data: BulkPaymentFormData) => {
+      assertCanChangeRecords();
       const payments = selectedPayments.map((w) => ({
         workerId: w.id,
         amount: workerPayments[w.id]?.amount || "0",
@@ -678,6 +690,7 @@ export function usePayrollModel() {
   };
 
   const handleDeleteEmployee = async (emp: Employee) => {
+    if (!recordChanges.allowed) return;
     if (await confirmAction({ title: `Are you sure you want to delete ${emp.firstName}?`, tone: "destructive" })) {
       modeApiRequest("DELETE", `/api/employees/${emp.id}`, undefined)
         .then(() => {
@@ -689,7 +702,7 @@ export function usePayrollModel() {
   };
 
   const handleForceDeleteEmployee = () => {
-    if (!deleteConflict) return;
+    if (!deleteConflict || !recordChanges.allowed) return;
     modeApiRequest("DELETE", `/api/employees/${deleteConflict.employee.id}?force=true`, undefined)
       .then(() => {
         toast({ title: "Deleted", description: "Employee force-deleted" });
@@ -701,6 +714,7 @@ export function usePayrollModel() {
 
   const editEmployeeMutation = useMutation({
     mutationFn: async (data: EmployeeFormData) => {
+      assertCanChangeRecords();
       if (!editingEmployee) throw new Error("No employee selected");
       const { employeeGroupId, ...employeeDetails } = data;
 
@@ -810,6 +824,7 @@ export function usePayrollModel() {
 
   const workerDeductionMutation = useMutation({
     mutationFn: async () => {
+      assertCanChangeRecords();
       if (!workerDeductionTarget) throw new Error("No worker selected");
       return await modeApiRequest("POST", `/api/factory/workers/${workerDeductionTarget.id}/deductions`, {
         amount: workerDeductionAmount,
@@ -827,6 +842,9 @@ export function usePayrollModel() {
   return {
     ...data,
     ...state,
+    canChangeExistingRecords: recordChanges.allowed,
+    canCreate: recordChanges.canCreate,
+    changeDisabledReason: recordChanges.reason,
     selectedCompany,
     employeeGroups,
     depositForm,

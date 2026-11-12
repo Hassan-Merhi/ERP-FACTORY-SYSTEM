@@ -28,6 +28,7 @@ import { utils, writeFile, ExcelJS } from "@/lib/excelHelper";
 import { spContainerInvoiceChargeLines } from "@shared/spContainerInvoiceCharges";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import ContainerDetailERP from "./ContainerDetail";
 import type { SpContainerDetailResponse } from "./containers/types";
 
@@ -75,6 +76,7 @@ function SpContainerDetailView() {
   const [showOffloadDialog, setShowOffloadDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
   const { formatDisplayDate } = useDateFormat();
 
   const { data: spc, isLoading } = useQuery<SpContainerDetailResponse>({
@@ -104,6 +106,7 @@ function SpContainerDetailView() {
 
   const editMutation = useMutation({
     mutationFn: async (data: EditForm) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await fetch(`/api/sp/containers/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -280,25 +283,27 @@ function SpContainerDetailView() {
           </>
         }
       >
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="gap-2" data-testid="button-actions-dropdown">
-              Actions <ChevronDown className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
-            {spc.status === "open" && (
-              <>
-                <DropdownMenuItem onClick={openEdit} data-testid="button-sp-edit">
-                  <Edit className="h-4 w-4 mr-2" /> Edit Container
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setShowOffloadDialog(true)} data-testid="button-sp-offload">
-                  <Truck className="h-4 w-4 mr-2" /> Offload Container
-                </DropdownMenuItem>
-              </>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {recordChanges.allowed && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="gap-2" data-testid="button-actions-dropdown">
+                Actions <ChevronDown className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              {spc.status === "open" && (
+                <>
+                  <DropdownMenuItem onClick={openEdit} data-testid="button-sp-edit">
+                    <Edit className="h-4 w-4 mr-2" /> Edit Container
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setShowOffloadDialog(true)} data-testid="button-sp-offload">
+                    <Truck className="h-4 w-4 mr-2" /> Offload Container
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" className="gap-2" data-testid="button-export-dropdown">

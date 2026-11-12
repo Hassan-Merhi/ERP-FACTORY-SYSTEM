@@ -1,9 +1,12 @@
 import type { ClientErrorLike } from "@/lib/clientError";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAdminOverride } from "@/hooks/use-admin-override";
 import { queryClient } from "@/lib/queryClient";
 import { apiRequest } from "@/lib/queryClient";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -83,6 +86,7 @@ function AccountSelect({
 // CHARGE DIALOG
 // ─────────────────────────────────────────────────────────────
 function ChargeDialog({ transporterId, open, onClose }: { transporterId: number; open: boolean; onClose: () => void }) {
+  const { selectedCompany } = useCompany();
   const { wrapAdminAction, AdminDialog } = useAdminOverride();
   const { toast } = useToast();
   const [amount, setAmount] = useState("");
@@ -91,8 +95,8 @@ function ChargeDialog({ transporterId, open, onClose }: { transporterId: number;
   const [expenseAccountId, setExpenseAccountId] = useState("");
 
   const { data: accounts = [] } = useQuery<LedgerAccount[]>({
-    queryKey: ["/api/factory/transporter-accounts"],
-    enabled: open,
+    queryKey: companyQueryKey("/api/factory/transporter-accounts", selectedCompany?.id),
+    enabled: open && Boolean(selectedCompany?.id),
   });
 
   const charge = useMutation({
@@ -106,7 +110,7 @@ function ChargeDialog({ transporterId, open, onClose }: { transporterId: number;
     onSuccess: () => {
       toast({ title: "Charge recorded" });
       queryClient.invalidateQueries({ queryKey: [API] });
-      queryClient.invalidateQueries({ queryKey: [API, transporterId] });
+      queryClient.invalidateQueries({ queryKey: companyQueryKey(API, selectedCompany?.id, transporterId) });
       setAmount("");
       setDescription("");
       onClose();
@@ -194,6 +198,7 @@ function PaymentDialog({
   open: boolean;
   onClose: () => void;
 }) {
+  const { selectedCompany } = useCompany();
   const { wrapAdminAction, AdminDialog } = useAdminOverride();
   const { toast } = useToast();
   const [amount, setAmount] = useState("");
@@ -202,8 +207,8 @@ function PaymentDialog({
   const [cashAccountId, setCashAccountId] = useState("");
 
   const { data: accounts = [] } = useQuery<LedgerAccount[]>({
-    queryKey: ["/api/factory/transporter-accounts"],
-    enabled: open,
+    queryKey: companyQueryKey("/api/factory/transporter-accounts", selectedCompany?.id),
+    enabled: open && Boolean(selectedCompany?.id),
   });
 
   const pay = useMutation({
@@ -217,7 +222,7 @@ function PaymentDialog({
     onSuccess: () => {
       toast({ title: "Payment recorded" });
       queryClient.invalidateQueries({ queryKey: [API] });
-      queryClient.invalidateQueries({ queryKey: [API, transporterId] });
+      queryClient.invalidateQueries({ queryKey: companyQueryKey(API, selectedCompany?.id, transporterId) });
       setAmount("");
       setDescription("");
       onClose();
@@ -297,24 +302,31 @@ function PaymentDialog({
 // STATEMENT VIEW (detail page)
 // ─────────────────────────────────────────────────────────────
 function TransporterStatement({ transporterId, onBack }: { transporterId: number; onBack: () => void }) {
+  const { selectedCompany } = useCompany();
   const { wrapAdminAction, AdminDialog } = useAdminOverride();
   const { toast } = useToast();
   const [chargeOpen, setChargeOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<(() => void) | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
+  // Charges and payments post to an existing transporter's ledger; read-only roles view and print only.
+  const recordChanges = useExistingRecordChangeAccess();
 
   const { data, isLoading } = useQuery<TransporterDetail>({
-    queryKey: [API, transporterId],
+    queryKey: companyQueryKey(API, selectedCompany?.id, transporterId),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: () => fetch(`${API}/${transporterId}`, { credentials: "include" }).then((r) => r.json()),
   });
 
   const deleteTx = useMutation({
-    mutationFn: (txId: number) => apiRequest("DELETE", `${API}/${transporterId}/transactions/${txId}`),
+    mutationFn: async (txId: number) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
+      return apiRequest("DELETE", `${API}/${transporterId}/transactions/${txId}`);
+    },
     onSuccess: () => {
       toast({ title: "Entry deleted" });
       queryClient.invalidateQueries({ queryKey: [API] });
-      queryClient.invalidateQueries({ queryKey: [API, transporterId] });
+      queryClient.invalidateQueries({ queryKey: companyQueryKey(API, selectedCompany?.id, transporterId) });
     },
     onError: (e: ClientErrorLike) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
@@ -341,12 +353,21 @@ function TransporterStatement({ transporterId, onBack }: { transporterId: number
           <Button variant="outline" size="sm" onClick={() => handlePrint()} data-testid="button-print-statement">
             <Printer className="h-4 w-4 mr-1" /> Print
           </Button>
-          <Button variant="outline" size="sm" onClick={() => setPaymentOpen(true)} data-testid="button-record-payment">
-            Record Payment
-          </Button>
-          <Button size="sm" onClick={() => setChargeOpen(true)} data-testid="button-record-charge">
-            <Plus className="h-4 w-4 mr-1" /> Record Charge
-          </Button>
+          {recordChanges.allowed && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPaymentOpen(true)}
+                data-testid="button-record-payment"
+              >
+                Record Payment
+              </Button>
+              <Button size="sm" onClick={() => setChargeOpen(true)} data-testid="button-record-charge">
+                <Plus className="h-4 w-4 mr-1" /> Record Charge
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
@@ -436,19 +457,21 @@ function TransporterStatement({ transporterId, onBack }: { transporterId: number
                         ${fmt(tx.runningBalance)}
                       </td>
                       <td className="px-3 py-2 print:hidden">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() =>
-                            wrapAdminAction(
-                              () => setPendingDelete(() => () => deleteTx.mutate(tx.id)),
-                              "Delete Transaction"
-                            )
-                          }
-                          data-testid={`button-delete-tx-${tx.id}`}
-                        >
-                          <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
-                        </Button>
+                        {recordChanges.allowed && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() =>
+                              wrapAdminAction(
+                                () => setPendingDelete(() => () => deleteTx.mutate(tx.id)),
+                                "Delete Transaction"
+                              )
+                            }
+                            data-testid={`button-delete-tx-${tx.id}`}
+                          >
+                            <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                          </Button>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -578,12 +601,19 @@ function AddTransporterDialog({ open, onClose }: { open: boolean; onClose: () =>
 // MAIN PAGE — list
 // ─────────────────────────────────────────────────────────────
 export default function FactoryTransporters() {
+  const { selectedCompany } = useCompany();
   const { AdminDialog } = useAdminOverride();
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  const canAddTransporter = useExistingRecordChangeAccess().canCreate("POST", API);
+  useEffect(() => {
+    setSelectedId(null);
+    setAddOpen(false);
+  }, [selectedCompany?.id]);
 
   const { data: transporters = [], isLoading } = useQuery<Transporter[]>({
-    queryKey: [API],
+    queryKey: companyQueryKey(API, selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
   });
 
   if (selectedId !== null) {
@@ -604,9 +634,11 @@ export default function FactoryTransporters() {
             <PageHeader title="Transporters" subtitle="Track charges and payments per transporter." />
           </div>
         </div>
-        <Button onClick={() => setAddOpen(true)} size="sm" data-testid="button-add-transporter">
-          <Plus className="h-4 w-4 mr-1" /> Add Transporter
-        </Button>
+        {canAddTransporter && (
+          <Button onClick={() => setAddOpen(true)} size="sm" data-testid="button-add-transporter">
+            <Plus className="h-4 w-4 mr-1" /> Add Transporter
+          </Button>
+        )}
       </div>
 
       {/* Summary cards */}

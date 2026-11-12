@@ -17,6 +17,24 @@
 // Environment validation first, so a misconfigured deployment fails before any
 // database work. Pure configuration checks; development only warns.
 await import("./deploymentPreflight.mjs");
+
+// The central startup migration list and always-on runtime/schema repair
+// services still write DDL and operational data during boot. A global
+// "read-only schema cutover" must NEVER silently skip those writers or
+// advertise readiness until their migration histories are fully reconciled.
+// Fail before any startup schema bridge is imported, preserving the previous
+// healthy deployment. Individual bridge verify-only modes can be rehearsed
+// on isolated staging independently.
+if (
+  process.env.DATABASE_STARTUP_SCHEMA_MODE === "verify-only" ||
+  process.env.LEGACY_STARTUP_MIGRATION_MODE === "verify-only"
+) {
+  throw new Error(
+    "Full read-only database startup cutover is blocked: startup-schema, " +
+      "ensureRuntimeSchema, and service boot-time writers remain unversioned. " +
+      "Complete their controlled migration and recovery validation before activation."
+  );
+}
 // Indexes and audit tables used by hot request paths.
 await import("./customerOrderBaleScanAuditBridge.mjs");
 await import("./wave3SalesHotpathIndexBridge.mjs");

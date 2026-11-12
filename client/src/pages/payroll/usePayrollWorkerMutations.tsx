@@ -1,6 +1,7 @@
 import { confirmAction } from "@/components/ConfirmHost";
 import { useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { queryClient } from "@/lib/queryClient";
 import { getApiRequest } from "@/lib/factoryApi";
 import type { Employee } from "@shared/schema";
@@ -38,6 +39,7 @@ export function usePayrollWorkerMutations({
   setDeleteWorkerConflict,
 }: UsePayrollWorkerMutationsArgs) {
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
   const showError = (error: unknown) =>
     toast({ title: "Error", description: errorMessage(error), variant: "destructive" });
 
@@ -56,6 +58,7 @@ export function usePayrollWorkerMutations({
   };
 
   const handleDeleteWorker = async (worker: Employee) => {
+    if (!recordChanges.allowed) return;
     if (await confirmAction({ title: `Delete worker ${worker.firstName} ${worker.lastName}?`, tone: "destructive" })) {
       modeApiRequest("DELETE", `/api/employees/${worker.id}`, undefined)
         .then(() => {
@@ -85,6 +88,7 @@ export function usePayrollWorkerMutations({
 
   const updateWorkerMutation = useMutation({
     mutationFn: async (data: WorkerFormData) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       if (!selectedWorkerForEdit) throw new Error("No worker selected");
       return modeApiRequest("PATCH", `/api/employees/${selectedWorkerForEdit.id}`, data);
     },
@@ -97,7 +101,7 @@ export function usePayrollWorkerMutations({
   });
 
   const handleForceDeleteWorker = () => {
-    if (!deleteWorkerConflict) return;
+    if (!deleteWorkerConflict || !recordChanges.allowed) return;
     modeApiRequest("DELETE", `/api/employees/${deleteWorkerConflict.employee.id}?force=true`, undefined)
       .then(() => {
         toast({ title: "Deleted", description: "Worker force-deleted" });
@@ -108,6 +112,7 @@ export function usePayrollWorkerMutations({
   };
 
   return {
+    canChangeExistingRecords: recordChanges.allowed,
     handleToggleWorker,
     handleUpdateAmount,
     handleDeleteWorker,

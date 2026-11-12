@@ -22,6 +22,7 @@ import { Check, X, Pencil, Tag, RefreshCw, AlertCircle, Download, Upload } from 
 import { PageHeader } from "@/components/PageHeader";
 import { ExcelJS, readFile } from "@/lib/excelHelper";
 import { productMatchesSearch } from "@shared/factoryProductSearch";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 
 interface FactoryBaleProduct {
   id: number;
@@ -49,6 +50,8 @@ export default function FactoryPriceList() {
   const { selectedCompany } = useCompany();
   const appMode = useAppMode();
   const modeApiRequest = getApiRequest(appMode);
+  // Prices are edits to existing products; read-only roles see the list and template only.
+  const recordChanges = useExistingRecordChangeAccess();
 
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
@@ -95,6 +98,7 @@ export default function FactoryPriceList() {
       value: string;
       nextCell?: { productId: number; field: "sellingPrice" | "productionPrice"; value: string };
     }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await modeApiRequest("PATCH", `/api/factory/bale-products/${id}`, { [field]: value });
       if (!res.ok) {
         const err = await res.json();
@@ -118,6 +122,7 @@ export default function FactoryPriceList() {
   });
 
   const handleStartEdit = (product: FactoryBaleProduct, field: "sellingPrice" | "productionPrice") => {
+    if (!recordChanges.allowed) return;
     const currentValue = field === "sellingPrice" ? product.sellingPrice || "0" : product.productionPrice || "0";
     setEditingCell({ productId: product.id, field, value: currentValue });
   };
@@ -218,7 +223,7 @@ export default function FactoryPriceList() {
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || !recordChanges.allowed) return;
     e.target.value = "";
 
     setIsUploading(true);
@@ -315,17 +320,19 @@ export default function FactoryPriceList() {
             <span className="hidden sm:inline">Download Template</span>
             <span className="sm:hidden">Template</span>
           </Button>
-          <Button
-            variant="outline"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isUploading}
-            className="gap-2"
-            data-testid="button-upload-price-excel"
-          >
-            {isUploading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-            <span className="hidden sm:inline">{isUploading ? "Uploading…" : "Upload Prices"}</span>
-            <span className="sm:hidden">{isUploading ? "…" : "Upload"}</span>
-          </Button>
+          {recordChanges.allowed && (
+            <Button
+              variant="outline"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+              className="gap-2"
+              data-testid="button-upload-price-excel"
+            >
+              {isUploading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+              <span className="hidden sm:inline">{isUploading ? "Uploading…" : "Upload Prices"}</span>
+              <span className="sm:hidden">{isUploading ? "…" : "Upload"}</span>
+            </Button>
+          )}
         </div>
       </div>
 
@@ -477,7 +484,7 @@ export default function FactoryPriceList() {
                           </div>
                         ) : (
                           <div
-                            className="flex items-center justify-end gap-2 group cursor-pointer hover-elevate rounded-md px-2 py-1"
+                            className={`flex items-center justify-end gap-2 group rounded-md px-2 py-1 ${recordChanges.allowed ? "cursor-pointer hover-elevate" : ""}`}
                             onClick={() => handleStartEdit(product, "sellingPrice")}
                             data-testid={`cell-selling-price-${product.id}`}
                           >
@@ -486,7 +493,9 @@ export default function FactoryPriceList() {
                             >
                               {sellingPrice > 0 ? `$${sellingPrice.toFixed(2)}` : "—"}
                             </span>
-                            <Pencil className="h-3 w-3 text-muted-foreground opacity-60 md:opacity-0 md:group-hover:opacity-100 touch:opacity-100" />
+                            {recordChanges.allowed && (
+                              <Pencil className="h-3 w-3 text-muted-foreground opacity-60 md:opacity-0 md:group-hover:opacity-100 touch:opacity-100" />
+                            )}
                           </div>
                         )}
                       </TableCell>
@@ -531,14 +540,16 @@ export default function FactoryPriceList() {
                           </div>
                         ) : (
                           <div
-                            className="flex items-center justify-end gap-2 group cursor-pointer hover-elevate rounded-md px-2 py-1"
+                            className={`flex items-center justify-end gap-2 group rounded-md px-2 py-1 ${recordChanges.allowed ? "cursor-pointer hover-elevate" : ""}`}
                             onClick={() => handleStartEdit(product, "productionPrice")}
                             data-testid={`cell-production-price-${product.id}`}
                           >
                             <span className={`font-mono text-sm text-muted-foreground`}>
                               {productionPrice > 0 ? `$${productionPrice.toFixed(2)}` : "—"}
                             </span>
-                            <Pencil className="h-3 w-3 text-muted-foreground opacity-60 md:opacity-0 md:group-hover:opacity-100 touch:opacity-100" />
+                            {recordChanges.allowed && (
+                              <Pencil className="h-3 w-3 text-muted-foreground opacity-60 md:opacity-0 md:group-hover:opacity-100 touch:opacity-100" />
+                            )}
                           </div>
                         )}
                       </TableCell>

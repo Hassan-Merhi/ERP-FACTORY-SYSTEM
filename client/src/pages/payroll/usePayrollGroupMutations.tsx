@@ -1,5 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { queryClient } from "@/lib/queryClient";
 import { getApiRequest } from "@/lib/factoryApi";
 import type { Employee } from "@shared/schema";
@@ -31,6 +32,10 @@ export function usePayrollGroupMutations({
   selectedGroupForMembers,
 }: UsePayrollGroupMutationsArgs) {
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
+  const assertCanChangeRecords = () => {
+    if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
+  };
   const showError = (error: unknown) =>
     toast({ title: "Error", description: errorMessage(error), variant: "destructive" });
 
@@ -65,8 +70,10 @@ export function usePayrollGroupMutations({
   });
 
   const addWorkerToGroupMutation = useMutation({
-    mutationFn: async ({ groupId, employeeId }: { groupId: number; employeeId: number }) =>
-      modeApiRequest("POST", `/api/employee-groups/${groupId}/members/${employeeId}`, undefined),
+    mutationFn: async ({ groupId, employeeId }: { groupId: number; employeeId: number }) => {
+      assertCanChangeRecords();
+      return modeApiRequest("POST", `/api/employee-groups/${groupId}/members/${employeeId}`, undefined);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ["/api/employee-groups", selectedGroupForMembers?.id, "members"],
@@ -76,8 +83,10 @@ export function usePayrollGroupMutations({
   });
 
   const removeWorkerFromGroupMutation = useMutation({
-    mutationFn: async ({ groupId, employeeId }: { groupId: number; employeeId: number }) =>
-      modeApiRequest("DELETE", `/api/employee-groups/${groupId}/members/${employeeId}`, undefined),
+    mutationFn: async ({ groupId, employeeId }: { groupId: number; employeeId: number }) => {
+      assertCanChangeRecords();
+      return modeApiRequest("DELETE", `/api/employee-groups/${groupId}/members/${employeeId}`, undefined);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ["/api/employee-groups", selectedGroupForMembers?.id, "members"],
@@ -87,7 +96,10 @@ export function usePayrollGroupMutations({
   });
 
   const deleteWorkerGroupMutation = useMutation({
-    mutationFn: async (groupId: number) => modeApiRequest("DELETE", `/api/worker-groups/${groupId}`, undefined),
+    mutationFn: async (groupId: number) => {
+      assertCanChangeRecords();
+      return modeApiRequest("DELETE", `/api/worker-groups/${groupId}`, undefined);
+    },
     onSuccess: () => {
       toast({ title: "Group deleted" });
       queryClient.invalidateQueries({ queryKey: ["/api/worker-groups/with-members", selectedCompanyId] });
@@ -95,22 +107,27 @@ export function usePayrollGroupMutations({
   });
 
   const addWorkerToWorkerGroupMutation = useMutation({
-    mutationFn: async ({ groupId, workerId }: { groupId: number; workerId: number }) =>
-      modeApiRequest("POST", `/api/worker-groups/${groupId}/members/${workerId}`),
+    mutationFn: async ({ groupId, workerId }: { groupId: number; workerId: number }) => {
+      assertCanChangeRecords();
+      return modeApiRequest("POST", `/api/worker-groups/${groupId}/members/${workerId}`);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/worker-groups/with-members", selectedCompanyId] });
     },
   });
 
   const removeWorkerFromWorkerGroupMutation = useMutation({
-    mutationFn: async ({ groupId, workerId }: { groupId: number; workerId: number }) =>
-      modeApiRequest("DELETE", `/api/worker-groups/${groupId}/members/${workerId}`),
+    mutationFn: async ({ groupId, workerId }: { groupId: number; workerId: number }) => {
+      assertCanChangeRecords();
+      return modeApiRequest("DELETE", `/api/worker-groups/${groupId}/members/${workerId}`);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/worker-groups/with-members", selectedCompanyId] });
     },
   });
 
   return {
+    canChangeExistingRecords: recordChanges.allowed,
     createGroupMutation,
     groupMembers,
     addWorkerToGroupMutation,

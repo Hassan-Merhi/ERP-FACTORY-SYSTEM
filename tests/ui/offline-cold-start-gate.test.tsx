@@ -55,7 +55,7 @@ describe("Read-only cold start screens", () => {
     });
     rerender(<ColdStartReadOnlyBanner />);
     expect(await screen.findByTestId("banner-cold-start-read-only")).toHaveTextContent(
-      "Not connected to the factory server: view only"
+      "Offline: entries that work offline are saved on this laptop and sent when the connection is back"
     );
   });
 });

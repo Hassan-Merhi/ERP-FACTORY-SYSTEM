@@ -122,7 +122,7 @@ export function useSupplierProfitCheckSafeModel() {
 
   const persistBulkOverrides = useCallback(
     async (overrides: BulkOverride[]) => {
-      if (!base.supplierId || overrides.length === 0) return;
+      if (!base.canChangeExistingRecords || !base.supplierId || overrides.length === 0) return;
       const response = await apiRequest("PUT", "/api/supplier-profit-check/po-overrides/bulk", {
         supplierId: Number(base.supplierId),
         overrides,
@@ -132,7 +132,7 @@ export function useSupplierProfitCheckSafeModel() {
         queryKey: ["/api/supplier-profit-check/po-overrides", base.supplierId],
       });
     },
-    [base.supplierId, queryClient]
+    [base.canChangeExistingRecords, base.supplierId, queryClient]
   );
 
   const allManualOverrides = useCallback((): BulkOverride[] => {
@@ -185,7 +185,7 @@ export function useSupplierProfitCheckSafeModel() {
   const handleManualPoChange = useCallback(
     (stockItemId: number, value: string) => {
       base.handleManualPoChange(stockItemId, value);
-      if (!base.supplierId) return;
+      if (!base.canChangeExistingRecords || !base.supplierId) return;
       const price = parsedPositiveOrNull(value);
       if (price === null) {
         void apiRequest("PUT", "/api/supplier-profit-check/po-overrides", {
@@ -203,7 +203,7 @@ export function useSupplierProfitCheckSafeModel() {
   const handleManualAvgChange = useCallback(
     (stockItemId: number, value: string) => {
       base.handleManualAvgChange(stockItemId, value);
-      if (!base.supplierId) return;
+      if (!base.canChangeExistingRecords || !base.supplierId) return;
       const price = parsedPositiveOrNull(value);
       if (price === null) {
         void apiRequest("PUT", "/api/supplier-profit-check/po-overrides", {

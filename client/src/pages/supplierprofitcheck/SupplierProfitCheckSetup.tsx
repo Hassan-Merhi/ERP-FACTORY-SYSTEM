@@ -53,7 +53,7 @@ export function SupplierProfitCheckSetup({ model }: { model: ProfitModel }) {
           )
         }
       >
-        {model.supplierId && (
+        {model.supplierId && model.canCreate("POST", "/api/supplier-profit-check/add-stock-item") && (
           <Button
             variant="outline"
             size="sm"
@@ -86,22 +86,25 @@ export function SupplierProfitCheckSetup({ model }: { model: ProfitModel }) {
             <X className="w-4 h-4 mr-1.5" /> Clear Import ({model.importedRows.length})
           </Button>
         )}
-        {model.loaded && !model.savedProforma && !(model.sourceType === "proforma" && model.proformaId) && (
-          <Button
-            onClick={() => {
-              if (model.itemsWithQty.length === 0) {
-                model.toast({ title: "Enter qty for at least one item", variant: "destructive" });
-                return;
-              }
-              model.setShowConfirmModal(true);
-            }}
-            disabled={model.itemsWithQty.length === 0}
-            className="bg-amber-500 text-white shrink-0"
-            data-testid="button-create-proforma"
-          >
-            <Save className="w-4 h-4 mr-2" /> Create Proforma ({model.itemsWithQty.length})
-          </Button>
-        )}
+        {model.loaded &&
+          !model.savedProforma &&
+          !(model.sourceType === "proforma" && model.proformaId) &&
+          model.canCreate("POST", "/api/supplier-profit-check/save-proforma") && (
+            <Button
+              onClick={() => {
+                if (model.itemsWithQty.length === 0) {
+                  model.toast({ title: "Enter qty for at least one item", variant: "destructive" });
+                  return;
+                }
+                model.setShowConfirmModal(true);
+              }}
+              disabled={model.itemsWithQty.length === 0}
+              className="bg-amber-500 text-white shrink-0"
+              data-testid="button-create-proforma"
+            >
+              <Save className="w-4 h-4 mr-2" /> Create Proforma ({model.itemsWithQty.length})
+            </Button>
+          )}
         {model.loaded && model.savedProforma && (
           <>
             <Button

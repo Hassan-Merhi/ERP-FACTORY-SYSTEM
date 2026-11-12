@@ -5,6 +5,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams, useSearch } from "wouter";
 import { useBackToParent } from "@/hooks/use-back-to-parent";
 import { useEscapeToParent } from "@/hooks/use-escape-to-parent";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -54,6 +55,7 @@ const calculateLineTotal = (qty: number | string, pricePerBale: number | string)
 export default function SupplierProformas() {
   const { toast } = useToast();
   const handleBack = useBackToParent();
+  const recordChanges = useExistingRecordChangeAccess();
   const params = useParams<{ supplierId: string }>();
   const supplierId = parseInt(params.supplierId);
   const searchString = useSearch();
@@ -361,10 +363,12 @@ export default function SupplierProformas() {
           <Download className="mr-2 h-4 w-4" />
           Template
         </Button>
-        <Button onClick={() => setShowCreateDialog(true)} data-testid="button-create-proforma">
-          <Plus className="mr-2 h-4 w-4" />
-          New Proforma
-        </Button>
+        {recordChanges.allowed && (
+          <Button onClick={() => setShowCreateDialog(true)} data-testid="button-create-proforma">
+            <Plus className="mr-2 h-4 w-4" />
+            New Proforma
+          </Button>
+        )}
       </PageHeader>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -417,7 +421,7 @@ export default function SupplierProformas() {
                       </>
                     )}
                   </div>
-                  {renamingId !== p.id && (
+                  {recordChanges.allowed && renamingId !== p.id && (
                     <Button
                       variant="ghost"
                       size="icon"
@@ -428,31 +432,35 @@ export default function SupplierProformas() {
                       <Pencil className="h-3 w-3 text-muted-foreground" />
                     </Button>
                   )}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      starMutation.mutate(p.id);
-                    }}
-                    data-testid={`button-star-proforma-${p.id}`}
-                    title={p.isStarred ? "Unstar (remove as default)" : "Star (use for auto-comparison)"}
-                  >
-                    <Star
-                      className={`h-3.5 w-3.5 ${p.isStarred ? "fill-amber-400 text-amber-400" : "text-muted-foreground"}`}
-                    />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setPendingDelete(() => () => deleteMutation.mutate(p.id));
-                    }}
-                    data-testid={`button-delete-proforma-${p.id}`}
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
+                  {recordChanges.allowed && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        starMutation.mutate(p.id);
+                      }}
+                      data-testid={`button-star-proforma-${p.id}`}
+                      title={p.isStarred ? "Unstar (remove as default)" : "Star (use for auto-comparison)"}
+                    >
+                      <Star
+                        className={`h-3.5 w-3.5 ${p.isStarred ? "fill-amber-400 text-amber-400" : "text-muted-foreground"}`}
+                      />
+                    </Button>
+                  )}
+                  {recordChanges.allowed && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPendingDelete(() => () => deleteMutation.mutate(p.id));
+                      }}
+                      data-testid={`button-delete-proforma-${p.id}`}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  )}
                 </div>
               ))}
             </CardContent>
@@ -471,18 +479,20 @@ export default function SupplierProformas() {
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge variant="secondary">{lines.length} items</Badge>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setImportTarget(selectedProformaId);
-                      fileInputRef.current?.click();
-                    }}
-                    data-testid="button-import-lines"
-                  >
-                    <Upload className="mr-1 h-3 w-3" />
-                    Import Excel
-                  </Button>
+                  {recordChanges.allowed && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setImportTarget(selectedProformaId);
+                        fileInputRef.current?.click();
+                      }}
+                      data-testid="button-import-lines"
+                    >
+                      <Upload className="mr-1 h-3 w-3" />
+                      Import Excel
+                    </Button>
+                  )}
                   <Button
                     variant="outline"
                     size="sm"
@@ -494,10 +504,12 @@ export default function SupplierProformas() {
                     <Download className="mr-1 h-3 w-3" />
                     Export Excel
                   </Button>
-                  <Button size="sm" onClick={() => setAddingLine(true)} data-testid="button-add-line">
-                    <Plus className="mr-1 h-3 w-3" />
-                    Add Line
-                  </Button>
+                  {recordChanges.allowed && (
+                    <Button size="sm" onClick={() => setAddingLine(true)} data-testid="button-add-line">
+                      <Plus className="mr-1 h-3 w-3" />
+                      Add Line
+                    </Button>
+                  )}
                 </div>
               </CardHeader>
               <CardContent>
@@ -642,24 +654,26 @@ export default function SupplierProformas() {
                               {calculateLineTotal(line.qty, line.pricePerBale).toFixed(2)}
                             </TableCell>
                             <TableCell className="text-right">
-                              <div className="flex items-center justify-end gap-1">
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  onClick={() => startEdit(line)}
-                                  data-testid={`button-edit-line-${line.id}`}
-                                >
-                                  <Pencil className="h-3 w-3" />
-                                </Button>
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  onClick={() => setPendingDelete(() => () => deleteLineMutation.mutate(line.id))}
-                                  data-testid={`button-delete-line-${line.id}`}
-                                >
-                                  <Trash2 className="h-3 w-3" />
-                                </Button>
-                              </div>
+                              {recordChanges.allowed && (
+                                <div className="flex items-center justify-end gap-1">
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    onClick={() => startEdit(line)}
+                                    data-testid={`button-edit-line-${line.id}`}
+                                  >
+                                    <Pencil className="h-3 w-3" />
+                                  </Button>
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    onClick={() => setPendingDelete(() => () => deleteLineMutation.mutate(line.id))}
+                                    data-testid={`button-delete-line-${line.id}`}
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              )}
                             </TableCell>
                           </>
                         )}

@@ -4,6 +4,7 @@ import { ArrowRight, Info, Loader2, RefreshCw, Replace, X } from "lucide-react";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { PageHeader } from "@/components/PageHeader";
 import { StockItemCombobox } from "@/components/vouchers/StockItemCombobox";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -93,6 +94,7 @@ function displayMoney(value: string | number): string {
 
 export default function POSItemReplacement() {
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
   const queryClient = useQueryClient();
   const initialDates = useMemo(initialDateRange, []);
 
@@ -113,30 +115,28 @@ export default function POSItemReplacement() {
     refetchOnWindowFocus: false,
   });
 
-  const {
-    data: replacementLastSoldPriceData,
-    isLoading: replacementLastSoldPriceLoading,
-  } = useQuery<LastSoldPriceResponse>({
-    queryKey:
-      locationId && replacementItem
-        ? ["/api/pos/item-replacements/last-sold-price", locationId, replacementItem.id]
-        : [],
-    queryFn: async () => {
-      if (!locationId || !replacementItem) return { sellingPrice: null };
-      const params = new URLSearchParams({
-        locationId: String(locationId),
-        stockItemId: String(replacementItem.id),
-      });
-      const response = await fetch(`/api/pos/item-replacements/last-sold-price?${params.toString()}`, {
-        credentials: "include",
-      });
-      if (!response.ok) return { sellingPrice: null };
-      return response.json();
-    },
-    enabled: Boolean(locationId && replacementItem),
-    staleTime: 60_000,
-    refetchOnWindowFocus: false,
-  });
+  const { data: replacementLastSoldPriceData, isLoading: replacementLastSoldPriceLoading } =
+    useQuery<LastSoldPriceResponse>({
+      queryKey:
+        locationId && replacementItem
+          ? ["/api/pos/item-replacements/last-sold-price", locationId, replacementItem.id]
+          : [],
+      queryFn: async () => {
+        if (!locationId || !replacementItem) return { sellingPrice: null };
+        const params = new URLSearchParams({
+          locationId: String(locationId),
+          stockItemId: String(replacementItem.id),
+        });
+        const response = await fetch(`/api/pos/item-replacements/last-sold-price?${params.toString()}`, {
+          credentials: "include",
+        });
+        if (!response.ok) return { sellingPrice: null };
+        return response.json();
+      },
+      enabled: Boolean(locationId && replacementItem),
+      staleTime: 60_000,
+      refetchOnWindowFocus: false,
+    });
 
   const candidateKey = [
     "/api/pos/item-replacements/candidates",
@@ -271,9 +271,9 @@ export default function POSItemReplacement() {
         <Info className="h-4 w-4" />
         <AlertTitle>Correction only</AlertTitle>
         <AlertDescription>
-          The original selling price and sale total stay unchanged. The tool replaces only the quantity you enter, returns
-          that quantity to the wrong item, deducts it from the correct item, and recalculates item cost/profit through the
-          normal POS edit flow.
+          The original selling price and sale total stay unchanged. The tool replaces only the quantity you enter,
+          returns that quantity to the wrong item, deducts it from the correct item, and recalculates item cost/profit
+          through the normal POS edit flow.
         </AlertDescription>
       </Alert>
 
@@ -392,8 +392,12 @@ export default function POSItemReplacement() {
                 <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${candidatesFetching ? "animate-spin" : ""}`} />
                 Refresh sales
               </Button>
-              <Badge variant="secondary">{candidateData?.count ?? 0} matching POS line{candidateData?.count === 1 ? "" : "s"}</Badge>
-              {candidateData?.capped && <Badge variant="destructive">Showing newest 500 rows — narrow the date range</Badge>}
+              <Badge variant="secondary">
+                {candidateData?.count ?? 0} matching POS line{candidateData?.count === 1 ? "" : "s"}
+              </Badge>
+              {candidateData?.capped && (
+                <Badge variant="destructive">Showing newest 500 rows — narrow the date range</Badge>
+              )}
             </div>
           )}
         </CardContent>
@@ -456,7 +460,9 @@ export default function POSItemReplacement() {
                         <TableCell className="whitespace-nowrap text-sm">{row.voucherDate}</TableCell>
                         <TableCell>
                           <div className="font-medium text-sm">{row.voucherNumber}</div>
-                          <div className="text-xs text-muted-foreground truncate max-w-[280px]">{row.description || "POS Sale"}</div>
+                          <div className="text-xs text-muted-foreground truncate max-w-[280px]">
+                            {row.description || "POS Sale"}
+                          </div>
                         </TableCell>
                         <TableCell className="text-right font-mono font-medium">{displayQty(row.quantity)}</TableCell>
                         <TableCell className="text-right font-mono">{displayMoney(row.sellingPrice)}</TableCell>
@@ -506,7 +512,9 @@ export default function POSItemReplacement() {
                                 All
                               </Button>
                             </div>
-                            {isInvalid && <p className="text-[11px] text-destructive text-right">Max {displayQty(row.quantity)}</p>}
+                            {isInvalid && (
+                              <p className="text-[11px] text-destructive text-right">Max {displayQty(row.quantity)}</p>
+                            )}
                           </div>
                         </TableCell>
                         <TableCell className="text-right font-mono">
@@ -532,26 +540,31 @@ export default function POSItemReplacement() {
           <CardContent className="p-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             <div>
               <p className="font-medium text-sm">
-                Replace {displayQty(totalReplaceQty)} qty from {sourceItem?.name} → {replacementItem?.name || "choose correct item"}
+                Replace {displayQty(totalReplaceQty)} qty from {sourceItem?.name} →{" "}
+                {replacementItem?.name || "choose correct item"}
               </p>
               <p className="text-xs text-muted-foreground mt-1">
-                {selectedReplacements.length} sale line{selectedReplacements.length === 1 ? "" : "s"} across {affectedVoucherCount} POS sale{affectedVoucherCount === 1 ? "" : "s"}. Original sale prices stay unchanged.
+                {selectedReplacements.length} sale line{selectedReplacements.length === 1 ? "" : "s"} across{" "}
+                {affectedVoucherCount} POS sale{affectedVoucherCount === 1 ? "" : "s"}. Original sale prices stay
+                unchanged.
               </p>
             </div>
-            <Button
-              type="button"
-              onClick={() => replacementMutation.mutate()}
-              disabled={!canSubmit}
-              data-testid="button-apply-pos-item-replacements"
-              className="min-w-[210px]"
-            >
-              {replacementMutation.isPending ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <Replace className="h-4 w-4 mr-2" />
-              )}
-              Apply {selectedReplacements.length} replacement{selectedReplacements.length === 1 ? "" : "s"}
-            </Button>
+            {recordChanges.allowed && (
+              <Button
+                type="button"
+                onClick={() => replacementMutation.mutate()}
+                disabled={!canSubmit}
+                data-testid="button-apply-pos-item-replacements"
+                className="min-w-[210px]"
+              >
+                {replacementMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Replace className="h-4 w-4 mr-2" />
+                )}
+                Apply {selectedReplacements.length} replacement{selectedReplacements.length === 1 ? "" : "s"}
+              </Button>
+            )}
           </CardContent>
         </Card>
       )}

@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/dialog";
 import { Loader2, Plus, Trash2, AlertTriangle } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 
 interface WasteEntry {
   id: number;
@@ -48,6 +49,8 @@ function getDefaultDateRange() {
 export default function FactoryWaste() {
   const { selectedCompany } = useCompany();
   const { formatDisplayDate } = useDateFormat();
+  const recordChanges = useExistingRecordChangeAccess();
+  const canAddWaste = recordChanges.canCreate("POST", "/api/factory/waste");
   const defaults = getDefaultDateRange();
   const [from, setFrom] = useState(defaults.from);
   const [to, setTo] = useState(defaults.to);
@@ -114,6 +117,7 @@ export default function FactoryWaste() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       await factoryApiRequest("DELETE", `/api/factory/waste/${id}`);
     },
     onSuccess: () => {
@@ -134,6 +138,7 @@ export default function FactoryWaste() {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!canAddWaste) return;
     const payload: {
       date: string;
       kgWaste: number;
@@ -199,101 +204,103 @@ export default function FactoryWaste() {
           </CardContent>
         </Card>
 
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button data-testid="button-add-waste">
-              <Plus className="mr-2 h-4 w-4" />
-              Add Waste Entry
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add Waste Entry</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-              <div className="space-y-2">
-                <Label htmlFor="waste-date">Date</Label>
-                <Input
-                  id="waste-date"
-                  type="date"
-                  value={formDate}
-                  onChange={(e) => setFormDate(e.target.value)}
-                  data-testid="input-waste-date"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="waste-type">Waste Type</Label>
-                <select
-                  id="waste-type"
-                  value={formWasteType}
-                  onChange={(e) => setFormWasteType(e.target.value)}
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
-                  data-testid="select-waste-type"
-                >
-                  <option value="">— None —</option>
-                  <option value="GARBAGE">Garbage</option>
-                  <option value="WIPERS">Wipers</option>
-                  <option value="OTHER">Other</option>
-                </select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="waste-kg">KG Waste *</Label>
-                <Input
-                  id="waste-kg"
-                  type="number"
-                  step="0.01"
-                  required
-                  value={formKg}
-                  onChange={(e) => setFormKg(e.target.value)}
-                  data-testid="input-waste-kg"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="waste-reason">Reason</Label>
-                <Textarea
-                  id="waste-reason"
-                  value={formReason}
-                  onChange={(e) => setFormReason(e.target.value)}
-                  data-testid="input-waste-reason"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="waste-mix-batch">Mix Batch ID (optional)</Label>
-                <Input
-                  id="waste-mix-batch"
-                  type="number"
-                  value={formMixBatchId}
-                  onChange={(e) => setFormMixBatchId(e.target.value)}
-                  data-testid="input-waste-mix-batch-id"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="waste-supplier">Supplier ID (optional)</Label>
-                <Input
-                  id="waste-supplier"
-                  type="number"
-                  value={formSupplierId}
-                  onChange={(e) => setFormSupplierId(e.target.value)}
-                  data-testid="input-waste-supplier-id"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="waste-container">Container ID (optional)</Label>
-                <Input
-                  id="waste-container"
-                  type="number"
-                  value={formContainerId}
-                  onChange={(e) => setFormContainerId(e.target.value)}
-                  data-testid="input-waste-container-id"
-                />
-              </div>
-              <Button type="submit" disabled={createMutation.isPending} data-testid="button-submit-waste">
-                {createMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Save
+        {canAddWaste && (
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button data-testid="button-add-waste">
+                <Plus className="mr-2 h-4 w-4" />
+                Add Waste Entry
               </Button>
-            </form>
-          </DialogContent>
-        </Dialog>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Add Waste Entry</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+                <div className="space-y-2">
+                  <Label htmlFor="waste-date">Date</Label>
+                  <Input
+                    id="waste-date"
+                    type="date"
+                    value={formDate}
+                    onChange={(e) => setFormDate(e.target.value)}
+                    data-testid="input-waste-date"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="waste-type">Waste Type</Label>
+                  <select
+                    id="waste-type"
+                    value={formWasteType}
+                    onChange={(e) => setFormWasteType(e.target.value)}
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+                    data-testid="select-waste-type"
+                  >
+                    <option value="">— None —</option>
+                    <option value="GARBAGE">Garbage</option>
+                    <option value="WIPERS">Wipers</option>
+                    <option value="OTHER">Other</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="waste-kg">KG Waste *</Label>
+                  <Input
+                    id="waste-kg"
+                    type="number"
+                    step="0.01"
+                    required
+                    value={formKg}
+                    onChange={(e) => setFormKg(e.target.value)}
+                    data-testid="input-waste-kg"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="waste-reason">Reason</Label>
+                  <Textarea
+                    id="waste-reason"
+                    value={formReason}
+                    onChange={(e) => setFormReason(e.target.value)}
+                    data-testid="input-waste-reason"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="waste-mix-batch">Mix Batch ID (optional)</Label>
+                  <Input
+                    id="waste-mix-batch"
+                    type="number"
+                    value={formMixBatchId}
+                    onChange={(e) => setFormMixBatchId(e.target.value)}
+                    data-testid="input-waste-mix-batch-id"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="waste-supplier">Supplier ID (optional)</Label>
+                  <Input
+                    id="waste-supplier"
+                    type="number"
+                    value={formSupplierId}
+                    onChange={(e) => setFormSupplierId(e.target.value)}
+                    data-testid="input-waste-supplier-id"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="waste-container">Container ID (optional)</Label>
+                  <Input
+                    id="waste-container"
+                    type="number"
+                    value={formContainerId}
+                    onChange={(e) => setFormContainerId(e.target.value)}
+                    data-testid="input-waste-container-id"
+                  />
+                </div>
+                <Button type="submit" disabled={createMutation.isPending} data-testid="button-submit-waste">
+                  {createMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Save
+                </Button>
+              </form>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
 
       <Card>
@@ -340,15 +347,17 @@ export default function FactoryWaste() {
                       <TableCell className="font-mono">{entry.supplierId ?? "—"}</TableCell>
                       <TableCell className="font-mono">{entry.containerId ?? "—"}</TableCell>
                       <TableCell>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => setPendingDeleteId(entry.id)}
-                          disabled={deleteMutation.isPending}
-                          data-testid={`button-delete-waste-${entry.id}`}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        {recordChanges.allowed && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => setPendingDeleteId(entry.id)}
+                            disabled={deleteMutation.isPending}
+                            data-testid={`button-delete-waste-${entry.id}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}

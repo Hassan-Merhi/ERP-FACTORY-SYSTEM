@@ -78,16 +78,18 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
               className="h-10 w-full rounded-xl border-slate-200 bg-white pl-10 text-slate-900 placeholder:text-slate-400 dark:border-[hsl(var(--factory-hue)_35%_33%)] dark:bg-[hsl(var(--factory-hue)_63%_14%)] dark:text-white dark:placeholder:text-slate-400"
             />
           </div>
-          <Button
-            className="h-10 shrink-0 rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 px-4 font-semibold text-white shadow-md shadow-blue-600/15 hover:from-blue-500 hover:to-blue-600"
-            onClick={() => {
-              model.resetForm();
-              model.setCreateOpen(true);
-            }}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Add Supplier
-          </Button>
+          {model.canCreateSupplier && (
+            <Button
+              className="h-10 shrink-0 rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 px-4 font-semibold text-white shadow-md shadow-blue-600/15 hover:from-blue-500 hover:to-blue-600"
+              onClick={() => {
+                model.resetForm();
+                model.setCreateOpen(true);
+              }}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Add Supplier
+            </Button>
+          )}
         </div>
       </div>
 
@@ -330,134 +332,143 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
                   <Eye className="mr-1.5 h-4 w-4" aria-hidden="true" />
                   View
                 </Button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="rounded-lg"
-                      data-testid={`btn-menu-supplier-${supplier.id}`}
-                    >
-                      <MoreVertical className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem
-                      onClick={() => {
-                        model.setEditingSupplier(supplier);
-                        model.setFormData({
-                          name: supplier.name,
-                          contactPerson: supplier.contactPerson || "",
-                          phone: supplier.phone || "",
-                          email: supplier.email || "",
-                          address: supplier.address || "",
-                          notes: supplier.notes || "",
-                          parentId: supplier.parentId,
-                        });
-                        model.setFormRole(supplier.parentId ? "linked" : isBroker ? "broker" : "standalone");
-                      }}
-                    >
-                      <Pencil className="h-4 w-4 mr-2" />
-                      Edit
-                    </DropdownMenuItem>
-                    {!isBroker && !supplier.parentId && (
-                      <DropdownMenuItem
-                        onClick={() =>
-                          model.wrapAdminAction(
-                            () => model.makeBrokerMutation.mutate({ id: supplier.id, isBroker: true }),
-                            "Make Broker"
-                          )
-                        }
-                        data-testid={`btn-make-broker-${supplier.id}`}
+                {(model.canChangeExistingRecords || model.canCreateSupplier || model.canRecordFxTransfer) && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="rounded-lg"
+                        data-testid={`btn-menu-supplier-${supplier.id}`}
                       >
-                        <GitBranch className="h-4 w-4 mr-2" />
-                        Make Broker
-                      </DropdownMenuItem>
-                    )}
-                    {isBroker && (
-                      <DropdownMenuItem
-                        onClick={() => {
-                          model.setCreateSubAccountParentId(supplier.id);
-                          model.resetForm(supplier.id);
-                          model.setCreateOpen(true);
-                        }}
-                        data-testid={`btn-add-linked-${supplier.id}`}
-                      >
-                        <Plus className="h-4 w-4 mr-2" />
-                        Add Linked Supplier
-                      </DropdownMenuItem>
-                    )}
-                    {nonUsdBalances
-                      .filter((balance) => balance.balance > 0.005)
-                      .map((balance) => (
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      {model.canChangeExistingRecords && (
                         <DropdownMenuItem
-                          key={balance.currencyCode}
-                          onClick={() => openFx(balance.currencyCode, balance.balance)}
+                          onClick={() => {
+                            model.setEditingSupplier(supplier);
+                            model.setFormData({
+                              name: supplier.name,
+                              contactPerson: supplier.contactPerson || "",
+                              phone: supplier.phone || "",
+                              email: supplier.email || "",
+                              address: supplier.address || "",
+                              notes: supplier.notes || "",
+                              parentId: supplier.parentId,
+                            });
+                            model.setFormRole(supplier.parentId ? "linked" : isBroker ? "broker" : "standalone");
+                          }}
                         >
-                          <ArrowRightLeft className="h-4 w-4 mr-2 text-blue-500" />
-                          FX Settlement ({balance.currencyCode})
+                          <Pencil className="h-4 w-4 mr-2" />
+                          Edit
                         </DropdownMenuItem>
-                      ))}
-                    {isBroker && (
-                      <DropdownMenuItem
-                        data-testid={`btn-bulk-fx-${supplier.id}`}
-                        onClick={() => {
-                          model.setBulkFxBrokerId(supplier.id);
-                          model.setBulkFxBrokerName(supplier.name);
-                          model.setBulkFxForm({
-                            fromCurrencyCode: nonUsdBalances.length > 0 ? nonUsdBalances[0].currencyCode : "EUR",
-                            totalAmount: "",
-                            fxRateToUsd: "",
-                            date: model.today,
-                            notes: "",
-                            order: "oldest",
-                          });
-                          model.setBulkFxPreview(null);
-                          model.setBulkFxOpen(true);
-                        }}
-                      >
-                        <Layers className="h-4 w-4 mr-2 text-blue-500" />
-                        Bulk FX Settlement
-                      </DropdownMenuItem>
-                    )}
-                    {supplier.isActive ? (
-                      <DropdownMenuItem
-                        className="text-destructive"
-                        onClick={() =>
-                          model.wrapAdminAction(
-                            () => model.deactivateMutation.mutate(supplier.id),
-                            "Deactivate Supplier"
-                          )
-                        }
-                      >
-                        <EyeOff className="h-4 w-4 mr-2" />
-                        Deactivate
-                      </DropdownMenuItem>
-                    ) : (
-                      <DropdownMenuItem
-                        onClick={() =>
-                          model.wrapAdminAction(
-                            () => model.reactivateMutation.mutate(supplier.id),
-                            "Reactivate Supplier"
-                          )
-                        }
-                      >
-                        <Eye className="h-4 w-4 mr-2" />
-                        Reactivate
-                      </DropdownMenuItem>
-                    )}
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      className="text-destructive"
-                      onClick={() =>
-                        model.setPendingDelete(() => () => model.permanentDeleteMutation.mutate(supplier.id))
-                      }
-                    >
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Delete Permanently
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                      )}
+                      {model.canChangeExistingRecords && !isBroker && !supplier.parentId && (
+                        <DropdownMenuItem
+                          onClick={() =>
+                            model.wrapAdminAction(
+                              () => model.makeBrokerMutation.mutate({ id: supplier.id, isBroker: true }),
+                              "Make Broker"
+                            )
+                          }
+                          data-testid={`btn-make-broker-${supplier.id}`}
+                        >
+                          <GitBranch className="h-4 w-4 mr-2" />
+                          Make Broker
+                        </DropdownMenuItem>
+                      )}
+                      {model.canCreateSupplier && isBroker && (
+                        <DropdownMenuItem
+                          onClick={() => {
+                            model.setCreateSubAccountParentId(supplier.id);
+                            model.resetForm(supplier.id);
+                            model.setCreateOpen(true);
+                          }}
+                          data-testid={`btn-add-linked-${supplier.id}`}
+                        >
+                          <Plus className="h-4 w-4 mr-2" />
+                          Add Linked Supplier
+                        </DropdownMenuItem>
+                      )}
+                      {model.canRecordFxTransfer &&
+                        nonUsdBalances
+                          .filter((balance) => balance.balance > 0.005)
+                          .map((balance) => (
+                            <DropdownMenuItem
+                              key={balance.currencyCode}
+                              onClick={() => openFx(balance.currencyCode, balance.balance)}
+                            >
+                              <ArrowRightLeft className="h-4 w-4 mr-2 text-blue-500" />
+                              FX Settlement ({balance.currencyCode})
+                            </DropdownMenuItem>
+                          ))}
+                      {model.canChangeExistingRecords && isBroker && (
+                        <DropdownMenuItem
+                          data-testid={`btn-bulk-fx-${supplier.id}`}
+                          onClick={() => {
+                            model.setBulkFxBrokerId(supplier.id);
+                            model.setBulkFxBrokerName(supplier.name);
+                            model.setBulkFxForm({
+                              fromCurrencyCode: nonUsdBalances.length > 0 ? nonUsdBalances[0].currencyCode : "EUR",
+                              totalAmount: "",
+                              fxRateToUsd: "",
+                              date: model.today,
+                              notes: "",
+                              order: "oldest",
+                            });
+                            model.setBulkFxPreview(null);
+                            model.setBulkFxOpen(true);
+                          }}
+                        >
+                          <Layers className="h-4 w-4 mr-2 text-blue-500" />
+                          Bulk FX Settlement
+                        </DropdownMenuItem>
+                      )}
+                      {model.canChangeExistingRecords && (
+                        <>
+                          {supplier.isActive ? (
+                            <DropdownMenuItem
+                              className="text-destructive"
+                              onClick={() =>
+                                model.wrapAdminAction(
+                                  () => model.deactivateMutation.mutate(supplier.id),
+                                  "Deactivate Supplier"
+                                )
+                              }
+                            >
+                              <EyeOff className="h-4 w-4 mr-2" />
+                              Deactivate
+                            </DropdownMenuItem>
+                          ) : (
+                            <DropdownMenuItem
+                              onClick={() =>
+                                model.wrapAdminAction(
+                                  () => model.reactivateMutation.mutate(supplier.id),
+                                  "Reactivate Supplier"
+                                )
+                              }
+                            >
+                              <Eye className="h-4 w-4 mr-2" />
+                              Reactivate
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            className="text-destructive"
+                            onClick={() =>
+                              model.setPendingDelete(() => () => model.permanentDeleteMutation.mutate(supplier.id))
+                            }
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Delete Permanently
+                          </DropdownMenuItem>
+                        </>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
                 <Button
                   variant="ghost"
                   size="icon"

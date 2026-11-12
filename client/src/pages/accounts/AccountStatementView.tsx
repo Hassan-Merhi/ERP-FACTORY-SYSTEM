@@ -38,6 +38,7 @@ import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { drCrClass } from "@/lib/formatNumber";
 import { shouldShowFactoryCustomerDestination } from "./customerDestinationVisibility";
 import "./propertiesLedger.css";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import {
   AccountStatementOpeningBalanceKpi,
   OpeningBalanceAmount,
@@ -124,6 +125,8 @@ export function AccountStatementView({
   brokerStatementLoading,
   transactionError,
 }: AccountStatementViewProps) {
+  // View Only and Create Only cannot delete existing vouchers (server-enforced too).
+  const { allowed: canChangeExistingRecords } = useExistingRecordChangeAccess();
   const { formatTransactionAmount } = useCurrencyContext();
   const { selectedCompany } = useCompany();
   const { language } = useApplicationLanguage();
@@ -284,7 +287,8 @@ export function AccountStatementView({
     const url = buildPdfUrl(lang);
     if (url) window.open(url, "_blank");
   };
-  const showWhatsApp = appMode === "factory" || appMode === "erp";
+  // Rule changes and statement sends are business writes; read-only roles do not see them.
+  const showWhatsApp = canChangeExistingRecords && (appMode === "factory" || appMode === "erp");
   // The phone header's one-tap PDF follows the interface language; other languages stay in the menu.
   const phonePdfLanguage: "en" | "fr" | "ar" = language === "ar" || language === "fr" ? language : "en";
 
@@ -427,6 +431,7 @@ export function AccountStatementView({
                     testId: "button-show-deleted",
                   },
                   !isEurTab &&
+                    canChangeExistingRecords &&
                     selectedVoucherIds.size > 0 && {
                       label: `Delete Selected (${selectedVoucherIds.size})`,
                       icon: Trash2,
@@ -507,7 +512,9 @@ export function AccountStatementView({
                   {showNativeBalance ? (
                     <FxAgentNativeBalance wallet={nativeWallet!} compact />
                   ) : (
-                    <span className={`text-sm font-mono tabular-nums shrink-0 ${drCrClass(balSide(displayClosingBalance))}`}>
+                    <span
+                      className={`text-sm font-mono tabular-nums shrink-0 ${drCrClass(balSide(displayClosingBalance))}`}
+                    >
                       {formatAmount(Math.abs(displayClosingBalance))}
                       <span className="ml-1 text-[11px] opacity-70">{balSide(displayClosingBalance)}</span>
                     </span>
@@ -516,7 +523,7 @@ export function AccountStatementView({
               )}
             </div>
             <div className="flex items-center gap-1 shrink-0">
-              {(appMode === "factory" || appMode === "erp") && (
+              {showWhatsApp && (
                 <>
                   <Button
                     size="icon"
@@ -603,7 +610,7 @@ export function AccountStatementView({
               </div>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              {!isEurTab && selectedVoucherIds.size > 0 && (
+              {!isEurTab && canChangeExistingRecords && selectedVoucherIds.size > 0 && (
                 <Button
                   variant="destructive"
                   size="sm"
@@ -698,7 +705,11 @@ export function AccountStatementView({
               value: (
                 <>
                   {formatAmount(Math.abs(displayClosingBalance))}
-                  <span className={`ms-1 text-[11px] font-normal opacity-70 ${drCrClass(balSide(displayClosingBalance))}`}>{balSide(displayClosingBalance)}</span>
+                  <span
+                    className={`ms-1 text-[11px] font-normal opacity-70 ${drCrClass(balSide(displayClosingBalance))}`}
+                  >
+                    {balSide(displayClosingBalance)}
+                  </span>
                 </>
               ),
             },
@@ -746,10 +757,16 @@ export function AccountStatementView({
               <p className="text-[11px] text-muted-foreground leading-none mb-0.5">
                 {showNativeBalance ? "Historical USD closing" : "Closing Balance"}
               </p>
-              <p className={`text-base font-semibold leading-none tabular-nums ${drCrClass(balSide(displayClosingBalance))}`}>
+              <p
+                className={`text-base font-semibold leading-none tabular-nums ${drCrClass(balSide(displayClosingBalance))}`}
+              >
                 <>
                   {formatAmount(Math.abs(displayClosingBalance))}
-                  <span className={`ml-1 text-[11px] font-normal opacity-70 ${drCrClass(balSide(displayClosingBalance))}`}>{balSide(displayClosingBalance)}</span>
+                  <span
+                    className={`ml-1 text-[11px] font-normal opacity-70 ${drCrClass(balSide(displayClosingBalance))}`}
+                  >
+                    {balSide(displayClosingBalance)}
+                  </span>
                 </>
               </p>
             </div>

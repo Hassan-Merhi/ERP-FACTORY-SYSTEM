@@ -1,6 +1,7 @@
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { formatNumber } from "@/lib/formatNumber";
 import { recordedMixBatchCost, summarizeRecordedMixSources } from "@/lib/recordedMixBatchCost";
 import { Plus, Trash2, Layers, Package } from "lucide-react";
@@ -31,11 +32,14 @@ export function EditMixBatchDialog({
   batch,
   open,
   onOpenChange,
-  readOnly = false,
+  readOnly: readOnlyProp = false,
   hideCosts = false,
   errorMessage,
 }: EditMixBatchDialogProps) {
   const { toast } = useToast();
+  // Read-only company roles always get the view-only form of this dialog.
+  const recordChanges = useExistingRecordChangeAccess();
+  const readOnly = readOnlyProp || !recordChanges.allowed;
   const [selectedSources, setSelectedSources] = useState<SourceSelection[]>([]);
   const [addSourceType, setAddSourceType] = useState<SourceType>("supplier");
   const [selectedSourceId, setSelectedSourceId] = useState<string>("");
@@ -135,7 +139,9 @@ export function EditMixBatchDialog({
           existing.weightKg += srcWeight;
           existing.totalCost = isCompleted ? existing.totalCost + savedUsd : existing.weightKg * currentRate;
           existing.costPerKg = isCompleted
-            ? (existing.weightKg > 0 ? existing.totalCost / existing.weightKg : 0)
+            ? existing.weightKg > 0
+              ? existing.totalCost / existing.weightKg
+              : 0
             : currentRate;
           existing.availableKg = currentRemaining + existing.weightKg;
         } else {
@@ -236,6 +242,7 @@ export function EditMixBatchDialog({
 
   const saveMutation = useMutation({
     mutationFn: async () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       if (sourcesChanged && (!sourceReview?.allowed || !sourceReview.reviewHash)) {
         throw new Error("Review and approve the proposed material changes before saving.");
       }
@@ -688,7 +695,11 @@ export function EditMixBatchDialog({
                               <span
                                 className="font-mono text-xs text-muted-foreground"
                                 data-testid={`text-cost-per-kg-${sel.type}-${sel.sourceId}`}
-                                title={historicalSourcesLocked ? "Recorded weighted-average supplier rate at the time of the mix" : "Current supplier rate, used only for an edit estimate"}
+                                title={
+                                  historicalSourcesLocked
+                                    ? "Recorded weighted-average supplier rate at the time of the mix"
+                                    : "Current supplier rate, used only for an edit estimate"
+                                }
                               >
                                 ${sel.costPerKg.toFixed(4)}
                               </span>

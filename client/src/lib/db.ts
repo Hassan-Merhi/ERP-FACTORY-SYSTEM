@@ -147,6 +147,56 @@ export interface LegacyRecoveryEntry {
 }
 
 /** The browser's non-extractable key for LegacyRecoveryEntry.sealed. */
+/**
+ * Standalone browser offline mode (Phases 13–16): one business operation the
+ * person saved on this laptop while offline. The entered values are sealed
+ * with this user's non-extractable device key; only a short label and the
+ * delivery state are readable.
+ */
+export type BrowserOperationState =
+  "saved" | "pending" | "sending" | "synced" | "waiting" | "conflict" | "rejected" | "needs_review" | "discarded";
+
+export interface BrowserOperationRecord {
+  /** The operation id: the cloud's idempotency key. */
+  id: string;
+  companyId: number;
+  userId: string;
+  deviceId: string;
+  kind: string;
+  stream: string;
+  /** Local id from 1,000,000,000 that names the record before the cloud has it. */
+  localRef: number;
+  capturedAt: string;
+  /** Short label for lists: what it is and its amount, never notes or parties. */
+  label: string;
+  /** SHA-256 of the entered values: spots a double click without decrypting. */
+  inputHash: string;
+  sealed: string;
+  iv: string;
+  state: BrowserOperationState;
+  attempts: number;
+  nextAttemptAt: number;
+  lastError: string | null;
+  conflictCode: string | null;
+  conflictOverridable: boolean;
+  /** A conflict code an Admin/Developer approved; sent with the next attempt. */
+  overrideCode: string | null;
+  cloudRef: number | null;
+  outcome: string | null;
+  createdAt: number;
+  updatedAt: number;
+  syncedAt: number | null;
+}
+
+export interface BrowserDeviceKey {
+  /** `${companyId}:${userId}` */
+  id: string;
+  key: CryptoKey;
+  deviceId: string;
+  /** Next local reference to hand out on this device. */
+  nextLocalRef: number;
+}
+
 export interface LegacyRecoveryKey {
   id: string;
   key: CryptoKey;
@@ -196,6 +246,8 @@ class ERPDatabase extends Dexie {
   offlineColdStartTickets!: Table<OfflineColdStartTicket, string>;
   legacyRecoveryEntries!: Table<LegacyRecoveryEntry, string>;
   legacyRecoveryKeys!: Table<LegacyRecoveryKey, string>;
+  browserOperations!: Table<BrowserOperationRecord, string>;
+  browserDeviceKeys!: Table<BrowserDeviceKey, string>;
   syncState!: Table<SyncState, number>;
   syncLogs!: Table<SyncLog, number>;
   conflicts!: Table<Conflict, number>;
@@ -323,6 +375,12 @@ class ERPDatabase extends Dexie {
     this.version(10).stores({
       legacyRecoveryEntries: "&id, companyId, state, expiresAt",
       legacyRecoveryKeys: "&id",
+    });
+    // Standalone browser offline mode: operations saved on this laptop, and the
+    // per-user device key that seals them.
+    this.version(11).stores({
+      browserOperations: "&id, [companyId+userId], state, createdAt",
+      browserDeviceKeys: "&id",
     });
   }
 }

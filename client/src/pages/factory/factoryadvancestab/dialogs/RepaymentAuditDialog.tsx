@@ -5,6 +5,7 @@
  * discovered from compiler errors rather than guessed.
  */
 import type { useAdvancesModel } from "../advances/useAdvancesModel";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 
 type AdvancesModel = ReturnType<typeof useAdvancesModel>;
 import { Fragment } from "react";
@@ -50,6 +51,7 @@ export function RepaymentAuditDialog({
   setRepayAuditForm: AdvancesModel["setRepayAuditForm"];
   setRepayAuditOpen: AdvancesModel["setRepayAuditOpen"];
 }) {
+  const recordChanges = useExistingRecordChangeAccess();
   return (
     <Dialog
       open={repayAuditOpen}
@@ -274,38 +276,40 @@ export function RepaymentAuditDialog({
           <Button variant="outline" onClick={() => setRepayAuditOpen(false)} data-testid="button-audit-cancel">
             Cancel
           </Button>
-          <Button
-            onClick={() => repayAuditMutation.mutate(repayAuditForm)}
-            disabled={
-              !auditData ||
-              auditData.advances.length === 0 ||
-              !repayAuditForm.cashAccountId ||
-              !repayAuditForm.repaymentDate ||
-              repayAuditMutation.isPending
-            }
-            data-testid="button-audit-confirm"
-          >
-            {repayAuditMutation.isPending ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Posting…
-              </>
-            ) : (
-              `Post Missing Entries — ${fmt(
-                auditData?.advances.reduce(
-                  (sum, advance) =>
-                    sum +
-                    (advance.caseType === "missing_voucher"
-                      ? advance.missingVoucherRepayments.reduce(
-                          (repaymentSum, repayment) => repaymentSum + parseFloat(repayment.amount || "0"),
-                          0
-                        )
-                      : parseFloat(advance.amount || "0")),
-                  0
-                ) ?? 0
-              )}`
-            )}
-          </Button>
+          {recordChanges.allowed && (
+            <Button
+              onClick={() => repayAuditMutation.mutate(repayAuditForm)}
+              disabled={
+                !auditData ||
+                auditData.advances.length === 0 ||
+                !repayAuditForm.cashAccountId ||
+                !repayAuditForm.repaymentDate ||
+                repayAuditMutation.isPending
+              }
+              data-testid="button-audit-confirm"
+            >
+              {repayAuditMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Posting…
+                </>
+              ) : (
+                `Post Missing Entries — ${fmt(
+                  auditData?.advances.reduce(
+                    (sum, advance) =>
+                      sum +
+                      (advance.caseType === "missing_voucher"
+                        ? advance.missingVoucherRepayments.reduce(
+                            (repaymentSum, repayment) => repaymentSum + parseFloat(repayment.amount || "0"),
+                            0
+                          )
+                        : parseFloat(advance.amount || "0")),
+                    0
+                  ) ?? 0
+                )}`
+              )}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

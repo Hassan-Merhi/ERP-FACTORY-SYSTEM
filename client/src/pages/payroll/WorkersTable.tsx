@@ -39,6 +39,8 @@ interface WorkersTableProps {
   setWorkerDeductionTarget?: (val: Employee | null) => void;
   setSelectedWorkerForEdit?: (val: Employee | null) => void;
   setEditWorkerDialogOpen?: (val: boolean) => void;
+  /** False for View Only and Create Only: row actions that change the worker are hidden. */
+  canChangeExistingRecords: boolean;
 }
 
 export function WorkersTable({
@@ -55,6 +57,7 @@ export function WorkersTable({
   setWorkerDeductionTarget,
   setSelectedWorkerForEdit,
   setEditWorkerDialogOpen,
+  canChangeExistingRecords,
 }: WorkersTableProps) {
   const workersOnly = workers.filter((worker) => worker.employeeType === "Worker");
 
@@ -62,80 +65,83 @@ export function WorkersTable({
     return <div className="py-8 text-center text-sm text-muted-foreground">No workers in this group</div>;
   }
 
-  const renderActions = (worker: PayrollWorker) => (
-    <div className="flex items-center justify-end gap-1">
-      {!groupId && workerGroups.length > 0 && addWorkerToWorkerGroupMutation && (
-        <Select
-          onValueChange={(groupValue) =>
-            addWorkerToWorkerGroupMutation.mutate({ groupId: parseInt(groupValue), workerId: worker.id })
-          }
-        >
-          <SelectTrigger className="hidden h-8 w-32 text-xs xl:flex" data-testid={`select-move-group-${worker.id}`}>
-            <SelectValue placeholder="Assign group" />
-          </SelectTrigger>
-          <SelectContent>
-            {workerGroups.map((group) => (
-              <SelectItem key={group.id} value={String(group.id)}>
-                {group.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      )}
-
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button size="icon" variant="ghost" className="h-8 w-8" data-testid={`button-actions-worker-${worker.id}`}>
-            <MoreHorizontal className="h-4 w-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-44">
-          {setSelectedWorkerForEdit && setEditWorkerDialogOpen && (
-            <DropdownMenuItem
-              onClick={() => {
-                setSelectedWorkerForEdit(worker);
-                setEditWorkerDialogOpen(true);
-              }}
-              data-testid={`button-edit-worker-${worker.id}`}
-            >
-              <Pencil className="mr-2 h-4 w-4" /> Edit worker
-            </DropdownMenuItem>
-          )}
-          {setWorkerDeductionTarget && (
-            <DropdownMenuItem
-              onClick={() => setWorkerDeductionTarget(worker)}
-              data-testid={`button-deduction-${worker.id}`}
-            >
-              <MinusCircle className="mr-2 h-4 w-4" /> Add deduction
-            </DropdownMenuItem>
-          )}
-          {!groupId && workerGroups.length > 0 && addWorkerToWorkerGroupMutation && (
-            <DropdownMenuItem className="xl:hidden" onSelect={(event) => event.preventDefault()}>
-              <span className="text-xs text-muted-foreground">Use Assign group beside this row on desktop</span>
-            </DropdownMenuItem>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
-
-      <ConfirmationDialog
-        trigger={
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-8 w-8 text-destructive hover:text-destructive"
-            data-testid={`button-delete-worker-${worker.id}`}
+  const renderActions = (worker: PayrollWorker) => {
+    if (!canChangeExistingRecords) return null;
+    return (
+      <div className="flex items-center justify-end gap-1">
+        {!groupId && workerGroups.length > 0 && addWorkerToWorkerGroupMutation && (
+          <Select
+            onValueChange={(groupValue) =>
+              addWorkerToWorkerGroupMutation.mutate({ groupId: parseInt(groupValue), workerId: worker.id })
+            }
           >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        }
-        title="Delete Worker"
-        description={`Are you sure you want to delete ${[worker.firstName, worker.lastName].filter(Boolean).join(" ")}? This action cannot be undone.`}
-        confirmText="Delete"
-        variant="destructive"
-        onConfirm={() => handleDeleteWorker(worker)}
-      />
-    </div>
-  );
+            <SelectTrigger className="hidden h-8 w-32 text-xs xl:flex" data-testid={`select-move-group-${worker.id}`}>
+              <SelectValue placeholder="Assign group" />
+            </SelectTrigger>
+            <SelectContent>
+              {workerGroups.map((group) => (
+                <SelectItem key={group.id} value={String(group.id)}>
+                  {group.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button size="icon" variant="ghost" className="h-8 w-8" data-testid={`button-actions-worker-${worker.id}`}>
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-44">
+            {setSelectedWorkerForEdit && setEditWorkerDialogOpen && (
+              <DropdownMenuItem
+                onClick={() => {
+                  setSelectedWorkerForEdit(worker);
+                  setEditWorkerDialogOpen(true);
+                }}
+                data-testid={`button-edit-worker-${worker.id}`}
+              >
+                <Pencil className="mr-2 h-4 w-4" /> Edit worker
+              </DropdownMenuItem>
+            )}
+            {setWorkerDeductionTarget && (
+              <DropdownMenuItem
+                onClick={() => setWorkerDeductionTarget(worker)}
+                data-testid={`button-deduction-${worker.id}`}
+              >
+                <MinusCircle className="mr-2 h-4 w-4" /> Add deduction
+              </DropdownMenuItem>
+            )}
+            {!groupId && workerGroups.length > 0 && addWorkerToWorkerGroupMutation && (
+              <DropdownMenuItem className="xl:hidden" onSelect={(event) => event.preventDefault()}>
+                <span className="text-xs text-muted-foreground">Use Assign group beside this row on desktop</span>
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <ConfirmationDialog
+          trigger={
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-8 w-8 text-destructive hover:text-destructive"
+              data-testid={`button-delete-worker-${worker.id}`}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          }
+          title="Delete Worker"
+          description={`Are you sure you want to delete ${[worker.firstName, worker.lastName].filter(Boolean).join(" ")}? This action cannot be undone.`}
+          confirmText="Delete"
+          variant="destructive"
+          onConfirm={() => handleDeleteWorker(worker)}
+        />
+      </div>
+    );
+  };
 
   return (
     <div>

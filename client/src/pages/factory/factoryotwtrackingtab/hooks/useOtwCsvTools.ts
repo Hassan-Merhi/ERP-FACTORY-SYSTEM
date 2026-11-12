@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getErrorDetails } from "@shared/errorUtils";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { factoryApiRequest } from "@/lib/factoryApi";
 import type { ContainerWithSupplier } from "../types";
 import { containerCost, num } from "../utils";
@@ -91,6 +92,8 @@ export function useOtwCsvTools(filtered: ContainerWithSupplier[], otwContainers:
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [importing, setImporting] = useState(false);
+  // Import rewrites ETAs on existing containers; export stays available to everyone.
+  const recordChanges = useExistingRecordChangeAccess();
 
   function exportCsv() {
     const rows = [["Container #", "Supplier", "ETA (YYYY-MM-DD)", "Status", "Cost", "Freight", "Weight (KG)", "Notes"]];
@@ -121,7 +124,7 @@ export function useOtwCsvTools(filtered: ContainerWithSupplier[], otwContainers:
   async function handleImportFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
-    if (!file) return;
+    if (!file || !recordChanges.allowed) return;
 
     setImporting(true);
     try {
@@ -165,5 +168,5 @@ export function useOtwCsvTools(filtered: ContainerWithSupplier[], otwContainers:
     }
   }
 
-  return { importing, exportCsv, handleImportFile };
+  return { importing, exportCsv, handleImportFile, canImport: recordChanges.allowed };
 }

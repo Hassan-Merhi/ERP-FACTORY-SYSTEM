@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { queryClient } from "@/lib/queryClient";
 import type { getApiRequest } from "@/lib/factoryApi";
@@ -22,6 +23,7 @@ interface AdvanceReassignDialogProps {
 /** Admin/Owner/Developer correction of the worker a salary advance belongs to. */
 export function AdvanceReassignDialog({ target, workers, companyId, apiRequest, onClose }: AdvanceReassignDialogProps) {
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
   const { formatAmount } = useCurrencyContext();
   const [workerId, setWorkerId] = useState("");
 
@@ -31,6 +33,7 @@ export function AdvanceReassignDialog({ target, workers, companyId, apiRequest, 
 
   const reassignAdvanceMutation = useMutation({
     mutationFn: async ({ advanceId, employeeId }: { advanceId: number; employeeId: number }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       return await apiRequest("PATCH", `/api/salary-advances/${advanceId}/worker`, { employeeId });
     },
     onSuccess: () => {
@@ -88,20 +91,22 @@ export function AdvanceReassignDialog({ target, workers, companyId, apiRequest, 
           <Button variant="outline" onClick={onClose} disabled={reassignAdvanceMutation.isPending}>
             Cancel
           </Button>
-          <Button
-            data-testid="button-confirm-reassign-advance"
-            disabled={
-              reassignAdvanceMutation.isPending || !target || !workerId || Number(workerId) === target?.employeeId
-            }
-            onClick={() => {
-              if (target && workerId) {
-                reassignAdvanceMutation.mutate({ advanceId: target.id, employeeId: Number(workerId) });
+          {recordChanges.allowed && (
+            <Button
+              data-testid="button-confirm-reassign-advance"
+              disabled={
+                reassignAdvanceMutation.isPending || !target || !workerId || Number(workerId) === target?.employeeId
               }
-            }}
-          >
-            {reassignAdvanceMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Save Worker
-          </Button>
+              onClick={() => {
+                if (target && workerId) {
+                  reassignAdvanceMutation.mutate({ advanceId: target.id, employeeId: Number(workerId) });
+                }
+              }}
+            >
+              {reassignAdvanceMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save Worker
+            </Button>
+          )}
         </div>
       </DialogContent>
     </Dialog>

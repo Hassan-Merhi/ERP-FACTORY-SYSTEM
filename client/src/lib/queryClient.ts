@@ -1,5 +1,10 @@
 import { offlineError } from "./offline/offlineError";
 import { CreateOnlyActionNotAvailableError, isCreateOnlyClientWriteBlocked } from "./createOnlyRequestGuard";
+import {
+  installPermissionRevalidationListener,
+  isPermissionDenial,
+  requestPermissionRevalidation,
+} from "./permissionRevalidation";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { getErrorDetails } from "@shared/errorUtils";
 import { QueryClient, QueryFunction, MutationCache, QueryCache } from "@tanstack/react-query";
@@ -19,6 +24,7 @@ import { isAbortError } from "./abortError";
 import { getRealtimeClientId } from "./realtimeClientIdentity";
 import { factoryPageOwnsAccountsAllRead, factoryPageOwnsSharedAccountingRead } from "./factoryClientAccess";
 import { coldStartReadOnlyActive, coldStartReadOnlyResponse } from "./offline/coldStartState";
+import { isKnownOffline } from "./offline/connectivityState";
 
 /** Session writes a read-only cold-start viewer may still make (sign in / out). */
 const COLD_START_ALLOWED_WRITES = new Set(["/api/auth/login", "/api/auth/logout", "/api/csrf-token"]);
@@ -462,6 +468,11 @@ async function throwIfResNotOk(res: Response) {
       } = new Error(errorData.message || res.statusText);
     error.status = res.status;
     error.code = errorData.code;
+    // A role or permission refusal means this tab's access data may be stale;
+    // refresh it here and in the other open tabs.
+    if (isPermissionDenial(res.status, errorData.code, errorData.message)) {
+      requestPermissionRevalidation(queryClient);
+    }
     error.requiresConfirmation = errorData.requiresConfirmation;
     error.employeeBalance = errorData.employeeBalance;
     error.ledgerBalance = errorData.ledgerBalance;
@@ -581,6 +592,17 @@ export async function apiRequest(
     }
     const { submitDurableVoucherWithEntries } = await import("./offline/voucherCapture");
     return submitDurableVoucherWithEntries({ companyId, userId: String(user.id) }, data, getAppDate());
+  }
+  if (
+    OFFLINE_MODE_ENABLED &&
+    !["GET", "HEAD", "OPTIONS"].includes(method.toUpperCase()) &&
+    (isKnownOffline() || coldStartReadOnlyActive())
+  ) {
+    // Standalone offline mode: known to be offline BEFORE sending. Supported
+    // writes are saved on this device for later delivery to the cloud; every
+    // other write is refused with its reason. Never after a send was cut off.
+    const { captureOfflineWriteForSignedInUser } = await import("./offline/browserCapture");
+    return captureOfflineWriteForSignedInUser(queryClient.getQueryData(["/api/auth/me"]), method, url, data);
   }
   const prepared = await prepareApiRequest(method, url, data, timeoutMs);
 
@@ -827,6 +849,7 @@ export const queryClient = new QueryClient({
 });
 
 referenceMutationQueryClient = queryClient;
+installPermissionRevalidationListener(queryClient);
 
 export const STABLE_REFERENCE_QUERY_PREFIXES = STABLE_REFERENCE_API_ENDPOINTS;
 export const STABLE_SETTINGS_QUERY_PREFIXES = STABLE_SETTINGS_API_ENDPOINTS;

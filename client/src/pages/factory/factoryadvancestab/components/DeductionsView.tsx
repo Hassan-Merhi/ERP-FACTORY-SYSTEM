@@ -4,6 +4,7 @@
  * Extracted from FactoryAdvancesTab.tsx during the Phase 4 god-file split.
  */
 import { useState, useMemo } from "react";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { Plus, Trash2, Loader2 } from "lucide-react";
@@ -32,6 +33,7 @@ import { fmt } from "../utils";
 export function DeductionsView() {
   const { formatDisplayDate } = useDateFormat();
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
 
   const formatDate = (d: string | null | undefined) => {
     if (!d) return "\u2014";
@@ -74,6 +76,7 @@ export function DeductionsView() {
 
   const createMutation = useMutation({
     mutationFn: async () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await apiRequest("POST", `/api/factory/workers/${form.workerId}/deductions`, {
         amount: form.amount,
         reason: form.reason || undefined,
@@ -97,6 +100,7 @@ export function DeductionsView() {
 
   const deleteMutation = useMutation({
     mutationFn: async ({ workerId, id }: { workerId: number; id: number }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await fetch(`/api/factory/workers/${workerId}/deductions/${id}`, {
         method: "DELETE",
         credentials: "include",
@@ -145,10 +149,12 @@ export function DeductionsView() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <Button onClick={() => setAddOpen(true)} size="sm" data-testid="button-add-deduction">
-          <Plus className="h-4 w-4 mr-1" />
-          Add Deduction
-        </Button>
+        {recordChanges.allowed && (
+          <Button onClick={() => setAddOpen(true)} size="sm" data-testid="button-add-deduction">
+            <Plus className="h-4 w-4 mr-1" />
+            Add Deduction
+          </Button>
+        )}
         <Select value={filterWorker} onValueChange={setFilterWorker}>
           <SelectTrigger className="w-48" data-testid="select-filter-deduction-worker">
             <SelectValue placeholder="All workers" />
@@ -226,7 +232,7 @@ export function DeductionsView() {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        {!d.applied && (
+                        {recordChanges.allowed && !d.applied && (
                           <Button
                             size="icon"
                             variant="ghost"

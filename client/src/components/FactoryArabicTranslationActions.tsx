@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { Download, FileSpreadsheet, Upload } from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -109,6 +110,7 @@ export function FactoryArabicTranslationActions({ className }: FactoryArabicTran
   const [mode, setMode] = useState<FactoryArabicImportMode>("fill-missing");
   const [preview, setPreview] = useState<TranslationPreview | null>(null);
   const [exporting, setExporting] = useState(false);
+  const recordChanges = useExistingRecordChangeAccess();
 
   const { data: canImport = false } = useQuery({
     queryKey: ["/api/factory/bale-products/arabic-import/capabilities/import"],
@@ -152,6 +154,7 @@ export function FactoryArabicTranslationActions({ className }: FactoryArabicTran
 
   const applyMutation = useMutation({
     mutationFn: async () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       if (!file || !preview) {
         throw new Error("Preview the workbook before applying it");
       }
@@ -270,7 +273,7 @@ export function FactoryArabicTranslationActions({ className }: FactoryArabicTran
             {exporting ? "Exporting…" : "Export Arabic Names Template"}
           </Button>
         )}
-        {canImport && (
+        {canImport && recordChanges.allowed && (
           <Button variant="outline" size="sm" onClick={() => setOpen(true)} data-testid="button-import-arabic-names">
             <Upload className="mr-2 h-4 w-4" /> Import Arabic Names
           </Button>

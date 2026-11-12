@@ -10,6 +10,7 @@ import { LoadingState, EmptyState, ErrorState } from "@/components/ui/page-state
 import { Button } from "@/components/ui/button";
 import { Loader2, Bell, RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 
 interface Alert {
   id: number;
@@ -36,6 +37,8 @@ function getSeverityBadge(severity: string) {
 
 export default function FactoryAlerts() {
   const { selectedCompany } = useCompany();
+  const recordChanges = useExistingRecordChangeAccess();
+  const canGenerate = recordChanges.canCreate("POST", "/api/factory/alerts/generate");
   const alertsQuery = useQuery<Alert[]>({
     queryKey: companyQueryKey("/api/factory/alerts", selectedCompany?.id),
     enabled: Boolean(selectedCompany?.id),
@@ -53,6 +56,7 @@ export default function FactoryAlerts() {
 
   const markReadMutation = useMutation({
     mutationFn: async (id: number) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       await factoryApiRequest("POST", `/api/factory/alerts/${id}/read`);
     },
     onSuccess: () => {
@@ -72,18 +76,20 @@ export default function FactoryAlerts() {
             <span data-testid="text-unread-count">{unreadCount}</span> unread alert{unreadCount !== 1 ? "s" : ""}
           </p>
         </div>
-        <Button
-          onClick={() => generateMutation.mutate()}
-          disabled={generateMutation.isPending}
-          data-testid="button-generate-alerts"
-        >
-          {generateMutation.isPending ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <RefreshCw className="mr-2 h-4 w-4" />
-          )}
-          Generate Alerts
-        </Button>
+        {canGenerate && (
+          <Button
+            onClick={() => generateMutation.mutate()}
+            disabled={generateMutation.isPending}
+            data-testid="button-generate-alerts"
+          >
+            {generateMutation.isPending ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="mr-2 h-4 w-4" />
+            )}
+            Generate Alerts
+          </Button>
+        )}
       </div>
 
       <Card>
@@ -161,15 +167,17 @@ export default function FactoryAlerts() {
                       </TableCell>
                       <TableCell>
                         {!alert.isRead ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => markReadMutation.mutate(alert.id)}
-                            disabled={markReadMutation.isPending}
-                            data-testid={`button-mark-read-${alert.id}`}
-                          >
-                            Mark Read
-                          </Button>
+                          recordChanges.allowed && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => markReadMutation.mutate(alert.id)}
+                              disabled={markReadMutation.isPending}
+                              data-testid={`button-mark-read-${alert.id}`}
+                            >
+                              Mark Read
+                            </Button>
+                          )
                         ) : (
                           <span className="text-xs text-muted-foreground" data-testid={`text-read-${alert.id}`}>
                             Read

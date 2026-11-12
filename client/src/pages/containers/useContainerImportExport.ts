@@ -2,6 +2,7 @@ import { getErrorDetails } from "@shared/errorUtils";
 import { useRef, useState } from "react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { utils, writeFile, read } from "@/lib/excelHelper";
 import type { Container } from "@shared/schema";
 import { cellVal, cellStr, cellNum, excelDateToString } from "./containerExcel";
@@ -20,6 +21,7 @@ export function useContainerImportExport({
   formatDisplayDate,
 }: ImportExportParams) {
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isImporting, setIsImporting] = useState(false);
 
@@ -109,12 +111,13 @@ export function useContainerImportExport({
   };
 
   const handleImportClick = async () => {
+    if (!recordChanges.allowed) return;
     fileInputRef.current?.click();
   };
 
   const handleFileImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || !recordChanges.allowed) return;
     setIsImporting(true);
     try {
       const data = await file.arrayBuffer();
@@ -180,5 +183,6 @@ export function useContainerImportExport({
     downloadImportTemplate,
     handleImportClick,
     handleFileImport,
+    canChangeExistingRecords: recordChanges.allowed,
   };
 }

@@ -1,5 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import type { InventoryLocation as Location } from "./locationInventoryTypes";
 
 interface UseLocationInventoryMutationsParams {
@@ -21,6 +22,7 @@ export function useLocationInventoryMutations({
   setCreateLocationName,
   setWaGroupDialogOpen,
 }: UseLocationInventoryMutationsParams) {
+  const recordChanges = useExistingRecordChangeAccess();
   const renameLocationMutation = useMutation({
     mutationFn: async ({
       id,
@@ -31,6 +33,7 @@ export function useLocationInventoryMutations({
       name: string;
       supplierPartnerPayableDeductionPerQty?: number;
     }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const payload: Record<string, unknown> = { name };
       if (supplierPartnerPayableDeductionPerQty !== undefined)
         payload.supplierPartnerPayableDeductionPerQty = supplierPartnerPayableDeductionPerQty;
@@ -70,6 +73,7 @@ export function useLocationInventoryMutations({
       whatsappGroupChatId: string | null;
       enabled: boolean;
     }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await apiRequest("PUT", `/api/locations/${id}/whatsapp-settings`, {
         whatsappGroupChatId,
         enabled,
@@ -94,6 +98,7 @@ export function useLocationInventoryMutations({
 
   const waTestMutation = useMutation({
     mutationFn: async ({ id, whatsappGroupChatId }: { id: number; whatsappGroupChatId: string | null }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await apiRequest("POST", `/api/locations/${id}/whatsapp-test`, { whatsappGroupChatId });
       return res.json();
     },
@@ -104,5 +109,12 @@ export function useLocationInventoryMutations({
       toast({ title: "WhatsApp test failed", description: error.message, variant: "destructive" }),
   });
 
-  return { renameLocationMutation, createLocationMutation, waGroupMutation, waTestMutation };
+  return {
+    renameLocationMutation,
+    createLocationMutation,
+    waGroupMutation,
+    waTestMutation,
+    canChangeExistingRecords: recordChanges.allowed,
+    canCreate: recordChanges.canCreate,
+  };
 }

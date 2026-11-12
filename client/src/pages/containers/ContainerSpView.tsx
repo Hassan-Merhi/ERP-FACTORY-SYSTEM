@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { apiRequest } from "@/lib/queryClient";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Package, Eye, Search, X, Ban, Loader2, Truck, Check, Download, ChevronDown, Filter } from "lucide-react";
 import {
@@ -77,7 +78,8 @@ export function ContainerSpView({
     queryKey: ["/api/auth/me"],
   });
   const role = currentUser?.currentRole ?? currentUser?.role ?? "";
-  const canCancel = role === "Admin" || role === "Developer";
+  const recordChanges = useExistingRecordChangeAccess();
+  const canCancel = (role === "Admin" || role === "Developer") && recordChanges.allowed;
 
   const cancelContainer = useMutation({
     mutationFn: async () => {
@@ -321,9 +323,11 @@ export function ContainerSpView({
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button className="gap-2" onClick={() => setLocation("/po-import")} data-testid="button-add-container">
-            <Plus className="h-4 w-4" /> Add
-          </Button>
+          {recordChanges.canCreate("POST", "/api/po-import/import") && (
+            <Button className="gap-2" onClick={() => setLocation("/po-import")} data-testid="button-add-container">
+              <Plus className="h-4 w-4" /> Add
+            </Button>
+          )}
         </div>
       </PageHeader>
       <div className="flex flex-wrap gap-3" data-testid="sp-container-summary">

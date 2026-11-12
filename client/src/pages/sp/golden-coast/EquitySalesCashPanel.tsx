@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { releaseDebtEnglish } from "@/i18n/finalCloseoutTranslations";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import {
   EQUITY_SALES_CASH_CONFIRMATION,
   EQUITY_SALES_CASH_READINESS,
@@ -38,6 +39,7 @@ import {
 
 export function EquitySalesCashPanel({ companyKey }: { companyKey: CompanyKey }) {
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
   const invalidateReadiness = useReadinessInvalidation();
 
   const [date, setDate] = useState(todayIso);
@@ -64,6 +66,7 @@ export function EquitySalesCashPanel({ companyKey }: { companyKey: CompanyKey })
 
   const settlement = useMutation({
     mutationFn: async () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const response = await apiRequest("POST", EQUITY_SALES_CASH_SETTLEMENT, {
         settlementDate: date,
         amountUsd: amount,
@@ -224,14 +227,16 @@ export function EquitySalesCashPanel({ companyKey }: { companyKey: CompanyKey })
             {money(Number.isFinite(Number(amount)) ? String(Number(amount || 0) * 2) : "0")}
           </p>
         </div>
-        <Button
-          onClick={() => settlement.mutate()}
-          disabled={!canSubmit || settlement.isPending}
-          data-testid="button-gc-equity-sales-cash-submit"
-        >
-          {settlement.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          {releaseDebtEnglish("Settle from equity")}
-        </Button>
+        {recordChanges.allowed && (
+          <Button
+            onClick={() => settlement.mutate()}
+            disabled={!canSubmit || settlement.isPending}
+            data-testid="button-gc-equity-sales-cash-submit"
+          >
+            {settlement.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {releaseDebtEnglish("Settle from equity")}
+          </Button>
+        )}
       </CardContent>
     </Card>
   );

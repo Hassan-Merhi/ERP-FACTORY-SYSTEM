@@ -3,6 +3,7 @@ import { getErrorDetails } from "@shared/errorUtils";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
@@ -20,6 +21,11 @@ export function useFactoryInvoiceDetailModel() {
   const { formatDisplayDate } = useDateFormat();
   const { toast } = useToast();
   const [, navigate] = useLocation();
+  // Every mutation below changes this existing invoice/loading.
+  const recordChanges = useExistingRecordChangeAccess();
+  const assertCanChange = () => {
+    if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
+  };
   const [editingArticleCode, setEditingArticleCode] = useState<string | null>(null);
   const [editingChargeLedger, setEditingChargeLedger] = useState<number | null>(null);
   const [editingChargeAmount, setEditingChargeAmount] = useState<number | null>(null);
@@ -67,6 +73,7 @@ export function useFactoryInvoiceDetailModel() {
 
   const updateChargeLedgerMutation = useMutation({
     mutationFn: async ({ chargeId, ledgerAccountId }: { chargeId: number; ledgerAccountId: number | null }) => {
+      assertCanChange();
       const res = await modeApiRequest("PATCH", `/api/factory/customer-orders/${orderId}/charges/${chargeId}`, {
         ledgerAccountId,
       });
@@ -93,6 +100,7 @@ export function useFactoryInvoiceDetailModel() {
       chargeType: string;
       ledgerAccountId: number | null;
     }) => {
+      assertCanChange();
       const res = await modeApiRequest("POST", `/api/factory/customer-orders/${orderId}/charges`, {
         name,
         amount,
@@ -120,6 +128,7 @@ export function useFactoryInvoiceDetailModel() {
 
   const relinkVouchersMutation = useMutation({
     mutationFn: async () => {
+      assertCanChange();
       const res = await modeApiRequest("POST", `/api/factory/customer-orders/${orderId}/charges/relink-vouchers`, {});
       if (!res.ok) throw new Error((await res.json()).message || "Failed to relink");
       return res.json();
@@ -133,6 +142,7 @@ export function useFactoryInvoiceDetailModel() {
 
   const updateChargeAmountMutation = useMutation({
     mutationFn: async ({ chargeId, amount }: { chargeId: number; amount: number }) => {
+      assertCanChange();
       const res = await modeApiRequest("PATCH", `/api/factory/customer-orders/${orderId}/charges/${chargeId}`, {
         amount,
       });
@@ -203,7 +213,9 @@ export function useFactoryInvoiceDetailModel() {
   });
 
   const accessReady = myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true;
-  const hideExportSelling = !accessReady || myAccess?.hideAllCosts === true ||
+  const hideExportSelling =
+    !accessReady ||
+    myAccess?.hideAllCosts === true ||
     myAccess?.hiddenCostFields.includes("hide_export_selling_price") === true;
   const isAdmin = accessReady && myAccess?.fullAccess === true;
 
@@ -259,6 +271,7 @@ export function useFactoryInvoiceDetailModel() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
+      assertCanChange();
       const res = await modeApiRequest("DELETE", `/api/factory/customer-orders/${id}`);
       if (!res.ok) {
         const data = await res.json();
@@ -280,6 +293,7 @@ export function useFactoryInvoiceDetailModel() {
 
   const repriceMutation = useMutation({
     mutationFn: async () => {
+      assertCanChange();
       const res = await modeApiRequest("POST", `/api/factory/customer-orders/${orderId}/reprice`);
       if (!res.ok) {
         const data = await res.json();
@@ -309,6 +323,7 @@ export function useFactoryInvoiceDetailModel() {
 
   const repriceArticleMutation = useMutation({
     mutationFn: async ({ articleCode, pricePerBale }: { articleCode: string; pricePerBale: number }) => {
+      assertCanChange();
       const res = await modeApiRequest("PATCH", `/api/factory/customer-orders/${orderId}/bales/reprice-article`, {
         articleCode,
         pricePerBale,
@@ -336,6 +351,7 @@ export function useFactoryInvoiceDetailModel() {
 
   const unfinalizeMutation = useMutation({
     mutationFn: async () => {
+      assertCanChange();
       const res = await modeApiRequest("POST", `/api/factory/customer-orders/${orderId}/unfinalize`);
       if (!res.ok) {
         const data = await res.json();
@@ -356,6 +372,7 @@ export function useFactoryInvoiceDetailModel() {
 
   const repriceProductionMutation = useMutation({
     mutationFn: async () => {
+      assertCanChange();
       const res = await modeApiRequest("POST", `/api/factory/customer-orders/${orderId}/reprice-production`);
       if (!res.ok) {
         const data = await res.json();
@@ -385,6 +402,7 @@ export function useFactoryInvoiceDetailModel() {
 
   const applyProformaMutation = useMutation({
     mutationFn: async (proformaId: number) => {
+      assertCanChange();
       const res = await modeApiRequest("POST", `/api/factory/customer-orders/${orderId}/apply-proforma-prices`, {
         proformaId,
       });
@@ -416,6 +434,7 @@ export function useFactoryInvoiceDetailModel() {
 
   const exchangeMutation = useMutation({
     mutationFn: async ({ orderBaleId, newBaleReference }: { orderBaleId: number; newBaleReference: string }) => {
+      assertCanChange();
       const res = await modeApiRequest("POST", `/api/factory/customer-orders/${orderId}/bales/exchange`, {
         orderBaleId,
         newBaleReference,
@@ -440,6 +459,7 @@ export function useFactoryInvoiceDetailModel() {
 
   const removeBaleMutation = useMutation({
     mutationFn: async (orderBaleId: number) => {
+      assertCanChange();
       const res = await modeApiRequest("DELETE", `/api/factory/customer-orders/${orderId}/bales/${orderBaleId}`);
       if (!res.ok) {
         const data = await res.json();
@@ -542,6 +562,9 @@ export function useFactoryInvoiceDetailModel() {
   return {
     formatDisplayDate,
     navigate,
+    /** False for View Only and Create Only: hide every control that changes this invoice. */
+    canChangeExistingRecords: recordChanges.allowed,
+    changeDisabledReason: recordChanges.reason,
     editingArticleCode,
     editingChargeLedger,
     setEditingChargeLedger,

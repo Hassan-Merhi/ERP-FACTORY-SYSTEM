@@ -22,6 +22,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { apiRequest } from "@/lib/queryClient";
 import type { V5Data } from "./factorystockallocationv5/types";
 import {
@@ -45,35 +46,14 @@ import {
   type HistoryResponse,
   type LoadingFilter,
 } from "./customerLoadingTypes";
+import { COLUMN_PREFERENCE_KEY, initialVisibleColumns, PAGE_SIZE, readJson } from "./customerLoadingHelpers";
 
-const PAGE_SIZE = 75;
-const COLUMN_PREFERENCE_KEY = "factory.customer-loading.visible-columns.v1";
-
-/** Only column presentation is persisted; selection, quantities, and proforma data are not stored. */
-function initialVisibleColumns(): Set<ColumnKey> {
-  const defaults = new Set(COLUMN_OPTIONS.map((column) => column.key));
-  if (typeof window === "undefined") return defaults;
-  try {
-    const stored = window.localStorage.getItem(COLUMN_PREFERENCE_KEY);
-    if (stored === null) return defaults;
-    const parsed: unknown = JSON.parse(stored);
-    if (!Array.isArray(parsed)) return defaults;
-    return new Set(COLUMN_OPTIONS.filter((column) => parsed.includes(column.key)).map((column) => column.key));
-  } catch {
-    return defaults;
-  }
-}
-
-async function readJson<T>(url: string): Promise<T> {
-  const response = await fetch(url, { credentials: "include" });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload?.message || "Request failed");
-  return payload as T;
-}
 export default function CustomerLoading() {
   const mhd = useFactoryMhdView();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const recordChanges = useExistingRecordChangeAccess();
+  const canCreateProforma = recordChanges.canCreate("POST", "/api/factory/customer-proformas/bulk");
   const [customerId, setCustomerId] = useState("");
   const [search, setSearch] = useState("");
   const [loadingFilter, setLoadingFilter] = useState<LoadingFilter>("ALL");
@@ -861,10 +841,12 @@ export default function CustomerLoading() {
               <Button variant="outline" onClick={resetSelection}>
                 Clear
               </Button>
-              <Button onClick={openPreview} disabled={validSelectedLines.length === 0 || hasInvalidSelectedLine}>
-                <ShoppingCart className="mr-2 h-4 w-4" />
-                Create Proforma
-              </Button>
+              {canCreateProforma && (
+                <Button onClick={openPreview} disabled={validSelectedLines.length === 0 || hasInvalidSelectedLine}>
+                  <ShoppingCart className="mr-2 h-4 w-4" />
+                  Create Proforma
+                </Button>
+              )}
             </div>
           </div>
         </div>
@@ -879,7 +861,7 @@ export default function CustomerLoading() {
       />
 
       <CustomerLoadingProformaDialog
-        open={previewOpen}
+        open={canCreateProforma && previewOpen}
         onOpenChange={setPreviewOpen}
         customerName={loadingQuery.data?.customer.legalName}
         proformaName={proformaName}
