@@ -102,12 +102,10 @@ export async function registerApplicationRoutes(app: Express): Promise<Server> {
   installRemoteSupportSessionStopAudit();
   registerWriteInvalidationSignal(app);
   registerPermissionBoundaryRoutes(app);
-  // Shared ERP accounting endpoints are reused inside Factory pages. Enforce
-  // their Factory page/tab ownership before any concrete route handler runs.
+  // Enforce Factory ownership before shared accounting routes.
   app.use(enforceSharedFactoryAccess);
   app.use("/api/cost-centers", requireAuth, enforceCostCenterErpPageAccess);
-  // New unified-accounting metadata writers are read-only until a
-  // company-specific, source-pinned Owner pilot. Existing voucher flows remain unchanged.
+  // Unified-accounting metadata remains read-only until an Owner pilot.
   app.use(enforceUnifiedAccountingRollout);
   registerWhatsAppFastSendRoutes(app);
   registerBandwidthPhase3FactoryReads(app);
