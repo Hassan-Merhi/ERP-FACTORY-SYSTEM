@@ -27,7 +27,15 @@ interface ContainerTableProps {
 
 const TRACKING_ROW_HEIGHT = 40;
 
-export function ContainerTable({ containers, colVis, sessionCompanyId, readOnly = false, propertiesMode = false, onOpenDrawer, printRef }: ContainerTableProps) {
+export function ContainerTable({
+  containers,
+  colVis,
+  sessionCompanyId,
+  readOnly = false,
+  propertiesMode = false,
+  onOpenDrawer,
+  printRef,
+}: ContainerTableProps) {
   const isPhone = useErpPhoneLayout();
   const virtualRows = useBoundedTableRows({
     rowCount: containers.length,
