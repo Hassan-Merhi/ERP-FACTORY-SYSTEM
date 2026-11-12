@@ -1,7 +1,8 @@
-import type { PreferencesPlugin } from "@capacitor/preferences";
-
 const CRED_KEY = "biometric_creds";
 
+// Typed through the dynamic import so this module keeps no static reference to
+// the native plugin, which must stay out of the authenticated startup bundle.
+type PreferencesPlugin = (typeof import("@capacitor/preferences"))["Preferences"];
 type NativePreferences = Pick<PreferencesPlugin, "get" | "set" | "remove">;
 
 export async function loadNativePreferences(): Promise<NativePreferences> {
