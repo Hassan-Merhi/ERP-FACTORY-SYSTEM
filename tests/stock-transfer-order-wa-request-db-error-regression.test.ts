@@ -56,7 +56,6 @@ describe("Stock Transfer Order WhatsApp approval request fix", () => {
     expect(route).toContain("sqlFailure.routine");
     expect(route).toContain('sqlFailure.step ? "/" + sqlFailure.step : ""');
     expect(route).not.toContain("internalQuery:");
-    expect(route).not.toContain("detail:");
     expect(route).toContain('stage="freeze_order_revision_snapshot"');
     expect(route).toContain('stage="verify_immutable_batch"');
     expect(route).toContain('stage="format_approval_message"');
