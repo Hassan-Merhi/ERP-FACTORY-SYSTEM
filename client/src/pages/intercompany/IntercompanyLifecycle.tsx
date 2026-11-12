@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useApplicationLanguageCode } from "@/contexts/ApplicationLanguageContext";
+import { propertiesContainerIntercompanyText } from "@/i18n/propertiesContainerIntercompanyTranslations";
 import { companyQueryKey } from "@/lib/companyQueryScope";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -58,6 +60,7 @@ export function IntercompanyLifecycleContent({
   embedded = false,
 }: { physicalContainerId?: number; embedded?: boolean } = {}) {
   const { selectedCompany } = useCompany();
+  const copy = propertiesContainerIntercompanyText(useApplicationLanguageCode());
   const companyId = Number(selectedCompany?.id || 0);
   const { toast } = useToast();
   const [selectedTradeId, setSelectedTradeId] = useState<number | null>(null);
@@ -99,8 +102,8 @@ export function IntercompanyLifecycleContent({
     ),
     queryFn: async () => {
       const response = await fetch(API + "/" + trade!.tradeId + "/receiving-options", { credentials: "include" });
-      const value = await response.json().catch(() => ({ message: "Cannot load receiving options" }));
-      if (!response.ok) throw new Error(value.message || "Cannot load receiving options");
+      const value = await response.json().catch(() => ({ message: copy.receivingOptionsFailed }));
+      if (!response.ok) throw new Error(value.message || copy.receivingOptionsFailed);
       return value;
     },
     retry: false,
@@ -309,15 +312,15 @@ export function IntercompanyLifecycleContent({
           </CardContent>
         </Card>
       )}
-      {embedded && query.isLoading && <p className="text-sm text-muted-foreground">Loading linked container status…</p>}
+      {embedded && query.isLoading && <p className="text-sm text-muted-foreground">{copy.loading}</p>}
       {embedded && query.isError && (
         <p role="alert" className="text-sm text-destructive">
-          Cannot load the linked container lifecycle.
+          {copy.failed}
         </p>
       )}
       {embedded && !query.isLoading && !query.isError && visibleTrades.length === 0 && (
         <p className="text-sm text-muted-foreground">
-          This physical container has no linked intercompany trade. Import its PO with an ERP destination first.
+          {copy.unlinked}
         </p>
       )}
       {trade && (
