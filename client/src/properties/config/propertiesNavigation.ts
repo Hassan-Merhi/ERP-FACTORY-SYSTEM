@@ -23,6 +23,7 @@ export const PROPERTIES_NAVIGATION: readonly NavEntry[] = [
   { path: "/properties/rentals", label: "Rentals", parent: null, capability: "workspace", navigation: "pinned" },
   { path: "/properties/tracking", label: "Tracking", parent: null, capability: "workspace", navigation: "tool" },
   { path: "/properties/containers", label: "Containers", parent: null, capability: "workspace", navigation: "tool" },
+  { path: "/properties/po-import", label: "Import PO", parent: "/properties/containers", capability: "trading", navigation: "tool" },
   { path: "/properties/suppliers", label: "Suppliers", parent: null, capability: "workspace", navigation: "tool" },
   {
     path: "/properties/containers/:id",
