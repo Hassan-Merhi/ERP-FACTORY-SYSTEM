@@ -47,21 +47,23 @@ export function AccountSearchResults({ model }: { model: AccountsLegacyModel }) 
               </div>
               {!hideBalances && acc.fxWallet ? (
                 <FxAgentNativeBalance wallet={acc.fxWallet} compact />
-              ) : !hideBalances && (
-                <span
-                  className={cn(
-                    "font-mono tabular-nums text-sm font-medium shrink-0",
-                    balanceSide === "Dr"
-                      ? "text-emerald-600 dark:text-emerald-400"
-                      : "text-amber-600 dark:text-amber-400"
-                  )}
-                >
-                  {model.formatAmountForAccount(Math.abs(acc.balance), acc.type)}
-                  <span className="ml-1 text-[11px] opacity-60">{balanceSide}</span>
-                </span>
+              ) : (
+                !hideBalances && (
+                  <span
+                    className={cn(
+                      "font-mono tabular-nums text-sm font-medium shrink-0",
+                      balanceSide === "Dr"
+                        ? "text-emerald-600 dark:text-emerald-400"
+                        : "text-amber-600 dark:text-amber-400"
+                    )}
+                  >
+                    {model.formatAmountForAccount(Math.abs(acc.balance), acc.type)}
+                    <span className="ml-1 text-[11px] opacity-60">{balanceSide}</span>
+                  </span>
+                )
               )}
             </button>
-            {acc.type === "ledger" && (
+            {model.canChangeExistingRecords && acc.type === "ledger" && (
               <button
                 type="button"
                 className="opacity-0 group-hover:opacity-100 touch:opacity-100 focus-visible:opacity-100 transition-opacity p-1 rounded-sm hover:bg-muted text-muted-foreground hover:text-foreground shrink-0"

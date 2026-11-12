@@ -11,17 +11,21 @@ export function EtaCell({
   arrivalDate,
   overdue,
   onSave,
+  readOnly = false,
 }: {
   containerId: number;
   arrivalDate: string | null | undefined;
   overdue: boolean;
   onSave: (id: number, val: string | null) => void;
+  /** Shows the ETA without the inline editor (read-only company roles). */
+  readOnly?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
 
   function startEdit(e: MouseEvent<HTMLButtonElement>) {
     e.stopPropagation();
+    if (readOnly) return;
     setDraft(arrivalDate ? arrivalDate.slice(0, 10) : "");
     setEditing(true);
   }
@@ -62,9 +66,10 @@ export function EtaCell({
             : "bg-muted/70 text-muted-foreground"
       )}
       onClick={startEdit}
+      disabled={readOnly}
       data-testid={"text-eta-" + containerId}
-      title="Click to edit ETA"
-      aria-label={"Edit ETA for container " + containerId}
+      title={readOnly ? undefined : "Click to edit ETA"}
+      aria-label={readOnly ? undefined : "Edit ETA for container " + containerId}
     >
       <CalendarDays className="h-3.5 w-3.5 shrink-0" />
       {arrivalDate ? fmtDate(arrivalDate) : "Set ETA..."}

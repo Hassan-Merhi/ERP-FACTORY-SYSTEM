@@ -1,4 +1,5 @@
 import { useFactoryMhdView } from "@/hooks/use-factory-mhd-view";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { downloadBlob } from "@/lib/downloadBlob";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
@@ -24,7 +25,18 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { moveProductNearItem, moveProductToPosition } from "./monthlyProductionRowOrder";
 import { useToast } from "@/hooks/use-toast";
 import type { MonthlyProductionExportBale } from "./monthlyProductionWorkbookDrilldown";
-import { ArrowDown, ArrowUp, ChevronDown, Download, GripVertical, ListOrdered, Plus, RotateCcw, Search, X } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  ChevronDown,
+  Download,
+  GripVertical,
+  ListOrdered,
+  Plus,
+  RotateCcw,
+  Search,
+  X,
+} from "lucide-react";
 
 type Product = { id: number; name: string; articleCode: string; categoryName: string };
 type MonthValue = { productId: number; month: string; quantity: number };
@@ -55,6 +67,8 @@ export default function FactoryMonthlyProductionMatrix() {
   const { t, language } = useApplicationLanguage();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  // The row order is shared company data; read-only roles see it but never save it.
+  const recordChanges = useExistingRecordChangeAccess();
   const queryKey = companyQueryKey("/api/factory/monthly-production-matrix", selectedCompany?.id);
   const { data, isLoading, error, refetch, isFetching } = useQuery<MatrixResponse>({
     queryKey,
@@ -107,7 +121,12 @@ export default function FactoryMonthlyProductionMatrix() {
   const monthKey = months.join("|");
   const monthLabels = useMemo(() => {
     const locale = language === "ar" ? "ar" : language === "fr" ? "fr" : "en";
-    return new Map(monthKey.split("|").filter(Boolean).map((month) => [month, prettyMonth(month, locale)]));
+    return new Map(
+      monthKey
+        .split("|")
+        .filter(Boolean)
+        .map((month) => [month, prettyMonth(month, locale)])
+    );
   }, [monthKey, language]);
   const monthLabel = (month: string) => monthLabels.get(month) ?? month;
   const counts = useMemo(() => {
@@ -150,7 +169,8 @@ export default function FactoryMonthlyProductionMatrix() {
         ))
     );
   });
-  const canReorder = mhd.mode === "standard" && !search.trim() && selectedCategories.length === 0 && !saving;
+  const canReorder =
+    recordChanges.allowed && mhd.mode === "standard" && !search.trim() && selectedCategories.length === 0 && !saving;
   const byId = (productId: number, month: string) => counts.get(productId)?.get(month) ?? 0;
   const openWorkerBreakdown = (productId: number, selectedMonths: string[]) => {
     if (selectedMonths.length === 0) return;
@@ -159,7 +179,7 @@ export default function FactoryMonthlyProductionMatrix() {
   };
   const rowTotal = (id: number) => months.reduce((sum, month) => sum + byId(id, month), 0);
   const persistOrder = async (next: number[]): Promise<boolean> => {
-    if (!data || saving) return false;
+    if (!data || saving || !recordChanges.allowed) return false;
     const current = orderedProducts.map((product) => product.id);
     if (next.every((id, index) => id === current[index])) return true;
     const before = orderedIds;
@@ -449,7 +469,9 @@ export default function FactoryMonthlyProductionMatrix() {
                   }}
                 >
                   <Checkbox checked={selectedCategories.includes(value)} className="pointer-events-none" />
-                  <span className="truncate" title={value}>{value}</span>
+                  <span className="truncate" title={value}>
+                    {value}
+                  </span>
                 </DropdownMenuItem>
               ))}
             </DropdownMenuContent>
@@ -659,44 +681,50 @@ export default function FactoryMonthlyProductionMatrix() {
                             #{rowPositionById.get(product.id)} · {product.articleCode} · {product.categoryName}
                           </div>
                         </div>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="h-7 shrink-0 gap-1 px-2 text-xs"
-                          disabled={saving}
-                          onClick={() => openMoveDialog(product.id)}
-                          aria-label={
-                            t("monthlyProduction.moveTo") + ": " + mhd.nameFor(product.articleCode, product.name)
-                          }
-                          data-testid={"move-matrix-item-" + product.id}
-                        >
-                          <ListOrdered className="h-3.5 w-3.5" /> {t("monthlyProduction.moveTo")}
-                        </Button>
-                        <div className="flex flex-col">
-                          <button
-                            type="button"
-                            aria-label={
-                              t("monthlyProduction.moveUp") + ": " + mhd.nameFor(product.articleCode, product.name)
-                            }
-                            disabled={!canReorder || index === 0}
-                            onClick={() => moveOne(product.id, -1)}
-                            className="rounded hover:bg-muted disabled:opacity-25"
-                          >
-                            <ArrowUp className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            aria-label={
-                              t("monthlyProduction.moveDown") + ": " + mhd.nameFor(product.articleCode, product.name)
-                            }
-                            disabled={!canReorder || index === visibleProducts.length - 1}
-                            onClick={() => moveOne(product.id, 1)}
-                            className="rounded hover:bg-muted disabled:opacity-25"
-                          >
-                            <ArrowDown className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
+                        {recordChanges.allowed && (
+                          <>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="h-7 shrink-0 gap-1 px-2 text-xs"
+                              disabled={saving}
+                              onClick={() => openMoveDialog(product.id)}
+                              aria-label={
+                                t("monthlyProduction.moveTo") + ": " + mhd.nameFor(product.articleCode, product.name)
+                              }
+                              data-testid={"move-matrix-item-" + product.id}
+                            >
+                              <ListOrdered className="h-3.5 w-3.5" /> {t("monthlyProduction.moveTo")}
+                            </Button>
+                            <div className="flex flex-col">
+                              <button
+                                type="button"
+                                aria-label={
+                                  t("monthlyProduction.moveUp") + ": " + mhd.nameFor(product.articleCode, product.name)
+                                }
+                                disabled={!canReorder || index === 0}
+                                onClick={() => moveOne(product.id, -1)}
+                                className="rounded hover:bg-muted disabled:opacity-25"
+                              >
+                                <ArrowUp className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                aria-label={
+                                  t("monthlyProduction.moveDown") +
+                                  ": " +
+                                  mhd.nameFor(product.articleCode, product.name)
+                                }
+                                disabled={!canReorder || index === visibleProducts.length - 1}
+                                onClick={() => moveOne(product.id, 1)}
+                                className="rounded hover:bg-muted disabled:opacity-25"
+                              >
+                                <ArrowDown className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </>
+                        )}
                       </div>
                     </td>
                     {values.map((value, i) => {

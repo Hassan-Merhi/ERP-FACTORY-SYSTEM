@@ -407,6 +407,7 @@ const SENSITIVE_WRITE_ROUTES = [
   "POST /api/stock-transfer-import/parse-multi-source",
   "POST /api/stock-transfer-import/validate",
   "POST /api/stock-transfer-import/validate-multi-source",
+  "POST /api/stock-transfer-orders",
   "POST /api/stock-transfers",
   "POST /api/system/parent-company",
   "POST /api/voucher-entries",

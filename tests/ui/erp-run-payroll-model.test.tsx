@@ -75,6 +75,8 @@ vi.mock("@tanstack/react-query", () => ({
   },
 }));
 vi.mock("../../client/src/contexts/CompanyContext", () => ({
+  // No provider role: the shared change-access helper leaves controls as they are.
+  useOptionalCompany: () => null,
   useCompany: () => ({ selectedCompany: { id: 4, displayCurrency: "USD" } }),
 }));
 vi.mock("../../client/src/contexts/CurrencyContext", () => ({

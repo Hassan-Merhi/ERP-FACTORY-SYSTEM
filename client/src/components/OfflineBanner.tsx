@@ -11,6 +11,7 @@ import { getQueue } from "@/lib/offlineQueue";
 import { getVerifiedOfflineReadScope } from "@/lib/offline/offlineReadCache";
 import { listOfflineOperations } from "@/lib/offline/durableOutbox";
 import { runSync } from "@/lib/syncEngine";
+import { OfflineModePanel } from "@/components/OfflineModePanel";
 import type { OfflineOperation } from "@/lib/offline/operationContract";
 
 interface VisibleQueue {
@@ -51,7 +52,7 @@ export function OfflineBanner() {
 }
 
 function OfflineBannerInner() {
-  const { isOnline, isSyncing, refreshCounts } = useConnectivity();
+  const { isOnline, isSyncing, refreshCounts, pendingCount, failedCount } = useConnectivity();
   const language = useOptionalApplicationLanguage();
   const t = language?.t ?? ((key: keyof typeof applicationEnglishTranslations) => applicationEnglishTranslations[key]);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -111,7 +112,19 @@ function OfflineBannerInner() {
   const review = snapshot.operations.filter((item) => REVIEW.has(item.state)).length;
   const acknowledged = snapshot.operations.filter((item) => item.state === "acknowledged").length;
   const legacy = snapshot.legacyCount;
-  const visible = !isOnline || pending > 0 || review > 0 || legacy > 0 || (drawerOpen && acknowledged > 0);
+  // Records saved on this laptop (standalone offline mode) are counted by the
+  // connectivity context together with the voucher outbox.
+  const laptopPending = Math.max(0, pendingCount - pending);
+  const laptopReview = Math.max(0, failedCount - review - legacy);
+  const visible =
+    !isOnline ||
+    pending > 0 ||
+    review > 0 ||
+    legacy > 0 ||
+    laptopPending > 0 ||
+    laptopReview > 0 ||
+    drawerOpen ||
+    acknowledged > 0;
   const retry = async () => {
     if (busy || isSyncing || !isOnline || !snapshot.scoped || pending === 0) return;
     setBusy(true);
@@ -137,6 +150,8 @@ function OfflineBannerInner() {
         <span className="flex-1">
           {!isOnline ? "Connection unavailable" : "Offline work requires review"}
           {pending > 0 ? ` · ${pending} device-pending` : ""}
+          {laptopPending > 0 ? ` · ${laptopPending} ${t("offlineMode.pendingSync").toLowerCase()}` : ""}
+          {laptopReview > 0 ? ` · ${laptopReview} ${t("offlineMode.failed").toLowerCase()}` : ""}
           {review > 0 ? ` · ${review} needing review` : ""}
           {legacy > 0 ? ` · ${legacy} blocked legacy records` : ""}
         </span>
@@ -148,6 +163,7 @@ function OfflineBannerInner() {
             <SheetDescription>{t("offlineDelivery.evidenceDetail")}</SheetDescription>
           </SheetHeader>
           <div className="space-y-3 overflow-y-auto flex-1 py-3">
+            <OfflineModePanel />
             {legacy > 0 && (
               <div role="alert" className="border rounded-md p-3 space-y-1" data-testid="offline-legacy-blocked">
                 <p className="font-medium text-sm flex items-center gap-2">
@@ -182,10 +198,7 @@ function OfflineBannerInner() {
                 ))}
           </div>
           <div className="border-t pt-3 space-y-2">
-            <p className="text-xs text-muted-foreground">
-              Only vetted durable Journal requests are eligible for retry. Inventory, POS, production, payments and
-              attachments remain blocked pending reconciliation.
-            </p>
+            <p className="text-xs text-muted-foreground">{t("offlineDelivery.panelLabel")}</p>
             <Button
               variant="outline"
               onClick={() => void retry()}

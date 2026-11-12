@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { parseISO, format } from "date-fns";
 
 function formatAmount(value: number) {
@@ -164,6 +165,7 @@ export default function OffloadDetail() {
   useEscapeToParent();
   const id = params.id;
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
 
   const {
     data: offload,
@@ -256,7 +258,7 @@ export default function OffloadDetail() {
           </>
         }
       >
-        {offload && (
+        {offload && recordChanges.allowed && (
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button
@@ -325,9 +327,7 @@ export default function OffloadDetail() {
                   <tbody>
                     {sortedItems.map((item) => (
                       <tr key={item.id} className="border-b last:border-0">
-                        <td className="p-3">
-                          {offloadItemDisplayName(item)}
-                        </td>
+                        <td className="p-3">{offloadItemDisplayName(item)}</td>
                         <td className="p-3 text-right font-mono">{formatNumber(Number(item.quantity))}</td>
                         <td className="p-3 text-right font-mono">{formatAmount(Number(item.rate))}</td>
                         <td className="p-3 text-right font-mono">{formatAmount(Number(item.totalValue))}</td>

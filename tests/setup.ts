@@ -127,6 +127,8 @@ export async function setupTestApp(options: TestAppOptions = {}): Promise<expres
   if (options.productionWriteGuards) {
     const { blockViewOnlyWrites, blockUnverifiedCreateOnlyWrites, blockErpTesterSettings } =
       await import("../server/auth");
+    const { permissionResponseObserver } = await import("../server/middleware/permissionResponseObserver");
+    app.use(permissionResponseObserver);
     app.use(blockViewOnlyWrites);
     app.use(blockUnverifiedCreateOnlyWrites);
     app.use(blockErpTesterSettings);

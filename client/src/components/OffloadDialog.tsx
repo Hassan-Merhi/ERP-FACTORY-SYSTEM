@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useLocation } from "wouter";
 import {
   Dialog,
@@ -193,6 +194,8 @@ function LocationCombobox({
 }
 
 export function OffloadDialog({ open, onOpenChange, containerId, containerNumber, totalBales }: OffloadDialogProps) {
+  // Offloading posts against an existing container; read-only roles never do it.
+  const recordChanges = useExistingRecordChangeAccess();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { selectedCompany } = useCompany();
@@ -309,6 +312,7 @@ export function OffloadDialog({ open, onOpenChange, containerId, containerNumber
   // ── Mutation ──────────────────────────────────────────────────────────────
   const offloadMutation = useMutation({
     mutationFn: async () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       if (!locationId) throw new Error("Please select a location");
 
       if (isSpCompany) {
@@ -426,6 +430,7 @@ export function OffloadDialog({ open, onOpenChange, containerId, containerNumber
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!recordChanges.allowed) return;
     offloadMutation.mutate();
   };
 
@@ -751,9 +756,11 @@ export function OffloadDialog({ open, onOpenChange, containerId, containerNumber
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={offloadMutation.isPending || !locationId} data-testid="button-offload">
-              {offloadMutation.isPending ? "Offloading..." : "Offload Container"}
-            </Button>
+            {recordChanges.allowed && (
+              <Button type="submit" disabled={offloadMutation.isPending || !locationId} data-testid="button-offload">
+                {offloadMutation.isPending ? "Offloading..." : "Offload Container"}
+              </Button>
+            )}
           </DialogFooter>
         </form>
       </DialogContent>

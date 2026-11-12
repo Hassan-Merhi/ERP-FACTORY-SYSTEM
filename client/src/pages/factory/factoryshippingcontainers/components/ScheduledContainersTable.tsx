@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Check, ChevronDown, ChevronRight, Loader2, Plus, Trash2, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 interface ScheduledRow {
   id: number;
   date: string;
@@ -30,6 +31,8 @@ const SCHEDULED_KEY = "/api/factory/scheduled-containers";
 
 export function ScheduledContainersTable() {
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
+  const canAddRow = recordChanges.canCreate("POST", SCHEDULED_KEY);
   const [editing, setEditing] = useState<EditingScheduled | null>(null);
   const [adding, setAdding] = useState(false);
   const [expanded, setExpanded] = useState(true);
@@ -41,7 +44,12 @@ export function ScheduledContainersTable() {
     details: "",
   });
 
-  const { data: rows = [], isLoading, isError, refetch } = useQuery<ScheduledRow[]>({
+  const {
+    data: rows = [],
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<ScheduledRow[]>({
     queryKey: [SCHEDULED_KEY],
     // This is an editable schedule, not a live status feed. Background polling
     // used to refetch every five seconds while someone was typing into a row.
@@ -138,17 +146,19 @@ export function ScheduledContainersTable() {
             <span>Scheduled Containers</span>
             <span className="text-xs text-muted-foreground">({activeRows.length})</span>
           </button>
-          <Button
-            size="sm"
-            onClick={() => {
-              setExpanded(true);
-              setAdding(true);
-            }}
-            disabled={adding}
-            data-testid="button-add-scheduled"
-          >
-            <Plus className="h-3.5 w-3.5 mr-1" /> Add Row
-          </Button>
+          {canAddRow && (
+            <Button
+              size="sm"
+              onClick={() => {
+                setExpanded(true);
+                setAdding(true);
+              }}
+              disabled={adding}
+              data-testid="button-add-scheduled"
+            >
+              <Plus className="h-3.5 w-3.5 mr-1" /> Add Row
+            </Button>
+          )}
         </div>
 
         {expanded && (
@@ -190,7 +200,7 @@ export function ScheduledContainersTable() {
                 ) : (
                   <>
                     {activeRows.map((row) =>
-                      editing?.id === row.id ? (
+                      recordChanges.allowed && editing?.id === row.id ? (
                         <TableRow key={row.id} className="bg-muted/30">
                           <TableCell>
                             <Input
@@ -268,8 +278,8 @@ export function ScheduledContainersTable() {
                       ) : (
                         <TableRow
                           key={row.id}
-                          className="hover-elevate cursor-pointer"
-                          onClick={() => startEdit(row)}
+                          className={recordChanges.allowed ? "hover-elevate cursor-pointer" : undefined}
+                          onClick={recordChanges.allowed ? () => startEdit(row) : undefined}
                           data-testid={`row-scheduled-${row.id}`}
                         >
                           <TableCell>{row.date}</TableCell>
@@ -279,24 +289,26 @@ export function ScheduledContainersTable() {
                           <TableCell className="text-muted-foreground">{row.details || "—"}</TableCell>
                           <TableCell>
                             <div className="flex items-center justify-end gap-1">
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  deleteMutation.mutate(row.id);
-                                }}
-                                disabled={deleteMutation.isPending}
-                                data-testid={`button-scheduled-delete-${row.id}`}
-                              >
-                                <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                              </Button>
+                              {recordChanges.allowed && (
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    deleteMutation.mutate(row.id);
+                                  }}
+                                  disabled={deleteMutation.isPending}
+                                  data-testid={`button-scheduled-delete-${row.id}`}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                                </Button>
+                              )}
                             </div>
                           </TableCell>
                         </TableRow>
                       )
                     )}
-                    {adding && (
+                    {canAddRow && adding && (
                       <TableRow className="bg-muted/30">
                         <TableCell>
                           <Input
@@ -393,4 +405,3 @@ export function ScheduledContainersTable() {
     </div>
   );
 }
-

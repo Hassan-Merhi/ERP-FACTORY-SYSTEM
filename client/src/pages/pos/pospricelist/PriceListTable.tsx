@@ -88,7 +88,7 @@ function PriceEditor({
 }
 
 function MasterPriceCells({ model, item }: { model: PosPriceListModel; item: PriceListRow }) {
-  const { canEdit, editingItem, formatAmount } = model;
+  const { canEditPrices: canEdit, editingItem, formatAmount } = model;
   return (
     <>
       {model.visibleMasters.map((m) => {
@@ -124,7 +124,7 @@ function MasterPriceCells({ model, item }: { model: PosPriceListModel; item: Pri
 }
 
 function SingleLocationPriceCell({ model, item }: { model: PosPriceListModel; item: PriceListRow }) {
-  const { canEdit, editingItem, formatAmount, selectedLocationId } = model;
+  const { canEditPrices: canEdit, editingItem, formatAmount, selectedLocationId } = model;
   const isEditing = editingItem?.stockItemId === item.stockItemId;
   return (
     <TableCell className="text-right">
@@ -215,7 +215,7 @@ function ItemsTable({ model }: { model: PosPriceListModel }) {
   const {
     isAllMode,
     showCostPrice,
-    canEdit,
+    canEditPrices: canEdit,
     formatAmount,
     filteredItems,
     locationPricedList,
@@ -335,17 +335,26 @@ function ItemsTable({ model }: { model: PosPriceListModel }) {
 
                 {/* Read-only historical prices and quantity, before the current editable price. */}
                 {!isAllMode && (
-                  <TableCell className="text-right text-sm tabular-nums" data-testid={`text-highest-sold-${item.stockItemId}`}>
+                  <TableCell
+                    className="text-right text-sm tabular-nums"
+                    data-testid={`text-highest-sold-${item.stockItemId}`}
+                  >
                     {item.highestPriceSold == null ? "—" : formatAmount(Number(item.highestPriceSold))}
                   </TableCell>
                 )}
                 {!isAllMode && (
-                  <TableCell className="text-right text-sm tabular-nums" data-testid={`text-lowest-sold-${item.stockItemId}`}>
+                  <TableCell
+                    className="text-right text-sm tabular-nums"
+                    data-testid={`text-lowest-sold-${item.stockItemId}`}
+                  >
                     {item.lowestPriceSold == null ? "—" : formatAmount(Number(item.lowestPriceSold))}
                   </TableCell>
                 )}
                 {!isAllMode && (
-                  <TableCell className="text-right text-sm tabular-nums" data-testid={`text-qty-sold-${item.stockItemId}`}>
+                  <TableCell
+                    className="text-right text-sm tabular-nums"
+                    data-testid={`text-qty-sold-${item.stockItemId}`}
+                  >
                     {formatQty(item.qtySold ?? "0")}
                   </TableCell>
                 )}

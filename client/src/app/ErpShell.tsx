@@ -25,6 +25,7 @@ import { MODULE_ACCENT } from "@/components/sidebar/sidebarPrimitives";
 import "@/erp-mobile-operations.css";
 import "@/styles/erp-unified-theme.css";
 import { isExistingRecordReadOnlyRole } from "@shared/createOnlyRolePolicy";
+import { ReadOnlyRoleRouteGate } from "@/components/ReadOnlyRoleRouteGate";
 
 interface ErpShellProps {
   user: ShellUser;
@@ -129,7 +130,9 @@ export function ErpShell({ user, hasErpAccess, handleLogout, leaveConfirmDialog 
                           : "w-full min-w-0 max-w-full p-3 sm:p-6"
                       }
                     >
-                      <Router user={user} />
+                      <ReadOnlyRoleRouteGate role={user.role}>
+                        <Router user={user} />
+                      </ReadOnlyRoleRouteGate>
                     </div>
                   </WorkspaceRouteBoundary>
                 </main>

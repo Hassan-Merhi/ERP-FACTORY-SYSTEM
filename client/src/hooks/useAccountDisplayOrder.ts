@@ -4,6 +4,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 
 export interface DisplayNode {
   key: string;
@@ -27,6 +28,7 @@ export function useAccountDisplayOrder() {
   const queryKey = [url, selectedCompany?.id];
   const { toast } = useToast();
   const [arranging, setArranging] = useState(false);
+  const recordChanges = useExistingRecordChangeAccess();
   const { data: layout, isError } = useQuery<DisplayLayout>({
     queryKey,
     queryFn: async () => {
@@ -40,7 +42,8 @@ export function useAccountDisplayOrder() {
     retry: false,
   });
   const { data: me } = useQuery<{ role?: string }>({ queryKey: ["/api/auth/me"] });
-  const canArrange = !isError && (me?.role === "Admin" || me?.role === "Developer");
+  // The saved layout is shared company data: read-only company roles never save it, whatever their user role.
+  const canArrange = !isError && recordChanges.allowed && (me?.role === "Admin" || me?.role === "Developer");
 
   const save = useMutation({
     mutationFn: async (nodes: DisplayNode[]) => {

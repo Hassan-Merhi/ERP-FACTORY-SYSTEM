@@ -29,6 +29,19 @@ import {
   saveV2Rules,
 } from "../../services/security/accessControlV2Store";
 import { isCreateOnlyAssignmentEnabled } from "../../services/security/createOnlyActivation";
+import {
+  readEffectivePermissions,
+  readV2PolicyStatus,
+  setV2PolicyMode,
+} from "../../services/security/effectivePermissionStore";
+import { isV2CompanyActivationEnabled, isV2EnforcementEnabled } from "../../services/security/permissionsV2Activation";
+import {
+  permissionMonitoringConfiguration,
+  permissionSignalCounts,
+  recordPermissionSignal,
+} from "../../services/security/permissionMonitor";
+import { getOperationalEventSnapshot } from "../../lib/operationalEvents";
+import { computeEffectivePermissions } from "@shared/effectivePermissions";
 
 const changeSchema = z
   .object({
@@ -55,6 +68,13 @@ const userSave = saveBase
     userId: z.string().min(1).max(128),
   })
   .strict();
+const modeChange = z
+  .object({
+    mode: z.enum(["shadow", "active", "rolled_back"]),
+    expectedRevision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+    reason: z.string().trim().min(10).max(500),
+  })
+  .strict();
 const previewParams = z
   .object({
     userId: z.string().min(1).max(128).optional(),
@@ -73,8 +93,18 @@ async function requirePolicyAdmin(req: Request): Promise<CompanyAdmin> {
   return { companyId: c.companyId, userId: c.userId };
 }
 
-function handleV2Error(error: unknown, res: Response): void {
+function handleV2Error(error: unknown, res: Response, req?: Request): void {
   if (error instanceof V2PolicyError) {
+    if (error.code === "POLICY_STALE_REVISION") {
+      recordPermissionSignal({
+        kind: "policy_revision_conflict",
+        code: error.code,
+        companyId: req?.session?.currentCompanyId ?? null,
+        userId: req?.session?.userId ?? null,
+        method: req?.method,
+        path: req?.path,
+      });
+    }
     res.status(error.status).json({ code: error.code, message: error.message });
     return;
   }
@@ -99,13 +129,21 @@ function handleV2Error(error: unknown, res: Response): void {
     return;
   }
   // Do not leak queries, user IDs, table names or DB state in HTTP responses.
+  recordPermissionSignal({
+    kind: "permission_service_error",
+    code: "ACCESS_POLICY_UNAVAILABLE",
+    companyId: req?.session?.currentCompanyId ?? null,
+    userId: req?.session?.userId ?? null,
+    method: req?.method,
+    path: req?.path,
+  });
   res.status(500).json({ code: "ACCESS_POLICY_UNAVAILABLE", message: "ACCESS_POLICY_UNAVAILABLE" });
 }
 
 function handle(fn: (req: Request, res: Response) => Promise<void>) {
   return (req: Request, res: Response): void => {
     res.setHeader("Cache-Control", "no-store");
-    void fn(req, res).catch((error: unknown) => handleV2Error(error, res));
+    void fn(req, res).catch((error: unknown) => handleV2Error(error, res, req));
   };
 }
 
@@ -213,15 +251,21 @@ export function registerPermissionControlCenterRoutes(app: Express): void {
     handle(async (req, res) => {
       const actor = await requirePolicyAdmin(req);
       const body = roleSave.parse(req.body);
-      res.json(
-        await saveV2Rules({
-          actor,
-          subject: { kind: "role", roleKey: body.roleKey },
-          expectedRevision: body.expectedRevision,
-          changes: body.changes,
-          reason: body.reason,
-        })
-      );
+      const saved = await saveV2Rules({
+        actor,
+        subject: { kind: "role", roleKey: body.roleKey },
+        expectedRevision: body.expectedRevision,
+        changes: body.changes,
+        reason: body.reason,
+      });
+      recordPermissionSignal({
+        kind: "policy_change",
+        code: "ROLE_RULES_SAVED",
+        companyId: actor.companyId,
+        userId: actor.userId,
+        detail: { revision: saved.revision, applied: saved.applied, subject: body.roleKey },
+      });
+      res.json(saved);
     })
   );
 
@@ -231,15 +275,124 @@ export function registerPermissionControlCenterRoutes(app: Express): void {
     handle(async (req, res) => {
       const actor = await requirePolicyAdmin(req);
       const body = userSave.parse(req.body);
-      res.json(
-        await saveV2Rules({
-          actor,
-          subject: { kind: "user", userId: body.userId },
-          expectedRevision: body.expectedRevision,
-          changes: body.changes,
-          reason: body.reason,
-        })
-      );
+      const saved = await saveV2Rules({
+        actor,
+        subject: { kind: "user", userId: body.userId },
+        expectedRevision: body.expectedRevision,
+        changes: body.changes,
+        reason: body.reason,
+      });
+      recordPermissionSignal({
+        kind: "policy_change",
+        code: "USER_OVERRIDES_SAVED",
+        companyId: actor.companyId,
+        userId: actor.userId,
+        detail: { revision: saved.revision, applied: saved.applied },
+      });
+      res.json(saved);
+    })
+  );
+
+  /**
+   * Effective permissions of the signed-in person in the active company. The
+   * role comes from canonical membership; nothing in the request can choose
+   * the company, the user or the role. While V2 is in shadow mode the
+   * effective decisions are today's legacy decisions.
+   */
+  app.get(
+    "/api/permissions-v2/me",
+    requireAuth,
+    handle(async (req, res) => {
+      const context = await getActiveCompanyPermissionContext(req);
+      if (context.developerBypass) {
+        res.json(
+          computeEffectivePermissions({
+            companyId: context.companyId,
+            userId: context.userId,
+            role: "Developer",
+            legacyModules: {},
+            v2: { available: false, mode: "shadow", revision: 0, roleRules: [], userRules: [] },
+            enforcementEnabled: false,
+          })
+        );
+        return;
+      }
+      res.json(await readEffectivePermissions(context.companyId, context.userId));
+    })
+  );
+
+  app.get(
+    "/api/permissions-v2/users/:userId/effective",
+    requireAuth,
+    handle(async (req, res) => {
+      const actor = await requirePolicyAdmin(req);
+      const userId = z.string().min(1).max(128).parse(req.params.userId);
+      res.json(await readEffectivePermissions(actor.companyId, userId));
+    })
+  );
+
+  app.get(
+    "/api/permissions-v2/activation",
+    requireAuth,
+    handle(async (req, res) => {
+      const actor = await requirePolicyAdmin(req);
+      const status = await readV2PolicyStatus(actor.companyId);
+      res.json({
+        companyId: actor.companyId,
+        ...status,
+        activationAuthorized: isV2CompanyActivationEnabled(),
+        enforcementEnabled: isV2EnforcementEnabled(),
+        enforced: status.available && status.mode === "active" && isV2EnforcementEnabled(),
+      });
+    })
+  );
+
+  /**
+   * Move the active company's V2 policy between shadow, active and
+   * rolled_back. Activation needs the operator switch; rollback never does.
+   * Revision-checked and audited in one transaction.
+   */
+  app.put(
+    "/api/permissions-v2/activation",
+    requireAuth,
+    handle(async (req, res) => {
+      const actor = await requirePolicyAdmin(req);
+      const body = modeChange.parse(req.body);
+      const result = await setV2PolicyMode({
+        actor,
+        mode: body.mode,
+        expectedRevision: body.expectedRevision,
+        reason: body.reason,
+      });
+      recordPermissionSignal({
+        kind: "policy_change",
+        code: "POLICY_MODE_CHANGED",
+        companyId: actor.companyId,
+        userId: actor.userId,
+        detail: { revision: result.revision, from: result.previousMode, to: result.mode },
+      });
+      res.json({ companyId: actor.companyId, ...result });
+    })
+  );
+
+  /**
+   * Permission monitoring for the active company: signal counts since the
+   * process started, integrity event totals and whether alerts are routed.
+   * Aggregates only; no user names, request data or secrets.
+   */
+  app.get(
+    "/api/permissions-v2/monitoring",
+    requireAuth,
+    handle(async (req, res) => {
+      const actor = await requirePolicyAdmin(req);
+      const events = getOperationalEventSnapshot();
+      res.json({
+        companyId: actor.companyId,
+        ...permissionSignalCounts(actor.companyId),
+        operationalIntegrityEvents: events.counts.integrity,
+        configuration: permissionMonitoringConfiguration(),
+        policy: await readV2PolicyStatus(actor.companyId),
+      });
     })
   );
 }

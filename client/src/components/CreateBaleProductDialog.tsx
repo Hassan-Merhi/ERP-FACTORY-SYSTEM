@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { factoryApiRequest } from "@/lib/factoryApi";
 import { useLabelDesignColors } from "@/hooks/useLabelDesignColors";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import type { FactoryCategory } from "@shared/schema";
 
 const formSchema = z.object({
@@ -38,6 +39,7 @@ interface CreateBaleProductDialogProps {
 export function CreateBaleProductDialog({ open, onOpenChange, adminAuth }: CreateBaleProductDialogProps) {
   const { toast } = useToast();
   const { colors } = useLabelDesignColors();
+  const canCreateProduct = useExistingRecordChangeAccess().canCreate("POST", "/api/factory/bale-products");
 
   const { data: categories } = useQuery<FactoryCategory[]>({
     queryKey: ["/api/factory/categories"],
@@ -103,12 +105,19 @@ export function CreateBaleProductDialog({ open, onOpenChange, adminAuth }: Creat
         <DialogHeader>
           <DialogTitle>Create Bale Product</DialogTitle>
           <DialogDescription>
-            Store English and Arabic on one product. Article code, weight, prices, stock, and costing remain language-neutral.
+            Store English and Arabic on one product. Article code, weight, prices, stock, and costing remain
+            language-neutral.
           </DialogDescription>
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit((data) => createMutation.mutate(data))} className="space-y-4" noValidate>
+          <form
+            onSubmit={form.handleSubmit((data) => {
+              if (canCreateProduct) createMutation.mutate(data);
+            })}
+            className="space-y-4"
+            noValidate
+          >
             <FormField
               control={form.control}
               name="grade"
@@ -259,7 +268,12 @@ export function CreateBaleProductDialog({ open, onOpenChange, adminAuth }: Creat
                   <FormItem>
                     <FormLabel>الوصف — العربية</FormLabel>
                     <FormControl>
-                      <Textarea {...field} placeholder="تفاصيل المنتج..." dir="rtl" data-testid="input-description-ar" />
+                      <Textarea
+                        {...field}
+                        placeholder="تفاصيل المنتج..."
+                        dir="rtl"
+                        data-testid="input-description-ar"
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -306,9 +320,11 @@ export function CreateBaleProductDialog({ open, onOpenChange, adminAuth }: Creat
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)} data-testid="button-cancel">
                 Cancel
               </Button>
-              <Button type="submit" disabled={createMutation.isPending} data-testid="button-submit">
-                {createMutation.isPending ? "Creating..." : "Create Product"}
-              </Button>
+              {canCreateProduct && (
+                <Button type="submit" disabled={createMutation.isPending} data-testid="button-submit">
+                  {createMutation.isPending ? "Creating..." : "Create Product"}
+                </Button>
+              )}
             </div>
           </form>
         </Form>

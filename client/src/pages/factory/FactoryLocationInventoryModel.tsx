@@ -8,6 +8,7 @@ import { companyQueryKey } from "@/lib/companyQueryScope";
 import type { FactoryMyAccess } from "@shared/apiTypes";
 import { getApiRequest } from "@/lib/factoryApi";
 import { apiRequest } from "@/lib/queryClient";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { queryClient, keyStartsWith } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useReactToPrint } from "react-to-print";
@@ -30,6 +31,11 @@ import { applySortProducts, isSpecialFactoryCategory } from "./factorylocationin
 import { productMatchesSearch } from "@shared/factoryProductSearch";
 import { useFactoryLocationReprint } from "./factorylocationinventory/useFactoryLocationReprint";
 import { buildActiveInventoryData } from "./factorylocationinventory/activeInventory";
+import {
+  buildEditProformaSelections,
+  groupInventoryByCategory,
+  toProformaSelection,
+} from "./factorylocationinventory/inventoryModelHelpers";
 
 export function useFactoryLocationInventory() {
   const { colors } = useLabelDesignColors();
@@ -47,6 +53,9 @@ export function useFactoryLocationInventory() {
   const appMode = useAppMode();
   const { selectedCompany } = useCompany();
   const modeApiRequest = getApiRequest(appMode);
+  const recordChanges = useExistingRecordChangeAccess();
+  const canCreateCustomer = recordChanges.canCreate("POST", "/api/factory/customers");
+  const canCreateProforma = recordChanges.canCreate("POST", "/api/factory/customer-proformas/bulk");
 
   const [proformaMode, setProformaMode] = useState(false);
   const [showZeroStock, setShowZeroStock] = useState(false);
@@ -96,6 +105,7 @@ export function useFactoryLocationInventory() {
     openBrowserReprintLabels,
     handleReprintProduct,
     handleDoPrint,
+    canReprint,
   } = useFactoryLocationReprint(selectedLocation);
 
   const [editingProformaId, setEditingProformaId] = useState<number | null>(null);
@@ -133,12 +143,14 @@ export function useFactoryLocationInventory() {
   const perUserHidden = scopedAccess?.hiddenCostFields ?? [];
   const noCostAccess = !scopedAccess || !scopedAccess.hasFactoryAccess || scopedAccess.hideAllCosts;
   const hideSellingPrice =
-    noCostAccess || !!factorySettingsData?.hideSellingPrice ||
+    noCostAccess ||
+    !!factorySettingsData?.hideSellingPrice ||
     perUserHidden.includes("inventory_sell_price") ||
     perUserHidden.includes("inventory_sell_value") ||
     perUserHidden.includes("hide_export_selling_price");
   const hideAvgCost =
-    noCostAccess || !!factorySettingsData?.hideAvgCost ||
+    noCostAccess ||
+    !!factorySettingsData?.hideAvgCost ||
     perUserHidden.includes("inventory_avg_rate") ||
     perUserHidden.includes("inventory_total_value") ||
     perUserHidden.includes("hide_export_cost_price");
@@ -156,7 +168,10 @@ export function useFactoryLocationInventory() {
   });
 
   const { data: availableInventoryData = [], isLoading: availableLoading } = useQuery<FactoryBaleProduct[]>({
-    queryKey: companyQueryKey(`/api/factory/location-inventory/${selectedLocation?.id ?? "none"}/available`, selectedCompany?.id),
+    queryKey: companyQueryKey(
+      `/api/factory/location-inventory/${selectedLocation?.id ?? "none"}/available`,
+      selectedCompany?.id
+    ),
     queryFn: async () => {
       const response = await fetch(`/api/factory/location-inventory/${selectedLocation!.id}/available`, {
         credentials: "include",
@@ -268,6 +283,7 @@ export function useFactoryLocationInventory() {
 
   const replaceLinesMutation = useMutation({
     mutationFn: async (data: { id: number; lines: FactoryProformaLine[] }): Promise<ProformaMutationResult> => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await modeApiRequest("PUT", `/api/factory/customer-proformas/${data.id}/replace-lines`, {
         lines: data.lines,
       });
@@ -302,6 +318,7 @@ export function useFactoryLocationInventory() {
       supervisorPassword: string;
       reason: string;
     }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await modeApiRequest("POST", "/api/factory/stock-entry/remove-by-product", data);
       const json = await res.json();
       if (!res.ok) throw new Error(json.message || "Failed to remove bales");
@@ -329,6 +346,7 @@ export function useFactoryLocationInventory() {
 
   const renameLocationMutation = useMutation({
     mutationFn: async ({ id, name }: { id: number; name: string }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await apiRequest("PATCH", `/api/locations/${id}`, { name });
       return res.json();
     },
@@ -393,64 +411,12 @@ export function useFactoryLocationInventory() {
       editModeInitialized
     )
       return;
-    const productByArticleCode = new Map<string, FactoryBaleProduct>();
-    inventoryData.forEach((product) => {
-      productByArticleCode.set((product.articleCode || "").toLowerCase(), product);
-    });
-    const newSelections = new Map<number, ProformaSelection>();
-    editProformaLines.forEach((line, index) => {
-      const prod = productByArticleCode.get((line.articleCode || "").toLowerCase());
-      if (prod) {
-        newSelections.set(prod.productId, {
-          productId: prod.productId,
-          articleCode: prod.articleCode,
-          productName: prod.productName,
-          availableBales: prod.baleCount,
-          totalWeight: prod.totalWeight,
-          selectedQty: line.quantity,
-          pricePerBale: line.pricePerBale,
-        });
-      } else {
-        const syntheticId = -(index + 1);
-        newSelections.set(syntheticId, {
-          productId: syntheticId,
-          articleCode: line.articleCode,
-          productName: line.productName || line.articleCode,
-          availableBales: 0,
-          totalWeight: 0,
-          selectedQty: line.quantity,
-          pricePerBale: line.pricePerBale,
-        });
-      }
-    });
+    const newSelections = buildEditProformaSelections(inventoryData, editProformaLines);
     if (newSelections.size > 0) setSelections(newSelections);
     setEditModeInitialized(true);
   }, [editingProformaId, editProformaLines, selectedLocation, inventoryData, inventoryLoading, editModeInitialized]);
 
-  const categoryGroups: CategoryGroup[] = activeInventoryData.reduce((groups, item) => {
-    const catId = item.categoryId || 0;
-    let group = groups.find((g) => (g.categoryId || 0) === catId);
-    if (!group) {
-      group = {
-        categoryId: item.categoryId,
-        categoryName: item.category || "Uncategorized",
-        baleCount: 0,
-        totalWeight: 0,
-        totalCost: 0,
-        totalSellValue: 0,
-        productCount: 0,
-        products: [],
-      };
-      groups.push(group);
-    }
-    group.baleCount += item.baleCount;
-    group.totalWeight += item.totalWeight;
-    group.totalCost += item.totalCost;
-    group.totalSellValue += (item.baleCount - (item.loadingCount ?? 0)) * parseFloat(item.sellingPrice || "0");
-    group.productCount += 1;
-    group.products.push(item);
-    return groups;
-  }, [] as CategoryGroup[]);
+  const categoryGroups: CategoryGroup[] = groupInventoryByCategory(activeInventoryData);
 
   const sortedLocations = [...locations].sort((a, b) => a.name.localeCompare(b.name));
   const filteredLocations = sortedLocations.filter((l) => l.name.toLowerCase().includes(locationSearch.toLowerCase()));
@@ -518,17 +484,7 @@ export function useFactoryLocationInventory() {
     setSelections((prev) => {
       const next = new Map(prev);
       filteredProducts.forEach((prod) => {
-        if (!next.has(prod.productId)) {
-          next.set(prod.productId, {
-            productId: prod.productId,
-            articleCode: prod.articleCode,
-            productName: prod.productName,
-            availableBales: prod.baleCount,
-            totalWeight: prod.totalWeight,
-            selectedQty: prod.baleCount,
-            pricePerBale: prod.sellingPrice || "0",
-          });
-        }
+        if (!next.has(prod.productId)) next.set(prod.productId, toProformaSelection(prod));
       });
       return next;
     });
@@ -549,15 +505,7 @@ export function useFactoryLocationInventory() {
       if (next.has(prod.productId)) {
         next.delete(prod.productId);
       } else {
-        next.set(prod.productId, {
-          productId: prod.productId,
-          articleCode: prod.articleCode,
-          productName: prod.productName,
-          availableBales: prod.baleCount,
-          totalWeight: prod.totalWeight,
-          selectedQty: prod.baleCount,
-          pricePerBale: prod.sellingPrice || "0",
-        });
+        next.set(prod.productId, toProformaSelection(prod));
       }
       return next;
     });
@@ -684,6 +632,7 @@ export function useFactoryLocationInventory() {
   };
 
   const doSaveProforma = () => {
+    if (editingProformaId ? !recordChanges.allowed : !canCreateProforma) return;
     const lines = selectedItems.map((item) => ({
       articleCode: item.articleCode,
       productName: item.productName,
@@ -787,6 +736,10 @@ export function useFactoryLocationInventory() {
   };
 
   return {
+    canChangeExistingRecords: recordChanges.allowed,
+    canCreateCustomer,
+    canCreateProforma,
+    canReprint,
     activeInventoryData,
     applyProductionPrices,
     applySellingPrices,

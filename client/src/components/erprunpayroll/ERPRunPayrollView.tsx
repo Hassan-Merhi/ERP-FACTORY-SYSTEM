@@ -57,6 +57,8 @@ export function ERPRunPayrollView({ model }: ERPRunPayrollViewProps) {
   const {
     activeTab,
     setActiveTab,
+    canChangeExistingRecords,
+    canCreate,
     searchQuery,
     setSearchQuery,
     expandedGroups,
@@ -311,23 +313,25 @@ export function ERPRunPayrollView({ model }: ERPRunPayrollViewProps) {
                   </h3>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button
-                    onClick={() => saveDraftMutation.mutate()}
-                    disabled={saveDraftMutation.isPending || previewTotalNet <= 0}
-                    data-testid="button-save-draft"
-                  >
-                    {saveDraftMutation.isPending ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Saving...
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle2 className="h-4 w-4 mr-2" />
-                        Save as Draft
-                      </>
-                    )}
-                  </Button>
+                  {canCreate("POST", "/api/payroll/runs") && (
+                    <Button
+                      onClick={() => saveDraftMutation.mutate()}
+                      disabled={saveDraftMutation.isPending || previewTotalNet <= 0}
+                      data-testid="button-save-draft"
+                    >
+                      {saveDraftMutation.isPending ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="h-4 w-4 mr-2" />
+                          Save as Draft
+                        </>
+                      )}
+                    </Button>
+                  )}
                 </div>
               </div>
 
@@ -509,7 +513,7 @@ export function ERPRunPayrollView({ model }: ERPRunPayrollViewProps) {
                             >
                               <FileSpreadsheet className="h-4 w-4" />
                             </Button>
-                            {run.status === "DRAFT" && (
+                            {canChangeExistingRecords && run.status === "DRAFT" && (
                               <>
                                 <Button
                                   size="sm"
@@ -534,7 +538,7 @@ export function ERPRunPayrollView({ model }: ERPRunPayrollViewProps) {
                                 </Button>
                               </>
                             )}
-                            {run.status === "PAID" && (
+                            {canChangeExistingRecords && run.status === "PAID" && (
                               <Button
                                 size="sm"
                                 variant="ghost"

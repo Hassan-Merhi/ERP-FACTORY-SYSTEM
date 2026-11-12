@@ -8,10 +8,13 @@ export function NotesCell({
   containerId,
   note,
   onSave,
+  readOnly = false,
 }: {
   containerId: number;
   note: string;
   onSave: (id: number, val: string) => void;
+  /** Shows the note without the inline editor (read-only company roles). */
+  readOnly?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
@@ -19,6 +22,7 @@ export function NotesCell({
 
   function startEdit(e: MouseEvent<HTMLButtonElement>) {
     e.stopPropagation();
+    if (readOnly) return;
     setDraft(current);
     setEditing(true);
   }
@@ -50,12 +54,13 @@ export function NotesCell({
       type="button"
       className="inline-flex min-h-8 w-full max-w-[180px] items-center gap-1.5 rounded-lg border border-border/60 bg-muted/40 px-2.5 py-1 text-left text-xs text-muted-foreground transition-colors hover:border-blue-500/40 hover:bg-blue-500/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50"
       onClick={startEdit}
+      disabled={readOnly}
       data-testid={"text-notes-" + containerId}
-      title={current || "Click to add a note"}
-      aria-label={"Edit note for container " + containerId}
+      title={readOnly ? current || undefined : current || "Click to add a note"}
+      aria-label={readOnly ? undefined : "Edit note for container " + containerId}
     >
-      <span className="min-w-0 flex-1 truncate">{current || "Add note..."}</span>
-      <Pencil className="h-3 w-3 shrink-0 opacity-50" />
+      <span className="min-w-0 flex-1 truncate">{readOnly ? current || "—" : current || "Add note..."}</span>
+      {!readOnly && <Pencil className="h-3 w-3 shrink-0 opacity-50" />}
     </button>
   );
 }

@@ -54,7 +54,7 @@ jobs:
 
             for file in "${files[@]}"; do
               case "$file" in
-                client/*|scripts/verify-iphone-duo-*.mjs|scripts/lib/iphone-duo-*.mjs|scripts/verify-mobile-responsive-*.mjs|scripts/verify-factory-mobile-*.mjs|scripts/lib/factory-mobile-*.mjs|tests/ui/factory-mobile-*|docs/factory-navigation-registry.md|scripts/audit-ux-module-consistency.mjs|scripts/prepare-phase9-browser-smoke-fixture.mjs|scripts/run-phase9-language-browser-smoke.mjs|scripts/lib/browser-smoke-*.mjs|scripts/verify-bandwidth-*.mjs|scripts/verify-phase10-dialog-form-consistency.mjs|tests/ui/mobile-responsive-*.test.ts|tests/ui/*filter*.test.*|docs/mobile-tablet-web-regression.md|docs/archive/mobile-responsive-phase-status.md|tsconfig.mobile.json|package.json|package-lock.json|.github/workflows/ui-quality.yml)
+                client/*|scripts/verify-iphone-duo-*.mjs|scripts/lib/iphone-duo-*.mjs|scripts/verify-mobile-responsive-*.mjs|scripts/verify-factory-mobile-*.mjs|scripts/verify-factory-blue-theme-*.mjs|scripts/lib/factory-mobile-*.mjs|tests/ui/factory-mobile-*|docs/factory-navigation-registry.md|scripts/audit-ux-module-consistency.mjs|scripts/prepare-phase9-browser-smoke-fixture.mjs|scripts/run-phase9-language-browser-smoke.mjs|scripts/lib/browser-smoke-*.mjs|scripts/verify-bandwidth-*.mjs|scripts/verify-phase10-dialog-form-consistency.mjs|tests/ui/mobile-responsive-*.test.ts|tests/ui/*filter*.test.*|docs/mobile-tablet-web-regression.md|docs/archive/mobile-responsive-phase-status.md|tsconfig.mobile.json|package.json|package-lock.json|.github/workflows/ui-quality.yml)
                   mobile=true
                   ;;
               esac
@@ -255,6 +255,9 @@ jobs:
       - name: Build rendered-smoke server
         run: npm run build
 
+      - name: Factory blue-theme Chromium render smoke (light/dark)
+        run: node scripts/verify-factory-blue-theme-browser.mjs
+
       - name: Cross-module UX consistency audit
         run: npm run audit:ux-consistency
 
@@ -330,6 +333,7 @@ jobs:
           # workflow routes (the disposable fixture gets one record of each kind).
           export ERP_FACTORY_MOBILE_CREATE_SEEDS=1 ERP_FACTORY_MOBILE_REQUIRE_SEEDS=1 ERP_FACTORY_MOBILE_STRICT_TABLES=1
           run_smoke scripts/verify-factory-mobile-browser.mjs
+          run_smoke scripts/verify-factory-blue-theme-auth-browser.mjs
 
           # PR gate: selected critical routes + fold/unfold transition. The full
           # route inventory is exercised separately with ERP_DUO_ROUTES unset.
@@ -372,5 +376,6 @@ jobs:
           path: |
             artifacts/ux-regression-browser
             artifacts/ux-regression-startup
+            artifacts/factory-theme-phase4
           if-no-files-found: warn
           retention-days: 7

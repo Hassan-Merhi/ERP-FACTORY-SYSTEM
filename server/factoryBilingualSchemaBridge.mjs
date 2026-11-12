@@ -4,10 +4,8 @@ import { resolveDatabaseSsl } from "./lib/databaseSsl.mjs";
 
 const { Client } = pg;
 const INSTALL_KEY = Symbol.for("erp.factory-bilingual-schema.applied");
-const STARTUP_SCHEMA_LOCK_SQL =
-  "SELECT pg_advisory_lock(hashtext('erp.startup'), hashtext('factory-schema'))";
-const STARTUP_SCHEMA_UNLOCK_SQL =
-  "SELECT pg_advisory_unlock(hashtext('erp.startup'), hashtext('factory-schema'))";
+const STARTUP_SCHEMA_LOCK_SQL = "SELECT pg_advisory_lock(hashtext('erp.startup'), hashtext('factory-schema'))";
+const STARTUP_SCHEMA_UNLOCK_SQL = "SELECT pg_advisory_unlock(hashtext('erp.startup'), hashtext('factory-schema'))";
 
 const connectionString =
   process.env.DATABASE_URL ||
@@ -58,6 +56,9 @@ function log(level, message, extra = {}) {
 
 export async function ensureFactoryBilingualSchema() {
   if (!connectionString) {
+    if (process.env.FACTORY_BILINGUAL_SCHEMA_MODE === "verify-only") {
+      throw new Error("Factory bilingual schema verification requires database configuration");
+    }
     log("WARN", "Factory bilingual schema check skipped because no database configuration is available");
     return { columnsAdded: [], missingOptionalTables: [] };
   }
@@ -75,6 +76,41 @@ export async function ensureFactoryBilingualSchema() {
 
   try {
     await client.connect();
+    const verifyOnly = process.env.FACTORY_BILINGUAL_SCHEMA_MODE === "verify-only";
+    if (verifyOnly) {
+      await client.query("BEGIN READ ONLY");
+      await client.query("SET LOCAL lock_timeout = '5s'");
+      await client.query("SET LOCAL statement_timeout = '60s'");
+      const required = FACTORY_BILINGUAL_COLUMNS.filter(([, , , mustExist]) => mustExist);
+      const existing = await client.query(`
+        SELECT table_name, column_name FROM information_schema.columns
+        WHERE table_schema = 'public'
+      `);
+      const columns = new Set(existing.rows.map((row) => row.table_name + "." + row.column_name));
+      const tables = new Set(existing.rows.map((row) => row.table_name));
+      const missing = FACTORY_BILINGUAL_COLUMNS.filter(
+        ([table, column, , mustExist]) => (mustExist || tables.has(table)) && !columns.has(table + "." + column)
+      ).map(([table, column]) => table + "." + column);
+      if (required.some(([table]) => !tables.has(table))) {
+        missing.push("required Factory bilingual table");
+      }
+      const index = await client.query(
+        `
+        SELECT EXISTS (
+          SELECT 1 FROM pg_index i
+          JOIN pg_class c ON c.oid=i.indexrelid
+          JOIN pg_namespace n ON n.oid=c.relnamespace
+          WHERE n.nspname='public' AND c.relname=$1 AND i.indisvalid AND i.indisready
+        ) AS ready
+      `,
+        [FACTORY_BILINGUAL_ARTICLE_INDEX]
+      );
+      if (!index.rows[0]?.ready) missing.push(FACTORY_BILINGUAL_ARTICLE_INDEX);
+      if (missing.length) throw new Error("Factory bilingual schema incomplete: " + missing.join(", "));
+      await client.query("ROLLBACK");
+      log("INFO", "Factory bilingual schema verified read-only");
+      return { columnsAdded: [], missingOptionalTables: [] };
+    }
     await client.query("SET statement_timeout = '90s'");
     await client.query(STARTUP_SCHEMA_LOCK_SQL);
     startupSchemaLockAcquired = true;

@@ -57,7 +57,7 @@ import { ErpPage, ErpPageActions, ErpDataTableToolbar, ErpEmptyState } from "@/e
 
 - `shared/erpNavigationPolicy.ts` is the authoritative **frontend role-visibility policy** for ERP navigation and route restrictions. It combines the existing role constraints with `shared/erpRouteAccess.ts` feature mapping. The server remains the final authorization boundary.
 - `client/src/app/erpPageRegistry.ts` owns the ERP pinned/section/utility navigation metadata, plus phone bottom-nav destination membership. The sidebar re-exports its public constants for older consumers; the command palette and phone More sheet already consume the sidebar's filtered list.
-- `client/src/app/erpAccessQuery.ts` supplies the company-scoped `/api/my-erp-pages` query options for **ErpAccessBoundary**, **ErpRoutes**, and **AppSidebar**, so selecting another company does not mix page grants. The boundary still mirrors the historical unscoped cache key for existing components; do not use that legacy key in new route or navigation code.
+- `client/src/app/erpAccessQuery.ts` supplies the company-scoped `/api/my-erp-pages` query options for **ErpAccessBoundary**, **ErpRoutes**, and **AppSidebar**, so selecting another company does not mix page grants. Phase 9 removes the legacy unscoped cache mirror after migrating ERP and shared Factory readers to these company-scoped options. Never reintroduce URL-only keys for ERP grants.
 - `ErpRoutes` uses the shared role policy for restricted `R(...)` route entries and preserves explicit feature-key guards for `G(...)` routes and composite hubs. Role restrictions are checked even if the ERP page API says `fullAccess`.
 - `useErpCan`, `useErpRecordChangeAccess`, and `erpCanDenialMessage` in the ERP barrel are aliases of the existing permission hooks. For mutation buttons, use those existing permission decisions with `ErpRecordAction`; no new authorization algorithm or role inferred from hard-coded UI strings.
 - Roles and special cases covered in tests: Developer-only accounting/tools, Admin-only maintenance, Owner-eligible review pages, POS menu limitations, View Only/Create Only dashboard suppression, ERP Tester settings/daybook exceptions, retail-hidden entries, composite inventory feature grants, company switching, and desktop/phone registry consistency.
@@ -113,6 +113,13 @@ Tests cover filename compatibility, multiline/quoted CSV, formula-safe labels, p
 The baseline CI run on this branch had **344 frontend test files passing and 7 failing** (3,256 individual tests passing, 11 failing), including ERP-provider regressions corrected above. Build succeeded. The failing TypeScript, lint, repository-audit, security and UI-quality jobs also reported changes in separately developed Factory/Properties code, such as Factory Dispatch report typing, rental reconciliation nullability, documentation/script inventory and a POS Jnah voucher company-scope security finding. Do **not** "fix" these by relaxing permissions, bypassing the tests, or mutating accounting records.
 
 **Merge gate:** run CI on the final Phase 7 SHA. All new ERP UI tests and targeted route/report regressions must pass, then reconcile this long-running branch with current `main` (which has substantially advanced), resolve conflicts, and run the suite again. A Phase 7 code commit is *not* a claim that the combined PR is ready to merge; leave it as draft until verified.
+
+## Phase 9: company-scoped access on every permission reader
+
+- All screens consuming `/api/my-erp-pages` now use `erpPageAccessQueryOptions(selectedCompany?.id, true)`, with Vouchers retaining its existing ERP-mode / non-POS enable condition.
+- Shared Factory/Properties surfaces keep their cost visibility and role decisions. Factory Daybook now scopes its cost-visibility query to the active company.
+- Removed the old unscoped query-cache mirror in `ErpAccessBoundary`. The boundary continues to wait for the current company's permissions before rendering the shell.
+- Tests protect every former legacy reader and verify company-specific page grants and hidden cost fields remain in independent query cache entries. Backend authorization and accounting workflows are unchanged.
 
 ## Rollout rules
 

@@ -3,18 +3,19 @@
  *
  * Extracted from FactorySheetsAndSacks.tsx during the Phase 4 god-file split.
  */
-import {useState, useMemo} from "react";
-import {useMutation} from "@tanstack/react-query";
-import {queryClient, apiRequest} from "@/lib/queryClient";
-import {useToast} from "@/hooks/use-toast";
-import {Button} from "@/components/ui/button";
-import {Input} from "@/components/ui/input";
-import {Label} from "@/components/ui/label";
-import {Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter} from "@/components/ui/dialog";
-import {Textarea} from "@/components/ui/textarea";
-import {Loader2} from "lucide-react";
+import { useState, useMemo } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
+import { useToast } from "@/hooks/use-toast";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Loader2 } from "lucide-react";
 
-import type {SheetsAndSacksItem} from "../types";
+import type { SheetsAndSacksItem } from "../types";
 
 export // ─── Deduct Dialog ────────────────────────────────────────────────────────────
 function DeductDialog({ open, onClose, item }: { open: boolean; onClose: () => void; item: SheetsAndSacksItem }) {
@@ -32,8 +33,10 @@ function DeductDialog({ open, onClose, item }: { open: boolean; onClose: () => v
   const currentQty = parseFloat(item.quantity || "0");
   const remaining = Math.max(0, currentQty - pcsToDeduct);
 
+  const recordChanges = useExistingRecordChangeAccess();
   const deductMutation = useMutation({
     mutationFn: async () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await apiRequest("PATCH", `/api/factory/sheets-sacks/${item.id}/deduct`, {
         pieces: pcsToDeduct,
         packs: hasPacks && packsStr !== "" ? parseInt(packsStr) || 0 : null,

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { apiRequest } from "@/lib/queryClient";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
@@ -82,6 +83,7 @@ export function FxAgentEurStatement({
   const { selectedCompany } = useCompany();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const recordChanges = useExistingRecordChangeAccess();
   const [showDeleted, setShowDeleted] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -112,8 +114,11 @@ export function FxAgentEurStatement({
   });
 
   const selectable = useMemo(
-    () => (data?.rows || []).filter((op) => op.kind === "EUR_SETTLEMENT" && !op.deleted && op.voucherId != null),
-    [data?.rows]
+    () =>
+      recordChanges.allowed
+        ? (data?.rows || []).filter((op) => op.kind === "EUR_SETTLEMENT" && !op.deleted && op.voucherId != null)
+        : [],
+    [data?.rows, recordChanges.allowed]
   );
   const selectedPayments = selectable.filter((op) => selectedIds.has(op.id));
   const allSelected = selectable.length > 0 && selectedPayments.length === selectable.length;
@@ -139,6 +144,7 @@ export function FxAgentEurStatement({
     // FX EUR payment vouchers must be deleted individually: the generic bulk
     // endpoint deliberately rejects wallet-linked vouchers.
     mutationFn: async (voucherIds: number[]) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       let deleted = 0;
       for (const id of voucherIds) {
         try {
@@ -164,12 +170,14 @@ export function FxAgentEurStatement({
     },
   });
   const reverseMutation = useMutation({
-    mutationFn: async (params: { conversionId: number; reason: string }) =>
-      apiRequest("POST", "/api/factory/fx-agent-wallets/" + walletId + "/reverse-conversion", {
+    mutationFn: async (params: { conversionId: number; reason: string }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
+      return apiRequest("POST", "/api/factory/fx-agent-wallets/" + walletId + "/reverse-conversion", {
         conversionId: params.conversionId,
         reason: params.reason,
         requestKey: "eur-ledger-reverse-" + params.conversionId + "-" + Date.now(),
-      }),
+      });
+    },
     onSuccess: () => {
       toast({ title: "EUR conversion reversed", description: "Original USD basis restored to the wallet." });
       invalidateFx();
@@ -277,15 +285,17 @@ export function FxAgentEurStatement({
           <TableHeader className="sticky top-0 z-10 bg-background">
             <TableRow className="bg-muted/40 hover:bg-muted/40">
               <TableHead className="w-[40px]">
-                <Checkbox
-                  aria-label="Select all EUR payments"
-                  checked={allSelected}
-                  disabled={selectable.length === 0}
-                  onCheckedChange={() =>
-                    setSelectedIds(allSelected ? new Set() : new Set(selectable.map((op) => op.id)))
-                  }
-                  data-testid="fx-agent-eur-select-all"
-                />
+                {recordChanges.allowed && (
+                  <Checkbox
+                    aria-label="Select all EUR payments"
+                    checked={allSelected}
+                    disabled={selectable.length === 0}
+                    onCheckedChange={() =>
+                      setSelectedIds(allSelected ? new Set() : new Set(selectable.map((op) => op.id)))
+                    }
+                    data-testid="fx-agent-eur-select-all"
+                  />
+                )}
               </TableHead>
               <TableHead className="w-[110px] text-xs uppercase">Date</TableHead>
               <TableHead className="text-xs uppercase">Particulars</TableHead>
@@ -310,8 +320,9 @@ export function FxAgentEurStatement({
               )}
             </TableRow>
             {operations.map((op) => {
-              const canDelete = op.kind === "EUR_SETTLEMENT" && !op.deleted && op.voucherId != null;
-              const canReverse = op.kind === "USD_TO_EUR" && !op.deleted;
+              const canDelete =
+                recordChanges.allowed && op.kind === "EUR_SETTLEMENT" && !op.deleted && op.voucherId != null;
+              const canReverse = recordChanges.allowed && op.kind === "USD_TO_EUR" && !op.deleted;
               return (
                 <TableRow
                   key={op.id}
@@ -402,7 +413,8 @@ export function FxAgentEurStatement({
           <span className="font-mono font-semibold">{format(data.openingEur)}</span>
         </div>
         {operations.map((op) => {
-          const canDelete = op.kind === "EUR_SETTLEMENT" && !op.deleted && op.voucherId != null;
+          const canDelete =
+            recordChanges.allowed && op.kind === "EUR_SETTLEMENT" && !op.deleted && op.voucherId != null;
           return (
             <div key={op.id} className={"rounded-lg border p-3 space-y-2 text-sm " + (op.deleted ? "opacity-55" : "")}>
               <div className="flex items-start gap-2">
@@ -420,7 +432,7 @@ export function FxAgentEurStatement({
                   </p>
                   <p className="font-medium">{op.description}</p>
                 </div>
-                {op.kind === "USD_TO_EUR" && (
+                {recordChanges.allowed && op.kind === "USD_TO_EUR" && (
                   <Button
                     size="sm"
                     variant="outline"

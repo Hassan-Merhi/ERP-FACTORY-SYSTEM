@@ -50,11 +50,14 @@ import { SummaryCard } from "./factoryotwtrackingtab/components/SummaryCard";
 import { EtaCell } from "./factoryotwtrackingtab/components/EtaCell";
 import { NotesCell } from "./factoryotwtrackingtab/components/NotesCell";
 import { useOtwCsvTools } from "./factoryotwtrackingtab/hooks/useOtwCsvTools";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import type { AuthMe } from "@shared/apiTypes";
 export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = {}) {
   const { toast } = useToast();
   const { selectedCompany } = useCompany();
   const tqClient = useTQClient();
+  // ETA, docs and notes edit existing containers; read-only roles see them without editors.
+  const recordChanges = useExistingRecordChangeAccess();
   const { data: currentUser } = useQuery<AuthMe>({ queryKey: ["/api/auth/me"] });
   const [supplierFilter, setSupplierFilter] = useState<string>("all");
   const [freightFilter, setFreightFilter] = useState<string>("all");
@@ -180,6 +183,7 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
     );
   }
   async function saveNote(id: number, val: string) {
+    if (!recordChanges.allowed) return;
     try {
       await factoryApiRequest("PATCH", `/api/factory/containers/${id}`, { otwNote: val || null });
       patchCacheContainer(id, { otwNote: val || null });
@@ -193,6 +197,7 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
     }
   }
   async function toggleDoc(id: number, checked: boolean) {
+    if (!recordChanges.allowed) return;
     try {
       await factoryApiRequest("PATCH", `/api/factory/containers/${id}`, { otwDocsReceived: checked });
       patchCacheContainer(id, { otwDocsReceived: checked });
@@ -207,6 +212,7 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
   }
   const etaMutation = useMutation({
     mutationFn: async ({ id, arrivalDate }: { id: number; arrivalDate: string | null }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await factoryApiRequest("PATCH", `/api/factory/containers/${id}`, {
         arrivalDate: arrivalDate || null,
       });
@@ -236,7 +242,7 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
     setDelayedFilter("all");
     setSortOrder("DEFAULT");
   }
-  const { importing, exportCsv, handleImportFile } = useOtwCsvTools(filtered, otwContainers);
+  const { importing, exportCsv, handleImportFile, canImport } = useOtwCsvTools(filtered, otwContainers);
 
   if (isLoading) {
     return (
@@ -469,28 +475,32 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
                 >
                   <Download className="mr-1.5 h-4 w-4" /> Export CSV
                 </Button>
-                <Button
-                  variant="outline"
-                  className="h-9"
-                  disabled={importing}
-                  title="Import CSV to bulk-update ETA. Columns: Container #, Supplier, ETA (YYYY-MM-DD)"
-                  data-testid="button-import-csv"
-                  onClick={() => document.getElementById("otw-import-input")?.click()}
-                >
-                  {importing ? (
-                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Upload className="mr-1.5 h-4 w-4" />
-                  )}{" "}
-                  Import CSV
-                </Button>
-                <input
-                  id="otw-import-input"
-                  type="file"
-                  accept=".csv,.txt"
-                  className="hidden"
-                  onChange={handleImportFile}
-                />
+                {canImport && (
+                  <>
+                    <Button
+                      variant="outline"
+                      className="h-9"
+                      disabled={importing}
+                      title="Import CSV to bulk-update ETA. Columns: Container #, Supplier, ETA (YYYY-MM-DD)"
+                      data-testid="button-import-csv"
+                      onClick={() => document.getElementById("otw-import-input")?.click()}
+                    >
+                      {importing ? (
+                        <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Upload className="mr-1.5 h-4 w-4" />
+                      )}{" "}
+                      Import CSV
+                    </Button>
+                    <input
+                      id="otw-import-input"
+                      type="file"
+                      accept=".csv,.txt"
+                      className="hidden"
+                      onChange={handleImportFile}
+                    />
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -585,7 +595,13 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
                     </TableCell>
                     <TableCell className="py-3 font-medium text-foreground/85">{c.supplierName || "—"}</TableCell>
                     <TableCell className="py-3" onClick={(e) => e.stopPropagation()}>
-                      <EtaCell containerId={c.id} arrivalDate={c.arrivalDate} overdue={overdue} onSave={saveEta} />
+                      <EtaCell
+                        containerId={c.id}
+                        arrivalDate={c.arrivalDate}
+                        overdue={overdue}
+                        onSave={saveEta}
+                        readOnly={!recordChanges.allowed}
+                      />
                     </TableCell>
                     <TableCell className="py-3 text-right font-semibold tabular-nums">
                       {cost.amount > 0 ? fmtAmt(cost.symbol, cost.amount) : "—"}
@@ -631,12 +647,18 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
                       <Checkbox
                         checked={!!c.otwDocsReceived}
                         onCheckedChange={(v) => toggleDoc(c.id, !!v)}
+                        disabled={!recordChanges.allowed}
                         data-testid={"checkbox-docs-" + c.id}
                         aria-label={"Docs received for " + (c.containerNumber || "container")}
                       />
                     </TableCell>
                     <TableCell className="py-3" onClick={(e) => e.stopPropagation()}>
-                      <NotesCell containerId={c.id} note={c.otwNote ?? ""} onSave={saveNote} />
+                      <NotesCell
+                        containerId={c.id}
+                        note={c.otwNote ?? ""}
+                        onSave={saveNote}
+                        readOnly={!recordChanges.allowed}
+                      />
                     </TableCell>
                     <TableCell className="py-3 text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1">
@@ -658,7 +680,7 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
                         >
                           <Copy className="h-4 w-4" />
                         </Button>
-                        {onEdit && (
+                        {onEdit && recordChanges.allowed && (
                           <Button
                             variant="ghost"
                             size="icon"
@@ -683,7 +705,7 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
           <span>
             Showing {filtered.length} of {otwContainers.length} containers
           </span>
-          <span className="hidden sm:inline">Click an ETA or note to edit</span>
+          {recordChanges.allowed && <span className="hidden sm:inline">Click an ETA or note to edit</span>}
         </div>
       </section>
     </div>

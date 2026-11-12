@@ -9,6 +9,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@/lib/form-resolver";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
@@ -50,6 +51,7 @@ export function useContainerDetailModel({ id: idProp, forceErp }: { id?: string;
   const [showSellDialog, setShowSellDialog] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<(() => void) | null>(null);
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
   const [, setLocation] = useLocation();
   useEscapeToParent();
   const { selectedCompany } = useCompany();
@@ -170,6 +172,7 @@ export function useContainerDetailModel({ id: idProp, forceErp }: { id?: string;
 
   const priceApplyMutation = useMutation({
     mutationFn: async (rows: { lineItemIds: number[]; newRate: number }[]) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await apiRequest("POST", `/api/containers/${containerId}/price-import/apply`, { rows });
       return res.json();
     },
@@ -266,6 +269,7 @@ export function useContainerDetailModel({ id: idProp, forceErp }: { id?: string;
 
   const uploadDocMutation = useMutation({
     mutationFn: async ({ docTypeId, file }: { docTypeId: number; file: File }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const formData = new FormData();
       formData.append("file", file);
       formData.append("docTypeId", String(docTypeId));
@@ -305,6 +309,7 @@ export function useContainerDetailModel({ id: idProp, forceErp }: { id?: string;
 
   const addFreightMutation = useMutation({
     mutationFn: async (data: FreightFormValues) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await apiRequest("POST", `/api/factory/containers/${containerId}/freight`, data);
       return res.json();
     },
@@ -326,6 +331,7 @@ export function useContainerDetailModel({ id: idProp, forceErp }: { id?: string;
 
   const addPaymentMutation = useMutation({
     mutationFn: async ({ freightId, data }: { freightId: number; data: PaymentFormValues }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await apiRequest("POST", `/api/factory/freight/${freightId}/payments`, data);
       return res.json();
     },
@@ -527,6 +533,7 @@ export function useContainerDetailModel({ id: idProp, forceErp }: { id?: string;
   // Delete PO mutation
   const deletePOMutation = useMutation({
     mutationFn: async (poId: number) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       await apiRequest("DELETE", `/api/purchase-orders/${poId}`);
     },
     onSuccess: () => {
@@ -550,6 +557,7 @@ export function useContainerDetailModel({ id: idProp, forceErp }: { id?: string;
   // Delete Container mutation
   const deleteContainerMutation = useMutation({
     mutationFn: async (id: number) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       await apiRequest("DELETE", `/api/containers/${id}`);
     },
     onSuccess: () => {
@@ -573,6 +581,7 @@ export function useContainerDetailModel({ id: idProp, forceErp }: { id?: string;
   // Sync purchase voucher amounts (fixes $0 balance when items were imported after PO creation)
   const syncVoucherMutation = useMutation({
     mutationFn: async () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await apiRequest("POST", `/api/containers/${containerId}/sync-voucher`);
       return res.json();
     },
@@ -596,6 +605,7 @@ export function useContainerDetailModel({ id: idProp, forceErp }: { id?: string;
   // Reverse Offload mutation
   const reverseOffloadMutation = useMutation({
     mutationFn: async (id: number) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       await apiRequest("POST", `/api/containers/${id}/reverse-offload`, {});
     },
     onSuccess: () => {
@@ -738,5 +748,7 @@ export function useContainerDetailModel({ id: idProp, forceErp }: { id?: string;
     handleSellSubmit,
     handlePrint,
     saleCustomer,
+    canChangeExistingRecords: recordChanges.allowed,
+    canCreate: recordChanges.canCreate,
   } as const;
 }

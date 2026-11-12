@@ -11,12 +11,12 @@ describe("Manual Production Bonuses", () => {
     const page = source("client/src/pages/factory/productiontargets/ProductionBonusCheckoutPanel.tsx");
     const sheet = source("client/src/pages/factory/productiontargets/ProductionBonusWeeklySheet.tsx");
     const payment = source("client/src/pages/factory/productiontargets/ProductionBonusManualPaymentPanel.tsx");
-    expect(page).toContain("const [manualMode,setManualMode]=useState(true)");
+    expect(page).toContain("const [manualMode, setManualMode] = useState(true);");
     expect(sheet).toContain("manualMode || member.readyDays > 0");
     expect(sheet).toContain("onToggle(member.workerId,!selected.includes(member.workerId))");
     expect(sheet).toContain("onAmountChange?.(member.workerId, event.target.value)");
-    expect(page).toContain("selected={manualSelected} amounts={manualAmounts}");
-    expect(payment).toContain("selections:chosen.map(item=>({workerId:item.workerId,amount:item.amount}))");
+    expect(page).toMatch(/selected=\{manualSelected\}\s+amounts=\{manualAmounts\}/);
+    expect(payment).toContain("selections: chosen.map((item) => ({ workerId: item.workerId, amount: item.amount }))");
   });
   it("posts each user-confirmed amount into a balanced voucher and daybook atomically", () => {
     const s = service(),

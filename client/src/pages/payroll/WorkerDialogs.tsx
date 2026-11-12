@@ -26,6 +26,7 @@ import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { getApiRequest } from "@/lib/factoryApi";
 import { queryClient } from "@/lib/queryClient";
 import type { Employee } from "@shared/schema";
@@ -82,6 +83,8 @@ export function WorkerDialogs({
   const modeApiRequest = getApiRequest(appMode);
   const { selectedCompany } = useCompany();
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
+  const canCreateWorkerGroup = recordChanges.canCreate("POST", "/api/worker-groups");
   const [workerGroupName, setWorkerGroupName] = useState("");
   const [workerGroupDescription, setWorkerGroupDescription] = useState("");
 
@@ -353,9 +356,15 @@ export function WorkerDialogs({
                 >
                   Cancel
                 </Button>
-                <Button type="submit" disabled={updateWorkerMutation.isPending} data-testid="button-submit-edit-worker">
-                  {updateWorkerMutation.isPending ? "Updating..." : "Update Worker"}
-                </Button>
+                {recordChanges.allowed && (
+                  <Button
+                    type="submit"
+                    disabled={updateWorkerMutation.isPending}
+                    data-testid="button-submit-edit-worker"
+                  >
+                    {updateWorkerMutation.isPending ? "Updating..." : "Update Worker"}
+                  </Button>
+                )}
               </div>
             </form>
           </Form>
@@ -402,14 +411,16 @@ export function WorkerDialogs({
               >
                 Cancel
               </Button>
-              <Button
-                type="button"
-                onClick={() => createWorkerGroupMutation.mutate()}
-                disabled={!workerGroupName.trim() || createWorkerGroupMutation.isPending}
-                data-testid="button-submit-worker-group"
-              >
-                Create Group
-              </Button>
+              {canCreateWorkerGroup && (
+                <Button
+                  type="button"
+                  onClick={() => createWorkerGroupMutation.mutate()}
+                  disabled={!workerGroupName.trim() || createWorkerGroupMutation.isPending}
+                  data-testid="button-submit-worker-group"
+                >
+                  Create Group
+                </Button>
+              )}
             </div>
           </div>
         </DialogContent>
@@ -440,8 +451,10 @@ export function WorkerDialogs({
                       <TableCell>
                         <Checkbox
                           checked={!!isMember}
+                          disabled={!recordChanges.allowed}
+                          title={recordChanges.reason ?? undefined}
                           onCheckedChange={(checked) => {
-                            if (!selectedWorkerGroupForMembers) return;
+                            if (!selectedWorkerGroupForMembers || !recordChanges.allowed) return;
                             if (checked) {
                               addWorkerToWorkerGroupMutation.mutate({
                                 groupId: selectedWorkerGroupForMembers.id,
@@ -510,13 +523,15 @@ export function WorkerDialogs({
             >
               Cancel
             </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleForceDeleteWorker}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              data-testid="button-confirm-force-delete-worker"
-            >
-              Delete Anyway
-            </AlertDialogAction>
+            {recordChanges.allowed && (
+              <AlertDialogAction
+                onClick={handleForceDeleteWorker}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                data-testid="button-confirm-force-delete-worker"
+              >
+                Delete Anyway
+              </AlertDialogAction>
+            )}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

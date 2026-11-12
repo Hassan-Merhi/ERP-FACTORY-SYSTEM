@@ -65,6 +65,7 @@ export function FactoryWorkerAdvancesPanel({ model }: FactoryWorkerDetailModelPr
     showAdvances,
     workerAdvances,
     wrapAdminAction,
+    canChangeExistingRecords,
   } = model;
   return (
     <>
@@ -157,7 +158,7 @@ export function FactoryWorkerAdvancesPanel({ model }: FactoryWorkerDetailModelPr
                           Salary Ded: {fmt(salaryBal)}
                         </Badge>
                       )}
-                      {loanBal > 0 && (
+                      {canChangeExistingRecords && loanBal > 0 && (
                         <>
                           <Badge
                             variant="outline"
@@ -191,14 +192,16 @@ export function FactoryWorkerAdvancesPanel({ model }: FactoryWorkerDetailModelPr
                     </>
                   );
                 })()}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setShowAdvanceForm(true)}
-                  data-testid="button-new-advance"
-                >
-                  <Plus className="h-4 w-4 mr-1" /> New Advance
-                </Button>
+                {canChangeExistingRecords && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setShowAdvanceForm(true)}
+                    data-testid="button-new-advance"
+                  >
+                    <Plus className="h-4 w-4 mr-1" /> New Advance
+                  </Button>
+                )}
               </div>
             </CardHeader>
             <CardContent className="p-0">
@@ -334,13 +337,17 @@ export function FactoryWorkerAdvancesPanel({ model }: FactoryWorkerDetailModelPr
                               isLoan={isLoan}
                               isExpanded={isExpanded}
                               onToggleExpand={() => setExpandedAdvanceId(isExpanded ? null : adv.id)}
-                              onRepay={() => {
-                                setRepayAdvanceId(adv.id);
-                                setRepayDate(new Date().toLocaleDateString("en-CA"));
-                                setRepayAmount("");
-                                setRepayCashAccountId("");
-                                setRepayNotes("");
-                              }}
+                              onRepay={
+                                canChangeExistingRecords
+                                  ? () => {
+                                      setRepayAdvanceId(adv.id);
+                                      setRepayDate(new Date().toLocaleDateString("en-CA"));
+                                      setRepayAmount("");
+                                      setRepayCashAccountId("");
+                                      setRepayNotes("");
+                                    }
+                                  : undefined
+                              }
                               formatDate={formatDate}
                               fmt={fmt}
                             />

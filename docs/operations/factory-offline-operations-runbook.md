@@ -83,6 +83,84 @@ Such a laptop is a **read-only viewer**. It never takes a write.
   on disk makes the ticket fail to open
   (`tests/ui/offline-cold-start-read-only.test.ts`).
 
+### Standalone laptops: browser offline mode (Phases 13–16)
+
+A laptop's browser can keep working when the internet drops, **without the
+factory server**, and send what it saved straight to the cloud when the
+connection is back. This reverses decision 10 for the entries listed below:
+they are saved; everything else on a disconnected laptop is still refused.
+
+**Switched off.** It needs all three of: the client flag
+`OFFLINE_MODE_ENABLED` (still `false`), the cloud setting
+`OFFLINE_BROWSER_SYNC_ENABLED=1` (default off; the routes answer 404) and the
+offline evidence schema on the cloud database (§3, `offlineSchemaInstall.ts
+cloud`). Production has none of them.
+
+**What can be saved offline** (client/src/lib/offline/offlineCoverage.ts and
+server/offline/browserSync/browserOperationKinds.ts hold the same list):
+
+| Entry | Live route it replaces | Cloud replay |
+| --- | --- | --- |
+| Payment / Receipt | `POST /api/vouchers/payment-receipt` | payment posting code, at the entered rate |
+| Stock adjustment | `POST /api/inventory/quick-adjust` | quick-adjust code, as a change to the cloud's quantity |
+| Stock transfer | `POST /api/stock-transfers` | transfer code, keyed by the operation id |
+| New stock item | `POST /api/stock-items` | item create; later entries naming it are translated |
+| POS sale | `POST /api/pos/sales` | sale service; must name the account it was paid into |
+
+Journal vouchers keep their existing durable path.
+
+**How a laptop saves.** Only when the app already knows it is offline (browser
+offline, failed health checks, or the sealed read-only ticket) is a supported
+write saved, never after a request was cut off mid-send. It is stored in
+IndexedDB, separate per company and user, sealed with AES-GCM under a
+non-extractable key made for that user on that laptop; only a label (type and
+amount) is readable. The screen says "Saved offline". A double click within two
+minutes is saved once. Records can be edited until they may have reached the
+cloud. Every other write is refused with the reason it needs a connection.
+
+**How it syncs** (client/src/lib/offline/browserSync.ts →
+`POST /api/offline/browser-sync/operations`): when the connection returns (or
+on **Sync now**), the browser re-checks the session and sends the signed-in
+user's records for the active company, one at a time, in the order saved per
+stream. The cloud takes the actor from the session, builds the Phase 9
+evidence envelope from the entered values, runs the same handler as the LAN
+replay (authorize → apply → verify) and writes the receipt in the same
+transaction, under the laptop's device id. A record counts as synced only when
+the receipt names that operation. A lost acknowledgement returns the stored
+receipt; a changed record under the same id is refused. Failures retry with
+backoff; an expired session pauses; a conflict or refusal stops that stream
+until the user decides.
+
+**Conflicts.** The cloud never overwrites: it rolls back and reports the code.
+In the offline panel (banner drawer, and Factory settings) the user can try
+again, discard (recorded in the cloud as rejected) or, as an Admin or
+Developer and only for a code the entry declares overridable, apply it anyway.
+The cloud checks the role and the code again.
+
+**Controls.** Connection state, counters (saved, waiting, synced, needing a
+decision), Sync now, Pause/Resume delivery, storage used, removing synced
+records, and a recovery copy (readable JSON of unsynced entries, for re-entry
+by hand if the laptop must be replaced).
+
+**Still needs a connection, and why:**
+
+| Category | Reason |
+| --- | --- |
+| Editing or deleting existing cloud records | Needs the cloud's current version so nothing is overwritten; the browser has no version token for cloud records yet. |
+| Pressing scans | Need the machine's current assignment, the bale and the shift day from the cloud at scan time. |
+| Files and attachments | Bytes are not stored on the laptop. |
+| Supplier receiving (container offload) | The replay exists, but the browser would need the order lines and prices cached; not wired yet. |
+| Payroll, rentals, month-end accounting | Can wait; high conflict risk. |
+| Users, permissions, settings | Must change in one place. |
+| WhatsApp, chat, other outside services | Unreachable offline. |
+| Password or manager-approval actions | Checked by the server at that moment. |
+| Everything else | Not reviewed for offline replay. |
+
+**Not verified yet.** The code is covered by automated tests (cloud endpoint on
+the full schema; queue, delivery, capture and panel in the browser test
+suite). It has not been run on real laptops or in production, and the staging
+drills do not cover it yet.
+
 ### Entries left in the old browser queues
 
 Some browsers still hold entries saved offline before the current design

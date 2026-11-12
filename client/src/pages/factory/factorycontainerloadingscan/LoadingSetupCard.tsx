@@ -118,19 +118,23 @@ export function LoadingSetupCard({ model }: { model: FactoryContainerLoadingScan
                 placeholder={model.tr("addLoadingNote")}
                 className="min-h-[88px] resize-none rounded-xl border-blue-200/90 bg-slate-50/60 text-sm shadow-sm focus-visible:ring-blue-500/30 dark:border-blue-500/25 dark:bg-[hsl(var(--factory-hue)_59%_11%)]"
                 rows={2}
+                readOnly={!model.canChangeExistingRecords}
+                title={model.changeDisabledReason ?? undefined}
                 data-testid="input-loading-note"
               />
-              <Button
-                size="icon"
-                variant="outline"
-                className="h-10 w-10 shrink-0 rounded-xl"
-                onClick={() => model.saveNoteMutation.mutate(model.loadingNote)}
-                disabled={model.saveNoteMutation.isPending}
-                data-testid="button-save-note"
-                title={model.tr("saveNote")}
-              >
-                <Save className="h-4 w-4" />
-              </Button>
+              {model.canChangeExistingRecords && (
+                <Button
+                  size="icon"
+                  variant="outline"
+                  className="h-10 w-10 shrink-0 rounded-xl"
+                  onClick={() => model.saveNoteMutation.mutate(model.loadingNote)}
+                  disabled={model.saveNoteMutation.isPending}
+                  data-testid="button-save-note"
+                  title={model.tr("saveNote")}
+                >
+                  <Save className="h-4 w-4" />
+                </Button>
+              )}
             </div>
           ) : (
             <Textarea
@@ -144,7 +148,7 @@ export function LoadingSetupCard({ model }: { model: FactoryContainerLoadingScan
           )}
         </div>
 
-        {!orderId && (
+        {!orderId && model.canCreateLoading && (
           <Button
             className="h-12 w-full rounded-xl bg-gradient-to-r from-sky-500 to-blue-700 text-sm font-bold text-white shadow-lg shadow-blue-500/20 transition-all hover:from-sky-600 hover:to-blue-800 disabled:opacity-50"
             onClick={model.handleStartLoading}

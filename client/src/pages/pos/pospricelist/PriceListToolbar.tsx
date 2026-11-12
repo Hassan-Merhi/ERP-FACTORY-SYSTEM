@@ -51,7 +51,7 @@ export function PriceListTitleBar({ model }: { model: PosPriceListModel }) {
             Template
           </Button>
         )}
-        {selectedLocationId && isAllMode && canEdit && (
+        {selectedLocationId && isAllMode && model.canEditPrices && (
           <Button
             variant="outline"
             size="sm"
@@ -77,7 +77,7 @@ export function PriceListTitleBar({ model }: { model: PosPriceListModel }) {
           </Button>
         )}
       </PageHeader>
-      {isAllMode && canEdit && (
+      {isAllMode && model.canEditPrices && (
         <input
           ref={model.importFileRef}
           type="file"

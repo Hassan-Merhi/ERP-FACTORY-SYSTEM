@@ -1,4 +1,5 @@
 import { searchAny } from "@shared/searchNormalization";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -101,6 +102,7 @@ export default function FactoryEmployees() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const { selectedCompany } = useCompany();
+  const recordChanges = useExistingRecordChangeAccess();
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("Active");
@@ -148,6 +150,7 @@ export default function FactoryEmployees() {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: Partial<typeof formData> }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await factoryApiRequest("PATCH", `/api/factory/employees/${id}`, data);
       if (!res.ok) {
         const err = await res.json();
@@ -157,7 +160,9 @@ export default function FactoryEmployees() {
     },
     onSuccess: (emp: Employee) => {
       queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id) });
-      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id, emp.id) });
+      queryClient.invalidateQueries({
+        queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id, emp.id),
+      });
       toast({ title: "Employee updated" });
       setEditingEmployee(null);
     },
@@ -169,6 +174,7 @@ export default function FactoryEmployees() {
 
   const deactivateMutation = useMutation({
     mutationFn: async (id: number) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await factoryApiRequest("PATCH", `/api/factory/employees/${id}`, { active: false });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -189,6 +195,7 @@ export default function FactoryEmployees() {
 
   const reactivateMutation = useMutation({
     mutationFn: async (id: number) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await factoryApiRequest("PATCH", `/api/factory/employees/${id}`, { active: true });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -208,6 +215,7 @@ export default function FactoryEmployees() {
 
   const recalcMutation = useMutation({
     mutationFn: async () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await factoryApiRequest("POST", "/api/factory/employees/recalculate-balances", {});
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -353,14 +361,16 @@ export default function FactoryEmployees() {
             <SelectItem value="All">All</SelectItem>
           </SelectContent>
         </Select>
-        <Button
-          onClick={openCreate}
-          className="h-11 rounded-xl bg-emerald-600 px-5 font-semibold text-white shadow-sm hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500"
-          data-testid="button-create-employee"
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          New Employee
-        </Button>
+        {recordChanges.canCreate("POST", "/api/factory/employees") && (
+          <Button
+            onClick={openCreate}
+            className="h-11 rounded-xl bg-emerald-600 px-5 font-semibold text-white shadow-sm hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+            data-testid="button-create-employee"
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            New Employee
+          </Button>
+        )}
       </div>
 
       {/* Table */}
@@ -468,41 +478,43 @@ export default function FactoryEmployees() {
                       </Badge>
                     </TableCell>
                     <TableCell className="py-3">
-                      <div
-                        className="flex items-center justify-end gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 touch:opacity-100"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => openEdit(emp)}
-                          data-testid={`button-edit-employee-${emp.id}`}
+                      {recordChanges.allowed && (
+                        <div
+                          className="flex items-center justify-end gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 touch:opacity-100"
+                          onClick={(e) => e.stopPropagation()}
                         >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        {emp.active ? (
                           <Button
                             size="icon"
                             variant="ghost"
-                            onClick={() => setEndingContractEmployee(emp)}
-                            data-testid={`button-end-contract-${emp.id}`}
-                            title="End Contract"
+                            onClick={() => openEdit(emp)}
+                            data-testid={`button-edit-employee-${emp.id}`}
                           >
-                            <UserX className="h-3.5 w-3.5 text-destructive" />
+                            <Pencil className="h-3.5 w-3.5" />
                           </Button>
-                        ) : (
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => reactivateMutation.mutate(emp.id)}
-                            disabled={reactivateMutation.isPending}
-                            data-testid={`button-reactivate-${emp.id}`}
-                            title="Reactivate"
-                          >
-                            <UserCheck className="h-3.5 w-3.5 text-emerald-600" />
-                          </Button>
-                        )}
-                      </div>
+                          {emp.active ? (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => setEndingContractEmployee(emp)}
+                              data-testid={`button-end-contract-${emp.id}`}
+                              title="End Contract"
+                            >
+                              <UserX className="h-3.5 w-3.5 text-destructive" />
+                            </Button>
+                          ) : (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => reactivateMutation.mutate(emp.id)}
+                              disabled={reactivateMutation.isPending}
+                              data-testid={`button-reactivate-${emp.id}`}
+                              title="Reactivate"
+                            >
+                              <UserCheck className="h-3.5 w-3.5 text-emerald-600" />
+                            </Button>
+                          )}
+                        </div>
+                      )}
                     </TableCell>
                   </TableRow>
                 );
@@ -611,19 +623,21 @@ export default function FactoryEmployees() {
             >
               Cancel
             </Button>
-            <Button
-              onClick={() => {
-                if (editingEmployee) {
-                  updateMutation.mutate({ id: editingEmployee.id, data: formData });
-                } else {
-                  createMutation.mutate(formData);
-                }
-              }}
-              disabled={createMutation.isPending || updateMutation.isPending}
-              data-testid="button-save"
-            >
-              {createMutation.isPending || updateMutation.isPending ? "Saving..." : "Save"}
-            </Button>
+            {(editingEmployee ? recordChanges.allowed : recordChanges.canCreate("POST", "/api/factory/employees")) && (
+              <Button
+                onClick={() => {
+                  if (editingEmployee) {
+                    updateMutation.mutate({ id: editingEmployee.id, data: formData });
+                  } else {
+                    createMutation.mutate(formData);
+                  }
+                }}
+                disabled={createMutation.isPending || updateMutation.isPending}
+                data-testid="button-save"
+              >
+                {createMutation.isPending || updateMutation.isPending ? "Saving..." : "Save"}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useToast } from "@/hooks/use-toast";
 import { authenticatedUserQueryOptions } from "@/contracts/sessionQueryContracts";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
@@ -41,7 +42,9 @@ export function FactoryFxAgentWalletCard({
 }) {
   const { toast } = useToast();
   const { data: user } = useQuery(authenticatedUserQueryOptions());
-  const canEdit = ["Admin", "Owner", "Developer"].includes(user?.role || "") && !readOnly;
+  // The company role must also allow changes: View Only and Create Only never post FX agent transactions.
+  const recordChanges = useExistingRecordChangeAccess();
+  const canEdit = ["Admin", "Owner", "Developer"].includes(user?.role || "") && !readOnly && recordChanges.allowed;
   const [accountId, setAccountId] = useState("");
   const [accountSearch, setAccountSearch] = useState("");
   const [walletId, setWalletId] = useState("");
@@ -106,7 +109,10 @@ export function FactoryFxAgentWalletCard({
   });
   const [reversalReason, setReversalReason] = useState("");
   const write = useMutation({
-    mutationFn: async ({ path, body }: WalletWrite) => (await apiRequest("POST", path, body)).json(),
+    mutationFn: async ({ path, body }: WalletWrite) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
+      return (await apiRequest("POST", path, body)).json();
+    },
     onSuccess: () => {
       toast({ title: "FX agent transaction saved" });
       void queryClient.invalidateQueries({ queryKey: ["/api/factory/fx-agent-wallets"] });
@@ -235,25 +241,27 @@ export function FactoryFxAgentWalletCard({
               </section>
             )}
             {!!active && !active.synchronized && (
-              <section className="space-y-3 rounded-lg border border-destructive/50 p-3" data-testid="fx-agent-ledger-reconciliation">
+              <section
+                className="space-y-3 rounded-lg border border-destructive/50 p-3"
+                data-testid="fx-agent-ledger-reconciliation"
+              >
                 <h4 className="font-semibold text-sm">USD ledger and FX wallet do not match</h4>
                 <p className="text-sm">
-                  Wallet USD book: <strong>USD {fmt(active.state.totalBookUsd)}</strong>.
-                  Posted account balance: <strong>USD {fmt(active.ledgerBookUsd)}</strong>.
-                  Difference: <strong>USD {fmt(active.bookDifferenceUsd)}</strong>.
+                  Wallet USD book: <strong>USD {fmt(active.state.totalBookUsd)}</strong>. Posted account balance:{" "}
+                  <strong>USD {fmt(active.ledgerBookUsd)}</strong>. Difference:{" "}
+                  <strong>USD {fmt(active.bookDifferenceUsd)}</strong>.
                 </p>
                 {active.hasOperations ? (
                   <p className="text-sm text-destructive">
-                    FX conversions or payouts already exist. Review the ledger changes before any new operation;
-                    an existing wallet with movements cannot be reset.
+                    FX conversions or payouts already exist. Review the ledger changes before any new operation; an
+                    existing wallet with movements cannot be reset.
                   </p>
                 ) : (
                   <>
                     <p className="text-sm text-muted-foreground">
-                      This wallet has no FX transactions. If the posted ledger is still entirely USD,
-                      you can restart the wallet from today's posted USD balance. This does not change
-                      vouchers, and the previous baseline remains in the audit history. Older dates use
-                      the ordinary posted ledger balance.
+                      This wallet has no FX transactions. If the posted ledger is still entirely USD, you can restart
+                      the wallet from today's posted USD balance. This does not change vouchers, and the previous
+                      baseline remains in the audit history. Older dates use the ordinary posted ledger balance.
                     </p>
                     {canEdit && (
                       <>
@@ -269,11 +277,13 @@ export function FactoryFxAgentWalletCard({
                           variant="outline"
                           disabled={write.isPending || !rebaselineReason.trim() || Number(active.ledgerBookUsd) <= 0}
                           onClick={() => {
-                            if (window.confirm(
-                              "Reset this unused FX wallet to the current posted ledger balance USD " +
-                                fmt(active.ledgerBookUsd) +
-                                "? Its activation date will become today. Existing vouchers are unchanged."
-                            )) {
+                            if (
+                              window.confirm(
+                                "Reset this unused FX wallet to the current posted ledger balance USD " +
+                                  fmt(active.ledgerBookUsd) +
+                                  "? Its activation date will become today. Existing vouchers are unchanged."
+                              )
+                            ) {
                               write.mutate({
                                 path: "/api/factory/fx-agent-wallets/" + active.wallet.id + "/rebaseline",
                                 body: {

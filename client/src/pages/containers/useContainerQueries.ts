@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import type { Container, Supplier } from "@shared/schema";
 import { companyQueryKey } from "@/lib/companyQueryScope";
+import { erpPageAccessQueryOptions } from "@/app/erpAccessQuery";
 import type { SoldContainer, SpContainerWithLines } from "./types";
 
 interface SelectedCompany {
@@ -14,7 +15,7 @@ export function useContainerQueries(
   isFactory: boolean
 ) {
   const { data: myErpPages } = useQuery<{ hiddenErpCostFields?: string[] }>({
-    queryKey: ["/api/my-erp-pages"],
+    ...erpPageAccessQueryOptions(selectedCompany?.id, true),
   });
   const hideContainerCosts = (myErpPages?.hiddenErpCostFields ?? []).includes("container_costs");
 

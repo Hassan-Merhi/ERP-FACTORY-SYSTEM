@@ -42,7 +42,7 @@ import { compareItemNamesAZ } from "@/lib/itemNameSort";
 type Model = ReturnType<typeof useContainerDetailModel>;
 export function ContainerDetailErpView({ model }: { model: Model }) {
   // prettier-ignore
-  const { formatDisplayDate, containerId, showOffloadDialog, setShowOffloadDialog, showSellDialog, setShowSellDialog, pendingDelete, setPendingDelete, setLocation, formatAmount, isDeveloper, containerData, suppliers, customers, incomeAccounts, containerSale, docsData, showUploadDialog, setShowUploadDialog, showFreightDialog, setShowFreightDialog, uploadDocTypeId, setUploadDocTypeId, uploadFile, setUploadFile, fileInputRef, setShowPriceImportDialog, setPriceImportPreview, setPriceImportError, uploadDocMutation, freightForm, addFreightMutation, handleExportContainer, handleExportContainerNoCost, backUrl, form, deletePOMutation, deleteContainerMutation, syncVoucherMutation, reverseOffloadMutation, sellContainerMutation, handleDeletePO, handleDeleteContainer, handleSellSubmit, handlePrint, saleCustomer } = model;
+  const { formatDisplayDate, containerId, showOffloadDialog, setShowOffloadDialog, showSellDialog, setShowSellDialog, pendingDelete, setPendingDelete, setLocation, formatAmount, isDeveloper, containerData, suppliers, customers, incomeAccounts, containerSale, docsData, showUploadDialog, setShowUploadDialog, showFreightDialog, setShowFreightDialog, uploadDocTypeId, setUploadDocTypeId, uploadFile, setUploadFile, fileInputRef, setShowPriceImportDialog, setPriceImportPreview, setPriceImportError, uploadDocMutation, freightForm, addFreightMutation, handleExportContainer, handleExportContainerNoCost, backUrl, form, deletePOMutation, deleteContainerMutation, syncVoucherMutation, reverseOffloadMutation, sellContainerMutation, handleDeletePO, handleDeleteContainer, handleSellSubmit, handlePrint, saleCustomer, canChangeExistingRecords, canCreate } = model;
   // Defensive guard: by this point isSupplierPartner is false (handled above) and the
   // earlier `!containerData && !isSupplierPartner` check already returned if missing,
   // but TS can't infer that across the two branches — this re-confirms it for display only.
@@ -121,7 +121,7 @@ export function ContainerDetailErpView({ model }: { model: Model }) {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
-            {isDeveloper && (
+            {isDeveloper && canChangeExistingRecords && (
               <>
                 <DropdownMenuItem
                   onClick={() => syncVoucherMutation.mutate()}
@@ -141,19 +141,19 @@ export function ContainerDetailErpView({ model }: { model: Model }) {
               <FileText className="w-4 h-4 mr-2" />
               Verify
             </DropdownMenuItem>
-            {!containerSale && (
+            {!containerSale && canCreate("POST", "/api/container-sales") && (
               <DropdownMenuItem onClick={() => setShowSellDialog(true)} data-testid="button-sell-container">
                 <HandCoins className="w-4 h-4 mr-2" />
                 Sell Container
               </DropdownMenuItem>
             )}
-            {container.status !== "OFFLOADED" && (
+            {canChangeExistingRecords && container.status !== "OFFLOADED" && (
               <DropdownMenuItem onClick={() => setShowOffloadDialog(true)} data-testid="button-offload-container">
                 <Truck className="w-4 h-4 mr-2" />
                 Offload Container
               </DropdownMenuItem>
             )}
-            {container.status === "OFFLOADED" && (
+            {canChangeExistingRecords && container.status === "OFFLOADED" && (
               <>
                 <DropdownMenuItem onClick={() => setShowOffloadDialog(true)} data-testid="button-edit-offload">
                   <Edit className="w-4 h-4 mr-2" />
@@ -194,32 +194,36 @@ export function ContainerDetailErpView({ model }: { model: Model }) {
               <Printer className="w-4 h-4 mr-2" />
               Export PDF
             </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={() => {
-                setPriceImportPreview(null);
-                setPriceImportError(null);
-                setShowPriceImportDialog(true);
-              }}
-              data-testid="button-import-pricing"
-            >
-              <Upload className="w-4 h-4 mr-2" />
-              Import Pricing (Excel)
-            </DropdownMenuItem>
+            {canChangeExistingRecords && <DropdownMenuSeparator />}
+            {canChangeExistingRecords && (
+              <DropdownMenuItem
+                onClick={() => {
+                  setPriceImportPreview(null);
+                  setPriceImportError(null);
+                  setShowPriceImportDialog(true);
+                }}
+                data-testid="button-import-pricing"
+              >
+                <Upload className="w-4 h-4 mr-2" />
+                Import Pricing (Excel)
+              </DropdownMenuItem>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <Button
-          variant="destructive"
-          onClick={handleDeleteContainer}
-          disabled={deleteContainerMutation.isPending}
-          className="gap-2"
-          data-testid="button-delete-container"
-        >
-          <Trash2 className="w-4 h-4" />
-          <span className="hidden sm:inline">Delete Container</span>
-          <span className="sm:hidden">Delete</span>
-        </Button>
+        {canChangeExistingRecords && (
+          <Button
+            variant="destructive"
+            onClick={handleDeleteContainer}
+            disabled={deleteContainerMutation.isPending}
+            className="gap-2"
+            data-testid="button-delete-container"
+          >
+            <Trash2 className="w-4 h-4" />
+            <span className="hidden sm:inline">Delete Container</span>
+            <span className="sm:hidden">Delete</span>
+          </Button>
+        )}
       </PageHeader>
 
       {containerSale && (
@@ -328,23 +332,27 @@ export function ContainerDetailErpView({ model }: { model: Model }) {
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-sm font-semibold tabular-nums">{formatAmount(po.itemsTotal)}</span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setLocation(`/purchase-orders/${po.id}/edit`)}
-                    data-testid={`button-edit-po-${po.id}`}
-                  >
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleDeletePO(po.id, po.poNumber)}
-                    disabled={deletePOMutation.isPending}
-                    data-testid={`button-delete-po-${po.id}`}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  {canChangeExistingRecords && (
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setLocation(`/purchase-orders/${po.id}/edit`)}
+                        data-testid={`button-edit-po-${po.id}`}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDeletePO(po.id, po.poNumber)}
+                        disabled={deletePOMutation.isPending}
+                        data-testid={`button-delete-po-${po.id}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
 

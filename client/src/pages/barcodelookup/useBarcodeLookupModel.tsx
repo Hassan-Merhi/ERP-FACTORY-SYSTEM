@@ -2,6 +2,7 @@ import { searchAny } from "@shared/searchNormalization";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { getApiRequest } from "@/lib/factoryApi";
 import { useAdminOverride } from "@/hooks/use-admin-override";
@@ -53,6 +54,7 @@ export function useBarcodeLookupModel() {
   const [weightEditBale, setWeightEditBale] = useState<WeightEditBale | null>(null);
 
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
   const queryClient = useQueryClient();
   const appMode = useAppMode();
   const modeApiRequest = getApiRequest(appMode);
@@ -102,6 +104,7 @@ export function useBarcodeLookupModel() {
 
   const markScanned = useMutation({
     mutationFn: async (refNum: string) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const response = await modeApiRequest("POST", `/api/lookup/reference/${encodeURIComponent(refNum)}/scan`, {});
       if (!response.ok) throw await readError(response, "Failed to mark as scanned");
       return (await response.json()) as {
@@ -151,6 +154,7 @@ export function useBarcodeLookupModel() {
 
   const deleteBaleMutation = useMutation({
     mutationFn: async (refNum: string) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const response = await modeApiRequest(
         "DELETE",
         `/api/lookup/reference/${encodeURIComponent(refNum)}/delete-everywhere`,
@@ -176,6 +180,7 @@ export function useBarcodeLookupModel() {
 
   const changeProductMutation = useMutation({
     mutationFn: async ({ refNum, newProductId }: { refNum: string; newProductId: number }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const response = await modeApiRequest(
         "PATCH",
         `/api/lookup/reference/${encodeURIComponent(refNum)}/change-product`,
@@ -202,6 +207,7 @@ export function useBarcodeLookupModel() {
 
   const restoreDeletedMutation = useMutation({
     mutationFn: async ({ baleId, reason }: { baleId: number; reason: string }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       let response = await modeApiRequest("POST", `/api/factory/bales/${baleId}/restore-to-stock`, {
         reason,
       });
@@ -262,6 +268,7 @@ export function useBarcodeLookupModel() {
 
   const returnToStockMutation = useMutation({
     mutationFn: async (baleId: number): Promise<ReturnToStockResult> => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       // An open V5 loading keeps the physical bale IN_STOCK; detach its active
       // container assignment instead of using the legacy reserved/sold endpoint.
       const endpoint = isOpenLoading ? "release-from-loading" : "return-to-stock";
@@ -339,6 +346,7 @@ export function useBarcodeLookupModel() {
       currentBaleRef: string;
       replacementBaleRef: string;
     }): Promise<SwapResult> => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const response = await modeApiRequest("POST", "/api/factory/bales/swap", { currentBaleRef, replacementBaleRef });
       if (!response.ok) throw await readError(response, "Swap failed");
       return (await response.json()) as SwapResult;
@@ -445,6 +453,7 @@ export function useBarcodeLookupModel() {
     articleLookup,
     markScanned,
     isAdmin,
+    canChangeExistingRecords: recordChanges.allowed,
     filteredBaleProducts,
     deleteBaleMutation,
     changeProductMutation,

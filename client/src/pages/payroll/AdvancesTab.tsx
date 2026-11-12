@@ -23,6 +23,7 @@ import {
   Activity,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useForm } from "react-hook-form";
@@ -54,7 +55,10 @@ interface AdvancesTabProps {
 export function AdvancesTab({ cashAccounts = [] }: AdvancesTabProps) {
   const appMode = useAppMode();
   const { user } = useAuthenticatedUser();
-  const canReassignAdvance = ["Admin", "Owner", "Developer"].includes(user?.currentRole ?? user?.role ?? "");
+  const recordChanges = useExistingRecordChangeAccess();
+  const canCreateAdvance = recordChanges.canCreate("POST", "/api/salary-advances");
+  const canReassignAdvance =
+    recordChanges.allowed && ["Admin", "Owner", "Developer"].includes(user?.currentRole ?? user?.role ?? "");
   const modeApiRequest = getApiRequest(appMode);
   const { selectedCompany } = useCompany();
   const { toast } = useToast();
@@ -172,6 +176,7 @@ export function AdvancesTab({ cashAccounts = [] }: AdvancesTabProps) {
 
   const deleteAdvanceMutation = useMutation({
     mutationFn: async (advanceId: number) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       return await modeApiRequest("DELETE", `/api/salary-advances/${advanceId}`, undefined);
     },
     onSuccess: () => {
@@ -185,6 +190,7 @@ export function AdvancesTab({ cashAccounts = [] }: AdvancesTabProps) {
 
   const deductionMutation = useMutation({
     mutationFn: async (data: DeductionFormData) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       if (!selectedAdvance) throw new Error("No advance selected");
       return await modeApiRequest("POST", `/api/salary-advances/${selectedAdvance.id}/deduction`, data);
     },
@@ -205,6 +211,7 @@ export function AdvancesTab({ cashAccounts = [] }: AdvancesTabProps) {
 
   const addWorkerDeductionMutation = useMutation({
     mutationFn: async (data: { workerId: string; amount: string; reason: string; deductionDate: string }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       return await modeApiRequest("POST", `${workerDeductionsWorkerBase}/${data.workerId}/deductions`, {
         amount: data.amount,
         reason: data.reason || null,
@@ -230,6 +237,7 @@ export function AdvancesTab({ cashAccounts = [] }: AdvancesTabProps) {
 
   const deleteWorkerDeductionMutation = useMutation({
     mutationFn: async ({ workerId, deductionId }: { workerId: number; deductionId: number }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       return await modeApiRequest(
         "DELETE",
         `${workerDeductionsWorkerBase}/${workerId}/deductions/${deductionId}`,
@@ -315,7 +323,7 @@ export function AdvancesTab({ cashAccounts = [] }: AdvancesTabProps) {
                 <Pencil className="h-4 w-4 text-blue-500" />
               </Button>
             )}
-            {!advance.fullyPaid && (
+            {recordChanges.allowed && !advance.fullyPaid && (
               <Button
                 size="icon"
                 variant="ghost"
@@ -330,21 +338,23 @@ export function AdvancesTab({ cashAccounts = [] }: AdvancesTabProps) {
                 <ArrowDownCircle className="h-4 w-4 text-green-600" />
               </Button>
             )}
-            <Button
-              size="icon"
-              variant="ghost"
-              className="text-destructive"
-              onClick={async () => {
-                if (
-                  await confirmAction({ title: "Are you sure you want to delete this advance?", tone: "destructive" })
-                ) {
-                  deleteAdvanceMutation.mutate(advance.id);
-                }
-              }}
-              data-testid={`button-delete-advance-${advance.id}`}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
+            {recordChanges.allowed && (
+              <Button
+                size="icon"
+                variant="ghost"
+                className="text-destructive"
+                onClick={async () => {
+                  if (
+                    await confirmAction({ title: "Are you sure you want to delete this advance?", tone: "destructive" })
+                  ) {
+                    deleteAdvanceMutation.mutate(advance.id);
+                  }
+                }}
+                data-testid={`button-delete-advance-${advance.id}`}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
           </div>
         </TableCell>
       </TableRow>
@@ -435,16 +445,18 @@ export function AdvancesTab({ cashAccounts = [] }: AdvancesTabProps) {
               </SelectContent>
             </Select>
 
-            <div className="ml-auto flex gap-2">
-              <Button variant="outline" onClick={() => setAdvanceDialogOpen(true)} data-testid="button-bulk-advance">
-                <Banknote className="mr-2 h-4 w-4" />
-                Bulk Advance
-              </Button>
-              <Button onClick={() => setAdvanceDialogOpen(true)} data-testid="button-create-advance">
-                <Plus className="mr-2 h-4 w-4" />
-                Add Advance
-              </Button>
-            </div>
+            {canCreateAdvance && (
+              <div className="ml-auto flex gap-2">
+                <Button variant="outline" onClick={() => setAdvanceDialogOpen(true)} data-testid="button-bulk-advance">
+                  <Banknote className="mr-2 h-4 w-4" />
+                  Bulk Advance
+                </Button>
+                <Button onClick={() => setAdvanceDialogOpen(true)} data-testid="button-create-advance">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Advance
+                </Button>
+              </div>
+            )}
           </div>
 
           {/* Outstanding table */}
@@ -549,12 +561,14 @@ export function AdvancesTab({ cashAccounts = [] }: AdvancesTabProps) {
 
         {/* ── Worker Deductions sub-tab ── */}
         <TabsContent value="worker-deductions" className="pt-4 space-y-4">
-          <div className="flex justify-end">
-            <Button onClick={() => setAddWorkerDeductionDialogOpen(true)} data-testid="button-add-worker-deduction">
-              <Plus className="mr-2 h-4 w-4" />
-              Add Deduction
-            </Button>
-          </div>
+          {recordChanges.allowed && (
+            <div className="flex justify-end">
+              <Button onClick={() => setAddWorkerDeductionDialogOpen(true)} data-testid="button-add-worker-deduction">
+                <Plus className="mr-2 h-4 w-4" />
+                Add Deduction
+              </Button>
+            </div>
+          )}
           {deductionsLoading ? (
             <div className="flex items-center justify-center p-12">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -606,25 +620,27 @@ export function AdvancesTab({ cashAccounts = [] }: AdvancesTabProps) {
                           )}
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="text-destructive"
-                            disabled={deleteWorkerDeductionMutation.isPending}
-                            onClick={async () => {
-                              if (
-                                await confirmAction({
-                                  title: `Delete this deduction of ${formatAmount(parseFloat(d.amount || "0"))} for ${d.workerName || "this worker"}?`,
-                                  tone: "destructive",
-                                })
-                              ) {
-                                deleteWorkerDeductionMutation.mutate({ workerId: d.workerId, deductionId: d.id });
-                              }
-                            }}
-                            data-testid={`button-delete-deduction-${d.id}`}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          {recordChanges.allowed && (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="text-destructive"
+                              disabled={deleteWorkerDeductionMutation.isPending}
+                              onClick={async () => {
+                                if (
+                                  await confirmAction({
+                                    title: `Delete this deduction of ${formatAmount(parseFloat(d.amount || "0"))} for ${d.workerName || "this worker"}?`,
+                                    tone: "destructive",
+                                  })
+                                ) {
+                                  deleteWorkerDeductionMutation.mutate({ workerId: d.workerId, deductionId: d.id });
+                                }
+                              }}
+                              data-testid={`button-delete-deduction-${d.id}`}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { releaseDebtEnglish } from "@/i18n/finalCloseoutTranslations";
 import { apiRequest } from "@/lib/queryClient";
 import { PHASE7_READINESS, PHASE7_TRANSFER, type CompanyKey, type Phase7Readiness } from "./contracts";
@@ -39,6 +40,7 @@ function safeRemittanceCap(data?: HadiHeldBalanceReadiness): string {
 
 export function HadiProceedsRemittancePanel({ companyKey }: { companyKey: CompanyKey }) {
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
   const invalidateReadiness = useReadinessInvalidation();
   const [transferDate, setTransferDate] = useState(todayIso);
   const [amount, setAmount] = useState("");
@@ -86,6 +88,7 @@ export function HadiProceedsRemittancePanel({ companyKey }: { companyKey: Compan
 
   const mutation = useMutation({
     mutationFn: async () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       if (!targetCompanyId || !hadiChoice || !gcChoice) {
         throw new Error(releaseDebtEnglish("HADI remittance routing is not ready."));
       }
@@ -245,18 +248,20 @@ export function HadiProceedsRemittancePanel({ companyKey }: { companyKey: Compan
           </div>
         </div>
 
-        <Button
-          onClick={() => mutation.mutate()}
-          disabled={!canSubmit || mutation.isPending}
-          data-testid="button-gc-p16-remit-submit"
-        >
-          {mutation.isPending ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <ArrowDownToLine className="mr-2 h-4 w-4" />
-          )}
-          {releaseDebtEnglish("Remit proceeds to Golden Coast")}
-        </Button>
+        {recordChanges.allowed && (
+          <Button
+            onClick={() => mutation.mutate()}
+            disabled={!canSubmit || mutation.isPending}
+            data-testid="button-gc-p16-remit-submit"
+          >
+            {mutation.isPending ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <ArrowDownToLine className="mr-2 h-4 w-4" />
+            )}
+            {releaseDebtEnglish("Remit proceeds to Golden Coast")}
+          </Button>
+        )}
       </CardContent>
     </Card>
   );

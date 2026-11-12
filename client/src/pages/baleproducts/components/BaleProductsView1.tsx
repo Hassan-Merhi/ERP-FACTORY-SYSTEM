@@ -138,7 +138,13 @@ export function BaleProductsView1({ model }: { model: Model }) {
     bulkToggleActiveMutation,
     toggleGroup,
     groupedProducts,
+    canChangeExistingRecords,
+    canCreate,
   } = model;
+  const canEditProducts = isAdmin && canChangeExistingRecords;
+  const openCreateDialog = canCreate("POST", "/api/factory/bale-products")
+    ? () => setCreateDialogOpen(true)
+    : undefined;
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-blue-400/20 dark:bg-[#111c2e]">
       {/* Toolbar */}
@@ -153,7 +159,7 @@ export function BaleProductsView1({ model }: { model: Model }) {
           {selectedIds.size > 0 && (
             <>
               <span className="text-xs text-muted-foreground border-l pl-2">{selectedIds.size} selected</span>
-              {selectedActiveIds.length > 0 && (
+              {canChangeExistingRecords && selectedActiveIds.length > 0 && (
                 <Button
                   size="sm"
                   variant="outline"
@@ -165,7 +171,7 @@ export function BaleProductsView1({ model }: { model: Model }) {
                   Hide ({selectedActiveIds.length})
                 </Button>
               )}
-              {selectedHiddenIds.length > 0 && (
+              {canChangeExistingRecords && selectedHiddenIds.length > 0 && (
                 <Button
                   size="sm"
                   variant="outline"
@@ -471,7 +477,7 @@ export function BaleProductsView1({ model }: { model: Model }) {
                               )}
                               <TableCell></TableCell>
                               <TableCell>
-                                {isAdmin && (
+                                {canEditProducts && (
                                   <Button
                                     size="icon"
                                     variant="ghost"
@@ -492,7 +498,7 @@ export function BaleProductsView1({ model }: { model: Model }) {
               </TableBody>
             </Table>
           ) : (
-            <EmptyState onCreateClick={() => setCreateDialogOpen(true)} />
+            <EmptyState onCreateClick={openCreateDialog} />
           )
         ) : activeProducts && activeProducts.length > 0 ? (
           <Table
@@ -563,7 +569,7 @@ export function BaleProductsView1({ model }: { model: Model }) {
                           product={product}
                           designColors={designColors}
                           colorUpdateMutation={colorUpdateMutation}
-                          canEdit={isAdmin}
+                          canEdit={canEditProducts}
                         />
                       </div>
                     </TableCell>
@@ -597,7 +603,7 @@ export function BaleProductsView1({ model }: { model: Model }) {
                       </TableCell>
                     )}
                     <TableCell>
-                      {isAdmin && (
+                      {canEditProducts && (
                         <Button
                           size="icon"
                           variant="ghost"
@@ -613,7 +619,7 @@ export function BaleProductsView1({ model }: { model: Model }) {
             </TableBody>
           </Table>
         ) : (
-          <EmptyState onCreateClick={() => setCreateDialogOpen(true)} />
+          <EmptyState onCreateClick={openCreateDialog} />
         )}
 
         {showHidden && hiddenProducts && hiddenProducts.length > 0 && (
@@ -670,16 +676,18 @@ export function BaleProductsView1({ model }: { model: Model }) {
                       {product.categoryId ? categoryMap.get(product.categoryId) || "-" : "-"}
                     </TableCell>
                     <TableCell>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => bulkToggleActiveMutation.mutate({ ids: [product.id], active: true })}
-                        disabled={bulkToggleActiveMutation.isPending}
-                        data-testid={`button-unhide-product-${product.id}`}
-                      >
-                        <Eye className="h-4 w-4 mr-1" />
-                        Unhide
-                      </Button>
+                      {canChangeExistingRecords && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => bulkToggleActiveMutation.mutate({ ids: [product.id], active: true })}
+                          disabled={bulkToggleActiveMutation.isPending}
+                          data-testid={`button-unhide-product-${product.id}`}
+                        >
+                          <Eye className="h-4 w-4 mr-1" />
+                          Unhide
+                        </Button>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}

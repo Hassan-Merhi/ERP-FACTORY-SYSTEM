@@ -37,6 +37,7 @@ export function PayrollRunDialogs({ payroll }: { payroll: FactoryPayrollState })
     activeWorkers,
     previewMutation,
     generateMutation,
+    canChangeExistingRecords,
   } = payroll;
   return (
     <>
@@ -299,36 +300,38 @@ export function PayrollRunDialogs({ payroll }: { payroll: FactoryPayrollState })
                           </span>
                           {ded.reason && <span className="text-xs text-muted-foreground">· {ded.reason}</span>}
                           <span className="text-xs text-muted-foreground italic">(pending, applied at generation)</span>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-5 w-5 text-destructive"
-                            title="Remove this deduction"
-                            data-testid={`button-delete-deduction-${ded.id}`}
-                            onClick={async (e) => {
-                              e.stopPropagation();
-                              try {
-                                const res = await fetch(`/api/factory/workers/${r.id}/deductions/${ded.id}`, {
-                                  method: "DELETE",
-                                  credentials: "include",
-                                });
-                                if (!res.ok) {
-                                  const err = await res.json();
-                                  toast({
-                                    title: "Failed to remove deduction",
-                                    description: err.message,
-                                    variant: "destructive",
+                          {canChangeExistingRecords && (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-5 w-5 text-destructive"
+                              title="Remove this deduction"
+                              data-testid={`button-delete-deduction-${ded.id}`}
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                try {
+                                  const res = await fetch(`/api/factory/workers/${r.id}/deductions/${ded.id}`, {
+                                    method: "DELETE",
+                                    credentials: "include",
                                   });
-                                } else {
-                                  queryClient.invalidateQueries({ queryKey: ["/api/factory/payrolls/preview"] });
+                                  if (!res.ok) {
+                                    const err = await res.json();
+                                    toast({
+                                      title: "Failed to remove deduction",
+                                      description: err.message,
+                                      variant: "destructive",
+                                    });
+                                  } else {
+                                    queryClient.invalidateQueries({ queryKey: ["/api/factory/payrolls/preview"] });
+                                  }
+                                } catch {
+                                  toast({ title: "Failed to remove deduction", variant: "destructive" });
                                 }
-                              } catch {
-                                toast({ title: "Failed to remove deduction", variant: "destructive" });
-                              }
-                            }}
-                          >
-                            <X className="h-3 w-3" />
-                          </Button>
+                              }}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -516,13 +519,15 @@ export function PayrollRunDialogs({ payroll }: { payroll: FactoryPayrollState })
               <FileDown className="h-4 w-4 mr-2" />
               Export Excel
             </Button>
-            <Button
-              onClick={() => generateMutation.mutate()}
-              disabled={generateMutation.isPending || previewRows.length === 0}
-              data-testid="button-confirm-payroll"
-            >
-              {generateMutation.isPending ? "Generating..." : `Generate ${previewRows.length} Records`}
-            </Button>
+            {canChangeExistingRecords && (
+              <Button
+                onClick={() => generateMutation.mutate()}
+                disabled={generateMutation.isPending || previewRows.length === 0}
+                data-testid="button-confirm-payroll"
+              >
+                {generateMutation.isPending ? "Generating..." : `Generate ${previewRows.length} Records`}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

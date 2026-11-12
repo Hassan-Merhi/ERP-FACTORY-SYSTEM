@@ -1,5 +1,5 @@
 import { useLayoutEffect, useState, type ReactNode } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 
 import { ErrorState, LoadingState } from "@/components/ui/page-state";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
@@ -8,8 +8,6 @@ import { erpPageAccessQueryOptions } from "./erpAccessQuery";
 import type { ErpFeatureAccess } from "./erpAccess";
 
 export type ErpPageAccess = ErpFeatureAccess;
-
-export const LEGACY_ERP_PAGE_ACCESS_QUERY_KEY = ["/api/my-erp-pages"] as const;
 
 export const ERP_ACCESS_BOUNDARY_STATE = {
   loading: "loading",
@@ -50,7 +48,6 @@ interface ErpAccessBoundaryProps {
 export function ErpAccessBoundary({ user, children }: ErpAccessBoundaryProps) {
   const { selectedCompany } = useCompany();
   const { t } = useApplicationLanguage();
-  const queryClient = useQueryClient();
   const companyId = selectedCompany?.id;
   const [synchronizedCompanyId, setSynchronizedCompanyId] = useState<number | string | null>(null);
 
@@ -64,9 +61,9 @@ export function ErpAccessBoundary({ user, children }: ErpAccessBoundaryProps) {
   useLayoutEffect(() => {
     if (companyId == null || !accessQuery.data) return;
 
-    queryClient.setQueryData(LEGACY_ERP_PAGE_ACCESS_QUERY_KEY, accessQuery.data);
+    // Permission readers now use the scoped key directly; no global cache mirror.
     setSynchronizedCompanyId(companyId);
-  }, [accessQuery.data, companyId, queryClient]);
+  }, [accessQuery.data, companyId]);
 
   const boundaryState = resolveErpAccessBoundaryState({
     hasUser: Boolean(user),

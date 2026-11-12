@@ -175,6 +175,25 @@ Done in the owner-approved offline plan (2026-11-05):
 - Branch CI repairs: merged `main`, fixed `main`-introduced TypeScript errors, the `drizzle-kit push` BigInt default crash, the pressing PostgreSQL SQLSTATE assertion, the Phase 4 fixture, formatting, env documentation and runtime-table declarations for every offline table.
 - Still open: real hardware drills (Phase 6 matrix), independent security/DBA review, owner sign-off, and full CI on the exact release SHA.
 
+## Phases 13–16 — Standalone browser offline mode (2026-11-09, development)
+
+Laptops keep working without the internet and without the factory server, then
+sync straight to the cloud. Code and tests are in place; it is switched off
+(client `OFFLINE_MODE_ENABLED=false`, cloud `OFFLINE_BROWSER_SYNC_ENABLED` unset)
+and not verified on laptops or in production. Details, supported entries and
+the reasons for everything still online-only:
+[runbook](../../operations/factory-offline-operations-runbook.md#standalone-laptops-browser-offline-mode-phases-1316).
+
+- Phase 13: encrypted per-user queue in IndexedDB, capture only when known to be
+  offline, saved/pending/synced/failed states, offline editing of unsent records.
+- Phase 14: `/api/offline/browser-sync/*` applies each record exactly once through
+  the Phase 9 handlers with the session as the actor; receipts, lost-ack replay,
+  per-stream order, backoff, conflicts, Admin/Developer override, discard.
+- Phase 15: Payment/Receipt, stock adjustment, stock transfer, new stock item and
+  POS sale work offline; every other write is refused with a reason.
+- Phase 16: offline panel (banner drawer and Factory settings) with counters,
+  Sync now, Pause/Resume, conflict decisions, storage and a recovery copy.
+
 ## Resume checklist (next session)
 
 All development in the owner-approved offline plan is merged (#2871, 2026-11-06). The coverage audit (`node scripts/edge/audit-phase9-write-coverage.mjs`) reports 39 captured routes, 17 of them waiting for drill approval, and 1,140 refused; `--require-complete` stays red by design. What remains is rollout and certification:

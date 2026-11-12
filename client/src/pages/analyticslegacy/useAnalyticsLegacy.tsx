@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useLocation } from "wouter";
 import { useCompany } from "@/contexts/CompanyContext";
+import { erpPageAccessQueryOptions } from "@/app/erpAccessQuery";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { PeriodFilterValue, getDefaultPeriodValue } from "@/components/ui/period-filter";
 import { useDateJump } from "@/hooks/use-date-jump";
@@ -142,7 +143,9 @@ export function useAnalyticsLegacy() {
   const { toast } = useToast();
   const { formatAmount } = useCurrencyContext();
   const [, navigate] = useLocation();
-  const { data: myErpPages } = useQuery<{ hiddenErpCostFields?: string[] }>({ queryKey: ["/api/my-erp-pages"] });
+  const { data: myErpPages } = useQuery<{ hiddenErpCostFields?: string[] }>({
+    ...erpPageAccessQueryOptions(selectedCompany?.id, true),
+  });
   const [selectedPeriod, setSelectedPeriod] = useState("month");
   const [rangeStart, setRangeStart] = useState("");
   const [rangeEnd, setRangeEnd] = useState("");
@@ -514,8 +517,7 @@ export function useAnalyticsLegacy() {
   } = useQuery<ExpensePeriodResponse>({
     queryKey: ["analytics-period-expenses", appMode, selectedCompany?.id, plStartDate, plEndDate],
     queryFn: async () => {
-      const base =
-        appMode === "factory" ? "/api/factory/analytics" : "/api/reports/net-profit-statement";
+      const base = appMode === "factory" ? "/api/factory/analytics" : "/api/reports/net-profit-statement";
       const params = new URLSearchParams();
       if (plStartDate) params.set("startDate", plStartDate);
       if (plEndDate) params.set("endDate", plEndDate);
