@@ -24,6 +24,11 @@ describe("Stock Transfer Order WhatsApp approval request fix", () => {
     expect(batch).toContain("t.destination_location_id=");
     expect(batch).toContain("item_hash_snapshot");
     expect(batch).toContain("payload_hash_snapshot");
+    expect(batch).toContain("function integerIdArray(ids: readonly number[])");
+    expect(batch).toContain("ARRAY[");
+    expect(batch).toContain("sql.join(ids.map((id) => sql`");
+    expect(batch).not.toContain("ANY(${transferIds}::integer[])");
+    expect(batch).not.toContain("ANY(${ids}::integer[])");
   });
 
   it("pins the verified active-company context when freezing the batch and reading the message", () => {
