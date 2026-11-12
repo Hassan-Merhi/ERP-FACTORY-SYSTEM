@@ -18,6 +18,7 @@ import { useState, useCallback, useRef } from "react";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { getApiRequest } from "@/lib/factoryApi";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -152,6 +153,7 @@ export default function FactoryInvoices() {
   });
   const accessReady = Boolean(myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess);
   const isAdmin = accessReady && myAccess?.fullAccess === true;
+  const recordChanges = useExistingRecordChangeAccess();
   const { data: authUser } = useQuery<AuthMe>({ queryKey: ["/api/auth/me"], staleTime: 5 * 60000 });
   const showBookingInfo =
     accessReady &&
@@ -452,6 +454,7 @@ export default function FactoryInvoices() {
       await shippingFieldMutation.mutateAsync({ orderId, field, value });
     },
     isAdmin,
+    canChangeExistingRecords: recordChanges.allowed,
     unfinalizePending: unfinalizeMutation.isPending,
     onRevertOrder: (orderId: number) => unfinalizeMutation.mutate(orderId),
     onDeleteOrder: (orderId: number) => deleteMutation.mutate(orderId),

@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BarChart3, Loader2, RotateCcw, Wrench } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -73,6 +74,7 @@ function money(value: unknown): string {
 
 export default function SpOverview() {
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
   const queryClient = useQueryClient();
   const [selectedSale, setSelectedSale] = useState<SpSale | null>(null);
   const [reason, setReason] = useState("");
@@ -81,7 +83,7 @@ export default function SpOverview() {
     queryKey: ["/api/auth/me"],
   });
   const role = currentUser?.currentRole ?? currentUser?.role ?? "";
-  const canReverse = role === "Admin" || role === "Developer";
+  const canReverse = recordChanges.allowed && (role === "Admin" || role === "Developer");
 
   const { data: sales = [], isLoading: salesLoading } = useQuery<SpSale[]>({
     queryKey: ["/api/sp/sales"],
@@ -89,6 +91,7 @@ export default function SpOverview() {
 
   const reverseSale = useMutation({
     mutationFn: async () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       if (!selectedSale) throw new Error(releaseDebtEnglish("No sale selected"));
       const response = await apiRequest("POST", `/api/sp/sales/${selectedSale.id}/reverse`, { reason });
       return response.json();

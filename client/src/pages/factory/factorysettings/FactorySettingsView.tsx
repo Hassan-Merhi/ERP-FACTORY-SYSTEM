@@ -1,4 +1,6 @@
 import { OfflinePrepPanel } from "@/components/OfflinePrepPanel";
+import { OfflineModePanel } from "@/components/OfflineModePanel";
+import { OFFLINE_MODE_ENABLED } from "@/lib/featureFlags";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -649,12 +651,13 @@ export function FactorySettingsView({ model }: Props) {
             Offline Mode
           </CardTitle>
           <CardDescription>
-            Download all factory data to this device so it works without internet. Mutations made while offline are
-            queued and auto-synced when the connection returns.
+            Prepare supported factory data for offline reads on this device. Only approved operations are available
+            through a certified factory LAN server; returning to the cloud requires a supervised handover.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <OfflinePrepPanel />
+          {OFFLINE_MODE_ENABLED && <OfflineModePanel />}
         </CardContent>
       </Card>
 

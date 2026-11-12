@@ -4,6 +4,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 
 import type { CardKey, NetPositionData, PinnedRow, SnapshotData } from "./types";
 
@@ -13,6 +14,8 @@ function getFinancialSnapshotErrorMessage(error: unknown): string {
 
 export function useFactoryFinancialSnapshotModel() {
   const { toast } = useToast();
+  // Pinning or unpinning accounts changes the company's saved snapshot layout; read-only roles only view it.
+  const recordChanges = useExistingRecordChangeAccess();
 
   const [cashBankExpanded, setCashBankExpanded] = useState(false);
   const [agentExpanded, setAgentExpanded] = useState(false);
@@ -81,6 +84,7 @@ export function useFactoryFinancialSnapshotModel() {
       type: CardKey;
       body: { accountId: string; accountType: string; accountName: string };
     }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       if (type === "agent") return apiRequest("POST", "/api/agent-accounts", body);
       if (type === "freight") return apiRequest("POST", "/api/freight-accounts", body);
       return apiRequest("POST", `/api/snapshot-pinned-accounts/${type}`, body);
@@ -96,6 +100,7 @@ export function useFactoryFinancialSnapshotModel() {
 
   const removeAccountMutation = useMutation({
     mutationFn: ({ type, accountId }: { type: CardKey; accountId: string }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       if (type === "agent") return apiRequest("DELETE", `/api/agent-accounts/${encodeURIComponent(accountId)}`);
       if (type === "freight") return apiRequest("DELETE", `/api/freight-accounts/${encodeURIComponent(accountId)}`);
       return apiRequest("DELETE", `/api/snapshot-pinned-accounts/${type}/${encodeURIComponent(accountId)}`);
@@ -329,6 +334,7 @@ export function useFactoryFinancialSnapshotModel() {
             : "";
 
   return {
+    canChangeExistingRecords: recordChanges.allowed,
     addAccountMutation,
     advanceExpanded,
     allLoading,

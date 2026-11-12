@@ -42,8 +42,9 @@ export function FactorySupplierStatementBranch({ model }: { model: SuppliersMode
       amountVal: parseFloat(row.value),
       rowCc: "USD",
       status: row.status,
-      onMove: () =>
-        model.setMoveContainerDialog({ open: true, containerId: row.id, containerRef: row.containerNumber }),
+      onMove: model.canChangeExistingRecords
+        ? () => model.setMoveContainerDialog({ open: true, containerId: row.id, containerRef: row.containerNumber })
+        : undefined,
     });
   }
 
@@ -60,7 +61,9 @@ export function FactorySupplierStatementBranch({ model }: { model: SuppliersMode
       amount: model.formatNum(payment.amount),
       amountVal: parseFloat(payment.amountUsd),
       rowCc: "USD",
-      onDelete: () => model.wrapAdminAction(() => model.deletePaymentMutation.mutate(payment.id), "Delete Payment"),
+      onDelete: model.canChangeExistingRecords
+        ? () => model.wrapAdminAction(() => model.deletePaymentMutation.mutate(payment.id), "Delete Payment")
+        : undefined,
     });
   }
 
@@ -107,19 +110,23 @@ export function FactorySupplierStatementBranch({ model }: { model: SuppliersMode
       amount: model.formatNum(commission.amount),
       amountVal: parseFloat(commission.amountUsd),
       rowCc: "USD",
-      onEdit: () =>
-        model.setEditObComm({
-          rawStockId: commission.rawStockId,
-          amount: commission.amount,
-          currencyCode: commission.currencyCode,
-          personName: commission.personName,
-          notes: "",
-        }),
-      onDelete: () =>
-        model.wrapAdminAction(
-          () => model.deleteObCommissionMutation.mutate(commission.rawStockId),
-          "Delete OB Commission"
-        ),
+      onEdit: !model.canChangeExistingRecords
+        ? undefined
+        : () =>
+            model.setEditObComm({
+              rawStockId: commission.rawStockId,
+              amount: commission.amount,
+              currencyCode: commission.currencyCode,
+              personName: commission.personName,
+              notes: "",
+            }),
+      onDelete: !model.canChangeExistingRecords
+        ? undefined
+        : () =>
+            model.wrapAdminAction(
+              () => model.deleteObCommissionMutation.mutate(commission.rawStockId),
+              "Delete OB Commission"
+            ),
     });
   }
 
@@ -221,14 +228,21 @@ export function FactorySupplierStatementBranch({ model }: { model: SuppliersMode
         sfTxCount={filteredRows.length}
         currencyTotals={{ USD: runningBalance }}
         primaryCc="USD"
-        onRenameSupplier={(id, name) => model.renameSupplierMutation.mutate({ id, name })}
-        onDeleteSupplier={(id) =>
-          model.wrapAdminAction(() => {
-            model.permanentDeleteMutation.mutate(id);
-            model.setStatementSupplierId(null);
-            if (model.statementReturnToParent) model.setStatementReturnToParent(false);
-          }, "Delete Supplier")
+        onRenameSupplier={
+          model.canChangeExistingRecords ? (id, name) => model.renameSupplierMutation.mutate({ id, name }) : undefined
         }
+        onDeleteSupplier={
+          model.canChangeExistingRecords
+            ? (id) =>
+                model.wrapAdminAction(() => {
+                  model.permanentDeleteMutation.mutate(id);
+                  model.setStatementSupplierId(null);
+                  if (model.statementReturnToParent) model.setStatementReturnToParent(false);
+                }, "Delete Supplier")
+            : undefined
+        }
+        canRecordFxTransfer={model.canRecordFxTransfer}
+        canChangeExistingRecords={model.canChangeExistingRecords}
       />
       <FactorySuppliersMoveContainerDialog model={model} />
     </>

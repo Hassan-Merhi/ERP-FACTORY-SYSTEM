@@ -5,6 +5,7 @@ import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { authenticatedUserQueryOptions } from "@/contracts/sessionQueryContracts";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -30,9 +31,12 @@ export function ZambiaCashCurrencyTransfer() {
   const { displayCurrency, baseCurrency } = useCurrencyContext();
   const { data: currentUser } = useQuery(authenticatedUserQueryOptions());
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
   const companyId = selectedCompany?.id;
   const enabled = !!companyId && baseCurrency === "USD" && displayCurrency === "ZMW";
-  const canPost = currentUser?.role === "Admin" || currentUser?.role === "Owner" || currentUser?.role === "Developer";
+  const canPost =
+    recordChanges.allowed &&
+    (currentUser?.role === "Admin" || currentUser?.role === "Owner" || currentUser?.role === "Developer");
 
   const [source, setSource] = useState("");
   const [destination, setDestination] = useState("");

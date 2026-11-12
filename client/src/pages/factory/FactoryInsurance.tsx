@@ -1,4 +1,5 @@
 import { searchAny } from "@shared/searchNormalization";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -48,6 +49,7 @@ import { InsuranceImportDialog } from "./factoryinsurance/components/InsuranceIm
 import { InsuranceClearDialog } from "./factoryinsurance/components/InsuranceClearDialog";
 export default function FactoryInsurance() {
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
   const { formatDisplayDate } = useDateFormat();
   const { selectedCompany } = useCompany();
   const [, navigate] = useLocation();
@@ -107,6 +109,7 @@ export default function FactoryInsurance() {
 
   const extraChargesMutation = useMutation({
     mutationFn: async () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const amt = parseFloat(ecAmount);
       if (!ecDrId || !ecCrId || isNaN(amt) || amt <= 0) throw new Error("Fill in all fields with a valid amount.");
       if (ecDrId === ecCrId) throw new Error("Debit and credit accounts must be different.");
@@ -173,6 +176,7 @@ export default function FactoryInsurance() {
 
   const toggleMutation = useMutation({
     mutationFn: async (member: InsuranceMember) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       return apiRequest("PATCH", `/api/insurance/members/${member.id}/toggle`, {});
     },
     onSuccess: () => {
@@ -186,6 +190,7 @@ export default function FactoryInsurance() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       return apiRequest("DELETE", `/api/insurance/members/${id}`, undefined);
     },
     onSuccess: () => {
@@ -200,6 +205,7 @@ export default function FactoryInsurance() {
 
   const generateMutation = useMutation({
     mutationFn: async () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await apiRequest("POST", "/api/insurance/generate", {
         month: genMonth,
         year: genYear,
@@ -264,7 +270,7 @@ export default function FactoryInsurance() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {canClearInsurance && (
+            {recordChanges.allowed && canClearInsurance && (
               <Button
                 variant="destructive"
                 className="rounded-xl border border-red-400/30 bg-red-600 text-white shadow-sm shadow-red-700/15 hover:bg-red-700"
@@ -275,41 +281,47 @@ export default function FactoryInsurance() {
                 Clear All
               </Button>
             )}
-            <Button
-              variant="outline"
-              className="rounded-xl border-slate-300/80 bg-white/75 text-slate-800 shadow-sm hover:bg-blue-50 dark:border-slate-600/80 dark:bg-slate-900/70 dark:text-slate-100 dark:hover:bg-blue-950/80"
-              onClick={() => setShowImportDialog(true)}
-              data-testid="button-import-insurance"
-            >
-              <FileSpreadsheet className="h-4 w-4 mr-1" />
-              Import Excel
-            </Button>
-            <Button
-              variant="outline"
-              className="rounded-xl border-slate-300/80 bg-white/75 text-slate-800 shadow-sm hover:bg-blue-50 dark:border-slate-600/80 dark:bg-slate-900/70 dark:text-slate-100 dark:hover:bg-blue-950/80"
-              onClick={() => setShowExtraCharges(true)}
-              data-testid="button-extra-charges"
-            >
-              <Receipt className="h-4 w-4 mr-1" />
-              Add Extra Charges
-            </Button>
-            <Button
-              className="rounded-xl bg-gradient-to-r from-blue-700 to-blue-500 text-white shadow-md shadow-blue-700/20 hover:from-blue-800 hover:to-blue-600"
-              onClick={() => setShowGenDialog(true)}
-              data-testid="button-generate-entries"
-            >
-              <DollarSign className="h-4 w-4 mr-1" />
-              Generate Entries
-            </Button>
-            <Button
-              variant="outline"
-              className="rounded-xl border-blue-300 bg-blue-50 text-blue-900 shadow-sm hover:bg-blue-100 dark:border-blue-500/40 dark:bg-blue-500/15 dark:text-blue-100 dark:hover:bg-blue-500/25"
-              onClick={() => setShowAddDialog(true)}
-              data-testid="button-add-member"
-            >
-              <Plus className="h-4 w-4 mr-1" />
-              Add Member
-            </Button>
+            {recordChanges.allowed && (
+              <>
+                <Button
+                  variant="outline"
+                  className="rounded-xl border-slate-300/80 bg-white/75 text-slate-800 shadow-sm hover:bg-blue-50 dark:border-slate-600/80 dark:bg-slate-900/70 dark:text-slate-100 dark:hover:bg-blue-950/80"
+                  onClick={() => setShowImportDialog(true)}
+                  data-testid="button-import-insurance"
+                >
+                  <FileSpreadsheet className="h-4 w-4 mr-1" />
+                  Import Excel
+                </Button>
+                <Button
+                  variant="outline"
+                  className="rounded-xl border-slate-300/80 bg-white/75 text-slate-800 shadow-sm hover:bg-blue-50 dark:border-slate-600/80 dark:bg-slate-900/70 dark:text-slate-100 dark:hover:bg-blue-950/80"
+                  onClick={() => setShowExtraCharges(true)}
+                  data-testid="button-extra-charges"
+                >
+                  <Receipt className="h-4 w-4 mr-1" />
+                  Add Extra Charges
+                </Button>
+                <Button
+                  className="rounded-xl bg-gradient-to-r from-blue-700 to-blue-500 text-white shadow-md shadow-blue-700/20 hover:from-blue-800 hover:to-blue-600"
+                  onClick={() => setShowGenDialog(true)}
+                  data-testid="button-generate-entries"
+                >
+                  <DollarSign className="h-4 w-4 mr-1" />
+                  Generate Entries
+                </Button>
+              </>
+            )}
+            {recordChanges.canCreate("POST", "/api/insurance/members") && (
+              <Button
+                variant="outline"
+                className="rounded-xl border-blue-300 bg-blue-50 text-blue-900 shadow-sm hover:bg-blue-100 dark:border-blue-500/40 dark:bg-blue-500/15 dark:text-blue-100 dark:hover:bg-blue-500/25"
+                onClick={() => setShowAddDialog(true)}
+                data-testid="button-add-member"
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                Add Member
+              </Button>
+            )}
           </div>
         </div>
       </section>
@@ -534,42 +546,44 @@ export default function FactoryInsurance() {
                       )}
                     </TableCell>
                     <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-8 w-8 rounded-lg border border-slate-200 bg-slate-50/70 hover:bg-blue-100 dark:border-slate-600/70 dark:bg-slate-800/60 dark:hover:bg-slate-700"
-                          onClick={() => setEditMember(m)}
-                          title="Edit member"
-                          data-testid={`button-edit-${m.id}`}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-8 w-8 rounded-lg border border-slate-200 bg-slate-50/70 hover:bg-blue-100 dark:border-slate-600/70 dark:bg-slate-800/60 dark:hover:bg-slate-700"
-                          onClick={() => toggleMutation.mutate(m)}
-                          title={m.active ? "Deactivate" : "Activate"}
-                          data-testid={`button-toggle-${m.id}`}
-                        >
-                          {m.active ? (
-                            <ToggleRight className="h-4 w-4 text-green-600" />
-                          ) : (
-                            <ToggleLeft className="h-4 w-4 text-muted-foreground" />
-                          )}
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-8 w-8 rounded-lg border border-slate-200 bg-slate-50/70 hover:bg-blue-100 dark:border-slate-600/70 dark:bg-slate-800/60 dark:hover:bg-slate-700"
-                          onClick={() => setDeleteMember(m)}
-                          title="Delete member"
-                          data-testid={`button-delete-${m.id}`}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
+                      {recordChanges.allowed && (
+                        <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8 rounded-lg border border-slate-200 bg-slate-50/70 hover:bg-blue-100 dark:border-slate-600/70 dark:bg-slate-800/60 dark:hover:bg-slate-700"
+                            onClick={() => setEditMember(m)}
+                            title="Edit member"
+                            data-testid={`button-edit-${m.id}`}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8 rounded-lg border border-slate-200 bg-slate-50/70 hover:bg-blue-100 dark:border-slate-600/70 dark:bg-slate-800/60 dark:hover:bg-slate-700"
+                            onClick={() => toggleMutation.mutate(m)}
+                            title={m.active ? "Deactivate" : "Activate"}
+                            data-testid={`button-toggle-${m.id}`}
+                          >
+                            {m.active ? (
+                              <ToggleRight className="h-4 w-4 text-green-600" />
+                            ) : (
+                              <ToggleLeft className="h-4 w-4 text-muted-foreground" />
+                            )}
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8 rounded-lg border border-slate-200 bg-slate-50/70 hover:bg-blue-100 dark:border-slate-600/70 dark:bg-slate-800/60 dark:hover:bg-slate-700"
+                            onClick={() => setDeleteMember(m)}
+                            title="Delete member"
+                            data-testid={`button-delete-${m.id}`}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}

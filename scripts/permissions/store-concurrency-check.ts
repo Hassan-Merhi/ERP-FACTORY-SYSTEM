@@ -7,7 +7,12 @@
  *   - two administrators saving against the same revision: exactly one wins,
  *     the other gets 409 POLICY_STALE_REVISION and writes nothing;
  *   - a user override for someone outside the company is refused;
- *   - another company's scope sees none of these rules or audit rows.
+ *   - another company's scope sees none of these rules or audit rows;
+ *   - the effective-permission read resolves the canonical role and stays on
+ *     legacy decisions in shadow mode;
+ *   - activation is refused while the operator switch is off, a stale mode
+ *     change gets 409, and an authorized activation and rollback are both
+ *     audited as policy_mode rows.
  */
 // The throwaway database already carries the application's company-scope
 // functions (installed by validate-shadow-migration.sh), but not the full
@@ -21,6 +26,9 @@ const { createTenantDatabaseScope, runWithDatabaseScopeRuntimeContext } = await 
 );
 const { V2PolicyError, readV2Audit, readV2Roles, saveV2Rules } = await import(
   "../../server/services/security/accessControlV2Store"
+);
+const { readEffectivePermissions, readV2PolicyStatus, setV2PolicyMode } = await import(
+  "../../server/services/security/effectivePermissionStore"
 );
 
 const inCompany = <T>(companyId: number, work: () => Promise<T>) =>
@@ -71,6 +79,53 @@ async function main() {
   check(otherRoles.rules.length === 0 && otherAudit.length === 0, "company 2 sees none of company 1's rules or audit");
   const audit = await inCompany(1, () => readV2Audit(1, 100));
   check(audit.length >= 1, `company 1 audit recorded the change (${audit.length} row(s))`);
+
+  // Effective permissions: canonical role, legacy decisions while in shadow.
+  const clerk = await inCompany(1, () => readEffectivePermissions(1, "clerk-a", {}));
+  check(clerk.role === "Create Only" && clerk.mode === "shadow" && clerk.enforced === false, "effective read uses the canonical Create Only role in shadow mode");
+  check(
+    clerk.decisions["erp.suppliers"].edit.allowed === false && clerk.decisions["erp.suppliers"].create.allowed === true,
+    "Create Only: supplier create allowed, supplier edit denied"
+  );
+  check(clerk.decisions["erp.vouchers"].create.allowed === false, "Create Only: unverified voucher create denied");
+  let notMember: unknown = null;
+  try {
+    await inCompany(1, () => readEffectivePermissions(1, "clerk-b", {}));
+  } catch (error) {
+    notMember = error;
+  }
+  check(notMember instanceof V2PolicyError && notMember.status === 404, "effective read refuses a person outside the company");
+
+  // Activation switch and audited mode changes.
+  const status = await inCompany(1, () => readV2PolicyStatus(1));
+  let refused: unknown = null;
+  try {
+    await inCompany(1, () => setV2PolicyMode({ actor, mode: "active", expectedRevision: status.revision, reason: "Activation without operator approval" }, {}));
+  } catch (error) {
+    refused = error;
+  }
+  check(refused instanceof V2PolicyError && refused.code === "PERMISSIONS_V2_ACTIVATION_NOT_AUTHORIZED", "activation refused while PERMISSIONS_V2_COMPANY_ACTIVATION is off");
+  let stale: unknown = null;
+  try {
+    await inCompany(1, () => setV2PolicyMode({ actor, mode: "active", expectedRevision: status.revision - 1, reason: "Activation from a stale screen" }, { PERMISSIONS_V2_COMPANY_ACTIVATION: "enabled" }));
+  } catch (error) {
+    stale = error;
+  }
+  check(stale instanceof V2PolicyError && stale.code === "POLICY_STALE_REVISION", "a stale mode change gets 409 POLICY_STALE_REVISION");
+  const unchanged = await inCompany(1, () => readV2PolicyStatus(1));
+  check(unchanged.mode === "shadow" && unchanged.revision === status.revision, "refused mode changes wrote nothing");
+  const activated = await inCompany(1, () =>
+    setV2PolicyMode({ actor, mode: "active", expectedRevision: status.revision, reason: "Approved pilot activation drill" }, { PERMISSIONS_V2_COMPANY_ACTIVATION: "enabled" })
+  );
+  check(activated.mode === "active" && activated.revision === status.revision + 1, "authorized activation commits with a new revision");
+  const rolledBack = await inCompany(1, () =>
+    setV2PolicyMode({ actor, mode: "rolled_back", expectedRevision: activated.revision, reason: "Rollback drill back to legacy" }, {})
+  );
+  check(rolledBack.mode === "rolled_back", "rollback is allowed with the activation switch off");
+  const modeAudit = (await inCompany(1, () => readV2Audit(1, 100))).filter((row: { subjectType: string }) => row.subjectType === "policy_mode");
+  check(modeAudit.some((row: { subjectKey: string }) => row.subjectKey === "active") && modeAudit.some((row: { subjectKey: string }) => row.subjectKey === "rolled_back"), "activation and rollback are both in the audit");
+  const otherStatus = await inCompany(2, () => readV2PolicyStatus(2));
+  check(otherStatus.mode === "shadow", "company 2's policy mode is unaffected");
 }
 
 main()

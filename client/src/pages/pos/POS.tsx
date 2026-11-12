@@ -306,7 +306,7 @@ export default function POS({ posUser, editVoucherId }: { posUser?: AuthMe; edit
   });
 
   // ── WhatsApp / mutations / autosave ───────────────────────────────────────
-  const { handleSendInvoiceWhatsApp, handleSendWhatsAppReport } = usePosWhatsApp({
+  const { handleSendInvoiceWhatsApp, handleSendWhatsAppReport, canSendWhatsApp } = usePosWhatsApp({
     pendingAutoSend,
     setPendingAutoSend,
     pendingStockSend,
@@ -794,6 +794,7 @@ export default function POS({ posUser, editVoucherId }: { posUser?: AuthMe; edit
         stockWaStatus={stockWaStatus}
         handleSendStockWhatsApp={handleSendWhatsAppReport}
         sendingWhatsApp={sendingWhatsApp}
+        canSendWhatsApp={canSendWhatsApp}
         handlePrint={handlePrint}
         isCreditSale={isCreditSale}
         showStockPrompt={showStockPrompt}

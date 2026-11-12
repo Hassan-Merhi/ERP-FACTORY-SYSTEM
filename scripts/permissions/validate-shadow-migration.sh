@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Isolated validation of migrations/20261024_001_permissions_control_center_shadow.sql.
+# Isolated validation of migrations/20261024_001_permissions_control_center_shadow.sql
+# and its additive follow-up migrations/20261107_001_permissions_v2_policy_mode_audit.sql.
 #
 # Creates a THROWAWAY PostgreSQL cluster in a temporary directory (never a
 # configured DATABASE_URL), installs the application's real company-scope
@@ -10,7 +11,9 @@
 #   3. FORCE row-level security isolates companies for a non-superuser table owner;
 #   4. a user override needs a role assignment in the same company;
 #   5. the change audit is append-only (UPDATE and DELETE refused);
-#   6. vouchers and live role_feature_permissions are byte-for-byte unchanged.
+#   6. vouchers and live role_feature_permissions are byte-for-byte unchanged;
+#   7. the follow-up migration is idempotent and lets the audit record policy
+#      mode changes while still refusing unknown subject types.
 #
 # This is NOT the staging gate: it proves the SQL's behaviour on PostgreSQL 16,
 # not the production schema, data volume or service role. See
@@ -21,6 +24,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 MIGRATION="$ROOT/migrations/20261024_001_permissions_control_center_shadow.sql"
+MODE_AUDIT_MIGRATION="$ROOT/migrations/20261107_001_permissions_v2_policy_mode_audit.sql"
 SCOPE_SQL="$ROOT/migrations/0016_company_scope_rls_readiness.sql"
 PG_BIN="${PG_BIN:-$(ls -d /usr/lib/postgresql/*/bin 2>/dev/null | sort -V | tail -1)}"
 [[ -x "$PG_BIN/initdb" ]] || { echo "initdb not found; set PG_BIN" >&2; exit 2; }
@@ -152,6 +156,19 @@ for statement in "UPDATE access_policy_change_audit SET reason='Rewritten histor
 done
 pass "policy change audit refuses UPDATE and DELETE"
 
+# 5b. Follow-up migration: idempotent, widens the audit subject check only.
+"${DB[@]}" -f "$MODE_AUDIT_MIGRATION" >/dev/null || fail "policy mode audit migration did not apply"
+"${DB[@]}" -f "$MODE_AUDIT_MIGRATION" >/dev/null || fail "second run of the policy mode audit migration failed"
+checks="$("${DB[@]}" -At -c "SELECT count(*) FROM pg_constraint WHERE conname='access_policy_change_audit_subject_type_check'")"
+[[ "$checks" == "1" ]] || fail "expected one subject_type check after re-run, found $checks"
+"${APP[@]}" -c "BEGIN; SELECT set_config('app.current_company_id','1',true); INSERT INTO access_policy_change_audit (company_id, revision, actor_id, subject_type, subject_key, before_rules, after_rules, reason) VALUES (1, 900, 'admin-a', 'policy_mode', 'shadow', '[]', '[]', 'Validation mode audit row'); COMMIT;" >/dev/null || fail "policy_mode audit row refused"
+if "${APP[@]}" -c "BEGIN; SELECT set_config('app.current_company_id','1',true); INSERT INTO access_policy_change_audit (company_id, revision, actor_id, subject_type, subject_key, before_rules, after_rules, reason) VALUES (1, 901, 'admin-a', 'anything', 'x', '[]', '[]', 'Validation bad subject row'); COMMIT;" >/dev/null 2>&1; then
+  fail "audit accepted an unknown subject_type"
+fi
+existing="$("${DB[@]}" -At -c "SELECT count(*) FROM access_policy_change_audit WHERE subject_type='role'")"
+[[ "$existing" == "1" ]] || fail "existing role audit rows changed ($existing)"
+pass "policy mode audit migration is idempotent, accepts policy_mode and still refuses unknown subjects"
+
 # 6. Business data unchanged.
 after="$("${DB[@]}" -At -c "$BUSINESS_SNAPSHOT")"
 [[ "$before" == "$after" ]] || fail "vouchers or role_feature_permissions changed"
@@ -159,7 +176,7 @@ pass "vouchers and live role_feature_permissions are unchanged (md5 $after)"
 
 # 7. The application's own store against the migrated database (needs node + tsx).
 if [[ "${SKIP_STORE_CHECK:-0}" != "1" && -x "$ROOT/node_modules/.bin/tsx" ]]; then
-  "${DB[@]}" -c "GRANT SELECT ON user_company_roles, users, companies TO app_runtime" >/dev/null
+  "${DB[@]}" -c "GRANT SELECT ON user_company_roles, users, companies, role_feature_permissions TO app_runtime" >/dev/null
   (cd "$ROOT" && DATABASE_URL="postgresql://app_runtime@localhost:$PORT/shadow_validation?host=$WORK" \
     PGSSLMODE=disable NODE_ENV=test node_modules/.bin/tsx scripts/permissions/store-concurrency-check.ts) || fail "store checks failed"
 fi

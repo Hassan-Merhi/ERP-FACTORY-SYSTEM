@@ -1,6 +1,7 @@
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { Check, ChevronsUpDown, Trash2, X, Tag, Plus, Folder, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -141,6 +142,8 @@ export function SupplierCategoriesDialog({ open, onClose }: { open: boolean; onC
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingName, setEditingName] = useState("");
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const recordChanges = useExistingRecordChangeAccess();
+  const canCreateCategory = recordChanges.canCreate("POST", "/api/factory/supplier-categories");
 
   const { data: categories = [] } = useQuery<SupplierCategory[]>({
     queryKey: ["/api/factory/supplier-categories"],
@@ -172,6 +175,7 @@ export function SupplierCategoriesDialog({ open, onClose }: { open: boolean; onC
 
   const renameMutation = useMutation({
     mutationFn: async ({ id, name }: { id: number; name: string }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await fetch(`/api/factory/supplier-categories/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -191,6 +195,7 @@ export function SupplierCategoriesDialog({ open, onClose }: { open: boolean; onC
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await fetch(`/api/factory/supplier-categories/${id}`, {
         method: "DELETE",
         credentials: "include",
@@ -209,6 +214,7 @@ export function SupplierCategoriesDialog({ open, onClose }: { open: boolean; onC
 
   const assignMutation = useMutation({
     mutationFn: async ({ supplierId, categoryId }: { supplierId: number; categoryId: number | null }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await fetch(`/api/factory/suppliers/${supplierId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -248,31 +254,34 @@ export function SupplierCategoriesDialog({ open, onClose }: { open: boolean; onC
           </DialogHeader>
 
           <div className="flex-1 overflow-y-auto space-y-6">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">New Category</label>
-              <div className="flex gap-2">
-                <Input
-                  placeholder="e.g. Cyprus, Australia…"
-                  value={newCatName}
-                  onChange={(e) => setNewCatName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && newCatName.trim())
-                      wrapAdminAction(() => createMutation.mutate(newCatName), "Create Category");
-                  }}
-                  data-testid="input-new-category-name"
-                />
-                <Button
-                  onClick={() => {
-                    if (newCatName.trim()) wrapAdminAction(() => createMutation.mutate(newCatName), "Create Category");
-                  }}
-                  disabled={!newCatName.trim() || createMutation.isPending}
-                  data-testid="button-create-category"
-                >
-                  <Plus className="h-4 w-4 mr-1" />
-                  Add
-                </Button>
+            {canCreateCategory && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">New Category</label>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="e.g. Cyprus, Australia…"
+                    value={newCatName}
+                    onChange={(e) => setNewCatName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && newCatName.trim())
+                        wrapAdminAction(() => createMutation.mutate(newCatName), "Create Category");
+                    }}
+                    data-testid="input-new-category-name"
+                  />
+                  <Button
+                    onClick={() => {
+                      if (newCatName.trim())
+                        wrapAdminAction(() => createMutation.mutate(newCatName), "Create Category");
+                    }}
+                    disabled={!newCatName.trim() || createMutation.isPending}
+                    data-testid="button-create-category"
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add
+                  </Button>
+                </div>
               </div>
-            </div>
+            )}
 
             {categories.length > 0 && (
               <div className="space-y-2">
@@ -324,27 +333,29 @@ export function SupplierCategoriesDialog({ open, onClose }: { open: boolean; onC
                           </Button>
                         </>
                       ) : (
-                        <>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => {
-                              setEditingId(cat.id);
-                              setEditingName(cat.name);
-                            }}
-                            data-testid={`button-rename-category-${cat.id}`}
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => setDeletingId(cat.id)}
-                            data-testid={`button-delete-category-${cat.id}`}
-                          >
-                            <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                          </Button>
-                        </>
+                        recordChanges.allowed && (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => {
+                                setEditingId(cat.id);
+                                setEditingName(cat.name);
+                              }}
+                              data-testid={`button-rename-category-${cat.id}`}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => setDeletingId(cat.id)}
+                              data-testid={`button-delete-category-${cat.id}`}
+                            >
+                              <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                            </Button>
+                          </>
+                        )
                       )}
                     </div>
                   ))}
@@ -360,6 +371,7 @@ export function SupplierCategoriesDialog({ open, onClose }: { open: boolean; onC
                     <div key={sup.id} className="flex items-center gap-3 px-3 py-2">
                       <span className="flex-1 text-sm truncate">{sup.name}</span>
                       <Select
+                        disabled={!recordChanges.allowed}
                         value={sup.supplierCategoryId != null ? String(sup.supplierCategoryId) : "none"}
                         onValueChange={(val) => {
                           wrapAdminAction(

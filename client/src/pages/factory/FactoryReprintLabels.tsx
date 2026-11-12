@@ -36,6 +36,7 @@ import {
   type A4DesignColor,
 } from "@/lib/labelHtml";
 import { useLabelDesignColors } from "@/hooks/useLabelDesignColors";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 
 interface Location {
   id: number;
@@ -69,6 +70,8 @@ export default function FactoryReprintLabels() {
   const { colors } = useLabelDesignColors();
   const appMode = useAppMode();
   const modeApiRequest = getApiRequest(appMode);
+  // Each reprint is recorded against the bale, so read-only roles cannot reprint.
+  const recordChanges = useExistingRecordChangeAccess();
 
   const [selectedLocationId, setSelectedLocationId] = useState<string>("");
   const [search, setSearch] = useState("");
@@ -188,6 +191,7 @@ export default function FactoryReprintLabels() {
   };
 
   const handlePrint = async () => {
+    if (!recordChanges.allowed) return;
     const rowsToPrint = filteredBales.filter((r) => selectedIds.has(r.bale.id));
     if (rowsToPrint.length === 0) {
       toast({ title: "Nothing selected", description: "Tick at least one bale to print.", variant: "destructive" });
@@ -410,15 +414,17 @@ export default function FactoryReprintLabels() {
               )}
             </Button>
 
-            <Button
-              size="sm"
-              onClick={handlePrint}
-              disabled={selectedIds.size === 0 || balesLoading}
-              data-testid="button-print-selected"
-            >
-              <Printer className="h-4 w-4 mr-1.5" />
-              Print {selectedIds.size > 0 ? `${selectedIds.size} Label(s)` : "Selected"}
-            </Button>
+            {recordChanges.allowed && (
+              <Button
+                size="sm"
+                onClick={handlePrint}
+                disabled={selectedIds.size === 0 || balesLoading}
+                data-testid="button-print-selected"
+              >
+                <Printer className="h-4 w-4 mr-1.5" />
+                Print {selectedIds.size > 0 ? `${selectedIds.size} Label(s)` : "Selected"}
+              </Button>
+            )}
           </div>
 
           {/* Active article code filter chips */}

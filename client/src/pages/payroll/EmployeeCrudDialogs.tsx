@@ -20,6 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { FormSubmitButton } from "@/components/FormSubmitButton";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 
 interface EmployeeCrudDialogsProps {
@@ -72,6 +73,8 @@ export function EmployeeCrudDialogs({
   removeWorkerFromGroupMutation,
 }: EmployeeCrudDialogsProps) {
   const { formatAmount } = useCurrencyContext();
+  const recordChanges = useExistingRecordChangeAccess();
+  const canCreateGroup = recordChanges.canCreate("POST", "/api/employee-groups");
 
   return (
     <>
@@ -185,7 +188,9 @@ export function EmployeeCrudDialogs({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Opening Balance (Optional)</FormLabel>
-                    <FormDescription>Positive = Credit (owed to employee). Negative = Debit (employee advance).</FormDescription>
+                    <FormDescription>
+                      Positive = Credit (owed to employee). Negative = Debit (employee advance).
+                    </FormDescription>
                     <FormControl>
                       <Input
                         type="number"
@@ -328,13 +333,15 @@ export function EmployeeCrudDialogs({
             <AlertDialogCancel onClick={() => setDeleteConflict(null)} data-testid="button-cancel-force-delete">
               Cancel
             </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleForceDeleteEmployee}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              data-testid="button-confirm-force-delete"
-            >
-              Delete Anyway
-            </AlertDialogAction>
+            {recordChanges.allowed && (
+              <AlertDialogAction
+                onClick={handleForceDeleteEmployee}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                data-testid="button-confirm-force-delete"
+              >
+                Delete Anyway
+              </AlertDialogAction>
+            )}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -378,13 +385,15 @@ export function EmployeeCrudDialogs({
               >
                 Cancel
               </Button>
-              <Button
-                onClick={() => createGroupMutation.mutate()}
-                disabled={!newGroupName.trim() || createGroupMutation.isPending}
-                data-testid="button-submit-group"
-              >
-                {createGroupMutation.isPending ? "Creating..." : "Create Group"}
-              </Button>
+              {canCreateGroup && (
+                <Button
+                  onClick={() => createGroupMutation.mutate()}
+                  disabled={!newGroupName.trim() || createGroupMutation.isPending}
+                  data-testid="button-submit-group"
+                >
+                  {createGroupMutation.isPending ? "Creating..." : "Create Group"}
+                </Button>
+              )}
             </div>
           </div>
         </DialogContent>
@@ -405,7 +414,10 @@ export function EmployeeCrudDialogs({
                   <Checkbox
                     id={`worker-${worker.id}`}
                     checked={isMember}
+                    disabled={!recordChanges.allowed}
+                    title={recordChanges.reason ?? undefined}
                     onCheckedChange={(checked) => {
+                      if (!recordChanges.allowed) return;
                       if (checked && selectedGroupForMembers) {
                         addWorkerToGroupMutation.mutate({ groupId: selectedGroupForMembers.id, employeeId: worker.id });
                       } else if (!checked && selectedGroupForMembers) {

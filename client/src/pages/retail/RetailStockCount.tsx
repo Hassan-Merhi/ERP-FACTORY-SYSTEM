@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { queryClient } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { RetailNav } from "./RetailNav";
@@ -69,6 +70,8 @@ function lineStatusClass(status: RetailStockCountLineStatus): string {
 export default function RetailStockCount() {
   const { selectedCompany } = useCompany();
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
+  const canChangeCounts = recordChanges.allowed;
   const retailEnabled = selectedCompany?.companyType === "retail";
   const [locationId, setLocationId] = useState<number | "">("");
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -150,7 +153,8 @@ export default function RetailStockCount() {
       transitionRetailStockCount(
         session!.id,
         input.action,
-        input.action === "cancel" ? { reason: "Canceled from stock count screen" } : {}
+        input.action === "cancel" ? { reason: "Canceled from stock count screen" } : {},
+        recordChanges
       ),
     onSuccess: async (_data, input) => {
       await refreshAll();
@@ -164,11 +168,16 @@ export default function RetailStockCount() {
 
   const finalizeMutation = useMutation({
     mutationFn: () =>
-      transitionRetailStockCount(session!.id, "finalize", {
-        allowUncounted,
-        confirmVariance,
-        notes: finalizeNotes.trim() || undefined,
-      }),
+      transitionRetailStockCount(
+        session!.id,
+        "finalize",
+        {
+          allowUncounted,
+          confirmVariance,
+          notes: finalizeNotes.trim() || undefined,
+        },
+        recordChanges
+      ),
     onSuccess: async (data) => {
       setFinalizeOpen(false);
       await refreshAll();
@@ -182,7 +191,8 @@ export default function RetailStockCount() {
   });
 
   const scanMutation = useMutation({
-    mutationFn: (barcode: string) => scanRetailStockCount(session!.id, { barcode, quantity: 1, mode: "increment" }),
+    mutationFn: (barcode: string) =>
+      scanRetailStockCount(session!.id, { barcode, quantity: 1, mode: "increment" }, recordChanges),
     onSuccess: async (data) => {
       setScanText("");
       await Promise.all([
@@ -207,11 +217,16 @@ export default function RetailStockCount() {
       recountRequired?: boolean;
       notes?: string;
     }) =>
-      updateRetailStockCountLine(session!.id, input.line.id, {
-        countedQuantity: input.countedQuantity,
-        recountRequired: input.recountRequired,
-        notes: input.notes,
-      }),
+      updateRetailStockCountLine(
+        session!.id,
+        input.line.id,
+        {
+          countedQuantity: input.countedQuantity,
+          recountRequired: input.recountRequired,
+          notes: input.notes,
+        },
+        recordChanges
+      ),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["retail-stock-count"] }),
@@ -223,7 +238,7 @@ export default function RetailStockCount() {
   });
 
   const lines = useMemo(() => session?.lines ?? [], [session]);
-  const canCount = session?.status === "counting";
+  const canCount = canChangeCounts && session?.status === "counting";
   const report = reportQuery.data;
 
   if (!retailEnabled) return null;
@@ -268,13 +283,15 @@ export default function RetailStockCount() {
             />
             Include variants with no stock here
           </label>
-          <Button
-            disabled={!locationId || createMutation.isPending}
-            onClick={() => createMutation.mutate()}
-            data-testid="stock-count-create"
-          >
-            <Play className="mr-1 h-4 w-4" /> {createMutation.isPending ? "Creating…" : "New count"}
-          </Button>
+          {recordChanges.canCreate("POST", "/api/pos/retail/stock-counts") && (
+            <Button
+              disabled={!locationId || createMutation.isPending}
+              onClick={() => createMutation.mutate()}
+              data-testid="stock-count-create"
+            >
+              <Play className="mr-1 h-4 w-4" /> {createMutation.isPending ? "Creating…" : "New count"}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -335,7 +352,7 @@ export default function RetailStockCount() {
                     </span>
                   </CardTitle>
                   <div className="flex flex-wrap gap-2">
-                    {session.status === "draft" && (
+                    {canChangeCounts && session.status === "draft" && (
                       <Button
                         size="sm"
                         variant="outline"
@@ -345,7 +362,7 @@ export default function RetailStockCount() {
                         <Play className="mr-1 h-3.5 w-3.5" /> Start counting
                       </Button>
                     )}
-                    {session.status === "counting" && (
+                    {canChangeCounts && session.status === "counting" && (
                       <Button
                         size="sm"
                         variant="outline"
@@ -355,7 +372,7 @@ export default function RetailStockCount() {
                         Send to review
                       </Button>
                     )}
-                    {(session.status === "review" || session.status === "counting") && (
+                    {canChangeCounts && (session.status === "review" || session.status === "counting") && (
                       <Button
                         size="sm"
                         variant="outline"
@@ -365,7 +382,7 @@ export default function RetailStockCount() {
                         <RotateCcw className="mr-1 h-3.5 w-3.5" /> Recount flagged
                       </Button>
                     )}
-                    {session.status !== "finalized" && session.status !== "canceled" && (
+                    {canChangeCounts && session.status !== "finalized" && session.status !== "canceled" && (
                       <>
                         <Button size="sm" onClick={() => setFinalizeOpen(true)} data-testid="stock-count-finalize-open">
                           <Lock className="mr-1 h-3.5 w-3.5" /> Finalize
@@ -517,7 +534,9 @@ export default function RetailStockCount() {
                               <input
                                 type="checkbox"
                                 checked={line.recountRequired}
-                                disabled={session.status === "finalized" || session.status === "canceled"}
+                                disabled={
+                                  !canChangeCounts || session.status === "finalized" || session.status === "canceled"
+                                }
                                 onChange={(event) =>
                                   lineMutation.mutate({ line, recountRequired: event.target.checked })
                                 }

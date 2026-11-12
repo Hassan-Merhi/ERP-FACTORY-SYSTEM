@@ -7,6 +7,7 @@ import type { ClientErrorLike } from "@/lib/clientError";
 import { useId, useState, useMemo } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { FormSubmitButton } from "@/components/FormSubmitButton";
@@ -46,6 +47,7 @@ function ItemFormDialog({
   const totalPcs = useMemo(() => (parseInt(packQty) || 0) * (parseInt(pcsPerPack) || 0), [packQty, pcsPerPack]);
   const totalValue = useMemo(() => totalPcs * (parseFloat(unitPrice) || 0), [totalPcs, unitPrice]);
 
+  const recordChanges = useExistingRecordChangeAccess();
   const saveMutation = useMutation({
     mutationFn: async (data: {
       type: string;
@@ -58,6 +60,7 @@ function ItemFormDialog({
       rowColor: string | null;
       notes: string | null;
     }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       if (existing) return apiRequest("PATCH", `/api/factory/sheets-sacks/${existing.id}`, data);
       return apiRequest("POST", "/api/factory/sheets-sacks", data);
     },

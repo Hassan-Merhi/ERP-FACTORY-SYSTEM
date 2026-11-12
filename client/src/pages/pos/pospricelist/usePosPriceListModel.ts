@@ -20,6 +20,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { getDefaultPeriodValue, type PeriodFilterValue } from "@/components/ui/period-filter";
 import type {
   Location,
@@ -42,6 +43,7 @@ export type ImportPreviewRow = {
 export function usePosPriceListModel({ posUser }: POSPriceListProps) {
   const { formatAmount } = useCurrencyContext();
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
   const [selectedLocationId, setSelectedLocationId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
   const [groupFilter, setGroupFilter] = useState<string>("all");
@@ -162,12 +164,7 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
       }
       // "Show 0 Qty" also exposes priced items with no stock at this location.
       // The base-price fallback is valid here; unpriced items remain hidden.
-      return (
-        showZeroQty &&
-        Number(item.quantity) === 0 &&
-        item.sellingPrice !== null &&
-        Number(item.sellingPrice) > 0
-      );
+      return showZeroQty && Number(item.quantity) === 0 && item.sellingPrice !== null && Number(item.sellingPrice) > 0;
     });
   }, [priceList, masterItems, posUser, isAllMode, showZeroQty]);
 
@@ -228,10 +225,7 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
     if (posUser && !isAllMode) {
       // Count the additional zero-stock, priced rows even before they are shown.
       return priceList.filter(
-        (item) =>
-          Number(item.quantity) === 0 &&
-          item.sellingPrice !== null &&
-          Number(item.sellingPrice) > 0
+        (item) => Number(item.quantity) === 0 && item.sellingPrice !== null && Number(item.sellingPrice) > 0
       ).length;
     }
     return locationPricedList.filter((item) => itemQty(item) === 0).length;
@@ -275,6 +269,7 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
       locationId: number;
       sellingPrice: string;
     }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await apiRequest("POST", `/api/stock-items/${stockItemId}/location-prices`, {
         locationId,
         sellingPrice,
@@ -310,7 +305,7 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
   });
 
   const startEdit = (stockItemId: number, locationId: number, currentPrice: string | null | undefined) => {
-    if (posUser) return;
+    if (posUser || !recordChanges.allowed) return;
     lastSavedRef.current = null; // prevent onSuccess from clearing a re-opened edit
     const hasValue = currentPrice && parseFloat(currentPrice) > 0;
     setEditingItem({ stockItemId, locationId, value: hasValue ? currentPrice : "" });
@@ -448,6 +443,8 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
   };
 
   const canEdit = !posUser;
+  // Price edits and imports change existing items; read-only roles keep the view filters only.
+  const canEditPrices = canEdit && recordChanges.allowed;
   const showCostPrice = (isPrivileged || currentUser?.role === "View Only") && !posUser;
 
   const [exporting, setExporting] = useState(false);
@@ -548,7 +545,7 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
   };
 
   const handleImportSubmit = async () => {
-    if (importPreview.length === 0) return;
+    if (importPreview.length === 0 || !recordChanges.allowed) return;
     setImporting(true);
     try {
       const prices: { barcode: string; sellingPrice: string; locationId: number }[] = [];
@@ -690,6 +687,8 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
   return {
     posUser,
     canEdit,
+    canEditPrices,
+    canChangeExistingRecords: recordChanges.allowed,
     showCostPrice,
     formatAmount,
     // locations

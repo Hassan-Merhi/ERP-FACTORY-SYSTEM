@@ -1,4 +1,5 @@
 import type { ClientErrorLike } from "@/lib/clientError";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAdminOverride } from "@/hooks/use-admin-override";
@@ -50,6 +51,7 @@ export default function FactoryEmployeeWithdrawalsTab() {
   const { wrapAdminAction, AdminDialog } = useAdminOverride();
   const { toast } = useToast();
   const { selectedCompany } = useCompany();
+  const recordChanges = useExistingRecordChangeAccess();
   const [singleOpen, setSingleOpen] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
 
@@ -92,6 +94,7 @@ export default function FactoryEmployeeWithdrawalsTab() {
 
   const singleMutation = useMutation({
     mutationFn: async () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await fetch(`/api/factory/employees/${singleForm.employeeId}/withdraw`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -120,6 +123,7 @@ export default function FactoryEmployeeWithdrawalsTab() {
 
   const bulkMutation = useMutation({
     mutationFn: async () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const withdrawals = employees
         .filter((e) => bulkAmounts[e.id] && parseFloat(bulkAmounts[e.id]) > 0)
         .map((e) => ({ employeeId: e.id, amount: bulkAmounts[e.id] }));
@@ -168,16 +172,18 @@ export default function FactoryEmployeeWithdrawalsTab() {
           <h3 className="font-medium">Employee Withdrawals</h3>
           <p className="text-sm text-muted-foreground">Deduct cash from one or multiple employees.</p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setSingleOpen(true)} data-testid="button-withdraw-single">
-            <ArrowDownCircle className="h-4 w-4 mr-2" />
-            Withdraw (Single)
-          </Button>
-          <Button onClick={() => setBulkOpen(true)} data-testid="button-withdraw-bulk">
-            <Users className="h-4 w-4 mr-2" />
-            Withdraw All (Bulk)
-          </Button>
-        </div>
+        {recordChanges.allowed && (
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setSingleOpen(true)} data-testid="button-withdraw-single">
+              <ArrowDownCircle className="h-4 w-4 mr-2" />
+              Withdraw (Single)
+            </Button>
+            <Button onClick={() => setBulkOpen(true)} data-testid="button-withdraw-bulk">
+              <Users className="h-4 w-4 mr-2" />
+              Withdraw All (Bulk)
+            </Button>
+          </div>
+        )}
       </div>
 
       {employees.length === 0 ? (
@@ -221,17 +227,19 @@ export default function FactoryEmployeeWithdrawalsTab() {
                           {fmt(emp.currentBalance)}
                         </TableCell>
                         <TableCell>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              setSingleForm((f) => ({ ...f, employeeId: String(emp.id) }));
-                              setSingleOpen(true);
-                            }}
-                            data-testid={`button-withdraw-${emp.id}`}
-                          >
-                            <ArrowDownCircle className="h-3 w-3 mr-1" /> Withdraw
-                          </Button>
+                          {recordChanges.allowed && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setSingleForm((f) => ({ ...f, employeeId: String(emp.id) }));
+                                setSingleOpen(true);
+                              }}
+                              data-testid={`button-withdraw-${emp.id}`}
+                            >
+                              <ArrowDownCircle className="h-3 w-3 mr-1" /> Withdraw
+                            </Button>
+                          )}
                         </TableCell>
                       </TableRow>
                     );
@@ -255,16 +263,18 @@ export default function FactoryEmployeeWithdrawalsTab() {
                           {fmt(emp.currentBalance)}
                         </p>
                       </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setSingleForm((f) => ({ ...f, employeeId: String(emp.id) }));
-                          setSingleOpen(true);
-                        }}
-                      >
-                        <ArrowDownCircle className="h-3 w-3 mr-1" /> Withdraw
-                      </Button>
+                      {recordChanges.allowed && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setSingleForm((f) => ({ ...f, employeeId: String(emp.id) }));
+                            setSingleOpen(true);
+                          }}
+                        >
+                          <ArrowDownCircle className="h-3 w-3 mr-1" /> Withdraw
+                        </Button>
+                      )}
                     </CardContent>
                   </Card>
                 );

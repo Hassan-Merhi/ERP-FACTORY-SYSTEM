@@ -23,6 +23,7 @@ import { registerRoutes } from "./routes";
 import { markStartupMigrationsComplete } from "./startupMigrationReport";
 import { registerDbHealthRoute } from "./health/dbHealthRoute";
 import { blockErpTesterSettings, blockViewOnlyWrites, blockUnverifiedCreateOnlyWrites } from "./auth";
+import { permissionResponseObserver } from "./middleware/permissionResponseObserver";
 import { registerWebSocketHttpFallback, setupWS } from "./wsServer";
 import { startScheduler } from "./services/scheduler";
 import { pool } from "./db";
@@ -165,6 +166,11 @@ app.use(sessionMiddleware);
 // Read-only LAN edge safety boundary + same-origin server identity endpoint.
 // Cloud stays unchanged; edge requests never silently proxy to cloud.
 registerFactoryEdgeBoundary(app);
+
+// Permission monitoring: classify refused API responses (403s and
+// cross-company refusals) into permission signals after they are sent. Reads
+// only the response status and error code; never bodies or headers.
+app.use(permissionResponseObserver);
 
 // Globally block all mutation requests (POST/PUT/PATCH/DELETE) for View Only role.
 // Must run after session middleware so req.session.currentRole is populated.
@@ -529,6 +535,14 @@ let migrationsDone = false;
         try {
           await runMigrations();
         } catch (err: unknown) {
+          if (process.env.LEGACY_STARTUP_MIGRATION_MODE === "verify-only") {
+            // A strict migration cutover must never fall back to the old
+            // nonfatal readiness behavior. Keep prior Render instance alive.
+            logger.error("Strict legacy migration verification blocked boot", {
+              error: getErrorMessage(err) ?? err,
+            });
+            throw err;
+          }
           logger.error("Migration error (non-fatal — server will still start):", {
             error: getErrorMessage(err) ?? err,
           });

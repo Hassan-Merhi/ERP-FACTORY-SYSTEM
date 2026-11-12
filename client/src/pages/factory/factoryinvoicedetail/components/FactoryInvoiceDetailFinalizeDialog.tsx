@@ -26,7 +26,7 @@ export function FactoryInvoiceDetailFinalizeDialog({ model, isFinalized }: { mod
             const balesForArticle = (order?.bales ?? [])
               .filter((b) => b.articleCode === baleRefArticle.code)
               .sort((a, b) => a.baleReference.localeCompare(b.baleReference));
-            const canExchange = isAdmin && isFinalized;
+            const canExchange = model.canChangeExistingRecords && isAdmin && isFinalized;
             return balesForArticle.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4 text-center">No bale references found for this item.</p>
             ) : (

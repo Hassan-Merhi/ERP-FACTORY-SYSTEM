@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { releaseDebtEnglish } from "@/i18n/finalCloseoutTranslations";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import {
   MONTHLY_CLOSE_CONFIRMATION,
   PHASE11_CLOSE,
@@ -35,6 +36,7 @@ import {
 
 export function MonthlyClosePanel({ companyKey }: { companyKey: CompanyKey }) {
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
   const invalidateReadiness = useReadinessInvalidation();
 
   const [phase11Month, setPhase11Month] = useState(previousCompletedMonth);
@@ -62,6 +64,7 @@ export function MonthlyClosePanel({ companyKey }: { companyKey: CompanyKey }) {
 
   const phase11Mutation = useMutation({
     mutationFn: async () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const response = await apiRequest("POST", PHASE11_CLOSE, {
         periodMonth: phase11Month,
         clientRequestId: phase11RequestId,
@@ -205,18 +208,20 @@ export function MonthlyClosePanel({ companyKey }: { companyKey: CompanyKey }) {
             </p>
           </div>
         </div>
-        <Button
-          onClick={() => phase11Mutation.mutate()}
-          disabled={!phase11CanSubmit || phase11Mutation.isPending}
-          data-testid="button-gc-phase11-submit"
-        >
-          {phase11Mutation.isPending ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <CalendarCheck2 className="mr-2 h-4 w-4" />
-          )}
-          {releaseDebtEnglish("Finalize monthly close")}
-        </Button>
+        {recordChanges.allowed && (
+          <Button
+            onClick={() => phase11Mutation.mutate()}
+            disabled={!phase11CanSubmit || phase11Mutation.isPending}
+            data-testid="button-gc-phase11-submit"
+          >
+            {phase11Mutation.isPending ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <CalendarCheck2 className="mr-2 h-4 w-4" />
+            )}
+            {releaseDebtEnglish("Finalize monthly close")}
+          </Button>
+        )}
       </CardContent>
     </Card>
   );

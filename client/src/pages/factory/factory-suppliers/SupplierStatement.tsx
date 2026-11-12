@@ -83,6 +83,9 @@ interface SupplierStatementProps {
   primaryCc: string;
   onRenameSupplier?: (id: number, newName: string) => void;
   onDeleteSupplier?: (id: number) => void;
+  /** False for read-only company roles: no FX settle, FX delete or other edits. */
+  canRecordFxTransfer?: boolean;
+  canChangeExistingRecords?: boolean;
 }
 
 export function SupplierStatement({
@@ -126,6 +129,8 @@ export function SupplierStatement({
   primaryCc,
   onRenameSupplier,
   onDeleteSupplier,
+  canRecordFxTransfer = true,
+  canChangeExistingRecords = true,
 }: SupplierStatementProps) {
   const [showRename, setShowRename] = useState(false);
   const [renameDraft, setRenameDraft] = useState("");
@@ -378,6 +383,7 @@ export function SupplierStatement({
             setFxConversionForm={setFxConversionForm}
             setFxConversionOpen={setFxConversionOpen}
             openFxConversionDialog={openFxConversionDialog}
+            canRecordFxTransfer={canRecordFxTransfer}
           />
         )}
 
@@ -393,6 +399,7 @@ export function SupplierStatement({
           formatDate={formatDate}
           formatNum={formatNum}
           openFxConversionDialog={openFxConversionDialog}
+          canRecordFxTransfer={canRecordFxTransfer}
         />
       )}
 
@@ -442,16 +449,18 @@ export function SupplierStatement({
                             ${formatNum(f.toAmountUsd)}
                           </TableCell>
                           <TableCell className="text-right">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="text-destructive"
-                              onClick={() =>
-                                wrapAdminAction(() => deleteFxTransferMutation.mutate(f.id), "Delete FX Transfer")
-                              }
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
+                            {canChangeExistingRecords && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="text-destructive"
+                                onClick={() =>
+                                  wrapAdminAction(() => deleteFxTransferMutation.mutate(f.id), "Delete FX Transfer")
+                                }
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
                           </TableCell>
                         </TableRow>
                       );

@@ -202,6 +202,23 @@ pg_restore \
   "$BACKUP_FILE"
 ```
 
+Before `pg_restore`, run the **read-only restore-target preflight** against
+the newly created, empty, isolated database. This refuses an unapproved
+destination, an accidentally identical source/target, and a target that already
+contains application tables or other public objects:
+
+```bash
+export SOURCE_DATABASE_URL="$SOURCE_DATABASE_URL"
+export RESTORE_DATABASE_URL="$RESTORE_DATABASE_URL"
+RESTORE_TARGET_CONFIRMATION=ISOLATED_EMPTY_RESTORE npm run db:restore:preflight
+```
+
+The source URL is used only to compare endpoint identities; the preflight opens
+a read-only connection **only** to `RESTORE_DATABASE_URL`. Check the actual
+host and database cluster independently: a suffix such as `_restore` is not
+sufficient isolation by itself. If the guard fails, **do not restore** until
+the destination is corrected.
+
 After restoration:
 
 1. Point an isolated application instance at `RESTORE_DATABASE_URL`.

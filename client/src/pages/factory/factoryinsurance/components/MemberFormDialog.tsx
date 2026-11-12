@@ -1,4 +1,5 @@
 import type { ClientErrorLike } from "@/lib/clientError";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 /**
  * MemberFormDialog — extracted sub-component.
  *
@@ -31,6 +32,8 @@ function MemberFormDialog({
   existing?: InsuranceMember | null;
 }) {
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
+  const canSave = existing ? recordChanges.allowed : recordChanges.canCreate("POST", "/api/insurance/members");
   const formId = useId();
   const { execute: executeSave, pending: submitting } = useSingleFlightAction();
   const [name, setName] = useState(existing?.name ?? "");
@@ -54,6 +57,7 @@ function MemberFormDialog({
       notes: string | null;
     }) => {
       if (existing) {
+        if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
         return apiRequest("PATCH", `/api/insurance/members/${existing.id}`, data);
       } else {
         return apiRequest("POST", "/api/insurance/members", data);
@@ -197,15 +201,17 @@ function MemberFormDialog({
           <Button variant="outline" onClick={onClose} data-testid="button-cancel-member">
             Cancel
           </Button>
-          <FormSubmitButton
-            type="button"
-            onClick={handleSubmit}
-            pending={submitting || saveMutation.isPending}
-            pendingLabel="Saving…"
-            data-testid="button-save-member"
-          >
-            {existing ? "Save Changes" : "Add Member"}
-          </FormSubmitButton>
+          {canSave && (
+            <FormSubmitButton
+              type="button"
+              onClick={handleSubmit}
+              pending={submitting || saveMutation.isPending}
+              pendingLabel="Saving…"
+              data-testid="button-save-member"
+            >
+              {existing ? "Save Changes" : "Add Member"}
+            </FormSubmitButton>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

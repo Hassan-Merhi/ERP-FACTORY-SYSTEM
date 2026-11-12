@@ -49,7 +49,8 @@ describe("Factory Phase 2 follow-up isolation on main", () => {
     const code = source("client/src/pages/baleproducts/useBaleProductsModel.tsx");
     expect(code).toContain("myAccess?.companyId === selectedCompany?.id");
     expect(code).toContain("myAccess?.hasFactoryAccess === true");
-    expect(code).toContain("!accessReady || myAccess?.hideAllCosts === true");
+    // Whitespace-insensitive: the formatter may wrap this guard across lines.
+    expect(code.replace(/\s+/g, " ")).toContain("!accessReady || myAccess?.hideAllCosts === true");
   });
 
   it("matches waste mutations to the exact company-scoped read", () => {

@@ -113,16 +113,22 @@ export default function LocationInventory({ posUser }: { posUser?: AuthMe } = {}
   } = useLocationInventoryState({ companyId, toast });
 
   // ─── Mutations ────────────────────────────────────────────────────────────
-  const { renameLocationMutation, createLocationMutation, waGroupMutation, waTestMutation } =
-    useLocationInventoryMutations({
-      toast,
-      selectedLocationLocal,
-      setSelectedLocationLocal,
-      setRenameDialogOpen,
-      setCreateLocationOpen,
-      setCreateLocationName,
-      setWaGroupDialogOpen,
-    });
+  const {
+    renameLocationMutation,
+    createLocationMutation,
+    waGroupMutation,
+    waTestMutation,
+    canChangeExistingRecords,
+    canCreate,
+  } = useLocationInventoryMutations({
+    toast,
+    selectedLocationLocal,
+    setSelectedLocationLocal,
+    setRenameDialogOpen,
+    setCreateLocationOpen,
+    setCreateLocationName,
+    setWaGroupDialogOpen,
+  });
 
   // ─── Queries ──────────────────────────────────────────────────────────────
   const {
@@ -219,7 +225,11 @@ export default function LocationInventory({ posUser }: { posUser?: AuthMe } = {}
         locationsCount={locationsLoading ? null : locations.length}
         negativeCount={posUser || negativeStockLoading || negativeStockError ? null : allNegativeStock.length}
         linkedGroupsCount={locationsLoading ? null : locations.filter((loc) => Boolean(loc.whatsappGroupChatId)).length}
-        activeReportsCount={locationsLoading ? null : locations.filter((loc) => Boolean(loc.whatsappGroupChatId && loc.whatsappStockReportsEnabled)).length}
+        activeReportsCount={
+          locationsLoading
+            ? null
+            : locations.filter((loc) => Boolean(loc.whatsappGroupChatId && loc.whatsappStockReportsEnabled)).length
+        }
       />
 
       <LocationInventoryMovementFilter
@@ -309,14 +319,16 @@ export default function LocationInventory({ posUser }: { posUser?: AuthMe } = {}
                       >
                         <Globe className="h-4 w-4" /> View All Stock
                       </Button>
-                      <Button
-                        size="sm"
-                        className="h-9 gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 font-semibold text-white shadow-[0_5px_18px_-8px_rgba(147,51,234,.85)] hover:from-violet-700 hover:to-fuchsia-700"
-                        onClick={() => setCreateLocationOpen(true)}
-                        data-testid="button-create-location"
-                      >
-                        <Plus className="h-4 w-4" /> Create Location
-                      </Button>
+                      {canCreate("POST", "/api/locations") && (
+                        <Button
+                          size="sm"
+                          className="h-9 gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 font-semibold text-white shadow-[0_5px_18px_-8px_rgba(147,51,234,.85)] hover:from-violet-700 hover:to-fuchsia-700"
+                          onClick={() => setCreateLocationOpen(true)}
+                          data-testid="button-create-location"
+                        >
+                          <Plus className="h-4 w-4" /> Create Location
+                        </Button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -335,9 +347,9 @@ export default function LocationInventory({ posUser }: { posUser?: AuthMe } = {}
                   locationSearchTerm={locationSearchTerm}
                   setLocationSearchTerm={setLocationSearchTerm}
                   posUser={posUser}
-                  canManageWhatsapp={canManageWhatsapp}
-                  openRenameDialog={openRenameDialog}
-                  openWaGroupDialog={openWaGroupDialog}
+                  canManageWhatsapp={canManageWhatsapp && canChangeExistingRecords}
+                  openRenameDialog={canChangeExistingRecords ? openRenameDialog : undefined}
+                  openWaGroupDialog={canChangeExistingRecords ? openWaGroupDialog : undefined}
                 />
               </>
             )}
@@ -349,6 +361,7 @@ export default function LocationInventory({ posUser }: { posUser?: AuthMe } = {}
                 posUser={posUser}
                 canViewCost={canViewInventoryCost}
                 canManageWhatsapp={canManageWhatsapp}
+                canChangeExistingRecords={canChangeExistingRecords}
                 openRenameDialog={openRenameDialog}
                 openWaGroupDialog={openWaGroupDialog}
                 activeInventoryLoading={activeInventoryLoading}
@@ -384,6 +397,7 @@ export default function LocationInventory({ posUser }: { posUser?: AuthMe } = {}
                 canViewCost={canViewInventoryCost}
                 formatAmount={formatAmount}
                 setArchiveDialogOpen={setArchiveDialogOpen}
+                canChangeExistingRecords={canChangeExistingRecords}
                 itemSearchTerm={itemSearchTerm}
                 setItemSearchTerm={setItemSearchTerm}
                 itemCategoryFilter={itemCategoryFilter}

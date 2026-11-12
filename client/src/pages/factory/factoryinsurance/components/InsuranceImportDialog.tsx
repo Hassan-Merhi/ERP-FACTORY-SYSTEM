@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useMutation } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle2, Download, FileSpreadsheet, Loader2, Upload } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -18,6 +19,7 @@ interface InsuranceImportDialogProps {
 
 export function InsuranceImportDialog({ open, onClose }: InsuranceImportDialogProps) {
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<InsuranceImportPreview | null>(null);
@@ -60,6 +62,7 @@ export function InsuranceImportDialog({ open, onClose }: InsuranceImportDialogPr
       if (!preview || preview.errors.length > 0 || preview.rows.length === 0) {
         throw new Error("Fix workbook errors before importing");
       }
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const response = await apiRequest("POST", "/api/insurance/import/apply", { rows: preview.rows });
       return response.json();
     },
@@ -228,14 +231,16 @@ export function InsuranceImportDialog({ open, onClose }: InsuranceImportDialogPr
           <Button variant="outline" onClick={close} disabled={previewMutation.isPending || applyMutation.isPending}>
             Cancel
           </Button>
-          <Button
-            onClick={() => applyMutation.mutate()}
-            disabled={!preview || preview.errors.length > 0 || preview.rows.length === 0 || applyMutation.isPending}
-            data-testid="button-apply-insurance-import"
-          >
-            {applyMutation.isPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
-            Import {preview?.rows.length ?? 0} Rows
-          </Button>
+          {recordChanges.allowed && (
+            <Button
+              onClick={() => applyMutation.mutate()}
+              disabled={!preview || preview.errors.length > 0 || preview.rows.length === 0 || applyMutation.isPending}
+              data-testid="button-apply-insurance-import"
+            >
+              {applyMutation.isPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
+              Import {preview?.rows.length ?? 0} Rows
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -11,6 +11,7 @@ import { visibleTabInterval } from "@/lib/queryPolicies";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { translatePriorityScanText, type PriorityScanTranslationKey } from "@/i18n/priorityScanTranslations";
 import { getPriorityScanLetter, getPriorityScanLetterInk } from "@shared/priorityScanColors";
 import { PriorityScanColorLetter } from "./PriorityScanColorLetter";
@@ -88,6 +89,8 @@ interface ScanFeedback {
 export default function FactoryPriorityScan() {
   const { language } = useApplicationLanguage();
   const { selectedCompany } = useCompany();
+  // Every priority scan allocates the bale into an existing loading: a write.
+  const recordChanges = useExistingRecordChangeAccess();
   const tr = useCallback(
     (key: PriorityScanTranslationKey, params?: Record<string, string | number>) =>
       translatePriorityScanText(key, language, params),
@@ -276,7 +279,7 @@ export default function FactoryPriorityScan() {
 
   const handleScan = async (code = scanInput) => {
     const referenceNumber = code.trim().toUpperCase();
-    if (!referenceNumber || scanning || scanSubmissionInFlightRef.current) return;
+    if (!referenceNumber || scanning || scanSubmissionInFlightRef.current || !recordChanges.allowed) return;
 
     setScanInput("");
 
@@ -450,21 +453,23 @@ export default function FactoryPriorityScan() {
                 placeholder={tr("scanPlaceholder")}
                 autoComplete="off"
                 className="h-12 rounded-xl border-blue-300 bg-white pl-11 font-mono text-base text-slate-900 shadow-inner shadow-blue-100/60 focus-visible:ring-blue-500 dark:border-blue-400/55 dark:bg-[hsl(var(--factory-hue)_75%_11%)] dark:text-white dark:shadow-blue-900/30 dark:placeholder:text-slate-400"
-                disabled={scanning}
+                disabled={scanning || !recordChanges.allowed}
+                title={recordChanges.reason ?? undefined}
                 data-testid="input-priority-scan"
               />
             </div>
             <MobileBarcodeScanner
               onScan={(code) => void handleScan(code)}
               feedback={feedback}
-              disabled={scanning}
+              disabled={scanning || !recordChanges.allowed}
               className="h-12 w-12 shrink-0 rounded-xl border-blue-300 dark:border-blue-400/55"
             />
             <Button
               type="button"
               className="h-12 shrink-0 rounded-xl bg-blue-600 px-4 font-semibold text-white shadow-md shadow-blue-600/20 hover:bg-blue-500 dark:bg-blue-600 dark:hover:bg-blue-500 sm:px-6"
               onClick={() => void handleScan()}
-              disabled={scanning || !scanInput.trim()}
+              disabled={scanning || !scanInput.trim() || !recordChanges.allowed}
+              title={recordChanges.reason ?? undefined}
               data-testid="button-priority-scan"
             >
               <ScanLine className="mr-2 h-4 w-4" />

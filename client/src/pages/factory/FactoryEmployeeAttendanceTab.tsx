@@ -1,4 +1,5 @@
 import type { ClientErrorLike } from "@/lib/clientError";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useState, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -157,6 +158,7 @@ function SummaryCard({
 export default function FactoryEmployeeAttendanceTab() {
   const { toast } = useToast();
   const { selectedCompany } = useCompany();
+  const recordChanges = useExistingRecordChangeAccess();
   const [mode, setMode] = useState<ViewMode>("daily");
 
   const [selectedDate, setSelectedDate] = useState(attendanceToday);
@@ -198,11 +200,13 @@ export default function FactoryEmployeeAttendanceTab() {
   }, [data]);
 
   const saveMutation = useMutation({
-    mutationFn: (payload: { records: EmployeeAttendanceBulkRecord[]; credentials?: AttendanceAdminCredentials }) =>
-      apiRequest("POST", "/api/factory/employee-attendance/bulk", {
+    mutationFn: (payload: { records: EmployeeAttendanceBulkRecord[]; credentials?: AttendanceAdminCredentials }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
+      return apiRequest("POST", "/api/factory/employee-attendance/bulk", {
         records: payload.records,
         ...payload.credentials,
-      }),
+      });
+    },
     onSuccess: () => {
       setApprovalOpen(false);
       setPendingApprovalRecords(null);
@@ -353,15 +357,17 @@ export default function FactoryEmployeeAttendanceTab() {
                   >
                     <RotateCcw className="h-4 w-4 mr-1" /> Reset
                   </Button>
-                  <Button
-                    className="rounded-xl border border-blue-500 bg-gradient-to-r from-sky-500 to-blue-600 px-5 text-white shadow-md shadow-blue-500/20 hover:from-sky-600 hover:to-blue-700"
-                    onClick={handleSave}
-                    disabled={!emps.length || saveMutation.isPending || selectedDate > attendanceToday()}
-                    data-testid="button-save-attendance"
-                  >
-                    <Save className="h-4 w-4 mr-1" />
-                    {saveMutation.isPending ? "Saving…" : "Save Attendance"}
-                  </Button>
+                  {recordChanges.allowed && (
+                    <Button
+                      className="rounded-xl border border-blue-500 bg-gradient-to-r from-sky-500 to-blue-600 px-5 text-white shadow-md shadow-blue-500/20 hover:from-sky-600 hover:to-blue-700"
+                      onClick={handleSave}
+                      disabled={!emps.length || saveMutation.isPending || selectedDate > attendanceToday()}
+                      data-testid="button-save-attendance"
+                    >
+                      <Save className="h-4 w-4 mr-1" />
+                      {saveMutation.isPending ? "Saving…" : "Save Attendance"}
+                    </Button>
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -567,6 +573,7 @@ export default function FactoryEmployeeAttendanceTab() {
 function PerEmployeeView() {
   const { toast } = useToast();
   const { selectedCompany } = useCompany();
+  const recordChanges = useExistingRecordChangeAccess();
   const [selectedEmpId, setSelectedEmpId] = useState<string>("");
   const [empComboOpen, setEmpComboOpen] = useState(false);
   const [startDate, setStartDate] = useState(attendanceToday);
@@ -623,11 +630,13 @@ function PerEmployeeView() {
   const absentCount = dates.length - presentCount;
 
   const saveMutation = useMutation({
-    mutationFn: (payload: { records: EmployeeAttendanceBulkRecord[]; credentials?: AttendanceAdminCredentials }) =>
-      apiRequest("POST", "/api/factory/employee-attendance/bulk", {
+    mutationFn: (payload: { records: EmployeeAttendanceBulkRecord[]; credentials?: AttendanceAdminCredentials }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
+      return apiRequest("POST", "/api/factory/employee-attendance/bulk", {
         records: payload.records,
         ...payload.credentials,
-      }),
+      });
+    },
     onSuccess: () => {
       setApprovalOpen(false);
       setPendingApprovalRecords(null);
@@ -780,14 +789,16 @@ function PerEmployeeView() {
               >
                 <UserX className="h-4 w-4 mr-1" /> Deselect All
               </Button>
-              <Button
-                onClick={handleSave}
-                disabled={!empIdNum || saveMutation.isPending || dates.some((d) => d > attendanceToday())}
-                data-testid="button-save-per-employee"
-              >
-                <Save className="h-4 w-4 mr-1" />
-                {saveMutation.isPending ? "Saving…" : "Save"}
-              </Button>
+              {recordChanges.allowed && (
+                <Button
+                  onClick={handleSave}
+                  disabled={!empIdNum || saveMutation.isPending || dates.some((d) => d > attendanceToday())}
+                  data-testid="button-save-per-employee"
+                >
+                  <Save className="h-4 w-4 mr-1" />
+                  {saveMutation.isPending ? "Saving…" : "Save"}
+                </Button>
+              )}
             </div>
           </div>
         </CardContent>

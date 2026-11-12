@@ -11,7 +11,16 @@ interface FactoryWorkersModelProps {
 }
 
 export function FactoryWorkerCategoriesPanel({ model }: FactoryWorkersModelProps) {
-  const { showCategories, workers, categories, deleteCatMutation, openNewCategory, openEditCategory } = model;
+  const {
+    showCategories,
+    workers,
+    categories,
+    deleteCatMutation,
+    openNewCategory,
+    openEditCategory,
+    canChangeExistingRecords,
+    canCreate,
+  } = model;
 
   return (
     <>
@@ -22,10 +31,12 @@ export function FactoryWorkerCategoriesPanel({ model }: FactoryWorkersModelProps
               <p className="text-sm text-muted-foreground">
                 Group workers into categories to quickly filter them during stock entry and history.
               </p>
-              <Button onClick={openNewCategory} className="rounded-lg shadow-sm" data-testid="button-add-category">
-                <Plus className="h-4 w-4 mr-2" />
-                New Category
-              </Button>
+              {canCreate("POST", "/api/factory/worker-categories") && (
+                <Button onClick={openNewCategory} className="rounded-lg shadow-sm" data-testid="button-add-category">
+                  <Plus className="h-4 w-4 mr-2" />
+                  New Category
+                </Button>
+              )}
             </div>
 
             {categories.length === 0 ? (
@@ -55,25 +66,27 @@ export function FactoryWorkerCategoriesPanel({ model }: FactoryWorkersModelProps
                             {activeMembers.length} active worker{activeMembers.length !== 1 ? "s" : ""}
                           </p>
                         </div>
-                        <div className="flex gap-1 shrink-0">
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => openEditCategory(cat)}
-                            data-testid={`button-edit-cat-${cat.id}`}
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => deleteCatMutation.mutate(cat.id)}
-                            disabled={deleteCatMutation.isPending}
-                            data-testid={`button-delete-cat-${cat.id}`}
-                          >
-                            <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                          </Button>
-                        </div>
+                        {canChangeExistingRecords && (
+                          <div className="flex gap-1 shrink-0">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => openEditCategory(cat)}
+                              data-testid={`button-edit-cat-${cat.id}`}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => deleteCatMutation.mutate(cat.id)}
+                              disabled={deleteCatMutation.isPending}
+                              data-testid={`button-delete-cat-${cat.id}`}
+                            >
+                              <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                            </Button>
+                          </div>
+                        )}
                       </div>
                       {activeMembers.length > 0 && (
                         <div className="flex flex-wrap gap-1">

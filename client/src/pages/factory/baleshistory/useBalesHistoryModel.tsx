@@ -4,6 +4,7 @@ import { getErrorDetails } from "@shared/errorUtils";
 import { useState, useRef, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAdminOverride } from "@/hooks/use-admin-override";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -25,7 +26,6 @@ import {
 import { useLabelDesignColors } from "@/hooks/useLabelDesignColors";
 import { type WeightEditBale } from "@/components/BaleWeightEditDialog";
 import { useBalesHistoryDateKeyboard } from "./pagePolicies";
-import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 
 interface BaleRecord {
   id: number;
@@ -61,6 +61,7 @@ type BalesPage = { items: BaleRow[]; total: number; page: number; limit: number;
 export function useBalesHistoryModel() {
   const { selectedCompany } = useCompany();
   const { wrapAdminAction, AdminDialog } = useAdminOverride();
+  const recordChanges = useExistingRecordChangeAccess();
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [exportFrom, setExportFrom] = useState("");
   const [exportTo, setExportTo] = useState("");
@@ -154,8 +155,10 @@ export function useBalesHistoryModel() {
   // View Only / Create Only company roles never change existing bales: the page
   // hides repack and delete (fullAccess-gated) and ignores rename, weight edit
   // and bulk-selection gestures. The server refuses the same writes.
-  const recordChanges = useExistingRecordChangeAccess();
-  const scopedAccess = selectedCompany?.id && factoryAccess?.companyId === selectedCompany.id && factoryAccess.hasFactoryAccess === true ? factoryAccess : undefined;
+  const scopedAccess =
+    selectedCompany?.id && factoryAccess?.companyId === selectedCompany.id && factoryAccess.hasFactoryAccess === true
+      ? factoryAccess
+      : undefined;
   const myAccess = scopedAccess && !recordChanges.allowed ? { ...scopedAccess, fullAccess: false } : scopedAccess;
 
   const { data: balesResponse, isLoading } = useQuery<BalesPage>({
@@ -166,7 +169,7 @@ export function useBalesHistoryModel() {
       currentPage,
       statusFilter !== "all" ? statusFilter : undefined,
       batchFilter !== "all" ? batchFilter : undefined,
-      debouncedSearch || undefined,
+      debouncedSearch || undefined
     ),
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -200,6 +203,7 @@ export function useBalesHistoryModel() {
 
   const deleteBale = useMutation({
     mutationFn: async (id: number) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       return await modeApiRequest("DELETE", `/api/factory/bales/${id}`, {});
     },
     onSuccess: () => {
@@ -220,6 +224,7 @@ export function useBalesHistoryModel() {
 
   const updateStatus = useMutation({
     mutationFn: async ({ id, status }: { id: number; status: string }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       return await modeApiRequest("PATCH", `/api/factory/bales/${id}/status`, { status });
     },
     onSuccess: () => {
@@ -236,6 +241,7 @@ export function useBalesHistoryModel() {
 
   const bulkUpdateStatus = useMutation({
     mutationFn: async ({ ids, status }: { ids: number[]; status: string }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       return await modeApiRequest("PATCH", "/api/factory/bales/bulk-status", { ids, status });
     },
     onSuccess: () => {
@@ -254,6 +260,7 @@ export function useBalesHistoryModel() {
 
   const updateProductName = useMutation({
     mutationFn: async ({ id, name }: { id: number; name: string }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       return await modeApiRequest("PATCH", `/api/factory/bales/${id}/product-name`, { name });
     },
     onSuccess: () => {
@@ -281,6 +288,7 @@ export function useBalesHistoryModel() {
 
   const returnToStockMutation = useMutation({
     mutationFn: async (baleId: number) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await modeApiRequest("POST", `/api/factory/bales/${baleId}/return-to-stock`, {});
       if (!res.ok) {
         const err = await res.json();
@@ -307,6 +315,7 @@ export function useBalesHistoryModel() {
 
   const repackBale = useMutation({
     mutationFn: async (id: number) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       return await modeApiRequest("POST", `/api/factory/bales/${id}/repack`, {});
     },
     onSuccess: async (response) => {
@@ -343,6 +352,7 @@ export function useBalesHistoryModel() {
       supervisorPassword: string;
       reason: string;
     }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const response = await modeApiRequest("POST", "/api/factory/stock-entry/remove", {
         baleIds: ids,
         supervisorUsername,
@@ -371,6 +381,7 @@ export function useBalesHistoryModel() {
 
   const bulkUpdateNamesMutation = useMutation({
     mutationFn: async (file: File) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const formData = new FormData();
       formData.append("file", file);
       const res = await fetch("/api/factory/bales/bulk-update-names", {
@@ -400,6 +411,7 @@ export function useBalesHistoryModel() {
 
   const reimportMutation = useMutation({
     mutationFn: async (file: File) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const formData = new FormData();
       formData.append("file", file);
       const res = await fetch("/api/factory/bales/reimport", {
@@ -468,6 +480,7 @@ export function useBalesHistoryModel() {
   };
 
   const handleReprint = async (baleRow: BaleRow) => {
+    if (!recordChanges.allowed) return;
     const label: LabelData = {
       referenceNumber: baleRow.bale.referenceNumber || baleRow.bale.baleCode,
       articleCode: baleRow.product?.articleCode || baleRow.bale.articleCode || baleRow.bale.category || "",
@@ -757,6 +770,7 @@ export function useBalesHistoryModel() {
     balesData,
     serverTotalPages,
     serverTotal,
+    canChangeExistingRecords: recordChanges.allowed,
     deleteBale,
     updateStatus,
     bulkUpdateStatus,

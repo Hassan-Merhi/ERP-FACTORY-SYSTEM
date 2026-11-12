@@ -56,6 +56,9 @@ interface WorkersTabProps {
   setWorkerDeductionTarget: (val: Employee | null) => void;
   setSelectedWorkerForEdit: (val: Employee | null) => void;
   setEditWorkerDialogOpen: (val: boolean) => void;
+  /** False for View Only and Create Only: hide controls that change existing records. */
+  canChangeExistingRecords: boolean;
+  canCreate: (method: string, path: string) => boolean;
 }
 
 export function WorkersTab({
@@ -81,7 +84,11 @@ export function WorkersTab({
   setWorkerDeductionTarget,
   setSelectedWorkerForEdit,
   setEditWorkerDialogOpen,
+  canChangeExistingRecords,
+  canCreate,
 }: WorkersTabProps) {
+  const canCreateWorker = canCreate("POST", "/api/employees");
+  const canCreateWorkerGroup = canCreate("POST", "/api/worker-groups");
   const { formatAmount } = useCurrencyContext();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
@@ -245,14 +252,16 @@ export function WorkersTab({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuItem
-                  onClick={() => setCreateWorkerGroupDialogOpen(true)}
-                  data-testid="button-create-worker-group"
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create Group
-                </DropdownMenuItem>
-                {workerGroupsOnly.length > 0 && <DropdownMenuSeparator />}
+                {canCreateWorkerGroup && (
+                  <DropdownMenuItem
+                    onClick={() => setCreateWorkerGroupDialogOpen(true)}
+                    data-testid="button-create-worker-group"
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Create Group
+                  </DropdownMenuItem>
+                )}
+                {canCreateWorkerGroup && workerGroupsOnly.length > 0 && <DropdownMenuSeparator />}
                 {workerGroupsOnly.map((group) => (
                   <DropdownMenuItem
                     key={group.id}
@@ -266,18 +275,22 @@ export function WorkersTab({
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <Button variant="outline" onClick={() => setNewWorkerDialogOpen(true)} data-testid="button-create-worker">
-              <UserRoundPlus className="mr-2 h-4 w-4" />
-              New Worker
-            </Button>
-            <Button
-              onClick={() => setBulkPaymentDialogOpen(true)}
-              disabled={selectedPayments.length === 0}
-              data-testid="button-bulk-payment"
-            >
-              <Banknote className="mr-2 h-4 w-4" />
-              Pay Selected ({selectedPayments.length})
-            </Button>
+            {canCreateWorker && (
+              <Button variant="outline" onClick={() => setNewWorkerDialogOpen(true)} data-testid="button-create-worker">
+                <UserRoundPlus className="mr-2 h-4 w-4" />
+                New Worker
+              </Button>
+            )}
+            {canChangeExistingRecords && (
+              <Button
+                onClick={() => setBulkPaymentDialogOpen(true)}
+                disabled={selectedPayments.length === 0}
+                data-testid="button-bulk-payment"
+              >
+                <Banknote className="mr-2 h-4 w-4" />
+                Pay Selected ({selectedPayments.length})
+              </Button>
+            )}
           </div>
         </div>
       </Card>
@@ -303,9 +316,11 @@ export function WorkersTab({
           <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
             Workers are separate from Employees. Add a Worker here to manage worker payroll and deductions.
           </p>
-          <Button className="mt-4" onClick={() => setNewWorkerDialogOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" /> New Worker
-          </Button>
+          {canCreateWorker && (
+            <Button className="mt-4" onClick={() => setNewWorkerDialogOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" /> New Worker
+            </Button>
+          )}
         </Card>
       ) : filteredWorkers.length === 0 ? (
         <Card className="border-dashed py-14 text-center">
@@ -346,23 +361,25 @@ export function WorkersTab({
                       <Pencil className="mr-2 h-3.5 w-3.5" />
                       Manage
                     </Button>
-                    <ConfirmationDialog
-                      trigger={
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="text-destructive"
-                          data-testid={`button-delete-group-${group.id}`}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      }
-                      title="Delete Worker Group"
-                      description={`Delete "${group.name}"? Workers will become ungrouped.`}
-                      confirmText="Delete"
-                      variant="destructive"
-                      onConfirm={() => deleteWorkerGroupMutation.mutate(group.id)}
-                    />
+                    {canChangeExistingRecords && (
+                      <ConfirmationDialog
+                        trigger={
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="text-destructive"
+                            data-testid={`button-delete-group-${group.id}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        }
+                        title="Delete Worker Group"
+                        description={`Delete "${group.name}"? Workers will become ungrouped.`}
+                        confirmText="Delete"
+                        variant="destructive"
+                        onConfirm={() => deleteWorkerGroupMutation.mutate(group.id)}
+                      />
+                    )}
                   </div>
                 </div>
                 <WorkersTable
@@ -376,6 +393,7 @@ export function WorkersTab({
                   setWorkerOverrides={setWorkerOverrides}
                   formatAmount={formatAmount}
                   groupId={group.id}
+                  canChangeExistingRecords={canChangeExistingRecords}
                   setWorkerDeductionTarget={setWorkerDeductionTarget}
                   setSelectedWorkerForEdit={setSelectedWorkerForEdit}
                   setEditWorkerDialogOpen={setEditWorkerDialogOpen}
@@ -404,6 +422,7 @@ export function WorkersTab({
                 setWorkerOverrides={setWorkerOverrides}
                 formatAmount={formatAmount}
                 addWorkerToWorkerGroupMutation={addWorkerToWorkerGroupMutation}
+                canChangeExistingRecords={canChangeExistingRecords}
                 setWorkerDeductionTarget={setWorkerDeductionTarget}
                 setSelectedWorkerForEdit={setSelectedWorkerForEdit}
                 setEditWorkerDialogOpen={setEditWorkerDialogOpen}

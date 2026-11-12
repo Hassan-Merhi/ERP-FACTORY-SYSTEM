@@ -4,47 +4,16 @@ import {
   sendFactoryAccessDenied,
   type FactoryAccessDecision,
 } from "../lib/factoryAccessControl";
+import {
+  anyOf,
+  hasPrefix,
+  isFactoryAccessBoundaryExempt,
+  isWrite,
+  requirement,
+  type FactoryApiAccessRequirement,
+} from "./factoryBackendAccessBoundaryRules";
 
-export type FactoryApiAccessRequirement = {
-  pageKey?: string;
-  /** Every listed tab must be visible. */
-  tabs?: string[];
-  /** At least one complete alternative tab-set on the same page must be visible. */
-  tabAlternatives?: string[][];
-  /** Shared APIs may be legitimately owned by more than one Factory surface. */
-  alternatives?: FactoryApiAccessRequirement[];
-};
-
-function hasPrefix(path: string, prefix: string): boolean {
-  return path === prefix || path.startsWith(prefix + "/");
-}
-
-function isWrite(req: Request): boolean {
-  return !["GET", "HEAD", "OPTIONS"].includes(req.method.toUpperCase());
-}
-
-function isFactoryAccessBoundaryExempt(req: Request, path: string): boolean {
-  if (path === "/my-access") return true;
-  if (req.method.toUpperCase() !== "GET") return false;
-
-  // Shared read-only configuration/assets are consumed by multiple permitted
-  // Factory pages. Their mutations are still explicitly protected by Settings.
-  if (path === "/settings") return true;
-  // Read-only company switch state; changing it requires Settings access and
-  // an Admin/Owner role (enforced by the route itself).
-  if (path === "/automatic-priority-mode") return true;
-  if (path === "/label-design-colors" || path === "/label-banners") return true;
-  if (/^\/customer-logos\/\d+\/image$/.test(path)) return true;
-  return false;
-}
-
-function requirement(pageKey: string, tabs?: string[]): FactoryApiAccessRequirement {
-  return { pageKey, ...(tabs?.length ? { tabs } : {}) };
-}
-
-function anyOf(...alternatives: FactoryApiAccessRequirement[]): FactoryApiAccessRequirement {
-  return { alternatives };
-}
+export type { FactoryApiAccessRequirement } from "./factoryBackendAccessBoundaryRules";
 
 const PAYROLL_WORKERS = "hide_tab_payrollhub_workers";
 const PAYROLL_EMPLOYEES = "hide_tab_payrollhub_employees";
@@ -190,10 +159,7 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
     // existing report-tab permission as an alternative for the same bulk save.
     // Existing-record and historical-date Admin approval rules still apply.
     if (req.method === "POST" && path === "/attendance/bulk") {
-      return anyOf(
-        attendanceRequirement(),
-        requirement("factory/payroll-hub", [PAYROLL_WORKERS, WORKERS_REPORT])
-      );
+      return anyOf(attendanceRequirement(), requirement("factory/payroll-hub", [PAYROLL_WORKERS, WORKERS_REPORT]));
     }
     return attendanceRequirement();
   }

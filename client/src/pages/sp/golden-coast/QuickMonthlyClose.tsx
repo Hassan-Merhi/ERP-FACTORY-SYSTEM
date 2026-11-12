@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { releaseDebtEnglish } from "@/i18n/finalCloseoutTranslations";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import {
   MONTHLY_CLOSE_CONFIRMATION,
   PHASE11_CLOSE,
@@ -43,6 +44,7 @@ function monthLabel(periodMonth: string): string {
 
 export function QuickMonthlyClose({ periodMonth, companyKey }: { periodMonth: string; companyKey: CompanyKey }) {
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
   const queryClient = useQueryClient();
   const invalidateReadiness = useReadinessInvalidation();
   const [confirmationOpen, setConfirmationOpen] = useState(false);
@@ -72,6 +74,7 @@ export function QuickMonthlyClose({ periodMonth, companyKey }: { periodMonth: st
 
   const closeMutation = useMutation({
     mutationFn: async () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const response = await apiRequest("POST", PHASE11_CLOSE, {
         periodMonth,
         clientRequestId: requestId,
@@ -128,20 +131,22 @@ export function QuickMonthlyClose({ periodMonth, companyKey }: { periodMonth: st
               {releaseDebtEnglish("The split uses posted ledger activity for the selected month.")}
             </p>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setConfirmationOpen(true)}
-            disabled={!canOpen || closeMutation.isPending}
-            data-testid="button-sp-split-selected-month"
-          >
-            {closeMutation.isPending ? (
-              <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <CalendarCheck2 className="mr-1 h-3.5 w-3.5" />
-            )}
-            {releaseDebtEnglish("Split")}
-          </Button>
+          {recordChanges.allowed && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setConfirmationOpen(true)}
+              disabled={!canOpen || closeMutation.isPending}
+              data-testid="button-sp-split-selected-month"
+            >
+              {closeMutation.isPending ? (
+                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <CalendarCheck2 className="mr-1 h-3.5 w-3.5" />
+              )}
+              {releaseDebtEnglish("Split")}
+            </Button>
+          )}
         </div>
 
         <ReadinessState
@@ -173,13 +178,16 @@ export function QuickMonthlyClose({ periodMonth, companyKey }: { periodMonth: st
           </div>
         ) : null}
 
-        {(postedVoucher?.id || phase11?.voucher?.id) ? (
+        {postedVoucher?.id || phase11?.voucher?.id ? (
           <a
             href={`/voucher-detail/${postedVoucher?.id || phase11?.voucher?.id}`}
             className="text-sm font-medium underline underline-offset-2"
             data-testid="link-sp-monthly-close-journal"
           >
-            Journal voucher {postedVoucher?.voucherNumber || phase11?.voucher?.voucherNumber || `#${postedVoucher?.id || phase11?.voucher?.id}`}
+            Journal voucher{" "}
+            {postedVoucher?.voucherNumber ||
+              phase11?.voucher?.voucherNumber ||
+              `#${postedVoucher?.id || phase11?.voucher?.id}`}
           </a>
         ) : null}
         {phase11?.alreadyClosed && phase11.journalVerified === false ? (
@@ -227,14 +235,16 @@ export function QuickMonthlyClose({ periodMonth, companyKey }: { periodMonth: st
             <Button variant="outline" onClick={() => setConfirmationOpen(false)} disabled={closeMutation.isPending}>
               {releaseDebtEnglish("Cancel")}
             </Button>
-            <Button
-              onClick={() => closeMutation.mutate()}
-              disabled={confirmation.trim() !== MONTHLY_CLOSE_CONFIRMATION || closeMutation.isPending}
-              data-testid="button-sp-confirm-split"
-            >
-              {closeMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              {releaseDebtEnglish("Confirm split")}
-            </Button>
+            {recordChanges.allowed && (
+              <Button
+                onClick={() => closeMutation.mutate()}
+                disabled={confirmation.trim() !== MONTHLY_CLOSE_CONFIRMATION || closeMutation.isPending}
+                data-testid="button-sp-confirm-split"
+              >
+                {closeMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                {releaseDebtEnglish("Confirm split")}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

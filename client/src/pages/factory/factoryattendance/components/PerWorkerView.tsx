@@ -1,4 +1,5 @@
 import type { ClientErrorLike } from "@/lib/clientError";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 /**
  * PerWorkerView — extracted sub-component.
  *
@@ -27,6 +28,7 @@ import { SummaryCard } from "./SummaryCard";
 
 export function PerWorkerView() {
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
   const [selectedWorkerId, setSelectedWorkerId] = useState<string>("");
   const [workerComboOpen, setWorkerComboOpen] = useState(false);
   const [startDate, setStartDate] = useState<string>(attendanceToday);
@@ -96,8 +98,10 @@ export function PerWorkerView() {
   };
 
   const saveMutation = useMutation({
-    mutationFn: (payload: { records: AttendanceBulkRecord[]; credentials?: AttendanceAdminCredentials }) =>
-      apiRequest("POST", "/api/factory/attendance/bulk", { records: payload.records, ...payload.credentials }),
+    mutationFn: (payload: { records: AttendanceBulkRecord[]; credentials?: AttendanceAdminCredentials }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
+      return apiRequest("POST", "/api/factory/attendance/bulk", { records: payload.records, ...payload.credentials });
+    },
     onSuccess: () => {
       setApprovalOpen(false);
       setPendingApprovalRecords(null);
@@ -128,9 +132,7 @@ export function PerWorkerView() {
         // is checked; fall back to "Present" for new/previously-absent dates.
         const existing = existingStatusMap[d];
         const status: AttendanceBulkRecord["status"] =
-          existing === "Late" || existing === "Half Day" || existing === "Leave"
-            ? existing
-            : "Present";
+          existing === "Late" || existing === "Half Day" || existing === "Leave" ? existing : "Present";
         return { workerId: workerIdNum, attendanceDate: d, status };
       }
       return { workerId: workerIdNum, attendanceDate: d, status: "Absent" };
@@ -257,15 +259,22 @@ export function PerWorkerView() {
                 <UserX className="h-4 w-4 mr-1" />
                 Deselect All
               </Button>
-              <Button
-                size="default"
-                data-testid="button-save-per-worker"
-                onClick={handleSave}
-                disabled={!workerIdNum || dates.length === 0 || saveMutation.isPending || dates.some((d) => d > attendanceToday())}
-              >
-                <Save className="h-4 w-4 mr-1" />
-                {saveMutation.isPending ? "Saving…" : "Save Attendance"}
-              </Button>
+              {recordChanges.allowed && (
+                <Button
+                  size="default"
+                  data-testid="button-save-per-worker"
+                  onClick={handleSave}
+                  disabled={
+                    !workerIdNum ||
+                    dates.length === 0 ||
+                    saveMutation.isPending ||
+                    dates.some((d) => d > attendanceToday())
+                  }
+                >
+                  <Save className="h-4 w-4 mr-1" />
+                  {saveMutation.isPending ? "Saving…" : "Save Attendance"}
+                </Button>
+              )}
             </div>
           </div>
         </CardContent>

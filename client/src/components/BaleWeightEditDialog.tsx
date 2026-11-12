@@ -1,18 +1,13 @@
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useState, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 
 export interface WeightEditBale {
   id: number;
@@ -31,6 +26,7 @@ export function BaleWeightEditDialog({
 }) {
   const { toast } = useToast();
   const [newWeight, setNewWeight] = useState("");
+  const recordChanges = useExistingRecordChangeAccess();
 
   // Reset input whenever a different bale is opened
   useEffect(() => {
@@ -46,6 +42,7 @@ export function BaleWeightEditDialog({
 
   const mutation = useMutation({
     mutationFn: async () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const w = parseFloat(newWeight);
       if (isNaN(w) || w <= 0) throw new Error("Enter a valid positive weight.");
       return apiRequest("PATCH", `/api/factory/bales/${bale!.id}/weight`, { weightKg: w.toFixed(3) });
@@ -95,7 +92,8 @@ export function BaleWeightEditDialog({
                 value={newWeight}
                 onChange={(e) => setNewWeight(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && newWeight && parseFloat(newWeight) > 0) mutation.mutate();
+                  if (e.key === "Enter" && recordChanges.allowed && newWeight && parseFloat(newWeight) > 0)
+                    mutation.mutate();
                 }}
                 autoFocus
                 data-testid="input-new-weight"
@@ -103,18 +101,23 @@ export function BaleWeightEditDialog({
             </div>
           </div>
           <p className="text-xs text-muted-foreground">
-            Updates the bale record, loading orders, invoice scans, and customer order lines. Cost is recalculated automatically.
+            Updates the bale record, loading orders, invoice scans, and customer order lines. Cost is recalculated
+            automatically.
           </p>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button
-            onClick={() => mutation.mutate()}
-            disabled={mutation.isPending || !newWeight || parseFloat(newWeight) <= 0}
-            data-testid="button-confirm-weight"
-          >
-            {mutation.isPending ? "Saving…" : "Save Weight"}
+          <Button variant="outline" onClick={onClose}>
+            Cancel
           </Button>
+          {recordChanges.allowed && (
+            <Button
+              onClick={() => mutation.mutate()}
+              disabled={mutation.isPending || !newWeight || parseFloat(newWeight) <= 0}
+              data-testid="button-confirm-weight"
+            >
+              {mutation.isPending ? "Saving…" : "Save Weight"}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

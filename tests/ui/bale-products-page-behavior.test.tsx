@@ -54,6 +54,15 @@ const products = [
   },
 ];
 
+vi.mock("@/contexts/CompanyContext", () => {
+  const company = {
+    selectedCompany: { id: 1, code: "PHASE9-FACTORY", name: "Factory Test", active: true, companyType: "factory" },
+    companies: [],
+    isLoading: false,
+  };
+  return { useCompany: () => company, useOptionalCompany: () => company };
+});
+
 vi.mock("@tanstack/react-query", () => ({
   useQuery: ({ queryKey }: any) => {
     const root = queryKey?.[0];

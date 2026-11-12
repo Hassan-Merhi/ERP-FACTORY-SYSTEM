@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { releaseDebtEnglish } from "@/i18n/finalCloseoutTranslations";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import {
   HASSAN_SAVINGS_CONFIRMATION,
   PHASE9_READINESS,
@@ -38,6 +39,7 @@ import {
 
 export function HassanSavingsPanel({ companyKey }: { companyKey: CompanyKey }) {
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
   const invalidateReadiness = useReadinessInvalidation();
 
   const [phase9Date, setPhase9Date] = useState(todayIso);
@@ -67,6 +69,7 @@ export function HassanSavingsPanel({ companyKey }: { companyKey: CompanyKey }) {
 
   const phase9Mutation = useMutation({
     mutationFn: async () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       if (!phase9Choice) throw new Error(releaseDebtEnglish("Select a payment account."));
       const response = await apiRequest("POST", PHASE9_WITHDRAWAL, {
         withdrawalDate: phase9Date,
@@ -223,18 +226,20 @@ export function HassanSavingsPanel({ companyKey }: { companyKey: CompanyKey }) {
             </p>
           </div>
         </div>
-        <Button
-          onClick={() => phase9Mutation.mutate()}
-          disabled={!phase9CanSubmit || phase9Mutation.isPending}
-          data-testid="button-gc-phase9-submit"
-        >
-          {phase9Mutation.isPending ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <WalletCards className="mr-2 h-4 w-4" />
-          )}
-          {releaseDebtEnglish("Withdraw Hassan Savings")}
-        </Button>
+        {recordChanges.allowed && (
+          <Button
+            onClick={() => phase9Mutation.mutate()}
+            disabled={!phase9CanSubmit || phase9Mutation.isPending}
+            data-testid="button-gc-phase9-submit"
+          >
+            {phase9Mutation.isPending ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <WalletCards className="mr-2 h-4 w-4" />
+            )}
+            {releaseDebtEnglish("Withdraw Hassan Savings")}
+          </Button>
+        )}
       </CardContent>
     </Card>
   );

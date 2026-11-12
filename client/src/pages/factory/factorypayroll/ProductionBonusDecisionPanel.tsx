@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { Check, Loader2, Target, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -69,6 +70,7 @@ export function ProductionBonusDecisionPanel({
   onChanged?: (result: ProductionBonusDecisionResult) => void;
 }) {
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
   const queryClient = useQueryClient();
   const queryKey = ["/api/factory/payroll", payrollId, "production-bonuses"];
 
@@ -93,6 +95,7 @@ export function ProductionBonusDecisionPanel({
       items?: { runId: number; workerId: number }[];
       all?: boolean;
     }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const response = await factoryApiRequest(
         "POST",
         `/api/factory/payroll/${payrollId}/production-bonuses/decision`,
@@ -157,7 +160,7 @@ export function ProductionBonusDecisionPanel({
             </div>
           </div>
         </div>
-        {details.totals.pendingCount > 0 && canDecide && (
+        {details.totals.pendingCount > 0 && canDecide && recordChanges.allowed && (
           <div className="flex gap-2">
             <Button
               type="button"
@@ -229,7 +232,7 @@ export function ProductionBonusDecisionPanel({
                 </div>
               </div>
 
-              {canDecide && (
+              {canDecide && recordChanges.allowed && (
                 <div className="mt-2 flex justify-end gap-2">
                   <Button
                     type="button"

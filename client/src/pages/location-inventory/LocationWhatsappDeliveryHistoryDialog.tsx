@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { cn } from "@/lib/utils";
 import type { InventoryLocation } from "./locationInventoryTypes";
 
@@ -96,6 +97,7 @@ export function LocationWhatsappDeliveryHistoryDialog({ location, companyId, can
   const [retryingId, setRetryingId] = useState<number | null>(null);
   const retryLockRef = useRef(false);
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
 
   const historyQuery = useQuery<DeliveryHistoryResponse>({
     queryKey: ["/api/locations", location.id, "whatsapp-deliveries", companyId],
@@ -116,6 +118,7 @@ export function LocationWhatsappDeliveryHistoryDialog({ location, companyId, can
 
   const retryMutation = useMutation({
     mutationFn: async (delivery: DeliveryEntry) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       setRetryingId(delivery.id);
       const idempotencyKey = newIdempotencyToken();
       const response = await apiRequest(
@@ -293,7 +296,7 @@ export function LocationWhatsappDeliveryHistoryDialog({ location, companyId, can
                               </p>
                             </div>
 
-                            {delivery.canRetry && (
+                            {recordChanges.allowed && delivery.canRetry && (
                               <Button
                                 variant="outline"
                                 size="sm"

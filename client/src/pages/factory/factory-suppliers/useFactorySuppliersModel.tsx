@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useAdminOverride } from "@/hooks/use-admin-override";
 import { useEscapeBack } from "@/hooks/use-escape-back";
 import { useDateFormat } from "@/contexts/DateFormatContext";
@@ -117,6 +118,10 @@ export function useFactorySuppliersModel() {
   const { formatDisplayDate } = useDateFormat();
   const { toast } = useToast();
   const today = new Date().toLocaleDateString("en-CA");
+  const recordChanges = useExistingRecordChangeAccess();
+  const canCreateSupplier = recordChanges.canCreate("POST", "/api/factory/suppliers");
+  const canRecordSupplierPayment = recordChanges.canCreate("POST", "/api/factory/supplier-payments");
+  const canRecordFxTransfer = recordChanges.canCreate("POST", "/api/factory/supplier-fx-transfers");
 
   const [createOpen, setCreateOpen] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<FactorySupplier | null>(null);
@@ -280,6 +285,7 @@ export function useFactorySuppliersModel() {
 
   const bulkFxPreviewMutation = useMutation({
     mutationFn: async () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       if (!bulkFxBrokerId) throw new Error("No broker selected");
       const response = await factoryApiRequest("POST", `/api/factory/suppliers/${bulkFxBrokerId}/bulk-fx-settlement`, {
         ...bulkFxForm,
@@ -294,6 +300,7 @@ export function useFactorySuppliersModel() {
 
   const bulkFxMutation = useMutation({
     mutationFn: async () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       if (!bulkFxBrokerId) throw new Error("No broker selected");
       const response = await factoryApiRequest(
         "POST",
@@ -367,15 +374,24 @@ export function useFactorySuppliersModel() {
   });
 
   const deletePaymentMutation = useMutation({
-    mutationFn: async (id: number) => factoryApiRequest("DELETE", `/api/factory/supplier-payments/${id}`),
+    mutationFn: async (id: number) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
+      return factoryApiRequest("DELETE", `/api/factory/supplier-payments/${id}`);
+    },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/factory/suppliers"] }),
   });
   const deleteFxTransferMutation = useMutation({
-    mutationFn: async (id: number) => factoryApiRequest("DELETE", `/api/factory/supplier-fx-transfers/${id}`),
+    mutationFn: async (id: number) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
+      return factoryApiRequest("DELETE", `/api/factory/supplier-fx-transfers/${id}`);
+    },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/factory/suppliers"] }),
   });
   const deleteObCommissionMutation = useMutation({
-    mutationFn: async (id: number) => factoryApiRequest("DELETE", `/api/factory/raw-stock/opening-balance/${id}`),
+    mutationFn: async (id: number) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
+      return factoryApiRequest("DELETE", `/api/factory/raw-stock/opening-balance/${id}`);
+    },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/factory/suppliers"] }),
   });
   const createMutation = useMutation({
@@ -390,37 +406,53 @@ export function useFactorySuppliersModel() {
       toast({ title: "Failed to create supplier", description: error.message, variant: "destructive" }),
   });
   const updateMutation = useMutation({
-    mutationFn: async (data: SupplierPatch) => factoryApiRequest("PATCH", `/api/factory/suppliers/${data.id}`, data),
+    mutationFn: async (data: SupplierPatch) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
+      return factoryApiRequest("PATCH", `/api/factory/suppliers/${data.id}`, data);
+    },
     onSuccess: () => {
       setEditingSupplier(null);
       queryClient.invalidateQueries({ queryKey: ["/api/factory/suppliers"] });
     },
   });
   const obEditMutation = useMutation({
-    mutationFn: async (data: { id: number; openingBalance: string }) =>
-      factoryApiRequest("PATCH", `/api/factory/suppliers/${data.id}/opening-balance`, {
+    mutationFn: async (data: { id: number; openingBalance: string }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
+      return factoryApiRequest("PATCH", `/api/factory/suppliers/${data.id}/opening-balance`, {
         openingBalance: data.openingBalance,
-      }),
+      });
+    },
     onSuccess: () => {
       setObEditSupplier(null);
       queryClient.invalidateQueries({ queryKey: ["/api/factory/suppliers"] });
     },
   });
   const deactivateMutation = useMutation({
-    mutationFn: async (id: number) => factoryApiRequest("POST", `/api/factory/suppliers/${id}/deactivate`),
+    mutationFn: async (id: number) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
+      return factoryApiRequest("POST", `/api/factory/suppliers/${id}/deactivate`);
+    },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/factory/suppliers"] }),
   });
   const reactivateMutation = useMutation({
-    mutationFn: async (id: number) => factoryApiRequest("POST", `/api/factory/suppliers/${id}/reactivate`),
+    mutationFn: async (id: number) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
+      return factoryApiRequest("POST", `/api/factory/suppliers/${id}/reactivate`);
+    },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/factory/suppliers"] }),
   });
   const permanentDeleteMutation = useMutation({
-    mutationFn: async (id: number) => factoryApiRequest("DELETE", `/api/factory/suppliers/${id}`),
+    mutationFn: async (id: number) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
+      return factoryApiRequest("DELETE", `/api/factory/suppliers/${id}`);
+    },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/factory/suppliers"] }),
   });
   const renameSupplierMutation = useMutation({
-    mutationFn: async ({ id, name }: { id: number; name: string }) =>
-      factoryApiRequest("PATCH", `/api/factory/suppliers/${id}`, { name }),
+    mutationFn: async ({ id, name }: { id: number; name: string }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
+      return factoryApiRequest("PATCH", `/api/factory/suppliers/${id}`, { name });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/factory/suppliers"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/suppliers", statementSupplierId, "statement"] });
@@ -428,6 +460,7 @@ export function useFactorySuppliersModel() {
   });
   const makeBrokerMutation = useMutation({
     mutationFn: async ({ id, isBroker }: { id: number; isBroker: boolean }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const response = await factoryApiRequest("PATCH", `/api/factory/suppliers/${id}/set-broker`, { isBroker });
       if (!response.ok) throw new Error(responseMessage(await response.json().catch(() => ({})), "Failed"));
       return response.json();
@@ -441,6 +474,7 @@ export function useFactorySuppliersModel() {
 
   const moveContainerMutation = useMutation({
     mutationFn: async ({ containerId, targetSupplierId }: { containerId: number; targetSupplierId: number }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const response = await factoryApiRequest("POST", `/api/factory/containers/${containerId}/move-supplier`, {
         targetSupplierId,
       });
@@ -459,6 +493,7 @@ export function useFactorySuppliersModel() {
 
   const assignContainersMutation = useMutation({
     mutationFn: async ({ containerIds, targetSupplierId }: { containerIds: number[]; targetSupplierId: number }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const results: MoveResult[] = [];
       for (const containerId of containerIds) {
         const response = await factoryApiRequest("POST", `/api/factory/containers/${containerId}/move-supplier`, {
@@ -492,8 +527,10 @@ export function useFactorySuppliersModel() {
   });
 
   const updateObCommissionMutation = useMutation({
-    mutationFn: async (data: OpeningCommissionUpdatePayload) =>
-      factoryApiRequest("PATCH", `/api/factory/raw-stock/opening-balance/${data.rawStockId}`, data),
+    mutationFn: async (data: OpeningCommissionUpdatePayload) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
+      return factoryApiRequest("PATCH", `/api/factory/raw-stock/opening-balance/${data.rawStockId}`, data);
+    },
     onSuccess: () => {
       setEditObComm(null);
       queryClient.invalidateQueries({ queryKey: ["/api/factory/suppliers"] });
@@ -579,6 +616,10 @@ export function useFactorySuppliersModel() {
     status === "OTW" ? "On the Way" : status.charAt(0) + status.slice(1).toLowerCase();
 
   return {
+    canChangeExistingRecords: recordChanges.allowed,
+    canCreateSupplier,
+    canRecordSupplierPayment,
+    canRecordFxTransfer,
     wrapAdminAction,
     AdminDialog,
     today,

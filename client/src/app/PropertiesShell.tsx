@@ -14,6 +14,7 @@ import { CommandPalette } from "@/components/CommandPalette";
 import { SkipLink } from "@/components/ui/responsive-accessibility";
 import { WorkspaceRouteBoundary } from "@/components/ui/workspace-route-boundary";
 import { PropertiesRoutes } from "@/app/PropertiesRoutes";
+import { ReadOnlyRoleRouteGate } from "@/components/ReadOnlyRoleRouteGate";
 import { canUseAdminSearch, type ShellUser } from "./shellUser";
 import { MODULE_ACCENT } from "@/components/sidebar/sidebarPrimitives";
 import "@/styles/properties-unified-theme.css";
@@ -79,7 +80,9 @@ export function PropertiesShell({ user, currentLocation, handleLogout, leaveConf
                   loadingDescription="Preparing the latest property and rental information."
                   className="p-3 sm:p-6"
                 >
-                  <PropertiesRoutes user={user} />
+                  <ReadOnlyRoleRouteGate role={user.role}>
+                    <PropertiesRoutes user={user} />
+                  </ReadOnlyRoleRouteGate>
                 </WorkspaceRouteBoundary>
               </main>
             </div>

@@ -18,6 +18,8 @@ import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { factoryApiRequest } from "@/lib/factoryApi";
 import { useAppMode } from "@/contexts/AppModeContext";
+import { useCompany } from "@/contexts/CompanyContext";
+import { erpPageAccessQueryOptions } from "@/app/erpAccessQuery";
 import { PeriodFilterValue, getDefaultPeriodValue } from "@/components/ui/period-filter";
 import { useDateJump } from "@/hooks/use-date-jump";
 import { useDebounce } from "@/hooks/use-debounce";
@@ -63,6 +65,7 @@ export function useFactoryDaybookModel() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
   const appMode = useAppMode();
+  const { selectedCompany } = useCompany();
   const routePrefix = appMode === "properties" ? "/properties" : "/factory";
 
   const { data: currentUser } = useQuery<{ id?: number; role?: string }>({ queryKey: ["/api/auth/me"] });
@@ -182,7 +185,9 @@ export function useFactoryDaybookModel() {
     // Never show a previous date/company/filter's transactions while fetching.
   });
 
-  const { data: myErpPages } = useQuery<{ hiddenErpCostFields?: string[] }>({ queryKey: ["/api/my-erp-pages"] });
+  const { data: myErpPages } = useQuery<{ hiddenErpCostFields?: string[] }>({
+    ...erpPageAccessQueryOptions(selectedCompany?.id, true),
+  });
   const hiddenErpCosts: string[] = myErpPages?.hiddenErpCostFields ?? [];
   const showAmounts = !hiddenErpCosts.includes("daybook_amounts");
 

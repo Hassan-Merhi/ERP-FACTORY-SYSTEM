@@ -70,6 +70,8 @@ vi.mock("@tanstack/react-query", () => ({
 }));
 
 vi.mock("@/contexts/CompanyContext", () => ({
+  // No provider role: the shared change-access helper leaves controls as they are.
+  useOptionalCompany: () => null,
   useCompany: () => ({ selectedCompany: { id: 4, name: "GC Lshi" } }),
 }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: harness.toast }) }));

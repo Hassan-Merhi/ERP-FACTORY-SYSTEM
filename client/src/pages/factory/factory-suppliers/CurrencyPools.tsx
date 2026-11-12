@@ -26,6 +26,8 @@ interface CurrencyPoolsProps {
     netPayable: string,
     totalCommission?: string
   ) => void;
+  /** False for read-only company roles: no FX settle/transfer actions. */
+  canRecordFxTransfer?: boolean;
 }
 
 export function CurrencyPools({
@@ -40,6 +42,7 @@ export function CurrencyPools({
   setFxConversionForm,
   setFxConversionOpen,
   openFxConversionDialog,
+  canRecordFxTransfer = true,
 }: CurrencyPoolsProps) {
   return (
     <div className="rounded-xl border overflow-hidden">
@@ -50,35 +53,36 @@ export function CurrencyPools({
         >
           <span className="text-sm font-semibold">Currency Pools</span>
         </span>
-        {statementData.currencyGroups.some(
-          (g) => g.currencyCode !== "USD" && (parseFloat(g.netPayable) > 0 || parseFloat(g.totalCommission) > 0)
-        ) && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              const firstNonUsd = statementData.currencyGroups.find(
-                (g) => g.currencyCode !== "USD" && (parseFloat(g.netPayable) > 0 || parseFloat(g.totalCommission) > 0)
-              );
-              if (firstNonUsd && statementSupplierId) {
-                const hasBalance = parseFloat(firstNonUsd.netPayable) > 0;
-                setFxSourceType(hasBalance ? "supplier" : "commission");
-                const toId = statementData.supplier.parentId || statementSupplierId;
-                openFxConversionDialog(
-                  statementSupplierId,
-                  toId,
-                  firstNonUsd.currencyCode,
-                  hasBalance ? firstNonUsd.netPayable : "0",
-                  firstNonUsd.totalCommission
+        {canRecordFxTransfer &&
+          statementData.currencyGroups.some(
+            (g) => g.currencyCode !== "USD" && (parseFloat(g.netPayable) > 0 || parseFloat(g.totalCommission) > 0)
+          ) && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const firstNonUsd = statementData.currencyGroups.find(
+                  (g) => g.currencyCode !== "USD" && (parseFloat(g.netPayable) > 0 || parseFloat(g.totalCommission) > 0)
                 );
-              }
-            }}
-            data-testid="button-fx-convert"
-          >
-            <ArrowRightLeft className="h-3.5 w-3.5 mr-1.5" />
-            {statementData.supplier.parentId ? "Settle FX to Broker" : "Settle FX to EUR"}
-          </Button>
-        )}
+                if (firstNonUsd && statementSupplierId) {
+                  const hasBalance = parseFloat(firstNonUsd.netPayable) > 0;
+                  setFxSourceType(hasBalance ? "supplier" : "commission");
+                  const toId = statementData.supplier.parentId || statementSupplierId;
+                  openFxConversionDialog(
+                    statementSupplierId,
+                    toId,
+                    firstNonUsd.currencyCode,
+                    hasBalance ? firstNonUsd.netPayable : "0",
+                    firstNonUsd.totalCommission
+                  );
+                }
+              }}
+              data-testid="button-fx-convert"
+            >
+              <ArrowRightLeft className="h-3.5 w-3.5 mr-1.5" />
+              {statementData.supplier.parentId ? "Settle FX to Broker" : "Settle FX to EUR"}
+            </Button>
+          )}
       </div>
       {!collapsedStmtSections.has("currencyPools") && (
         <div>
@@ -204,7 +208,8 @@ export function CurrencyPools({
                             {formatNum(group.netPayable)}
                           </>
                         )}
-                        {!isAutoSettled &&
+                        {canRecordFxTransfer &&
+                          !isAutoSettled &&
                           (group.currencyCode !== "USD" || isCommissionOnly || isCrossFreightPool) &&
                           (netPay > 0 || hasCommission) && (
                             <Button

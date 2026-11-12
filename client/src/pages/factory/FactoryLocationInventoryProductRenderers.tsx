@@ -14,6 +14,8 @@ export function createFactoryLocationProductRenderers(
   nameFor: (articleCode: string | null | undefined, originalName: string) => string
 ) {
   const {
+    canChangeExistingRecords,
+    canReprint,
     fmt,
     formatAmount,
     handleReprintProduct,
@@ -146,7 +148,7 @@ export function createFactoryLocationProductRenderers(
               >
                 <Package className="h-3.5 w-3.5" />
               </Button>
-              {myAccess?.fullAccess && (
+              {canReprint && myAccess?.fullAccess && (
                 <Button
                   size="icon"
                   variant="ghost"
@@ -158,20 +160,22 @@ export function createFactoryLocationProductRenderers(
                   <Tag className="h-3.5 w-3.5" />
                 </Button>
               )}
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-7 w-7 text-destructive"
-                title="Remove bales"
-                onClick={() => {
-                  setDeleteProduct(prod);
-                  setDeleteQty(1);
-                  setDeleteDialogOpen(true);
-                }}
-                data-testid={`button-delete-product${testIdSuffix}-${prod.productId}`}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
+              {canChangeExistingRecords && (
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-7 w-7 text-destructive"
+                  title="Remove bales"
+                  onClick={() => {
+                    setDeleteProduct(prod);
+                    setDeleteQty(1);
+                    setDeleteDialogOpen(true);
+                  }}
+                  data-testid={`button-delete-product${testIdSuffix}-${prod.productId}`}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              )}
             </div>
           </td>
         )}
@@ -214,28 +218,32 @@ export function createFactoryLocationProductRenderers(
           )}
           {!proformaMode && (
             <div className="flex items-center gap-0.5 ml-auto">
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-7 w-7"
-                onClick={() => handleReprintProduct(prod)}
-                data-testid={`button-reprint-mobile${testIdSuffix}-${prod.productId}`}
-              >
-                <Tag className="h-3.5 w-3.5" />
-              </Button>
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-7 w-7 text-destructive"
-                onClick={() => {
-                  setDeleteProduct(prod);
-                  setDeleteQty(1);
-                  setDeleteDialogOpen(true);
-                }}
-                data-testid={`button-delete-mobile${testIdSuffix}-${prod.productId}`}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
+              {canReprint && (
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-7 w-7"
+                  onClick={() => handleReprintProduct(prod)}
+                  data-testid={`button-reprint-mobile${testIdSuffix}-${prod.productId}`}
+                >
+                  <Tag className="h-3.5 w-3.5" />
+                </Button>
+              )}
+              {canChangeExistingRecords && (
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-7 w-7 text-destructive"
+                  onClick={() => {
+                    setDeleteProduct(prod);
+                    setDeleteQty(1);
+                    setDeleteDialogOpen(true);
+                  }}
+                  data-testid={`button-delete-mobile${testIdSuffix}-${prod.productId}`}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              )}
             </div>
           )}
         </div>

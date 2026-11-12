@@ -4,6 +4,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
 import type {
@@ -18,6 +19,7 @@ import type {
 
 export function useERPRunPayrollModel() {
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
   const { formatAmount } = useCurrencyContext();
   const { selectedCompany } = useCompany();
   const companyId = selectedCompany?.id;
@@ -267,6 +269,7 @@ export function useERPRunPayrollModel() {
 
   const payRunMutation = useMutation({
     mutationFn: async ({ runId, accountId }: { runId: number; accountId: string }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await apiRequest("PATCH", `/api/payroll/runs/${runId}`, {
         action: "pay",
         paymentAccountId: parseInt(accountId),
@@ -293,6 +296,7 @@ export function useERPRunPayrollModel() {
 
   const deleteRunMutation = useMutation({
     mutationFn: async (runId: number) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await apiRequest("DELETE", `/api/payroll/runs/${runId}`, undefined);
       if (!res.ok) {
         const d = await res.json();
@@ -309,6 +313,7 @@ export function useERPRunPayrollModel() {
 
   const undoRunMutation = useMutation({
     mutationFn: async (runId: number) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await apiRequest("POST", `/api/payroll/runs/${runId}/undo`, {});
       if (!res.ok) {
         const d = await res.json();
@@ -561,6 +566,9 @@ export function useERPRunPayrollModel() {
   const previewTotalBase = useMemo(() => previewItems.reduce((s, it) => s + it.baseSalary, 0), [previewItems]);
 
   return {
+    canChangeExistingRecords: recordChanges.allowed,
+    canCreate: recordChanges.canCreate,
+    changeDisabledReason: recordChanges.reason,
     activeTab,
     setActiveTab,
     searchQuery,
