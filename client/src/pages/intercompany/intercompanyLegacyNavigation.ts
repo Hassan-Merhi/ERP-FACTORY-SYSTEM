@@ -7,8 +7,8 @@ export type LegacyPropertiesIntercompanyRoute = "linked-trades" | "intercompany-
 
 export const INTERCOMPANY_CANONICAL_DESTINATIONS = {
   propertiesContainers: "/properties/containers",
-  propertiesVouchers: "/properties/vouchers?tab=intercompany",
-  erpVouchers: "/vouchers?tab=intercompany",
+  propertiesVouchers: "/properties/vouchers?tab=payment",
+  erpVouchers: "/vouchers?tab=payment",
 } as const;
 
 export const LEGACY_PROPERTIES_INTERCOMPANY_ROUTES: Record<LegacyPropertiesIntercompanyRoute, string> = {
