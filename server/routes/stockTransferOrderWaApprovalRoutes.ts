@@ -18,7 +18,7 @@ import {
   StockTransferOrderApprovalError,
 } from "../services/stockTransferOrderWhatsAppApprovalBatch";
 import {
-  getWaSettings, getGreenInstanceState, fetchGreenApiChats,
+  getWaSettings, getStrictGreenMainInstanceState, fetchStrictGreenMainChats,
   sendStockTransferOrderApprovalRequest,
 } from "../services/whatsappService";
 
@@ -480,16 +480,37 @@ export function registerStockTransferOrderWaApprovalRoutes(app: Express,
       }
       stage="main_whatsapp_state";
       const wa=await getWaSettings();
-      if(!wa?.enabled||!wa.instanceId||!wa.apiToken||
-        (await getGreenInstanceState(wa.instanceId,wa.apiToken))!=="authorized") {
-        return res.status(409).json({message:"Connect the main WhatsApp account first."});
+      if(!wa?.enabled||!wa.instanceId||!wa.apiToken) {
+        return res.status(409).json({
+          code:"STO_WA_MAIN_NOT_CONFIGURED",
+          message:"Main WhatsApp sending is disabled or its credentials are missing. " +
+            "Open Settings → Export Center → Daily Export → WhatsApp Export.",
+        });
+      }
+      // Strict: never mistake an authorized POS/backup session for the MAIN
+      // account. All approval requests and quoted DONE replies use MAIN only.
+      const mainState = await getStrictGreenMainInstanceState(wa.instanceId,wa.apiToken);
+      if(mainState!=="authorized") {
+        const guidance = mainState==="invalidCredentials"
+          ? "GREEN API rejected the MAIN WhatsApp instance ID or API token (401/403). " +
+            "Update MAIN credentials in Settings → Export Center → Daily Export → WhatsApp Export. " +
+            "The POS connection is separate."
+          : mainState==="notAuthorized"
+            ? "The MAIN WhatsApp instance is disconnected. Reauthorize it in the GREEN API console."
+            : mainState==="unknown"
+              ? "Unable to verify the MAIN WhatsApp instance. Check its status in Export Center and retry."
+              : "The MAIN WhatsApp instance is not ready (" + mainState + "). Check GREEN API.";
+        return res.status(mainState==="unknown"?503:409).json({
+          code:"STO_WA_MAIN_NOT_AUTHORIZED",
+          state:mainState, message:guidance,
+        });
       }
       stage="approval_group";
       const settings=await pool.query("SELECT approval_group_chat_id FROM stock_transfer_order_approval_settings WHERE company_id=$1 AND enabled=true",[a.companyId]);
       const group=String(settings.rows[0]?.approval_group_chat_id??"");
       if(!groupPattern.test(group))return res.status(409).json({message:"Configure the approval group first."});
       stage="approval_group_visibility";
-      const chats=await fetchGreenApiChats(wa.instanceId,wa.apiToken);
+      const chats=await fetchStrictGreenMainChats(wa.instanceId,wa.apiToken);
       if(!chats.some(c=>c.id===group&&c.id.endsWith("@g.us"))) {
         return res.status(409).json({message:"The approval group is not visible to the linked WhatsApp."});
       }
