@@ -5,184 +5,31 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { PageHeader } from "@/components/PageHeader";
 import { ErpListTable } from "@/erp-core";
-
-const formatCurrency = (num: number) => {
-  return num.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
-};
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { companyQueryKey } from "@/lib/companyQueryScope";
 import { useCompany } from "@/contexts/CompanyContext";
-import { Upload, FileSpreadsheet, CheckCircle, XCircle, Download, Check, ChevronsUpDown, RefreshCw } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Upload, FileSpreadsheet, CheckCircle, XCircle, Download, RefreshCw } from "lucide-react";
 import type { Supplier } from "@shared/schema";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-interface SupplierComboboxProps {
-  value: string;
-  onValueChange: (value: string) => void;
-  suppliers: Supplier[];
-  placeholder?: string;
-  testId?: string;
-  isLoading?: boolean;
-  hasError?: boolean;
-}
-
-interface POImportItem {
-  poNumber: string;
-  supplierCode?: string;
-  barcode?: string | null;
-  stockItemId?: number | null;
-  itemName: string;
-  quantity: string | number;
-  rate: string | number;
-  lineTotal: string | number;
-  currency?: string;
-}
-
-interface POImportCharges {
-  freight: string | number;
-  surcharge: string | number;
-  fumigation: string | number;
-  discount: string | number;
-  documentCharges: string | number;
-}
-
-interface POImportContainer {
-  containerNumber: string;
-  supplierCode?: string;
-  itemsCount: number;
-  posCount: number;
-  itemsTotal: string | number;
-  grandTotal: string | number;
-  charges: POImportCharges;
-  items: POImportItem[];
-}
-
-interface POImportPreview {
-  fileHash: string;
-  fileName: string;
-  preview: POImportContainer[];
-}
-
-interface POValidationResult {
-  errors: React.ReactNode[];
-  resolvedItems?: { index: number; stockItemId: number; itemName: string }[];
-}
-
-interface POImportDraft {
-  preview: POImportPreview;
-  selectedSupplier: string;
-  containerNumber: string;
-  importDate: string;
-  freightPaidBy: "supplier" | "parent";
-  freightParentAccountId: string;
-  importCurrency: "" | "USD" | "ZMW";
-}
-
-const draftStorageKey = (companyId: number) => `po-import-draft:${companyId}`;
-
-/** Merge server-resolved names into the parsed file without touching its amounts. */
-function withResolvedStockItems(
-  current: POImportPreview | null,
-  payload: POImportPayload,
-  result: POValidationResult
-): POImportPreview | null {
-  if (!current || current.fileHash !== payload.fileHash || !result.resolvedItems?.length) return current;
-  const resolved = new Map(result.resolvedItems.map((item) => [item.index, item]));
-  let changed = false;
-  const containers = current.preview.map((container) => {
-    if (container.containerNumber !== payload.containerNumber) return container;
-    const items = container.items.map((item, index) => {
-      const match = resolved.get(index);
-      if (!match || (item.itemName === match.itemName && item.stockItemId === match.stockItemId)) return item;
-      changed = true;
-      return { ...item, itemName: match.itemName, stockItemId: match.stockItemId };
-    });
-    return changed ? { ...container, items } : container;
-  });
-  return changed ? { ...current, preview: containers } : current;
-}
-
-type POImportPayload = POImportPreview & {
-  containerNumber: string;
-  supplierId: number;
-  importDate: string;
-  exchangeRate?: string;
-  /** Explicit invoice currency for a USD/ZMW company; absent elsewhere. */
-  currency?: "USD" | "ZMW";
-  freightPaidBy: "supplier" | "parent";
-  freightParentAccountId: number | null;
-};
-
-function SupplierCombobox({
-  value,
-  onValueChange,
-  suppliers,
-  placeholder = "Select supplier",
-  testId,
-  isLoading = false,
-  hasError = false,
-}: SupplierComboboxProps) {
-  const [open, setOpen] = useState(false);
-  const selectedSupplier = suppliers.find((supplier) => supplier.id.toString() === value);
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          className="w-full justify-between"
-          data-testid={testId}
-          disabled={isLoading || hasError}
-        >
-          {isLoading
-            ? "Loading suppliers..."
-            : hasError
-              ? "Unable to load suppliers"
-              : selectedSupplier
-                ? selectedSupplier.legalName
-                : placeholder}
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-full p-0" align="start">
-        <Command>
-          <CommandInput placeholder="Search suppliers..." />
-          <CommandList>
-            <CommandEmpty>No supplier found for this company.</CommandEmpty>
-            <CommandGroup>
-              {suppliers.map((supplier) => (
-                <CommandItem
-                  key={supplier.id}
-                  value={supplier.legalName}
-                  onSelect={() => {
-                    onValueChange(supplier.id.toString());
-                    setOpen(false);
-                  }}
-                >
-                  <Check
-                    className={cn("mr-2 h-4 w-4", value === supplier.id.toString() ? "opacity-100" : "opacity-0")}
-                  />
-                  {supplier.legalName}
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
-  );
-}
+import {
+  formatCurrency,
+  draftStorageKey,
+  withResolvedStockItems,
+  SupplierCombobox,
+  type POImportItem,
+  type POImportContainer,
+  type POImportPreview,
+  type POValidationResult,
+  type POImportDraft,
+  type POImportPayload,
+} from "./poimport/poImportShared";
 
 function ErpPOImport() {
   const [, navigate] = useLocation();
@@ -628,11 +475,7 @@ function ErpPOImport() {
   return (
     <div className="space-y-4">
       <PageHeader title="PO Import (Excel)">
-        <Button
-          variant="outline"
-          asChild
-          data-testid="button-download-template"
-        >
+        <Button variant="outline" asChild data-testid="button-download-template">
           <a href="/api/po-import/template" download="po-import-template.xlsx">
             <Download className="w-4 h-4 mr-2" />
             Download Template
@@ -675,24 +518,32 @@ function ErpPOImport() {
 
           {preview && (
             <div className="space-y-4">
-              {selectedContainer && (/^FD-/i.test(selectedContainer.containerNumber) ||
-                selectedContainer.items.some(i => /^FDPO-/i.test(i.poNumber))) && (
-                <div className="rounded-lg border border-blue-300 bg-blue-50/70 p-4 text-sm dark:border-blue-800 dark:bg-blue-950/20" data-testid="factory-trip-po-import-notice">
-                  <p className="font-semibold">Factory Dispatch — manual truck PO import</p>
-                  <p className="mt-1">
-                    This Excel file represents one financially finalized Factory truck.
-                    You must select the exact ERP supplier code {selectedContainer.supplierCode ? (
-                      <strong className="font-mono">{selectedContainer.supplierCode}</strong>
-                    ) : "(shown in the file)"} and validate every article code before importing.
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    ERP articles are matched by exact code or alias, not a similar item name.
-                    If any code is missing, create the correct ERP article/alias first and validate again.
-                    Purchase rates and charges are independently valued for ERP; re-importing the same truck is blocked,
-                    even if its file name or rates change.
-                  </p>
-                </div>
-              )}
+              {selectedContainer &&
+                (/^FD-/i.test(selectedContainer.containerNumber) ||
+                  selectedContainer.items.some((i) => /^FDPO-/i.test(i.poNumber))) && (
+                  <div
+                    className="rounded-lg border border-blue-300 bg-blue-50/70 p-4 text-sm dark:border-blue-800 dark:bg-blue-950/20"
+                    data-testid="factory-trip-po-import-notice"
+                  >
+                    <p className="font-semibold">Factory Dispatch — manual truck PO import</p>
+                    <p className="mt-1">
+                      This Excel file represents one financially finalized Factory truck. You must select the exact ERP
+                      supplier code{" "}
+                      {selectedContainer.supplierCode ? (
+                        <strong className="font-mono">{selectedContainer.supplierCode}</strong>
+                      ) : (
+                        "(shown in the file)"
+                      )}{" "}
+                      and validate every article code before importing.
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      ERP articles are matched by exact code or alias, not a similar item name. If any code is missing,
+                      create the correct ERP article/alias first and validate again. Purchase rates and charges are
+                      independently valued for ERP; re-importing the same truck is blocked, even if its file name or
+                      rates change.
+                    </p>
+                  </div>
+                )}
               <Label>Step 2: Configure Import Details</Label>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
@@ -888,7 +739,12 @@ function ErpPOImport() {
                   </div>
                 </div>
                 <div className="rounded-md border">
-                  <ErpListTable pageKey="po-import-preview" companyId={selectedCompany?.id} showDensityControl={false} scrollLabel="PO import preview">
+                  <ErpListTable
+                    pageKey="po-import-preview"
+                    companyId={selectedCompany?.id}
+                    showDensityControl={false}
+                    scrollLabel="PO import preview"
+                  >
                     <TableHeader className="sticky top-0 z-30 bg-background">
                       <TableRow>
                         <TableHead>PO Number</TableHead>
