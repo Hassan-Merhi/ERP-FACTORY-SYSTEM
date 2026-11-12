@@ -362,6 +362,7 @@ export default function PropertiesIntercompanyPOImport() {
                     <TableHead>{copy.details}</TableHead>
                     <TableHead>{copy.total}</TableHead>
                     <TableHead>{copy.charges}</TableHead>
+                    <TableHead>{copy.landed}</TableHead>
                     <TableHead>{copy.destination}</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -379,6 +380,7 @@ export default function PropertiesIntercompanyPOImport() {
                         <TableCell>{container.itemsCount} / {container.posCount}</TableCell>
                         <TableCell>{currency(container.itemsTotal)}</TableCell>
                         <TableCell>{currency(container.chargesTotal)}</TableCell>
+                        <TableCell>{currency(container.itemsTotal + (selected?.chargesConfirmed ? container.chargesTotal : 0))}</TableCell>
                         <TableCell className="min-w-[220px] space-y-2">
                           <select
                             aria-label={`${copy.destination}: ${container.containerNumber}`}
