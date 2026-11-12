@@ -13,14 +13,10 @@ jobs:
   format:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: feature/properties-account-statement-whatsapp
           persist-credentials: true
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .node-version
-          cache: npm
       - run: npm ci --ignore-scripts
       - name: Format changed files
         run: |
