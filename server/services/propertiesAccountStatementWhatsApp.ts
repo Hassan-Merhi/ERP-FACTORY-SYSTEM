@@ -157,7 +157,7 @@ export async function sendPropertiesWaStatement(input: PropertiesWaSendInput) {
   if (!claim.rowCount) return { accepted: false, duplicate: true };
 
   const deliveryId = claim.rows[0].id;
-  let status: "accepted" | "failed" | "uncertain" = "uncertain";
+  let status: "accepted" | "failed" | "uncertain";
   let error: string | null = null;
   try {
     // Scoped server reads also protect background-scheduler sends.
@@ -209,7 +209,7 @@ export async function runScheduledPropertiesWaStatements(now = new Date()) {
     "SELECT * FROM properties_account_wa_schedules WHERE enabled = true"
   );
   for (const schedule of active.rows) {
-    let localDate: string | null = null;
+    let localDate: string | null;
     try {
       localDate = propertiesWaDue(schedule, now);
     } catch (error) {
