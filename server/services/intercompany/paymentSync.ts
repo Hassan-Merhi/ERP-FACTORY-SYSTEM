@@ -19,6 +19,7 @@ import { postErpVoucherTx, type ErpVoucherLine } from "../accounting/erpVoucherP
 import { normalizeCurrencyCode } from "../accounting/currencyAmounts";
 import { type EditIdentity, postingDay, rejectEdit, validateRequestKey, withTradeScope } from "./tradeSync";
 import { cents } from "./tradeRevisionMath";
+import { requirePairedCashAuthorization } from "./pairedPaymentAuthorization";
 import {
   exactManualAllocation,
   paymentBaseAmount,
@@ -175,6 +176,9 @@ export async function accessiblePaymentPair(relationshipId: number, actor: EditI
   ) {
     rejectEdit("No active paired intercompany payment relation in your company", "IC_PAYMENT_PAIR", 403);
   }
+  // Even a developer must have explicit finance membership in both companies
+  // before reading paired cash details or posting either bank/cash leg.
+  await requirePairedCashAuthorization(pair, actor);
   return pair;
 }
 async function activePaymentPairTx(tx: DbTransaction, id: number) {
