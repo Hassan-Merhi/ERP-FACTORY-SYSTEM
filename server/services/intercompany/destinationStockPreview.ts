@@ -1,5 +1,5 @@
 /** Read-only Phase 4 stock verification before committing a linked PO. */
-import { and, inArray } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 import { stockItemCodeAliases, stockItems } from "@shared/schema";
 import { db } from "../../db";
 import { eligibleDestinations, withinTrustedPair } from "./containerTradingImport";
