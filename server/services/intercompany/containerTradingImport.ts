@@ -121,7 +121,7 @@ function assertUsdPair(a: { baseCurrency: string | null }, b: { baseCurrency: st
   );
 }
 
-function withinTrustedPair<T>(source: number, destinations: number[], operation: () => Promise<T>): Promise<T> {
+export function withinTrustedPair<T>(source: number, destinations: number[], operation: () => Promise<T>): Promise<T> {
   const scope = getDatabaseScopeRuntimeContext();
   if (scope?.kind === "tenant" && scope.companyId !== source) {
     throw new TradingImportError(403, "Company context differs from authenticated Properties company");
