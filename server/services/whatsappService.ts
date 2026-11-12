@@ -348,7 +348,7 @@ export async function getStrictGreenMainWebhookReadiness(
         webhookHost = parsed.hostname;
         webhookEndpointMatches =
           ["hmdinternationalgroup.com", "erp-pos-system-copy.onrender.com"].includes(parsed.hostname) &&
-          parsed.pathname.replace(/\\/$/, "") === "/api/stock-transfer-order/wa-approval/webhook" &&
+          parsed.pathname.replace(/[/]$/, "") === "/api/stock-transfer-order/wa-approval/webhook" &&
           parsed.search === "" && parsed.hash === "" && !parsed.port;
       }
     } catch { /* malformed or secret-bearing URL: report only a boolean */ }
