@@ -58,11 +58,13 @@ jobs:
             tests/stock-transfer-order-wa-phase5-workbook.test.ts \
             tests/stock-transfer-order-wa-phase6-contract.test.ts \
             tests/stock-transfer-order-wa-phase6-policy.test.ts \
+            tests/stock-transfer-order-wa-request-db-error-regression.test.ts \
             tests/startup-schema-integrity.test.ts
-      - name: Verify schema and migrations registry
-        run: |
-          npm run verify:migrations
-          npm run verify:startup-migrations
+      - name: Verify migration registry (database startup tested in PostgreSQL job)
+        run: npm run verify:migrations
+        # verify:startup-migrations requires a running ERP HTTP server on :5000.
+        # This job does not start one; the independent disposable PostgreSQL
+        # certification validates actual startup SQL, RLS and constraints.
       - name: Build client and server without enabling jobs
         run: npm run build
 

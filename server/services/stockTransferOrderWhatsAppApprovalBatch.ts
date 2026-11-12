@@ -96,7 +96,11 @@ async function loadEligibleOrders(tx: DbTransaction, companyId: number, destinat
   `;
   // Consistent lock order keeps concurrent batch creation serialized. The
   // immutable revision service also locks the stock_transfer_vouchers row.
-  const result = await tx.execute(lock ? sql`${query} FOR UPDATE OF t,v` : query);
+  // Only the stock_transfer_vouchers row needs the approval serialization
+  // lock. Locking the linked posted voucher adds an unnecessary financial-row
+  // UPDATE lock and may hit stricter posted-voucher security/fiscal guards.
+  // All voucher fields are still verified by the join and frozen snapshot.
+  const result = await tx.execute(lock ? sql`${query} FOR UPDATE OF t` : query);
   return result.rows as IdRow[];
 }
 
