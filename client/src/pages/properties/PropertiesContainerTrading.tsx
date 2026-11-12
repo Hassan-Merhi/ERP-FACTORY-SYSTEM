@@ -75,16 +75,16 @@ interface ImportResult {
     landedTotal: string;
   }>;
 }
-type MappingKey =
-  | "sourceReceivableAccountId"
-  | "destinationPayableAccountId"
-  | "sourceSalesAccountId"
-  | "sourcePurchaseAccountId"
-  | "sourceCostAccountId"
-  | "sourceChargeAccrualAccountId"
-  | "destinationGitAccountId"
-  | "destinationSupplierId";
-type PartnerMapping = Record<MappingKey, string>;
+interface ProvisioningResult {
+  relationshipId: number;
+  destinationCompanyId: number;
+  tradeEnabled: boolean;
+  status: "configured" | "already_ready";
+  createdAccounts: number;
+  reusedAccounts: number;
+  createdSupplier: boolean;
+}
+
 interface ContainerSelection {
   relationshipId: string;
   chargesConfirmed: boolean;
@@ -92,16 +92,6 @@ interface ContainerSelection {
 }
 
 const ENDPOINT = "/api/intercompany-container-trading";
-const emptyMapping: PartnerMapping = {
-  sourceReceivableAccountId: "",
-  destinationPayableAccountId: "",
-  sourceSalesAccountId: "",
-  sourcePurchaseAccountId: "",
-  sourceCostAccountId: "",
-  sourceChargeAccrualAccountId: "",
-  destinationGitAccountId: "",
-  destinationSupplierId: "",
-};
 const currency = (value: number | string) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(value));
 
@@ -114,48 +104,10 @@ async function apiJson<T>(url: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-function AccountSelect({
-  label,
-  value,
-  onChange,
-  accounts,
-  companyId,
-  testId,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  accounts: Account[];
-  companyId: number;
-  testId: string;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <Label htmlFor={testId}>{label}</Label>
-      <select
-        id={testId}
-        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      >
-        <option value="">Choose a verified ledger account</option>
-        {accounts
-          .filter((a) => a.companyId === companyId)
-          .map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.code} — {a.name} ({a.accountType})
-            </option>
-          ))}
-      </select>
-    </div>
-  );
-}
-
 export default function PropertiesContainerTrading() {
   const { selectedCompany } = useCompany();
   const { toast } = useToast();
   const [target, setTarget] = useState("");
-  const [mapping, setMapping] = useState<PartnerMapping>(emptyMapping);
   const [file, setFile] = useState<File | null>(null);
   const [externalSupplierId, setExternalSupplierId] = useState("");
   const [importDate, setImportDate] = useState(new Date().toLocaleDateString("en-CA"));
@@ -178,10 +130,10 @@ export default function PropertiesContainerTrading() {
   const enabledPairs = (setup?.policies || []).filter(
     (p) => p.tradeEnabled && (setup?.destinations ?? []).some((d) => d.id === p.destinationCompanyId)
   );
+  const selectedPolicy = enabledPairs.find((policy) => policy.destinationCompanyId === Number(target));
 
   useEffect(() => {
     setTarget("");
-    setMapping(emptyMapping);
     setPreview(null);
     setSelections({});
     setResult(null);
@@ -191,24 +143,25 @@ export default function PropertiesContainerTrading() {
 
   const configure = useMutation({
     mutationFn: async () => {
-      if (!target || Object.values(mapping).some((v) => !v))
-        throw new Error("Choose a destination and every account / supplier mapping");
-      const res = await apiRequest("POST", ENDPOINT + "/relationships", {
+      if (!target) throw new Error("Choose an ERP destination company");
+      const res = await apiRequest("POST", ENDPOINT + "/relationships/auto", {
         destinationCompanyId: Number(target),
-        ...Object.fromEntries(Object.entries(mapping).map(([key, value]) => [key, Number(value)])),
       });
-      return res.json();
+      return (await res.json()) as ProvisioningResult;
     },
-    onSuccess: async () => {
+    onSuccess: async (data) => {
       toast({
-        title: "Trading partner configured",
-        description: "This company pair can now be selected during import.",
+        title: data.status === "already_ready" ? "Accounting setup verified" : "Trading partner ready",
+        description:
+          data.status === "already_ready"
+            ? "Existing company-pair accounts and supplier were reused."
+            : `${data.createdAccounts} account(s) created and ${data.reusedAccounts} reused. ${data.createdSupplier ? "Properties supplier created." : "Existing Properties supplier reused."}`,
       });
       await queryClient.invalidateQueries({ queryKey: companyQueryKey(ENDPOINT + "/setup", selectedCompany?.id) });
       await refetch();
     },
     onError: (error: Error) =>
-      toast({ title: "Configuration rejected", description: error.message, variant: "destructive" }),
+      toast({ title: "Automatic setup rejected", description: error.message, variant: "destructive" }),
   });
   const previewMutation = useMutation({
     mutationFn: async () => {
@@ -291,7 +244,6 @@ export default function PropertiesContainerTrading() {
     }));
   };
   const sourceId = setup?.sourceCompanyId ?? Number(selectedCompany?.id ?? 0);
-  const targetId = Number(target);
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 pb-10" data-testid="properties-container-trading">
@@ -315,11 +267,11 @@ export default function PropertiesContainerTrading() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Link2 className="h-5 w-5" /> Partner setup
+                <Link2 className="h-5 w-5" /> Automatic partner setup
               </CardTitle>
               <CardDescription>
-                Owners and Developers with permission in both companies must verify existing ledger accounts and the
-                destination supplier representing {selectedCompany?.name}. No accounts are created automatically.
+                Choose an ERP destination. The system automatically reuses verified company accounts and the Properties
+                supplier, creating any missing master data with zero opening balances. No vouchers or cash are posted.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -330,115 +282,50 @@ export default function PropertiesContainerTrading() {
                     id="ic-target"
                     className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
                     value={target}
-                    onChange={(e) => {
-                      setTarget(e.target.value);
-                      setMapping(emptyMapping);
-                    }}
+                    onChange={(e) => setTarget(e.target.value)}
                   >
                     <option value="">Choose company</option>
-                    {setup.destinations.map((c) => (
-                      <option value={c.id} key={c.id}>
-                        {c.name}
+                    {setup.destinations.map((company) => (
+                      <option value={company.id} key={company.id}>
+                        {company.name}
                       </option>
                     ))}
                   </select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Enabled destination pairs</Label>
-                  <p className="rounded-md border p-2 text-sm">
-                    {enabledPairs.length
-                      ? enabledPairs
-                          .map((p) => setup.destinations.find((c) => c.id === p.destinationCompanyId)?.name)
-                          .join(", ")
-                      : "None yet — configure a partner before import"}
+                  <Label>Accounting setup</Label>
+                  <p className="flex h-10 items-center rounded-md border px-3 text-sm" data-testid="ic-setup-status">
+                    {!target
+                      ? "Choose a destination"
+                      : selectedPolicy
+                        ? "Ready — accounts and supplier linked"
+                        : "Not configured — automatic setup available"}
                   </p>
                 </div>
               </div>
-              {!!target && (
-                <div className="grid gap-4 md:grid-cols-2">
-                  <AccountSelect
-                    label="Properties intercompany receivable"
-                    testId="ic-ar"
-                    companyId={sourceId}
-                    accounts={setup.accounts}
-                    value={mapping.sourceReceivableAccountId}
-                    onChange={(v) => setMapping((m) => ({ ...m, sourceReceivableAccountId: v }))}
-                  />
-                  <AccountSelect
-                    label="Destination intercompany payable"
-                    testId="ic-ap"
-                    companyId={targetId}
-                    accounts={setup.accounts}
-                    value={mapping.destinationPayableAccountId}
-                    onChange={(v) => setMapping((m) => ({ ...m, destinationPayableAccountId: v }))}
-                  />
-                  <AccountSelect
-                    label="Properties intercompany sales"
-                    testId="ic-sales"
-                    companyId={sourceId}
-                    accounts={setup.accounts}
-                    value={mapping.sourceSalesAccountId}
-                    onChange={(v) => setMapping((m) => ({ ...m, sourceSalesAccountId: v }))}
-                  />
-                  <AccountSelect
-                    label="Properties original purchases"
-                    testId="ic-purchases"
-                    companyId={sourceId}
-                    accounts={setup.accounts}
-                    value={mapping.sourcePurchaseAccountId}
-                    onChange={(v) => setMapping((m) => ({ ...m, sourcePurchaseAccountId: v }))}
-                  />
-                  <AccountSelect
-                    label="Properties cost of goods sold"
-                    testId="ic-cogs"
-                    companyId={sourceId}
-                    accounts={setup.accounts}
-                    value={mapping.sourceCostAccountId}
-                    onChange={(v) => setMapping((m) => ({ ...m, sourceCostAccountId: v }))}
-                  />
-                  <AccountSelect
-                    label="Properties confirmed charges payable"
-                    testId="ic-charges"
-                    companyId={sourceId}
-                    accounts={setup.accounts}
-                    value={mapping.sourceChargeAccrualAccountId}
-                    onChange={(v) => setMapping((m) => ({ ...m, sourceChargeAccrualAccountId: v }))}
-                  />
-                  <AccountSelect
-                    label="Destination goods in transit"
-                    testId="ic-git"
-                    companyId={targetId}
-                    accounts={setup.accounts}
-                    value={mapping.destinationGitAccountId}
-                    onChange={(v) => setMapping((m) => ({ ...m, destinationGitAccountId: v }))}
-                  />
-                  <div className="space-y-1.5 md:col-span-2">
-                    <Label htmlFor="ic-dest-supplier">Destination's supplier representing Properties</Label>
-                    <select
-                      id="ic-dest-supplier"
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                      value={mapping.destinationSupplierId}
-                      onChange={(e) => setMapping((m) => ({ ...m, destinationSupplierId: e.target.value }))}
-                    >
-                      <option value="">Choose existing supplier</option>
-                      {setup.suppliers
-                        .filter((s) => s.companyId === targetId)
-                        .map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.code} — {s.legalName}
-                          </option>
-                        ))}
-                    </select>
-                  </div>
-                </div>
-              )}
               <Button
                 onClick={() => configure.mutate()}
                 disabled={!target || configure.isPending}
                 data-testid="button-ic-configure"
               >
-                {configure.isPending ? "Verifying partnership…" : "Save verified partnership"}
+                {configure.isPending
+                  ? "Setting up company pair…"
+                  : selectedPolicy
+                    ? "Verify automatic setup"
+                    : "Enable intercompany trading"}
               </Button>
+              <p className="text-xs text-muted-foreground">
+                The destination's actual payable is held once in its Properties supplier subledger. Mapping accounts
+                support reconciliation without creating a second payable or stock movement.
+              </p>
+              <p className="text-xs text-muted-foreground" data-testid="ic-enabled-pairs">
+                Ready destinations:{" "}
+                {enabledPairs.length
+                  ? enabledPairs
+                      .map((policy) => setup.destinations.find((company) => company.id === policy.destinationCompanyId)?.name)
+                      .join(", ")
+                  : "None yet"}
+              </p>
             </CardContent>
           </Card>
 
