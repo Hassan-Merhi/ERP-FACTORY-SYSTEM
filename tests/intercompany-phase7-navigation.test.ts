@@ -142,8 +142,9 @@ describe("Phase 7 retired intercompany navigation and protected compatibility", 
     expect(details).toContain("PropertiesIntercompanyContainerWorkflow containerId={container.id}");
     expect(panel).toContain("<LinkedTradesEditor physicalContainerId={containerId} embedded />");
     expect(panel).toContain("<IntercompanyLifecycle physicalContainerId={containerId} embedded />");
-    expect(vouchers).toContain('activeTab === "intercompany"');
-    expect(vouchers).toContain("<IntercompanyVoucherTransfer embedded />");
+    expect(vouchers).not.toContain('activeTab === "intercompany"');
+    expect(vouchers).toContain("useNormalIntercompanyVoucher");
+    expect(vouchers).toContain("normalIntercompany.buildMirror()");
     expect(vouchers).toContain("<PaymentVoucherTab");
     expect(payment).toContain('BASE + "/confirm"');
     expect(payment).toContain('BASE + "/" + reversing + "/reverse"');
