@@ -9,6 +9,8 @@ import {
   BarChart2,
   UserRound,
   Package,
+  Truck,
+  Users,
 } from "lucide-react";
 import { Sidebar, SidebarContent } from "@/components/ui/sidebar";
 import { useMemo } from "react";
@@ -52,6 +54,15 @@ export const PROPERTIES_NAV_SECTIONS: NavSection[] = [
       { title: "Accounts", url: "/properties/accounts", icon: Landmark },
       { title: "Vouchers", url: "/properties/vouchers", icon: FileText },
       { title: "Analytics", url: "/properties/analytics", icon: BarChart2 },
+    ],
+  },
+  {
+    label: "Logistics",
+    color: NAV_COLOR.finance,
+    items: [
+      { title: "Tracking", url: "/properties/tracking", icon: Truck },
+      { title: "Containers", url: "/properties/containers", icon: Package },
+      { title: "Suppliers", url: "/properties/suppliers", icon: Users },
     ],
   },
   {
