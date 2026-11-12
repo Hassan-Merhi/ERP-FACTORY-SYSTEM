@@ -35,9 +35,20 @@ describe("Stock Transfer Order WhatsApp approval request fix", () => {
     expect(route).toContain("getActiveCompanyPermissionContext(req)");
   });
 
-  it("logs SQLSTATE and exact failed stage without disclosing SQL or WhatsApp credentials", () => {
+  it("labels every snapshot database operation and logs safe PostgreSQL type diagnostics", () => {
+    for (const step of [
+      "read_approval_settings", "read_destination_recipient", "lock_and_read_eligible_orders",
+      "check_active_reservations", "read_pending_revisions", "read_current_stock_transfer_lines",
+      "insert_batch_header", "insert_batch_order_item", "insert_batch_revision",
+      "insert_draft_audit_event", "commit_snapshot_transaction",
+    ]) expect(batch).toContain("failedStep = \"" + step + "\"");
     expect(route).toContain("function stockTransferApprovalSqlFailure(error: unknown)");
     expect(route).toContain("sqlState:sqlFailure.sqlState");
+    expect(route).toContain("dataType:sqlFailure.dataType");
+    expect(route).toContain("routine:sqlFailure.routine");
+    expect(route).toContain('sqlFailure.step ? "/" + sqlFailure.step : ""');
+    expect(route).not.toContain("internalQuery:");
+    expect(route).not.toContain("detail:");
     expect(route).toContain('stage="freeze_order_revision_snapshot"');
     expect(route).toContain('stage="verify_immutable_batch"');
     expect(route).toContain('stage="format_approval_message"');
