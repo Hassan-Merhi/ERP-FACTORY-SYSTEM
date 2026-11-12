@@ -25,7 +25,6 @@ import {
   fetchGreenApiChats,
   sendWhatsAppFile,
   sendWhatsAppFileToChatId,
-  getGreenInstanceState,
   getStrictGreenMainInstanceState,
 } from "../services/whatsappService";
 import { generateNetPositionExcel, generateMonthEnds } from "../helpers/generateNetPositionExcel";
@@ -290,7 +289,9 @@ export function registerWhatsAppRoutes(app: Express) {
       if (!s?.instanceId || !s?.apiToken) {
         return res.json({ state: "notConfigured" });
       }
-      const state = await getGreenInstanceState(s.instanceId, s.apiToken);
+      // Check this exact POS account only; an authorized backup account
+      // must never mask an invalid POS token or unauthorized POS instance.
+      const state = await getStrictGreenMainInstanceState(s.instanceId, s.apiToken);
       res.json({ state });
     } catch (err: unknown) {
       res.status(500).json({ message: getErrorMessage(err) });

@@ -15,7 +15,12 @@ import { enforcePosOperationalPermissionScope } from "../middleware/posOperation
 import { generateInvoicePdfMeta } from "../helpers/generateInvoicePdf";
 import { generateStockPdf } from "../helpers/generateStockPdf";
 import { getErpExportVisibility } from "../helpers/exportVisibility";
-import { getPosWaSettings, getWaSettingsById, sendWhatsAppFileByUploadPos } from "../services/whatsappService";
+import {
+  getPosWaSettings,
+  getWaSettingsById,
+  getGreenApiHost,
+  sendWhatsAppFileByUploadPos,
+} from "../services/whatsappService";
 import {
   companies,
   factoryAccountWhatsappRules,
@@ -139,7 +144,7 @@ async function sendFileByUrlAttempt({
 }): Promise<FastUrlAttempt> {
   const token = storeFastAttachment(buffer, fileName, contentType);
   const fileUrl = `${publicBaseUrl}/api/whatsapp/fast-file/${token}`;
-  const apiUrl = `https://api.green-api.com/waInstance${settings.instanceId}/sendFileByUrl/${settings.apiToken}`;
+  const apiUrl = `${getGreenApiHost(settings.instanceId)}/waInstance${settings.instanceId}/sendFileByUrl/${settings.apiToken}`;
   const startedAt = Date.now();
 
   try {
