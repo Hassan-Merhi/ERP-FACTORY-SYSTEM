@@ -40,7 +40,8 @@ const en = {
   evidencePlaceholder: "Reference required when confirming charges",
   chargeWarning: "Unconfirmed charges are excluded from the posted landed cost.",
   ready: "Step 3: Confirm intercompany import",
-  readyExplanation: "Accounts and the Properties supplier are created or reused for each destination. At-cost linked POs and balanced vouchers are posted atomically. No cash or stock receiving is recorded.",
+  readyExplanation:
+    "Accounts and the Properties supplier are created or reused for each destination. At-cost linked POs and balanced vouchers are posted atomically. No cash or stock receiving is recorded.",
   confirm: "Import and link purchase orders",
   confirming: "Creating linked purchase orders…",
   clear: "Clear preview",
@@ -78,7 +79,8 @@ const strings: Record<ApplicationLanguage, Labels> = {
     title: "Importer des bons de commande",
     subtitle: "Importez le fichier Excel habituel du fournisseur, puis attribuez chaque conteneur à sa société ERP.",
     uploadTitle: "Excel des bons de commande",
-    uploadDescription: "Utilisez le modèle Excel d'importation existant. Chaque conteneur physique appartient une seule fois à Propriétés.",
+    uploadDescription:
+      "Utilisez le modèle Excel d'importation existant. Chaque conteneur physique appartient une seule fois à Propriétés.",
     chooseFile: "Étape 1 : choisir le fichier Excel (.xlsx)",
     parse: "Lire et prévisualiser",
     parsing: "Lecture du fichier…",
@@ -103,7 +105,8 @@ const strings: Record<ApplicationLanguage, Labels> = {
     evidencePlaceholder: "Référence requise pour confirmer les frais",
     chargeWarning: "Les frais non confirmés ne sont pas inclus dans le coût rendu comptabilisé.",
     ready: "Étape 3 : confirmer l'importation intersociétés",
-    readyExplanation: "Les comptes et le fournisseur Propriétés sont réutilisés ou créés. Les BC et écritures équilibrées sont enregistrés ensemble au coût réel, sans transfert de trésorerie ni réception de stock.",
+    readyExplanation:
+      "Les comptes et le fournisseur Propriétés sont réutilisés ou créés. Les BC et écritures équilibrées sont enregistrés ensemble au coût réel, sans transfert de trésorerie ni réception de stock.",
     confirm: "Importer et lier les bons de commande",
     confirming: "Création des bons de commande liés…",
     clear: "Effacer l'aperçu",
@@ -113,7 +116,8 @@ const strings: Record<ApplicationLanguage, Labels> = {
     batch: "Lot",
     linked: "Conteneurs liés",
     destinationPo: "BC destinataire",
-    noDestinations: "Aucune société ERP autorisée. L'accès Propriétaire/Développeur est requis dans la société destinataire.",
+    noDestinations:
+      "Aucune société ERP autorisée. L'accès Propriétaire/Développeur est requis dans la société destinataire.",
     missingSupplier: "Créez ou sélectionnez un fournisseur externe dans Propriétés.",
     noFile: "Sélectionnez d'abord le fichier Excel.",
     stale: "La société a changé. Relancez l'aperçu dans la société Propriétés correcte.",
@@ -124,7 +128,8 @@ const strings: Record<ApplicationLanguage, Labels> = {
     selected: "Sélectionné :",
     code: "Code",
     noPreview: "Lisez le fichier pour afficher les conteneurs.",
-    checkCurrency: "L'importation intersociétés prend actuellement en charge les sociétés et les données sources en USD.",
+    checkCurrency:
+      "L'importation intersociétés prend actuellement en charge les sociétés et les données sources en USD.",
     sourceNote: "Un conteneur physique reste dans Propriétés, avec une seule société ERP destinataire.",
     incomplete: "Choisissez le fournisseur, la destination par défaut et les destinations de chaque conteneur.",
     rerunBlocked: "Le serveur refuse d'importer une seconde fois un conteneur déjà importé.",
@@ -161,7 +166,8 @@ const strings: Record<ApplicationLanguage, Labels> = {
     evidencePlaceholder: "المرجع مطلوب عند تأكيد الرسوم",
     chargeWarning: "لا تُحتسب الرسوم غير المؤكدة في التكلفة المسجلة.",
     ready: "الخطوة ٣: تأكيد الاستيراد بين الشركات",
-    readyExplanation: "يُنشئ النظام الحسابات والمورّد أو يعيد استخدامها، ويسجل أوامر الشراء والقيود المتوازنة بالتكلفة الفعلية في عملية واحدة دون تحريك نقد أو استلام مخزون.",
+    readyExplanation:
+      "يُنشئ النظام الحسابات والمورّد أو يعيد استخدامها، ويسجل أوامر الشراء والقيود المتوازنة بالتكلفة الفعلية في عملية واحدة دون تحريك نقد أو استلام مخزون.",
     confirm: "استيراد وربط أوامر الشراء",
     confirming: "جارٍ إنشاء أوامر الشراء المرتبطة…",
     clear: "مسح المعاينة",

@@ -39,9 +39,7 @@ export function updatePropertiesDefaultDestination(
   return Object.fromEntries(
     Object.entries(current).map(([containerNumber, selection]) => [
       containerNumber,
-      selection.overridden
-        ? selection
-        : { ...selection, destinationCompanyId: newDefaultCompanyId },
+      selection.overridden ? selection : { ...selection, destinationCompanyId: newDefaultCompanyId },
     ])
   );
 }
@@ -99,8 +97,7 @@ export function validatePropertiesImportSelections(
     unique.add(normalized);
     const selected = destinations[container.containerNumber];
     const destinationCompanyId = Number(selected?.destinationCompanyId);
-    if (!selected || !Number.isSafeInteger(destinationCompanyId) ||
-        !permittedCompanyIds.has(destinationCompanyId)) {
+    if (!selected || !Number.isSafeInteger(destinationCompanyId) || !permittedCompanyIds.has(destinationCompanyId)) {
       throw new Error(PROPERTIES_PO_IMPORT_ERRORS.unauthorizedDestination + " " + container.containerNumber);
     }
     const chargeEvidenceReference = selected.chargeEvidenceReference.trim();

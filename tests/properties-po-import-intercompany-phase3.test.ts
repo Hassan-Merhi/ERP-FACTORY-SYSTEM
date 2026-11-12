@@ -20,36 +20,50 @@ const containers = [
 
 describe("Properties normal PO Import intercompany destinations", () => {
   it("applies one default to every container without any duplicate assignments", () => {
-    const selections = initializePropertiesDestinations(containers.map((entry) => entry.containerNumber), "30");
+    const selections = initializePropertiesDestinations(
+      containers.map((entry) => entry.containerNumber),
+      "30"
+    );
     const validated = validatePropertiesImportSelections(containers, selections, new Set([30, 31]));
     expect(validated.map((entry) => entry.destinationCompanyId)).toEqual([30, 30, 30]);
     expect(validated.every((entry) => entry.chargesConfirmed === false)).toBe(true);
   });
 
   it("preserves individual overrides when the global default changes", () => {
-    let selections = initializePropertiesDestinations(containers.map((entry) => entry.containerNumber), "30");
+    let selections = initializePropertiesDestinations(
+      containers.map((entry) => entry.containerNumber),
+      "30"
+    );
     selections = updatePropertiesContainerDestination(selections, "TEST-CONT-002", "31", "30");
     selections = updatePropertiesDefaultDestination(selections, "32");
     expect(
-      validatePropertiesImportSelections(containers, selections, new Set([30, 31, 32]))
-        .map((entry) => entry.destinationCompanyId)
+      validatePropertiesImportSelections(containers, selections, new Set([30, 31, 32])).map(
+        (entry) => entry.destinationCompanyId
+      )
     ).toEqual([32, 31, 32]);
     selections = updatePropertiesContainerDestination(selections, "TEST-CONT-002", null, "32");
     expect(
-      validatePropertiesImportSelections(containers, selections, new Set([30, 31, 32]))
-        .map((entry) => entry.destinationCompanyId)
+      validatePropertiesImportSelections(containers, selections, new Set([30, 31, 32])).map(
+        (entry) => entry.destinationCompanyId
+      )
     ).toEqual([32, 32, 32]);
   });
 
   it("refuses unknown company IDs, missing selections, and duplicate physical containers", () => {
-    const original = initializePropertiesDestinations(containers.map((entry) => entry.containerNumber), "30");
+    const original = initializePropertiesDestinations(
+      containers.map((entry) => entry.containerNumber),
+      "30"
+    );
     expect(() => validatePropertiesImportSelections(containers, original, new Set([31]))).toThrow(
       "authorized ERP destination"
     );
     expect(() => validatePropertiesImportSelections(containers, {}, new Set([30]))).toThrow("Review every container");
     expect(() =>
       validatePropertiesImportSelections(
-        [{ containerNumber: "ABC", chargesTotal: 0 }, { containerNumber: "abc", chargesTotal: 0 }],
+        [
+          { containerNumber: "ABC", chargesTotal: 0 },
+          { containerNumber: "abc", chargesTotal: 0 },
+        ],
         initializePropertiesDestinations(["ABC", "abc"], "30"),
         new Set([30])
       )
@@ -57,7 +71,10 @@ describe("Properties normal PO Import intercompany destinations", () => {
   });
 
   it("requires evidence for confirmed nonzero charges but never fabricates it", () => {
-    let selections = initializePropertiesDestinations(containers.map((entry) => entry.containerNumber), "30");
+    let selections = initializePropertiesDestinations(
+      containers.map((entry) => entry.containerNumber),
+      "30"
+    );
     selections = updatePropertiesContainerCharges(selections, "TEST-CONT-001", { chargesConfirmed: true });
     expect(() => validatePropertiesImportSelections(containers, selections, new Set([30]))).toThrow(
       "evidence reference"

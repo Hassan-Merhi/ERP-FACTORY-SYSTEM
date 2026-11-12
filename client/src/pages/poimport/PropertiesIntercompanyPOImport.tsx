@@ -106,7 +106,11 @@ export default function PropertiesIntercompanyPOImport() {
   const [outcome, setOutcome] = useState<ImportOutcome | null>(null);
   const [fileInputVersion, setFileInputVersion] = useState(0);
 
-  const { data: setup, isPending: setupLoading, error: setupError } = useQuery<TradingSetup>({
+  const {
+    data: setup,
+    isPending: setupLoading,
+    error: setupError,
+  } = useQuery<TradingSetup>({
     queryKey: companyQueryKey(`${API}/setup`, companyId),
     enabled: companyId > 0 && selectedCompany?.companyType === "properties",
     queryFn: async () => {
@@ -143,7 +147,10 @@ export default function PropertiesIntercompanyPOImport() {
       setPreview(parsed);
       setPreviewCompanyId(variables.requestedCompanyId);
       setDestinations(
-        initializePropertiesDestinations(parsed.containers.map((container) => container.containerNumber), defaultDestinationId)
+        initializePropertiesDestinations(
+          parsed.containers.map((container) => container.containerNumber),
+          defaultDestinationId
+        )
       );
       setOutcome(null);
       toast({ title: copy.parsed, description: [parsed.containers.length, copy.container.toLowerCase()].join(" ") });
@@ -157,8 +164,12 @@ export default function PropertiesIntercompanyPOImport() {
         throw new Error(copy.stale);
       }
       if (!file) throw new Error(copy.noFile);
-      if (!supplierId || !setup?.suppliers.some((supplier) => supplier.companyId === requestedCompanyId &&
-        supplier.id === Number(supplierId))) {
+      if (
+        !supplierId ||
+        !setup?.suppliers.some(
+          (supplier) => supplier.companyId === requestedCompanyId && supplier.id === Number(supplierId)
+        )
+      ) {
         throw new Error(copy.missingSupplier);
       }
       if (!/^\d{4}-\d{2}-\d{2}$/.test(importDate)) throw new Error(copy.importDate);
@@ -257,7 +268,11 @@ export default function PropertiesIntercompanyPOImport() {
         {copy.sourceNote}
       </div>
 
-      {setupError && <p role="alert" className="text-destructive">{(setupError as Error).message}</p>}
+      {setupError && (
+        <p role="alert" className="text-destructive">
+          {(setupError as Error).message}
+        </p>
+      )}
       {setupLoading && <p className="text-sm text-muted-foreground">{copy.parsing}</p>}
 
       <Card>
@@ -294,9 +309,15 @@ export default function PropertiesIntercompanyPOImport() {
               {copy.supplierLink}
             </Button>
           </div>
-          {file && <p className="text-xs text-muted-foreground">{copy.selected} {file.name}</p>}
+          {file && (
+            <p className="text-xs text-muted-foreground">
+              {copy.selected} {file.name}
+            </p>
+          )}
           {setup && setup.destinations.length === 0 && (
-            <p role="alert" className="text-sm text-destructive">{copy.noDestinations}</p>
+            <p role="alert" className="text-sm text-destructive">
+              {copy.noDestinations}
+            </p>
           )}
           <div className="grid gap-4 md:grid-cols-3">
             <div className="space-y-2">
@@ -310,9 +331,13 @@ export default function PropertiesIntercompanyPOImport() {
                 data-testid="select-supplier"
               >
                 <option value="">{copy.chooseSupplier}</option>
-                {(setup?.suppliers ?? []).filter((supplier) => supplier.companyId === companyId).map((supplier) => (
-                  <option value={supplier.id} key={supplier.id}>{supplier.code} — {supplier.legalName}</option>
-                ))}
+                {(setup?.suppliers ?? [])
+                  .filter((supplier) => supplier.companyId === companyId)
+                  .map((supplier) => (
+                    <option value={supplier.id} key={supplier.id}>
+                      {supplier.code} — {supplier.legalName}
+                    </option>
+                  ))}
               </select>
               {setup && !setup.suppliers.some((supplier) => supplier.companyId === companyId) && (
                 <p className="text-xs text-destructive">{copy.noSuppliers}</p>
@@ -340,7 +365,9 @@ export default function PropertiesIntercompanyPOImport() {
               >
                 <option value="">{copy.chooseDestination}</option>
                 {(setup?.destinations ?? []).map((company) => (
-                  <option key={company.id} value={company.id}>{company.code} — {company.name}</option>
+                  <option key={company.id} value={company.id}>
+                    {company.code} — {company.name}
+                  </option>
                 ))}
               </select>
               <p className="text-xs text-muted-foreground">{copy.destinationHelp}</p>
@@ -374,17 +401,26 @@ export default function PropertiesIntercompanyPOImport() {
                   {preview.containers.map((container) => {
                     const selected = destinations[container.containerNumber];
                     return (
-                      <TableRow key={container.containerNumber} data-testid={`po-container-${container.containerNumber}`}>
+                      <TableRow
+                        key={container.containerNumber}
+                        data-testid={`po-container-${container.containerNumber}`}
+                      >
                         <TableCell className="font-medium">
                           {container.containerNumber}
                           {container.supplierCode && (
-                            <div className="text-xs text-muted-foreground">{copy.code}: {container.supplierCode}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {copy.code}: {container.supplierCode}
+                            </div>
                           )}
                         </TableCell>
-                        <TableCell>{container.itemsCount} / {container.posCount}</TableCell>
+                        <TableCell>
+                          {container.itemsCount} / {container.posCount}
+                        </TableCell>
                         <TableCell>{currency(container.itemsTotal)}</TableCell>
                         <TableCell>{currency(container.chargesTotal)}</TableCell>
-                        <TableCell>{currency(container.itemsTotal + (selected?.chargesConfirmed ? container.chargesTotal : 0))}</TableCell>
+                        <TableCell>
+                          {currency(container.itemsTotal + (selected?.chargesConfirmed ? container.chargesTotal : 0))}
+                        </TableCell>
                         <TableCell className="min-w-[220px] space-y-2">
                           <select
                             aria-label={`${copy.destination}: ${container.containerNumber}`}
@@ -392,31 +428,40 @@ export default function PropertiesIntercompanyPOImport() {
                             value={selected?.overridden ? selected.destinationCompanyId : "__default"}
                             disabled={importMutation.isPending}
                             data-testid={`select-destination-${container.containerNumber}`}
-                            onChange={(event) => setDestinations((current) =>
-                              updatePropertiesContainerDestination(
-                                current,
-                                container.containerNumber,
-                                event.target.value === "__default" ? null : event.target.value,
-                                defaultDestinationId
+                            onChange={(event) =>
+                              setDestinations((current) =>
+                                updatePropertiesContainerDestination(
+                                  current,
+                                  container.containerNumber,
+                                  event.target.value === "__default" ? null : event.target.value,
+                                  defaultDestinationId
+                                )
                               )
-                            )}
+                            }
                           >
-                            <option value="__default">{copy.followDefault} {defaultDestinationId
-                              ? `(${setup?.destinations.find((company) => String(company.id) === defaultDestinationId)?.name ?? ""})`
-                              : ""}</option>
+                            <option value="__default">
+                              {copy.followDefault}{" "}
+                              {defaultDestinationId
+                                ? `(${setup?.destinations.find((company) => String(company.id) === defaultDestinationId)?.name ?? ""})`
+                                : ""}
+                            </option>
                             {(setup?.destinations ?? []).map((company) => (
-                              <option key={company.id} value={company.id}>{company.name}</option>
+                              <option key={company.id} value={company.id}>
+                                {company.name}
+                              </option>
                             ))}
                           </select>
                           <Label className="flex items-center gap-2 text-xs">
                             <Checkbox
                               checked={Boolean(selected?.chargesConfirmed)}
                               disabled={importMutation.isPending}
-                              onCheckedChange={(checked) => setDestinations((current) =>
-                                updatePropertiesContainerCharges(current, container.containerNumber, {
-                                  chargesConfirmed: checked === true,
-                                })
-                              )}
+                              onCheckedChange={(checked) =>
+                                setDestinations((current) =>
+                                  updatePropertiesContainerCharges(current, container.containerNumber, {
+                                    chargesConfirmed: checked === true,
+                                  })
+                                )
+                              }
                             />
                             {copy.confirmCharges}
                           </Label>
@@ -426,11 +471,13 @@ export default function PropertiesIntercompanyPOImport() {
                               placeholder={copy.evidencePlaceholder}
                               value={selected.chargeEvidenceReference}
                               disabled={importMutation.isPending}
-                              onChange={(event) => setDestinations((current) =>
-                                updatePropertiesContainerCharges(current, container.containerNumber, {
-                                  chargeEvidenceReference: event.target.value,
-                                })
-                              )}
+                              onChange={(event) =>
+                                setDestinations((current) =>
+                                  updatePropertiesContainerCharges(current, container.containerNumber, {
+                                    chargeEvidenceReference: event.target.value,
+                                  })
+                                )
+                              }
                             />
                           )}
                           {!selected?.chargesConfirmed && container.chargesTotal !== 0 && (
@@ -468,7 +515,9 @@ export default function PropertiesIntercompanyPOImport() {
                 </Button>
               </div>
             </div>
-            <p className="text-xs text-muted-foreground">{copy.readyExplanation} {copy.rerunBlocked}</p>
+            <p className="text-xs text-muted-foreground">
+              {copy.readyExplanation} {copy.rerunBlocked}
+            </p>
           </CardContent>
         </Card>
       )}
@@ -480,7 +529,8 @@ export default function PropertiesIntercompanyPOImport() {
               <PackageCheck className="h-5 w-5" /> {copy.posted}
             </CardTitle>
             <CardDescription>
-              {copy.batch}: {outcome.batchId} · {copy.linked}: {outcome.containerCount} · {currency(outcome.totalIntercompanyCost)}
+              {copy.batch}: {outcome.batchId} · {copy.linked}: {outcome.containerCount} ·{" "}
+              {currency(outcome.totalIntercompanyCost)}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -497,7 +547,10 @@ export default function PropertiesIntercompanyPOImport() {
                 {outcome.containers.map((row) => (
                   <TableRow key={row.containerNumber}>
                     <TableCell>{row.containerNumber}</TableCell>
-                    <TableCell>{setup?.destinations.find((company) => company.id === row.destinationCompanyId)?.name ?? row.destinationCompanyId}</TableCell>
+                    <TableCell>
+                      {setup?.destinations.find((company) => company.id === row.destinationCompanyId)?.name ??
+                        row.destinationCompanyId}
+                    </TableCell>
                     <TableCell>{row.destinationPoId}</TableCell>
                     <TableCell>{currency(row.landedTotal)}</TableCell>
                   </TableRow>
@@ -506,7 +559,9 @@ export default function PropertiesIntercompanyPOImport() {
             </Table>
             <div className="flex flex-wrap gap-2">
               <Button onClick={() => navigate("/properties/containers")}>{copy.openContainers}</Button>
-              <Button variant="outline" onClick={() => navigate("/properties/tracking")}>{copy.openTracking}</Button>
+              <Button variant="outline" onClick={() => navigate("/properties/tracking")}>
+                {copy.openTracking}
+              </Button>
             </div>
           </CardContent>
         </Card>
