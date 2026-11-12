@@ -158,6 +158,7 @@ export function registerIntercompanyContainerTradingRoutes(app: Express) {
           await postIntercompanyImport({
             sourceCompanyId: companyId,
             userId,
+            username: req.session.username || "unknown",
             role,
             preview: parsed,
             input,
