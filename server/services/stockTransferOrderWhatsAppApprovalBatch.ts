@@ -41,6 +41,16 @@ function fail(code: string, message: string): never {
   throw new StockTransferOrderApprovalError(code, message);
 }
 
+/**
+ * Drizzle raw SQL binds a JavaScript number[] as a scalar in this query shape.
+ * PostgreSQL then receives e.g. "944" for an integer[] cast and raises 22P02.
+ * Build a parameterized ARRAY constructor so every ID is sent as an integer.
+ */
+function integerIdArray(ids: readonly number[]) {
+  if (!ids.length) fail("STO_WA_BAD_SELECTION", "At least one transfer order is required.");
+  return sql`ARRAY[${sql.join(ids.map((id) => sql`${id}`), sql`, `)}]::integer[]`;
+}
+
 function safeIds(ids: readonly number[]): number[] {
   if (!Array.isArray(ids) || ids.length < 1 || ids.length > MAX_ORDERS ||
       ids.some((v) => !Number.isSafeInteger(v) || v <= 0) ||
@@ -75,7 +85,7 @@ async function loadLines(tx: DbTransaction, transferIds: number[]): Promise<Map<
            ti.quantity::text AS quantity, ti.rate::text AS rate,
            ti.total_amount::text AS total_amount
       FROM stock_transfer_items ti
-     WHERE ti.transfer_id = ANY(${transferIds}::integer[])
+     WHERE ti.transfer_id = ANY(${integerIdArray(transferIds)})
      ORDER BY ti.transfer_id, ti.stock_item_id, ti.source_location_id, ti.id
   `);
   return lineHashes(result.rows as LineRow[]);
@@ -91,7 +101,7 @@ async function loadEligibleOrders(tx: DbTransaction, companyId: number, destinat
        AND v.voucher_type='Stock Transfer'
        AND t.workflow_origin='stock_transfer_order'
        AND t.destination_location_id=${destinationId}
-       AND t.id=ANY(${transferIds}::integer[])
+       AND t.id=ANY(${integerIdArray(transferIds)})
      ORDER BY t.id
   `;
   // Consistent lock order keeps concurrent batch creation serialized. The
@@ -109,7 +119,7 @@ async function loadPendingRevisions(tx: DbTransaction, transferIds: number[]): P
     SELECT r.transfer_id, r.id AS revision_id, r.revision_number,
            r.payload_hash
       FROM stock_transfer_revisions r
-     WHERE r.transfer_id=ANY(${transferIds}::integer[])
+     WHERE r.transfer_id=ANY(${integerIdArray(transferIds)})
        AND r.status='pending'
      ORDER BY r.transfer_id, r.revision_number, r.id
   `);
@@ -186,7 +196,7 @@ export async function createStockTransferOrderApprovalDraft(
     failedStep = "check_active_reservations";
     const conflicts = await tx.execute(sql`
       SELECT transfer_id FROM stock_transfer_order_approval_batch_items
-       WHERE company_id=${companyId} AND transfer_id=ANY(${ids}::integer[])
+       WHERE company_id=${companyId} AND transfer_id=ANY(${integerIdArray(ids)})
          AND reservation_active=true
        LIMIT 1
     `);
