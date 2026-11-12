@@ -54,7 +54,16 @@ interface PosInstanceSettings {
 }
 
 type InstanceState =
-  "authorized" | "notAuthorized" | "sleepMode" | "starting" | "yellowCard" | "blocked" | "suspended" | "invalidCredentials" | "notConfigured" | "unknown";
+  | "authorized"
+  | "notAuthorized"
+  | "sleepMode"
+  | "starting"
+  | "yellowCard"
+  | "blocked"
+  | "suspended"
+  | "invalidCredentials"
+  | "notConfigured"
+  | "unknown";
 
 function InstanceStateBadge({ state, loading }: { state: InstanceState | undefined; loading: boolean }) {
   if (loading) {
@@ -103,9 +112,17 @@ function InstanceStateBadge({ state, loading }: { state: InstanceState | undefin
     );
   }
   if (state === "blocked" || state === "suspended" || state === "invalidCredentials") {
-    const label = state === "blocked" ? "WhatsApp blocked" : state === "suspended" ? "Sending suspended" : "Invalid API credentials";
+    const label = {
+      blocked: "WhatsApp blocked",
+      suspended: "Sending suspended",
+      invalidCredentials: "Invalid API credentials",
+    }[state];
     return (
-      <Badge variant="secondary" className="gap-1 text-red-700 bg-red-100 dark:bg-red-950 dark:text-red-300" data-testid="badge-instance-state">
+      <Badge
+        variant="secondary"
+        className="gap-1 text-red-700 bg-red-100 dark:bg-red-950 dark:text-red-300"
+        data-testid="badge-instance-state"
+      >
         <XCircle className="h-3 w-3" />
         {label}
       </Badge>
@@ -342,12 +359,12 @@ export function PosWhatsAppSection() {
           </div>
           {instanceStateData?.state === "unknown" && (
             <p className="text-xs text-amber-700 dark:text-amber-400 mt-2">
-              Green API did not return a recognizable connection state. Check the instance host and server logs. This does not mean the account is unauthorized.
+              Green API did not return a valid status. Check the instance host and Render logs.
             </p>
           )}
           {instanceStateData?.state === "invalidCredentials" && (
             <p className="text-xs text-red-700 dark:text-red-400 mt-2">
-              Green API rejected the POS instance credentials. Confirm the instance ID and token in your Green API console.
+              Green API rejected this POS token. Check the instance ID and token in your Green API console.
             </p>
           )}
           {instanceStateData?.state === "sleepMode" && (
