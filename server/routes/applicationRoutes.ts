@@ -50,6 +50,7 @@ import { registerTicketRoutes } from "./ticketRoutes";
 import { registerPasskeyRoutes } from "./passkeyRoutes";
 import { registerPosRoutes } from "./posRoutes";
 import { registerPropertiesRentalRoutes } from "./propertiesRentalRoutes";
+import { registerPropertiesAccountStatementWhatsAppRoutes } from "./propertiesAccountStatementWhatsAppRoutes";
 import { registerRemoteControlSessionRoutes } from "./remoteControlSessionRoutes";
 import { registerRemoteKeyboardControlRoutes } from "./remoteKeyboardControlRoutes";
 import { registerRemoteSupportAuditRoutes } from "./remoteSupportAuditRoutes";
@@ -101,12 +102,10 @@ export async function registerApplicationRoutes(app: Express): Promise<Server> {
   installRemoteSupportSessionStopAudit();
   registerWriteInvalidationSignal(app);
   registerPermissionBoundaryRoutes(app);
-  // Shared ERP accounting endpoints are reused inside Factory pages. Enforce
-  // their Factory page/tab ownership before any concrete route handler runs.
+  // Enforce Factory ownership before shared accounting routes.
   app.use(enforceSharedFactoryAccess);
   app.use("/api/cost-centers", requireAuth, enforceCostCenterErpPageAccess);
-  // New unified-accounting metadata writers are read-only until a
-  // company-specific, source-pinned Owner pilot. Existing voucher flows remain unchanged.
+  // Unified-accounting metadata remains read-only until an Owner pilot.
   app.use(enforceUnifiedAccountingRollout);
   registerWhatsAppFastSendRoutes(app);
   registerBandwidthPhase3FactoryReads(app);
@@ -199,6 +198,7 @@ export async function registerApplicationRoutes(app: Express): Promise<Server> {
   // Must be mounted eagerly: production GIT lazy routes only match /api/git.
   registerStockTransferExportWhatsAppRoutes(app);
   registerScheduledWhatsAppMessageRoutes(app);
+  registerPropertiesAccountStatementWhatsAppRoutes(app);
   await registerLazyRouteModule(app, {
     prefixes: ["/api/export"],
     load: async () => (await import("./exportRoutes")).registerExportRoutes,
