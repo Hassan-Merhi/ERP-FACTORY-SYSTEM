@@ -26,6 +26,7 @@ import {
   sendWhatsAppFile,
   sendWhatsAppFileToChatId,
   getGreenInstanceState,
+  getStrictGreenMainInstanceState,
 } from "../services/whatsappService";
 import { generateNetPositionExcel, generateMonthEnds } from "../helpers/generateNetPositionExcel";
 import { generateStockPdf } from "../helpers/generateStockPdf";
@@ -275,7 +276,7 @@ export function registerWhatsAppRoutes(app: Express) {
       if (!s?.instanceId || !s?.apiToken) {
         return res.json({ state: "notConfigured" });
       }
-      const state = await getGreenInstanceState(s.instanceId, s.apiToken);
+      const state = await getStrictGreenMainInstanceState(s.instanceId, s.apiToken);
       res.json({ state });
     } catch (err: unknown) {
       res.status(500).json({ message: getErrorMessage(err) });
