@@ -15,7 +15,12 @@ import { enforcePosOperationalPermissionScope } from "../middleware/posOperation
 import { generateInvoicePdfMeta } from "../helpers/generateInvoicePdf";
 import { generateStockPdf } from "../helpers/generateStockPdf";
 import { getErpExportVisibility } from "../helpers/exportVisibility";
-import { getPosWaSettings, getWaSettingsById, getGreenApiHost, sendWhatsAppFileByUploadPos } from "../services/whatsappService";
+import {
+  getPosWaSettings,
+  getWaSettingsById,
+  getGreenApiHost,
+  sendWhatsAppFileByUploadPos,
+} from "../services/whatsappService";
 import {
   companies,
   factoryAccountWhatsappRules,
