@@ -64,10 +64,48 @@ function cleanGreenApiCredential(value: unknown): string {
   return String(value ?? "").replace(/[\s\u200B-\u200D\uFEFF]+/g, "");
 }
 
-function baseUrl(instanceId: string, apiToken: string, method: string): string {
+/**
+ * Match an explicitly configured POS instance to its GREEN-API console hosts.
+ * Never infer a provider host from instance ID digits. Other instances retain
+ * the universal host until explicitly configured.
+ */
+export function getGreenApiHost(instanceId: string, media = false): string {
+  const matchedPos =
+    !!process.env.GREEN_API_POS_INSTANCE_ID &&
+    cleanGreenApiCredential(instanceId) === cleanGreenApiCredential(process.env.GREEN_API_POS_INSTANCE_ID);
+  const configured = !matchedPos
+    ? undefined
+    : media
+      ? process.env.GREEN_API_POS_MEDIA_URL || process.env.GREEN_API_POS_API_URL
+      : process.env.GREEN_API_POS_API_URL;
+  if (!configured?.trim()) return "https://api.greenapi.com";
+  try {
+    const parsed = new URL(configured.trim());
+    const host = parsed.hostname.toLowerCase();
+    const allowed = /^(?:[a-z0-9-]+\.)?api\.greenapi\.com$/.test(host) || (media && host === "media.greenapi.com");
+    if (
+      parsed.protocol !== "https:" ||
+      !allowed ||
+      parsed.port ||
+      parsed.username ||
+      parsed.password ||
+      parsed.pathname !== "/" ||
+      parsed.search ||
+      parsed.hash
+    ) {
+      throw new Error("Invalid host");
+    }
+    return parsed.origin;
+  } catch {
+    logger.warn("[WhatsApp] Ignoring invalid configured POS GREEN API host", { media });
+    return "https://api.greenapi.com";
+  }
+}
+
+function baseUrl(instanceId: string, apiToken: string, method: string, media = false): string {
   const cleanInstanceId = cleanGreenApiCredential(instanceId);
   const cleanApiToken = cleanGreenApiCredential(apiToken);
-  return `https://api.greenapi.com/waInstance${cleanInstanceId}/${method}/${cleanApiToken}`;
+  return `${getGreenApiHost(cleanInstanceId, media)}/waInstance${cleanInstanceId}/${method}/${cleanApiToken}`;
 }
 
 async function getGreenApiAuthFallback(current: GreenApiCredentials): Promise<GreenApiCredentials | null> {
@@ -159,7 +197,7 @@ async function requestGreenApiUpload(
   body: Buffer,
   headers: Record<string, string | number>
 ): Promise<Response> {
-  const endpoint = new URL(baseUrl(credentials.instanceId, credentials.apiToken, "sendFileByUpload"));
+  const endpoint = new URL(baseUrl(credentials.instanceId, credentials.apiToken, "sendFileByUpload", true));
   return new Promise<Response>((resolve, reject) => {
     const req = httpsRequest(endpoint, {
       method: "POST",
@@ -250,7 +288,7 @@ export interface GreenChat {
 }
 
 /** Green API instance states returned by getStateInstance */
-export type GreenInstanceState = "authorized" | "notAuthorized" | "sleepMode" | "starting" | "yellowCard" | "unknown";
+export type GreenInstanceState = "authorized" | "notAuthorized" | "sleepMode" | "starting" | "yellowCard" | "blocked" | "suspended" | "unknown";
 
 /**
  * Call Green API's getStateInstance to get the real connection state.
@@ -265,7 +303,7 @@ export async function getGreenInstanceState(instanceId: string, apiToken: string
     if (!response.ok) return "unknown";
     const json = await response.json().catch(() => null);
     const state: string = json?.stateInstance ?? "unknown";
-    const validStates: GreenInstanceState[] = ["authorized", "notAuthorized", "sleepMode", "starting", "yellowCard"];
+    const validStates: GreenInstanceState[] = ["authorized", "notAuthorized", "sleepMode", "starting", "yellowCard", "blocked", "suspended"];
     return validStates.includes(state as GreenInstanceState) ? (state as GreenInstanceState) : "unknown";
   } catch (error) {
     logger.warn("[WhatsApp] Green API instance status unavailable", { error: getErrorMessage(error) });
@@ -297,7 +335,7 @@ export async function getStrictGreenMainInstanceState(
     const body = await response.json().catch(() => null) as { stateInstance?: unknown } | null;
     const state = body?.stateInstance;
     const allowed: GreenInstanceState[] = [
-      "authorized", "notAuthorized", "sleepMode", "starting", "yellowCard",
+      "authorized", "notAuthorized", "sleepMode", "starting", "yellowCard", "blocked", "suspended",
     ];
     return typeof state === "string" && allowed.includes(state as GreenInstanceState)
       ? state as GreenInstanceState : "unknown";

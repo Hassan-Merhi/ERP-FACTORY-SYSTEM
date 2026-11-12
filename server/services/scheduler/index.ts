@@ -61,6 +61,16 @@ export function startScheduler(): void {
   );
   cron.schedule("* * * * *", customMessageTick);
 
+  const propertiesStatementTick = createSchedulerTick(
+    "propertiesAccountStatementWhatsApp",
+    async () => {
+      const { runScheduledPropertiesWaStatements } = await import("../propertiesAccountStatementWhatsApp");
+      await runScheduledPropertiesWaStatements();
+    },
+    { quiet: true }
+  );
+  cron.schedule("* * * * *", propertiesStatementTick);
+
   // Ticket dispatch, retries of unconfigured channels, and 24-hour overdue reminders.
   // Environment-gated until migrations and recipient opt-ins are configured.
   const ticketTick = createSchedulerTick(
@@ -103,6 +113,7 @@ export function startScheduler(): void {
     jobs: [
       "locationStockWhatsApp(every minute; per-location timezone/time/day rules)",
       "scheduledWhatsAppCustomMessages(every minute; per-message timezone and weekday times)",
+      "propertiesAccountStatementWhatsApp(every minute; only enabled Properties account schedules)",
       "factoryStockJournal(23:45 UTC daily)",
       "factoryMixIntegrityMonitor(01:35 UTC daily; if enabled)",
     ],
