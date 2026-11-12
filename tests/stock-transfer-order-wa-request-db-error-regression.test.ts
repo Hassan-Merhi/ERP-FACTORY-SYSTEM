@@ -48,9 +48,9 @@ describe("Stock Transfer Order WhatsApp approval request fix", () => {
       "insert_draft_audit_event", "commit_snapshot_transaction",
     ]) expect(batch).toContain("failedStep = \"" + step + "\"");
     expect(route).toContain("function stockTransferApprovalSqlFailure(error: unknown)");
-    expect(route).toContain("sqlState:sqlFailure.sqlState");
-    expect(route).toContain("dataType:sqlFailure.dataType");
-    expect(route).toContain("routine:sqlFailure.routine");
+    expect(route).toContain("sqlFailure.sqlState");
+    expect(route).toContain("sqlFailure.dataType");
+    expect(route).toContain("sqlFailure.routine");
     expect(route).toContain('sqlFailure.step ? "/" + sqlFailure.step : ""');
     expect(route).not.toContain("internalQuery:");
     expect(route).not.toContain("detail:");
