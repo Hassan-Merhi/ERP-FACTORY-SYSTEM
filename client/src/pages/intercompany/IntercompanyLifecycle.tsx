@@ -287,7 +287,6 @@ export function IntercompanyLifecycleContent({
                           onClick={() => {
                             setSelectedTradeId(row.tradeId);
                             setLocationId("");
-                            
                             setEvidence("");
                             setReason("");
                             setArrivalVerified(false);
