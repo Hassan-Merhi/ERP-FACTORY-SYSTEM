@@ -89,8 +89,11 @@ describe("Phase 6 — normal Vouchers intercompany payment isolation", () => {
     const payments = readFileSync("client/src/pages/intercompany/IntercompanyPayments.tsx", "utf8");
     expect(vouchers).toContain('activeTab === "payment"');
     expect(vouchers).toContain("PaymentVoucherTab");
-    expect(vouchers).toContain('activeTab === "intercompany"');
-    expect(vouchers).toContain("<IntercompanyVoucherTransfer embedded />");
+    expect(vouchers).not.toContain('activeTab === "intercompany"');
+    expect(vouchers).not.toContain("<IntercompanyVoucherTransfer embedded />");
+    expect(vouchers).toContain("useNormalIntercompanyVoucher");
+    expect(vouchers).toContain("normalIntercompany.buildMirror()");
+    expect(vouchers).toContain("normalIntercompany.details");
     expect(vouchers).toContain('activeTab !== "payment" && activeTab !== "receipt"');
     expect(vouchers).not.toContain('apiRequest("POST", "/api/intercompany-container-trading/payments/confirm"');
     expect(payments).toContain('BASE + "/confirm"');
