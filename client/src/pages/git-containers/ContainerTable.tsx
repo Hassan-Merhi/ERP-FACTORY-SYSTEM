@@ -20,13 +20,14 @@ interface ContainerTableProps {
   colVis: Record<OtwColId, boolean>;
   sessionCompanyId: number | null;
   readOnly?: boolean;
+  propertiesMode?: boolean;
   onOpenDrawer: (c: EnrichedContainerRow) => void;
   printRef: React.RefObject<HTMLDivElement | null>;
 }
 
 const TRACKING_ROW_HEIGHT = 40;
 
-export function ContainerTable({ containers, colVis, sessionCompanyId, readOnly = false, onOpenDrawer, printRef }: ContainerTableProps) {
+export function ContainerTable({ containers, colVis, sessionCompanyId, readOnly = false, propertiesMode = false, onOpenDrawer, printRef }: ContainerTableProps) {
   const isPhone = useErpPhoneLayout();
   const virtualRows = useBoundedTableRows({
     rowCount: containers.length,
@@ -149,7 +150,7 @@ export function ContainerTable({ containers, colVis, sessionCompanyId, readOnly 
                         </TableCell>
                         <TableCell className="font-mono font-bold text-[11px] h-10">
                           <Link
-                            href={gitContainerDetailPath(c.id)}
+                            href={gitContainerDetailPath(c.id, propertiesMode)}
                             className="text-foreground hover:text-primary hover:underline underline-offset-2 transition-colors"
                             onClick={(event) => event.stopPropagation()}
                             data-testid={`link-container-${c.id}`}
