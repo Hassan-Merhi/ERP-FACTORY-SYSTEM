@@ -56,9 +56,6 @@ import { useApplicationLanguageCode } from "@/contexts/ApplicationLanguageContex
 import { intercompanyVoucherText } from "@/i18n/intercompanyVoucherTranslations";
 import { Button } from "@/components/ui/button";
 
-const IntercompanyVoucherTransfer = lazy(() =>
-  import("@/pages/intercompany/IntercompanyPayments").then((module) => ({ default: module.IntercompanyPaymentsContent }))
-);
 import type { VoucherSidebarGroup } from "@/pages/vouchers/voucherSidebarGroups";
 import { exportVoucherHelper } from "@/pages/vouchers/voucherActions";
 import { voucherFormSchema } from "@/pages/vouchers/voucherTypes";
@@ -69,6 +66,10 @@ import { isRetailManualVoucherTabHidden, isRetailManualVoucherTypeHidden } from 
 import { shouldShowFactoryVoucherTab } from "@/pages/vouchers/factoryVoucherPolicy";
 import type { ErpFeatureAccess } from "@/app/erpAccess";
 import { erpPageAccessQueryOptions } from "@/app/erpAccessQuery";
+
+const IntercompanyVoucherTransfer = lazy(() =>
+  import("@/pages/intercompany/IntercompanyPayments").then((module) => ({ default: module.IntercompanyPaymentsContent }))
+);
 
 type VoucherTab = "payment" | "intercompany" | "receipt" | "journal" | "transfer" | "transferorder" | "adjustment" | "creditnote";
 
@@ -303,7 +304,7 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
   }, [voucherIdToEdit, voucherToEdit]);
 
   const paymentDraftMode = isFactoryMode ? "factory" : "erp";
-  const paymentDraftType = activeTab === "payment" ? "voucher-payment" : "voucher-receipt";
+  const paymentDraftType = activeTab === "receipt" ? "voucher-receipt" : "voucher-payment";
   const {
     hasDraft: hasPaymentDraft,
     draftAge: paymentDraftAge,
@@ -314,14 +315,14 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
     entityType: paymentDraftType,
     mode: paymentDraftMode,
     companyId: selectedCompany?.id ?? null,
-    enabled: !voucherIdToEdit,
+    enabled: !voucherIdToEdit && (activeTab === "payment" || activeTab === "receipt"),
   });
 
   const allFormValues = form.watch();
   useEffect(() => {
-    if (voucherIdToEdit) return;
+    if (voucherIdToEdit || (activeTab !== "payment" && activeTab !== "receipt")) return;
     schedulePaymentSave(allFormValues);
-  }, [allFormValues, schedulePaymentSave, voucherIdToEdit]);
+  }, [activeTab, allFormValues, schedulePaymentSave, voucherIdToEdit]);
 
   const { hydratedVoucherIdRef } = useVoucherHydration({
     voucherToEdit,
