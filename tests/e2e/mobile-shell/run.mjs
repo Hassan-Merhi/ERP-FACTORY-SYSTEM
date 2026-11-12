@@ -231,6 +231,7 @@ try {
   await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1, isMobile: true, hasTouch: true });
 
   const { consoleErrors, failedRequests } = diagnostics;
+  const failedApiRequests = [];
   diagnostics.apiRequests = api.requests;
   const otherHosts = new Set();
   const sameOriginApiCalls = [];
@@ -249,7 +250,10 @@ try {
     }
   });
   page.on("requestfailed", (request) => {
-    failedRequests.push(`${request.method()} ${request.url()} (${request.failure()?.errorText})`);
+    const description = `${request.method()} ${request.url()} (${request.failure()?.errorText})`;
+    failedRequests.push(description);
+    // Compare the parsed origin: a substring match would also count look-alike hosts.
+    if (new URL(request.url()).origin === API_ORIGIN) failedApiRequests.push(description);
   });
 
   // ── Cold start: the sign-in screen ──────────────────────────────────────
@@ -306,8 +310,7 @@ try {
   const preflights = api.requests.filter((request) => request.method === "OPTIONS");
   const corsErrors = consoleErrors.filter((text) => /CORS|Access-Control|preflight/i.test(text));
   check("Chromium reports no cross-origin (CORS) refusal", corsErrors.length === 0, corsErrors.slice(0, 5));
-  const corsFailures = failedRequests.filter((entry) => entry.includes(API_ORIGIN));
-  check("no request to the production API fails", corsFailures.length === 0, corsFailures.slice(0, 10));
+  check("no request to the production API fails", failedApiRequests.length === 0, failedApiRequests.slice(0, 10));
   check(
     "every API request comes from the WebView origin",
     api.requests.every((request) => request.origin === null || request.origin === WEBVIEW_ORIGIN),
