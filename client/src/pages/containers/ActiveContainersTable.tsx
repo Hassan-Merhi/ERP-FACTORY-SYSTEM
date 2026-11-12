@@ -188,7 +188,10 @@ export function ActiveContainersTable({
                   )}
                 </div>
               )}
-              <Link href={`${propertiesMode ? "/properties" : ""}/containers/${container.id}`} className="w-full sm:w-auto">
+              <Link
+                href={`${propertiesMode ? "/properties" : ""}/containers/${container.id}`}
+                className="w-full sm:w-auto"
+              >
                 <Button
                   size="sm"
                   variant="outline"
