@@ -17,6 +17,7 @@ interface ContainerToolbarProps {
   onSyncAll: () => void;
   isSyncing: boolean;
   showSyncAll: boolean;
+  propertiesMode?: boolean;
 }
 
 export function ContainerToolbar({
@@ -25,6 +26,7 @@ export function ContainerToolbar({
   onSyncAll,
   isSyncing,
   showSyncAll,
+  propertiesMode = false,
 }: ContainerToolbarProps) {
   const { language } = useApplicationLanguage();
   const syncLabel = getContainerSyncButtonLabel(language);
@@ -68,6 +70,7 @@ export function ContainerToolbar({
         </Button>
       )}
 
+      {!propertiesMode && <>
       <Link href="/intercompany/linked-trades">
         <Button variant="outline" data-testid="button-intercompany-linked-trades">
           Linked POs & Freight
@@ -92,6 +95,7 @@ export function ContainerToolbar({
           Add
         </Button>
       </Link>
+      </>}
     </div>
   );
 }
