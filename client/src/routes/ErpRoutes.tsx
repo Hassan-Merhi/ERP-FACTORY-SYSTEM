@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Switch, Route, Redirect } from "wouter";
 import NotFound from "@/pages/not-found";
 import LinkedTradesEditor from "@/pages/intercompany/LinkedTradesEditor";
-import IntercompanyPayments from "@/pages/intercompany/IntercompanyPayments";
+import { legacyErpIntercompanyPaymentDestination } from "@/pages/intercompany/intercompanyLegacyNavigation";
 import IntercompanyLifecycle from "@/pages/intercompany/IntercompanyLifecycle";
 import { lazyRetry as lazy } from "@/lib/lazyRetry";
 const ErpHelpTraining = lazy(() =>
@@ -129,6 +129,10 @@ interface ErpRoutesProps {
 }
 
 type RouteComponent = ComponentType;
+
+function LegacyIntercompanyPaymentRedirect() {
+  return <Redirect replace to={legacyErpIntercompanyPaymentDestination()} />;
+}
 
 export function ErpRoutes({ user }: ErpRoutesProps) {
   const { selectedCompany } = useCompany();
@@ -257,9 +261,12 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
       )}
       {R(
         "/intercompany/payments",
-        canAccess("containers") && !["POS", "View Only"].includes(effectiveRole),
-        IntercompanyPayments
+        canAccess("vouchers") && canAccess("containers") && !["POS", "View Only"].includes(effectiveRole),
+        LegacyIntercompanyPaymentRedirect
       )}
+      {/* Destination ERP may still need the dedicated receipt/linked-PO route.
+          Keep these permission-gated compatibility routes until the ERP
+          container details have a matching receiving workflow. */}
       {R(
         "/intercompany/lifecycle",
         canAccess("containers") && !["POS", "View Only"].includes(effectiveRole),
