@@ -15,6 +15,21 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const endpoint = "/api/stock-transfer-order/wa-approval/settings";
+type WebhookReadiness = {
+  ready: boolean;
+  mainConfigured: boolean;
+  providerChecked: boolean;
+  webhookUrlConfigured?: boolean;
+  endpointMatches?: boolean;
+  webhookHost?: string | null;
+  tokenMatches?: boolean;
+  incomingWebhookEnabled?: boolean;
+  outgoingPhoneWebhookEnabled?: boolean;
+  selfApprovalAccount?: boolean;
+  expectedPath?: string;
+  message: string;
+};
+
 export type StockTransferOrderWaSettings = {
   settings: { enabled: boolean; approvalGroupChatId: string | null; authorizedPhoneE164: string | null };
   connected: boolean;
@@ -95,6 +110,13 @@ export function StockTransferOrderApprovalSettings() {
     staleTime: 15_000,
     retry: false,
   });
+  const webhookReadiness = useQuery<WebhookReadiness>({
+    queryKey: ["/api/stock-transfer-order/wa-approval/webhook-readiness", selectedCompany?.id],
+    queryFn: async () => (await apiRequest("GET",
+      "/api/stock-transfer-order/wa-approval/webhook-readiness")).json(),
+    enabled: false,
+    retry: false,
+  });
   useEffect(() => {
     if (!settings.data) return;
     setEnabled(settings.data.settings.enabled);
@@ -163,8 +185,56 @@ export function StockTransferOrderApprovalSettings() {
               </>
             )}
             <Badge variant={settings.data?.webhookConfigured ? "secondary" : "outline"}>
-              {settings.data?.webhookConfigured ? "Protected inbound webhook configured" : "Webhook token not configured"}
+              {settings.data?.webhookConfigured ? "ERP webhook token saved" : "ERP webhook token missing"}
             </Badge>
+            <div className="rounded-lg border p-3 space-y-2" data-testid="sto-wa-webhook-readiness">
+              <div className="flex items-center justify-between gap-2">
+                <p className="font-medium text-sm">GREEN API callback verification</p>
+                <Button variant="outline" size="sm"
+                  disabled={!settings.data?.canConfigure || webhookReadiness.isFetching}
+                  onClick={() => { void webhookReadiness.refetch(); }}
+                  data-testid="sto-wa-verify-green-webhook">
+                  {webhookReadiness.isFetching && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                  Verify webhook
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Saving the ERP token alone does not configure GREEN API notifications.
+                This checks its actual callback destination, bearer and message type without changing settings.
+              </p>
+              {webhookReadiness.data && (
+                <div className="text-sm space-y-1" data-testid="sto-wa-webhook-results">
+                  <p className={webhookReadiness.data.ready ? "text-green-600" : "text-amber-600"}>
+                    {webhookReadiness.data.ready ? "Callback configuration matches" : "Callback not ready"}:
+                    {" "}{webhookReadiness.data.message}
+                  </p>
+                  {webhookReadiness.data.providerChecked && (
+                    <>
+                      <p>Callback URL: {webhookReadiness.data.endpointMatches ? "Correct ERP endpoint" :
+                        "Different or missing endpoint"}{webhookReadiness.data.webhookHost ?
+                          " (host: " + webhookReadiness.data.webhookHost + ")" : ""}</p>
+                      <p>Callback bearer: {webhookReadiness.data.tokenMatches ? "Matches ERP" : "Does not match ERP"}</p>
+                      <p>Incoming notifications: {webhookReadiness.data.incomingWebhookEnabled ? "Enabled" : "Disabled"}</p>
+                      <p>Outgoing phone notifications: {webhookReadiness.data.outgoingPhoneWebhookEnabled ? "Enabled" : "Disabled"}</p>
+                      <p>Authorized approval number is the linked GREEN API phone:
+                        {" "}{webhookReadiness.data.selfApprovalAccount ? "Yes (outgoing phone notifications required)" :
+                          "No (incoming notifications required)"}
+                      </p>
+                    </>
+                  )}
+                  {!webhookReadiness.data.ready && (
+                    <p className="text-xs text-muted-foreground">
+                      GREEN API must send callbacks to this ERP's /api/stock-transfer-order/wa-approval/webhook
+                      with the matching Bearer token. If another webhook URL exists, preserve it through
+                      a verified fan-out instead of overwriting other integrations.
+                    </p>
+                  )}
+                </div>
+              )}
+              {webhookReadiness.isError && (
+                <p className="text-xs text-destructive">Could not read GREEN API webhook settings.</p>
+              )}
+            </div>
             <Badge variant={settings.data?.executionEnabled ? "secondary" : "outline"}>
               {settings.data?.executionEnabled ? "Automatic batch approval processor enabled" : "Automatic batch approval processor paused"}
             </Badge>

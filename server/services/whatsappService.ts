@@ -11,6 +11,7 @@ import { pool } from "../db";
 import { request as httpsRequest } from "node:https";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { logger } from "../lib/logger";
+import { authorizedStockTransferOrderWaWebhook } from "./security/stockTransferOrderWaWebhookAuthentication";
 import FormDataLib from "form-data";
 import {
   getExportAttachmentSize,
@@ -305,6 +306,63 @@ export async function getStrictGreenMainInstanceState(
     logger.warn("[STO WA] Main WhatsApp authorization check unavailable");
     return "unknown";
   }
+}
+
+/**
+ * Read-only GREEN API webhook readiness for the MAIN WhatsApp account.
+ * Do not mutate provider settings or expose its callback bearer token, API
+ * token, full URL, or linked phone number to clients/logs. Other integrations
+ * might already use a webhook URL and require fan-out to preserve them.
+ */
+export type StoWaMainWebhookReadiness = {
+  incomingWebhookEnabled: boolean;
+  outgoingPhoneWebhookEnabled: boolean;
+  webhookUrlConfigured: boolean;
+  webhookEndpointMatches: boolean;
+  webhookTokenMatches: boolean;
+  webhookHost: string | null;
+  mainAccountChatId: string | null; // server-only; never return to browser
+};
+
+export async function getStrictGreenMainWebhookReadiness(
+  instanceId: string, apiToken: string
+): Promise<StoWaMainWebhookReadiness> {
+  const response = await fetchGreenApiReadOnly({ instanceId, apiToken }, "getSettings", {
+    method: "GET",
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!response.ok) throw new Error("GREEN API main instance settings unavailable (HTTP " + response.status + ")");
+  const raw: unknown = await response.json().catch(() => null);
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error("GREEN API returned invalid main instance settings.");
+  }
+  const provider = raw as Record<string, unknown>;
+  const webhookUrl = typeof provider.webhookUrl === "string" ? provider.webhookUrl.trim() : "";
+  const bearer = typeof provider.webhookUrlToken === "string" ? provider.webhookUrlToken : "";
+  let webhookEndpointMatches = false;
+  let webhookHost: string | null = null;
+  if (webhookUrl) {
+    try {
+      const parsed = new URL(webhookUrl);
+      if (parsed.protocol === "https:" && parsed.username === "" && parsed.password === "") {
+        webhookHost = parsed.hostname;
+        webhookEndpointMatches =
+          ["hmdinternationalgroup.com", "erp-pos-system-copy.onrender.com"].includes(parsed.hostname) &&
+          parsed.pathname.replace(/[/]$/, "") === "/api/stock-transfer-order/wa-approval/webhook" &&
+          parsed.search === "" && parsed.hash === "" && !parsed.port;
+      }
+    } catch { /* malformed or secret-bearing URL: report only a boolean */ }
+  }
+  return {
+    incomingWebhookEnabled: provider.incomingWebhook === "yes",
+    outgoingPhoneWebhookEnabled: provider.outgoingMessageWebhook === "yes",
+    webhookUrlConfigured: Boolean(webhookUrl),
+    webhookEndpointMatches,
+    webhookTokenMatches: authorizedStockTransferOrderWaWebhook(bearer),
+    webhookHost,
+    mainAccountChatId: typeof provider.wid === "string" &&
+      /^[1-9][0-9]{6,14}@c[.]us$/.test(provider.wid) ? provider.wid : null,
+  };
 }
 
 /** Read only chats from the exact main instance, without POS fallback. */
