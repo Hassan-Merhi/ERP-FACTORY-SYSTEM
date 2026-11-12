@@ -37,11 +37,19 @@ describe("Phase 7 retired intercompany navigation and protected compatibility", 
     }
     expect(PROPERTIES_PINNED_DEFAULTS.map((entry) => entry.url)).toContain("/properties/vouchers");
     const allItems = getPropertiesVisibleNavSections(false, true).flatMap((section) => section.items);
-    for (const path of ["/properties/containers", "/properties/tracking", "/properties/suppliers", "/properties/po-import"]) {
+    for (const path of [
+      "/properties/containers",
+      "/properties/tracking",
+      "/properties/suppliers",
+      "/properties/po-import",
+    ]) {
       expect(allItems.some((entry) => entry.url === path)).toBe(true);
     }
-    expect(getPropertiesVisibleNavSections(false, false).flatMap((section) => section.items)
-      .some((entry) => entry.url === "/properties/po-import")).toBe(false);
+    expect(
+      getPropertiesVisibleNavSections(false, false)
+        .flatMap((section) => section.items)
+        .some((entry) => entry.url === "/properties/po-import")
+    ).toBe(false);
   });
 
   it("removes all three duplicate Properties Trading sidebar entries, including the Recent menu sources", () => {
@@ -61,13 +69,22 @@ describe("Phase 7 retired intercompany navigation and protected compatibility", 
     expect(legacyPropertiesIntercompanyDestination("intercompany-lifecycle")).toBe("/properties/containers");
     for (const screen of ["linked-trades", "intercompany-lifecycle"] as const) {
       expect(legacyPropertiesIntercompanyDestination(screen, "?containerId=432")).toBe("/properties/containers/432");
-      expect(legacyPropertiesIntercompanyDestination(screen, "?physicalContainerId=432")).toBe("/properties/containers/432");
-      expect(legacyPropertiesIntercompanyDestination(screen, "?containerId=432&physicalContainerId=432"))
-        .toBe("/properties/containers/432");
+      expect(legacyPropertiesIntercompanyDestination(screen, "?physicalContainerId=432")).toBe(
+        "/properties/containers/432"
+      );
+      expect(legacyPropertiesIntercompanyDestination(screen, "?containerId=432&physicalContainerId=432")).toBe(
+        "/properties/containers/432"
+      );
       for (const search of [
-        "?containerId=0", "?containerId=-1", "?containerId=1.0", "?containerId=001",
-        "?containerId=1%2F..", "?containerId=9007199254740992", "?containerId=abc",
-        "?containerId=32&physicalContainerId=33", "?tradeId=432",
+        "?containerId=0",
+        "?containerId=-1",
+        "?containerId=1.0",
+        "?containerId=001",
+        "?containerId=1%2F..",
+        "?containerId=9007199254740992",
+        "?containerId=abc",
+        "?containerId=32&physicalContainerId=33",
+        "?tradeId=432",
       ]) {
         expect(legacyPropertiesIntercompanyDestination(screen, search)).toBe("/properties/containers");
       }
@@ -86,8 +103,9 @@ describe("Phase 7 retired intercompany navigation and protected compatibility", 
     }
     expect(getPropertiesParentRoute("/properties/linked-trades")).toBe("/properties/containers");
     expect(getPropertiesParentRoute("/properties/intercompany-lifecycle")).toBe("/properties/containers");
-    expect(getPropertiesParentRoute("/properties/intercompany-payments"))
-      .toBe(INTERCOMPANY_CANONICAL_DESTINATIONS.propertiesVouchers);
+    expect(getPropertiesParentRoute("/properties/intercompany-payments")).toBe(
+      INTERCOMPANY_CANONICAL_DESTINATIONS.propertiesVouchers
+    );
   });
 
   it("keeps old Properties route handlers guarded and redirect-only, while preserving new canonical screens", () => {
@@ -98,9 +116,9 @@ describe("Phase 7 retired intercompany navigation and protected compatibility", 
     expect(routes).toContain('legacyPropertiesIntercompanyDestination("intercompany-lifecycle"');
     expect(routes).toContain('<Route path="/properties/containers/:id" component={ContainerDetailPage} />');
     expect(routes).toContain('<Route path="/properties/vouchers">');
-    expect(routes).not.toContain('component={IntercompanyPayments}');
-    expect(routes).not.toContain('component={LinkedTradesEditor}');
-    expect(routes).not.toContain('component={IntercompanyLifecycle}');
+    expect(routes).not.toContain("component={IntercompanyPayments}");
+    expect(routes).not.toContain("component={LinkedTradesEditor}");
+    expect(routes).not.toContain("component={IntercompanyLifecycle}");
     expect(routes).toContain('<Redirect replace to="/properties/po-import" />');
   });
 

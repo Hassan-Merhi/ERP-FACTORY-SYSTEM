@@ -28,10 +28,7 @@ function verifiedContainerId(search: string): number | null {
   return ids[0];
 }
 
-export function legacyPropertiesIntercompanyDestination(
-  route: LegacyPropertiesIntercompanyRoute,
-  search = ""
-): string {
+export function legacyPropertiesIntercompanyDestination(route: LegacyPropertiesIntercompanyRoute, search = ""): string {
   if (route === "intercompany-payments") return INTERCOMPANY_CANONICAL_DESTINATIONS.propertiesVouchers;
   const containerId = verifiedContainerId(search);
   return containerId == null

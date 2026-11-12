@@ -120,10 +120,7 @@ export function PropertiesRoutes({ user }: PropertiesRoutesProps) {
       {canTrade && (
         <Route path="/properties/linked-trades">
           {() => (
-            <Redirect
-              replace
-              to={legacyPropertiesIntercompanyDestination("linked-trades", window.location.search)}
-            />
+            <Redirect replace to={legacyPropertiesIntercompanyDestination("linked-trades", window.location.search)} />
           )}
         </Route>
       )}
