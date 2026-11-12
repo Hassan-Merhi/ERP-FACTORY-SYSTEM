@@ -357,16 +357,6 @@ export function PosWhatsAppSection() {
               )}
             </div>
           </div>
-          {instanceStateData?.state === "unknown" && (
-            <p className="text-xs text-amber-700 dark:text-amber-400 mt-2">
-              Green API did not return a valid status. Check the instance host and Render logs.
-            </p>
-          )}
-          {instanceStateData?.state === "invalidCredentials" && (
-            <p className="text-xs text-red-700 dark:text-red-400 mt-2">
-              Green API rejected this POS token. Check the instance ID and token in your Green API console.
-            </p>
-          )}
           {instanceStateData?.state === "sleepMode" && (
             <p className="text-xs text-amber-700 dark:text-amber-400 mt-2 bg-amber-50 dark:bg-amber-950/40 rounded-sm px-2 py-1.5">
               Your Green API instance is in sleep mode. Log in to{" "}
