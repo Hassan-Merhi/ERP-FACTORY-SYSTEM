@@ -20,6 +20,17 @@ export const PROPERTIES_NAVIGATION: readonly NavEntry[] = [
   { path: "/properties/daybook", label: "Daybook", parent: null, capability: "workspace", navigation: "pinned" },
   { path: "/properties/agents", label: "Agent Ledger", parent: null, capability: "workspace", navigation: "pinned" },
   { path: "/properties/rentals", label: "Rentals", parent: null, capability: "workspace", navigation: "pinned" },
+  { path: "/properties/tracking", label: "Tracking", parent: null, capability: "workspace", navigation: "tool" },
+  { path: "/properties/containers", label: "Containers", parent: null, capability: "workspace", navigation: "tool" },
+  { path: "/properties/suppliers", label: "Suppliers", parent: null, capability: "workspace", navigation: "tool" },
+  { path: "/properties/containers/:id", label: "Container Details", parent: "/properties/containers", capability: "workspace", navigation: "hidden" },
+  { path: "/properties/containers/:containerId/verification", label: "Container Verification", parent: "/properties/containers", capability: "workspace", navigation: "hidden" },
+  { path: "/properties/offloads/:id", label: "Offload Details", parent: "/properties/containers", capability: "workspace", navigation: "hidden" },
+  { path: "/properties/suppliers/:id/edit", label: "Edit Supplier", parent: "/properties/suppliers", capability: "workspace", navigation: "hidden" },
+  { path: "/properties/suppliers/:supplierId/proformas", label: "Supplier Proformas", parent: "/properties/suppliers", capability: "workspace", navigation: "hidden" },
+  { path: "/properties/purchase-orders/:id/edit", label: "Edit Purchase Order", parent: "/properties/containers", capability: "workspace", navigation: "hidden" },
+  { path: "/properties/master-data", label: "Create Master Data", parent: "/properties/suppliers", capability: "workspace", navigation: "hidden" },
+
   {
     path: "/properties/rentals?tab=shops",
     label: "Shops",
