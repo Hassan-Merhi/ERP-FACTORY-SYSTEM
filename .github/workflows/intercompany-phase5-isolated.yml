@@ -69,7 +69,7 @@ jobs:
         if: always() && steps.install.outcome == 'success'
         run: npm run check
 
-      - name: Check formatting of Phase 5 changed TypeScript files
+      - name: Check formatting of Phase 1–6 intercompany source files
         if: always() && steps.install.outcome == 'success'
         run: |
           node node_modules/prettier/bin/prettier.cjs --check \
@@ -101,6 +101,15 @@ jobs:
             client/src/i18n/propertiesContainerIntercompanyTranslations.ts \
             server/routes/import/intercompany-phase3.ts \
             tests/intercompany-phase5-properties-container-integration.test.ts \
+            server/services/intercompany/pairedPaymentAuthorization.ts \
+            server/services/intercompany/paymentSync.ts \
+            server/services/intercompany/paymentQueries.ts \
+            client/src/pages/vouchers/intercompanyTransferPolicy.ts \
+            client/src/i18n/intercompanyVoucherTranslations.ts \
+            client/src/pages/vouchers/voucherSidebarGroups.ts \
+            client/src/pages/Vouchers.tsx \
+            client/src/pages/intercompany/IntercompanyPayments.tsx \
+            tests/intercompany-phase6-voucher-payments.test.ts \
             tests/intercompany-phase5-database-guards.test.ts \
             tests/intercompany-phase5-lifecycle-math.test.ts \
             tests/intercompany-phase5-mirrored-lines.test.ts
@@ -110,7 +119,7 @@ jobs:
         if: always() && steps.install.outcome == 'success'
         run: node node_modules/drizzle-kit/bin.cjs push --force
 
-      - name: Execute Phase 1-5 regressions against disposable PostgreSQL
+      - name: Execute Phase 1-6 regressions against disposable PostgreSQL
         if: always() && steps.schema.outcome == 'success'
         shell: bash
         run: |
@@ -126,6 +135,7 @@ jobs:
             tests/intercompany-phase4-database-guards.test.ts \
             tests/intercompany-phase4-payment-money.test.ts \
             tests/intercompany-phase5-properties-container-integration.test.ts \
+            tests/intercompany-phase6-voucher-payments.test.ts \
             tests/intercompany-phase5-database-guards.test.ts \
             tests/intercompany-phase5-lifecycle-math.test.ts \
             tests/intercompany-phase5-mirrored-lines.test.ts
