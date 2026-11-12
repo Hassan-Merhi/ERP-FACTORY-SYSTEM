@@ -26,6 +26,7 @@ const money = (value: string) =>
   }).format(Number(value));
 type Trade = {
   tradeId: number;
+  physicalContainerId: number;
   relationshipId: number;
   sourceCompanyId: number;
   destinationCompanyId: number;
@@ -52,13 +53,12 @@ async function load(companyId: number): Promise<Lifecycle> {
   return value as Lifecycle;
 }
 
-export default function IntercompanyLifecycle() {
+export default function IntercompanyLifecycle({ physicalContainerId, embedded = false }: { physicalContainerId?: number; embedded?: boolean } = {}) {
   const { selectedCompany } = useCompany();
   const companyId = Number(selectedCompany?.id || 0);
   const { toast } = useToast();
   const [selectedTradeId, setSelectedTradeId] = useState<number | null>(null);
   const [locationId, setLocationId] = useState("");
-  const [inventoryAccountId, setInventoryAccountId] = useState("");
   const [date, setDate] = useState(dateNow);
   const [evidence, setEvidence] = useState("");
   const [reason, setReason] = useState("");
@@ -76,11 +76,30 @@ export default function IntercompanyLifecycle() {
     queryFn: () => load(companyId),
     retry: false,
   });
-  const trade = query.data?.trades.find((row) => row.tradeId === selectedTradeId);
+  const visibleTrades = physicalContainerId
+    ? (query.data?.trades ?? []).filter((row) => row.physicalContainerId === physicalContainerId)
+    : (query.data?.trades ?? []);
+  const trade = visibleTrades.find((row) => row.tradeId === selectedTradeId);
+  const receivingOptions = useQuery<{
+    destinationCompanyId: number;
+    locations: Array<{ id: number; name: string }>;
+    inventoryAccountId: number | null;
+    inventoryAccountStatus: "ready" | "ambiguous" | "missing";
+  }>({
+    queryKey: companyQueryKey(API + "/" + trade?.tradeId + "/receiving-options", companyId),
+    enabled: Boolean(trade && trade.state === "active" && !trade.received && !trade.canceled &&
+      (selectedCompany?.companyType !== "properties" || ["Owner", "Developer"].includes(selectedCompany?.role ?? ""))),
+    queryFn: async () => {
+      const response = await fetch(API + "/" + trade!.tradeId + "/receiving-options", { credentials: "include" });
+      const value = await response.json().catch(() => ({ message: "Cannot load receiving options" }));
+      if (!response.ok) throw new Error(value.message || "Cannot load receiving options");
+      return value;
+    },
+    retry: false,
+  });
   useEffect(() => {
     setSelectedTradeId(null);
     setLocationId("");
-    setInventoryAccountId("");
     setEvidence("");
     setReason("");
     setArrivalVerified(false);
@@ -90,9 +109,16 @@ export default function IntercompanyLifecycle() {
     setRedistributed(false);
     setReceiptKey(newKey());
     setCancelKey(newKey());
-  }, [companyId]);
+  }, [companyId, physicalContainerId]);
+  useEffect(() => {
+    if (!physicalContainerId || !query.data) return;
+    const matching = query.data.trades.find((row) => row.physicalContainerId === physicalContainerId);
+    setSelectedTradeId(matching?.tradeId ?? null);
+  }, [physicalContainerId, query.data]);
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: companyQueryKey(API, companyId) });
+    queryClient.invalidateQueries({ queryKey: ["/api/containers"] });
+    if (physicalContainerId) queryClient.invalidateQueries({ queryKey: [`/api/containers/${physicalContainerId}`] });
     queryClient.invalidateQueries({
       queryKey: companyQueryKey("/api/intercompany-container-trading/linked-trades", companyId),
     });
@@ -108,7 +134,7 @@ export default function IntercompanyLifecycle() {
         requestKey: receiptKey,
         postingDate: date,
         locationId: Number(locationId),
-        inventoryAccountId: Number(inventoryAccountId),
+        inventoryAccountId: Number(receivingOptions.data?.inventoryAccountId),
         arrivalEvidence: evidence.trim(),
         reason: reason.trim(),
         confirmPhysicalArrival: arrivalVerified,
@@ -168,9 +194,9 @@ export default function IntercompanyLifecycle() {
     trade.state === "active" &&
     !trade.received &&
     !trade.canceled &&
-    companyId === trade.destinationCompanyId &&
+    Boolean(receivingOptions.data?.inventoryAccountId) &&
+    Boolean(receivingOptions.data?.locations.some((loc) => String(loc.id) === locationId)) &&
     locationId &&
-    inventoryAccountId &&
     date &&
     evidence.trim().length >= 8 &&
     reason.trim().length >= 3 &&
@@ -183,6 +209,7 @@ export default function IntercompanyLifecycle() {
     trade.state === "active" &&
     !trade.received &&
     !trade.canceled &&
+    ["Owner", "Developer"].includes(selectedCompany?.role ?? "") &&
     !trade.pendingSharedAllocation &&
     (!trade.hasSharedInvoices || redistributed) &&
     evidence.trim().length >= 8 &&
@@ -194,12 +221,14 @@ export default function IntercompanyLifecycle() {
   );
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 pb-10" data-testid="intercompany-phase5-lifecycle">
-      <PageHeader
-        title="Intercompany Receiving & Cancellation"
-        subtitle="Receive into the actual destination ERP, or reverse an unreceived internal sale. The original physical container and cash transfers are never duplicated."
-      />
-      <Card>
+    <div className={embedded ? "space-y-4" : "mx-auto max-w-6xl space-y-6 pb-10"} data-testid="intercompany-phase5-lifecycle">
+      {!embedded && (
+        <PageHeader
+          title="Intercompany Receiving & Cancellation"
+          subtitle="Receive into the actual destination ERP, or reverse an unreceived internal sale. The original physical container and cash transfers are never duplicated."
+        />
+      )}
+      {!embedded && <Card>
         <CardHeader>
           <CardTitle>Linked container lifecycle</CardTitle>
           <CardDescription>
@@ -225,7 +254,7 @@ export default function IntercompanyLifecycle() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {query.data?.trades.map((row) => (
+                {visibleTrades.map((row) => (
                   <TableRow key={row.tradeId}>
                     <TableCell>{row.containerNumber}</TableCell>
                     <TableCell>Company #{row.destinationCompanyId}</TableCell>
@@ -267,7 +296,16 @@ export default function IntercompanyLifecycle() {
             </Table>
           </div>
         </CardContent>
-      </Card>
+      </Card>}
+      {embedded && query.isLoading && <p className="text-sm text-muted-foreground">Loading linked container status…</p>}
+      {embedded && query.isError && (
+        <p role="alert" className="text-sm text-destructive">Cannot load the linked container lifecycle.</p>
+      )}
+      {embedded && !query.isLoading && !query.isError && visibleTrades.length === 0 && (
+        <p className="text-sm text-muted-foreground">
+          This physical container has no linked intercompany trade. Import its PO with an ERP destination first.
+        </p>
+      )}
       {trade && (
         <Card>
           <CardHeader>
@@ -303,14 +341,16 @@ export default function IntercompanyLifecycle() {
                     <Input id="ic-phase5-evidence" value={evidence} onChange={(e) => setEvidence(e.target.value)} />
                   </div>
                 </div>
-                {companyId === trade.destinationCompanyId && (
+                {(companyId === trade.destinationCompanyId ||
+                  (selectedCompany?.companyType === "properties" &&
+                    ["Owner", "Developer"].includes(selectedCompany?.role ?? ""))) && (
                   <div className="space-y-3 rounded-lg border p-4">
                     <h3 className="font-semibold">Receive into this ERP company</h3>
                     <p className="text-sm text-muted-foreground">
                       Reclassifies only the verified linked cost from Goods in Transit into the ERP INVENTORY account.
                       Existing negative-stock or residual-value situations are refused.
                     </p>
-                    <Label htmlFor="ic-phase5-location">Actual receiving warehouse</Label>
+                    <Label htmlFor="ic-phase5-location">Actual receiving warehouse in ERP #{trade.destinationCompanyId}</Label>
                     <select
                       id="ic-phase5-location"
                       value={locationId}
@@ -318,26 +358,24 @@ export default function IntercompanyLifecycle() {
                       className="w-full rounded-md border bg-background p-2"
                     >
                       <option value="">Choose ERP location</option>
-                      {query.data?.locations.map((row) => (
+                      {receivingOptions.data?.locations.map((row) => (
                         <option key={row.id} value={row.id}>
                           {row.name}
                         </option>
                       ))}
                     </select>
-                    <Label htmlFor="ic-phase5-account">Existing ERP INVENTORY asset account</Label>
-                    <select
-                      id="ic-phase5-account"
-                      value={inventoryAccountId}
-                      onChange={(e) => setInventoryAccountId(e.target.value)}
-                      className="w-full rounded-md border bg-background p-2"
-                    >
-                      <option value="">Choose verified inventory account</option>
-                      {query.data?.inventoryAccounts.map((row) => (
-                        <option key={row.id} value={row.id}>
-                          {row.name}
-                        </option>
-                      ))}
-                    </select>
+                    <p className="text-xs text-muted-foreground" data-testid="intercompany-inventory-account-status">
+                      {receivingOptions.isLoading
+                        ? "Verifying the ERP warehouse and INVENTORY account…"
+                        : receivingOptions.data?.inventoryAccountStatus === "ready"
+                          ? "Verified ERP INVENTORY account automatically selected."
+                          : "No unique active ERP INVENTORY asset account exists. Resolve the account in the destination ERP before receiving."}
+                    </p>
+                    {receivingOptions.isError && (
+                      <p role="alert" className="text-sm text-destructive">
+                        {receivingOptions.error?.message}
+                      </p>
+                    )}
                     <label className="flex items-center gap-2 text-sm">
                       <Checkbox checked={arrivalVerified} onCheckedChange={(v) => setArrivalVerified(v === true)} />I
                       verified the physical goods arrived at this ERP warehouse
