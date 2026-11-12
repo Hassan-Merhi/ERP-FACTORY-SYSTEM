@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { authenticatedUserQueryOptions } from "@/contracts/sessionQueryContracts";
 import { useCompany } from "@/contexts/CompanyContext";
 import { canUseFactorySurface } from "@/lib/factoryClientAccess";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import type { FactoryMyAccess } from "@shared/apiTypes";
 
 import type { Preset, ProductionValuationMode, ReportData } from "./types";
@@ -44,16 +45,18 @@ export function useDailyProductionReport(loadProductionData = true) {
   const [workerPayrollOpen, setWorkerPayrollOpen] = useState(false);
   const [empPayrollOpen, setEmpPayrollOpen] = useState(false);
   const { data: authenticatedUser } = useQuery(authenticatedUserQueryOptions());
+  const { selectedCompany } = useCompany();
   const { data: myAccess } = useQuery<FactoryMyAccess>({
-    queryKey: ["/api/factory/my-access"],
+    queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     staleTime: 5 * 60_000,
   });
-  const { selectedCompany } = useCompany();
-  const canReadWorkerAttendanceReport = canUseFactorySurface(myAccess, "factory/payroll-hub", [
+  const scopedAccess = selectedCompany?.id && myAccess?.companyId === selectedCompany.id && myAccess.hasFactoryAccess === true ? myAccess : undefined;
+  const canReadWorkerAttendanceReport = canUseFactorySurface(scopedAccess, "factory/payroll-hub", [
     "hide_tab_payrollhub_workers",
     "hide_tab_workers_report",
   ]);
-  const canReadWorkerPayrollSummary = canUseFactorySurface(myAccess, "factory/payroll-hub", [
+  const canReadWorkerPayrollSummary = canUseFactorySurface(scopedAccess, "factory/payroll-hub", [
     "hide_tab_payrollhub_workers",
     "hide_tab_workers_payroll",
   ]);
@@ -130,7 +133,7 @@ export function useDailyProductionReport(loadProductionData = true) {
   }, [stepDates]);
 
   const { data, isLoading } = useQuery<ReportData>({
-    queryKey: ["/api/factory/production-value-report", from, to, "production", valuationMode],
+    queryKey: companyQueryKey("/api/factory/production-value-report", selectedCompany?.id, from, to, "production", valuationMode),
     queryFn: async () => {
       const params = new URLSearchParams({ view: "production", valuationMode });
       if (from) params.set("from", from);
@@ -140,7 +143,7 @@ export function useDailyProductionReport(loadProductionData = true) {
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
-    enabled: loadProductionData && valuationReady && (preset === "alltime" || (!!from && !!to)),
+    enabled: loadProductionData && Boolean(selectedCompany?.id) && valuationReady && (preset === "alltime" || (!!from && !!to)),
   });
 
   const { data: attendanceData } = useQuery<{
@@ -156,7 +159,7 @@ export function useDailyProductionReport(loadProductionData = true) {
       paidSalary: string;
     }[];
   }>({
-    queryKey: ["/api/factory/workers/attendance-report", from, to],
+    queryKey: companyQueryKey("/api/factory/workers/attendance-report", selectedCompany?.id, from, to),
     queryFn: async () => {
       const res = await fetch(`/api/factory/workers/attendance-report?startDate=${from}&endDate=${to}`, {
         credentials: "include",
@@ -188,7 +191,7 @@ export function useDailyProductionReport(loadProductionData = true) {
     }[];
     employeeBreakdown: { id: number; name: string; monthlySalary: number; expected: number; balance: number }[];
   }>({
-    queryKey: ["/api/factory/monthly-salary-summary", payrollDateParam, payrollStartParam],
+    queryKey: companyQueryKey("/api/factory/monthly-salary-summary", selectedCompany?.id, payrollDateParam, payrollStartParam),
     queryFn: async () => {
       const params = new URLSearchParams({ date: payrollDateParam, includeBreakdown: "true" });
       if (payrollStartParam) params.set("startDate", payrollStartParam);

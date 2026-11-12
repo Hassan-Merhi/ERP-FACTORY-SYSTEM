@@ -18,3 +18,19 @@ postcss.config.js
 capacitor.config.ts
 scripts/
 client/public/
+
+# Factory dispatch accounting sources whose exact text is pinned by the
+# Phase 4–10 release-contract tests. Reformatting them breaks those contracts,
+# so they are excluded from the changed-file formatting gate.
+client/src/pages/factory/FactoryLoadingDispatchPoExport.tsx
+server/routes/factory/customer-orders/loadingDispatchCombinedInvoiceService.ts
+server/routes/factory/customer-orders/loadingDispatchOrderReconciliationRoutes.ts
+server/routes/factory/customer-orders/loadingDispatchPoExportModel.ts
+server/services/factory/dispatchInvoiceIntegrity.ts
+server/services/factory/dispatchTripFinancialPosting.ts
+
+# Stock Transfer Order WhatsApp approval sources whose exact text is pinned by
+# the Phase 2–6 contract tests. Reformatting them breaks those contracts.
+server/routes/stockTransferOrderWaApprovalRoutes.ts
+server/services/security/stockTransferOrderWaWebhookAuthentication.ts
+server/services/stockTransferOrderWaReconciliationPolicy.ts

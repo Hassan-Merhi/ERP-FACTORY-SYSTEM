@@ -12,6 +12,8 @@ interface StockGroupItemsViewProps {
   canViewCost: boolean;
   formatAmount: (v: number) => string;
   setArchiveDialogOpen: (v: boolean) => void;
+  /** False for read-only roles: hides Archive Group. */
+  canChangeExistingRecords?: boolean;
   itemSearchTerm: string;
   setItemSearchTerm: (v: string) => void;
   itemCategoryFilter: string[];
@@ -32,6 +34,7 @@ export function StockGroupItemsView({
   canViewCost,
   formatAmount,
   setArchiveDialogOpen,
+  canChangeExistingRecords = true,
   itemSearchTerm,
   setItemSearchTerm,
   itemCategoryFilter,
@@ -48,18 +51,31 @@ export function StockGroupItemsView({
   return (
     <>
       {/* Group identity and restricted actions */}
-      <section className="relative isolate overflow-hidden rounded-2xl border border-violet-200/70 bg-gradient-to-r from-violet-50 via-background to-blue-50/70 px-4 py-4 shadow-sm dark:border-violet-400/20 dark:from-violet-950/40 dark:via-slate-950/70 dark:to-blue-950/30 sm:px-5" aria-label="Selected stock group">
-        <div aria-hidden="true" className="pointer-events-none absolute -right-10 -top-24 h-52 w-72 rounded-full bg-violet-400/10 blur-3xl dark:bg-violet-500/20" />
+      <section
+        className="relative isolate overflow-hidden rounded-2xl border border-violet-200/70 bg-gradient-to-r from-violet-50 via-background to-blue-50/70 px-4 py-4 shadow-sm dark:border-violet-400/20 dark:from-violet-950/40 dark:via-slate-950/70 dark:to-blue-950/30 sm:px-5"
+        aria-label="Selected stock group"
+      >
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -right-10 -top-24 h-52 w-72 rounded-full bg-violet-400/10 blur-3xl dark:bg-violet-500/20"
+        />
         <div className="relative flex flex-wrap items-center gap-3">
           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-violet-300/40 bg-violet-500/10 text-violet-700 shadow-sm dark:border-violet-400/25 dark:bg-violet-400/20 dark:text-violet-200">
             <Layers className="h-6 w-6" aria-hidden="true" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-violet-700/80 dark:text-violet-300/80">Stock group</p>
-            <h2 className="truncate text-xl font-bold tracking-tight sm:text-2xl" data-testid="stock-group-title">{selectedGroup.groupName}</h2>
-            <p className="text-xs text-muted-foreground">{selectedGroup.itemCount.toLocaleString()} items · {Math.floor(selectedGroup.totalQuantity).toLocaleString()} BL total</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-violet-700/80 dark:text-violet-300/80">
+              Stock group
+            </p>
+            <h2 className="truncate text-xl font-bold tracking-tight sm:text-2xl" data-testid="stock-group-title">
+              {selectedGroup.groupName}
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              {selectedGroup.itemCount.toLocaleString()} items ·{" "}
+              {Math.floor(selectedGroup.totalQuantity).toLocaleString()} BL total
+            </p>
           </div>
-          {!posUser && (
+          {!posUser && canChangeExistingRecords && (
             <Button
               variant="outline"
               size="sm"
@@ -74,24 +90,58 @@ export function StockGroupItemsView({
       </section>
 
       {/* KPI tiles respect the same cost visibility capability as the table */}
-      <div className={canViewCost ? "grid grid-cols-2 gap-3 xl:grid-cols-4" : "grid grid-cols-2 gap-3"} aria-label="Group inventory summary">
+      <div
+        className={canViewCost ? "grid grid-cols-2 gap-3 xl:grid-cols-4" : "grid grid-cols-2 gap-3"}
+        aria-label="Group inventory summary"
+      >
         <div className="flex min-w-0 items-center gap-3 rounded-2xl border border-blue-200/70 bg-gradient-to-br from-blue-50 to-sky-100/60 p-3 shadow-sm dark:border-blue-400/25 dark:from-blue-950/60 dark:to-sky-900/25 sm:p-4">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-500/15 text-blue-700 dark:text-blue-300"><Package className="h-5 w-5" aria-hidden="true" /></span>
-          <div className="min-w-0"><p className="text-xs font-medium text-muted-foreground">Items</p><p className="truncate text-xl font-bold tabular-nums sm:text-2xl">{selectedGroup.itemCount.toLocaleString()}</p></div>
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-500/15 text-blue-700 dark:text-blue-300">
+            <Package className="h-5 w-5" aria-hidden="true" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-xs font-medium text-muted-foreground">Items</p>
+            <p className="truncate text-xl font-bold tabular-nums sm:text-2xl">
+              {selectedGroup.itemCount.toLocaleString()}
+            </p>
+          </div>
         </div>
         <div className="flex min-w-0 items-center gap-3 rounded-2xl border border-violet-200/70 bg-gradient-to-br from-violet-50 to-purple-100/60 p-3 shadow-sm dark:border-violet-400/25 dark:from-violet-950/60 dark:to-purple-900/25 sm:p-4">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-500/15 text-violet-700 dark:text-violet-300"><Boxes className="h-5 w-5" aria-hidden="true" /></span>
-          <div className="min-w-0"><p className="text-xs font-medium text-muted-foreground">Total BL</p><p className="truncate text-xl font-bold tabular-nums sm:text-2xl">{Math.floor(selectedGroup.totalQuantity).toLocaleString()} <span className="text-sm font-medium">BL</span></p></div>
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-500/15 text-violet-700 dark:text-violet-300">
+            <Boxes className="h-5 w-5" aria-hidden="true" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-xs font-medium text-muted-foreground">Total BL</p>
+            <p className="truncate text-xl font-bold tabular-nums sm:text-2xl">
+              {Math.floor(selectedGroup.totalQuantity).toLocaleString()} <span className="text-sm font-medium">BL</span>
+            </p>
+          </div>
         </div>
         {canViewCost && (
           <>
             <div className="flex min-w-0 items-center gap-3 rounded-2xl border border-emerald-200/70 bg-gradient-to-br from-emerald-50 to-teal-100/60 p-3 shadow-sm dark:border-emerald-400/25 dark:from-emerald-950/60 dark:to-teal-900/25 sm:p-4">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"><DollarSign className="h-5 w-5" aria-hidden="true" /></span>
-              <div className="min-w-0"><p className="text-xs font-medium text-muted-foreground">Total Value</p><p className="truncate text-lg font-bold tabular-nums sm:text-xl" title={formatAmount(selectedGroup.totalValue)}>{formatAmount(selectedGroup.totalValue)}</p></div>
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
+                <DollarSign className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-muted-foreground">Total Value</p>
+                <p
+                  className="truncate text-lg font-bold tabular-nums sm:text-xl"
+                  title={formatAmount(selectedGroup.totalValue)}
+                >
+                  {formatAmount(selectedGroup.totalValue)}
+                </p>
+              </div>
             </div>
             <div className="flex min-w-0 items-center gap-3 rounded-2xl border border-amber-200/70 bg-gradient-to-br from-amber-50 to-orange-100/60 p-3 shadow-sm dark:border-amber-400/25 dark:from-amber-950/50 dark:to-orange-900/25 sm:p-4">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 text-amber-700 dark:text-amber-300"><Gauge className="h-5 w-5" aria-hidden="true" /></span>
-              <div className="min-w-0"><p className="text-xs font-medium text-muted-foreground">Avg Rate / BL</p><p className="truncate text-lg font-bold tabular-nums sm:text-xl">{formatAmount(selectedGroup.averageRate)}</p></div>
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 text-amber-700 dark:text-amber-300">
+                <Gauge className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-muted-foreground">Avg Rate / BL</p>
+                <p className="truncate text-lg font-bold tabular-nums sm:text-xl">
+                  {formatAmount(selectedGroup.averageRate)}
+                </p>
+              </div>
             </div>
           </>
         )}

@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 
 interface ProductTranslation {
   id: number;
@@ -58,6 +59,8 @@ export function BaleProductArabicEditBridge() {
   const refetchedKeyRef = useRef<string | null>(null);
   const dirtyRef = useRef(false);
   const { toast } = useToast();
+  // Editing an existing product's Arabic fields is a record change; read-only roles get no fields and no save hook.
+  const canChangeExistingRecords = useExistingRecordChangeAccess().allowed;
 
   const loadProducts = async () => {
     const response = await fetch("/api/factory/bale-products?lang=en", { credentials: "include" });
@@ -145,7 +148,7 @@ export function BaleProductArabicEditBridge() {
   }, []);
 
   useEffect(() => {
-    if (!dialog) return;
+    if (!dialog || !canChangeExistingRecords) return;
     const captureSave = async (event: MouseEvent) => {
       const button = (event.target as HTMLElement | null)?.closest("button") as HTMLButtonElement | null;
       if (!button || button !== findSaveButton(dialog)) return;
@@ -189,9 +192,9 @@ export function BaleProductArabicEditBridge() {
     };
     document.addEventListener("click", captureSave, true);
     return () => document.removeEventListener("click", captureSave, true);
-  }, [dialog, toast]);
+  }, [dialog, toast, canChangeExistingRecords]);
 
-  if (!mountNode) return null;
+  if (!mountNode || !canChangeExistingRecords) return null;
   return createPortal(
     <div className="grid gap-4 border-t pt-4 mt-4" dir="ltr">
       <div className="grid gap-2">

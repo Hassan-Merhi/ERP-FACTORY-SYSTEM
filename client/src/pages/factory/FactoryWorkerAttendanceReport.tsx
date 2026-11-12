@@ -1,22 +1,11 @@
 import { useState, useMemo, useCallback, useRef } from "react";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/PageHeader";
-import {
-  Loader2,
-  CalendarDays,
-  Printer,
-  Pencil,
-  EyeOff,
-  Eye,
-  UsersRound,
-  CalendarCheck2,
-  Coins,
-  HandCoins,
-  Wallet,
-} from "lucide-react";
+import { Loader2, CalendarDays, Printer, ChevronLeft, ChevronRight, Pencil, EyeOff, Eye } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import {
@@ -42,7 +31,8 @@ import {
   workerCodeNum,
 } from "./factoryworkerattendancereport/utils";
 import { StatusPill } from "./factoryworkerattendancereport/components/StatusPill";
-import { AttendanceReportPeriodBar } from "./factoryworkerattendancereport/components/AttendanceReportPeriodBar";
+import { AttendanceSummaryCards } from "./factoryworkerattendancereport/components/AttendanceSummaryCards";
+import { AttendanceLegend } from "./factoryworkerattendancereport/components/AttendanceLegend";
 import { AttendanceAdminApprovalDialog } from "./factoryattendance/components/AttendanceAdminApprovalDialog";
 import {
   attendancePastDates,
@@ -70,7 +60,9 @@ export default function FactoryWorkerAttendanceReport() {
   /* UI state */
   const [filter, setFilter] = useState<AttendanceFilter>("all");
   const [hideFullAbsent, setHideFullAbsent] = useState(false);
-  const [editMode, setEditMode] = useState(false);
+  const recordChanges = useExistingRecordChangeAccess(); // read-only roles never enter edit mode
+  const [editModeRequested, setEditMode] = useState(false);
+  const editMode = recordChanges.allowed && editModeRequested;
 
   /* Pending optimistic edits: "workerId|date" → status */
   const [pending, setPending] = useState<Record<string, string | undefined>>({});
@@ -129,6 +121,7 @@ export default function FactoryWorkerAttendanceReport() {
     // Save sequentially: a delayed response must never overwrite a newer status.
     scope: { id: "factory-worker-attendance-report" },
     mutationFn: async ({ records, credentials }: AttendanceReportSavePayload) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const validRecords = records.filter((r) => r.status !== "");
       const blankRecords = records.filter((r) => r.status === "");
       const promises: Promise<unknown>[] = [];
@@ -366,16 +359,82 @@ export default function FactoryWorkerAttendanceReport() {
       </div>
 
       {/* ── Date mode selector ──────────────────────────────────────────────── */}
-      <AttendanceReportPeriodBar
-        mode={mode}
-        setMode={setMode}
-        customStart={customStart}
-        setCustomStart={setCustomStart}
-        customEnd={customEnd}
-        setCustomEnd={setCustomEnd}
-        navigateMonth={navigateMonth}
-        rangeLabel={rangeLabel}
-      />
+      <div className="flex flex-wrap items-center gap-3 print:hidden">
+        <span className="text-sm font-semibold text-muted-foreground">Period:</span>
+        <div className="flex flex-wrap items-center gap-1 rounded-xl border border-slate-200 bg-white/80 p-1 shadow-sm dark:border-blue-900/60 dark:bg-[hsl(var(--factory-hue)_51%_14%)]">
+          {(["today", "yesterday", "thisMonth", "custom"] as DateMode[]).map((m) => (
+            <Button
+              key={m}
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                if (m === "thisMonth") {
+                  setCustomStart(isoMonthStart());
+                  setCustomEnd(isoMonthEnd());
+                }
+                setMode(m);
+              }}
+              data-testid={`mode-${m}`}
+              className={cn(
+                "h-8 rounded-lg px-4 text-xs font-semibold transition-colors",
+                mode === m
+                  ? "bg-blue-600 text-white shadow-[0_2px_10px_hsl(var(--factory-hue)_83%_53%_/_0.35)] hover:bg-blue-700 hover:text-white dark:bg-blue-600 dark:hover:bg-blue-500"
+                  : "text-muted-foreground hover:bg-slate-100 dark:hover:bg-blue-950/70"
+              )}
+            >
+              {m === "today" ? "Today" : m === "yesterday" ? "Yesterday" : m === "thisMonth" ? "This Month" : "Custom"}
+            </Button>
+          ))}
+        </div>
+
+        {/* Month navigator for thisMonth */}
+        {mode === "thisMonth" && (
+          <div className="flex flex-wrap items-center gap-1 rounded-xl border border-slate-200 bg-white/80 p-1 shadow-sm dark:border-blue-900/60 dark:bg-[hsl(var(--factory-hue)_51%_14%)]">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigateMonth(-1)}
+              data-testid="button-prev-month"
+              className="h-7 w-7"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </Button>
+            <span className="text-xs font-semibold px-2 select-none" data-testid="text-current-month">
+              {rangeLabel}
+            </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigateMonth(1)}
+              data-testid="button-next-month"
+              className="h-7 w-7"
+            >
+              <ChevronRight className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        )}
+
+        {/* Custom range inputs */}
+        {mode === "custom" && (
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={customStart}
+              onChange={(e) => setCustomStart(e.target.value)}
+              data-testid="input-custom-start"
+              className="h-7 rounded-md border bg-background px-2 text-xs focus:outline-hidden focus:ring-1 focus:ring-ring"
+            />
+            <span className="text-xs text-muted-foreground">–</span>
+            <input
+              type="date"
+              value={customEnd}
+              onChange={(e) => setCustomEnd(e.target.value)}
+              data-testid="input-custom-end"
+              className="h-7 rounded-md border bg-background px-2 text-xs focus:outline-hidden focus:ring-1 focus:ring-ring"
+            />
+          </div>
+        )}
+      </div>
 
       {/* ── Filter + toggle bar ─────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-3 print:hidden">
@@ -470,6 +529,7 @@ export default function FactoryWorkerAttendanceReport() {
           size="sm"
           onClick={() => setEditMode((v) => !v)}
           data-testid="toggle-edit-mode"
+          hidden={!recordChanges.allowed}
           className={cn(
             "h-9 gap-1.5 rounded-lg border-slate-200 px-3 text-xs font-semibold dark:border-blue-900/60 dark:bg-[hsl(var(--factory-hue)_51%_14%)]",
             editMode &&
@@ -522,116 +582,7 @@ export default function FactoryWorkerAttendanceReport() {
           </div>
 
           {/* ── Summary cards ───────────────────────────────────────────────── */}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5 print:grid-cols-5">
-            <Card className="relative min-w-0 overflow-hidden rounded-2xl border shadow-sm dark:shadow-[0_12px_25px_rgba(0,0,0,0.22)] print:rounded-none print:border-gray-300 print:bg-white print:bg-none print:shadow-none border-blue-300/70 dark:border-blue-500/60 bg-gradient-to-br from-blue-50 via-blue-50/70 to-white dark:from-[hsl(var(--factory-hue)_59%_25%)] dark:via-[hsl(var(--factory-hue)_62%_17%)] dark:to-[hsl(var(--factory-hue)_59%_12%)]">
-              <CardContent className="flex min-h-[106px] items-center gap-3 p-4">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl print:hidden bg-blue-100 text-blue-600 dark:bg-blue-500/25 dark:text-blue-300">
-                  <UsersRound className="h-6 w-6" />
-                </div>
-                <div className="min-w-0">
-                  <p className="mb-1 text-xs font-medium text-muted-foreground">Workers</p>
-                  <p className="text-2xl font-bold tabular-nums tracking-tight" data-testid="stat-total-workers">
-                    {filteredWorkers.length}
-                  </p>
-                  {filteredWorkers.some((worker) => worker.active === false) && (
-                    <p className="mt-1 text-[10px] text-muted-foreground" data-testid="stat-worker-status-breakdown">
-                      {filteredWorkers.filter((worker) => worker.active !== false).length} active ·{" "}
-                      {filteredWorkers.filter((worker) => worker.active === false).length} inactive
-                    </p>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="relative min-w-0 overflow-hidden rounded-2xl border shadow-sm dark:shadow-[0_12px_25px_rgba(0,0,0,0.22)] print:rounded-none print:border-gray-300 print:bg-white print:bg-none print:shadow-none border-emerald-300/70 dark:border-emerald-500/60 bg-gradient-to-br from-emerald-50 via-emerald-50/70 to-white dark:from-[#104e44] dark:via-[#0b382f] dark:to-[#0a2527]">
-              <CardContent className="flex min-h-[106px] items-center gap-3 p-4">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl print:hidden bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300">
-                  <CalendarCheck2 className="h-6 w-6" />
-                </div>
-                <div className="min-w-0">
-                  <p className="mb-1 text-xs font-medium text-muted-foreground">Attendance Rate</p>
-                  <p
-                    className={cn(
-                      "text-2xl font-bold tabular-nums tracking-tight",
-                      overallPct === null
-                        ? "text-muted-foreground"
-                        : overallPct >= 90
-                          ? "text-emerald-600 dark:text-emerald-400"
-                          : overallPct >= 75
-                            ? "text-amber-600 dark:text-amber-400"
-                            : "text-red-500 dark:text-red-400"
-                    )}
-                    data-testid="stat-attendance-pct"
-                  >
-                    {overallPct !== null ? `${overallPct}%` : "—"}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="relative min-w-0 overflow-hidden rounded-2xl border shadow-sm dark:shadow-[0_12px_25px_rgba(0,0,0,0.22)] print:rounded-none print:border-gray-300 print:bg-white print:bg-none print:shadow-none border-violet-300/70 dark:border-violet-500/60 bg-gradient-to-br from-violet-50 via-violet-50/70 to-white dark:from-[hsl(var(--factory-hue)_34%_28%)] dark:via-[hsl(var(--factory-hue)_33%_21%)] dark:to-[hsl(var(--factory-hue)_37%_16%)]">
-              <CardContent className="flex min-h-[106px] items-center gap-3 p-4">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl print:hidden bg-violet-100 text-violet-700 dark:bg-violet-500/25 dark:text-violet-300">
-                  <Coins className="h-6 w-6" />
-                </div>
-                <div className="min-w-0">
-                  <p className="mb-1 text-xs font-medium text-muted-foreground">Expected Salary</p>
-                  <p
-                    className="break-words text-xl font-bold tabular-nums tracking-tight text-foreground"
-                    data-testid="stat-expected-salary"
-                  >
-                    {salaryKpi ? fmtCurrency(salaryKpi.totalExpected) : "—"}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="relative min-w-0 overflow-hidden rounded-2xl border shadow-sm dark:shadow-[0_12px_25px_rgba(0,0,0,0.22)] print:rounded-none print:border-gray-300 print:bg-white print:bg-none print:shadow-none border-cyan-300/70 dark:border-cyan-500/60 bg-gradient-to-br from-cyan-50 via-cyan-50/70 to-white dark:from-[hsl(var(--factory-hue)_70%_19%)] dark:via-[hsl(var(--factory-hue)_60%_16%)] dark:to-[hsl(var(--factory-hue)_65%_12%)]">
-              <CardContent className="flex min-h-[106px] items-center gap-3 p-4">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl print:hidden bg-cyan-100 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-300">
-                  <HandCoins className="h-6 w-6" />
-                </div>
-                <div className="min-w-0">
-                  <p className="mb-1 text-xs font-medium text-muted-foreground">Paid Salary</p>
-                  <p
-                    className="break-words text-xl font-bold tabular-nums tracking-tight text-emerald-600 dark:text-emerald-400"
-                    data-testid="stat-paid-salary"
-                  >
-                    {salaryKpi ? fmtCurrency(salaryKpi.totalPaid) : "—"}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="relative min-w-0 overflow-hidden rounded-2xl border shadow-sm dark:shadow-[0_12px_25px_rgba(0,0,0,0.22)] print:rounded-none print:border-gray-300 print:bg-white print:bg-none print:shadow-none border-amber-300/80 dark:border-amber-500/70 bg-gradient-to-br from-amber-50 via-amber-50/70 to-white dark:from-[#54411e] dark:via-[#3c301c] dark:to-[#29241b]">
-              <CardContent className="flex min-h-[106px] items-center gap-3 p-4">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl print:hidden bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">
-                  <Wallet className="h-6 w-6" />
-                </div>
-                <div className="min-w-0">
-                  <p className="mb-1 text-xs font-medium text-muted-foreground">Remaining Salary</p>
-                  <p
-                    className={cn(
-                      "break-words text-xl font-bold tabular-nums tracking-tight",
-                      !salaryKpi
-                        ? "text-muted-foreground"
-                        : salaryKpi.totalRemaining < 0
-                          ? "text-blue-600 dark:text-blue-400"
-                          : salaryKpi.totalRemaining === 0
-                            ? "text-emerald-600 dark:text-emerald-400"
-                            : "text-amber-600 dark:text-amber-400"
-                    )}
-                    data-testid="stat-remaining-salary"
-                  >
-                    {salaryKpi
-                      ? salaryKpi.totalRemaining < 0
-                        ? `Overpaid ${fmtCurrency(Math.abs(salaryKpi.totalRemaining))}`
-                        : fmtCurrency(salaryKpi.totalRemaining)
-                      : "—"}
-                  </p>
-                  {salaryKpi && salaryKpi.totalRemaining < 0 && (
-                    <p className="text-[11px] text-blue-500 dark:text-blue-400 mt-0.5">Overpaid</p>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+          <AttendanceSummaryCards filteredWorkers={filteredWorkers} overallPct={overallPct} salaryKpi={salaryKpi} />
 
           {/* ── Edit mode hint ───────────────────────────────────────────────── */}
           {editMode && (
@@ -852,33 +803,7 @@ export default function FactoryWorkerAttendanceReport() {
           )}
 
           {/* ── Legend ──────────────────────────────────────────────────────── */}
-          <div className="flex flex-wrap items-center gap-4 rounded-xl border border-slate-200 bg-white/70 px-4 py-3 text-xs text-muted-foreground dark:border-blue-900/50 dark:bg-[hsl(var(--factory-hue)_52%_14%)]/80 print:hidden">
-            <span className="flex items-center gap-1.5">
-              <span className="inline-flex items-center justify-center w-4 h-4 rounded-xs bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 text-[11px] font-bold">
-                P
-              </span>
-              Present
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="inline-flex items-center justify-center w-4 h-4 rounded-xs bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 text-[11px] font-bold">
-                A
-              </span>
-              Absent
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="text-muted-foreground/40">—</span>
-              Not recorded
-            </span>
-            <span className="flex items-center gap-1.5">
-              <Badge
-                variant="outline"
-                className="text-[11px] text-amber-600 dark:text-amber-400 border-amber-300 px-1 py-0 h-auto"
-              >
-                Sa/Su
-              </Badge>
-              Weekend
-            </span>
-          </div>
+          <AttendanceLegend />
         </>
       )}
     </div>

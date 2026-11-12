@@ -28,6 +28,8 @@ export function FactoryLocationInventoryProductFooterDialogs({
     bulkCreateMutation,
     colors,
     createCustomerMutation,
+    canChangeExistingRecords,
+    canCreateProforma,
     customerSearch,
     deleteDialogOpen,
     deleteProduct,
@@ -118,14 +120,16 @@ export function FactoryLocationInventoryProductFooterDialogs({
                   {replaceLinesMutation.isPending ? "Saving…" : "Auto-saving"}
                 </span>
               )}
-              <Button
-                onClick={editingProformaId ? handleSaveProforma : handleFinalize}
-                disabled={(bulkCreateMutation.isPending || replaceLinesMutation.isPending) && !!editingProformaId}
-                data-testid="button-finalize-proforma-bar"
-              >
-                <FileText className="h-4 w-4 mr-1" />
-                {editingProformaId ? "Update Proforma" : "Finalize Proforma"}
-              </Button>
+              {(editingProformaId ? canChangeExistingRecords : canCreateProforma) && (
+                <Button
+                  onClick={editingProformaId ? handleSaveProforma : handleFinalize}
+                  disabled={(bulkCreateMutation.isPending || replaceLinesMutation.isPending) && !!editingProformaId}
+                  data-testid="button-finalize-proforma-bar"
+                >
+                  <FileText className="h-4 w-4 mr-1" />
+                  {editingProformaId ? "Update Proforma" : "Finalize Proforma"}
+                </Button>
+              )}
             </div>
           </div>
         </div>

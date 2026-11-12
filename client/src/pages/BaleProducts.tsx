@@ -66,7 +66,10 @@ export default function BaleProducts() {
     handleExportNoPrices,
     handleDownloadTemplate,
     handleFileSelect,
+    canChangeExistingRecords,
+    canCreate,
   } = model;
+  const canCreateCategory = canCreate("POST", "/api/factory/categories");
 
   return (
     <div className="container mx-auto max-w-none space-y-5 px-3 py-4 sm:px-6 sm:py-6" data-bale-products-modern="true">
@@ -142,27 +145,31 @@ export default function BaleProducts() {
                     <Download className="h-4 w-4 mr-2" />
                     Download Template
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => fileInputRef.current?.click()} data-testid="menu-import-excel">
-                    <Upload className="h-4 w-4 mr-2" />
-                    Import Excel
-                  </DropdownMenuItem>
+                  {canChangeExistingRecords && (
+                    <DropdownMenuItem onClick={() => fileInputRef.current?.click()} data-testid="menu-import-excel">
+                      <Upload className="h-4 w-4 mr-2" />
+                      Import Excel
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
-            <Button
-              onClick={() => {
-                if (isAdmin) {
-                  setCreateDialogOpen(true);
-                } else {
-                  setAdminAuthOpen(true);
-                }
-              }}
-              data-testid="button-create-product"
-              className="bg-blue-600 text-white shadow-md shadow-blue-500/20 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Create Product
-            </Button>
+            {canCreate("POST", "/api/factory/bale-products") && (
+              <Button
+                onClick={() => {
+                  if (isAdmin) {
+                    setCreateDialogOpen(true);
+                  } else {
+                    setAdminAuthOpen(true);
+                  }
+                }}
+                data-testid="button-create-product"
+                className="bg-blue-600 text-white shadow-md shadow-blue-500/20 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Create Product
+              </Button>
+            )}
           </div>
         </div>
         <div className="relative grid grid-cols-2 gap-3 border-t border-blue-200/60 px-4 py-4 sm:px-6 xl:grid-cols-4 dark:border-blue-200/10">
@@ -219,29 +226,31 @@ export default function BaleProducts() {
             <span className="font-semibold text-sm">Product Categories</span>
           </div>
           <div className="px-4 py-4 space-y-4">
-            <div className="flex gap-2">
-              <Input
-                value={newCategoryName}
-                onChange={(e) => setNewCategoryName(e.target.value)}
-                placeholder="New category name..."
-                data-testid="input-new-category"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && newCategoryName.trim()) {
-                    createCategoryMutation.mutate(newCategoryName.trim());
-                  }
-                }}
-              />
-              <Button
-                onClick={() => {
-                  if (newCategoryName.trim()) createCategoryMutation.mutate(newCategoryName.trim());
-                }}
-                disabled={!newCategoryName.trim() || createCategoryMutation.isPending}
-                data-testid="button-add-category"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Add
-              </Button>
-            </div>
+            {canCreateCategory && (
+              <div className="flex gap-2">
+                <Input
+                  value={newCategoryName}
+                  onChange={(e) => setNewCategoryName(e.target.value)}
+                  placeholder="New category name..."
+                  data-testid="input-new-category"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && newCategoryName.trim()) {
+                      createCategoryMutation.mutate(newCategoryName.trim());
+                    }
+                  }}
+                />
+                <Button
+                  onClick={() => {
+                    if (newCategoryName.trim()) createCategoryMutation.mutate(newCategoryName.trim());
+                  }}
+                  disabled={!newCategoryName.trim() || createCategoryMutation.isPending}
+                  data-testid="button-add-category"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add
+                </Button>
+              </div>
+            )}
             {categories && categories.length > 0 ? (
               <div className="space-y-1">
                 {categories.map((cat) => {
@@ -306,24 +315,26 @@ export default function BaleProducts() {
                               {!cat.isActive && <Badge variant="outline">Inactive</Badge>}
                               <span className="text-xs text-muted-foreground ml-1">({catProducts.length})</span>
                             </button>
-                            <div className="flex items-center gap-1 shrink-0">
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                onClick={() => setEditingCategory({ id: cat.id, name: cat.name })}
-                                data-testid={`button-edit-category-${cat.id}`}
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                onClick={() => setPendingDelete(() => () => deleteCategoryMutation.mutate(cat.id))}
-                                data-testid={`button-delete-category-${cat.id}`}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
+                            {canChangeExistingRecords && (
+                              <div className="flex items-center gap-1 shrink-0">
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={() => setEditingCategory({ id: cat.id, name: cat.name })}
+                                  data-testid={`button-edit-category-${cat.id}`}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={() => setPendingDelete(() => () => deleteCategoryMutation.mutate(cat.id))}
+                                  data-testid={`button-delete-category-${cat.id}`}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            )}
                           </>
                         )}
                       </div>

@@ -1,10 +1,22 @@
 import type { ClientErrorLike } from "@/lib/clientError";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { useCompany } from "@/contexts/CompanyContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
-import { Play, DollarSign, Users, Building2, WalletCards, Loader2, ChevronDown, ChevronRight, Minus, RefreshCw } from "lucide-react";
+import {
+  Play,
+  DollarSign,
+  Users,
+  Building2,
+  WalletCards,
+  Loader2,
+  ChevronDown,
+  ChevronRight,
+  Minus,
+  RefreshCw,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -68,6 +80,7 @@ const currentMonthEnd = () => {
 export default function FactoryEmployeePayrollTab() {
   const { selectedCompany } = useCompany();
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
   const [payrollOpen, setPayrollOpen] = useState(false);
   const [payDate, setPayDate] = useState(today());
   const [payEffectiveDate, setPayEffectiveDate] = useState("");
@@ -146,6 +159,7 @@ export default function FactoryEmployeePayrollTab() {
 
   const payrollMutation = useMutation({
     mutationFn: async () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const deposits = employees
         .map((e) => ({
           employeeId: e.id,
@@ -220,18 +234,21 @@ export default function FactoryEmployeePayrollTab() {
           <span className="hidden h-7 w-px bg-border sm:block" aria-hidden="true" />
           <span className="inline-flex items-center gap-2 text-muted-foreground">
             <WalletCards className="h-4 w-4 text-blue-500 dark:text-sky-400" aria-hidden="true" />
-            Base payroll: <strong className="font-semibold text-foreground tabular-nums">{fmt(totalMonthlyBase)}</strong>/mo
+            Base payroll:{" "}
+            <strong className="font-semibold text-foreground tabular-nums">{fmt(totalMonthlyBase)}</strong>/mo
           </span>
         </div>
-        <Button
-          onClick={openPayroll}
-          disabled={previewLoading}
-          data-testid="button-run-payroll"
-          className="h-11 rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 px-5 font-semibold text-white shadow-md shadow-blue-500/20 transition-shadow hover:from-blue-700 hover:to-blue-600 hover:shadow-lg hover:shadow-blue-500/25"
-        >
-          {previewLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
-          Run Payroll
-        </Button>
+        {recordChanges.allowed && (
+          <Button
+            onClick={openPayroll}
+            disabled={previewLoading}
+            data-testid="button-run-payroll"
+            className="h-11 rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 px-5 font-semibold text-white shadow-md shadow-blue-500/20 transition-shadow hover:from-blue-700 hover:to-blue-600 hover:shadow-lg hover:shadow-blue-500/25"
+          >
+            {previewLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
+            Run Payroll
+          </Button>
+        )}
       </div>
 
       {employees.length === 0 ? (
@@ -247,7 +264,10 @@ export default function FactoryEmployeePayrollTab() {
             const deptTotal = emps.reduce((s, e) => s + parseFloat(e.monthlySalary || "0"), 0);
             const isExpanded = expandedGroup === dept;
             return (
-              <Card key={dept} className={`overflow-hidden rounded-2xl border bg-gradient-to-r from-card to-muted/20 shadow-sm transition-colors dark:from-slate-900/80 dark:to-slate-900/45 ${isExpanded ? "border-blue-500/45 ring-1 ring-blue-500/15" : "border-border/80 hover:border-blue-400/35"}`}>
+              <Card
+                key={dept}
+                className={`overflow-hidden rounded-2xl border bg-gradient-to-r from-card to-muted/20 shadow-sm transition-colors dark:from-slate-900/80 dark:to-slate-900/45 ${isExpanded ? "border-blue-500/45 ring-1 ring-blue-500/15" : "border-border/80 hover:border-blue-400/35"}`}
+              >
                 <button
                   type="button"
                   aria-expanded={isExpanded}
@@ -265,13 +285,19 @@ export default function FactoryEmployeePayrollTab() {
                       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-blue-500/15 bg-blue-500/10 text-blue-600 dark:text-sky-300">
                         <Building2 className="h-4 w-4" aria-hidden="true" />
                       </span>
-                      <span className="min-w-0 truncate" title={dept}>{dept}</span>
-                      <Badge variant="secondary" className="ml-1 border border-border/60 bg-muted/80 px-2.5 py-0.5 font-semibold tabular-nums">
+                      <span className="min-w-0 truncate" title={dept}>
+                        {dept}
+                      </span>
+                      <Badge
+                        variant="secondary"
+                        className="ml-1 border border-border/60 bg-muted/80 px-2.5 py-0.5 font-semibold tabular-nums"
+                      >
                         {emps.length}
                       </Badge>
                     </CardTitle>
                     <span className="shrink-0 text-right text-sm font-semibold tabular-nums text-foreground sm:text-base">
-                      {fmt(deptTotal)}<span className="ml-0.5 text-xs font-normal text-muted-foreground sm:text-sm">/mo</span>
+                      {fmt(deptTotal)}
+                      <span className="ml-0.5 text-xs font-normal text-muted-foreground sm:text-sm">/mo</span>
                     </span>
                   </CardHeader>
                 </button>

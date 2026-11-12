@@ -125,15 +125,17 @@ export default function FactoryContainerLoadingScan() {
                 <Save className="mr-2 h-4 w-4" />
                 {model.tr("saveAndExit")}
               </Button>
-              <Button
-                className="h-11 w-full rounded-xl bg-gradient-to-r from-sky-500 to-blue-700 font-semibold text-white shadow-md shadow-blue-500/20 hover:from-sky-600 hover:to-blue-800"
-                onClick={() => model.setShowFinalizeDialog(true)}
-                disabled={model.bales.length === 0 || model.finalizeMutation.isPending}
-                data-testid="button-finalize-loading"
-              >
-                <CheckCircle className="mr-2 h-5 w-5" />
-                {model.tr("validateFinalize")}
-              </Button>
+              {model.canChangeExistingRecords && (
+                <Button
+                  className="h-11 w-full rounded-xl bg-gradient-to-r from-sky-500 to-blue-700 font-semibold text-white shadow-md shadow-blue-500/20 hover:from-sky-600 hover:to-blue-800"
+                  onClick={() => model.setShowFinalizeDialog(true)}
+                  disabled={model.bales.length === 0 || model.finalizeMutation.isPending}
+                  data-testid="button-finalize-loading"
+                >
+                  <CheckCircle className="mr-2 h-5 w-5" />
+                  {model.tr("validateFinalize")}
+                </Button>
+              )}
             </div>
           )}
         </div>

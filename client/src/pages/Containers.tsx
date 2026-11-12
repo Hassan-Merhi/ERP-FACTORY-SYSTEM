@@ -7,6 +7,7 @@ import { useCurrencyContext } from "@/contexts/CurrencyContext";
 // Split-out hooks
 import { useContainerQueries } from "./containers/useContainerQueries";
 import { useContainerNumberEdit } from "./containers/useContainerNumberEdit";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useContainerImportExport } from "./containers/useContainerImportExport";
 import { useContainerSyncAll } from "./containers/useContainerSyncAll";
 // Split-out components
@@ -56,6 +57,8 @@ export default function Containers() {
   };
 
   const numberEdit = useContainerNumberEdit();
+  // View Only and Create Only cannot rename containers or re-sync their vouchers.
+  const { allowed: canChangeExistingRecords } = useExistingRecordChangeAccess();
   const syncAll = useContainerSyncAll();
   const importExport = useContainerImportExport({
     containers,
@@ -91,7 +94,7 @@ export default function Containers() {
           onExportAllFull={importExport.exportAllContainersFull}
           onSyncAll={() => syncAll.setSyncAllConfirmOpen(true)}
           isSyncing={syncAll.syncAllMutation.isPending}
-          showSyncAll={canSyncAllVouchers}
+          showSyncAll={canSyncAllVouchers && canChangeExistingRecords}
         />
       </PageHeader>
 
@@ -167,10 +170,14 @@ export default function Containers() {
         formatAmount={formatAmount}
         editingNumberId={numberEdit.editingNumberId}
         editingNumberValue={numberEdit.editingNumberValue}
-        onEditNumberStart={(id, number) => {
-          numberEdit.setEditingNumberId(id);
-          numberEdit.setEditingNumberValue(number);
-        }}
+        onEditNumberStart={
+          canChangeExistingRecords
+            ? (id, number) => {
+                numberEdit.setEditingNumberId(id);
+                numberEdit.setEditingNumberValue(number);
+              }
+            : undefined
+        }
         onEditNumberChange={numberEdit.setEditingNumberValue}
         onEditNumberSave={(id, containerNumber) =>
           numberEdit.editContainerNumberMutation.mutate({ id, containerNumber })

@@ -6,7 +6,6 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe,expect,it } from "vitest";
 import { MoneyDecimal,sumMoney } from "../server/lib/money";
-import { codeShape, fragmentFor, shaped } from "./helpers/codeShape";
 
 const at=(pathName:string)=>fs.readFileSync(path.join(process.cwd(),pathName),"utf8");
 describe("Phase 8: one combined Factory invoice without double customer billing",()=>{
@@ -27,50 +26,50 @@ describe("Phase 8: one combined Factory invoice without double customer billing"
     expect(invoiceTotal.toFixed(2)).toBe("13075.00");
   });
   it("requires locked signed Phase 7 fingerprint, posting IDs, all frozen bales and live voucher matching",()=>{
-    expect(shaped(service)).toContain(fragmentFor(service, "loadOrderDispatchReconciliationTx(tx,s)"));
-    expect(shaped(service)).toContain(fragmentFor(service, "signed.fingerprint"));
-    expect(shaped(service)).toContain(fragmentFor(service, "current.includedPostingIds"));
-    expect(shaped(service)).toContain(fragmentFor(service, "loadCombinedInvoicePlanTx(tx,s)"));
-    expect(shaped(service)).toContain(fragmentFor(service, "plan.fingerprint!==expectedFingerprint"));
-    expect(shaped(service)).toContain(fragmentFor(service, "Signed financial bale count"));
+    expect(service).toContain("loadOrderDispatchReconciliationTx(tx,s)");
+    expect(service).toContain("signed.fingerprint");
+    expect(service).toContain("current.includedPostingIds");
+    expect(service).toContain("loadCombinedInvoicePlanTx(tx,s)");
+    expect(service).toContain("plan.fingerprint!==expectedFingerprint");
+    expect(service).toContain("Signed financial bale count");
   });
   it("uses one invoice number and never re-debits posted truck receivables",()=>{
-    expect(shaped(service)).toContain(fragmentFor(service, "invoiceNumberTx(tx,s.companyId)"));
-    expect(shaped(service)).toContain(fragmentFor(service, "FACTORY_DISPATCH_CLEARING"));
-    expect(shaped(service)).toContain(fragmentFor(service, "FACTORY_BALE_SALES_INCOME"));
-    expect(shaped(service)).toContain(fragmentFor(service, "Recognize already-posted trip goods"));
-    expect(shaped(service)).not.toContain(fragmentFor(service, "syncFactoryInvoiceTx("));
-    expect(shaped(service)).not.toContain(fragmentFor(service, "insert(customerBalances)"));
-    expect(shaped(service)).not.toContain(fragmentFor(service, "transactionType: \"SALE\""));
-    expect(shaped(service)).toContain(fragmentFor(service, "customerReceivableReposted:false"));
+    expect(service).toContain("invoiceNumberTx(tx,s.companyId)");
+    expect(service).toContain("FACTORY_DISPATCH_CLEARING");
+    expect(service).toContain("FACTORY_BALE_SALES_INCOME");
+    expect(service).toContain("Recognize already-posted trip goods");
+    expect(service).not.toContain("syncFactoryInvoiceTx(");
+    expect(service).not.toContain("insert(customerBalances)");
+    expect(service).not.toContain("transactionType: \"SALE\"");
+    expect(service).toContain("customerReceivableReposted:false");
   });
   it("posts stock costs only under active perpetual cutover and returns only scanned bales to SOLD",()=>{
-    expect(shaped(service)).toContain(fragmentFor(service, "isPerpetualInventoryActive(tx,s.companyId,s.postingDate)"));
-    expect(shaped(service)).toContain(fragmentFor(service, '"COGS"'));
-    expect(shaped(service)).toContain(fragmentFor(service, '"FACTORY_FINISHED_GOODS"'));
-    expect(shaped(service)).toContain(fragmentFor(service, "await rewriteCommercialLinesTx(tx,s,bales)"));
-    expect(shaped(service)).toContain(fragmentFor(service, 'status:"SOLD"'));
-    expect(shaped(service)).toContain(fragmentFor(service, "baleIds=bales.map(b=>b.baleId)"));
+    expect(service).toContain("isPerpetualInventoryActive(tx,s.companyId,s.postingDate)");
+    expect(service).toContain('"COGS"');
+    expect(service).toContain('"FACTORY_FINISHED_GOODS"');
+    expect(service).toContain("await rewriteCommercialLinesTx(tx,s,bales)");
+    expect(service).toContain('status:"SOLD"');
+    expect(service).toContain("baleIds=bales.map(b=>b.baleId)");
   });
   it("requires reason, no-double-billing acknowledgments and supervisor-only finalization",()=>{
-    expect(shaped(route)).toContain(fragmentFor(route, 'data.confirmNoDuplicateReceivable!==true'));
-    expect(shaped(route)).toContain(fragmentFor(route, 'data.confirmTripChargesReviewed!==true'));
-    expect(shaped(route)).toContain(fragmentFor(route, '["admin","owner","developer"]'));
-    expect(shaped(route)).toContain(fragmentFor(route, 'data.expectedFingerprint'));
+    expect(route).toContain('data.confirmNoDuplicateReceivable!==true');
+    expect(route).toContain('data.confirmTripChargesReviewed!==true');
+    expect(route).toContain('["admin","owner","developer"]');
+    expect(route).toContain('data.expectedFingerprint');
   });
   it("renders every trip with charges and signed discounts, while excluding internal-only expenses",()=>{
-    expect(shaped(docSource)).toContain(fragmentFor(docSource, "factory_dispatch_trip_charges c"));
-    expect(shaped(docSource)).toContain(fragmentFor(docSource, "c.kind IN ('BILLABLE','DISCOUNT')"));
-    expect(shaped(docSource)).toContain(fragmentFor(docSource, 'row.kind==="DISCOUNT"?-1:1'));
-    expect(shaped(docSource)).toContain(fragmentFor(docSource, 'dispatchTrips'));
-    expect(shaped(docPrint)).toContain(fragmentFor(docPrint, 'document.dispatchTrips'));
+    expect(docSource).toContain("factory_dispatch_trip_charges c");
+    expect(docSource).toContain("c.kind IN ('BILLABLE','DISCOUNT')");
+    expect(docSource).toContain('row.kind==="DISCOUNT"?-1:1');
+    expect(docSource).toContain('dispatchTrips');
+    expect(docPrint).toContain('document.dispatchTrips');
   });
   it("pins the finalization snapshot and prevents a second invoice after any restart",()=>{
-    expect(shaped(service)).toContain(fragmentFor(service, 'if(consolidation?.status==="FINALIZED")'));
-    expect(shaped(service)).toContain(fragmentFor(service, "replayed:true"));
-    expect(shaped(service)).toContain(fragmentFor(service, "finalization_details="));
-    expect(shaped(sql)).toContain(fragmentFor(sql, "factory_dispatch_order_consolidations_final_invoice_ck"));
-    expect(shaped(sql)).toContain(fragmentFor(sql, "factory_dispatch_final_invoice_guard"));
-    expect(shaped(sql)).toContain(fragmentFor(sql, "factory_dispatch_final_invoice_number_uq"));
+    expect(service).toContain('if(consolidation?.status==="FINALIZED")');
+    expect(service).toContain("replayed:true");
+    expect(service).toContain("finalization_details=");
+    expect(sql).toContain("factory_dispatch_order_consolidations_final_invoice_ck");
+    expect(sql).toContain("factory_dispatch_final_invoice_guard");
+    expect(sql).toContain("factory_dispatch_final_invoice_number_uq");
   });
 });

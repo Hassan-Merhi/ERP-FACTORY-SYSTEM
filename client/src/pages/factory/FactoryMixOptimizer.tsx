@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { factoryApiRequest } from "@/lib/factoryApi";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 
 interface MaterialRow {
   supplierId: string;
@@ -34,20 +37,30 @@ interface Supplier {
 }
 
 export default function FactoryMixOptimizer() {
+  const { selectedCompany } = useCompany();
+  // The server refuses this POST for read-only roles, so the button explains why instead of failing.
+  const recordChanges = useExistingRecordChangeAccess();
   const [targetProduct, setTargetProduct] = useState("");
   const [desiredMargin, setDesiredMargin] = useState(20);
   const [materials, setMaterials] = useState<MaterialRow[]>([{ supplierId: "", kgAvailable: 0, costPerKg: 0 }]);
+  useEffect(() => {
+    setTargetProduct("");
+    setMaterials([{ supplierId: "", kgAvailable: 0, costPerKg: 0 }]);
+  }, [selectedCompany?.id]);
 
   const productsQuery = useQuery<BaleProduct[]>({
-    queryKey: ["/api/factory/bale-products?profile=picker"],
+    queryKey: companyQueryKey("/api/factory/bale-products?profile=picker", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
   });
 
   const suppliersQuery = useQuery<Supplier[]>({
-    queryKey: ["/api/factory/suppliers"],
+    queryKey: companyQueryKey("/api/factory/suppliers", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
   });
 
   const optimizeMutation = useMutation<OptimizeSuggestion[], Error>({
     mutationFn: async () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await factoryApiRequest("POST", "/api/factory/mix/optimize", {
         targetProduct,
         desiredMargin,
@@ -204,7 +217,8 @@ export default function FactoryMixOptimizer() {
 
           <Button
             onClick={handleOptimize}
-            disabled={optimizeMutation.isPending || !targetProduct}
+            disabled={optimizeMutation.isPending || !targetProduct || !recordChanges.allowed}
+            title={recordChanges.reason ?? undefined}
             data-testid="button-optimize"
           >
             {optimizeMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

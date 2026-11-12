@@ -10,6 +10,7 @@ type FactoryLocationInventoryModel = ReturnType<typeof useFactoryLocationInvento
 
 export function FactoryLocationInventoryLocationView({ inventory }: { inventory: FactoryLocationInventoryModel }) {
   const {
+    canChangeExistingRecords,
     filteredLocations,
     handleLocationClick,
     hideAvgCost,
@@ -110,16 +111,18 @@ export function FactoryLocationInventoryLocationView({ inventory }: { inventory:
                     <span className="block truncate text-sm font-semibold leading-snug">{location.name}</span>
                     <span className="mt-1 block text-xs text-muted-foreground">Tap to view inventory</span>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 shrink-0 text-muted-foreground opacity-70 hover:text-foreground"
-                    onClick={(e) => openRenameDialog(location, e)}
-                    data-testid={`button-rename-location-${location.id}`}
-                    title="Rename location"
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
+                  {canChangeExistingRecords && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 shrink-0 text-muted-foreground opacity-70 hover:text-foreground"
+                      onClick={(e) => openRenameDialog(location, e)}
+                      data-testid={`button-rename-location-${location.id}`}
+                      title="Rename location"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
                   <ChevronRight className="inventory-location-chevron h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
                 </div>
               ))}

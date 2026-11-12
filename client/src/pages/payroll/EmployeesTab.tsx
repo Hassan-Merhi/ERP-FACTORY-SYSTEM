@@ -60,6 +60,9 @@ interface EmployeesTabProps {
   setEditingEmployee: (emp: Employee | null) => void;
   setEditEmployeeDialogOpen: (val: boolean) => void;
   handleDeleteEmployee: (emp: Employee) => void;
+  /** False for View Only and Create Only: hide controls that change existing records. */
+  canChangeExistingRecords: boolean;
+  canCreate: (method: string, path: string) => boolean;
 }
 
 export function EmployeesTab({
@@ -91,7 +94,11 @@ export function EmployeesTab({
   setEditingEmployee,
   setEditEmployeeDialogOpen,
   handleDeleteEmployee,
+  canChangeExistingRecords,
+  canCreate,
 }: EmployeesTabProps) {
+  const canCreateEmployee = canCreate("POST", "/api/employees");
+  const canCreateGroup = canCreate("POST", "/api/employee-groups");
   const { formatAmount } = useCurrencyContext();
   const activeCount = employeeStaff.filter((employee) => employee.active).length;
   const monthlyPayroll = employeeStaff
@@ -176,14 +183,16 @@ export function EmployeesTab({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuItem
-                  onClick={() => setCreateGroupDialogOpen(true)}
-                  data-testid="button-create-employee-group"
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create Group
-                </DropdownMenuItem>
-                {employeeGroups.length > 0 && <DropdownMenuSeparator />}
+                {canCreateGroup && (
+                  <DropdownMenuItem
+                    onClick={() => setCreateGroupDialogOpen(true)}
+                    data-testid="button-create-employee-group"
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Create Group
+                  </DropdownMenuItem>
+                )}
+                {canCreateGroup && employeeGroups.length > 0 && <DropdownMenuSeparator />}
                 {employeeGroups.map((group) => (
                   <DropdownMenuItem
                     key={group.id}
@@ -200,7 +209,7 @@ export function EmployeesTab({
               </DropdownMenuContent>
             </DropdownMenu>
 
-            {employeeStaff.length > 0 && (
+            {canChangeExistingRecords && employeeStaff.length > 0 && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" className="h-10" data-testid="button-open-payroll-actions">
@@ -257,14 +266,16 @@ export function EmployeesTab({
               </DropdownMenu>
             )}
 
-            <Button
-              className="h-10"
-              onClick={() => setCreateEmployeeDialogOpen(true)}
-              data-testid="button-create-employee"
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              New Employee
-            </Button>
+            {canCreateEmployee && (
+              <Button
+                className="h-10"
+                onClick={() => setCreateEmployeeDialogOpen(true)}
+                data-testid="button-create-employee"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                New Employee
+              </Button>
+            )}
           </div>
         </div>
 
@@ -364,73 +375,77 @@ export function EmployeesTab({
                     </div>
 
                     <div className="col-span-2 flex items-center justify-end gap-1 max-sm:border-t max-sm:pt-2 sm:col-span-1">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-8"
-                            data-testid={`button-actions-${employee.id}`}
-                          >
-                            Actions <ChevronDown className="ml-1 h-3.5 w-3.5" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            onClick={() => handleDeposit(employee)}
-                            data-testid={`button-deposit-${employee.id}`}
-                          >
-                            <TrendingUp className="mr-2 h-4 w-4" /> Deposit
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => handleBonus(employee)}
-                            data-testid={`button-bonus-${employee.id}`}
-                          >
-                            <DollarSign className="mr-2 h-4 w-4" /> Bonus
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => handleWithdrawal(employee)}
-                            data-testid={`button-withdraw-${employee.id}`}
-                          >
-                            <TrendingDown className="mr-2 h-4 w-4" /> Withdraw
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      {canChangeExistingRecords && (
+                        <>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8"
+                                data-testid={`button-actions-${employee.id}`}
+                              >
+                                Actions <ChevronDown className="ml-1 h-3.5 w-3.5" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                onClick={() => handleDeposit(employee)}
+                                data-testid={`button-deposit-${employee.id}`}
+                              >
+                                <TrendingUp className="mr-2 h-4 w-4" /> Deposit
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => handleBonus(employee)}
+                                data-testid={`button-bonus-${employee.id}`}
+                              >
+                                <DollarSign className="mr-2 h-4 w-4" /> Bonus
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => handleWithdrawal(employee)}
+                                data-testid={`button-withdraw-${employee.id}`}
+                              >
+                                <TrendingDown className="mr-2 h-4 w-4" /> Withdraw
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
 
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8"
-                        onClick={() => {
-                          setEditingEmployee(employee);
-                          setEditEmployeeDialogOpen(true);
-                        }}
-                        aria-label={`Edit ${employee.firstName} ${employee.lastName}`}
-                        data-testid={`button-edit-${employee.id}`}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-
-                      <ConfirmationDialog
-                        trigger={
                           <Button
                             size="icon"
                             variant="ghost"
-                            className="h-8 w-8 text-destructive hover:text-destructive"
-                            aria-label={`Delete ${employee.firstName} ${employee.lastName}`}
-                            data-testid={`button-delete-${employee.id}`}
+                            className="h-8 w-8"
+                            onClick={() => {
+                              setEditingEmployee(employee);
+                              setEditEmployeeDialogOpen(true);
+                            }}
+                            aria-label={`Edit ${employee.firstName} ${employee.lastName}`}
+                            data-testid={`button-edit-${employee.id}`}
                           >
-                            <Trash2 className="h-4 w-4" />
+                            <Pencil className="h-4 w-4" />
                           </Button>
-                        }
-                        title="Delete Employee"
-                        description={`Are you sure you want to delete ${[employee.firstName, employee.lastName]
-                          .filter(Boolean)
-                          .join(" ")}? This action cannot be undone.`}
-                        confirmText="Delete"
-                        variant="destructive"
-                        onConfirm={() => handleDeleteEmployee(employee)}
-                      />
+
+                          <ConfirmationDialog
+                            trigger={
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8 text-destructive hover:text-destructive"
+                                aria-label={`Delete ${employee.firstName} ${employee.lastName}`}
+                                data-testid={`button-delete-${employee.id}`}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            }
+                            title="Delete Employee"
+                            description={`Are you sure you want to delete ${[employee.firstName, employee.lastName]
+                              .filter(Boolean)
+                              .join(" ")}? This action cannot be undone.`}
+                            confirmText="Delete"
+                            variant="destructive"
+                            onConfirm={() => handleDeleteEmployee(employee)}
+                          />
+                        </>
+                      )}
                     </div>
                   </div>
                 );

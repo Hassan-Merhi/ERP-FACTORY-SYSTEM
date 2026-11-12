@@ -103,6 +103,8 @@ vi.mock("react-hook-form", () => ({
 vi.mock("@hookform/resolvers/zod", () => ({ zodResolver: () => undefined }));
 vi.mock("wouter", () => ({ useLocation: () => ["/daybook", harness.navigate] }));
 vi.mock("@/contexts/CompanyContext", () => ({
+  // No provider role: the shared change-access helper leaves controls as they are.
+  useOptionalCompany: () => null,
   useCompany: () => ({
     selectedCompany: { id: 4, name: "GC Lshi", companyType: "standard" },
   }),

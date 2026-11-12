@@ -35,6 +35,7 @@ export function FactoryWorkerDocumentsBalesPanel({ model }: FactoryWorkerDetailM
     showDocuments,
     startDate,
     uploadingDoc,
+    canChangeExistingRecords,
   } = model;
   return (
     <>
@@ -47,25 +48,27 @@ export function FactoryWorkerDocumentsBalesPanel({ model }: FactoryWorkerDetailM
                 {documents?.length || 0} file{documents?.length !== 1 ? "s" : ""} uploaded
               </p>
             </div>
-            <div>
-              <input
-                ref={docInputRef}
-                type="file"
-                className="hidden"
-                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xlsx,.xls"
-                onChange={handleDocUpload}
-                data-testid="input-doc-upload"
-              />
-              <Button
-                variant="outline"
-                onClick={() => docInputRef.current?.click()}
-                disabled={uploadingDoc}
-                data-testid="button-upload-doc"
-              >
-                <Upload className="h-4 w-4 mr-2" />
-                {uploadingDoc ? "Uploading..." : "Upload Document"}
-              </Button>
-            </div>
+            {canChangeExistingRecords && (
+              <div>
+                <input
+                  ref={docInputRef}
+                  type="file"
+                  className="hidden"
+                  accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xlsx,.xls"
+                  onChange={handleDocUpload}
+                  data-testid="input-doc-upload"
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => docInputRef.current?.click()}
+                  disabled={uploadingDoc}
+                  data-testid="button-upload-doc"
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  {uploadingDoc ? "Uploading..." : "Upload Document"}
+                </Button>
+              </div>
+            )}
           </div>
 
           {docsLoading ? (
@@ -135,15 +138,17 @@ export function FactoryWorkerDocumentsBalesPanel({ model }: FactoryWorkerDetailM
                           >
                             <Download className="h-3.5 w-3.5" />
                           </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => setPendingDeleteDocId(doc.id)}
-                            disabled={deleteDocMutation.isPending}
-                            data-testid={`button-delete-doc-${doc.id}`}
-                          >
-                            <Trash2 className="h-4 w-4 text-muted-foreground" />
-                          </Button>
+                          {canChangeExistingRecords && (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => setPendingDeleteDocId(doc.id)}
+                              disabled={deleteDocMutation.isPending}
+                              data-testid={`button-delete-doc-${doc.id}`}
+                            >
+                              <Trash2 className="h-4 w-4 text-muted-foreground" />
+                            </Button>
+                          )}
                         </div>
                       </div>
                     );

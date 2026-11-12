@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { readJson, type Location } from "@/pages/pos/retailPosTypes";
 import { RetailLedgerPanel } from "./RetailLedgerPanel";
@@ -76,6 +77,7 @@ const LABELS: Array<[keyof RetailAccountingSettings, string]> = [
 
 export function RetailFinancialPanel({ companyKey }: { companyKey: number }) {
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
   const [locationId, setLocationId] = useState("");
   const [draft, setDraft] = useState<RetailAccountingSettings | null>(null);
 
@@ -111,6 +113,7 @@ export function RetailFinancialPanel({ companyKey }: { companyKey: number }) {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       if (!draft) throw new Error("Retail accounting settings are not loaded");
       const response = await apiRequest("PUT", "/api/retail/financial/settings", {
         ...draft,
@@ -165,6 +168,7 @@ export function RetailFinancialPanel({ companyKey }: { companyKey: number }) {
                     <select
                       className="mt-1 h-9 w-full rounded-md border bg-background px-2 text-sm"
                       value={String(draft[key] ?? "")}
+                      disabled={!recordChanges.allowed}
                       onChange={(event) =>
                         setDraft((current) => (current ? { ...current, [key]: Number(event.target.value) } : current))
                       }
@@ -182,6 +186,7 @@ export function RetailFinancialPanel({ companyKey }: { companyKey: number }) {
                   <select
                     className="mt-1 h-9 w-full rounded-md border bg-background px-2 text-sm"
                     value={draft.bankAccountId ?? ""}
+                    disabled={!recordChanges.allowed}
                     onChange={(event) =>
                       setDraft((current) =>
                         current
@@ -202,9 +207,11 @@ export function RetailFinancialPanel({ companyKey }: { companyKey: number }) {
             ) : (
               <div className="text-sm text-muted-foreground">Loading accounting mapping…</div>
             )}
-            <Button disabled={!draft || saveMutation.isPending} onClick={() => saveMutation.mutate()}>
-              <Save className="mr-2 h-4 w-4" /> Save mapping
-            </Button>
+            {recordChanges.allowed && (
+              <Button disabled={!draft || saveMutation.isPending} onClick={() => saveMutation.mutate()}>
+                <Save className="mr-2 h-4 w-4" /> Save mapping
+              </Button>
+            )}
           </CardContent>
         </Card>
 

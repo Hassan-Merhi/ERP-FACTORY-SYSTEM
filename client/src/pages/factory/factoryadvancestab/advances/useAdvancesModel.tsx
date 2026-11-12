@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useToast } from "@/hooks/use-toast";
@@ -13,6 +14,7 @@ function wasHandledGlobally(error: unknown): boolean {
 export function useAdvancesModel() {
   const { formatDisplayDate } = useDateFormat();
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
 
   const [addOpen, setAddOpen] = useState(false);
   const [postAccountingOpen, setPostAccountingOpen] = useState(false);
@@ -87,6 +89,7 @@ export function useAdvancesModel() {
 
   const postAccountingMutation = useMutation({
     mutationFn: async (data: { cashAccountId: number }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await apiRequest("POST", "/api/factory/advances/post-accounting", data);
       const json = await res.json();
       if (!res.ok) throw new Error(json.message || "Failed");
@@ -121,6 +124,7 @@ export function useAdvancesModel() {
 
   const repayByMonthMutation = useMutation({
     mutationFn: async (month: string) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await apiRequest("POST", "/api/factory/advances/repay-by-month", {
         month,
         repaymentDate: repayByMonthForm.repaymentDate,
@@ -156,6 +160,7 @@ export function useAdvancesModel() {
   });
   const cashAdjMutation = useMutation({
     mutationFn: async (data: typeof cashAdjForm) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await apiRequest("POST", "/api/factory/advances/cash-adjustment", {
         cashAccountId: parseInt(data.cashAccountId),
         amount: data.amount,
@@ -227,6 +232,7 @@ export function useAdvancesModel() {
 
   const repayAuditMutation = useMutation({
     mutationFn: async (form: typeof repayAuditForm) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await apiRequest("POST", "/api/factory/advances/post-repayment-vouchers", {
         cashAccountId: parseInt(form.cashAccountId),
         repaymentDate: form.repaymentDate,
@@ -278,6 +284,7 @@ export function useAdvancesModel() {
 
   const reconcileMutation = useMutation({
     mutationFn: async () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await apiRequest("POST", "/api/factory/advances/reconcile", {});
       const json = await res.json();
       if (!res.ok) throw new Error(json.message || "Reconciliation failed");
@@ -298,6 +305,7 @@ export function useAdvancesModel() {
 
   const createMutation = useMutation({
     mutationFn: async () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await apiRequest("POST", `/api/factory/workers/${form.workerId}/advances`, {
         advanceDate: form.advanceDate,
         amount: form.amount,
@@ -331,6 +339,7 @@ export function useAdvancesModel() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await fetch(`/api/factory/advances/${id}`, { method: "DELETE", credentials: "include" });
       if (!res.ok) {
         const err = await res.json();
@@ -352,6 +361,7 @@ export function useAdvancesModel() {
 
   const reverseMutation = useMutation({
     mutationFn: async (id: number) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await apiRequest("POST", `/api/factory/advances/${id}/reverse`, {});
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed to reverse advance");
@@ -371,6 +381,7 @@ export function useAdvancesModel() {
 
   const bulkMutation = useMutation({
     mutationFn: async () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const items = Array.from(bulkSelected)
         .map((wid) => ({ workerId: wid, amount: bulkAmounts[wid] || "" }))
         .filter((i) => parseFloat(i.amount) > 0);
@@ -407,6 +418,7 @@ export function useAdvancesModel() {
 
   const bulkUpdateCashAccountMutation = useMutation({
     mutationFn: async () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await apiRequest("POST", "/api/factory/advances/bulk-update-cash-account", {
         advanceIds: Array.from(selectedIds),
         cashAccountId: parseInt(bulkCashAccountId),
@@ -452,6 +464,8 @@ export function useAdvancesModel() {
     }
   };
   return {
+    canChangeExistingRecords: recordChanges.allowed,
+    changeDisabledReason: recordChanges.reason,
     addOpen,
     setAddOpen,
     postAccountingOpen,

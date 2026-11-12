@@ -33,6 +33,8 @@ export interface POSDialogsProps {
   stockWaStatus: string;
   handleSendStockWhatsApp: () => void;
   sendingWhatsApp: boolean;
+  /** False for read-only roles: WhatsApp send buttons are hidden. */
+  canSendWhatsApp?: boolean;
   handlePrint: () => void;
   isCreditSale: boolean;
   showStockPrompt: boolean;
@@ -66,6 +68,7 @@ export function POSDialogs({
   stockWaStatus,
   handleSendStockWhatsApp,
   sendingWhatsApp,
+  canSendWhatsApp = true,
   handlePrint,
   showStockPrompt,
   setShowStockPrompt,
@@ -214,7 +217,8 @@ export function POSDialogs({
                 New Sale
               </Button>
             )}
-            {activeLocation?.whatsappGroupChatId &&
+            {canSendWhatsApp &&
+              activeLocation?.whatsappGroupChatId &&
               (() => {
                 if (invoiceWaStatus === "sending") {
                   return (
@@ -252,7 +256,8 @@ export function POSDialogs({
                   </Button>
                 );
               })()}
-            {!editVoucherId &&
+            {canSendWhatsApp &&
+              !editVoucherId &&
               (() => {
                 const hasWa = !!activeLocation?.whatsappGroupChatId;
                 if (stockWaStatus === "sending") {
@@ -362,16 +367,18 @@ export function POSDialogs({
             <Button variant="outline" onClick={() => setShowStockPrompt(false)} data-testid="button-close-stock-report">
               Close
             </Button>
-            <Button
-              variant="outline"
-              onClick={handleSendWhatsAppReport}
-              disabled={sendingWhatsApp || !activeLocation?.whatsappGroupChatId}
-              className="gap-2"
-              data-testid="button-share-stock-wa"
-            >
-              <Send className="h-4 w-4" />
-              Share on WhatsApp
-            </Button>
+            {canSendWhatsApp && (
+              <Button
+                variant="outline"
+                onClick={handleSendWhatsAppReport}
+                disabled={sendingWhatsApp || !activeLocation?.whatsappGroupChatId}
+                className="gap-2"
+                data-testid="button-share-stock-wa"
+              >
+                <Send className="h-4 w-4" />
+                Share on WhatsApp
+              </Button>
+            )}
             <Button
               onClick={handleStockPrint}
               disabled={stockInventoryLoading}

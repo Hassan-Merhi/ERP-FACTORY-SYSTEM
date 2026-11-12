@@ -16,97 +16,24 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { factoryApiRequest } from "@/lib/factoryApi";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { PageHeader } from "@/components/PageHeader";
 import * as XLSX from "xlsx-js-style";
 import type { FactoryMyAccess } from "@shared/apiTypes";
 import { useCompany } from "@/contexts/CompanyContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
 import {
-  type LedgerSplitFields,
-  type NotInLedgerRowFields,
-} from "./factorycustomerstatement/NotInLedgerParts";
-
-interface CustomerInfo {
-  id: number;
-  code: string;
-  legalName: string;
-  phone: string | null;
-  openingBalance: string | null;
-  openingBalanceSide: string | null;
-  active: boolean;
-  statementNote: string | null;
-}
-
-interface BalanceEntry extends NotInLedgerRowFields {
-  id: number | string; // numeric for customerBalances rows, "ve-{n}" for voucher-entry rows
-  transactionDate: string;
-  transactionType: string;
-  description: string | null;
-  referenceType: string | null;
-  referenceId: number | null;
-  debitAmount: string;
-  creditAmount: string;
-  balance: string;
-  currency: string;
-  containerNumber: string | null;
-  destination: string | null;
-  totalQtyBales: number | null;
-  totalWeightKg: number | null;
-  runningBalance: number;
-  runningBalanceSide: string;
-  rowNote: string | null;
-}
-
-interface StatementData extends LedgerSplitFields {
-  customer: CustomerInfo;
-  invoices: unknown[];
-  balanceHistory: BalanceEntry[];
-  currentBalance: number;
-  currentBalanceSide: string;
-  openingBalance: number;
-  openingBalanceSide: string;
-}
-
-interface PriceListEntry {
-  article_code: string;
-  item_name: string;
-  price_per_bale: string;
-  updated_at: string;
-}
-
-// Older customer-wide prices are retained for reference, but never used as
-// destination-specific agreed prices on new proformas.
-const LEGACY_PRICE_DESTINATION = "__legacy__";
-
-function priceListUrl(customerId: string | undefined, destination: string, articleCode?: string): string {
-  const base = `/api/factory/customer-price-lists/${customerId}`;
-  const path = articleCode ? `${base}/${encodeURIComponent(articleCode)}` : base;
-  return destination === LEGACY_PRICE_DESTINATION
-    ? path
-    : `${path}?destination=${encodeURIComponent(destination)}`;
-}
-
-function normalizePriceDestination(value: string): string {
-  const normalized = value.trim().replace(/\s+/g, " ").toUpperCase().replace(/[\u2019\u2018]/g, "'");
-  if (["LUBUMBASHI", "LSHI", "L'SHI", "L SHI"].includes(normalized)) return "L'SHI";
-  if (normalized === "MALI 53") return "MALI";
-  return normalized;
-}
-
-function fmtMoney(value: number | null | undefined): string {
-  if (value == null || isNaN(value)) return "$0";
-  const abs = Math.abs(value);
-  if (abs % 1 === 0) {
-    return `$${Math.round(abs).toLocaleString()}`;
-  }
-  return `$${abs.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
-function fmtNum(value: number | null | undefined): string {
-  if (value == null || isNaN(value)) return "0";
-  if (value % 1 === 0) return Math.round(value).toLocaleString();
-  return value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
-}
+  LEGACY_PRICE_DESTINATION,
+  downloadPriceListTemplate,
+  fmtMoney,
+  fmtNum,
+  normalizePriceDestination,
+  parsePriceListRows,
+  priceListUrl,
+  type PriceListEntry,
+  type PriceListLine,
+  type StatementData,
+} from "./factorycustomerstatement/statementHelpers";
 
 export default function FactoryCustomerStatement() {
   const { selectedCompany } = useCompany();
@@ -116,14 +43,16 @@ export default function FactoryCustomerStatement() {
   useEscapeToParent("/factory/customers");
   const params = useParams<{ id: string }>();
   const customerId = params.id;
+  const recordChanges = useExistingRecordChangeAccess();
   const { data: myAccess } = useQuery<FactoryMyAccess>({
     queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
     enabled: Boolean(selectedCompany?.id),
     staleTime: 5 * 60000,
   });
-  const hiddenTabs = myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
-    ? myAccess.hiddenCostFields
-    : ["hide_tab_customer_statement", "hide_tab_customer_pricelist"];
+  const hiddenTabs =
+    myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
+      ? myAccess.hiddenCostFields
+      : ["hide_tab_customer_statement", "hide_tab_customer_pricelist"];
   const showStatementTab = !hiddenTabs.includes("hide_tab_customer_statement");
   const showPriceListTab = !hiddenTabs.includes("hide_tab_customer_pricelist");
   const visibleCustomerTabs = [showStatementTab ? "statement" : null, showPriceListTab ? "pricelist" : null].filter(
@@ -157,7 +86,14 @@ export default function FactoryCustomerStatement() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: statement, isLoading } = useQuery<StatementData>({
-    queryKey: companyQueryKey("/api/factory/customers", selectedCompany?.id, customerId, "statement", filterDateFrom, filterDateTo),
+    queryKey: companyQueryKey(
+      "/api/factory/customers",
+      selectedCompany?.id,
+      customerId,
+      "statement",
+      filterDateFrom,
+      filterDateTo
+    ),
     queryFn: async () => {
       // Re-group at each date boundary: a late charge must never shift into
       // a different accounting period when filtering the statement.
@@ -249,6 +185,7 @@ export default function FactoryCustomerStatement() {
 
   const saveNoteMutation = useMutation({
     mutationFn: async (note: string) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       await apiRequest("PATCH", `/api/factory/customers/${customerId}/statement-note`, { statementNote: note });
     },
     onSuccess: () => {
@@ -261,10 +198,8 @@ export default function FactoryCustomerStatement() {
   });
 
   const savePricesMutation = useMutation({
-    mutationFn: async (payload: {
-      destination: string;
-      lines: { articleCode: string; pricePerBale: string | number }[];
-    }) => {
+    mutationFn: async (payload: { destination: string; lines: PriceListLine[] }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await factoryApiRequest("PUT", priceListUrl(customerId, payload.destination), payload.lines);
       return (await res.json()) as { saved?: number };
     },
@@ -287,6 +222,7 @@ export default function FactoryCustomerStatement() {
 
   const deletePriceMutation = useMutation({
     mutationFn: async (payload: { articleCode: string; destination: string }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       return factoryApiRequest("DELETE", priceListUrl(customerId, payload.destination, payload.articleCode), {});
     },
     onSuccess: (_data, variables) => {
@@ -307,7 +243,7 @@ export default function FactoryCustomerStatement() {
 
   const saveRowNote = async (entryId: number | string, note: string) => {
     // Voucher-entry rows have string IDs ("ve-N") — they have no customerBalances record to update
-    if (typeof entryId === "string") return;
+    if (typeof entryId === "string" || !recordChanges.allowed) return;
     const original = statement?.balanceHistory.find((e) => e.id === entryId)?.rowNote ?? "";
     if (note === original) return;
     setSavingRowNote(entryId);
@@ -355,37 +291,8 @@ export default function FactoryCustomerStatement() {
   const hasFilters = filterDestination || filterDateFrom || filterDateTo;
 
   const handlePriceListTemplateDownload = async () => {
-    // The first sheet matches the importer headers and contains no fake example articles.
-    const workbook = XLSX.utils.book_new();
-    const sheet = XLSX.utils.aoa_to_sheet([["article_code", "price"]]);
-    sheet["!cols"] = [{ wch: 28 }, { wch: 18 }];
-    sheet["!rows"] = [{ hpt: 26 }];
-    sheet["!autofilter"] = { ref: "A1:B1" };
-    for (const cell of ["A1", "B1"]) {
-      sheet[cell].s = {
-        font: { bold: true, color: { rgb: "FFFFFF" } },
-        fill: { patternType: "solid", fgColor: { rgb: "1E293B" } },
-        alignment: { vertical: "center" },
-      };
-    }
-    XLSX.utils.book_append_sheet(workbook, sheet, "Price List");
-
-    const guide = XLSX.utils.aoa_to_sheet([
-      ["How to upload agreed prices"],
-      ["1. In Price List, enter existing article codes under article_code and positive USD prices per bale under price."],
-      ["2. Keep both headers unchanged. Enter prices as numbers without a dollar sign."],
-      ["3. In the ERP, select the correct customer and destination, then use Upload Excel."],
-      ["4. Only that customer and destination are updated; existing proforma line prices are not changed."],
-    ]);
-    guide["!cols"] = [{ wch: 110 }];
-    guide["A1"].s = {
-      font: { bold: true, color: { rgb: "FFFFFF" } },
-      fill: { patternType: "solid", fgColor: { rgb: "1E293B" } },
-    };
-    XLSX.utils.book_append_sheet(workbook, guide, "Instructions");
-
     try {
-      await XLSX.writeFile(workbook, "agreed-prices-upload-template.xlsx");
+      await downloadPriceListTemplate();
     } catch {
       toast({ title: "Failed to download price-list template", variant: "destructive" });
     }
@@ -404,18 +311,7 @@ export default function FactoryCustomerStatement() {
         const workbook = XLSX.read(data, { type: "array" });
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
         const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
-        const lines: { articleCode: string; pricePerBale: string | number }[] = [];
-        for (const row of rows) {
-          const code = String(
-            row["article_code"] ?? row["Article Code"] ?? row["ARTICLE_CODE"] ?? row["code"] ?? ""
-          ).trim();
-          const price =
-            row["price"] ?? row["price_per_bale"] ?? row["Price"] ?? row["Price Per Bale"] ?? row["PRICE"] ?? "";
-          if (code && price !== "") {
-            const p = parseFloat(String(price));
-            if (!isNaN(p) && p > 0) lines.push({ articleCode: code, pricePerBale: p });
-          }
-        }
+        const lines = parsePriceListRows(rows);
         if (lines.length === 0) {
           toast({
             title: "No valid rows found",
@@ -437,7 +333,7 @@ export default function FactoryCustomerStatement() {
     if (!priceDestination) return;
     // Save only edited/new rows: resending stale unchanged prices can overwrite
     // a newer explicit save from another screen.
-    const lines: { articleCode: string; pricePerBale: string | number }[] = [];
+    const lines: PriceListLine[] = [];
     for (const [articleCode, value] of Object.entries(priceEdits)) {
       const price = Number(value);
       if (!Number.isFinite(price) || price <= 0) {
@@ -739,7 +635,6 @@ export default function FactoryCustomerStatement() {
                                   {entry.transactionType}
                                 </Badge>
                                 {isInvoice && <ExternalLink className="h-3 w-3 text-muted-foreground shrink-0" />}
-
                               </div>
                             </TableCell>
                             <TableCell
@@ -806,7 +701,10 @@ export default function FactoryCustomerStatement() {
                                 }
                                 onBlur={() => saveRowNote(entry.id, rowNotes[entry.id] ?? "")}
                                 placeholder={typeof entry.id === "string" ? "—" : "Add note…"}
-                                disabled={savingRowNote === entry.id || typeof entry.id === "string"}
+                                disabled={
+                                  !recordChanges.allowed || savingRowNote === entry.id || typeof entry.id === "string"
+                                }
+                                title={recordChanges.reason ?? undefined}
                                 className="w-full text-xs bg-transparent border border-border rounded-sm px-2 py-1 placeholder:text-muted-foreground/50 focus:outline-hidden focus:ring-1 focus:ring-ring disabled:opacity-50"
                                 data-testid={`input-row-note-${entry.id}`}
                               />
@@ -828,16 +726,20 @@ export default function FactoryCustomerStatement() {
                   onChange={(e) => setDraftNote(e.target.value)}
                   placeholder="Add a note for this customer's statement..."
                   rows={3}
+                  readOnly={!recordChanges.allowed}
+                  title={recordChanges.reason ?? undefined}
                   data-testid="textarea-statement-note"
                 />
-                <Button
-                  size="sm"
-                  onClick={() => saveNoteMutation.mutate(draftNote ?? "")}
-                  disabled={saveNoteMutation.isPending}
-                  data-testid="button-save-statement-note"
-                >
-                  {saveNoteMutation.isPending ? "Saving…" : "Save Note"}
-                </Button>
+                {recordChanges.allowed && (
+                  <Button
+                    size="sm"
+                    onClick={() => saveNoteMutation.mutate(draftNote ?? "")}
+                    disabled={saveNoteMutation.isPending}
+                    data-testid="button-save-statement-note"
+                  >
+                    {saveNoteMutation.isPending ? "Saving…" : "Save Note"}
+                  </Button>
+                )}
               </div>
             </TabsContent>
           )}
@@ -854,21 +756,42 @@ export default function FactoryCustomerStatement() {
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={handlePriceListTemplateDownload}
-                      data-testid="button-download-pricelist-template">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handlePriceListTemplateDownload}
+                      data-testid="button-download-pricelist-template"
+                    >
                       <Download className="h-4 w-4 mr-2" /> Download Template
                     </Button>
-                    <input type="file" accept=".xlsx,.xls,.csv" ref={fileInputRef}
-                      onChange={handleExcelUpload} className="hidden" data-testid="input-upload-pricelist" />
-                    <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}
-                      disabled={!priceDestination || savePricesMutation.isPending || deletePriceMutation.isPending}
-                      data-testid="button-upload-excel-pricelist">
-                      <Upload className="h-4 w-4 mr-2" /> Upload Excel
-                    </Button>
-                    {hasPriceEdits && (
-                      <Button size="sm" onClick={handleSavePrices}
+                    {recordChanges.allowed && (
+                      <>
+                        <input
+                          type="file"
+                          accept=".xlsx,.xls,.csv"
+                          ref={fileInputRef}
+                          onChange={handleExcelUpload}
+                          className="hidden"
+                          data-testid="input-upload-pricelist"
+                        />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={!priceDestination || savePricesMutation.isPending || deletePriceMutation.isPending}
+                          data-testid="button-upload-excel-pricelist"
+                        >
+                          <Upload className="h-4 w-4 mr-2" /> Upload Excel
+                        </Button>
+                      </>
+                    )}
+                    {recordChanges.allowed && hasPriceEdits && (
+                      <Button
+                        size="sm"
+                        onClick={handleSavePrices}
                         disabled={!priceDestination || savePricesMutation.isPending || deletePriceMutation.isPending}
-                        data-testid="button-save-pricelist">
+                        data-testid="button-save-pricelist"
+                      >
                         <Save className="h-4 w-4 mr-2" />
                         {savePricesMutation.isPending ? "Saving…" : "Save Changes"}
                       </Button>
@@ -880,38 +803,65 @@ export default function FactoryCustomerStatement() {
                     <label htmlFor="customer-price-destination" className="mb-1 block text-xs font-semibold">
                       Price list destination
                     </label>
-                    <select id="customer-price-destination" data-testid="select-price-destination"
+                    <select
+                      id="customer-price-destination"
+                      data-testid="select-price-destination"
                       className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground"
-                      value={priceDestination} onChange={(e) => selectPriceDestination(e.target.value)}
-                      disabled={savePricesMutation.isPending || deletePriceMutation.isPending}>
-                      <option value="" disabled>Select destination</option>
+                      value={priceDestination}
+                      onChange={(e) => selectPriceDestination(e.target.value)}
+                      disabled={savePricesMutation.isPending || deletePriceMutation.isPending}
+                    >
+                      <option value="" disabled>
+                        Select destination
+                      </option>
                       {(priceDestinationsQuery.data ?? []).map((destination) => (
-                        <option key={destination} value={destination}>{destination}</option>
+                        <option key={destination} value={destination}>
+                          {destination}
+                        </option>
                       ))}
-                      {priceDestination && priceDestination !== LEGACY_PRICE_DESTINATION &&
+                      {priceDestination &&
+                        priceDestination !== LEGACY_PRICE_DESTINATION &&
                         !(priceDestinationsQuery.data ?? []).includes(priceDestination) && (
                           <option value={priceDestination}>{priceDestination}</option>
                         )}
                       <option value={LEGACY_PRICE_DESTINATION}>Legacy / Unassigned (old prices)</option>
                     </select>
                   </div>
-                  <div className="flex min-w-[220px] flex-1 items-end gap-2">
-                    <div className="flex-1">
-                      <label htmlFor="customer-new-price-destination" className="mb-1 block text-xs font-semibold">
-                        Add another destination
-                      </label>
-                      <Input id="customer-new-price-destination" data-testid="input-new-price-destination"
-                        value={newDestination} onChange={(e) => setNewDestination(e.target.value)}
-                        placeholder="e.g. L'SHI, MALI" maxLength={120}
-                        disabled={savePricesMutation.isPending || deletePriceMutation.isPending}
-                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addPriceDestination(); } }} />
+                  {recordChanges.allowed && (
+                    <div className="flex min-w-[220px] flex-1 items-end gap-2">
+                      <div className="flex-1">
+                        <label htmlFor="customer-new-price-destination" className="mb-1 block text-xs font-semibold">
+                          Add another destination
+                        </label>
+                        <Input
+                          id="customer-new-price-destination"
+                          data-testid="input-new-price-destination"
+                          value={newDestination}
+                          onChange={(e) => setNewDestination(e.target.value)}
+                          placeholder="e.g. L'SHI, MALI"
+                          maxLength={120}
+                          disabled={savePricesMutation.isPending || deletePriceMutation.isPending}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              addPriceDestination();
+                            }
+                          }}
+                        />
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        data-testid="button-add-price-destination"
+                        onClick={addPriceDestination}
+                        disabled={
+                          !newDestination.trim() || savePricesMutation.isPending || deletePriceMutation.isPending
+                        }
+                      >
+                        Use
+                      </Button>
                     </div>
-                    <Button size="sm" variant="outline" data-testid="button-add-price-destination"
-                      onClick={addPriceDestination}
-                      disabled={!newDestination.trim() || savePricesMutation.isPending || deletePriceMutation.isPending}>
-                      Use
-                    </Button>
-                  </div>
+                  )}
                   {priceDestinationsQuery.isError && (
                     <p role="alert" className="w-full text-xs text-destructive">
                       Failed to load customer destinations. Please refresh and retry.
@@ -1000,8 +950,14 @@ export default function FactoryCustomerStatement() {
                               onChange={(e) =>
                                 setPriceEdits((prev) => ({ ...prev, [entry.article_code]: e.target.value }))
                               }
+                              readOnly={!recordChanges.allowed}
+                              title={recordChanges.reason ?? undefined}
                               onBlur={() => {
-                                if (priceEdits[entry.article_code] !== undefined && !savePricesMutation.isPending) {
+                                if (
+                                  recordChanges.allowed &&
+                                  priceEdits[entry.article_code] !== undefined &&
+                                  !savePricesMutation.isPending
+                                ) {
                                   handleSavePrices();
                                 }
                               }}
@@ -1013,58 +969,75 @@ export default function FactoryCustomerStatement() {
                             {entry.updated_at ? new Date(entry.updated_at).toLocaleDateString() : "-"}
                           </TableCell>
                           <TableCell>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="text-destructive"
-                              onClick={() => deletePriceMutation.mutate({ articleCode: entry.article_code, destination: priceDestination })}
-                              disabled={!priceDestination || deletePriceMutation.isPending || savePricesMutation.isPending}
-                              data-testid={`button-delete-price-${entry.article_code}`}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            {recordChanges.allowed && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="text-destructive"
+                                onClick={() =>
+                                  deletePriceMutation.mutate({
+                                    articleCode: entry.article_code,
+                                    destination: priceDestination,
+                                  })
+                                }
+                                disabled={
+                                  !priceDestination || deletePriceMutation.isPending || savePricesMutation.isPending
+                                }
+                                data-testid={`button-delete-price-${entry.article_code}`}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
                           </TableCell>
                         </TableRow>
                       ))
                     )}
 
                     {/* Add new row */}
-                    <TableRow data-testid="row-add-price">
-                      <TableCell>
-                        <Input
-                          placeholder="Article code…"
-                          value={newCode}
-                          onChange={(e) => setNewCode(e.target.value)}
-                          className="font-mono"
-                          data-testid="input-new-price-code"
-                        />
-                      </TableCell>
-                      <TableCell />
-                      <TableCell className="text-right">
-                        <Input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          placeholder="0.00"
-                          value={newPrice}
-                          onChange={(e) => setNewPrice(e.target.value)}
-                          className="w-32 ml-auto text-right font-mono"
-                          data-testid="input-new-price-value"
-                        />
-                      </TableCell>
-                      <TableCell />
-                      <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={handleSavePrices}
-                          disabled={!priceDestination || !newCode.trim() || !newPrice || savePricesMutation.isPending || deletePriceMutation.isPending}
-                          data-testid="button-add-price"
-                        >
-                          <Plus className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
+                    {recordChanges.allowed && (
+                      <TableRow data-testid="row-add-price">
+                        <TableCell>
+                          <Input
+                            placeholder="Article code…"
+                            value={newCode}
+                            onChange={(e) => setNewCode(e.target.value)}
+                            className="font-mono"
+                            data-testid="input-new-price-code"
+                          />
+                        </TableCell>
+                        <TableCell />
+                        <TableCell className="text-right">
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            placeholder="0.00"
+                            value={newPrice}
+                            onChange={(e) => setNewPrice(e.target.value)}
+                            className="w-32 ml-auto text-right font-mono"
+                            data-testid="input-new-price-value"
+                          />
+                        </TableCell>
+                        <TableCell />
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={handleSavePrices}
+                            disabled={
+                              !priceDestination ||
+                              !newCode.trim() ||
+                              !newPrice ||
+                              savePricesMutation.isPending ||
+                              deletePriceMutation.isPending
+                            }
+                            data-testid="button-add-price"
+                          >
+                            <Plus className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    )}
                   </TableBody>
                 </Table>
               </div>
@@ -1072,7 +1045,8 @@ export default function FactoryCustomerStatement() {
               <p className="text-xs text-muted-foreground mt-3">
                 Excel format: columns named <span className="font-mono">article_code</span> and{" "}
                 <span className="font-mono">price</span> (or <span className="font-mono">price_per_bale</span>). Prices
-                are saved only to the selected destination. Use "Save as Agreed Prices" on a proforma to store its prices here.
+                are saved only to the selected destination. Use "Save as Agreed Prices" on a proforma to store its
+                prices here.
               </p>
             </TabsContent>
           )}

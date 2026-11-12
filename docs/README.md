@@ -22,6 +22,11 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [permissions-control-center-phase1.md](permissions-control-center-phase1.md) | Route inventory, candidate mappings and policy model |
 | [permissions-control-center-phase2.md](permissions-control-center-phase2.md) | Shadow policy API, migration and audit foundation |
 | [permissions-control-center-phase8.md](permissions-control-center-phase8.md) | Phase 8 release gate, audit, monitored rollout and rollback runbook |
+| [security-posture.md](security-posture.md) | Current security controls, residual risks and how the posture is measured |
+| [permissions-v2-security-test-report.md](permissions-v2-security-test-report.md) | Role security matrix, business-integrity and regression results for Permissions V2 |
+| [permissions-v2-staging-certification.md](permissions-v2-staging-certification.md) | Staging migration, backup, data-integrity and rollback certification procedure and tooling |
+| [permissions-v2-effective-engine.md](permissions-v2-effective-engine.md) | Effective permission precedence, endpoints, company activation, enforcement switch and administrator safety rules |
+| [permissions-v2-frontend-page-audit.md](permissions-v2-frontend-page-audit.md) | Generated page-by-page frontend permission gating report for View Only and Create Only |
 | [permissions-control-center-admin-guide.md](permissions-control-center-admin-guide.md) | Shadow role/user permission editor instructions, audit review and troubleshooting |
 | [permissions-control-center-phase7.md](permissions-control-center-phase7.md) | Phase 7 security verification, staging integrity and rollback gate |
 | [permissions-control-center-phase6.md](permissions-control-center-phase6.md) | Phase 6 shared frontend permission bridge and UI integration plan |
@@ -41,6 +46,25 @@ failure, so a correct document cannot quietly become undiscoverable.
 | Doc | What it covers |
 |---|---|
 | [accounting-flow.md](accounting-flow.md) | Voucher types, posting, the ledger |
+| [accounting/hmd-kinshasa-shop-rent-phase1-audit-2026-11-10.md](accounting/hmd-kinshasa-shop-rent-phase1-audit-2026-11-10.md) | HMD Kinshasa rent source audit |
+| [accounting/hmd-kinshasa-shop-rent-phase2-execution-2026-11-10.md](accounting/hmd-kinshasa-shop-rent-phase2-execution-2026-11-10.md) | HMD Kinshasa rent execution controls |
+| [accounting/hmd-kinshasa-shop-rent-phase3-reconciliation-2026-11-10.md](accounting/hmd-kinshasa-shop-rent-phase3-reconciliation-2026-11-10.md) | HMD Kinshasa rent reconciliation |
+| [accounting/hmd-kinshasa-shop-rent-phase4-permanent-prevention-2026-11-10.md](accounting/hmd-kinshasa-shop-rent-phase4-permanent-prevention-2026-11-10.md) | HMD Kinshasa rent permanent safeguards |
+| [accounting/hadi-lshi-shop-rent-phase1-audit-2026-11-10.md](accounting/hadi-lshi-shop-rent-phase1-audit-2026-11-10.md) | HADI L'SHI rent source audit |
+| [accounting/hadi-lshi-shop-rent-phase2-prepared-2026-11-10.md](accounting/hadi-lshi-shop-rent-phase2-prepared-2026-11-10.md) | HADI L'SHI rent prepared correction |
+| [accounting/hadi-lshi-shop-rent-phase3-permanent-prevention-2026-11-10.md](accounting/hadi-lshi-shop-rent-phase3-permanent-prevention-2026-11-10.md) | HADI L'SHI rent permanent safeguards |
+| [accounting/hadi-lshi-2026-original-dated-monthly-rent-restatement-2026-11-10.md](accounting/hadi-lshi-2026-original-dated-monthly-rent-restatement-2026-11-10.md) | HADI L'SHI original-dated monthly rent restatement |
+| [factory-dispatch-trip-accounting-phase1.md](factory-dispatch-trip-accounting-phase1.md) | Factory dispatch trip accounting Phase 1 reference |
+| [factory-dispatch-trip-accounting-phase2.md](factory-dispatch-trip-accounting-phase2.md) | Factory dispatch trip accounting Phase 2 reference |
+| [factory-dispatch-trip-accounting-phase3.md](factory-dispatch-trip-accounting-phase3.md) | Factory dispatch trip accounting Phase 3 reference |
+| [factory-dispatch-trip-accounting-phase4.md](factory-dispatch-trip-accounting-phase4.md) | Factory dispatch trip accounting Phase 4 reference |
+| [factory-dispatch-trip-accounting-phase5.md](factory-dispatch-trip-accounting-phase5.md) | Factory dispatch trip accounting Phase 5 reference |
+| [factory-dispatch-trip-accounting-phase6.md](factory-dispatch-trip-accounting-phase6.md) | Factory dispatch trip accounting Phase 6 reference |
+| [factory-dispatch-trip-accounting-phase7.md](factory-dispatch-trip-accounting-phase7.md) | Factory dispatch trip accounting Phase 7 reference |
+| [factory-dispatch-trip-accounting-phase8.md](factory-dispatch-trip-accounting-phase8.md) | Factory dispatch trip accounting Phase 8 reference |
+| [factory-dispatch-trip-accounting-phase9.md](factory-dispatch-trip-accounting-phase9.md) | Factory dispatch trip accounting Phase 9 reference |
+| [factory-dispatch-trip-accounting-phase10.md](factory-dispatch-trip-accounting-phase10.md) | Factory dispatch trip accounting Phase 10 reference |
+
 | [accounting-audit-2026-10.md](accounting-audit-2026-10.md) | Accounting audit findings, production evidence and remediation waves |
 | [accounting/factory-rent-open-exception.md](accounting/factory-rent-open-exception.md) | Factory Mode unresolved Warehouse 5001 November rent, preserved prepaid balance and safe-reconciliation rules |
 | [accounting/factory-worker-advance-ledger-audit-2026-11-03.md](accounting/factory-worker-advance-ledger-audit-2026-11-03.md) | Factory Worker Advances production reconciliation, verified accrual repair, and residual historical exceptions |
@@ -59,6 +83,15 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [unified-accounting-phase13.md](unified-accounting-phase13.md) | Unified accounting (ERP, Factory, Rentals): Phase 13: Fiscal Period Closing & Audit Controls |
 | [unified-accounting-phase14.md](unified-accounting-phase14.md) | Unified accounting (ERP, Factory, Rentals): Phase 14: Unified Net Position & Accounting Dashboard |
 | [unified-accounting-phase15.md](unified-accounting-phase15.md) | Unified accounting (ERP, Factory, Rentals): Phase 15: Integration, Permissions & Controlled Rollout |
+| [factory-loading-dispatch-phase1.md](factory-loading-dispatch-phase1.md) | Factory Loading Dispatch — Phase 1 (Verification Only) |
+| [factory-loading-dispatch-phase2.md](factory-loading-dispatch-phase2.md) | Factory Loading Dispatch — Phase 2 implementation |
+| [factory-loading-dispatch-phase3.md](factory-loading-dispatch-phase3.md) | Factory Loading Dispatch — Phase 3: Barcode verification |
+| [factory-loading-dispatch-phase4.md](factory-loading-dispatch-phase4.md) | Factory Loading Dispatch — Phase 4: Comparison |
+| [factory-loading-dispatch-phase5.md](factory-loading-dispatch-phase5.md) | Factory Loading Dispatch — Phase 5: Priority allocation and cross-trip coordination |
+| [factory-loading-dispatch-phase6.md](factory-loading-dispatch-phase6.md) | Factory Loading Dispatch — Phase 6: End Dispatch and audit controls |
+| [factory-loading-dispatch-phase7.md](factory-loading-dispatch-phase7.md) | Factory Loading Dispatch — Phase 7: Reports, manifests and exports |
+| [properties-unification-phase6-handoff.md](properties-unification-phase6-handoff.md) | Properties Unification — Phase 6 Parity Audit and Claude Merge Handoff |
+| [properties-unification-execution-tracker.md](properties-unification-execution-tracker.md) | Properties Mode — Unification Execution Tracker |
 | [audits/mali-hmd-cost-repair-procedure.md](audits/mali-hmd-cost-repair-procedure.md) | Evidence-gated MALI/HMD landed-cost, adjustment, transfer and COGS repair procedure (backend-only) |
 | [audits/historical-sold-bale-cost-reconciliation-review.md](audits/historical-sold-bale-cost-reconciliation-review.md) | Review-only reconciliation of historical sold-bale costs and the guarded pre-invoice recost |
 | [inventory-flow.md](inventory-flow.md) | Stock data model and cost calculation |
@@ -314,6 +347,13 @@ These current-reference documents are indexed here for audit coverage. Their beh
 | [factory-loading-dispatch-phase5.md](factory-loading-dispatch-phase5.md) | Factory Loading Dispatch — Phase 5: Priority allocation and cross-trip coordination |
 | [factory-loading-dispatch-phase6.md](factory-loading-dispatch-phase6.md) | Factory Loading Dispatch — Phase 6: End Dispatch and audit controls |
 | [factory-loading-dispatch-phase7.md](factory-loading-dispatch-phase7.md) | Factory Loading Dispatch — Phase 7: Reports, manifests and exports |
+| [factory-mix-cost-integrity-phase1.md](factory-mix-cost-integrity-phase1.md) | Factory Mix Cost Integrity — Phase 1 |
+| [factory-mix-cost-integrity-phase2.md](factory-mix-cost-integrity-phase2.md) | Factory Mix Cost Integrity — Phase 2 |
+| [factory-mix-cost-integrity-phase3.md](factory-mix-cost-integrity-phase3.md) | Factory Mix Cost Integrity — Phase 3 |
+| [factory-mix-cost-integrity-phase4.md](factory-mix-cost-integrity-phase4.md) | Factory Mix Cost Integrity — Phase 4 |
+| [factory-mix-cost-integrity-phase5.md](factory-mix-cost-integrity-phase5.md) | Factory Mix Cost Integrity — Phase 5 |
+| [factory-mix-cost-integrity-phase6.md](factory-mix-cost-integrity-phase6.md) | Factory Mix Cost Integrity — Phase 6 |
+| [factory-mix-cost-integrity-phase7.md](factory-mix-cost-integrity-phase7.md) | Factory Mix Cost Integrity — Phase 7 |
 | [factory-unification/execution-tracker.md](factory-unification/execution-tracker.md) | Factory Unification — Execution Tracker |
 | [factory-unification/phase-1-baseline.md](factory-unification/phase-1-baseline.md) | Factory Unification — Phase 1 Source Baseline |
 | [factory-unification/phase-1-manual-baseline-protocol.md](factory-unification/phase-1-manual-baseline-protocol.md) | Phase 1 — Manual Runtime Baseline Capture Protocol |
@@ -329,17 +369,24 @@ These current-reference documents are indexed here for audit coverage. Their beh
 | [properties-unification-phase6-handoff.md](properties-unification-phase6-handoff.md) | Properties Unification — Phase 6 Parity Audit and Claude Merge Handoff |
 | [properties-unification-phases-12-15-tracker.md](properties-unification-phases-12-15-tracker.md) | Properties Mode — Follow-up Unification Execution Tracker (Phases 12–15) |
 | [properties-unification-phases-7-11-tracker.md](properties-unification-phases-7-11-tracker.md) | Properties Mode — Unification Execution Tracker (Phases 7–11) |
-| [hmd-kinshasa-shop-rent-phase1-audit-2026-11-10.md](accounting/hmd-kinshasa-shop-rent-phase1-audit-2026-11-10.md) | HMD KINSHASA — ERP Shops rent ledger, Phase 1 read-only audit |
-| [hmd-kinshasa-shop-rent-phase2-execution-2026-11-10.md](accounting/hmd-kinshasa-shop-rent-phase2-execution-2026-11-10.md) | Phase 2 — HMD KINSHASA historical rent vouchers (execution handoff) |
-| [hmd-kinshasa-shop-rent-phase3-reconciliation-2026-11-10.md](accounting/hmd-kinshasa-shop-rent-phase3-reconciliation-2026-11-10.md) | HMD KINSHASA — Phase 3 33-month reconciliation and historical payable controls |
-| [hmd-kinshasa-shop-rent-phase4-permanent-prevention-2026-11-10.md](accounting/hmd-kinshasa-shop-rent-phase4-permanent-prevention-2026-11-10.md) | HMD KINSHASA ERP shop rent — Phase 4 permanent prevention |
-| [factory-dispatch-trip-accounting-phase1.md](factory-dispatch-trip-accounting-phase1.md) | Factory Dispatch Trip Accounting and Consolidated Invoice — Phase 1 |
-| [factory-dispatch-trip-accounting-phase10.md](factory-dispatch-trip-accounting-phase10.md) | Factory Dispatch Trip Accounting — Phase 10 Release & Accounting Protection |
-| [factory-dispatch-trip-accounting-phase2.md](factory-dispatch-trip-accounting-phase2.md) | Factory Dispatch Trip Accounting — Phase 2 Handoff |
-| [factory-dispatch-trip-accounting-phase3.md](factory-dispatch-trip-accounting-phase3.md) | Factory Dispatch Trip Accounting — Phase 3 implementation |
-| [factory-dispatch-trip-accounting-phase4.md](factory-dispatch-trip-accounting-phase4.md) | Factory Dispatch Trip Accounting — Phase 4 implementation handoff |
-| [factory-dispatch-trip-accounting-phase5.md](factory-dispatch-trip-accounting-phase5.md) | Factory Dispatch Trip Accounting — Phase 5 Handoff |
-| [factory-dispatch-trip-accounting-phase6.md](factory-dispatch-trip-accounting-phase6.md) | Factory Dispatch Trip Accounting — Phase 6 Handoff |
-| [factory-dispatch-trip-accounting-phase7.md](factory-dispatch-trip-accounting-phase7.md) | Factory Dispatch Trip Accounting — Phase 7 Handoff |
-| [factory-dispatch-trip-accounting-phase8.md](factory-dispatch-trip-accounting-phase8.md) | Factory Dispatch Trip Accounting — Phase 8 Handoff |
-| [factory-dispatch-trip-accounting-phase9.md](factory-dispatch-trip-accounting-phase9.md) | Factory Dispatch Accounting — Phase 9 Report, History & Interface |
+| [database-migration-modernization-2026-11-11.md](database-migration-modernization-2026-11-11.md) | Database and migrations modernization — baseline and rollout |
+| [database-phase3-continued-inventory.md](database-phase3-continued-inventory.md) | Phase 3 continued — Startup mutation inventory and safe extraction |
+| [database-phase3-startup-cutover.md](database-phase3-startup-cutover.md) | Phase 3 — Startup DDL extraction and verification-only cutover |
+| [database-phase4-integrity-hardening.md](database-phase4-integrity-hardening.md) | Phase 4 — Database constraints and integrity |
+| [database-phase5-schema-drift.md](database-phase5-schema-drift.md) | Phase 5 — Schema drift detection and reference certification |
+| [database-phase6-performance.md](database-phase6-performance.md) | Phase 6 — Database performance and index optimization |
+| [database-phase7-disaster-recovery.md](database-phase7-disaster-recovery.md) | Phase 7 — Backup and disaster recovery verification |
+| [database-phase8-migration-testing.md](database-phase8-migration-testing.md) | Phase 8 — Automated database migration testing |
+| [database-phase9-production-rollout.md](database-phase9-production-rollout.md) | Phase 9 — Production rollout and certification gate |
+| [factory-unification/phase-2-2026-11-10-continuation.md](factory-unification/phase-2-2026-11-10-continuation.md) | Factory Unification Phase 2 continuation handoff (2026-11-10) |
+| [audits/erp-phase3-navigation-permissions-ux-2026-11-11.md](audits/erp-phase3-navigation-permissions-ux-2026-11-11.md) | ERP Phase 3 navigation, permissions and company page grant audit |
+| [audits/erp-phase4-confirmed-defect-remediation-2026-11-11.md](audits/erp-phase4-confirmed-defect-remediation-2026-11-11.md) | ERP Phase 4 stock transfer convergence defect remediation |
+| [accounting/hadi-lshi-rent-monthwise-original-voucher-audit-2026-11-10.md](accounting/hadi-lshi-rent-monthwise-original-voucher-audit-2026-11-10.md) | HADI L'SHI rent month-by-month original voucher audit |
+| [audits/erp-phase1-financial-integrity-2026-11-11.md](audits/erp-phase1-financial-integrity-2026-11-11.md) | ERP Phase 1 financial integrity audit (stock adjustment lifecycle) |
+| [stock-transfer-order-whatsapp-approval-phase1.md](stock-transfer-order-whatsapp-approval-phase1.md) | Stock Transfer Order → WhatsApp approval — Phase 1 |
+| [stock-transfer-order-whatsapp-approval-phase2.md](stock-transfer-order-whatsapp-approval-phase2.md) | Stock Transfer Order WhatsApp approval — Phase 2 |
+| [stock-transfer-order-whatsapp-approval-phase3.md](stock-transfer-order-whatsapp-approval-phase3.md) | Stock Transfer Order — GREEN API inbound approval (Phase 3) |
+| [stock-transfer-order-whatsapp-approval-phase4.md](stock-transfer-order-whatsapp-approval-phase4.md) | Stock Transfer Order WhatsApp Approval — Phase 4 |
+| [stock-transfer-order-whatsapp-approval-phase5.md](stock-transfer-order-whatsapp-approval-phase5.md) | Stock Transfer Order — WhatsApp approved Excel, Phase 5 |
+| [stock-transfer-order-whatsapp-approval-phase6.md](stock-transfer-order-whatsapp-approval-phase6.md) | Stock Transfer Order WhatsApp approval — Phase 6 |
+| [stock-transfer-order-whatsapp-approval-phase7.md](stock-transfer-order-whatsapp-approval-phase7.md) | Stock Transfer Order WhatsApp — Phase 7 certification and rollout gate |

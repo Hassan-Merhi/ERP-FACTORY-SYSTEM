@@ -35,6 +35,8 @@ vi.mock("@/lib/offline/durableOutbox", () => ({
 vi.mock("@/lib/syncEngine", () => ({
   runSync: state.sync,
 }));
+// The laptop queue panel has its own test (offline-mode-panel.test.tsx).
+vi.mock("@/components/OfflineModePanel", () => ({ OfflineModePanel: () => null }));
 
 import { OfflineBanner } from "@/components/OfflineBanner";
 

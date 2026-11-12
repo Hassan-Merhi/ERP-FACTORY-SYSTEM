@@ -69,6 +69,7 @@ export function FactoryWorkerDetailView({ model }: FactoryWorkerDetailModelProps
     handleEndContract,
     handlePhotoUpload,
     handleSkipAndEnd,
+    canChangeExistingRecords,
     isDeveloper,
     markPaidMutation,
     navigate,
@@ -252,47 +253,49 @@ export function FactoryWorkerDetailView({ model }: FactoryWorkerDetailModelProps
                 )}
               </div>
 
-              <div className="border-t pt-3 space-y-2">
-                <input
-                  type="file"
-                  accept="image/*"
-                  ref={fileInputRef}
-                  className="hidden"
-                  onChange={handlePhotoUpload}
-                  data-testid="input-photo-upload"
-                />
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => fileInputRef.current?.click()}
-                  data-testid="button-upload-photo"
-                >
-                  <Upload className="h-3.5 w-3.5 mr-2" />
-                  Upload Photo
-                </Button>
-                {worker.active ? (
-                  <Button
-                    variant="destructive"
-                    className="w-full"
-                    onClick={openEndContract}
-                    data-testid="button-end-contract"
-                  >
-                    <UserX className="h-3.5 w-3.5 mr-2" />
-                    End Contract
-                  </Button>
-                ) : (
+              {canChangeExistingRecords && (
+                <div className="border-t pt-3 space-y-2">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    ref={fileInputRef}
+                    className="hidden"
+                    onChange={handlePhotoUpload}
+                    data-testid="input-photo-upload"
+                  />
                   <Button
                     variant="outline"
-                    className="w-full text-green-600 border-green-600"
-                    onClick={() => wrapAdminAction(() => reactivateMutation.mutate(), "Reactivate Worker")}
-                    disabled={reactivateMutation.isPending}
-                    data-testid="button-reactivate-worker"
+                    className="w-full"
+                    onClick={() => fileInputRef.current?.click()}
+                    data-testid="button-upload-photo"
                   >
-                    <UserCheck className="h-3.5 w-3.5 mr-2" />
-                    {reactivateMutation.isPending ? "Reactivating..." : "Reactivate Worker"}
+                    <Upload className="h-3.5 w-3.5 mr-2" />
+                    Upload Photo
                   </Button>
-                )}
-              </div>
+                  {worker.active ? (
+                    <Button
+                      variant="destructive"
+                      className="w-full"
+                      onClick={openEndContract}
+                      data-testid="button-end-contract"
+                    >
+                      <UserX className="h-3.5 w-3.5 mr-2" />
+                      End Contract
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      className="w-full text-green-600 border-green-600"
+                      onClick={() => wrapAdminAction(() => reactivateMutation.mutate(), "Reactivate Worker")}
+                      disabled={reactivateMutation.isPending}
+                      data-testid="button-reactivate-worker"
+                    >
+                      <UserCheck className="h-3.5 w-3.5 mr-2" />
+                      {reactivateMutation.isPending ? "Reactivating..." : "Reactivate Worker"}
+                    </Button>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -581,7 +584,7 @@ export function FactoryWorkerDetailView({ model }: FactoryWorkerDetailModelProps
                                         >
                                           <Eye className="h-4 w-4 text-muted-foreground" />
                                         </Button>
-                                        {p.status !== "PAID" && (
+                                        {canChangeExistingRecords && p.status !== "PAID" && (
                                           <Button
                                             size="sm"
                                             variant="outline"
@@ -595,7 +598,8 @@ export function FactoryWorkerDetailView({ model }: FactoryWorkerDetailModelProps
                                             Pay
                                           </Button>
                                         )}
-                                        {isDeveloper &&
+                                        {canChangeExistingRecords &&
+                                          isDeveloper &&
                                           (p.status === "PAID" || p.status === "APPROVED") &&
                                           !p.cashAccountId && (
                                             <Button

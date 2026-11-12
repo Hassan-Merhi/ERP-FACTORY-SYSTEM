@@ -156,6 +156,11 @@ afterAll(async () => {
       );
       await client.query(`DELETE FROM vouchers WHERE company_id = $1`, [id]);
     });
+    // Container receipts reference their container, so they go first.
+    await pool.query(
+      `DELETE FROM factory_container_receipts WHERE container_id IN (SELECT id FROM factory_containers WHERE company_id = $1)`,
+      [id]
+    );
     await pool.query(`DELETE FROM factory_containers WHERE company_id = $1`, [id]);
     await pool.query(`DELETE FROM factory_bale_products WHERE company_id = $1`, [id]);
     await pool.query(`DELETE FROM factory_suppliers WHERE company_id = $1`, [id]);
@@ -491,8 +496,119 @@ describe("M2: recorded dated factory rates", () => {
     const ok = await agent.post("/api/factory/containers").send(body);
     expect(ok.status).toBe(200);
     expect(Number(ok.body.fxRateToUsd)).toBe(1.1);
-    expect(ok.body.fxRateSource).toBe("manual");
+    // Since #3157 the source reports how THIS container was rated: a rate taken from the
+    // recorded dated table is "auto"; "manual" is reserved for a rate entered on the container.
+    expect(ok.body.fxRateSource).toBe("auto");
     ids.CONTAINER = ok.body.id;
+  }, 60_000);
+
+  it("uses an explicit manual container FX rate without a global dated rate and resyncs the import voucher", async () => {
+    const date = "2026-06-10";
+    const currency = "GBP";
+    const recordedRates = await pool.query(
+      `SELECT id FROM factory_fx_rates WHERE company_id = $1 AND currency_code = $2 AND effective_date <= $3`,
+      [ctx.companyId, currency, date]
+    );
+    expect(recordedRates.rows).toHaveLength(0);
+
+    const created = await agent.post("/api/factory/containers").send({
+      containerNumber: "P19C-MANUAL-GBP",
+      supplierId: ids.SUPPLIER,
+      currencyCode: currency,
+      fxRateSource: "manual",
+      fxRateToUsd: "1.12",
+      totalKg: "100",
+      ratePerKg: "0.36",
+      arrivalDate: date,
+    });
+    expect(created.status).toBe(200);
+    expect(created.body).toMatchObject({
+      currencyCode: currency,
+      fxRateSource: "manual",
+      fxRateConfirmed: true,
+    });
+    expect(Number(created.body.fxRateToUsd)).toBe(1.12);
+    expect(Number(created.body.ratePerKgUsd)).toBe(0.4032);
+
+    const entries = await pool.query(
+      `SELECT ve.transaction_currency, ve.transaction_debit_amount::numeric AS transaction_debit,
+              ve.base_debit_amount::numeric AS base_debit, ve.historical_exchange_rate::numeric AS fx_rate
+         FROM vouchers v JOIN voucher_entries ve ON ve.voucher_id = v.id
+        WHERE v.company_id = $1 AND v.voucher_number LIKE $2 AND ve.debit_amount > 0`,
+      [ctx.companyId, `FACTORY-IMPORT-${created.body.id}-%`]
+    );
+    expect(entries.rows).toHaveLength(1);
+    expect(entries.rows[0].transaction_currency).toBe(currency);
+    expect(Number(entries.rows[0].transaction_debit)).toBe(36);
+    expect(Number(entries.rows[0].base_debit)).toBe(40.32);
+    expect(Number(entries.rows[0].fx_rate)).toBe(1.12);
+
+    const edited = await agent.patch(`/api/factory/containers/${created.body.id}`).send({
+      fxRateSource: "manual",
+      fxRateToUsd: "1.20",
+    });
+    expect(edited.status).toBe(200);
+    expect(edited.body.fxRateConfirmed).toBe(true);
+    expect(Number(edited.body.fxRateToUsd)).toBe(1.2);
+    expect(Number(edited.body.ratePerKgUsd)).toBe(0.432);
+
+    const reposted = await pool.query(
+      `SELECT ve.transaction_currency, ve.transaction_debit_amount::numeric AS transaction_debit,
+              ve.base_debit_amount::numeric AS base_debit, ve.historical_exchange_rate::numeric AS fx_rate
+         FROM vouchers v JOIN voucher_entries ve ON ve.voucher_id = v.id
+        WHERE v.company_id = $1 AND v.voucher_number LIKE $2 AND ve.debit_amount > 0`,
+      [ctx.companyId, `FACTORY-IMPORT-${created.body.id}-%`]
+    );
+    expect(reposted.rows).toHaveLength(1);
+    expect(reposted.rows[0].transaction_currency).toBe(currency);
+    expect(Number(reposted.rows[0].transaction_debit)).toBe(36);
+    expect(Number(reposted.rows[0].base_debit)).toBe(43.2);
+    expect(Number(reposted.rows[0].fx_rate)).toBe(1.2);
+
+    expect(
+      (
+        await pool.query(
+          `SELECT id FROM factory_fx_rates WHERE company_id = $1 AND currency_code = $2 AND effective_date <= $3`,
+          [ctx.companyId, currency, date]
+        )
+      ).rows
+    ).toHaveLength(0);
+
+    const invalid = await agent.patch(`/api/factory/containers/${created.body.id}`).send({
+      fxRateSource: "manual",
+      fxRateToUsd: "0",
+    });
+    expect(invalid.status).toBe(400);
+    const unchanged = await pool.query(
+      "SELECT fx_rate_to_usd::numeric AS fx_rate FROM factory_containers WHERE id = $1",
+      [created.body.id]
+    );
+    expect(Number(unchanged.rows[0].fx_rate)).toBe(1.2);
+
+    const offloaded = await agent.post("/api/factory/raw-stock/offload").send({
+      containerId: String(created.body.id),
+      receivedKg: "100",
+      costPerKg: "0.36",
+      currencyCode: currency,
+      fxRateToUsd: "1.20",
+      offloadDate: date,
+    });
+    expect(offloaded.status, JSON.stringify(offloaded.body)).toBe(200);
+    const fxAtOffload = await pool.query(
+      `SELECT fx_rate_to_usd_offload::numeric AS offload_fx, fx_rate_confirmed
+         FROM factory_containers WHERE id = $1`,
+      [created.body.id]
+    );
+    expect(Number(fxAtOffload.rows[0].offload_fx)).toBe(1.2);
+    expect(fxAtOffload.rows[0].fx_rate_confirmed).toBe(true);
+    expect(
+      (
+        await pool.query(
+          `SELECT id FROM factory_fx_rates WHERE company_id = $1 AND currency_code = $2 AND effective_date <= $3`,
+          [ctx.companyId, currency, date]
+        )
+      ).rows
+    ).toHaveLength(0);
   }, 60_000);
 
   it("container Excel import reports a row with no recorded rate and creates nothing", async () => {
@@ -682,7 +798,9 @@ describe("MC-2: intercompany transfer legs", () => {
          FROM voucher_entries WHERE voucher_id = $1 ORDER BY id`,
       [legs.from]
     );
-    expect(correctedLines.rows.map((line) => [line.ledger_account_id, Number(line.debit), Number(line.credit)])).toEqual([
+    expect(
+      correctedLines.rows.map((line) => [line.ledger_account_id, Number(line.debit), Number(line.credit)])
+    ).toEqual([
       [replacementAccount, 0, 100],
       [ctx.salesAccountId, 100, 0],
     ]);
@@ -718,7 +836,9 @@ describe("MC-2: intercompany transfer legs", () => {
          FROM voucher_entries WHERE voucher_id = $1 ORDER BY id`,
       [legs.from]
     );
-    expect(reclassifiedContra.rows.map((line) => [line.ledger_account_id, Number(line.debit), Number(line.credit)])).toEqual([
+    expect(
+      reclassifiedContra.rows.map((line) => [line.ledger_account_id, Number(line.debit), Number(line.credit)])
+    ).toEqual([
       [replacementAccount, 0, 100],
       [replacementContra, 100, 0],
     ]);

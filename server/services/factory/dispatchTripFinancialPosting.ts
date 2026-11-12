@@ -20,24 +20,17 @@ import { resultRows } from "../../lib/queryResult";
 import { MoneyDecimal, sumMoney } from "../../lib/money";
 import { customerLedgerAccountTx } from "../accounting/perpetualInventory/factoryInvoice";
 import { ledgerAccountByCodeTx } from "../accounting/perpetualInventory/linkedJournal";
-import { mirroredUsdLines, postFactoryVoucherTx, type FactoryVoucherLine } from "./factoryVoucherPosting";
+import {
+  mirroredUsdLines, postFactoryVoucherTx, type FactoryVoucherLine,
+} from "./factoryVoucherPosting";
 import { loadDispatchTripFinancialSource } from "./dispatchTripFinancialSource";
 import {
-  accountAcceptsCharge,
-  accountAcceptsOffset,
-  buildTripChargePreview,
-  tripChargeFingerprint,
-  type TripChargeRow,
-  type TripChargeKind,
-  type ErpChargeType,
+  accountAcceptsCharge, accountAcceptsOffset, buildTripChargePreview,
+  tripChargeFingerprint, type TripChargeRow, type TripChargeKind, type ErpChargeType,
 } from "../../routes/factory/customer-orders/loadingDispatchFinancialChargeModel";
 
 export class TripFinancialPostingError extends Error {
-  constructor(
-    readonly code: string,
-    message: string,
-    readonly status = 409
-  ) {
+  constructor(readonly code: string, message: string, readonly status = 409) {
     super(message);
     this.name = "TripFinancialPostingError";
   }
@@ -81,10 +74,7 @@ export interface DispatchPostingResult {
   replayed: boolean;
 }
 async function readFinancial(tx: DbTransaction, scope: DispatchPostingScope) {
-  const r = (
-    await rows(
-      tx,
-      sql`
+  const r = (await rows(tx, sql`
     SELECT id, status, posting_revision AS "postingRevision",
            snapshot_revision AS "snapshotRevision",
            source_fingerprint AS "sourceFingerprint", currency,
@@ -95,33 +85,17 @@ async function readFinancial(tx: DbTransaction, scope: DispatchPostingScope) {
       FROM factory_dispatch_trip_financials
      WHERE company_id = ${scope.companyId} AND order_id = ${scope.orderId}
        AND dispatch_id = ${scope.dispatchId} FOR UPDATE
-  `
-    )
-  )[0];
-  return r
-    ? {
-        id: numberId(r.id),
-        status: String(r.status),
-        postingRevision: Number(r.postingRevision),
-        snapshotRevision: Number(r.snapshotRevision),
-        sourceFingerprint: r.sourceFingerprint == null ? null : String(r.sourceFingerprint),
-        currency: String(r.currency),
-        goodsSubtotal: String(r.goodsSubtotal),
-        billableChargesTotal: String(r.billableChargesTotal),
-        discountTotal: String(r.discountTotal),
-        customerTotal: String(r.customerTotal),
-      }
-    : null;
+  `))[0];
+  return r ? {
+    id: numberId(r.id), status: String(r.status), postingRevision: Number(r.postingRevision),
+    snapshotRevision: Number(r.snapshotRevision), sourceFingerprint: r.sourceFingerprint == null ? null : String(r.sourceFingerprint),
+    currency: String(r.currency),
+    goodsSubtotal: String(r.goodsSubtotal), billableChargesTotal: String(r.billableChargesTotal),
+    discountTotal: String(r.discountTotal), customerTotal: String(r.customerTotal),
+  } : null;
 }
-async function readCharges(
-  tx: DbTransaction,
-  financialId: number,
-  revision: number,
-  scope: DispatchPostingScope
-): Promise<TripChargeRow[]> {
-  const found = await rows(
-    tx,
-    sql`
+async function readCharges(tx: DbTransaction, financialId: number, revision: number, scope: DispatchPostingScope): Promise<TripChargeRow[]> {
+  const found = await rows(tx, sql`
     SELECT id, name, kind, amount::text, currency, revision,
            ledger_account_id AS "ledgerAccountId",
            offset_ledger_account_id AS "offsetLedgerAccountId",
@@ -130,15 +104,10 @@ async function readCharges(
      WHERE financial_id = ${financialId} AND company_id = ${scope.companyId}
        AND order_id = ${scope.orderId} AND dispatch_id = ${scope.dispatchId}
        AND revision = ${revision} ORDER BY id FOR UPDATE
-  `
-  );
-  return found.map((r) => ({
-    id: numberId(r.id),
-    name: String(r.name),
-    kind: String(r.kind) as TripChargeKind,
-    amount: String(r.amount),
-    currency: String(r.currency),
-    revision: Number(r.revision),
+  `);
+  return found.map(r => ({
+    id: numberId(r.id), name: String(r.name), kind: String(r.kind) as TripChargeKind,
+    amount: String(r.amount), currency: String(r.currency), revision: Number(r.revision),
     ledgerAccountId: numberId(r.ledgerAccountId),
     offsetLedgerAccountId: r.offsetLedgerAccountId == null ? null : numberId(r.offsetLedgerAccountId),
     erpChargeType: (r.erpChargeType ?? null) as ErpChargeType,
@@ -148,41 +117,23 @@ async function readCharges(
 }
 async function assertChargeAccounts(tx: DbTransaction, companyId: number, charges: TripChargeRow[]) {
   if (!charges.length) return;
-  const ids = Array.from(
-    new Set(charges.flatMap((c) => [c.ledgerAccountId, ...(c.offsetLedgerAccountId ? [c.offsetLedgerAccountId] : [])]))
-  );
-  const accounts = await rows(
-    tx,
-    sql`
+  const ids = Array.from(new Set(charges.flatMap(c => [c.ledgerAccountId, ...(c.offsetLedgerAccountId ? [c.offsetLedgerAccountId] : [])])));
+  const accounts = await rows(tx, sql`
     SELECT id, account_type AS "accountType", active, is_hidden AS "hidden", deleted_at AS "deletedAt"
-      FROM ledger_accounts WHERE company_id = ${companyId} AND id IN (${sql.join(
-        ids.map((i) => sql`${i}`),
-        sql`,`
-      )})
-  `
-  );
-  const byId = new Map(accounts.map((a) => [Number(a.id), a]));
+      FROM ledger_accounts WHERE company_id = ${companyId} AND id IN (${sql.join(ids.map(i => sql`${i}`), sql`,`)})
+  `);
+  const byId = new Map(accounts.map(a => [Number(a.id), a]));
   for (const charge of charges) {
     const a = byId.get(charge.ledgerAccountId);
     if (!a || !a.active || a.deletedAt || a.hidden || !accountAcceptsCharge(charge.kind, String(a.accountType))) {
       refuse("TRIP_CHARGE_ACCOUNT_INVALID", `Charge "${charge.name}" has no valid active company-owned account`);
     }
-    if (charge.currency !== "USD" || charge.lockedAt)
-      refuse("TRIP_CHARGE_CURRENCY_OR_LOCKED", "Only unlocked USD charge drafts can be posted");
+    if (charge.currency !== "USD" || charge.lockedAt) refuse("TRIP_CHARGE_CURRENCY_OR_LOCKED", "Only unlocked USD charge drafts can be posted");
     if (charge.kind === "INTERNAL") {
       const offset = charge.offsetLedgerAccountId ? byId.get(charge.offsetLedgerAccountId) : null;
-      if (
-        !offset ||
-        !offset.active ||
-        offset.deletedAt ||
-        offset.hidden ||
-        !accountAcceptsOffset(String(offset.accountType)) ||
-        charge.ledgerAccountId === charge.offsetLedgerAccountId
-      ) {
-        refuse(
-          "TRIP_CHARGE_OFFSET_INVALID",
-          `Internal expense "${charge.name}" requires a valid company offset account`
-        );
+      if (!offset || !offset.active || offset.deletedAt || offset.hidden || !accountAcceptsOffset(String(offset.accountType)) ||
+          charge.ledgerAccountId === charge.offsetLedgerAccountId) {
+        refuse("TRIP_CHARGE_OFFSET_INVALID", `Internal expense "${charge.name}" requires a valid company offset account`);
       }
     } else if (charge.offsetLedgerAccountId !== null) {
       refuse("TRIP_CHARGE_OFFSET_INVALID", "Only internal expenses may have a separate offset account");
@@ -190,9 +141,7 @@ async function assertChargeAccounts(tx: DbTransaction, companyId: number, charge
   }
 }
 async function lockTripOrder(tx: DbTransaction, scope: DispatchPostingScope) {
-  const [o] = await rows(
-    tx,
-    sql`
+  const [o] = await rows(tx, sql`
     SELECT o.id, o.status, o.deleted_at AS "deletedAt",
            COALESCE(b.currency, 'USD') AS currency
       FROM customer_orders o
@@ -200,40 +149,21 @@ async function lockTripOrder(tx: DbTransaction, scope: DispatchPostingScope) {
         ON b.id=o.dispatch_batch_id AND b.company_id=o.company_id
      WHERE o.company_id = ${scope.companyId} AND o.id = ${scope.orderId}
      FOR UPDATE OF o
-  `
-  );
+  `);
   if (!o || o.deletedAt || !["LOADING", "PENDING_VERIFICATION", "VERIFIED"].includes(String(o.status))) {
     refuse("TRIP_LOADING_INACTIVE", "Only an active unfinalized loading can financially finalize a truck");
   }
-  if (
-    String(o.currency || "USD")
-      .trim()
-      .toUpperCase() !== "USD"
-  ) {
-    refuse(
-      "TRIP_CURRENCY_UNSUPPORTED",
-      "Multi-currency dispatch financial posting is not yet supported. No USD-only journal will be created for this order."
-    );
+  if (String(o.currency || "USD").trim().toUpperCase() !== "USD") {
+    refuse("TRIP_CURRENCY_UNSUPPORTED", "Multi-currency dispatch financial posting is not yet supported. No USD-only journal will be created for this order.");
   }
-  const [trip] = await rows(
-    tx,
-    sql`
+  const [trip] = await rows(tx, sql`
     SELECT id, status FROM factory_loading_dispatches
      WHERE company_id = ${scope.companyId} AND order_id = ${scope.orderId}
        AND id = ${scope.dispatchId} FOR UPDATE
-  `
-  );
-  if (!trip || trip.status !== "CLOSED")
-    refuse("TRIP_NOT_CLOSED", "End Dispatch before financially finalizing its charges");
+  `);
+  if (!trip || trip.status !== "CLOSED") refuse("TRIP_NOT_CLOSED", "End Dispatch before financially finalizing its charges");
 }
-async function writeAudit(
-  tx: DbTransaction,
-  scope: DispatchPostingScope,
-  financialId: number,
-  event: string,
-  details: object,
-  reason: string | null = null
-) {
+async function writeAudit(tx: DbTransaction, scope: DispatchPostingScope, financialId: number, event: string, details: object, reason: string | null = null) {
   await tx.execute(sql`
     INSERT INTO factory_dispatch_financial_events
       (company_id,order_id,dispatch_id,financial_id,event_type,details,reason,actor_user_id,actor_username)
@@ -248,9 +178,7 @@ function requireDate(date: string) {
 }
 /** Posting stays disabled until BOTH manual TablePlus SQL files are applied. */
 async function assertHardenedFinancialSchemaTx(tx: DbTransaction): Promise<void> {
-  const [ready] = await rows(
-    tx,
-    sql`
+  const [ready] = await rows(tx, sql`
     SELECT
       (SELECT relforcerowsecurity FROM pg_class
         WHERE oid=to_regclass('public.factory_dispatch_trip_financials')) AS "financialRls",
@@ -286,69 +214,45 @@ async function assertHardenedFinancialSchemaTx(tx: DbTransaction): Promise<void>
            AND tgname='factory_dispatch_source_posting_identity_guard'
            AND tgenabled <> 'D'
       ) AS "postingIdentityGuard"
-  `
-  );
-  if (
-    !ready?.financialRls ||
-    !ready?.postingsRls ||
-    !ready?.physicalGuard ||
-    !ready?.baleGuard ||
-    !ready?.voucherGuard ||
-    !ready?.voucherEntriesGuard ||
-    !ready?.postingIdentityGuard
-  ) {
-    refuse(
-      "TRIP_FINANCIAL_SQL_PENDING",
+  `);
+  if (!ready?.financialRls || !ready?.postingsRls ||
+      !ready?.physicalGuard || !ready?.baleGuard ||
+      !ready?.voucherGuard || !ready?.voucherEntriesGuard ||
+      !ready?.postingIdentityGuard) {
+    refuse("TRIP_FINANCIAL_SQL_PENDING",
       "Trip financial posting is disabled until the final Phase 2 and Phase 4 TablePlus SQL has been installed.",
-      503
-    );
+      503);
   }
 }
 /** One atomic finalization; caller creates a real database transaction. */
 export async function postDispatchTripFinancialTx(
-  tx: DbTransaction,
-  scope: DispatchPostingScope,
-  req: DispatchPostingRequest
+  tx: DbTransaction, scope: DispatchPostingScope, req: DispatchPostingRequest
 ): Promise<DispatchPostingResult> {
   requireDate(req.postingDate);
   await assertHardenedFinancialSchemaTx(tx);
   await lockTripOrder(tx, scope);
   const financial = await readFinancial(tx, scope);
   if (financial?.status === "POSTED") {
-    const [record] = await rows(
-      tx,
-      sql`
+    const [record] = await rows(tx, sql`
       SELECT voucher_ids AS "voucherIds", source_fingerprint AS "sourceFingerprint"
         FROM factory_dispatch_trip_postings
        WHERE financial_id = ${financial.id} AND kind = 'POST'
          AND posting_revision = ${financial.postingRevision} LIMIT 1
-    `
-    );
+    `);
     if (!record || !Array.isArray(record.voucherIds)) {
-      refuse(
-        "TRIP_POSTING_INCOMPLETE",
-        "The original financial posting evidence is missing; accounting review required"
-      );
+      return refuse("TRIP_POSTING_INCOMPLETE", "The original financial posting evidence is missing; accounting review required");
     }
-    if (
-      req.sourceFingerprint !== financial.sourceFingerprint ||
-      req.sourceFingerprint !== String(record.sourceFingerprint)
-    ) {
-      refuse(
-        "TRIP_ALREADY_POSTED_DIFFERENT_SOURCE",
-        "The trip has already been posted from another signed source revision"
-      );
+    if (req.sourceFingerprint !== financial.sourceFingerprint ||
+        req.sourceFingerprint !== String(record.sourceFingerprint)) {
+      refuse("TRIP_ALREADY_POSTED_DIFFERENT_SOURCE",
+        "The trip has already been posted from another signed source revision");
     }
     const postedCharges = await readCharges(tx, financial.id, financial.postingRevision, scope);
     const totals = buildTripChargePreview(financial.goodsSubtotal, postedCharges);
     return {
-      financialId: financial.id,
-      status: "POSTED",
-      revision: financial.postingRevision,
-      goodsSubtotal: financial.goodsSubtotal,
-      billableChargesTotal: financial.billableChargesTotal,
-      discountTotal: financial.discountTotal,
-      customerTotal: financial.customerTotal,
+      financialId: financial.id, status: "POSTED", revision: financial.postingRevision,
+      goodsSubtotal: financial.goodsSubtotal, billableChargesTotal: financial.billableChargesTotal,
+      discountTotal: financial.discountTotal, customerTotal: financial.customerTotal,
       internalExpenseTotal: totals.internalExpenseTotal,
       voucherIds: record.voucherIds.map(numberId),
       replayed: true,
@@ -375,26 +279,20 @@ export async function postDispatchTripFinancialTx(
 
   // Prevent ordinary invoicing from having already applied order charges to
   // the same receipt and prevent a second financial workflow from mixing in.
-  const [alreadyInvoiced] = await rows(
-    tx,
-    sql`
+  const [alreadyInvoiced] = await rows(tx, sql`
     SELECT id FROM customer_orders WHERE id = ${scope.orderId}
       AND company_id = ${scope.companyId} AND invoice_number IS NOT NULL LIMIT 1
-  `
-  );
+  `);
   if (alreadyInvoiced) refuse("TRIP_ORDER_ALREADY_INVOICED", "This loading already owns an invoice number");
 
   let financialId = financial?.id ?? 0;
   if (!financial) {
-    const [inserted] = await rows(
-      tx,
-      sql`
+    const [inserted] = await rows(tx, sql`
       INSERT INTO factory_dispatch_trip_financials
         (company_id, order_id, dispatch_id, status, currency)
       VALUES (${scope.companyId}, ${scope.orderId}, ${scope.dispatchId}, 'DRAFT', 'USD')
       RETURNING id
-    `
-    );
+    `);
     financialId = numberId(inserted.id);
   }
   // Freeze source membership first, before any financial effects.
@@ -415,65 +313,39 @@ export async function postDispatchTripFinancialTx(
 
   const customerLedgerId = await customerLedgerAccountTx(tx, scope.companyId, source.customerId);
   const clearingId = await ledgerAccountByCodeTx(
-    tx,
-    scope.companyId,
-    "FACTORY_DISPATCH_CLEARING",
-    "Factory Dispatch Clearing",
-    "Liability"
+    tx, scope.companyId, "FACTORY_DISPATCH_CLEARING", "Factory Dispatch Clearing", "Liability"
   );
-  const [clearing] = await rows(
-    tx,
-    sql`
+  const [clearing] = await rows(tx, sql`
     SELECT account_type AS "accountType",active,is_hidden AS "hidden",deleted_at AS "deletedAt"
       FROM ledger_accounts WHERE id=${clearingId} AND company_id=${scope.companyId}
-  `
-  );
-  if (
-    !clearing ||
-    !clearing.active ||
-    clearing.hidden ||
-    clearing.deletedAt ||
-    !/liability|clearing/i.test(String(clearing.accountType))
-  ) {
-    refuse(
-      "TRIP_CLEARING_ACCOUNT_INVALID",
-      "Factory Dispatch Clearing must be an active company-owned liability/clearing account"
-    );
+  `);
+  if (!clearing || !clearing.active || clearing.hidden || clearing.deletedAt ||
+      !/liability|clearing/i.test(String(clearing.accountType))) {
+    refuse("TRIP_CLEARING_ACCOUNT_INVALID",
+      "Factory Dispatch Clearing must be an active company-owned liability/clearing account");
   }
   const customerTotal = money(totals.customerTotal);
   const goods = money(source.goodsSubtotal);
   const positive = (v: Decimal) => v.gt(0);
   const invoiceLines: FactoryVoucherLine[] = [];
-  if (positive(customerTotal))
-    invoiceLines.push({
-      ledgerAccountId: customerLedgerId,
-      customerId: source.customerId,
-      debit: customerTotal,
-      narration: `Truck ${scope.dispatchId} customer receivable`,
-    });
-  if (positive(goods))
-    invoiceLines.push({
-      ledgerAccountId: clearingId,
-      credit: goods,
-      narration: "Pending consolidated Factory goods sale",
-    });
+  if (positive(customerTotal)) invoiceLines.push({
+    ledgerAccountId: customerLedgerId, customerId: source.customerId,
+    debit: customerTotal, narration: `Truck ${scope.dispatchId} customer receivable`,
+  });
+  if (positive(goods)) invoiceLines.push({
+    ledgerAccountId: clearingId, credit: goods, narration: "Pending consolidated Factory goods sale",
+  });
   for (const charge of charges) {
     const amount = money(charge.amount);
-    if (charge.kind === "BILLABLE")
-      invoiceLines.push({
-        ledgerAccountId: charge.ledgerAccountId,
-        credit: amount,
-        narration: charge.name,
-      });
-    if (charge.kind === "DISCOUNT")
-      invoiceLines.push({
-        ledgerAccountId: charge.ledgerAccountId,
-        debit: amount,
-        narration: charge.name,
-      });
+    if (charge.kind === "BILLABLE") invoiceLines.push({
+      ledgerAccountId: charge.ledgerAccountId, credit: amount, narration: charge.name,
+    });
+    if (charge.kind === "DISCOUNT") invoiceLines.push({
+      ledgerAccountId: charge.ledgerAccountId, debit: amount, narration: charge.name,
+    });
   }
-  const voucherDebits = sumMoney(invoiceLines.map((line) => line.debit ?? 0));
-  const voucherCredits = sumMoney(invoiceLines.map((line) => line.credit ?? 0));
+  const voucherDebits = sumMoney(invoiceLines.map(line => line.debit ?? 0));
+  const voucherCredits = sumMoney(invoiceLines.map(line => line.credit ?? 0));
   if (!voucherDebits.eq(voucherCredits)) {
     refuse("TRIP_JOURNAL_UNBALANCED", "Customer receivable and trip charge journal does not balance");
   }
@@ -487,13 +359,12 @@ export async function postDispatchTripFinancialTx(
       description: `Factory dispatch trip ${scope.dispatchId}, pending consolidated invoice`,
       sourceModule: "FACTORY",
       source: { sourceType: "factory-dispatch-trip", sourceId: `${financialId}:${revision}`, phase: "receivable" },
-      lines: invoiceLines,
-      actor: { userId: scope.userId, username: scope.username },
+      lines: invoiceLines, actor: { userId: scope.userId, username: scope.username },
     });
     salesVoucherId = r.voucher.id;
     voucherIds.push(salesVoucherId);
   }
-  for (const charge of charges.filter((c) => c.kind === "INTERNAL")) {
+  for (const charge of charges.filter(c => c.kind === "INTERNAL")) {
     const amount = money(charge.amount);
     const r = await postFactoryVoucherTx(tx, {
       companyId: scope.companyId,
@@ -501,16 +372,11 @@ export async function postDispatchTripFinancialTx(
       voucherDate: req.postingDate,
       description: `Factory dispatch trip ${scope.dispatchId} internal expense: ${charge.name}`,
       sourceModule: "FACTORY",
-      source: {
-        sourceType: "factory-dispatch-trip-internal",
-        sourceId: `${financialId}:${revision}:${charge.id}`,
-        phase: "expense",
-      },
+      source: { sourceType: "factory-dispatch-trip-internal", sourceId: `${financialId}:${revision}:${charge.id}`, phase: "expense" },
       lines: [
         { ledgerAccountId: charge.ledgerAccountId, debit: amount, narration: charge.name },
         { ledgerAccountId: charge.offsetLedgerAccountId!, credit: amount, narration: charge.name },
-      ],
-      actor: { userId: scope.userId, username: scope.username },
+      ], actor: { userId: scope.userId, username: scope.username },
     });
     voucherIds.push(r.voucher.id);
     await tx.execute(sql`
@@ -541,29 +407,23 @@ export async function postDispatchTripFinancialTx(
       (financial_id,company_id,order_id,dispatch_id,posting_revision,kind,idempotency_key,
        source_fingerprint,amount,voucher_ids,posted_by_user_id)
     VALUES (${financialId},${scope.companyId},${scope.orderId},${scope.dispatchId},${revision},
-            'POST',${keyOf(scope.companyId, scope.dispatchId, revision, "post")},
+            'POST',${keyOf(scope.companyId,scope.dispatchId,revision,"post")},
             ${source.sourceFingerprint},${totals.customerTotal},${JSON.stringify(voucherIds)}::jsonb,${scope.userId})
   `);
   await writeAudit(tx, scope, financialId, "TRIP_FINANCIALLY_POSTED", {
-    revision,
-    closureHistoryId: source.closureHistoryId,
-    sourceFingerprint: source.sourceFingerprint,
-    chargeFingerprint: req.chargeFingerprint,
-    voucherIds,
-    totals,
+    revision, closureHistoryId: source.closureHistoryId, sourceFingerprint: source.sourceFingerprint,
+    chargeFingerprint: req.chargeFingerprint, voucherIds, totals,
   });
   return { financialId, status: "POSTED", revision, ...totals, voucherIds, replayed: false };
 }
 
-/**
+/** 
  * Conservative reversal: only before ERP PO export or consolidation, with
  * no customer payment against the order. Correct through mirror vouchers;
  * historical bales/charges/postings stay immutable. Never delete a voucher.
  */
 export async function reverseDispatchTripFinancialTx(
-  tx: DbTransaction,
-  scope: DispatchPostingScope,
-  args: { date: string; reason: string }
+  tx: DbTransaction, scope: DispatchPostingScope, args: { date: string; reason: string }
 ) {
   requireDate(args.date);
   await assertHardenedFinancialSchemaTx(tx);
@@ -573,35 +433,22 @@ export async function reverseDispatchTripFinancialTx(
   await lockTripOrder(tx, scope);
   const financial = await readFinancial(tx, scope);
   if (!financial || financial.status !== "POSTED") {
-    refuse("TRIP_NOT_POSTED", "Only a financially posted, unconsolidated trip can be reversed");
+    return refuse("TRIP_NOT_POSTED", "Only a financially posted, unconsolidated trip can be reversed");
   }
-  const [exported] = await rows(
-    tx,
-    sql`
+  const [exported] = await rows(tx, sql`
     SELECT id FROM factory_dispatch_trip_exports WHERE financial_id=${financial.id} LIMIT 1
-  `
-  );
-  if (exported)
-    refuse(
-      "TRIP_EXPORTED_LOCKED",
-      "This trip has already been exported to ERP; use a controlled cross-company correction"
-    );
-  const [settlement] = await rows(
-    tx,
-    sql`
+  `);
+  if (exported) refuse("TRIP_EXPORTED_LOCKED", "This trip has already been exported to ERP; use a controlled cross-company correction");
+  const [settlement] = await rows(tx, sql`
     SELECT id FROM customer_balances
      WHERE company_id=${scope.companyId} AND reference_type='INVOICE'
        AND reference_id=${scope.orderId} AND transaction_type='PAYMENT' LIMIT 1
-  `
-  );
-  if (settlement)
-    refuse("TRIP_SETTLEMENT_LOCKED", "Payments linked to this loading must be reversed before financial correction");
+  `);
+  if (settlement) refuse("TRIP_SETTLEMENT_LOCKED", "Payments linked to this loading must be reversed before financial correction");
   // A receipt or credit may be recorded directly against the customer's
   // ledger rather than the order-specific customer_balances cache. Refuse a
   // potentially settled reversal instead of guessing which credit applied.
-  const [customerCredit] = await rows(
-    tx,
-    sql`
+  const [customerCredit] = await rows(tx, sql`
     SELECT 1
       FROM customer_orders o
       JOIN factory_dispatch_trip_financials f
@@ -617,62 +464,46 @@ export async function reverseDispatchTripFinancialTx(
          OR v.created_at >= f.posted_at
        )
      LIMIT 1
-  `
-  );
+  `);
   if (customerCredit) {
-    refuse(
-      "TRIP_CUSTOMER_CREDIT_RECONCILIATION_REQUIRED",
-      "A customer payment or credit exists after this trip was posted. Reconcile or reverse that credit first."
-    );
+    refuse("TRIP_CUSTOMER_CREDIT_RECONCILIATION_REQUIRED",
+      "A customer payment or credit exists after this trip was posted. Reconcile or reverse that credit first.");
   }
-  const [original] = await rows(
-    tx,
-    sql`
+  const [original] = await rows(tx, sql`
     SELECT id,voucher_ids AS "voucherIds",source_fingerprint AS "sourceFingerprint"
       FROM factory_dispatch_trip_postings WHERE financial_id=${financial.id}
         AND posting_revision=${financial.postingRevision} AND kind='POST' LIMIT 1
-  `
-  );
+  `);
   if (!original || !Array.isArray(original.voucherIds)) {
-    refuse("TRIP_POSTING_INCOMPLETE", "Original immutable posting evidence is missing");
+    return refuse("TRIP_POSTING_INCOMPLETE", "Original immutable posting evidence is missing");
   }
   const reversedVoucherIds: number[] = [];
   for (const value of original.voucherIds) {
     const voucherId = numberId(value);
-    const [voucher] = await rows(
-      tx,
-      sql`
+    const [voucher] = await rows(tx, sql`
       SELECT id,deleted_at AS "deletedAt", voucher_date AS "voucherDate"
         FROM vouchers WHERE id=${voucherId} AND company_id=${scope.companyId} FOR UPDATE
-    `
-    );
+    `);
     if (!voucher || voucher.deletedAt) refuse("TRIP_POSTING_INCOMPLETE", "Original voucher is no longer live");
-    const lines = await rows(
-      tx,
-      sql`
+    const lines = await rows(tx, sql`
       SELECT ledger_account_id AS "ledgerAccountId",customer_id AS "customerId",
              supplier_id AS "supplierId",employee_id AS "employeeId",
              bank_account_id AS "bankAccountId",fixed_asset_id AS "fixedAssetId",
              factory_supplier_id AS "factorySupplierId", debit_amount::text AS "debitAmount",
              credit_amount::text AS "creditAmount", narration
         FROM voucher_entries WHERE voucher_id=${voucherId} ORDER BY id
-    `
-    );
-    const mirror = mirroredUsdLines(
-      lines.map((line) => ({
-        ledgerAccountId: line.ledgerAccountId == null ? null : numberId(line.ledgerAccountId),
-        customerId: line.customerId == null ? null : numberId(line.customerId),
-        supplierId: line.supplierId == null ? null : numberId(line.supplierId),
-        employeeId: line.employeeId == null ? null : numberId(line.employeeId),
-        bankAccountId: line.bankAccountId == null ? null : numberId(line.bankAccountId),
-        fixedAssetId: line.fixedAssetId == null ? null : numberId(line.fixedAssetId),
-        factorySupplierId: line.factorySupplierId == null ? null : numberId(line.factorySupplierId),
-        debitAmount: String(line.debitAmount),
-        creditAmount: String(line.creditAmount),
-        narration: String(line.narration ?? ""),
-      })),
-      "Reversal of dispatch trip voucher " + voucherId
-    );
+    `);
+    const mirror = mirroredUsdLines(lines.map(line => ({
+      ledgerAccountId: line.ledgerAccountId == null ? null : numberId(line.ledgerAccountId),
+      customerId: line.customerId == null ? null : numberId(line.customerId),
+      supplierId: line.supplierId == null ? null : numberId(line.supplierId),
+      employeeId: line.employeeId == null ? null : numberId(line.employeeId),
+      bankAccountId: line.bankAccountId == null ? null : numberId(line.bankAccountId),
+      fixedAssetId: line.fixedAssetId == null ? null : numberId(line.fixedAssetId),
+      factorySupplierId: line.factorySupplierId == null ? null : numberId(line.factorySupplierId),
+      debitAmount: String(line.debitAmount), creditAmount: String(line.creditAmount),
+      narration: String(line.narration ?? ""),
+    })), "Reversal of dispatch trip voucher " + voucherId);
     const result = await postFactoryVoucherTx(tx, {
       companyId: scope.companyId,
       voucherNumber: `FDTR-REV-${scope.companyId}-${scope.dispatchId}-${financial.postingRevision}-${voucherId}`,
@@ -684,8 +515,7 @@ export async function reverseDispatchTripFinancialTx(
         sourceId: `${financial.id}:${financial.postingRevision}:${voucherId}`,
         phase: "reversal",
       },
-      lines: mirror,
-      actor: { userId: scope.userId, username: scope.username, reason: args.reason.trim() },
+      lines: mirror, actor: { userId: scope.userId, username: scope.username, reason: args.reason.trim() },
     });
     reversedVoucherIds.push(result.voucher.id);
   }
@@ -695,7 +525,7 @@ export async function reverseDispatchTripFinancialTx(
        source_fingerprint,amount,voucher_ids,reverses_posting_id,reason,posted_by_user_id)
     VALUES (${financial.id},${scope.companyId},${scope.orderId},${scope.dispatchId},
             ${financial.postingRevision},'REVERSAL',
-            ${keyOf(scope.companyId, scope.dispatchId, financial.postingRevision, "reversal")},
+            ${keyOf(scope.companyId,scope.dispatchId,financial.postingRevision,"reversal")},
             ${String(original.sourceFingerprint)},${financial.customerTotal},
             ${JSON.stringify(reversedVoucherIds)}::jsonb,${numberId(original.id)},${args.reason.trim()},${scope.userId})
   `);
@@ -703,17 +533,8 @@ export async function reverseDispatchTripFinancialTx(
     UPDATE factory_dispatch_trip_financials SET status='REVERSED',updated_at=NOW()
      WHERE id=${financial.id} AND status='POSTED'
   `);
-  await writeAudit(
-    tx,
-    scope,
-    financial.id,
-    "TRIP_POSTING_REVERSED",
-    {
-      revision: financial.postingRevision,
-      originalVoucherIds: original.voucherIds,
-      reversedVoucherIds,
-    },
-    args.reason.trim()
-  );
+  await writeAudit(tx, scope, financial.id, "TRIP_POSTING_REVERSED", {
+    revision: financial.postingRevision, originalVoucherIds: original.voucherIds, reversedVoucherIds,
+  }, args.reason.trim());
   return { status: "REVERSED" as const, revision: financial.postingRevision, reversedVoucherIds };
 }

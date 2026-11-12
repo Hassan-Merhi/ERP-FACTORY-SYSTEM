@@ -1,4 +1,5 @@
 import type { ClientErrorLike } from "@/lib/clientError";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAdminOverride } from "@/hooks/use-admin-override";
@@ -108,6 +109,7 @@ export default function FactoryEmployeeDetail() {
   const employeeId = params?.id ? parseInt(params.id) : null;
   const { toast } = useToast();
   const { selectedCompany } = useCompany();
+  const recordChanges = useExistingRecordChangeAccess();
   const { formatDisplayDate } = useDateFormat();
 
   const formatDate = (val: string | Date | null | undefined) => {
@@ -186,6 +188,7 @@ export default function FactoryEmployeeDetail() {
   // Mutations
   const updateMutation = useMutation({
     mutationFn: async (data: typeof editForm) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await factoryApiRequest("PATCH", `/api/factory/employees/${employeeId}`, data);
       if (!res.ok) {
         const e = await res.json();
@@ -194,7 +197,9 @@ export default function FactoryEmployeeDetail() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id, employeeId) });
+      queryClient.invalidateQueries({
+        queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id, employeeId),
+      });
       queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id) });
       toast({ title: "Employee updated" });
       setEditOpen(false);
@@ -207,6 +212,7 @@ export default function FactoryEmployeeDetail() {
 
   const recalcMutation = useMutation({
     mutationFn: async () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await factoryApiRequest("POST", `/api/factory/employees/${employeeId}/recalculate-balance`);
       if (!res.ok) {
         const e = await res.json();
@@ -215,7 +221,9 @@ export default function FactoryEmployeeDetail() {
       return res.json();
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id, employeeId) });
+      queryClient.invalidateQueries({
+        queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id, employeeId),
+      });
       queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id) });
       toast({ title: "Balance recalculated", description: `New balance: $${data.newBalance?.toFixed(2)}` });
     },
@@ -227,6 +235,7 @@ export default function FactoryEmployeeDetail() {
 
   const depositMutation = useMutation({
     mutationFn: async () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await factoryApiRequest("POST", `/api/factory/employees/${employeeId}/deposit`, {
         amount: depositAmount,
         date: depositDate,
@@ -240,8 +249,12 @@ export default function FactoryEmployeeDetail() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id, employeeId) });
-      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id, employeeId, "statement") });
+      queryClient.invalidateQueries({
+        queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id, employeeId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id, employeeId, "statement"),
+      });
       queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id) });
       toast({ title: "Deposit recorded" });
       setDepositOpen(false);
@@ -257,6 +270,7 @@ export default function FactoryEmployeeDetail() {
 
   const withdrawMutation = useMutation({
     mutationFn: async () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await factoryApiRequest("POST", `/api/factory/employees/${employeeId}/withdraw`, {
         amount: withdrawAmount,
         date: withdrawDate,
@@ -270,8 +284,12 @@ export default function FactoryEmployeeDetail() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id, employeeId) });
-      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id, employeeId, "statement") });
+      queryClient.invalidateQueries({
+        queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id, employeeId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id, employeeId, "statement"),
+      });
       queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id) });
       toast({ title: "Withdrawal recorded" });
       setWithdrawOpen(false);
@@ -406,44 +424,46 @@ export default function FactoryEmployeeDetail() {
                 </div>
               </div>
 
-              <div className="border-t pt-3 space-y-2">
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  size="sm"
-                  onClick={() => {
-                    setEditForm({
-                      firstName: employee.firstName,
-                      lastName: employee.lastName,
-                      department: employee.department || "",
-                      phone: employee.phone || "",
-                      monthlySalary: employee.monthlySalary || "",
-                    });
-                    setEditOpen(true);
-                  }}
-                  data-testid="button-edit-employee"
-                >
-                  <Pencil className="h-3.5 w-3.5 mr-2" />
-                  Edit
-                </Button>
-                {isDeveloper && (
+              {recordChanges.allowed && (
+                <div className="border-t pt-3 space-y-2">
                   <Button
                     variant="outline"
                     className="w-full"
                     size="sm"
-                    onClick={() => wrapAdminAction(() => recalcMutation.mutate(), "Recalculate Balance")}
-                    disabled={recalcMutation.isPending}
-                    data-testid="button-recalculate-balance"
+                    onClick={() => {
+                      setEditForm({
+                        firstName: employee.firstName,
+                        lastName: employee.lastName,
+                        department: employee.department || "",
+                        phone: employee.phone || "",
+                        monthlySalary: employee.monthlySalary || "",
+                      });
+                      setEditOpen(true);
+                    }}
+                    data-testid="button-edit-employee"
                   >
-                    {recalcMutation.isPending ? (
-                      <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
-                    ) : (
-                      <RefreshCw className="h-3.5 w-3.5 mr-2" />
-                    )}
-                    Recalculate
+                    <Pencil className="h-3.5 w-3.5 mr-2" />
+                    Edit
                   </Button>
-                )}
-              </div>
+                  {isDeveloper && (
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      size="sm"
+                      onClick={() => wrapAdminAction(() => recalcMutation.mutate(), "Recalculate Balance")}
+                      disabled={recalcMutation.isPending}
+                      data-testid="button-recalculate-balance"
+                    >
+                      {recalcMutation.isPending ? (
+                        <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-3.5 w-3.5 mr-2" />
+                      )}
+                      Recalculate
+                    </Button>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

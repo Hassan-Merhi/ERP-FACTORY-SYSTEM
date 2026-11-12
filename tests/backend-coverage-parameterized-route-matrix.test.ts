@@ -16,7 +16,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { pool } from "../server/db";
 import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
-import { isDeclaredReadinessGate } from "./helpers/declaredReadinessGate";
 
 type CompanyMode = "erp" | "factory" | "properties" | "supplier_partner";
 type HttpMethod = "DELETE" | "GET" | "PATCH" | "POST" | "PUT";
@@ -129,6 +128,28 @@ function requestFor(method: HttpMethod, routePath: string) {
  * route keeps its coverage here.
  */
 const STREAMING_ROUTES = new Set(["GET /api/screen-feed/live/:userId"]);
+
+/**
+ * Routes with a documented fail-closed release gate. The Factory Dispatch final
+ * invoice refuses with a structured 503 until the manual TablePlus safeguards
+ * (docs/sql/manual/2026-11-10-factory-dispatch-*.sql) are installed; they are
+ * never installed by a migration, so a CI database does not have them. Only
+ * this exact refusal (status, code and a non-empty `missing` list) is expected
+ * here: any other 5xx on these routes, and a 503 on any other route, still fails.
+ */
+const READINESS_GATED_ROUTES = new Map<string, { status: number; code: string }>([
+  [
+    "GET /api/factory/customer-orders/:id/loading-dispatches/combined-invoice/preview",
+    { status: 503, code: "FACTORY_DISPATCH_TABLEPLUS_GUARDS_PENDING" },
+  ],
+]);
+
+function isDocumentedReadinessRefusal(routeKey: string, status: number, body: unknown): boolean {
+  const gate = READINESS_GATED_ROUTES.get(routeKey);
+  if (!gate || status !== gate.status) return false;
+  const refusal = body as { code?: unknown; missing?: unknown } | undefined;
+  return refusal?.code === gate.code && Array.isArray(refusal.missing) && refusal.missing.length > 0;
+}
 
 function poisonBody(companyId: number) {
   return {
@@ -291,7 +312,8 @@ describe("Phase 1 parameterized backend route matrix", () => {
           .set("x-client-date", "2026-08-08")
           .send(poisonBody(companies[mode]))
           .timeout({ response: REQUEST_TIMEOUT_MS, deadline: REQUEST_TIMEOUT_MS });
-        if (response.status >= 500 && !isDeclaredReadinessGate(response)) {
+        if (isDocumentedReadinessRefusal(`${route.method} ${route.path}`, response.status, response.body)) continue;
+        if (response.status >= 500) {
           const body = response.body as { message?: string; error?: string } | undefined;
           failures.push({
             route: `${route.method} ${route.path}`,

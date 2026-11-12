@@ -272,12 +272,60 @@ export const reportsExportsPhase6TranslationsPart6: readonly Phase6ReportsExport
     ar: "لم يتم العثور على موقع بيان تحويل المخزون في هذه الشركة",
     fr: "L’emplacement du libellé du transfert de stock est introuvable dans cette société",
   },
+  // Stock transfer double-post guard refusals (#3142). The leading code stays untranslated.
+  {
+    en: "STOCK_TRANSFER_POST_IDENTITY_INVALID",
+    ar: "STOCK_TRANSFER_POST_IDENTITY_INVALID: معرّف ترحيل تحويل المخزون غير صالح",
+    fr: "STOCK_TRANSFER_POST_IDENTITY_INVALID : identifiant de comptabilisation du transfert de stock invalide",
+  },
+  {
+    en: "STOCK_TRANSFER_ALREADY_APPLIED_CANONICAL: stock already moved; inspect the transfer applied flag before posting",
+    ar: "STOCK_TRANSFER_ALREADY_APPLIED_CANONICAL: تم نقل المخزون مسبقًا؛ افحص علامة تطبيق التحويل قبل الترحيل",
+    fr: "STOCK_TRANSFER_ALREADY_APPLIED_CANONICAL : le stock a déjà été déplacé ; vérifiez l’indicateur d’application du transfert avant de comptabiliser",
+  },
+  {
+    en: "STOCK_TRANSFER_CANONICAL_EVIDENCE_UNVERIFIED: cannot verify whether this transfer already moved stock",
+    ar: "STOCK_TRANSFER_CANONICAL_EVIDENCE_UNVERIFIED: يتعذر التحقق مما إذا كان هذا التحويل قد نقل المخزون مسبقًا",
+    fr: "STOCK_TRANSFER_CANONICAL_EVIDENCE_UNVERIFIED : impossible de vérifier si ce transfert a déjà déplacé du stock",
+  },
   // Barcode Lookup restoration of legacy deleted bales (#2345).
   { en: "Restored to Stock", ar: "أُعيدت إلى المخزون", fr: "Remis en stock" },
   {
     en: "Deleted bale restored. Existing ERP stock quantity was preserved without a duplicate receipt.",
     ar: "تمت استعادة البالة المحذوفة. تم الحفاظ على كمية مخزون ERP الحالية دون إدخال مكرر.",
     fr: "Balle supprimée restaurée. La quantité de stock ERP existante a été conservée sans réception en double.",
+  },
+  // Company page-access and hidden-cost assignment refusals (#3140).
+  {
+    en: "User is not assigned to this company",
+    ar: "المستخدم غير معيّن لهذه الشركة",
+    fr: "L’utilisateur n’est pas affecté à cette société",
+  },
+  {
+    en: "pageKeys must be a unique list of recognized ERP features",
+    ar: "يجب أن تكون pageKeys قائمة فريدة من ميزات ERP المعترف بها",
+    fr: "pageKeys doit être une liste unique de fonctionnalités ERP reconnues",
+  },
+  {
+    en: "hiddenCostFields must contain unique recognized ERP restrictions",
+    ar: "يجب أن يحتوي hiddenCostFields على قيود ERP فريدة ومعترف بها",
+    fr: "hiddenCostFields doit contenir des restrictions ERP uniques et reconnues",
+  },
+  // Factory Rentals "Add Shop" refusals (#3158).
+  {
+    en: "The rental database schema is out of date. Please deploy the rental schema repair.",
+    ar: "مخطط قاعدة بيانات الإيجارات غير محدّث. يرجى نشر إصلاح مخطط الإيجارات.",
+    fr: "Le schéma de la base de données des locations n’est pas à jour. Veuillez déployer la réparation du schéma des locations.",
+  },
+  {
+    en: "Could not create the shop. The server logged the database error; please contact an administrator.",
+    ar: "تعذّر إنشاء المحل. سجّل الخادم خطأ قاعدة البيانات؛ يرجى التواصل مع المسؤول.",
+    fr: "Impossible de créer la boutique. Le serveur a consigné l’erreur de base de données ; veuillez contacter un administrateur.",
+  },
+  {
+    en: "RENTAL_PROPERTY_UNITS_TABLE_MISSING: apply the base rental migration",
+    ar: "RENTAL_PROPERTY_UNITS_TABLE_MISSING: طبّق ترحيل الإيجارات الأساسي",
+    fr: "RENTAL_PROPERTY_UNITS_TABLE_MISSING : appliquez la migration de base des locations",
   },
   {
     en: "Enable at least one weekday",

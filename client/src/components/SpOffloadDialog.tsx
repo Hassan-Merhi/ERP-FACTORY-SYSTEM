@@ -1,6 +1,7 @@
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -106,6 +107,8 @@ interface SpOffloadDialogProps {
 
 export function SpOffloadDialog({ open, onOpenChange, container, onSuccess }: SpOffloadDialogProps) {
   const { toast } = useToast();
+  // Offloading posts against an existing container; read-only roles never do it.
+  const recordChanges = useExistingRecordChangeAccess();
   const [offloadDate, setOffloadDate] = useState(new Date().toISOString().slice(0, 10));
   const [chargeLines, setChargeLines] = useState<ChargeLine[]>([]);
   const [selectedLocationId, setSelectedLocationId] = useState("");
@@ -140,6 +143,7 @@ export function SpOffloadDialog({ open, onOpenChange, container, onSuccess }: Sp
   // unreachable while the guard is returning null.
   const offloadMutation = useMutation({
     mutationFn: () => {
+      if (!recordChanges.allowed) return Promise.reject(new Error(recordChanges.reason ?? ""));
       if (!container) return Promise.reject(new Error("No container selected"));
       if (!selectedLocationId) {
         toast({ title: "Select a location", variant: "destructive" });
@@ -148,7 +152,11 @@ export function SpOffloadDialog({ open, onOpenChange, container, onSuccess }: Sp
       if (freshStartOtw) {
         const active = chargeLines.filter((charge) => Number(charge.amountUsd) > 0);
         if (active.some((charge) => charge.chargeType !== "paid_now")) {
-          return Promise.reject(new Error("Fresh Start Phase 8 supports additional charges paid from one bank account only. Invoice charges are already included in Goods OTW."));
+          return Promise.reject(
+            new Error(
+              "Fresh Start Phase 8 supports additional charges paid from one bank account only. Invoice charges are already included in Goods OTW."
+            )
+          );
         }
         const distinctBanks = [...new Set(active.map((charge) => charge.creditBankAccountId))];
         if (active.length > 0 && (distinctBanks.length !== 1 || !Number(distinctBanks[0]))) {
@@ -164,9 +172,7 @@ export function SpOffloadDialog({ open, onOpenChange, container, onSuccess }: Sp
             description: charge.description,
             amountUsd: charge.amountUsd,
           })),
-          chargeFundingAccount: active.length > 0
-            ? { kind: "bank", id: Number(distinctBanks[0]) }
-            : null,
+          chargeFundingAccount: active.length > 0 ? { kind: "bank", id: Number(distinctBanks[0]) } : null,
         });
       }
       return apiRequest("POST", "/api/sp/offload", {
@@ -498,17 +504,22 @@ export function SpOffloadDialog({ open, onOpenChange, container, onSuccess }: Sp
           <Separator />
 
           {freshStartOtw ? (
-            <div className="rounded-md border border-border bg-muted/20 p-3 space-y-2" data-testid="fresh-start-phase8-offload-preview">
+            <div
+              className="rounded-md border border-border bg-muted/20 p-3 space-y-2"
+              data-testid="fresh-start-phase8-offload-preview"
+            >
               <p className="text-sm font-medium">Golden Coast Phase 8 — Accounting Preview</p>
               <p className="text-xs text-muted-foreground">
-                One balanced journal transfers the existing Goods OTW amount into stock.
-                Invoice freight and discount are already included; no supplier or clearing charge is created again.
+                One balanced journal transfers the existing Goods OTW amount into stock. Invoice freight and discount
+                are already included; no supplier or clearing charge is created again.
               </p>
               <div className="flex justify-between text-sm">
-                <span>Dr Stock on Floor</span><strong>{fmt2(totalFinalCost)}</strong>
+                <span>Dr Stock on Floor</span>
+                <strong>{fmt2(totalFinalCost)}</strong>
               </div>
               <div className="flex justify-between text-sm">
-                <span>Cr Goods OTW</span><strong>{fmt2(invoiceTotal)}</strong>
+                <span>Cr Goods OTW</span>
+                <strong>{fmt2(invoiceTotal)}</strong>
               </div>
               {activeCharges.length > 0 && (
                 <div className="flex justify-between text-sm">
@@ -530,7 +541,7 @@ export function SpOffloadDialog({ open, onOpenChange, container, onSuccess }: Sp
                   </p>
                 </div>
               </div>
-  
+
               {/* Voucher A: OTW Reversal */}
               <div className="space-y-1">
                 <div className="flex items-center gap-1.5">
@@ -559,7 +570,7 @@ export function SpOffloadDialog({ open, onOpenChange, container, onSuccess }: Sp
                   </div>
                 </div>
               </div>
-  
+
               {/* Voucher B: Stock Creation */}
               <div className="space-y-1">
                 <div className="flex items-center gap-1.5">
@@ -633,7 +644,7 @@ export function SpOffloadDialog({ open, onOpenChange, container, onSuccess }: Sp
                   )}
                 </div>
               </div>
-  
+
               {/* Voucher C: HADI L'SHI Agent Journal — only if agent charges exist */}
               {agentCharges.length > 0 && (
                 <div className="space-y-1">
@@ -657,7 +668,9 @@ export function SpOffloadDialog({ open, onOpenChange, container, onSuccess }: Sp
                             <Badge variant="secondary" className="text-xs ml-1">
                               Dr
                             </Badge>
-                            {c.description ? <span className="text-muted-foreground ml-1">— {c.description}</span> : null}
+                            {c.description ? (
+                              <span className="text-muted-foreground ml-1">— {c.description}</span>
+                            ) : null}
                           </span>
                           <span className="text-right tabular-nums font-semibold">
                             {fmt2(parseFloat(c.amountUsd || "0"))}
@@ -690,15 +703,17 @@ export function SpOffloadDialog({ open, onOpenChange, container, onSuccess }: Sp
             >
               Cancel
             </Button>
-            <Button
-              type="button"
-              onClick={() => offloadMutation.mutate()}
-              disabled={offloadMutation.isPending}
-              data-testid="button-sp-confirm-offload"
-            >
-              {offloadMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Confirm Offload
-            </Button>
+            {recordChanges.allowed && (
+              <Button
+                type="button"
+                onClick={() => offloadMutation.mutate()}
+                disabled={offloadMutation.isPending}
+                data-testid="button-sp-confirm-offload"
+              >
+                {offloadMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Confirm Offload
+              </Button>
+            )}
           </div>
         </div>
       </DialogContent>

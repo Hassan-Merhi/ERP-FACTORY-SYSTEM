@@ -3,16 +3,12 @@ import type { ClientErrorLike } from "@/lib/clientError";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { Input } from "@/components/ui/input";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {} from "@/components/ui/dialog";
 import { LayoutGrid, Plus, X, Link2, Link2Off } from "lucide-react";
 
@@ -44,9 +40,16 @@ import { StatusViewToggle } from "./factorystatusbuilder/components/StatusViewTo
 import { StatusBuilderToolbar } from "./factorystatusbuilder/components/StatusBuilderToolbar";
 import { StatusColumnsMenu } from "./factorystatusbuilder/components/StatusColumnsMenu";
 import { StatusAddRow } from "./factorystatusbuilder/components/StatusAddRow";
+import { StatusCellLinkMenu } from "./factorystatusbuilder/components/StatusCellLinkMenu";
+import { StatusDiffFooterRow } from "./factorystatusbuilder/components/StatusDiffFooterRow";
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export default function FactoryStatusBuilder() {
+  const { selectedCompany } = useCompany();
+  // Sheets are shared company records: read-only roles can browse, switch pages, view history and export.
+  const recordChanges = useExistingRecordChangeAccess();
+  const canEdit = recordChanges.allowed;
+  const canCreateSheet = recordChanges.canCreate("POST", "/api/factory/status-builder/sheets");
   const { toast } = useToast();
   const { formatDisplayDate } = useDateFormat();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -56,6 +59,18 @@ export default function FactoryStatusBuilder() {
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const silentSaveRef = useRef(false);
+  const priorCompanyRef = useRef(selectedCompany?.id);
+  useEffect(() => {
+    if (priorCompanyRef.current === selectedCompany?.id) return;
+    priorCompanyRef.current = selectedCompany?.id;
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    autosaveTimerRef.current = null;
+    silentSaveRef.current = false;
+    setLocalSheets([]);
+    setInitialised(false);
+    setActiveIdx(0);
+    setSavedAt(null);
+  }, [selectedCompany?.id]);
 
   const [linkDialog, setLinkDialog] = useState<LinkDialogState>({
     open: false,
@@ -116,7 +131,8 @@ export default function FactoryStatusBuilder() {
 
   // ── Load ───────────────────────────────────────────────────────────────────
   const { data: apiSheets, isLoading } = useQuery<ApiSheet[]>({
-    queryKey: ["/api/factory/status-builder/sheets"],
+    queryKey: companyQueryKey("/api/factory/status-builder/sheets", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
   });
 
   useEffect(() => {
@@ -144,10 +160,10 @@ export default function FactoryStatusBuilder() {
       createdAt: string;
     }>
   >({
-    queryKey: ["/api/factory/status-builder/log", activeSheet?.id],
+    queryKey: companyQueryKey("/api/factory/status-builder/log", selectedCompany?.id, activeSheet?.id),
     queryFn: () =>
       apiRequest("GET", `/api/factory/status-builder/log?sheetId=${activeSheet?.id}&limit=200`).then((r) => r.json()),
-    enabled: viewMode === "history" && !!activeSheet?.id,
+    enabled: Boolean(selectedCompany?.id) && viewMode === "history" && !!activeSheet?.id,
   });
 
   // ── Helpers ────────────────────────────────────────────────────────────────
@@ -257,6 +273,7 @@ export default function FactoryStatusBuilder() {
 
   const saveMutation = useMutation({
     mutationFn: async (sheets: StatusBuilderSheet[]) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const dirty = sheets.filter((s) => s.dirty && s.id !== null);
       await Promise.all(
         dirty.map((s) =>
@@ -287,7 +304,7 @@ export default function FactoryStatusBuilder() {
 
   useEffect(() => {
     const hasSaveable = localSheets.some((s) => s.dirty && s.id !== null);
-    if (!hasSaveable) return;
+    if (!hasSaveable || !canEdit) return;
     if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
     autosaveTimerRef.current = setTimeout(() => {
       silentSaveRef.current = true;
@@ -296,10 +313,13 @@ export default function FactoryStatusBuilder() {
     return () => {
       if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
     };
-  }, [localSheets, saveMutation]);
+  }, [localSheets, saveMutation, canEdit]);
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => apiRequest("DELETE", `/api/factory/status-builder/sheets/${id}`),
+    mutationFn: async (id: number) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
+      return apiRequest("DELETE", `/api/factory/status-builder/sheets/${id}`);
+    },
     onSuccess: (_data, id) => {
       setLocalSheets((prev) => prev.filter((s) => s.id !== id));
       setActiveIdx((prev) => Math.max(0, prev - 1));
@@ -311,6 +331,7 @@ export default function FactoryStatusBuilder() {
 
   const importMutation = useMutation({
     mutationFn: (file: File) => {
+      if (!recordChanges.allowed) return Promise.reject(new Error(recordChanges.reason ?? ""));
       const fd = new FormData();
       fd.append("file", file);
       return fetch("/api/factory/status-builder/sheets/import", {
@@ -342,7 +363,7 @@ export default function FactoryStatusBuilder() {
   const handleExport = () => window.open("/api/factory/status-builder/sheets/export", "_blank");
 
   // ── Tab operations ─────────────────────────────────────────────────────────
-  const addTab = () => createMutation.mutate(`Page ${localSheets.length + 1}`);
+  const addTab = () => canCreateSheet && createMutation.mutate(`Page ${localSheets.length + 1}`);
 
   const renameTab = (idx: number, newName: string) => {
     setLocalSheets((prev) => {
@@ -441,6 +462,7 @@ export default function FactoryStatusBuilder() {
       if (e.key === "Enter") {
         e.preventDefault();
         if (ri >= rowCount - 1) {
+          if (!canEdit) return;
           updateSheet((s) => ({
             ...s,
             rows: [
@@ -479,19 +501,19 @@ export default function FactoryStatusBuilder() {
         }
       }
     },
-    [localSheets, activeIdx, focusCell, updateSheet, hiddenColumnsBySheet]
+    [localSheets, activeIdx, focusCell, updateSheet, hiddenColumnsBySheet, canEdit]
   );
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "i") {
+      if (canEdit && (e.ctrlKey || e.metaKey) && e.key === "i") {
         e.preventDefault();
         addColumn();
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [activeIdx, addColumn, localSheets]);
+  }, [activeIdx, addColumn, localSheets, canEdit]);
 
   // ── Render ─────────────────────────────────────────────────────────────────
   if (isLoading) {
@@ -525,6 +547,7 @@ export default function FactoryStatusBuilder() {
             silentSaveRef.current = false;
             saveMutation.mutate(localSheets);
           }}
+          canEdit={canEdit}
         />
 
         <StatusViewToggle viewMode={viewMode} onChange={setViewMode} />
@@ -541,19 +564,22 @@ export default function FactoryStatusBuilder() {
                     onActivate={() => setActiveIdx(idx)}
                     onRename={(v) => renameTab(idx, v)}
                     onDelete={() => deleteTab(idx)}
-                    canDelete={localSheets.length > 1}
+                    canDelete={canEdit && localSheets.length > 1}
+                    canRename={canEdit}
                   />
                 ))}
               </TabsList>
-              <button
-                type="button"
-                data-testid="sb-button-add-tab"
-                onClick={addTab}
-                className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-full px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                Add page
-              </button>
+              {canCreateSheet && (
+                <button
+                  type="button"
+                  data-testid="sb-button-add-tab"
+                  onClick={addTab}
+                  className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-full px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Add page
+                </button>
+              )}
             </div>
           </div>
           {activeSheet && viewMode === "sheet" && (
@@ -595,31 +621,36 @@ export default function FactoryStatusBuilder() {
                           <Input
                             value={col.label}
                             onChange={(e) => setColumnHeader(ci, e.target.value)}
+                            readOnly={!canEdit}
                             className="h-8 border-0 bg-transparent px-1 text-center text-xs font-bold tracking-wide text-foreground shadow-none focus-visible:ring-1 focus-visible:ring-primary"
                             data-testid={`sb-input-col-header-${ci}`}
                           />
-                          <button
-                            data-testid={`sb-button-remove-col-${ci}`}
-                            onClick={() =>
-                              setPendingDelete({ type: "col", idx: ci, label: col.label || `Column ${ci + 1}` })
-                            }
-                            className="shrink-0 rounded p-1 text-muted-foreground/70 transition-colors hover:bg-destructive/10 hover:text-destructive"
-                            title="Delete column (removes data); use Columns to hide instead"
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
+                          {canEdit && (
+                            <button
+                              data-testid={`sb-button-remove-col-${ci}`}
+                              onClick={() =>
+                                setPendingDelete({ type: "col", idx: ci, label: col.label || `Column ${ci + 1}` })
+                              }
+                              className="shrink-0 rounded p-1 text-muted-foreground/70 transition-colors hover:bg-destructive/10 hover:text-destructive"
+                              title="Delete column (removes data); use Columns to hide instead"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          )}
                         </div>
                       </th>
                     ))}
                     <th className="border-b border-border/60 bg-slate-100 px-3 py-2 text-center dark:bg-slate-800/90">
-                      <button
-                        data-testid="sb-button-add-column"
-                        onClick={addColumn}
-                        className="text-muted-foreground hover:text-foreground transition-colors"
-                        title="Add column"
-                      >
-                        <Plus className="h-4 w-4" />
-                      </button>
+                      {canEdit && (
+                        <button
+                          data-testid="sb-button-add-column"
+                          onClick={addColumn}
+                          className="text-muted-foreground hover:text-foreground transition-colors"
+                          title="Add column"
+                        >
+                          <Plus className="h-4 w-4" />
+                        </button>
+                      )}
                     </th>
                   </tr>
                 </thead>
@@ -636,20 +667,27 @@ export default function FactoryStatusBuilder() {
                           <Input
                             value={fmtLabel(row.label)}
                             onChange={(e) => setRowLabel(ri, e.target.value)}
+                            readOnly={!canEdit}
                             className="h-9 flex-1 border-0 bg-transparent px-2 text-sm font-medium text-foreground shadow-none focus-visible:ring-1 focus-visible:ring-primary"
                             data-testid={`sb-input-row-label-${ri}`}
                             dir="auto"
                           />
-                          <button
-                            data-testid={`sb-button-remove-row-${ri}`}
-                            onClick={() =>
-                              setPendingDelete({ type: "row", idx: ri, label: fmtLabel(row.label) || `Row ${ri + 1}` })
-                            }
-                            className="text-muted-foreground hover:text-destructive shrink-0 transition-colors opacity-0 group-hover:opacity-100 touch:opacity-100"
-                            style={{ visibility: "visible" }}
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
+                          {canEdit && (
+                            <button
+                              data-testid={`sb-button-remove-row-${ri}`}
+                              onClick={() =>
+                                setPendingDelete({
+                                  type: "row",
+                                  idx: ri,
+                                  label: fmtLabel(row.label) || `Row ${ri + 1}`,
+                                })
+                              }
+                              className="text-muted-foreground hover:text-destructive shrink-0 transition-colors opacity-0 group-hover:opacity-100 touch:opacity-100"
+                              style={{ visibility: "visible" }}
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          )}
                         </div>
                       </td>
 
@@ -744,6 +782,7 @@ export default function FactoryStatusBuilder() {
                                 <Input
                                   value={fmt(cell.value)}
                                   onChange={(e) => setCellDirect(ri, ci, e.target.value)}
+                                  readOnly={!canEdit}
                                   onKeyDown={(e) => handleCellKeyDown(e, ri, ci)}
                                   className={`h-10 border-0 bg-transparent px-3 text-sm font-medium shadow-none focus-visible:ring-1 focus-visible:ring-primary tabular-nums
                                     ${isNeg ? "text-red-500" : ""}
@@ -754,79 +793,20 @@ export default function FactoryStatusBuilder() {
                               )}
 
                               {/* Link menu */}
-                              {!isDiff && !isTotal && (
-                                <div
-                                  className={`absolute top-0.5 right-0.5 z-10 transition-opacity ${isLinked ? "opacity-100" : "opacity-0 group-hover/cell:opacity-100"}`}
-                                >
-                                  <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                      <button
-                                        className="p-0.5 rounded-sm hover:bg-muted/60"
-                                        onClick={(e) => e.stopPropagation()}
-                                        data-testid={`sb-button-cell-menu-${ri}-${ci}`}
-                                        title={isLinked ? `Linked from: ${linkInfo ?? "…"}` : "Link this cell"}
-                                      >
-                                        {isBroken || isCyclic ? (
-                                          <Link2Off className="h-2.5 w-2.5 text-red-400" />
-                                        ) : isLinked ? (
-                                          <Link2 className="h-2.5 w-2.5 text-blue-400" />
-                                        ) : (
-                                          <Link2 className="h-2.5 w-2.5 text-muted-foreground" />
-                                        )}
-                                      </button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end" className="text-xs min-w-[160px]">
-                                      {isLinked && linkInfo && (
-                                        <>
-                                          <div className="px-2 py-1.5 text-xs text-muted-foreground max-w-[200px] leading-tight">
-                                            {linkInfo}
-                                          </div>
-                                          <DropdownMenuSeparator />
-                                        </>
-                                      )}
-                                      {!isLinked ? (
-                                        <DropdownMenuItem
-                                          onClick={() => openLinkDialog(ri, ci)}
-                                          className="text-xs gap-2"
-                                        >
-                                          <Link2 className="h-3 w-3" />
-                                          Link cell
-                                        </DropdownMenuItem>
-                                      ) : (
-                                        <>
-                                          <DropdownMenuItem
-                                            onClick={() => openLinkDialog(ri, ci)}
-                                            className="text-xs gap-2"
-                                          >
-                                            <Link2 className="h-3 w-3" />
-                                            Change link
-                                          </DropdownMenuItem>
-                                          <DropdownMenuItem
-                                            onClick={() => unlinkCell(ri, ci)}
-                                            className="text-xs gap-2"
-                                          >
-                                            <Link2Off className="h-3 w-3" />
-                                            Remove link
-                                          </DropdownMenuItem>
-                                          <DropdownMenuItem
-                                            onClick={() => copyLinkValueAsManual(ri, ci)}
-                                            className="text-xs gap-2"
-                                          >
-                                            Copy value as manual
-                                          </DropdownMenuItem>
-                                          {srcSheetIdxForJump !== -1 && (
-                                            <DropdownMenuItem
-                                              onClick={() => setActiveIdx(srcSheetIdxForJump)}
-                                              className="text-xs gap-2"
-                                            >
-                                              Jump to source page
-                                            </DropdownMenuItem>
-                                          )}
-                                        </>
-                                      )}
-                                    </DropdownMenuContent>
-                                  </DropdownMenu>
-                                </div>
+                              {!isDiff && !isTotal && (canEdit || isLinked) && (
+                                <StatusCellLinkMenu
+                                  rowIdx={ri}
+                                  colIdx={ci}
+                                  isLinked={isLinked}
+                                  isBroken={isBroken || isCyclic}
+                                  linkInfo={linkInfo}
+                                  canEdit={canEdit}
+                                  sourceSheetIdx={srcSheetIdxForJump}
+                                  onJumpToSource={setActiveIdx}
+                                  onOpenLinkDialog={() => openLinkDialog(ri, ci)}
+                                  onUnlink={() => unlinkCell(ri, ci)}
+                                  onCopyAsManual={() => copyLinkValueAsManual(ri, ci)}
+                                />
                               )}
                             </div>
                           </td>
@@ -837,34 +817,21 @@ export default function FactoryStatusBuilder() {
                     </tr>
                   ))}
 
-                  <StatusAddRow
-                    columnIds={activeSheet.columns.map((col) => col.id)}
-                    hiddenColumnIds={hiddenColIds}
-                    onAddRow={addRow}
-                  />
+                  {canEdit && (
+                    <StatusAddRow
+                      columnIds={activeSheet.columns.map((col) => col.id)}
+                      hiddenColumnIds={hiddenColIds}
+                      onAddRow={addRow}
+                    />
+                  )}
 
                   {/* Footer — DIFFERENCE row */}
                   {activeSheet.rows.length > 0 && (
-                    <tr className="bg-amber-500/[0.10] dark:bg-amber-950/35">
-                      <td className="border-t-2 border-r border-amber-500/40 px-4 py-3">
-                        <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">DIFFERENCE</span>
-                      </td>
-                      {diffRow.map((val, ci) => {
-                        const isNeg = typeof val === "number" && val < 0;
-                        return (
-                          <td
-                            key={ci}
-                            className={`border-t-2 border-r border-amber-500/40 px-3 py-3 text-center text-sm font-bold tabular-nums ${hiddenColIds.includes(activeSheet.columns[ci]?.id) ? "hidden" : ""}`}
-                            data-testid={`sb-footer-diff-${ci}`}
-                          >
-                            <span className={isNeg ? "text-red-500" : "text-amber-700 dark:text-amber-400"}>
-                              {fmt(val)}
-                            </span>
-                          </td>
-                        );
-                      })}
-                      <td className="border border-border" />
-                    </tr>
+                    <StatusDiffFooterRow
+                      diffRow={diffRow}
+                      columnIds={activeSheet.columns.map((col) => col.id)}
+                      hiddenColumnIds={hiddenColIds}
+                    />
                   )}
                 </tbody>
               </table>

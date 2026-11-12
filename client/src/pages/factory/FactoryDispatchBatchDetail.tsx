@@ -1,6 +1,8 @@
 import { visibleTabInterval } from "@/lib/queryPolicies";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import { useState } from "react";
 import { useLocation, useRoute } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -30,6 +32,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { PageHeader } from "@/components/PageHeader";
 import {
@@ -53,7 +56,9 @@ import { useDateFormat } from "@/contexts/DateFormatContext";
 import type { AuditScan, BatchDetail, InvoicePreview } from "./factorydispatchbatchdetail/types";
 import { BATCH_STATUS_CONFIG, fmt } from "./factorydispatchbatchdetail/utils";
 import { RideStatusBadge } from "./factorydispatchbatchdetail/components/RideStatusBadge";
+import { BatchInfoCard } from "./factorydispatchbatchdetail/components/BatchInfoCard";
 export default function FactoryDispatchBatchDetail() {
+  const { selectedCompany } = useCompany();
   const [, navigate] = useLocation();
   const [, params] = useRoute("/factory/dispatch-batches/:id");
   const batchId = params?.id ? parseInt(params.id) : null;
@@ -68,6 +73,7 @@ export default function FactoryDispatchBatchDetail() {
   const [reopenReason, setReopenReason] = useState("");
   const { data: me } = useQuery<{ role: string }>({ queryKey: ["/api/auth/me"] });
   const isDeveloper = me?.role === "Developer";
+  const recordChanges = useExistingRecordChangeAccess();
 
   const [showBales, setShowBales] = useState(false);
   const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split("T")[0]);
@@ -80,35 +86,35 @@ export default function FactoryDispatchBatchDetail() {
   });
 
   const { data, isLoading, isError, error, refetch } = useQuery<BatchDetail>({
-    queryKey: [`/api/factory/dispatch-batches/${batchId}`],
+    queryKey: companyQueryKey(`/api/factory/dispatch-batches/${batchId}`, selectedCompany?.id),
     queryFn: async () => {
       const res = await fetch(`/api/factory/dispatch-batches/${batchId}`, { credentials: "include" });
       if (!res.ok) throw new Error((await res.json()).message);
       return res.json();
     },
-    enabled: !!batchId,
+    enabled: Boolean(selectedCompany?.id) && !!batchId,
     refetchInterval: visibleTabInterval(15_000),
   });
 
   const { data: preview, isLoading: previewLoading } = useQuery<InvoicePreview>({
-    queryKey: [`/api/factory/dispatch-batches/${batchId}/invoice-preview`],
+    queryKey: companyQueryKey(`/api/factory/dispatch-batches/${batchId}/invoice-preview`, selectedCompany?.id),
     queryFn: async () => {
       const res = await fetch(`/api/factory/dispatch-batches/${batchId}/invoice-preview`, { credentials: "include" });
       if (!res.ok) throw new Error((await res.json()).message);
       return res.json();
     },
-    enabled: !!batchId && previewOpen,
+    enabled: Boolean(selectedCompany?.id) && !!batchId && previewOpen,
     staleTime: 15000,
   });
 
   const { data: auditScans = [] } = useQuery<AuditScan[]>({
-    queryKey: [`/api/factory/dispatch-batches/${batchId}/audit`],
+    queryKey: companyQueryKey(`/api/factory/dispatch-batches/${batchId}/audit`, selectedCompany?.id),
     queryFn: async () => {
       const res = await fetch(`/api/factory/dispatch-batches/${batchId}/audit`, { credentials: "include" });
       if (!res.ok) return [];
       return res.json();
     },
-    enabled: !!batchId && showBales,
+    enabled: Boolean(selectedCompany?.id) && !!batchId && showBales,
   });
 
   const addRideMutation = useMutation({
@@ -224,6 +230,8 @@ export default function FactoryDispatchBatchDetail() {
 
   const { batch, customerName, proforma, proformaLines, rides, articleTotals, finalInvoice } = data;
   const isReadOnly = batch.status === "INVOICED" || batch.status === "CANCELLED";
+  // Rides, cancel, reopen, scan and invoice generation all change this existing batch.
+  const canChangeBatch = !isReadOnly && recordChanges.allowed;
 
   const totalBales = rides.reduce((s, r) => s + parseInt(String(r.baleCount || 0)), 0);
   const totalWeight = rides.reduce((s, r) => s + parseFloat(r.totalWeightKg || "0"), 0);
@@ -264,20 +272,24 @@ export default function FactoryDispatchBatchDetail() {
         <div className="flex flex-wrap gap-2">
           {!isReadOnly && (
             <>
-              <Button variant="outline" onClick={() => setAddRideOpen(true)} data-testid="button-add-truck-ride">
-                <Plus className="w-4 h-4 mr-1" /> Add Truck Ride
-              </Button>
+              {canChangeBatch && (
+                <Button variant="outline" onClick={() => setAddRideOpen(true)} data-testid="button-add-truck-ride">
+                  <Plus className="w-4 h-4 mr-1" /> Add Truck Ride
+                </Button>
+              )}
               <Button variant="outline" onClick={() => setPreviewOpen(true)} data-testid="button-preview-invoice">
                 <Eye className="w-4 h-4 mr-1" /> Preview Invoice
               </Button>
-              <Button
-                variant="outline"
-                className="text-destructive"
-                onClick={() => setCancelOpen(true)}
-                data-testid="button-cancel-batch"
-              >
-                Cancel Batch
-              </Button>
+              {canChangeBatch && (
+                <Button
+                  variant="outline"
+                  className="text-destructive"
+                  onClick={() => setCancelOpen(true)}
+                  data-testid="button-cancel-batch"
+                >
+                  Cancel Batch
+                </Button>
+              )}
             </>
           )}
           {batch.status === "INVOICED" && finalInvoice && (
@@ -345,49 +357,7 @@ export default function FactoryDispatchBatchDetail() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="md:col-span-1 space-y-3">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Batch Info</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Customer</span>
-                  <span className="font-medium">{customerName || "—"}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Proforma</span>
-                  <span>{proforma?.name || "None"}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Currency</span>
-                  <span>{batch.currency}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Price Mode</span>
-                  <span>{batch.priceMode === "PER_KG" ? "Per Kg" : "Per Bale"}</span>
-                </div>
-                {batch.destination && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Destination</span>
-                    <span>{batch.destination}</span>
-                  </div>
-                )}
-                {batch.notes && (
-                  <div>
-                    <span className="text-muted-foreground text-xs">Notes</span>
-                    <p className="text-sm mt-0.5">{batch.notes}</p>
-                  </div>
-                )}
-                {finalInvoice && (
-                  <div className="flex justify-between pt-1 border-t">
-                    <span className="text-muted-foreground">Invoice</span>
-                    <span className="font-mono font-medium text-green-700 dark:text-green-400">
-                      {finalInvoice.invoiceNumber}
-                    </span>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            <BatchInfoCard batch={batch} customerName={customerName} proforma={proforma} finalInvoice={finalInvoice} />
 
             {progress.length > 0 && (
               <Card>
@@ -445,7 +415,7 @@ export default function FactoryDispatchBatchDetail() {
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm flex items-center gap-1.5">
                   <Truck className="w-4 h-4" /> Truck Rides
-                  {!isReadOnly && (
+                  {canChangeBatch && (
                     <Button size="sm" variant="outline" className="ml-auto" onClick={() => setAddRideOpen(true)}>
                       <Plus className="w-3.5 h-3.5 mr-1" /> Add
                     </Button>
@@ -457,7 +427,7 @@ export default function FactoryDispatchBatchDetail() {
                   <div className="flex flex-col items-center gap-2 py-10 text-muted-foreground">
                     <Truck className="w-8 h-8 opacity-40" />
                     <p className="text-sm">No truck rides yet</p>
-                    {!isReadOnly && (
+                    {canChangeBatch && (
                       <Button size="sm" variant="outline" onClick={() => setAddRideOpen(true)}>
                         <Plus className="w-4 h-4 mr-1" /> Add first ride
                       </Button>
@@ -491,7 +461,7 @@ export default function FactoryDispatchBatchDetail() {
                           </TableCell>
                           <TableCell>
                             <div className="flex gap-1.5 justify-end">
-                              {(ride.status === "LOADING" || ride.status === "DRAFT") && !isReadOnly && (
+                              {(ride.status === "LOADING" || ride.status === "DRAFT") && canChangeBatch && (
                                 <Button
                                   size="sm"
                                   variant="outline"
@@ -501,7 +471,7 @@ export default function FactoryDispatchBatchDetail() {
                                   <ScanLine className="w-3.5 h-3.5 mr-1" /> Scan
                                 </Button>
                               )}
-                              {ride.status === "DISPATCHED" && !isReadOnly && (
+                              {ride.status === "DISPATCHED" && canChangeBatch && (
                                 <Button
                                   size="sm"
                                   variant="ghost"
@@ -782,7 +752,7 @@ export default function FactoryDispatchBatchDetail() {
             <Button variant="outline" onClick={() => setPreviewOpen(false)}>
               Close
             </Button>
-            {preview?.canGenerate && (
+            {recordChanges.allowed && preview?.canGenerate && (
               <Button
                 onClick={() => setGenerateOpen(true)}
                 disabled={!preview.canGenerate}

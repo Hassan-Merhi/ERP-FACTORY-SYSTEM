@@ -12,7 +12,13 @@ import { getClientDate } from "../../../lib/dateUtils";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { writeDaybookEntry } from "../_helpers";
-import { factoryContainers, factoryRawStock, factoryMixBatches, factoryMixBatchSources } from "@shared/schema";
+import {
+  factoryContainers,
+  factoryRawStock,
+  factoryMixBatches,
+  factoryMixBatchSources,
+  factorySuppliers,
+} from "@shared/schema";
 import { eq, and, sql, isNull } from "drizzle-orm";
 import { getStableSupplierCost } from "../../../services/factory/rawStockStableCost";
 import {
@@ -24,7 +30,15 @@ import {
 } from "../../../services/factory/baleCostBasis";
 import { recordFactoryStockValueEventTx } from "../../../services/factory/factoryStockValueEvents";
 import Decimal from "decimal.js";
-import { MoneyDecimal, parseMoneyInput, toMoney } from "../../../lib/money";
+import { MoneyDecimal, toMoney } from "../../../lib/money";
+import {
+  MixRawStockShortageError,
+  requireMixFifoFullyAllocated,
+  requireMixRawStockCapacity,
+  availableSupplierAddAllowance,
+  splitSupplierShortfall,
+} from "../../../services/factory/mixRawStockQuantityGuard";
+import { mixKilograms, requireMixLifecycleAvailable } from "../../../services/factory/mixLifecyclePhase6";
 
 /** A source's rate as stored on its row (0 when it has no USD rate: the mix is then unvalued). */
 const storedRate = (rate: Decimal | null) => (rate ?? new MoneyDecimal(0)).toFixed();
@@ -57,12 +71,26 @@ export function registerFactoryMixBatchCreateRoutes(app: Express) {
       // Source weights are read the way parseFloat reads them; one that does not
       // parse would otherwise reach usedKg as NaN.
       const allSources: Array<{ weightKg?: unknown }> = [...supplierSources, ...sources, ...batchSources];
-      if (allSources.some((source) => parseMoneyInput(source.weightKg) === null)) {
-        return res.status(400).json({ message: "Invalid amount" });
+      if (
+        allSources.some((source) => {
+          try {
+            mixKilograms(source.weightKg, "Source kg");
+            return false;
+          } catch {
+            return true;
+          }
+        })
+      ) {
+        return res.status(400).json({
+          code: "MIX_BATCH_LIFECYCLE_REFUSED",
+          message: "Source kg must be positive with no more than 3 decimal places.",
+        });
       }
-      const weightOf = (source: { weightKg?: unknown }) => parseMoneyInput(source.weightKg) as Decimal;
+      const weightOf = (source: { weightKg?: unknown }) => mixKilograms(source.weightKg, "Source kg");
 
       const result = await db.transaction(async (tx) => {
+        // Serialize batch-code assignment with carry-forward creation.
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('factory_mix_batch_sequence'), ${companyId})`);
         const year = new Date().getFullYear();
         const existingBatches = await tx
           .select({ batchCode: factoryMixBatches.batchCode })
@@ -97,8 +125,8 @@ export function registerFactoryMixBatchCreateRoutes(app: Express) {
 
           if (!srcBatch) throw new Error(`Opening batch not found`);
 
-          const remaining = toMoney(srcBatch.totalWeightKg).minus(toMoney(srcBatch.usedKg));
-          if (remaining.lessThanOrEqualTo(0.001)) throw new Error(`Opening batch has no remaining stock`);
+          const remaining = requireMixLifecycleAvailable(srcBatch);
+          if (remaining.lte(0)) throw new Error(`Opening batch has no remaining stock`);
 
           const cost = toMoney(srcBatch.costPerKg);
 
@@ -135,6 +163,13 @@ export function registerFactoryMixBatchCreateRoutes(app: Express) {
           // The persisted locked rate only: the legacy receipt-weighted fallback
           // can carry a native-currency cost. With no locked rate, each FIFO
           // container is priced at its own landed USD cost.
+          // Serialize concurrent mix allocations for the same supplier,
+          // including manual ADD stock with no physical raw-stock rows.
+          await tx
+            .select({ id: factorySuppliers.id })
+            .from(factorySuppliers)
+            .where(and(eq(factorySuppliers.companyId, companyId), eq(factorySuppliers.id, supplierId)))
+            .for("update");
           const [lockedRate, { rows: supplierRawStocks }] = await Promise.all([
             supplierLockedUsdRate(tx, companyId, supplierId),
             getStableSupplierCost(tx, companyId, supplierId, { forUpdate: true }),
@@ -142,7 +177,12 @@ export function registerFactoryMixBatchCreateRoutes(app: Express) {
 
           // FIFO allocation of usedKg only — this determines WHICH container rows get
           // debited, never the cost rate itself (that's fixed above).
-          const perRsDeductions: Array<{ containerId: number; deduct: Decimal }> = [];
+          const perRsDeductions: Array<{
+            containerId: number;
+            deduct: Decimal;
+            adjustmentBacked?: boolean;
+            supplierAdvance?: boolean;
+          }> = [];
           let remaining = weight;
           for (const rs of supplierRawStocks) {
             if (remaining.lessThanOrEqualTo(0.001)) break;
@@ -159,16 +199,40 @@ export function registerFactoryMixBatchCreateRoutes(app: Express) {
             remaining = remaining.minus(deduct);
           }
 
-          if (remaining.greaterThan(0.001) && supplierRawStocks.length > 0) {
-            const lastRs = supplierRawStocks[supplierRawStocks.length - 1];
+          // Supplier mixes may run ahead of on-hand stock. Record an explicit
+          // advance at the established locked USD rate; a later receipt nets
+          // the supplier's negative aggregate balance. Never invent a receipt
+          // or disguise an advance as a dated ADD adjustment.
+          const addAllowance = await availableSupplierAddAllowance(
+            tx,
+            companyId,
+            supplierId,
+            supplierRawStocks,
+            batchDate || getClientDate(req)
+          );
+          if (supplierRawStocks.length > 0 && remaining.gt(0)) {
+            const { adjustmentKg, advanceKg } = splitSupplierShortfall(remaining.toFixed(3), addAllowance.toFixed(3));
+            if (advanceKg.gt(0) && (lockedRate === null || lockedRate.lte(0))) {
+              throw new MixRawStockShortageError(
+                `Supplier #${supplierId} needs a known positive locked USD rate before using stock from a future offload.`
+              );
+            }
+            const last = supplierRawStocks[supplierRawStocks.length - 1];
             await tx
               .update(factoryRawStock)
-              .set({ usedKg: sql`${factoryRawStock.usedKg} + ${remaining.toFixed()}` })
-              .where(eq(factoryRawStock.id, lastRs.id));
-            // Add to the last deduction entry if it already exists, otherwise push a new one
-            const existing = perRsDeductions.find((d) => d.containerId === lastRs.containerId);
-            if (existing) existing.deduct = existing.deduct.plus(remaining);
-            else perRsDeductions.push({ containerId: lastRs.containerId, deduct: remaining });
+              .set({ usedKg: sql`${factoryRawStock.usedKg} + ${remaining.toFixed(3)}` })
+              .where(and(eq(factoryRawStock.id, last.id), eq(factoryRawStock.companyId, companyId)));
+            if (adjustmentKg.gt(0)) {
+              perRsDeductions.push({ containerId: last.containerId, deduct: adjustmentKg, adjustmentBacked: true });
+            }
+            if (advanceKg.gt(0)) {
+              perRsDeductions.push({ containerId: last.containerId, deduct: advanceKg, supplierAdvance: true });
+            }
+          }
+          if (supplierRawStocks.length === 0) {
+            // No historical receipt exists to anchor a negative stock
+            // balance. Keep the existing ADD-backed manual-supplier behavior.
+            requireMixFifoFullyAllocated(weight.toFixed(3), supplierId, addAllowance.toFixed(3));
           }
 
           if (supplierRawStocks.length === 0) {
@@ -197,6 +261,8 @@ export function registerFactoryMixBatchCreateRoutes(app: Express) {
               sourceRecords.push({
                 supplierId,
                 containerId: d.containerId,
+                adjustmentBacked: d.adjustmentBacked,
+                supplierAdvance: d.supplierAdvance,
                 weightKg: d.deduct.toFixed(),
                 costPerKg: storedRate(rate),
                 totalCost: d.deduct
@@ -243,7 +309,11 @@ export function registerFactoryMixBatchCreateRoutes(app: Express) {
           const priced = await rawSourceUsdRate(tx, companyId, { supplierId: ctnSupplierId, containerId });
           const costUsd = priced?.rate ?? null;
 
-          // Allow over-use: usedKg may exceed receivedKg, driving stock negative
+          requireMixRawStockCapacity({
+            availableKg: toMoney(rawStock.receivedKg).minus(rawStock.usedKg).toFixed(3),
+            requestedKg: weight.toFixed(3),
+            source: `container #${containerId}`,
+          });
           await tx
             .update(factoryRawStock)
             .set({ usedKg: sql`${factoryRawStock.usedKg} + ${weight.toFixed()}` })
@@ -273,9 +343,9 @@ export function registerFactoryMixBatchCreateRoutes(app: Express) {
 
           if (!srcBatch) throw new Error(`Source batch ${sourceBatchId} not found`);
 
-          const batchRemaining = toMoney(srcBatch.totalWeightKg).minus(toMoney(srcBatch.usedKg));
+          const batchRemaining = requireMixLifecycleAvailable(srcBatch);
           const weight = weightOf(bSource);
-          if (weight.greaterThan(batchRemaining.plus(0.001))) {
+          if (weight.greaterThan(batchRemaining)) {
             throw new Error(`Not enough in batch ${srcBatch.batchCode}. Available: ${batchRemaining.toFixed(3)} kg`);
           }
 
@@ -323,18 +393,25 @@ export function registerFactoryMixBatchCreateRoutes(app: Express) {
             containerId: sr.containerId || null,
             supplierId: sr.supplierId || null,
             sourceBatchId: sr.sourceBatchId || null,
-            sourceType: sr.sourceBatchId
-              ? "BATCH"
-              : sr.supplierId
-                ? sr.containerId
-                  ? "SUPPLIER_FIFO"
-                  : "SUPPLIER"
-                : "CONTAINER_DIRECT",
+            sourceType: sr.supplierAdvance
+              ? "SUPPLIER_ADVANCE"
+              : sr.adjustmentBacked
+                ? "SUPPLIER_ADJUSTMENT_BACKED"
+                : sr.sourceBatchId
+                  ? "BATCH"
+                  : sr.supplierId
+                    ? sr.containerId
+                      ? "SUPPLIER_FIFO"
+                      : "SUPPLIER"
+                    : "CONTAINER_DIRECT",
             sourceId: sr.supplierId || sr.containerId || sr.sourceBatchId || null,
             weightKg: sr.weightKg,
             quantityKg: sr.weightKg,
             costPerKg: sr.costPerKg,
             totalCost: sr.totalCost,
+            notes: sr.adjustmentBacked
+              ? "Receipt-row overdraw covered by an existing supplier ADD adjustment; see supplier adjustment ledger."
+              : null,
             inventorySupplierId: sr.sourceBatchId != null ? null : (sr.supplierId ?? null),
           });
         }
@@ -385,6 +462,9 @@ export function registerFactoryMixBatchCreateRoutes(app: Express) {
 
       res.json(result);
     } catch (error: unknown) {
+      if (error instanceof MixRawStockShortageError) {
+        return res.status(error.status).json({ code: error.code, message: error.message });
+      }
       if (sendFactoryCostBasisRefusal(res, error)) return;
       logger.error("Error creating mix batch:", { error: error });
       res.status(400).json({ message: getErrorMessage(error) });

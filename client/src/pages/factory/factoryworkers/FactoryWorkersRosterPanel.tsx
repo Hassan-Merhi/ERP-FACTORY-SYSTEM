@@ -73,6 +73,8 @@ export function FactoryWorkersRosterPanel({ model, onOpenCategories }: FactoryWo
     docCounts,
     amountDue,
     reactivateMutation,
+    canChangeExistingRecords,
+    canCreate,
     handleImportFile,
     resetForm,
     openEdit,
@@ -95,12 +97,54 @@ export function FactoryWorkersRosterPanel({ model, onOpenCategories }: FactoryWo
   } = model;
 
   const kpiCards = [
-    { label: "Total", value: String(workers?.length ?? 0), icon: Users, tone: "from-blue-500/15 to-blue-500/5", iconTone: "bg-blue-500/15 text-blue-500", valueTone: "text-foreground" },
-    { label: "Active", value: String(activeCount), icon: UserCheck, tone: "from-emerald-500/15 to-emerald-500/5", iconTone: "bg-emerald-500/15 text-emerald-500", valueTone: "text-foreground" },
-    { label: "Inactive", value: String(inactiveCount), icon: UserX, tone: "from-slate-500/15 to-slate-500/5", iconTone: "bg-slate-500/15 text-slate-400", valueTone: "text-foreground" },
-    { label: "Total Salary", value: `${totalSalary.toLocaleString()}`, icon: Download, tone: "from-sky-500/15 to-sky-500/5", iconTone: "bg-sky-500/15 text-sky-500", valueTone: "text-foreground" },
-    { label: "Transport", value: `${totalTransport.toLocaleString()}`, icon: Bus, tone: "from-indigo-500/15 to-indigo-500/5", iconTone: "bg-indigo-500/15 text-indigo-500", valueTone: "text-foreground" },
-    { label: "Advances", value: `${totalAdvances.toLocaleString()}`, icon: Banknote, tone: "from-amber-500/15 to-amber-500/5", iconTone: "bg-amber-500/15 text-amber-500", valueTone: "text-foreground" },
+    {
+      label: "Total",
+      value: String(workers?.length ?? 0),
+      icon: Users,
+      tone: "from-blue-500/15 to-blue-500/5",
+      iconTone: "bg-blue-500/15 text-blue-500",
+      valueTone: "text-foreground",
+    },
+    {
+      label: "Active",
+      value: String(activeCount),
+      icon: UserCheck,
+      tone: "from-emerald-500/15 to-emerald-500/5",
+      iconTone: "bg-emerald-500/15 text-emerald-500",
+      valueTone: "text-foreground",
+    },
+    {
+      label: "Inactive",
+      value: String(inactiveCount),
+      icon: UserX,
+      tone: "from-slate-500/15 to-slate-500/5",
+      iconTone: "bg-slate-500/15 text-slate-400",
+      valueTone: "text-foreground",
+    },
+    {
+      label: "Total Salary",
+      value: `${totalSalary.toLocaleString()}`,
+      icon: Download,
+      tone: "from-sky-500/15 to-sky-500/5",
+      iconTone: "bg-sky-500/15 text-sky-500",
+      valueTone: "text-foreground",
+    },
+    {
+      label: "Transport",
+      value: `${totalTransport.toLocaleString()}`,
+      icon: Bus,
+      tone: "from-indigo-500/15 to-indigo-500/5",
+      iconTone: "bg-indigo-500/15 text-indigo-500",
+      valueTone: "text-foreground",
+    },
+    {
+      label: "Advances",
+      value: `${totalAdvances.toLocaleString()}`,
+      icon: Banknote,
+      tone: "from-amber-500/15 to-amber-500/5",
+      iconTone: "bg-amber-500/15 text-amber-500",
+      valueTone: "text-foreground",
+    },
     {
       label: "Total Remaining",
       value: `${totalRemainingToBePaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
@@ -117,9 +161,7 @@ export function FactoryWorkersRosterPanel({ model, onOpenCategories }: FactoryWo
         {/* Presentation only: amounts and eligibility remain calculated by the existing model. */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-7" data-testid="worker-kpi-cards">
           {isLoading
-            ? Array.from({ length: 7 }).map((_, index) => (
-                <Skeleton key={index} className="h-[92px] rounded-xl" />
-              ))
+            ? Array.from({ length: 7 }).map((_, index) => <Skeleton key={index} className="h-[92px] rounded-xl" />)
             : kpiCards.map(({ label, value, icon: Icon, tone, iconTone, valueTone }) => (
                 <div
                   key={label}
@@ -131,7 +173,10 @@ export function FactoryWorkersRosterPanel({ model, onOpenCategories }: FactoryWo
                     </div>
                     <div className="min-w-0 flex-1">
                       <span className="block text-xs text-muted-foreground">{label}</span>
-                      <span className={`block truncate pt-1 text-lg font-bold tracking-tight tabular-nums ${valueTone}`} title={value}>
+                      <span
+                        className={`block truncate pt-1 text-lg font-bold tracking-tight tabular-nums ${valueTone}`}
+                        title={value}
+                      >
                         {value}
                       </span>
                     </div>
@@ -212,14 +257,16 @@ export function FactoryWorkersRosterPanel({ model, onOpenCategories }: FactoryWo
                 <Download className="h-4 w-4" />
                 Template
               </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => fileInputRef.current?.click()}
-                disabled={importLoading}
-                data-testid="button-import-workers"
-              >
-                <Upload className="h-4 w-4" />
-                {importLoading ? "Importing..." : "Import Excel"}
-              </DropdownMenuItem>
+              {canChangeExistingRecords && (
+                <DropdownMenuItem
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={importLoading}
+                  data-testid="button-import-workers"
+                >
+                  <Upload className="h-4 w-4" />
+                  {importLoading ? "Importing..." : "Import Excel"}
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem
                 onClick={handleExportSalaries}
                 disabled={!filteredWorkers.length}
@@ -230,17 +277,19 @@ export function FactoryWorkersRosterPanel({ model, onOpenCategories }: FactoryWo
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button
-            onClick={() => {
-              resetForm();
-              setCreateOpen(true);
-            }}
-            className="h-10 rounded-lg px-4 shadow-sm"
-            data-testid="button-add-worker"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Add Worker
-          </Button>
+          {canCreate("POST", "/api/factory/workers") && (
+            <Button
+              onClick={() => {
+                resetForm();
+                setCreateOpen(true);
+              }}
+              className="h-10 rounded-lg px-4 shadow-sm"
+              data-testid="button-add-worker"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add Worker
+            </Button>
+          )}
         </div>
 
         {/* ── Collapsible filter panel ─────────────────────────────── */}
@@ -454,7 +503,10 @@ export function FactoryWorkersRosterPanel({ model, onOpenCategories }: FactoryWo
         )}
 
         {/* Table */}
-        <div data-horizontal-scroll="true" className="overflow-x-auto rounded-xl border border-border/70 bg-card/70 shadow-sm">
+        <div
+          data-horizontal-scroll="true"
+          className="overflow-x-auto rounded-xl border border-border/70 bg-card/70 shadow-sm"
+        >
           {/* min-w keeps the eight columns readable on tablets: the outer div scrolls sideways
               instead of table-fixed squeezing every header into one another. Phone cards reset it. */}
           <Table mobileLayout="cards" wrapperClassName="overflow-visible" className="w-full min-w-[64rem] table-fixed">
@@ -723,39 +775,41 @@ export function FactoryWorkersRosterPanel({ model, onOpenCategories }: FactoryWo
                       </Badge>
                     </TableCell>
                     <TableCell className="py-3">
-                      <div
-                        className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => openEdit(worker)}
-                          data-testid={`button-edit-worker-${worker.id}`}
+                      {canChangeExistingRecords && (
+                        <div
+                          className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity"
+                          onClick={(e) => e.stopPropagation()}
                         >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        {worker.active ? (
                           <Button
                             size="icon"
                             variant="ghost"
-                            onClick={() => openEndContract(worker)}
-                            data-testid={`button-end-contract-${worker.id}`}
+                            onClick={() => openEdit(worker)}
+                            data-testid={`button-edit-worker-${worker.id}`}
                           >
-                            <UserX className="h-3.5 w-3.5 text-destructive" />
+                            <Pencil className="h-3.5 w-3.5" />
                           </Button>
-                        ) : (
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => reactivateMutation.mutate(worker.id)}
-                            disabled={reactivateMutation.isPending}
-                            data-testid={`button-reactivate-${worker.id}`}
-                          >
-                            <UserCheck className="h-3.5 w-3.5 text-emerald-600" />
-                          </Button>
-                        )}
-                      </div>
+                          {worker.active ? (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => openEndContract(worker)}
+                              data-testid={`button-end-contract-${worker.id}`}
+                            >
+                              <UserX className="h-3.5 w-3.5 text-destructive" />
+                            </Button>
+                          ) : (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => reactivateMutation.mutate(worker.id)}
+                              disabled={reactivateMutation.isPending}
+                              data-testid={`button-reactivate-${worker.id}`}
+                            >
+                              <UserCheck className="h-3.5 w-3.5 text-emerald-600" />
+                            </Button>
+                          )}
+                        </div>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))

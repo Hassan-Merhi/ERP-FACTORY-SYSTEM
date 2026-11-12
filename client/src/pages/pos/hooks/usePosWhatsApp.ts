@@ -1,5 +1,6 @@
 import { getErrorDetails } from "@shared/errorUtils";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import type { Location } from "../pos-components/posTypes";
 import { sendInvoicePdfWithRetry, sendStockPdfWithRetry } from "../utils/posPrintHelpers";
 
@@ -30,6 +31,12 @@ export function usePosWhatsApp({
   setSendingWhatsApp,
   toast,
 }: PosWhatsAppParams) {
+  // Sending invoice/stock PDFs is a business action; read-only roles never send.
+  const recordChanges = useExistingRecordChangeAccess();
+  const access = useMemo(
+    () => ({ allowed: recordChanges.allowed, reason: recordChanges.reason }),
+    [recordChanges.allowed, recordChanges.reason]
+  );
   // Deferred WhatsApp invoice auto-send after sale saved
   useEffect(() => {
     if (!pendingAutoSend) return;
@@ -40,6 +47,7 @@ export function usePosWhatsApp({
       setInvoiceWaStatus("sending");
       try {
         const result = await sendInvoicePdfWithRetry(data.voucherId, data.locationId, {
+          access,
           onAttempt: (n) => {
             if (n > 1) toast({ title: "Retrying…", description: `WhatsApp invoice send attempt ${n}/3.` });
           },
@@ -62,7 +70,7 @@ export function usePosWhatsApp({
       }
     };
     doSend();
-  }, [pendingAutoSend, setInvoiceWaStatus, setPendingAutoSend, setSendingInvoiceWhatsApp, toast]);
+  }, [access, pendingAutoSend, setInvoiceWaStatus, setPendingAutoSend, setSendingInvoiceWhatsApp, toast]);
 
   // Deferred WhatsApp stock auto-send after sale saved
   useEffect(() => {
@@ -72,6 +80,7 @@ export function usePosWhatsApp({
     const doSend = async () => {
       try {
         const result = await sendStockPdfWithRetry(activeLocation.id, {
+          access,
           onAttempt: (n) => {
             if (n > 1) toast({ title: "Retrying…", description: `WhatsApp stock send attempt ${n}/3.` });
           },
@@ -89,7 +98,7 @@ export function usePosWhatsApp({
       }
     };
     doSend();
-  }, [activeLocation, pendingStockSend, setPendingStockSend, setStockWaStatus, toast]);
+  }, [access, activeLocation, pendingStockSend, setPendingStockSend, setStockWaStatus, toast]);
 
   // ISSUE 4: Real invoice WhatsApp send
   const handleSendInvoiceWhatsApp = async () => {
@@ -103,6 +112,7 @@ export function usePosWhatsApp({
     setInvoiceWaStatus("sending");
     try {
       const result = await sendInvoicePdfWithRetry(vId, locId, {
+        access,
         onAttempt: (n) => {
           if (n > 1) toast({ title: "Retrying…", description: `WhatsApp invoice send attempt ${n}/3.` });
         },
@@ -136,6 +146,7 @@ export function usePosWhatsApp({
     setStockWaStatus("sending");
     try {
       const result = await sendStockPdfWithRetry(activeLocation.id, {
+        access,
         onAttempt: (n) => {
           if (n > 1) toast({ title: "Retrying…", description: `WhatsApp stock send attempt ${n}/3.` });
         },
@@ -155,5 +166,5 @@ export function usePosWhatsApp({
     }
   };
 
-  return { handleSendInvoiceWhatsApp, handleSendWhatsAppReport };
+  return { handleSendInvoiceWhatsApp, handleSendWhatsAppReport, canSendWhatsApp: recordChanges.allowed };
 }

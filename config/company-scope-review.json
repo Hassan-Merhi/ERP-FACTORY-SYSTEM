@@ -3,6 +3,14 @@
   "description": "Explicit Phase 4 review registry for legacy data queries that are safe because their caller, ownership join, transaction context, or controlled maintenance context provides the company boundary.",
   "reviews": [
     {
+      "path": "server/routes/import/factoryDispatchPoImportReceipt.ts",
+      "reason": "Reviewed 2026-11-10: reserveFactoryTripPoReceipt performs a deliberate global container_number duplicate-existence check before import. shared/schema/containers.ts declares containerNumber .unique() across all companies; adding company_id would miss collisions and weaken fail-closed import prevention. The query uses a server-authorized scope for other purchase-order and receipt operations; the global probe returns only existence and refuses insertion, not cross-tenant row data to the caller. Any future tenant-data read in this file requires separate scoped review."
+    },
+    {
+      "path": "server/services/factory/dispatchTripFinancialPosting.ts",
+      "reason": "Reviewed 2026-11-10: the flagged query in assertHardenedFinancialSchemaTx reads pg_class and pg_trigger catalog metadata to verify RLS and guard triggers; public.vouchers is only a to_regclass relation name, not a SELECT from tenant voucher rows. The service separately scopes order/trip financial reads by scope.companyId. Do not treat this file-level review as permission for future unscoped tenant SQL."
+    },
+    {
       "path": "server/chat/reports/implementations/phase3ReportShard.ts",
       "reason": "Report shard receives the already-authorized company context from the chat report orchestrator."
     },
@@ -59,12 +67,12 @@
       "reason": "Bank and fixed-asset queries use the active company boundary before loading entries."
     },
     {
-      "path": "server/routes/containerTrackingRoutes.ts",
-      "reason": "Tracking routes validate container ownership before loading tracking records."
-    },
-    {
       "path": "server/routes/containers/accounting/number.ts",
       "reason": "Container-number maintenance runs after the container ownership guard."
+    },
+    {
+      "path": "server/routes/containerTrackingRoutes.ts",
+      "reason": "Tracking routes validate container ownership before loading tracking records."
     },
     {
       "path": "server/routes/factory/employee-pos/employee-crud/recalculate.ts",

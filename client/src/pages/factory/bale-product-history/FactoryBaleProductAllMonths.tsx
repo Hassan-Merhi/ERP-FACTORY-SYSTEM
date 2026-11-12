@@ -11,6 +11,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { BaleHistoryStatusBadge, getBaleHistoryDisplayStatus } from "./BaleHistoryStatusBadge";
 import { useState } from "react";
 import { useEscapeToParent } from "@/hooks/use-escape-to-parent";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
+import type { FactoryMyAccess } from "@shared/apiTypes";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 
 import { BaleWeightEditDialog, type WeightEditBale } from "@/components/BaleWeightEditDialog";
 import type { BaleItem } from "./types";
@@ -22,6 +26,8 @@ export function FactoryBaleProductAllMonths() {
   const { formatDisplayDate } = useDateFormat();
   const { formatAmount } = useCurrencyContext();
   const queryClient = useQueryClient();
+  const { selectedCompany } = useCompany();
+  const recordChanges = useExistingRecordChangeAccess();
   useEscapeToParent();
 
   const productId = params.productId || "0";
@@ -32,13 +38,27 @@ export function FactoryBaleProductAllMonths() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [weightEditBale, setWeightEditBale] = useState<WeightEditBale | null>(null);
 
-  const { data: myAccess } = useQuery<{ fullAccess: boolean; pageKeys: string[]; hiddenCostFields: string[] }>({
-    queryKey: ["/api/factory/my-access"],
+  const { data: myAccess } = useQuery<FactoryMyAccess>({
+    queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
   });
-  const hiddenCost = myAccess?.hiddenCostFields ?? [];
+  const accessReady = Boolean(
+    selectedCompany?.id && myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
+  );
+  const hiddenCost =
+    accessReady && myAccess?.hideAllCosts !== true
+      ? (myAccess?.hiddenCostFields ?? [])
+      : ["bale_history_cost_per_kg", "bale_history_total_cost"];
 
   const { data: responseData, isLoading } = useQuery<{ bales: BaleItem[]; sellingPrice?: string }>({
-    queryKey: ["/api/factory/bale-product-history", productId, locationId, year, "all"],
+    queryKey: companyQueryKey(
+      "/api/factory/bale-product-history",
+      selectedCompany?.id,
+      productId,
+      locationId,
+      year,
+      "all"
+    ),
     queryFn: async () => {
       const response = await fetch(
         `/api/factory/bale-product-history/${productId}/${locationId}/all-bales?year=${year}`,
@@ -47,7 +67,7 @@ export function FactoryBaleProductAllMonths() {
       if (!response.ok) throw new Error("Failed to fetch");
       return response.json();
     },
-    enabled: parseInt(productId) > 0 && parseInt(locationId) > 0,
+    enabled: Boolean(selectedCompany?.id) && parseInt(productId) > 0 && parseInt(locationId) > 0,
   });
 
   const data = responseData?.bales;
@@ -72,9 +92,18 @@ export function FactoryBaleProductAllMonths() {
 
   const handleWeightSuccess = () => {
     queryClient.invalidateQueries({
-      queryKey: ["/api/factory/bale-product-history", productId, locationId, year, "all"],
+      queryKey: companyQueryKey(
+        "/api/factory/bale-product-history",
+        selectedCompany?.id,
+        productId,
+        locationId,
+        year,
+        "all"
+      ),
     });
-    queryClient.invalidateQueries({ queryKey: ["/api/factory/bale-product-history", productId, locationId, year] });
+    queryClient.invalidateQueries({
+      queryKey: companyQueryKey("/api/factory/bale-product-history", selectedCompany?.id, productId, locationId, year),
+    });
   };
 
   if (isLoading) {
@@ -174,20 +203,22 @@ export function FactoryBaleProductAllMonths() {
                     <TableCell className="text-right font-mono" data-testid={`text-weight-${bale.id}`}>
                       <span className="inline-flex items-center gap-1.5 group">
                         {formatNumber(Number(bale.weightKg))}
-                        <button
-                          className="opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity p-0.5 rounded-sm hover:bg-muted"
-                          onClick={() =>
-                            setWeightEditBale({
-                              id: bale.id,
-                              referenceNumber: bale.referenceNumber,
-                              weightKg: bale.weightKg,
-                            })
-                          }
-                          title="Correct weight"
-                          data-testid={`button-edit-weight-${bale.id}`}
-                        >
-                          <Pencil className="h-3 w-3 text-muted-foreground" />
-                        </button>
+                        {recordChanges.allowed && (
+                          <button
+                            className="opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity p-0.5 rounded-sm hover:bg-muted"
+                            onClick={() =>
+                              setWeightEditBale({
+                                id: bale.id,
+                                referenceNumber: bale.referenceNumber,
+                                weightKg: bale.weightKg,
+                              })
+                            }
+                            title="Correct weight"
+                            data-testid={`button-edit-weight-${bale.id}`}
+                          >
+                            <Pencil className="h-3 w-3 text-muted-foreground" />
+                          </button>
+                        )}
                       </span>
                     </TableCell>
                     {!hiddenCost.includes("bale_history_cost_per_kg") && (
@@ -253,20 +284,22 @@ export function FactoryBaleProductAllMonths() {
                   <div>
                     <div className="text-muted-foreground flex items-center gap-1">
                       Weight
-                      <button
-                        onClick={() =>
-                          setWeightEditBale({
-                            id: bale.id,
-                            referenceNumber: bale.referenceNumber,
-                            weightKg: bale.weightKg,
-                          })
-                        }
-                        className="p-0.5 rounded-sm hover:bg-muted"
-                        title="Correct weight"
-                        data-testid={`button-edit-weight-mobile-${bale.id}`}
-                      >
-                        <Pencil className="h-2.5 w-2.5 text-muted-foreground" />
-                      </button>
+                      {recordChanges.allowed && (
+                        <button
+                          onClick={() =>
+                            setWeightEditBale({
+                              id: bale.id,
+                              referenceNumber: bale.referenceNumber,
+                              weightKg: bale.weightKg,
+                            })
+                          }
+                          className="p-0.5 rounded-sm hover:bg-muted"
+                          title="Correct weight"
+                          data-testid={`button-edit-weight-mobile-${bale.id}`}
+                        >
+                          <Pencil className="h-2.5 w-2.5 text-muted-foreground" />
+                        </button>
+                      )}
                     </div>
                     <div className="font-mono">{formatNumber(Number(bale.weightKg))} KG</div>
                   </div>

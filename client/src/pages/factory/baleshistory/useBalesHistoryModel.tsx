@@ -4,8 +4,12 @@ import { getErrorDetails } from "@shared/errorUtils";
 import { useState, useRef, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAdminOverride } from "@/hooks/use-admin-override";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
+import type { FactoryMyAccess } from "@shared/apiTypes";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { getApiRequest } from "@/lib/factoryApi";
 import { isZebraMode, printRawZpl } from "@/lib/zebraPrint";
@@ -22,7 +26,6 @@ import {
 import { useLabelDesignColors } from "@/hooks/useLabelDesignColors";
 import { type WeightEditBale } from "@/components/BaleWeightEditDialog";
 import { useBalesHistoryDateKeyboard } from "./pagePolicies";
-import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 
 interface BaleRecord {
   id: number;
@@ -56,7 +59,9 @@ interface BaleRow {
 type BalesPage = { items: BaleRow[]; total: number; page: number; limit: number; totalPages: number };
 
 export function useBalesHistoryModel() {
+  const { selectedCompany } = useCompany();
   const { wrapAdminAction, AdminDialog } = useAdminOverride();
+  const recordChanges = useExistingRecordChangeAccess();
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [exportFrom, setExportFrom] = useState("");
   const [exportTo, setExportTo] = useState("");
@@ -102,6 +107,16 @@ export function useBalesHistoryModel() {
     return () => clearTimeout(t);
   }, [searchTerm]);
 
+  // Never reuse previous-company selected bale IDs or pending edits.
+  useEffect(() => {
+    setSelectedIds(new Set());
+    setReturnToStockBale(null);
+    setWeightEditBale(null);
+    setDeleteConfirm(null);
+    setEditingNameId(null);
+    setCurrentPage(1);
+  }, [selectedCompany?.id]);
+
   // Reset to page 1 whenever any filter that changes the result set changes.
   useEffect(() => {
     setCurrentPage(1);
@@ -133,24 +148,29 @@ export function useBalesHistoryModel() {
     }
   };
 
-  const { data: factoryAccess } = useQuery<{ fullAccess: boolean; pageKeys: string[]; hiddenCostFields: string[] }>({
-    queryKey: ["/api/factory/my-access"],
+  const { data: factoryAccess } = useQuery<FactoryMyAccess>({
+    queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
   });
   // View Only / Create Only company roles never change existing bales: the page
   // hides repack and delete (fullAccess-gated) and ignores rename, weight edit
   // and bulk-selection gestures. The server refuses the same writes.
-  const recordChanges = useExistingRecordChangeAccess();
-  const myAccess = factoryAccess && !recordChanges.allowed ? { ...factoryAccess, fullAccess: false } : factoryAccess;
+  const scopedAccess =
+    selectedCompany?.id && factoryAccess?.companyId === selectedCompany.id && factoryAccess.hasFactoryAccess === true
+      ? factoryAccess
+      : undefined;
+  const myAccess = scopedAccess && !recordChanges.allowed ? { ...scopedAccess, fullAccess: false } : scopedAccess;
 
   const { data: balesResponse, isLoading } = useQuery<BalesPage>({
-    queryKey: [
+    queryKey: companyQueryKey(
       "/api/factory/bales",
+      selectedCompany?.id,
       dateFilter,
       currentPage,
       statusFilter !== "all" ? statusFilter : undefined,
       batchFilter !== "all" ? batchFilter : undefined,
-      debouncedSearch || undefined,
-    ],
+      debouncedSearch || undefined
+    ),
     queryFn: async () => {
       const params = new URLSearchParams();
       // A reference/text search is global across production dates. Keeping the
@@ -173,7 +193,7 @@ export function useBalesHistoryModel() {
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     refetchOnMount: true,
-    placeholderData: (prev) => prev,
+    enabled: Boolean(selectedCompany?.id),
   });
 
   // Extract flat items + pagination metadata from the paginated response.
@@ -183,6 +203,7 @@ export function useBalesHistoryModel() {
 
   const deleteBale = useMutation({
     mutationFn: async (id: number) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       return await modeApiRequest("DELETE", `/api/factory/bales/${id}`, {});
     },
     onSuccess: () => {
@@ -203,6 +224,7 @@ export function useBalesHistoryModel() {
 
   const updateStatus = useMutation({
     mutationFn: async ({ id, status }: { id: number; status: string }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       return await modeApiRequest("PATCH", `/api/factory/bales/${id}/status`, { status });
     },
     onSuccess: () => {
@@ -219,6 +241,7 @@ export function useBalesHistoryModel() {
 
   const bulkUpdateStatus = useMutation({
     mutationFn: async ({ ids, status }: { ids: number[]; status: string }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       return await modeApiRequest("PATCH", "/api/factory/bales/bulk-status", { ids, status });
     },
     onSuccess: () => {
@@ -237,6 +260,7 @@ export function useBalesHistoryModel() {
 
   const updateProductName = useMutation({
     mutationFn: async ({ id, name }: { id: number; name: string }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       return await modeApiRequest("PATCH", `/api/factory/bales/${id}/product-name`, { name });
     },
     onSuccess: () => {
@@ -252,18 +276,19 @@ export function useBalesHistoryModel() {
   });
 
   const { data: returnToStockOrderInfo, isLoading: orderInfoLoading } = useQuery({
-    queryKey: ["/api/factory/bales", returnToStockBale?.bale?.id, "order-info"],
+    queryKey: companyQueryKey("/api/factory/bales", selectedCompany?.id, returnToStockBale?.bale?.id, "order-info"),
     queryFn: async () => {
       if (!returnToStockBale) return null;
       const res = await modeApiRequest("GET", `/api/factory/bales/${returnToStockBale.bale.id}/order-info`);
       if (!res.ok) return null;
       return res.json();
     },
-    enabled: !!returnToStockBale,
+    enabled: Boolean(selectedCompany?.id) && !!returnToStockBale,
   });
 
   const returnToStockMutation = useMutation({
     mutationFn: async (baleId: number) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await modeApiRequest("POST", `/api/factory/bales/${baleId}/return-to-stock`, {});
       if (!res.ok) {
         const err = await res.json();
@@ -290,6 +315,7 @@ export function useBalesHistoryModel() {
 
   const repackBale = useMutation({
     mutationFn: async (id: number) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       return await modeApiRequest("POST", `/api/factory/bales/${id}/repack`, {});
     },
     onSuccess: async (response) => {
@@ -326,6 +352,7 @@ export function useBalesHistoryModel() {
       supervisorPassword: string;
       reason: string;
     }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const response = await modeApiRequest("POST", "/api/factory/stock-entry/remove", {
         baleIds: ids,
         supervisorUsername,
@@ -354,6 +381,7 @@ export function useBalesHistoryModel() {
 
   const bulkUpdateNamesMutation = useMutation({
     mutationFn: async (file: File) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const formData = new FormData();
       formData.append("file", file);
       const res = await fetch("/api/factory/bales/bulk-update-names", {
@@ -383,6 +411,7 @@ export function useBalesHistoryModel() {
 
   const reimportMutation = useMutation({
     mutationFn: async (file: File) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const formData = new FormData();
       formData.append("file", file);
       const res = await fetch("/api/factory/bales/reimport", {
@@ -451,6 +480,7 @@ export function useBalesHistoryModel() {
   };
 
   const handleReprint = async (baleRow: BaleRow) => {
+    if (!recordChanges.allowed) return;
     const label: LabelData = {
       referenceNumber: baleRow.bale.referenceNumber || baleRow.bale.baleCode,
       articleCode: baleRow.product?.articleCode || baleRow.bale.articleCode || baleRow.bale.category || "",
@@ -740,6 +770,7 @@ export function useBalesHistoryModel() {
     balesData,
     serverTotalPages,
     serverTotal,
+    canChangeExistingRecords: recordChanges.allowed,
     deleteBale,
     updateStatus,
     bulkUpdateStatus,

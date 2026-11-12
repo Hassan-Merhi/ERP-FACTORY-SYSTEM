@@ -10,26 +10,39 @@ import { LoadingState, EmptyState, ErrorState } from "@/components/ui/page-state
 import { Button } from "@/components/ui/button";
 import { Loader2, Bell, RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 
 interface Alert {
   id: number;
-  severity: "critical" | "warning" | "info";
+  severity: "critical" | "error" | "warning" | "info";
   title: string;
-  message: string;
-  entity: string;
+  message: string | null;
+  entityType: string | null;
+  entityId: number | null;
   createdAt: string;
-  read: boolean;
+  isRead: boolean;
 }
 
 function getSeverityBadge(severity: string) {
-  return <StatusBadge status={severity} label={severity} showIcon={false} data-testid={`badge-severity-${severity}`} />;
+  const visibleSeverity = severity === "error" ? "critical" : severity;
+  return (
+    <StatusBadge
+      status={visibleSeverity}
+      label={visibleSeverity}
+      showIcon={false}
+      data-testid={`badge-severity-${visibleSeverity}`}
+    />
+  );
 }
 
 export default function FactoryAlerts() {
   const { selectedCompany } = useCompany();
+  const recordChanges = useExistingRecordChangeAccess();
+  const canGenerate = recordChanges.canCreate("POST", "/api/factory/alerts/generate");
   const alertsQuery = useQuery<Alert[]>({
     queryKey: companyQueryKey("/api/factory/alerts", selectedCompany?.id),
     enabled: Boolean(selectedCompany?.id),
+    refetchInterval: 300_000,
   });
 
   const generateMutation = useMutation({
@@ -43,6 +56,7 @@ export default function FactoryAlerts() {
 
   const markReadMutation = useMutation({
     mutationFn: async (id: number) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       await factoryApiRequest("POST", `/api/factory/alerts/${id}/read`);
     },
     onSuccess: () => {
@@ -51,7 +65,7 @@ export default function FactoryAlerts() {
   });
 
   const alerts = alertsQuery.data ?? [];
-  const unreadCount = alerts.filter((a) => !a.read).length;
+  const unreadCount = alerts.filter((a) => !a.isRead).length;
 
   return (
     <div className="space-y-6">
@@ -62,18 +76,20 @@ export default function FactoryAlerts() {
             <span data-testid="text-unread-count">{unreadCount}</span> unread alert{unreadCount !== 1 ? "s" : ""}
           </p>
         </div>
-        <Button
-          onClick={() => generateMutation.mutate()}
-          disabled={generateMutation.isPending}
-          data-testid="button-generate-alerts"
-        >
-          {generateMutation.isPending ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <RefreshCw className="mr-2 h-4 w-4" />
-          )}
-          Generate Alerts
-        </Button>
+        {canGenerate && (
+          <Button
+            onClick={() => generateMutation.mutate()}
+            disabled={generateMutation.isPending}
+            data-testid="button-generate-alerts"
+          >
+            {generateMutation.isPending ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="mr-2 h-4 w-4" />
+            )}
+            Generate Alerts
+          </Button>
+        )}
       </div>
 
       <Card>
@@ -129,7 +145,7 @@ export default function FactoryAlerts() {
                   {alerts.map((alert) => (
                     <TableRow
                       key={alert.id}
-                      className={alert.read ? "opacity-60" : ""}
+                      className={alert.isRead ? "opacity-60" : ""}
                       data-testid={`row-alert-${alert.id}`}
                     >
                       {/* Severity is a labelled field on phone cards; the alert title heads the card. */}
@@ -143,21 +159,25 @@ export default function FactoryAlerts() {
                       >
                         {alert.message}
                       </TableCell>
-                      <TableCell data-testid={`text-alert-entity-${alert.id}`}>{alert.entity}</TableCell>
+                      <TableCell data-testid={`text-alert-entity-${alert.id}`}>
+                        {alert.entityType ? `${alert.entityType} #${alert.entityId ?? "?"}` : "—"}
+                      </TableCell>
                       <TableCell className="font-mono text-sm" data-testid={`text-alert-created-${alert.id}`}>
                         {new Date(alert.createdAt).toLocaleString()}
                       </TableCell>
                       <TableCell>
-                        {!alert.read ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => markReadMutation.mutate(alert.id)}
-                            disabled={markReadMutation.isPending}
-                            data-testid={`button-mark-read-${alert.id}`}
-                          >
-                            Mark Read
-                          </Button>
+                        {!alert.isRead ? (
+                          recordChanges.allowed && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => markReadMutation.mutate(alert.id)}
+                              disabled={markReadMutation.isPending}
+                              data-testid={`button-mark-read-${alert.id}`}
+                            >
+                              Mark Read
+                            </Button>
+                          )
                         ) : (
                           <span className="text-xs text-muted-foreground" data-testid={`text-read-${alert.id}`}>
                             Read

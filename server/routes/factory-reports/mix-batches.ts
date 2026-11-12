@@ -81,7 +81,12 @@ export function registerFactoryMixBatchesByDateRoutes(app: Express, requireAuth:
           const batchSources = enrichedSources.filter((s) => s.mix_batch_id === b.id);
           const totalWeight = toMoney(b.total_weight_kg).toNumber();
           const totalCost = toMoney(b.total_cost).toNumber();
-          const costPerKg = toMoney(b.cost_per_kg).toNumber();
+          const weight = toMoney(b.total_weight_kg);
+          // All historical reports use the recorded USD batch total / recorded
+          // batch weight. Never rebuild from current supplier locked rates.
+          const costPerKg = weight.gt(0)
+            ? toMoney(b.total_cost).div(weight).toNumber()
+            : toMoney(b.cost_per_kg).toNumber();
           return {
             id: b.id,
             batchCode: b.batch_code,

@@ -1,6 +1,5 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { codeShape, fragmentFor, shaped } from "./helpers/codeShape";
 
 const read = (file: string) => readFileSync(file, "utf8");
 const manager = read("client/src/pages/factory/PressingMachineManagement.tsx");
@@ -15,81 +14,82 @@ const corrections = read("server/routes/factory/factoryPressingCorrectionRoutes.
 
 describe("Pressing worker camera-only access", () => {
   it("grants full scanner UI to Admin, Owner and Developer using the authenticated company role", () => {
-    expect(shaped(access)).toContain(fragmentFor(access, 'canManage: ["Admin", "Owner", "Developer"].includes(ctx.role) && !ctx.posViewOnly'));
-    expect(shaped(manager)).toContain(fragmentFor(manager, "access.data?.canManage === true"));
-    expect(shaped(manager)).toContain(fragmentFor(manager, '{fullControls && <><div className="relative min-w-0 flex-1">'));
-    expect(shaped(manager)).toContain(fragmentFor(manager, 'data-testid="button-pressing-camera"'));
-    expect(shaped(manager)).toContain(fragmentFor(manager, 'showCamera ? "Close Camera" : "Open Camera"'));
-    expect(shaped(manager)).toContain(fragmentFor(manager, "simpleControls={!fullControls}"));
-    expect(shaped(manager)).not.toContain(fragmentFor(manager, "Scan a bale like Ground Scan. Each accepted bale"));
+    expect(access).toContain('canManage: ["Admin", "Owner", "Developer"].includes(ctx.role) && !ctx.posViewOnly');
+    expect(manager).toContain("access.data?.canManage === true");
+    // Formatter-tolerant: the guarded fragment may be wrapped in parentheses and split across lines.
+    expect(manager).toMatch(/\{fullControls && \(?\s*<>\s*<div className="relative min-w-0 flex-1">/);
+    expect(manager).toContain('data-testid="button-pressing-camera"');
+    expect(manager).toContain('showCamera ? "Close Camera" : "Open Camera"');
+    expect(manager).toContain("simpleControls={!fullControls}");
+    expect(manager).not.toContain("Scan a bale like Ground Scan. Each accepted bale");
   });
 
   it("mounts workers' continuously scanning camera from the Open action without inner settings", () => {
-    expect(shaped(camera)).toContain(fragmentFor(camera, "useState(simpleControls)"));
-    expect(shaped(camera)).toContain(fragmentFor(camera, "{!simpleControls && running && ("));
-    expect(shaped(camera)).toContain(fragmentFor(camera, '{!simpleControls && <div className="flex flex-wrap gap-2">'));
-    expect(shaped(camera)).toContain(fragmentFor(camera, "stream?.getTracks().forEach(track => track.stop())"));
-    expect(shaped(camera)).not.toContain(fragmentFor(camera, "The camera stays open between reads."));
-    expect(shaped(camera)).not.toContain(fragmentFor(camera, "Permanent history and filters are below."));
+    expect(camera).toContain("useState(simpleControls)");
+    expect(camera).toContain("{!simpleControls && running && (");
+    expect(camera).toContain('{!simpleControls && <div className="flex flex-wrap gap-2">');
+    expect(camera).toContain("stream?.getTracks().forEach(track => track.stop())");
+    expect(camera).not.toContain("The camera stays open between reads.");
+    expect(camera).not.toContain("Permanent history and filters are below.");
   });
 
   it("shows company worker totals without barcode detail or Excel controls", () => {
-    expect(shaped(manager)).toContain(fragmentFor(manager, "fullControls"));
-    expect(shaped(manager)).toContain(fragmentFor(manager, "<PressingWorkerTotals"));
-    expect(shaped(manager)).toContain(fragmentFor(manager, "<PressingHistoryReport"));
-    expect(shaped(workerTotals)).toContain(fragmentFor(workerTotals, 'data-testid="pressing-worker-totals"'));
-    expect(shaped(workerTotals)).toContain(fragmentFor(workerTotals, "Total Items"));
-    expect(shaped(workerTotals)).toContain(fragmentFor(workerTotals, "Total KG"));
-    expect(shaped(workerTotals)).not.toContain(fragmentFor(workerTotals, "percentOfLeader"));
-    expect(shaped(workerTotals)).not.toContain(fragmentFor(workerTotals, "progressbar"));
-    expect(shaped(workerTotals)).not.toContain(fragmentFor(workerTotals, "Worker / progress"));
-    expect(shaped(workerTotals)).toContain(fragmentFor(workerTotals, "Worker"));
-    expect(shaped(workerTotals)).toContain(fragmentFor(workerTotals, "style.badge"));
-    expect(shaped(workerTotals)).toContain(fragmentFor(workerTotals, '"worker-totals", companyId, userId, day'));
-    expect(shaped(workerTotals)).not.toContain(fragmentFor(workerTotals, "referenceNumber"));
-    expect(shaped(workerTotals)).not.toContain(fragmentFor(workerTotals, "Export Excel"));
-    expect(shaped(history)).toContain(fragmentFor(history, "Export Excel"));
-    expect(shaped(stockEntry)).toContain(fragmentFor(stockEntry, "isPressingOnlyWorker"));
-    expect(shaped(stockEntry)).toContain(fragmentFor(stockEntry, "<PressingMachineManagement active />"));
+    expect(manager).toContain("fullControls");
+    expect(manager).toContain("<PressingWorkerTotals");
+    expect(manager).toContain("<PressingHistoryReport");
+    expect(workerTotals).toContain('data-testid="pressing-worker-totals"');
+    expect(workerTotals).toContain("Total Items");
+    expect(workerTotals).toContain("Total KG");
+    expect(workerTotals).not.toContain("percentOfLeader");
+    expect(workerTotals).not.toContain("progressbar");
+    expect(workerTotals).not.toContain("Worker / progress");
+    expect(workerTotals).toContain("Worker");
+    expect(workerTotals).toContain("style.badge");
+    expect(workerTotals).toContain('"worker-totals", companyId, userId, day');
+    expect(workerTotals).not.toContain("referenceNumber");
+    expect(workerTotals).not.toContain("Export Excel");
+    expect(history).toContain("Export Excel");
+    expect(stockEntry).toContain("isPressingOnlyWorker");
+    expect(stockEntry).toContain("<PressingMachineManagement active />");
   });
 
   it("filters worker scoreboard to one Beirut production day without lifetime totals", () => {
-    expect(shaped(workerTotals)).toContain(fragmentFor(workerTotals, "Daily confirmed scans (Beirut time)"));
-    expect(shaped(workerTotals)).toContain(fragmentFor(workerTotals, 'type="date"'));
-    expect(shaped(workerTotals)).toContain(fragmentFor(workerTotals, "max={totals.data?.serverToday}"));
-    expect(shaped(workerTotals)).toContain(fragmentFor(workerTotals, 'day ? "?day=" + encodeURIComponent(day) : ""'));
-    expect(shaped(workerTotals)).toContain(fragmentFor(workerTotals, 'value={day || totals.data?.day || ""}'));
-    expect(shaped(workerTotals)).not.toContain(fragmentFor(workerTotals, "All-time confirmed scans"));
-    expect(shaped(report)).toContain(fragmentFor(report, "const serverToday = factoryLocalDate(new Date(), PRESSING_TIME_ZONE)"));
-    expect(shaped(report)).toContain(fragmentFor(report, "c.confirmed_at >= ($2::date::timestamp AT TIME ZONE"));
-    expect(shaped(report)).toContain(fragmentFor(report, "c.confirmed_at < (($2::date + 1)::timestamp AT TIME ZONE"));
-    expect(shaped(report)).toContain(fragmentFor(report, "return res.json({ day, serverToday, workers: result.rows })"));
+    expect(workerTotals).toContain("Daily confirmed scans (Beirut time)");
+    expect(workerTotals).toContain('type="date"');
+    expect(workerTotals).toContain("max={totals.data?.serverToday}");
+    expect(workerTotals).toContain('day ? "?day=" + encodeURIComponent(day) : ""');
+    expect(workerTotals).toContain('value={day || totals.data?.day || ""}');
+    expect(workerTotals).not.toContain("All-time confirmed scans");
+    expect(report).toContain("const serverToday = factoryLocalDate(new Date(), PRESSING_TIME_ZONE)");
+    expect(report).toContain("c.confirmed_at >= ($2::date::timestamp AT TIME ZONE");
+    expect(report).toContain("c.confirmed_at < (($2::date + 1)::timestamp AT TIME ZONE");
+    expect(report).toContain("return res.json({ day, serverToday, workers: result.rows })");
   });
 
   it("shows read-only hourly KG targets directly below pressing worker totals", () => {
-    const totalsAt = codeShape(manager).indexOf(codeShape("<PressingWorkerTotals"));
+    const totalsAt = manager.indexOf("<PressingWorkerTotals");
     const hourlyAt = manager.indexOf("<PressingHourlyTargets", totalsAt);
     expect(totalsAt).toBeGreaterThan(-1);
     expect(hourlyAt).toBeGreaterThan(totalsAt);
-    expect(shaped(manager)).toContain(fragmentFor(manager, 'import PressingHourlyTargets from "./PressingHourlyTargets"'));
-    expect(shaped(hourlyTargets)).toContain(fragmentFor(hourlyTargets, "enabled: active,"));
-    expect(shaped(hourlyTargets)).toContain(fragmentFor(hourlyTargets, 'day ? "?day=" + encodeURIComponent(day) : ""'));
-    expect(shaped(hourlyTargets)).toContain(fragmentFor(hourlyTargets, 'value={day || data?.day || ""}'));
-    expect(shaped(hourlyTargets)).toContain(fragmentFor(hourlyTargets, "{data.canEdit && <Button"));
-    expect(shaped(report)).toContain(fragmentFor(report, "canEdit: ctx.canCorrect"));
+    expect(manager).toContain('import PressingHourlyTargets from "./PressingHourlyTargets"');
+    expect(hourlyTargets).toContain("enabled: active,");
+    expect(hourlyTargets).toContain('day ? "?day=" + encodeURIComponent(day) : ""');
+    expect(hourlyTargets).toContain('value={day || data?.day || ""}');
+    expect(hourlyTargets).toMatch(/\{data\.canEdit && \(?\s*<Button/);
+    expect(report).toContain("canEdit: ctx.canCorrect");
     expect(report).toMatch(/if \(!ctx\.canCorrect\)\s*throw new ReportPermissionError\(\s*403/);
   });
 
   it("allows shared aggregates while restricting other workers' detailed records and corrections", () => {
-    expect(shaped(report)).toContain(fragmentFor(report, 'const MANAGER_ROLES = new Set(["Admin", "Owner", "Developer"])'));
-    expect(shaped(report)).toContain(fragmentFor(report, 'push("c.user_id = ?", ctx.userId)'));
-    expect(shaped(report)).toContain(fragmentFor(report, 'app.get("/api/factory/pressing-machines/report/worker-totals", requireAuth'));
-    expect(shaped(report)).toContain(fragmentFor(report, "UPPER(BTRIM(u.username)) IN ('P1', 'P2', 'P3')"));
-    expect(shaped(report)).toContain(fragmentFor(report, "r.company_id = $1 AND r.user_id = u.id"));
-    expect(shaped(report)).toContain(fragmentFor(report, "r.role IN ('User', 'Normal User')"));
-    expect(shaped(report)).toContain(fragmentFor(report, "c.company_id = $1 AND c.user_id = u.id AND c.voided_at IS NULL"));
-    expect(shaped(report)).not.toContain(fragmentFor(report, "SELECT user_id FROM factory_pressing_assignments WHERE company_id = $1"));
-    expect(shaped(report)).toContain(fragmentFor(report, "c.voided_at IS NULL"));
-    expect(shaped(corrections)).toContain(fragmentFor(corrections, 'const SUPERVISORS = new Set(["Admin", "Owner"])'));
+    expect(report).toContain('const MANAGER_ROLES = new Set(["Admin", "Owner", "Developer"])');
+    expect(report).toContain('push("c.user_id = ?", ctx.userId)');
+    expect(report).toContain('app.get("/api/factory/pressing-machines/report/worker-totals", requireAuth');
+    expect(report).toContain("UPPER(BTRIM(u.username)) IN ('P1', 'P2', 'P3')");
+    expect(report).toContain("r.company_id = $1 AND r.user_id = u.id");
+    expect(report).toContain("r.role IN ('User', 'Normal User')");
+    expect(report).toContain("c.company_id = $1 AND c.user_id = u.id AND c.voided_at IS NULL");
+    expect(report).not.toContain("SELECT user_id FROM factory_pressing_assignments WHERE company_id = $1");
+    expect(report).toContain("c.voided_at IS NULL");
+    expect(corrections).toContain('const SUPERVISORS = new Set(["Admin", "Owner"])');
   });
 });

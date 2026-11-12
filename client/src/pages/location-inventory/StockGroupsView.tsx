@@ -39,6 +39,8 @@ interface StockGroupsViewProps {
   posUser?: AuthMe;
   canViewCost: boolean;
   canManageWhatsapp: boolean;
+  /** False for read-only roles: hides rename, WhatsApp settings and delete. */
+  canChangeExistingRecords?: boolean;
   openRenameDialog: (loc: Location, e?: { stopPropagation: () => void }) => void;
   openWaGroupDialog: (loc: Location, e?: { stopPropagation: () => void }) => void;
   activeInventoryLoading: boolean;
@@ -70,6 +72,7 @@ export function StockGroupsView({
   posUser,
   canViewCost,
   canManageWhatsapp,
+  canChangeExistingRecords = true,
   openRenameDialog,
   openWaGroupDialog,
   activeInventoryLoading,
@@ -95,6 +98,7 @@ export function StockGroupsView({
   setSelectedGroup,
   setItemCategoryFilter,
 }: StockGroupsViewProps) {
+  const canManageLocation = !posUser && canChangeExistingRecords;
   const whatsappTitle =
     selectedLocationLocal.whatsappGroupChatId && selectedLocationLocal.whatsappStockReportsEnabled
       ? `WhatsApp stock reports enabled${selectedLocationLocal.whatsappGroupName ? `: ${selectedLocationLocal.whatsappGroupName}` : ""}`
@@ -148,7 +152,14 @@ export function StockGroupsView({
         />
       </div>
       <Select value={groupCategoryFilter || "all"} onValueChange={(v) => setGroupCategoryFilter(v === "all" ? "" : v)}>
-        <SelectTrigger className={isPhone ? "h-10 w-full rounded-xl" : "h-10 w-52 rounded-xl border-violet-200/80 bg-background/90 shadow-sm dark:border-violet-500/25 dark:bg-slate-950/40"} data-testid="select-category-filter">
+        <SelectTrigger
+          className={
+            isPhone
+              ? "h-10 w-full rounded-xl"
+              : "h-10 w-52 rounded-xl border-violet-200/80 bg-background/90 shadow-sm dark:border-violet-500/25 dark:bg-slate-950/40"
+          }
+          data-testid="select-category-filter"
+        >
           <SelectValue placeholder="All Categories" />
         </SelectTrigger>
         <SelectContent>
@@ -216,21 +227,21 @@ export function StockGroupsView({
                 onSelect: () => handlePrintWithOption(false),
                 testId: "menu-export-pdf-nocost",
               },
-              !posUser && {
+              canManageLocation && {
                 label: "Edit / Rename location",
                 icon: Pencil,
                 onSelect: () => openRenameDialog(selectedLocationLocal),
                 separated: true,
                 testId: "button-rename-location",
               },
-              !posUser &&
+              canManageLocation &&
                 canManageWhatsapp && {
                   label: "WhatsApp Stock Reports",
                   icon: MessageCircle,
                   onSelect: () => openWaGroupDialog(selectedLocationLocal),
                   testId: "button-wa-location",
                 },
-              !posUser && {
+              canManageLocation && {
                 label: "Delete Location",
                 icon: Trash2,
                 destructive: true,
@@ -323,8 +334,10 @@ export function StockGroupsView({
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
               <h2 className="truncate text-xl font-bold tracking-tight sm:text-2xl">{selectedLocationLocal.name}</h2>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Stock Groups</span>
-              {!posUser && (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Stock Groups
+              </span>
+              {canManageLocation && (
                 <Button
                   variant="ghost"
                   size="icon"
@@ -334,7 +347,7 @@ export function StockGroupsView({
                   <Pencil className="h-4 w-4" />
                 </Button>
               )}
-              {!posUser && canManageWhatsapp && (
+              {canManageLocation && canManageWhatsapp && (
                 <Button
                   variant="ghost"
                   size="icon"
@@ -355,7 +368,9 @@ export function StockGroupsView({
                 </Button>
               )}
             </div>
-            <p className="mt-1 text-xs font-medium tracking-wide text-muted-foreground">Location: {selectedLocationLocal.name}</p>
+            <p className="mt-1 text-xs font-medium tracking-wide text-muted-foreground">
+              Location: {selectedLocationLocal.name}
+            </p>
           </div>
         </div>
 
@@ -386,7 +401,12 @@ export function StockGroupsView({
       <div className="flex flex-wrap items-center gap-2">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="h-10 gap-2 rounded-xl border-violet-200/80 bg-background/80 px-4 shadow-sm dark:border-violet-500/25" data-testid="button-export-dropdown">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-10 gap-2 rounded-xl border-violet-200/80 bg-background/80 px-4 shadow-sm dark:border-violet-500/25"
+              data-testid="button-export-dropdown"
+            >
               <Download className="h-4 w-4" /> Export <ChevronDown className="h-3 w-3" />
             </Button>
           </DropdownMenuTrigger>
@@ -426,13 +446,26 @@ export function StockGroupsView({
           onClick={() => setShowZeroStock(!showZeroStock)}
           data-testid="button-show-zero"
         >
-          <Eye className="h-4 w-4" /> Show Zero Stock <span className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${showZeroStock ? "bg-violet-600" : "bg-slate-300 dark:bg-slate-600"}`} aria-hidden="true"><span className={`h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform ${showZeroStock ? "translate-x-4" : "translate-x-1"}`} /></span>
+          <Eye className="h-4 w-4" /> Show Zero Stock{" "}
+          <span
+            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${showZeroStock ? "bg-violet-600" : "bg-slate-300 dark:bg-slate-600"}`}
+            aria-hidden="true"
+          >
+            <span
+              className={`h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform ${showZeroStock ? "translate-x-4" : "translate-x-1"}`}
+            />
+          </span>
         </Button>
 
-        {!posUser && (
+        {canManageLocation && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="ml-auto h-10 gap-2 rounded-xl border-violet-200/80 bg-background/80 px-4 shadow-sm dark:border-violet-500/25" data-testid="button-location-menu">
+              <Button
+                variant="outline"
+                size="sm"
+                className="ml-auto h-10 gap-2 rounded-xl border-violet-200/80 bg-background/80 px-4 shadow-sm dark:border-violet-500/25"
+                data-testid="button-location-menu"
+              >
                 Location <ChevronDown className="h-3 w-3" />
               </Button>
             </DropdownMenuTrigger>
@@ -467,11 +500,16 @@ export function StockGroupsView({
       {activeInventoryLoading ? (
         <div className="space-y-2">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-14 animate-pulse rounded-xl border border-violet-200/60 bg-muted/60 dark:border-violet-500/20" />
+            <div
+              key={i}
+              className="h-14 animate-pulse rounded-xl border border-violet-200/60 bg-muted/60 dark:border-violet-500/20"
+            />
           ))}
         </div>
       ) : filteredStockGroups.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-violet-300/80 bg-violet-50/40 py-16 text-center text-muted-foreground dark:border-violet-500/30 dark:bg-violet-900/10">{emptyMessage}</div>
+        <div className="rounded-2xl border border-dashed border-violet-300/80 bg-violet-50/40 py-16 text-center text-muted-foreground dark:border-violet-500/30 dark:bg-violet-900/10">
+          {emptyMessage}
+        </div>
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-violet-200/80 bg-card shadow-[0_14px_36px_-24px_rgba(79,70,229,0.55)] dark:border-violet-500/25 dark:bg-[#0a1429]">
           <table className="w-full min-w-[720px] border-collapse text-sm">
@@ -497,9 +535,24 @@ export function StockGroupsView({
                   onClick={() => openGroup(g)}
                   data-testid={`row-group-${g.groupId}`}
                 >
-                  <td className="px-4 py-3 font-semibold"><div className="flex items-center gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 text-xs font-bold text-white shadow-sm" aria-hidden="true">{g.groupName.trim().slice(0, 2).toUpperCase()}</span><span>{g.groupName}</span></div></td>
+                  <td className="px-4 py-3 font-semibold">
+                    <div className="flex items-center gap-3">
+                      <span
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 text-xs font-bold text-white shadow-sm"
+                        aria-hidden="true"
+                      >
+                        {g.groupName.trim().slice(0, 2).toUpperCase()}
+                      </span>
+                      <span>{g.groupName}</span>
+                    </div>
+                  </td>
                   <td className="px-4 py-3 text-center">
-                    <Badge variant="secondary" className="rounded-lg border border-violet-200/50 bg-violet-50 px-3 py-1 font-semibold tabular-nums dark:border-violet-500/20 dark:bg-violet-500/15">{g.itemCount}</Badge>
+                    <Badge
+                      variant="secondary"
+                      className="rounded-lg border border-violet-200/50 bg-violet-50 px-3 py-1 font-semibold tabular-nums dark:border-violet-500/20 dark:bg-violet-500/15"
+                    >
+                      {g.itemCount}
+                    </Badge>
                   </td>
                   <td className="px-4 py-3 text-right font-mono">
                     {Math.floor(g.totalQuantity).toLocaleString()}

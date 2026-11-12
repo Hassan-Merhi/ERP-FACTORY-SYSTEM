@@ -23,6 +23,7 @@ import { registerRoutes } from "./routes";
 import { markStartupMigrationsComplete } from "./startupMigrationReport";
 import { registerDbHealthRoute } from "./health/dbHealthRoute";
 import { blockErpTesterSettings, blockViewOnlyWrites, blockUnverifiedCreateOnlyWrites } from "./auth";
+import { permissionResponseObserver } from "./middleware/permissionResponseObserver";
 import { registerWebSocketHttpFallback, setupWS } from "./wsServer";
 import { startScheduler } from "./services/scheduler";
 import { pool } from "./db";
@@ -68,6 +69,10 @@ import { ensureFactoryContainerPlannerSchemaOnBoot } from "./startup/factoryCont
 import { ensurePriorityScanSchema } from "./startup/priorityScanSchema";
 import { ensureContainerExtraExpectedLines } from "./startup/ensureContainerExtraExpectedLines";
 import { ensureFactoryLoadingDispatchSchema } from "./startup/ensureFactoryLoadingDispatchSchema";
+import { ensureStockTransferOrderWhatsAppApprovalSchema } from "./startup/ensureStockTransferOrderWhatsAppApprovalSchema";
+import { startStockTransferOrderWaApprovalWorker } from "./services/stockTransferOrderWhatsAppApprovalWorker";
+import { startStockTransferOrderWaDeliveryWorker } from "./services/stockTransferOrderWaDeliveryWorker";
+import { ensureDispatchLoadingBaleScanGuard } from "./startup/ensureDispatchLoadingBaleScanGuard";
 import { ensureFactoryBaleOrderIntegrity } from "./startup/ensureFactoryBaleOrderIntegrity";
 import { runApprovedLegacyBaleUnitCostRepair } from "./startup/runApprovedLegacyBaleUnitCostRepair";
 import { runApprovedLegacySoldBaleUnitCostRepair } from "./startup/runApprovedLegacySoldBaleUnitCostRepair";
@@ -161,6 +166,11 @@ app.use(sessionMiddleware);
 // Read-only LAN edge safety boundary + same-origin server identity endpoint.
 // Cloud stays unchanged; edge requests never silently proxy to cloud.
 registerFactoryEdgeBoundary(app);
+
+// Permission monitoring: classify refused API responses (403s and
+// cross-company refusals) into permission signals after they are sent. Reads
+// only the response status and error code; never bodies or headers.
+app.use(permissionResponseObserver);
 
 // Globally block all mutation requests (POST/PUT/PATCH/DELETE) for View Only role.
 // Must run after session middleware so req.session.currentRole is populated.
@@ -362,7 +372,13 @@ let migrationsDone = false;
       // Loading-only expected items must exist even when bulk migrations are disabled.
       await ensureContainerExtraExpectedLines(pool);
       await ensureFactoryLoadingDispatchSchema(pool);
-      logger.info("[startup] ✓ Factory loading dispatch schema ensured");
+      // Replace the overbroad Phase 4 guard before the new server accepts scans.
+      // Fatal on failure: never report healthy while normal loading is blocked.
+      await ensureDispatchLoadingBaleScanGuard(pool);
+      logger.info("[startup] ✓ Factory loading dispatch schema and scan guard ensured");
+      // Stock Transfer Orders require the verified, idempotent approval schema before service.
+      await ensureStockTransferOrderWhatsAppApprovalSchema(pool);
+      logger.info("[startup] ✓ Stock Transfer Order WhatsApp approval foundation ensured");
       await ensureFactoryInvoiceDocumentSnapshotStore(pool);
       logger.info("[startup] ✓ Factory invoice document snapshot store ensured");
       try {
@@ -519,6 +535,14 @@ let migrationsDone = false;
         try {
           await runMigrations();
         } catch (err: unknown) {
+          if (process.env.LEGACY_STARTUP_MIGRATION_MODE === "verify-only") {
+            // A strict migration cutover must never fall back to the old
+            // nonfatal readiness behavior. Keep prior Render instance alive.
+            logger.error("Strict legacy migration verification blocked boot", {
+              error: getErrorMessage(err) ?? err,
+            });
+            throw err;
+          }
           logger.error("Migration error (non-fatal — server will still start):", {
             error: getErrorMessage(err) ?? err,
           });
@@ -535,6 +559,11 @@ let migrationsDone = false;
       listenWithRetry(server, port, () => {
         if (shouldStartEdgeBackgroundJobs(readFactoryEdgeConfiguration())) {
           runPostStartupJobs();
+          // Run only on the authoritative scheduler, honoring production activation kill switch.
+          if (process.env.ENABLE_SCHEDULERS !== "false") {
+            startStockTransferOrderWaApprovalWorker();
+            startStockTransferOrderWaDeliveryWorker();
+          }
         } else {
           logger.info("[FactoryEdge] Background startup jobs disabled by LAN mode or cloud writer fence");
         }

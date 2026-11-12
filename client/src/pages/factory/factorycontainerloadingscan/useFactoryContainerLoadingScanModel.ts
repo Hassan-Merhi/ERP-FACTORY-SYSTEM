@@ -9,6 +9,7 @@ import { useState, useRef, useCallback, useEffect, useMemo, type KeyboardEvent, 
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation, useSearch } from "wouter";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import type { CameraScanFeedback } from "@/components/MobileBarcodeScanner";
 import { translateCameraScanMessage } from "@/i18n/mobileCameraScanTranslations";
 import { queryClient } from "@/lib/queryClient";
@@ -62,6 +63,10 @@ export function useFactoryContainerLoadingScanModel() {
     [language]
   );
   const modeApiRequest = getApiRequest(appMode);
+  // Scanning bales, notes, import, removal and finalize all change an existing
+  // loading; starting a loading creates one via POST /api/factory/customer-orders-loading.
+  const recordChanges = useExistingRecordChangeAccess();
+  const canCreateLoading = recordChanges.canCreate("POST", "/api/factory/customer-orders-loading");
   const continuationFromOrderId = new URLSearchParams(search).get("continuationFromOrderId");
 
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>("");
@@ -312,6 +317,7 @@ export function useFactoryContainerLoadingScanModel() {
       allowBypassProforma?: boolean;
       allowBypassOverload?: boolean;
     }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await modeApiRequest("POST", `/api/factory/customer-orders/${orderId}/bales`, data);
       return await res.json();
     },
@@ -435,34 +441,40 @@ export function useFactoryContainerLoadingScanModel() {
     }
   }, [addBaleMutation.isPending]);
 
-  const { removeBaleMutation, emptyContainerMutation, bulkImportMutation, finalizeMutation, saveNoteMutation } =
-    useLoadingOrderMutations({
-      orderId,
-      selectedLocationId,
-      capacityProformaId,
-      modeApiRequest,
-      toast,
-      tr,
-      navigate,
-      refreshSharedLoadingQueues,
-      scannerRef,
-      ignoreProformaRef,
-      setBaleToDelete,
-      setShowEmptyContainerConfirm,
-      setLastScannedRef,
-      setShowLastScannedPopup,
-      setPendingBypassBaleRef,
-      setPendingBypassOverloadRef,
-      setExpandedGroups,
-      setScanCode,
-      setShowImportDialog,
-      setImportPreview,
-      setImportRefNumbers,
-      setOrderId,
-      setIsResuming,
-      setLoadingNote,
-      setShowFinalizeDialog,
-    });
+  const {
+    removeBaleMutation,
+    emptyContainerMutation,
+    bulkImportMutation,
+    finalizeMutation,
+    saveNoteMutation,
+    canChangeExistingRecords,
+  } = useLoadingOrderMutations({
+    orderId,
+    selectedLocationId,
+    capacityProformaId,
+    modeApiRequest,
+    toast,
+    tr,
+    navigate,
+    refreshSharedLoadingQueues,
+    scannerRef,
+    ignoreProformaRef,
+    setBaleToDelete,
+    setShowEmptyContainerConfirm,
+    setLastScannedRef,
+    setShowLastScannedPopup,
+    setPendingBypassBaleRef,
+    setPendingBypassOverloadRef,
+    setExpandedGroups,
+    setScanCode,
+    setShowImportDialog,
+    setImportPreview,
+    setImportRefNumbers,
+    setOrderId,
+    setIsResuming,
+    setLoadingNote,
+    setShowFinalizeDialog,
+  });
 
   const chosenProforma = useCallback(
     () =>
@@ -473,7 +485,7 @@ export function useFactoryContainerLoadingScanModel() {
   );
 
   const handleStartLoading = useCallback(async () => {
-    if (!customerId || !selectedLocationId) return;
+    if (!customerId || !selectedLocationId || !canCreateLoading) return;
     const proforma = chosenProforma();
 
     // A reusable proforma is a per-loading reference. Aggregate quantities from
@@ -504,11 +516,12 @@ export function useFactoryContainerLoadingScanModel() {
       orderDate,
       containerNotes: loadingNote.trim() || undefined,
     });
-  }, [customerId, selectedLocationId, chosenProforma, orderDate, loadingNote, createOrderMutation]);
+  }, [customerId, selectedLocationId, chosenProforma, orderDate, loadingNote, createOrderMutation, canCreateLoading]);
 
   /** Create a separate loading from the pending-orders warning. */
   const startNewLoadingAnyway = () => {
     setShowPendingWarning(false);
+    if (!canCreateLoading) return;
     const proforma = chosenProforma();
     createOrderMutation.mutate({
       customerId: customerId!,
@@ -523,7 +536,7 @@ export function useFactoryContainerLoadingScanModel() {
 
   const submitScannedCode = useCallback(
     (code: string) => {
-      if (!code.trim() || !orderId || !selectedLocationId) return;
+      if (!code.trim() || !orderId || !selectedLocationId || !recordChanges.allowed) return;
 
       // Hardware scanners can emit duplicate Enter events before React renders
       // mutation.isPending=true. Lock synchronously so one scan yields one POST.
@@ -563,6 +576,7 @@ export function useFactoryContainerLoadingScanModel() {
     [
       orderId,
       selectedLocationId,
+      recordChanges.allowed,
       orderDetail,
       pendingBypassBaleRef,
       pendingBypassOverloadRef,
@@ -571,11 +585,14 @@ export function useFactoryContainerLoadingScanModel() {
     ]
   );
 
-  const handleScan = useCallback((event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key !== "Enter") return;
-    event.preventDefault();
-    submitScannedCode(scanCode);
-  }, [scanCode, submitScannedCode]);
+  const handleScan = useCallback(
+    (event: KeyboardEvent<HTMLInputElement>) => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      submitScannedCode(scanCode);
+    },
+    [scanCode, submitScannedCode]
+  );
 
   const handleImportFile = useCallback(
     (e: ChangeEvent<HTMLInputElement>) => {
@@ -655,6 +672,10 @@ export function useFactoryContainerLoadingScanModel() {
   return {
     navigate,
     tr,
+    // permissions: false for View Only and Create Only
+    canChangeExistingRecords,
+    canCreateLoading,
+    changeDisabledReason: recordChanges.reason,
     // setup
     customers,
     locations,

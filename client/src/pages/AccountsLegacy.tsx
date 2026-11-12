@@ -33,6 +33,7 @@ import { AccountSearchResults } from "./accountslegacy/AccountSearchResults";
 import { FindVoucherTab } from "./accountslegacy/FindVoucherTab";
 import { EditAccountDialog } from "./accountslegacy/EditAccountDialog";
 import { AccountsConfirmDialogs } from "./accountslegacy/AccountsConfirmDialogs";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import type { FactoryMyAccess } from "@shared/apiTypes";
 import {
   projectGoldenCoastFreshStartAccounts,
@@ -42,6 +43,8 @@ import {
 
 export default function Accounts() {
   const model = useAccountsLegacyModel();
+  // View Only and Create Only cannot edit or reorder existing accounts.
+  const { allowed: canChangeExistingRecords } = useExistingRecordChangeAccess();
   const { selectedAccount, selectedAccountIsLedger } = model;
   const accountOrder = useAccountDisplayOrder();
   const displayLayout = accountOrder.layout;
@@ -141,12 +144,11 @@ export default function Accounts() {
 
   // Counts only, sourced from the existing as-of account list. Do not
   // modify posted balances, group structures or account queries.
-  const overviewAccounts = projectGoldenCoastFreshStartAccounts(
-    model.allAccounts, freshStartPresentation
-  ).filter((account) =>
-    account.type !== "displayGroup" &&
-    account.subType !== "Group" &&
-    (model.appMode !== "factory" || !account.name.trim().toLocaleLowerCase().startsWith("insurance - "))
+  const overviewAccounts = projectGoldenCoastFreshStartAccounts(model.allAccounts, freshStartPresentation).filter(
+    (account) =>
+      account.type !== "displayGroup" &&
+      account.subType !== "Group" &&
+      (model.appMode !== "factory" || !account.name.trim().toLocaleLowerCase().startsWith("insurance - "))
   );
   const totalAccounts = overviewAccounts.length;
   const accountsWithBalance = overviewAccounts.filter(
@@ -201,7 +203,11 @@ export default function Accounts() {
       <PageHeader
         title="Accounts Overview"
         subtitle="View all accounts, balances, and transaction history"
-        icon={<span className="flex h-11 w-11 items-center justify-center rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 to-sky-100 text-blue-700 shadow-sm shadow-blue-500/10 dark:border-blue-400/25 dark:from-blue-600/30 dark:to-blue-950 dark:text-blue-200"><Layers className="h-5 w-5" aria-hidden="true" /></span>}
+        icon={
+          <span className="flex h-11 w-11 items-center justify-center rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 to-sky-100 text-blue-700 shadow-sm shadow-blue-500/10 dark:border-blue-400/25 dark:from-blue-600/30 dark:to-blue-950 dark:text-blue-200">
+            <Layers className="h-5 w-5" aria-hidden="true" />
+          </span>
+        }
       >
         {showViewAccounts && !phoneStatementOpen && model.currentUser?.role === "Developer" && (
           <DropdownMenu>
@@ -230,7 +236,7 @@ export default function Accounts() {
             <Button
               variant="outline"
               data-testid="button-account-groups"
-               className="h-10 rounded-xl border-slate-200 bg-white/80 px-4 font-semibold shadow-sm transition-all hover:border-blue-300 hover:bg-blue-50 dark:border-slate-700 dark:bg-slate-900/70 dark:hover:border-blue-500/60 dark:hover:bg-blue-950/50"
+              className="h-10 rounded-xl border-slate-200 bg-white/80 px-4 font-semibold shadow-sm transition-all hover:border-blue-300 hover:bg-blue-50 dark:border-slate-700 dark:bg-slate-900/70 dark:hover:border-blue-500/60 dark:hover:bg-blue-950/50"
               onClick={() => model.navigate(`${model.modePrefix}/account-groups`)}
             >
               <Layers className="w-4 h-4 mr-2" /> Account Groups
@@ -239,7 +245,7 @@ export default function Accounts() {
         {showViewAccounts && !phoneStatementOpen && (
           <Button
             data-testid="button-create-account"
-             className="h-10 rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 px-5 font-semibold text-white shadow-md shadow-blue-600/20 transition-all hover:from-blue-700 hover:to-blue-600 dark:shadow-blue-900/40"
+            className="h-10 rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 px-5 font-semibold text-white shadow-md shadow-blue-600/20 transition-all hover:from-blue-700 hover:to-blue-600 dark:shadow-blue-900/40"
             disabled={!model.selectedCompany}
             onClick={() => model.navigate(`${model.modePrefix}/create`)}
           >
@@ -249,15 +255,37 @@ export default function Accounts() {
       </PageHeader>
 
       {showViewAccounts && activeAccountTab === "view" && !selectedAccount && !phoneStatementOpen && (
-        <section className="grid gap-3 sm:grid-cols-2" aria-label="Accounts overview figures" data-testid="accounts-summary">
+        <section
+          className="grid gap-3 sm:grid-cols-2"
+          aria-label="Accounts overview figures"
+          data-testid="accounts-summary"
+        >
           <div className="flex items-center gap-4 rounded-2xl border border-emerald-200/70 bg-gradient-to-br from-white to-emerald-50/80 p-4 shadow-sm dark:border-emerald-500/20 dark:from-[#12283a] dark:to-[#0b1d30]">
-            <span className="rounded-xl bg-emerald-500/15 p-3 text-emerald-600 dark:text-emerald-400"><Layers className="h-6 w-6" aria-hidden="true" /></span>
-            <div><p className="text-sm text-muted-foreground">Total Accounts</p><p className="text-2xl font-bold tabular-nums" data-testid="accounts-total-count">{model.accountsLoading || model.accountsError || !model.selectedCompany ? "—" : totalAccounts.toLocaleString()}</p></div>
+            <span className="rounded-xl bg-emerald-500/15 p-3 text-emerald-600 dark:text-emerald-400">
+              <Layers className="h-6 w-6" aria-hidden="true" />
+            </span>
+            <div>
+              <p className="text-sm text-muted-foreground">Total Accounts</p>
+              <p className="text-2xl font-bold tabular-nums" data-testid="accounts-total-count">
+                {model.accountsLoading || model.accountsError || !model.selectedCompany
+                  ? "—"
+                  : totalAccounts.toLocaleString()}
+              </p>
+            </div>
           </div>
           {!model.hideBalances && (
             <div className="flex items-center gap-4 rounded-2xl border border-blue-200/70 bg-gradient-to-br from-white to-blue-50/80 p-4 shadow-sm dark:border-blue-500/20 dark:from-[#12283a] dark:to-[#0b1d30]">
-              <span className="rounded-xl bg-blue-500/15 p-3 text-blue-600 dark:text-sky-300"><Wallet className="h-6 w-6" aria-hidden="true" /></span>
-              <div><p className="text-sm text-muted-foreground">Accounts with Balance</p><p className="text-2xl font-bold tabular-nums" data-testid="accounts-with-balance-count">{model.accountsLoading || model.accountsError || !model.selectedCompany ? "—" : accountsWithBalance.toLocaleString()}</p></div>
+              <span className="rounded-xl bg-blue-500/15 p-3 text-blue-600 dark:text-sky-300">
+                <Wallet className="h-6 w-6" aria-hidden="true" />
+              </span>
+              <div>
+                <p className="text-sm text-muted-foreground">Accounts with Balance</p>
+                <p className="text-2xl font-bold tabular-nums" data-testid="accounts-with-balance-count">
+                  {model.accountsLoading || model.accountsError || !model.selectedCompany
+                    ? "—"
+                    : accountsWithBalance.toLocaleString()}
+                </p>
+              </div>
             </div>
           )}
         </section>
@@ -305,9 +333,26 @@ export default function Accounts() {
           className="space-y-5"
         >
           <div className={phoneStatementOpen ? "hidden" : "erp-mobile-scroll-tabs pb-1"}>
-            <TabsList className="h-auto w-max min-w-full gap-1.5 rounded-2xl border border-slate-200/90 bg-slate-100/80 p-1.5 shadow-sm sm:min-w-0 sm:w-fit dark:border-slate-700/70 dark:bg-[#152238]/90" aria-label="Accounts sections">
-              {showViewAccounts && <TabsTrigger value="view" className="gap-2 rounded-xl px-4 py-2.5 font-semibold text-muted-foreground transition-colors data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md data-[state=active]:shadow-blue-600/20 dark:data-[state=active]:bg-blue-600"><Layers className="h-4 w-4" /> View Accounts</TabsTrigger>}
-              {showFindVoucher && <TabsTrigger value="find" className="gap-2 rounded-xl px-4 py-2.5 font-semibold text-muted-foreground transition-colors data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md data-[state=active]:shadow-blue-600/20 dark:data-[state=active]:bg-blue-600"><FileSearch className="h-4 w-4" /> Find Voucher</TabsTrigger>}
+            <TabsList
+              className="h-auto w-max min-w-full gap-1.5 rounded-2xl border border-slate-200/90 bg-slate-100/80 p-1.5 shadow-sm sm:min-w-0 sm:w-fit dark:border-slate-700/70 dark:bg-[#152238]/90"
+              aria-label="Accounts sections"
+            >
+              {showViewAccounts && (
+                <TabsTrigger
+                  value="view"
+                  className="gap-2 rounded-xl px-4 py-2.5 font-semibold text-muted-foreground transition-colors data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md data-[state=active]:shadow-blue-600/20 dark:data-[state=active]:bg-blue-600"
+                >
+                  <Layers className="h-4 w-4" /> View Accounts
+                </TabsTrigger>
+              )}
+              {showFindVoucher && (
+                <TabsTrigger
+                  value="find"
+                  className="gap-2 rounded-xl px-4 py-2.5 font-semibold text-muted-foreground transition-colors data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md data-[state=active]:shadow-blue-600/20 dark:data-[state=active]:bg-blue-600"
+                >
+                  <FileSearch className="h-4 w-4" /> Find Voucher
+                </TabsTrigger>
+              )}
             </TabsList>
           </div>
 
@@ -366,10 +411,10 @@ export default function Accounts() {
                       handleAccountChange={model.handleAccountChange}
                       hideBalances={model.hideBalances}
                       formatAmount={(amt) => model.formatAmountForAccount(amt, undefined)}
-                      onEdit={model.openEditAccountDialog}
+                      onEdit={canChangeExistingRecords ? model.openEditAccountDialog : undefined}
                       displayLayout={displayLayout}
                       searchActive={!!model.searchTerm}
-                      canArrange={accountOrder.canArrange}
+                      canArrange={canChangeExistingRecords && accountOrder.canArrange}
                       arranging={accountOrder.arranging}
                       onArrangeChange={accountOrder.setArranging}
                       onSwap={accountOrder.swap}

@@ -21,6 +21,8 @@ interface LinkedSupplierExposureProps {
     netPayable: string,
     totalCommission?: string
   ) => void;
+  /** False for read-only company roles: no "Settle to Pool" action. */
+  canRecordFxTransfer?: boolean;
 }
 
 export function LinkedSupplierExposure({
@@ -34,6 +36,7 @@ export function LinkedSupplierExposure({
   formatDate,
   formatNum,
   openFxConversionDialog,
+  canRecordFxTransfer = true,
 }: LinkedSupplierExposureProps) {
   return (
     <div className="rounded-xl border overflow-hidden">
@@ -116,7 +119,7 @@ export function LinkedSupplierExposure({
                             return (
                               <div key={cg.currencyCode} className="flex flex-col items-end gap-0.5">
                                 <div className="flex items-center gap-2">
-                                  {cg.currencyCode !== "USD" && (netPay > 0 || hasComm) && (
+                                  {canRecordFxTransfer && cg.currencyCode !== "USD" && (netPay > 0 || hasComm) && (
                                     <Button
                                       variant="ghost"
                                       size="sm"

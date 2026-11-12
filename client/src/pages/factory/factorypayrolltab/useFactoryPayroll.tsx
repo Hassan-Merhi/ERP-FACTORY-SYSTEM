@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { keepPreviousData, useQuery, useMutation } from "@tanstack/react-query";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useToast } from "@/hooks/use-toast";
@@ -14,6 +15,7 @@ import type { AttendanceEntry, CashAccount, PayrollGroup, PayrollRecord, Preview
 export default function useFactoryPayroll() {
   const { formatDisplayDate } = useDateFormat();
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
 
   const [runOpen, setRunOpen] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
@@ -215,6 +217,7 @@ export default function useFactoryPayroll() {
 
   const generateMutation = useMutation({
     mutationFn: async () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       // Convert advanceOverrides to numeric values keyed by workerId string
       const numericOverrides: Record<string, number> = {};
       for (const [wid, amt] of Object.entries(advanceOverrides)) {
@@ -260,6 +263,7 @@ export default function useFactoryPayroll() {
 
   const markPaidMutation = useMutation({
     mutationFn: async ({ id, cashId, paymentDate }: { id: number; cashId: string; paymentDate: string }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await apiRequest("PATCH", `/api/factory/payrolls/${id}/mark-paid`, {
         cashAccountId: cashId ? parseInt(cashId) : undefined,
         paymentDate,
@@ -287,6 +291,7 @@ export default function useFactoryPayroll() {
 
   const bulkMarkPaidMutation = useMutation({
     mutationFn: async ({ cashId, paymentDate }: { cashId: string; paymentDate: string }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await apiRequest("POST", "/api/factory/payrolls/mark-paid-bulk", {
         payrollIds: [...selectedIds],
         cashAccountId: cashId ? parseInt(cashId) : undefined,
@@ -316,6 +321,7 @@ export default function useFactoryPayroll() {
   // A paid record must first reverse its payment posting and then remove the
   // generated draft. The undo API intentionally performs these as separate steps.
   const deletePayrollCompletely = async (id: number) => {
+    if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
     const undo = async () => {
       const res = await apiRequest("POST", `/api/factory/payroll/${id}/undo`);
       if (!res.ok) {
@@ -339,7 +345,10 @@ export default function useFactoryPayroll() {
       queryClient.invalidateQueries({ queryKey: ["/api/factory/advances/unvouchered"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/workers"] });
       queryClient.invalidateQueries({ queryKey: ["/api/vouchers"] });
-      toast({ title: "Payroll deleted", description: "Payment postings reversed, payroll removed, and advances restored." });
+      toast({
+        title: "Payroll deleted",
+        description: "Payment postings reversed, payroll removed, and advances restored.",
+      });
       setDeleteTargetId(null);
     },
     onError: (err: Error) => {
@@ -347,12 +356,17 @@ export default function useFactoryPayroll() {
       queryClient.invalidateQueries({ queryKey: ["/api/factory/daybook"] });
       queryClient.invalidateQueries({ queryKey: ["/api/vouchers"] });
       if (err?._handledGlobally) return;
-      toast({ title: "Payroll deletion incomplete", description: err.message + ". Reload the payroll to see its current status before retrying.", variant: "destructive" });
+      toast({
+        title: "Payroll deletion incomplete",
+        description: err.message + ". Reload the payroll to see its current status before retrying.",
+        variant: "destructive",
+      });
     },
   });
 
   const undoMutation = useMutation({
     mutationFn: async (id: number) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await apiRequest("POST", `/api/factory/payroll/${id}/undo`);
       if (!res.ok) {
         const err = await res.json();
@@ -381,6 +395,7 @@ export default function useFactoryPayroll() {
 
   const batchDeleteMutation = useMutation({
     mutationFn: async (group: PayrollGroup) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       for (const p of group.records) {
         await deletePayrollCompletely(p.id);
       }
@@ -400,12 +415,17 @@ export default function useFactoryPayroll() {
       queryClient.invalidateQueries({ queryKey: ["/api/factory/payrolls"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/daybook"] });
       queryClient.invalidateQueries({ queryKey: ["/api/vouchers"] });
-      toast({ title: "Batch delete incomplete", description: err.message + ". Some records may already have been reversed; refresh before retrying.", variant: "destructive" });
+      toast({
+        title: "Batch delete incomplete",
+        description: err.message + ". Some records may already have been reversed; refresh before retrying.",
+        variant: "destructive",
+      });
     },
   });
 
   const repairMutation = useMutation({
     mutationFn: async () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await apiRequest("POST", "/api/factory/repair-orphaned-vouchers", {});
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Repair failed");
@@ -425,6 +445,7 @@ export default function useFactoryPayroll() {
 
   const fixAcctMutation = useMutation({
     mutationFn: async ({ id, cashId }: { id: number; cashId: string }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await apiRequest("PATCH", `/api/factory/payrolls/${id}/fix-accounting`, {
         cashAccountId: parseInt(cashId),
       });
@@ -482,6 +503,9 @@ export default function useFactoryPayroll() {
   const completedGroups = payrollGroups.filter((g) => g.records.every((p) => p.status === "PAID"));
 
   return {
+    canChangeExistingRecords: recordChanges.allowed,
+    canCreate: recordChanges.canCreate,
+    changeDisabledReason: recordChanges.reason,
     formatDisplayDate,
     toast,
     runOpen,

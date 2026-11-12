@@ -269,6 +269,8 @@ export function PayrollView({ model }: { model: ReturnType<typeof usePayrollMode
               setEditingEmployee={setEditingEmployee}
               setEditEmployeeDialogOpen={setEditEmployeeDialogOpen}
               handleDeleteEmployee={handleDeleteEmployee}
+              canChangeExistingRecords={model.canChangeExistingRecords}
+              canCreate={model.canCreate}
             />
           </TabsContent>
 
@@ -299,6 +301,8 @@ export function PayrollView({ model }: { model: ReturnType<typeof usePayrollMode
               setStatementEmployee={setStatementEmployee}
               ungroupedWorkers={ungroupedWorkers}
               addWorkerToWorkerGroupMutation={addWorkerToWorkerGroupMutation}
+              canChangeExistingRecords={model.canChangeExistingRecords}
+              canCreate={model.canCreate}
             />
           </TabsContent>
 

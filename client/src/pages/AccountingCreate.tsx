@@ -14,11 +14,23 @@ import { MapPin, BookOpen, Users, Truck, FolderTree, Package } from "lucide-reac
 import type { EntityType, SidebarGroup } from "./accountingcreate/types";
 import { entityConfig } from "./accountingcreate/utils";
 import { EntityFormWrapper } from "./accountingcreate/components/EntityFormWrapper";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
+import { isCreateOnlyVerifiedSignature } from "@shared/createOnlyRolePolicy";
+
+/** Entity forms whose endpoint is a handler-verified Create Only create. */
+function isCreateOnlyEntity(entity: EntityType): boolean {
+  return isCreateOnlyVerifiedSignature("POST", entityConfig[entity].endpoint);
+}
+
 export default function AccountingCreate() {
-  const [selectedEntity, setSelectedEntity] = useState<EntityType>("location");
+  // Create Only may open only the forms the server accepts (supplier, stock
+  // item); every other master-data create stays hidden for that role.
+  const { isCreateOnly } = useExistingRecordChangeAccess();
+  const [chosenEntity, setSelectedEntity] = useState<EntityType>("location");
+  const selectedEntity: EntityType = isCreateOnly && !isCreateOnlyEntity(chosenEntity) ? "supplier" : chosenEntity;
   const config = entityConfig[selectedEntity];
 
-  const sidebarGroups: SidebarGroup[] = [
+  const allSidebarGroups: SidebarGroup[] = [
     {
       label: "Accounts",
       items: [
@@ -36,11 +48,24 @@ export default function AccountingCreate() {
       ],
     },
   ];
+  const sidebarGroups: SidebarGroup[] = isCreateOnly
+    ? allSidebarGroups
+        .map((group) => ({ ...group, items: group.items.filter((item) => isCreateOnlyEntity(item.key)) }))
+        .filter((group) => group.items.length > 0)
+    : allSidebarGroups;
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 pb-10">
       <PageHeader title="Create Master Data" />
-      <p className="text-sm text-muted-foreground">Set up accounts, people, locations, and inventory for your selected company. Choose what to create below.</p>
+      <p className="text-sm text-muted-foreground">
+        Set up accounts, people, locations, and inventory for your selected company. Choose what to create below.
+      </p>
+      {isCreateOnly && (
+        <p role="status" data-testid="create-only-master-data-note" className="text-xs text-muted-foreground">
+          Create Only users can add new suppliers and stock items here. Other master data is managed by an
+          administrator.
+        </p>
+      )}
 
       {/* Mobile entity selector */}
       <div className="md:hidden">
@@ -70,7 +95,10 @@ export default function AccountingCreate() {
       </div>
 
       <div className="flex flex-col gap-6 md:flex-row md:items-start">
-        <nav className="hidden md:block w-56 shrink-0 space-y-6 rounded-2xl border border-border/70 bg-card/70 p-3" aria-label="Master data types">
+        <nav
+          className="hidden md:block w-56 shrink-0 space-y-6 rounded-2xl border border-border/70 bg-card/70 p-3"
+          aria-label="Master data types"
+        >
           {sidebarGroups.map((group) => (
             <div key={group.label}>
               <h3 className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
@@ -102,11 +130,7 @@ export default function AccountingCreate() {
         </nav>
 
         <div className="flex-1 min-w-0">
-          <EntityFormWrapper
-            key={selectedEntity}
-            entityType={selectedEntity}
-            config={config}
-          />
+          <EntityFormWrapper key={selectedEntity} entityType={selectedEntity} config={config} />
         </div>
       </div>
     </div>

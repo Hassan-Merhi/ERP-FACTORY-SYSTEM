@@ -57,6 +57,10 @@ export function FactorySuppliersBrokerBranch({ model }: { model: SuppliersModel 
         onAssignContainersTo={(supplierId, supplierName) =>
           model.setAssignTarget({ id: supplierId, name: supplierName })
         }
+        canAddLinkedSupplier={model.canCreateSupplier}
+        canChangeExistingRecords={model.canChangeExistingRecords}
+        canRecordFxTransfer={model.canRecordFxTransfer}
+        canRecordPayment={model.canRecordSupplierPayment}
       />
       <AssignContainersDialog
         open={!!model.assignTarget}

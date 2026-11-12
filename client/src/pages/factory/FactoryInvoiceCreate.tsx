@@ -19,13 +19,71 @@ import { Trash2, ScanLine, Plus, PackageCheck, MapPin, RefreshCw } from "lucide-
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PageHeader } from "@/components/PageHeader";
 
-import type {
-  Customer,
-  Location,
-  Proforma,
-  OrderBale,
-  OrderDetail,
-} from "./factoryInvoiceCreateTypes";
+interface Customer {
+  id: number;
+  legalName: string;
+  balance: number;
+  balanceSide: string;
+}
+
+interface Location {
+  id: number;
+  name: string;
+  code?: string;
+}
+
+interface ProformaLine {
+  id: number;
+  articleCode: string;
+  productName: string;
+  pricePerBale: string;
+  pricingMode?: string;
+  pricePerKg?: string | null;
+}
+
+interface Proforma {
+  id: number;
+  customerId: number;
+  name: string;
+  isActive: boolean;
+  lines: ProformaLine[];
+}
+
+interface OrderBale {
+  id: number;
+  baleId: number;
+  referenceNumber: string;
+  articleCode: string;
+  productName: string;
+  weight: string;
+  pricePerBale: string;
+  totalPrice: string;
+}
+
+interface OrderCharge {
+  id: number;
+  name: string;
+  amount: string;
+  chargeType: string;
+  voucherId?: number | null;
+  ledgerAccountId?: number | null;
+}
+
+interface OrderDetail {
+  id: number;
+  customerId: number;
+  companyId: number;
+  orderDate: string;
+  status: string;
+  invoiceNumber?: string;
+  subtotalBales: string;
+  freightAmount: string;
+  otherChargesTotal: string;
+  grandTotal: string;
+  totalQtyBales: number;
+  bales: OrderBale[];
+  charges: OrderCharge[];
+}
 
 export default function FactoryInvoiceCreate() {
   const { toast } = useToast();
@@ -54,6 +112,23 @@ export default function FactoryInvoiceCreate() {
   const [chargeAmount, setChargeAmount] = useState("");
   const [chargeType, setChargeType] = useState("FREIGHT");
   const scannerRef = useRef<HTMLInputElement>(null);
+  const lastCompanyRef = useRef(selectedCompany?.id);
+  useEffect(() => {
+    if (lastCompanyRef.current === selectedCompany?.id) return;
+    const hadPreviousCompany = Boolean(lastCompanyRef.current);
+    lastCompanyRef.current = selectedCompany?.id;
+    // Initial company hydration must not discard ?orderId= deep links.
+    if (!hadPreviousCompany) return;
+    setSelectedCustomerId("");
+    setChargeLedgerAccountId("");
+    setSelectedLocationId("");
+    setOrderId(null);
+    setScanCode("");
+    setShowFinalizeDialog(false);
+    setChargeName("");
+    setChargeAmount("");
+    setScanFlash(null);
+  }, [selectedCompany?.id]);
 
   const customerId = selectedCustomerId ? parseInt(selectedCustomerId) : null;
 
@@ -93,10 +168,7 @@ export default function FactoryInvoiceCreate() {
   });
 
   const { data: proformaSummaries = [] } = useQuery<Array<Omit<Proforma, "lines"> & { lineCount: number }>>({
-    queryKey: companyQueryKey(
-      `/api/factory/customer-proformas?customerId=${customerId}&profile=summary`,
-      selectedCompany?.id
-    ),
+    queryKey: companyQueryKey(`/api/factory/customer-proformas?customerId=${customerId}&profile=summary`, selectedCompany?.id),
     enabled: Boolean(selectedCompany?.id) && !!customerId,
   });
 
@@ -597,14 +669,11 @@ export default function FactoryInvoiceCreate() {
                 className={scanInputClass}
                 data-testid="input-scan-code"
               />
-              <MobileBarcodeScanner
-                onScan={(code) => {
-                  if (orderId && selectedLocationId && !addBaleMutation.isPending) {
-                    addBaleMutation.mutate({ scanCode: code, locationId: parseInt(selectedLocationId) });
-                  }
-                }}
-                disabled={!orderId || !selectedLocationId || addBaleMutation.isPending}
-              />
+              <MobileBarcodeScanner onScan={(code) => {
+                if (orderId && selectedLocationId && !addBaleMutation.isPending) {
+                  addBaleMutation.mutate({ scanCode: code, locationId: parseInt(selectedLocationId) });
+                }
+              }} disabled={!orderId || !selectedLocationId || addBaleMutation.isPending} />
               {(!orderId || !selectedLocationId) && (
                 <p className="text-xs text-muted-foreground mt-1">
                   {!orderId ? "Select a customer with an active proforma first" : "Select a location to start scanning"}

@@ -16,6 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { XCircle, Upload, Eye, Trash2, Check, X, Paperclip, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import type { ShippingDocument } from "../types";
 import { LIST_KEY } from "../utils";
 
@@ -31,6 +32,7 @@ export function DocumentsModal({
   onClose: () => void;
 }) {
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [newDocName, setNewDocName] = useState("");
   const [pendingFile, setPendingFile] = useState<File | null>(null);
@@ -192,15 +194,17 @@ export function DocumentsModal({
                           </p>
                         </TableCell>
                         <TableCell className="py-2">
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            disabled={deleteMutation.isPending}
-                            onClick={() => deleteMutation.mutate(doc.id)}
-                            data-testid={`button-remove-doc-${doc.id}`}
-                          >
-                            <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                          </Button>
+                          {recordChanges.allowed && (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              disabled={deleteMutation.isPending}
+                              onClick={() => deleteMutation.mutate(doc.id)}
+                              data-testid={`button-remove-doc-${doc.id}`}
+                            >
+                              <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                            </Button>
+                          )}
                         </TableCell>
                       </TableRow>
                     ) : (
@@ -230,15 +234,17 @@ export function DocumentsModal({
                             >
                               <Eye className="h-3.5 w-3.5" />
                             </Button>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              disabled={deleteMutation.isPending}
-                              onClick={() => deleteMutation.mutate(doc.id)}
-                              data-testid={`button-remove-doc-${doc.id}`}
-                            >
-                              <Trash2 className="h-3.5 w-3.5 text-red-500" />
-                            </Button>
+                            {recordChanges.allowed && (
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                disabled={deleteMutation.isPending}
+                                onClick={() => deleteMutation.mutate(doc.id)}
+                                data-testid={`button-remove-doc-${doc.id}`}
+                              >
+                                <Trash2 className="h-3.5 w-3.5 text-red-500" />
+                              </Button>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -249,64 +255,66 @@ export function DocumentsModal({
             </div>
           )}
 
-          <Separator />
+          {recordChanges.allowed && <Separator />}
 
-          <div className="space-y-2">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Upload Document</p>
-            <p className="text-xs text-muted-foreground">Max 25 MB per file.</p>
-            <input
-              ref={fileInputRef}
-              type="file"
-              className="hidden"
-              onChange={handleFileSelect}
-              data-testid="input-file-upload"
-            />
-            {pendingFile ? (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-xs text-muted-foreground border rounded-md px-2 py-1.5">
-                  <Paperclip className="h-3.5 w-3.5 shrink-0" />
-                  <span className="truncate">{pendingFile.name}</span>
+          {recordChanges.allowed && (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Upload Document</p>
+              <p className="text-xs text-muted-foreground">Max 25 MB per file.</p>
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                onChange={handleFileSelect}
+                data-testid="input-file-upload"
+              />
+              {pendingFile ? (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground border rounded-md px-2 py-1.5">
+                    <Paperclip className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">{pendingFile.name}</span>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Display Name</Label>
+                    <Input
+                      value={newDocName}
+                      onChange={(e) => setNewDocName(e.target.value)}
+                      placeholder="e.g. Packing List"
+                      className="h-8 text-sm"
+                      data-testid="input-doc-name"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={handleUpload}
+                      disabled={uploadMutation.isPending}
+                      data-testid="button-confirm-upload"
+                    >
+                      {uploadMutation.isPending ? (
+                        <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                      ) : (
+                        <Check className="h-3.5 w-3.5 mr-1" />
+                      )}
+                      Upload Document
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setPendingFile(null)}>
+                      <X className="h-3.5 w-3.5 mr-1" /> Cancel
+                    </Button>
+                  </div>
                 </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Display Name</Label>
-                  <Input
-                    value={newDocName}
-                    onChange={(e) => setNewDocName(e.target.value)}
-                    placeholder="e.g. Packing List"
-                    className="h-8 text-sm"
-                    data-testid="input-doc-name"
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    onClick={handleUpload}
-                    disabled={uploadMutation.isPending}
-                    data-testid="button-confirm-upload"
-                  >
-                    {uploadMutation.isPending ? (
-                      <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-                    ) : (
-                      <Check className="h-3.5 w-3.5 mr-1" />
-                    )}
-                    Upload Document
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => setPendingFile(null)}>
-                    <X className="h-3.5 w-3.5 mr-1" /> Cancel
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => fileInputRef.current?.click()}
-                data-testid="button-upload-doc"
-              >
-                <Upload className="h-3.5 w-3.5 mr-1" /> Choose File
-              </Button>
-            )}
-          </div>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                  data-testid="button-upload-doc"
+                >
+                  <Upload className="h-3.5 w-3.5 mr-1" /> Choose File
+                </Button>
+              )}
+            </div>
+          )}
         </div>
 
         <DialogFooter>

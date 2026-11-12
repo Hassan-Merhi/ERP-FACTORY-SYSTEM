@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { readJson } from "@/pages/pos/retailPosTypes";
 
@@ -66,6 +67,7 @@ export function RetailLedgerPanel({
   banks: AccountOption[];
 }) {
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [openingDate, setOpeningDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [plan, setPlan] = useState<OpeningPlan | null>(null);
@@ -88,6 +90,7 @@ export function RetailLedgerPanel({
 
   const saveReasons = useMutation({
     mutationFn: async () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const reasons = Object.entries(draft).map(([reasonCode, value]) => {
         const [kind, id] = value.split(":");
         return {
@@ -118,6 +121,7 @@ export function RetailLedgerPanel({
 
   const apply = useMutation({
     mutationFn: async () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       if (!plan) throw new Error("Preview the opening first");
       return (
         await apiRequest("POST", "/api/retail/financial/inventory-opening/apply", {
@@ -152,6 +156,7 @@ export function RetailLedgerPanel({
               <select
                 className="mt-1 h-9 w-full rounded-md border bg-background px-2 text-sm"
                 value={draft[reason.reasonCode] ?? ""}
+                disabled={!recordChanges.allowed}
                 onChange={(event) => setDraft((current) => ({ ...current, [reason.reasonCode]: event.target.value }))}
               >
                 <option value="">No account (movements refused)</option>
@@ -168,9 +173,11 @@ export function RetailLedgerPanel({
               </select>
             </div>
           ))}
-          <Button disabled={saveReasons.isPending || !reasonsQuery.data} onClick={() => saveReasons.mutate()}>
-            <Save className="mr-2 h-4 w-4" /> Save cash movement accounts
-          </Button>
+          {recordChanges.allowed && (
+            <Button disabled={saveReasons.isPending || !reasonsQuery.data} onClick={() => saveReasons.mutate()}>
+              <Save className="mr-2 h-4 w-4" /> Save cash movement accounts
+            </Button>
+          )}
         </CardContent>
       </Card>
 
@@ -206,9 +213,14 @@ export function RetailLedgerPanel({
                 <Button variant="outline" disabled={preview.isPending} onClick={() => preview.mutate()}>
                   Preview opening
                 </Button>
-                <Button disabled={!plan || plan.blockers.length > 0 || apply.isPending} onClick={() => apply.mutate()}>
-                  Apply opening
-                </Button>
+                {recordChanges.allowed && (
+                  <Button
+                    disabled={!plan || plan.blockers.length > 0 || apply.isPending}
+                    onClick={() => apply.mutate()}
+                  >
+                    Apply opening
+                  </Button>
+                )}
               </div>
               {plan ? (
                 <div className="rounded-md border p-2 text-xs">

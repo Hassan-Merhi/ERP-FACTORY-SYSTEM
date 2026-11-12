@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatNumber } from "@/lib/formatNumber";
+import { recordedMixBatchCost } from "@/lib/recordedMixBatchCost";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { getApiRequest } from "@/lib/factoryApi";
@@ -163,7 +164,7 @@ export default function BatchDetail({ batchId, onBack, onDeleted }: BatchDetailP
   const usedWeight = parseFloat(batch.usedKg || "0");
   const remainingWeight = totalWeight - usedWeight;
   const usagePercent = totalWeight > 0 ? Math.min((usedWeight / totalWeight) * 100, 100) : 0;
-  const costPerKg = parseFloat(batch.costPerKg || "0");
+  const costPerKg = recordedMixBatchCost(batch).costPerKg;
 
   const bales = balesData || [];
   const totalBalesCount = bales.length;
@@ -246,7 +247,7 @@ export default function BatchDetail({ batchId, onBack, onDeleted }: BatchDetailP
               </p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Cost/kg</p>
+              <p className="text-xs text-muted-foreground">Recorded cost/kg</p>
               <p className="text-lg font-mono font-semibold" data-testid="text-cost-per-kg">
                 ${costPerKg.toFixed(4)}
               </p>

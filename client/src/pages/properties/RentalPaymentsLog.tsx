@@ -5,6 +5,7 @@ import { useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -64,6 +65,7 @@ export default function RentalPaymentsLog({ rentalModule, pageTitle, pageIcon, t
   const apiBase = rentalPolicy.apiBase;
   const { selectedCompany } = useCompany();
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
   const appMode = useAppMode();
   // ERP and Properties share the page-header contract; Factory keeps its hub strip.
   const isErp = appMode === "erp" || appMode === "properties";
@@ -97,7 +99,10 @@ export default function RentalPaymentsLog({ rentalModule, pageTitle, pageIcon, t
   } = useRentalPaymentsFilters(payments, isPropertiesPayments, selectedCompany?.id);
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => apiRequest("DELETE", `${apiBase}/payments/${id}`),
+    mutationFn: async (id: number) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
+      return apiRequest("DELETE", `${apiBase}/payments/${id}`);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey });
       queryClient.invalidateQueries({ queryKey: [apiBase + "/units"] });
@@ -225,7 +230,7 @@ export default function RentalPaymentsLog({ rentalModule, pageTitle, pageIcon, t
           onCopy={() => {
             void (isFullHistory ? copyFullHistory() : copyHistory());
           }}
-          onDelete={setDeleteTarget}
+          onDelete={recordChanges.allowed ? setDeleteTarget : undefined}
         />
         {!clipboardIsUsd && (
           <p className="text-xs text-amber-600 dark:text-amber-400">
@@ -411,7 +416,7 @@ export default function RentalPaymentsLog({ rentalModule, pageTitle, pageIcon, t
                           >
                             Read-only
                           </span>
-                        ) : (
+                        ) : !recordChanges.allowed ? null : (
                           <Button
                             size="icon"
                             variant="ghost"

@@ -11,6 +11,7 @@ import "./fonts.css";
 import "./index.css";
 import "./mobile-browser-compat.css";
 import "./factory-mobile-touch-targets.css";
+import "./phase12-mobile-touch-targets.css";
 import "./voucher-narration-cleanup.css";
 import { installClientObservability } from "./lib/clientObservability";
 import { ObservabilityErrorBoundary } from "./components/ObservabilityErrorBoundary";

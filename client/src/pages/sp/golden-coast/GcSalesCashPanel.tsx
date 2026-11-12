@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { releaseDebtEnglish } from "@/i18n/finalCloseoutTranslations";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import {
   PHASE10_READINESS,
   PHASE10_SETTLEMENT,
@@ -37,6 +38,7 @@ import {
 
 export function GcSalesCashPanel({ companyKey }: { companyKey: CompanyKey }) {
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
   const invalidateReadiness = useReadinessInvalidation();
 
   const [phase10Date, setPhase10Date] = useState(todayIso);
@@ -69,6 +71,7 @@ export function GcSalesCashPanel({ companyKey }: { companyKey: CompanyKey }) {
 
   const phase10Mutation = useMutation({
     mutationFn: async () => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       if (!phase10Choice) throw new Error(releaseDebtEnglish("Select a receipt account."));
       const response = await apiRequest("POST", PHASE10_SETTLEMENT, {
         settlementDate: phase10Date,
@@ -219,18 +222,20 @@ export function GcSalesCashPanel({ companyKey }: { companyKey: CompanyKey }) {
             />
           </div>
         </div>
-        <Button
-          onClick={() => phase10Mutation.mutate()}
-          disabled={!phase10CanSubmit || phase10Mutation.isPending}
-          data-testid="button-gc-phase10-submit"
-        >
-          {phase10Mutation.isPending ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <CircleDollarSign className="mr-2 h-4 w-4" />
-          )}
-          {releaseDebtEnglish("Post direct settlement")}
-        </Button>
+        {recordChanges.allowed && (
+          <Button
+            onClick={() => phase10Mutation.mutate()}
+            disabled={!phase10CanSubmit || phase10Mutation.isPending}
+            data-testid="button-gc-phase10-submit"
+          >
+            {phase10Mutation.isPending ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <CircleDollarSign className="mr-2 h-4 w-4" />
+            )}
+            {releaseDebtEnglish("Post direct settlement")}
+          </Button>
+        )}
       </CardContent>
     </Card>
   );
