@@ -320,11 +320,12 @@ export async function setTradingRelationship(
 export async function postIntercompanyImport(args: {
   sourceCompanyId: number;
   userId: string;
+  username: string;
   role: string;
   preview: WorkbookPreview;
   input: IntercompanyImportInput;
 }) {
-  const { sourceCompanyId, userId, role, preview, input } = args;
+  const { sourceCompanyId, userId, username, role, preview, input } = args;
   const allowed = await eligibleDestinations(sourceCompanyId, userId, role);
   const plans = validateWorkbookSelections(preview, input);
   const ids = [...new Set(plans.map((p) => p.relationshipId))];
@@ -514,6 +515,7 @@ export async function postIntercompanyImport(args: {
         await logAudit(
           {
             userId,
+            username,
             companyId: created.companyId,
             action: "create",
             tableName: "stock_items",
