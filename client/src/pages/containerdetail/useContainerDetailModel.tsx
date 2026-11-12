@@ -518,9 +518,12 @@ export function useContainerDetailModel({ id: idProp, forceErp }: { id?: string;
   };
 
   // Determine the back URL based on container status
-  const backUrl = selectedCompany?.companyType === "properties"
-    ? "/properties/containers"
-    : containerData?.container?.status === "SOLD" ? "/sold-containers" : "/containers";
+  const backUrl =
+    selectedCompany?.companyType === "properties"
+      ? "/properties/containers"
+      : containerData?.container?.status === "SOLD"
+        ? "/sold-containers"
+        : "/containers";
 
   const form = useForm<z.infer<typeof saleFormSchema>>({
     resolver: zodResolver(saleFormSchema),
