@@ -6,7 +6,6 @@ import {
   canUsePropertiesCapability,
   PROPERTIES_LEGACY_RENTAL_REDIRECTS,
 } from "@/properties/config/propertiesNavigation";
-import PropertiesContainerTrading from "@/pages/properties/PropertiesContainerTrading";
 import LinkedTradesEditor from "@/pages/intercompany/LinkedTradesEditor";
 import IntercompanyPayments from "@/pages/intercompany/IntercompanyPayments";
 import IntercompanyLifecycle from "@/pages/intercompany/IntercompanyLifecycle";
@@ -116,7 +115,7 @@ export function PropertiesRoutes({ user }: PropertiesRoutesProps) {
       <Route path="/properties/purchase-orders/:id/edit" component={PurchaseOrderEdit} />
       <Route path="/properties/master-data" component={AccountingCreate} />
 
-      {canTrade && <Route path="/properties/container-trading" component={PropertiesContainerTrading} />}
+      {canTrade && <Route path="/properties/container-trading">{() => <Redirect replace to="/properties/po-import" />}</Route>}
       {canTrade && <Route path="/properties/linked-trades" component={LinkedTradesEditor} />}
       {canTrade && <Route path="/properties/intercompany-payments" component={IntercompanyPayments} />}
       {canTrade && <Route path="/properties/intercompany-lifecycle" component={IntercompanyLifecycle} />}
