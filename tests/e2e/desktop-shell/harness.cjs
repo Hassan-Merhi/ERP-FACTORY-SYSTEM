@@ -80,13 +80,27 @@ function mainWindow() {
   return BrowserWindow.getAllWindows()[0];
 }
 
+// Compare whole origins and whole URLs: a prefix or substring match would also
+// accept look-alike hosts, which is the mistake this harness exists to catch.
+function isOnAppOrigin(url) {
+  try {
+    return new URL(url).origin === APP_ORIGIN;
+  } catch {
+    return false;
+  }
+}
+
+function wasOpenedExternally(url) {
+  return openedExternally.some((opened) => opened === url);
+}
+
 function inPage(win, source) {
   return win.webContents.executeJavaScript(source, true);
 }
 
 async function loadedOnApp(win) {
   await waitFor("the application page", async () => {
-    if (!win.webContents.getURL().startsWith(APP_ORIGIN) || win.webContents.isLoading()) return false;
+    if (!isOnAppOrigin(win.webContents.getURL()) || win.webContents.isLoading()) return false;
     return inPage(win, "Boolean(document.getElementById('app-root'))").catch(() => false);
   });
 }
@@ -137,7 +151,7 @@ async function onlineScenario() {
 
   const lookalike = "https://www.hmdinternationalgroup.com.example.net/login";
   await inPage(win, `void window.open(${JSON.stringify(lookalike)})`);
-  await waitFor("the look-alike popup hand-off", async () => openedExternally.includes(lookalike));
+  await waitFor("the look-alike popup hand-off", async () => wasOpenedExternally(lookalike));
   check(
     "a look-alike popup goes to the system browser, not a new window",
     BrowserWindow.getAllWindows().length === 1,
@@ -167,7 +181,7 @@ async function onlineScenario() {
 
   const external = "https://example.org/somewhere";
   await inPage(win, `void (window.location.href = ${JSON.stringify(external)})`);
-  await waitFor("the external navigation hand-off", async () => openedExternally.includes(external));
+  await waitFor("the external navigation hand-off", async () => wasOpenedExternally(external));
   await new Promise((resolve) => setTimeout(resolve, 300));
   check(
     "navigating to another host is blocked and handed to the system browser",
