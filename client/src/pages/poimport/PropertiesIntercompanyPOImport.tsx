@@ -195,9 +195,13 @@ export default function PropertiesIntercompanyPOImport() {
           }))
         )
       );
-      return postForm<ImportOutcome>(`${API}/import`, body);
+      return { result: await postForm<ImportOutcome>(`${API}/import`, body), requestedCompanyId };
     },
-    onSuccess: async (result) => {
+    onSuccess: async ({ result, requestedCompanyId }) => {
+      if (activeCompanyId.current !== requestedCompanyId) {
+        await queryClient.invalidateQueries({ queryKey: companyQueryKey(`${API}/trades`, requestedCompanyId) });
+        return;
+      }
       setOutcome(result);
       setPreview(null);
       setFile(null);
