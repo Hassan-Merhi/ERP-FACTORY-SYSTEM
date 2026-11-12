@@ -1,6 +1,6 @@
 /** Dedicated Phase 5 receiving/cancellation; no generic container offload bypass. */
 import type { Express, Request, Response } from "express";
-import { and, eq, inArray, or } from "drizzle-orm";
+import { and, eq, inArray, isNull, or } from "drizzle-orm";
 import { z } from "zod";
 import {
   containers,
@@ -17,7 +17,8 @@ import { db } from "../../db";
 import { logger } from "../../lib/logger";
 import { cancelUnreceivedTrade } from "../../services/intercompany/phase5Cancel";
 import { receiveLinkedTrade } from "../../services/intercompany/phase5Receipt";
-import { IntercompanyEditError, type EditIdentity, withTradeScope } from "../../services/intercompany/tradeSync";
+import { requireReceivingPairPermission } from "../../services/intercompany/phase5ReceivingAccess";
+import { assertTradeAccess, IntercompanyEditError, type EditIdentity, withTradeScope } from "../../services/intercompany/tradeSync";
 
 const id = z.number().int().positive();
 const routeId = z.coerce.number().int().positive();
@@ -163,6 +164,7 @@ async function lifecycleList(identity: EditIdentity) {
         const invoiceCharges = charges.filter((item) => item.tradeId === trade.id);
         return {
           tradeId: trade.id,
+          physicalContainerId: trade.physicalContainerId,
           relationshipId: trade.relationshipId,
           sourceCompanyId: trade.sourceCompanyId,
           destinationCompanyId: trade.destinationCompanyId,
@@ -193,6 +195,49 @@ export function registerIntercompanyPhase5Routes(app: Express) {
       return fail(res, error);
     }
   });
+  // The Properties container detail selects the destination warehouse
+  // without asking the user to manually map GIT or INVENTORY. Only expose
+  // receiving choices to an actor authorized in this specific destination.
+  app.get("/api/intercompany-container-trading/lifecycle/:tradeId/receiving-options", requireAuth, async (req, res) => {
+    try {
+      const identity = actor(req);
+      const trade = await assertTradeAccess(routeId.parse(req.params.tradeId), identity);
+      await requireReceivingPairPermission(trade, identity);
+      return res.json(
+        await withTradeScope(identity, [trade.sourceCompanyId, trade.destinationCompanyId], async () => {
+          const [warehouses, inventoryAccounts] = await Promise.all([
+            db.select({ id: locations.id, name: locations.name })
+              .from(locations)
+              .where(and(
+                eq(locations.companyId, trade.destinationCompanyId),
+                eq(locations.active, true),
+                isNull(locations.deletedAt)
+              )),
+            db.select({ id: ledgerAccounts.id, name: ledgerAccounts.name, accountType: ledgerAccounts.accountType })
+              .from(ledgerAccounts)
+              .where(and(
+                eq(ledgerAccounts.companyId, trade.destinationCompanyId),
+                eq(ledgerAccounts.code, "INVENTORY"),
+                eq(ledgerAccounts.active, true),
+                isNull(ledgerAccounts.deletedAt)
+              )),
+          ]);
+          const eligible = inventoryAccounts.filter(account => ["Asset", "Current Asset"].includes(account.accountType));
+          return {
+            tradeId: trade.id,
+            destinationCompanyId: trade.destinationCompanyId,
+            locations: warehouses,
+            // Refuse to guess if legacy data contains multiple INVENTORY accounts.
+            inventoryAccountId: eligible.length === 1 ? eligible[0].id : null,
+            inventoryAccountStatus: eligible.length === 1 ? "ready" : eligible.length ? "ambiguous" : "missing",
+          };
+        })
+      );
+    } catch (error) {
+      return fail(res, error);
+    }
+  });
+
   app.post("/api/intercompany-container-trading/lifecycle/:tradeId/receive", requireAuth, async (req, res) => {
     try {
       const parsed = receive.parse(req.body);
