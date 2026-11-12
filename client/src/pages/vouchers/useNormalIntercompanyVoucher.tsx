@@ -7,6 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { type VoucherFormData } from "./voucherTypes";
+import IntercompanyVoucherHistory from "./IntercompanyVoucherHistory";
 
 const PREVIEW = "/api/intercompany-container-trading/payments/voucher-preview";
 
@@ -224,6 +225,12 @@ export function useNormalIntercompanyVoucher(options: {
           <Checkbox checked={confirmed} onCheckedChange={(checked) => setConfirmed(checked === true)} />
           {copy.linkedConfirm}
         </Label>
+        <IntercompanyVoucherHistory
+          relationshipId={match.match.relationshipId}
+          companyId={companyId}
+          sourceCompanyId={match.match.sourceCompanyId}
+          destinationCompanyId={match.match.destinationCompanyId}
+        />
       </div>
     );
   };
