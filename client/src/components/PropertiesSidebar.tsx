@@ -16,7 +16,11 @@ import { useRecentNav } from "@/hooks/use-recent-nav";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Clock, LifeBuoy } from "lucide-react";
 import type { ShellUser } from "@/app/shellUser";
-import { canUsePropertiesCapability, canNavigateProperties, PROPERTIES_NAVIGATION } from "@/properties/config/propertiesNavigation";
+import {
+  canUsePropertiesCapability,
+  canNavigateProperties,
+  PROPERTIES_NAVIGATION,
+} from "@/properties/config/propertiesNavigation";
 import {
   ModuleHeader,
   ModuleFooter,
@@ -73,7 +77,12 @@ export const PROPERTIES_NAV_SECTIONS: NavSection[] = [
 export function getPropertiesVisibleNavSections(isDeveloper: boolean, canTrade = false): NavSection[] {
   return PROPERTIES_NAV_SECTIONS.map((section) => ({
     ...section,
-    items: section.items.filter((item) => canNavigateProperties(item.url, null, { companyType: "properties", role: isDeveloper ? "Developer" : canTrade ? "Owner" : "User" })),
+    items: section.items.filter((item) =>
+      canNavigateProperties(item.url, null, {
+        companyType: "properties",
+        role: isDeveloper ? "Developer" : canTrade ? "Owner" : "User",
+      })
+    ),
   })).filter((section) => section.items.length > 0);
 }
 
@@ -87,13 +96,13 @@ const pinnedIconsByPath = {
   "/properties/vouchers": FileText,
   "/properties/analytics": BarChart2,
 } as const;
-export const PROPERTIES_PINNED_DEFAULTS: NavItem[] = PROPERTIES_NAVIGATION
-  .filter((entry) => entry.navigation === "pinned")
-  .map((entry) => ({
-    title: entry.label,
-    url: entry.path,
-    icon: pinnedIconsByPath[entry.path as keyof typeof pinnedIconsByPath] ?? Building2,
-  }));
+export const PROPERTIES_PINNED_DEFAULTS: NavItem[] = PROPERTIES_NAVIGATION.filter(
+  (entry) => entry.navigation === "pinned"
+).map((entry) => ({
+  title: entry.label,
+  url: entry.path,
+  icon: pinnedIconsByPath[entry.path as keyof typeof pinnedIconsByPath] ?? Building2,
+}));
 
 export function PropertiesSidebar({ user, onLogout }: { user?: ShellUser; onLogout: () => void | Promise<void> }) {
   const { selectedCompany } = useCompany();
@@ -124,7 +133,10 @@ export function PropertiesSidebar({ user, onLogout }: { user?: ShellUser; onLogo
     () => [...PROPERTIES_PINNED_DEFAULTS, ...visibleSections.flatMap((s) => s.items)],
     [visibleSections]
   );
-  const recentItems = useRecentNav(allNavItems.filter((item) => canNavigateProperties(item.url, user, selectedCompany)), selectedCompany?.id);
+  const recentItems = useRecentNav(
+    allNavItems.filter((item) => canNavigateProperties(item.url, user, selectedCompany)),
+    selectedCompany?.id
+  );
 
   const testIdFor = (i: NavItem) => `link-properties-${i.url.split("/").pop()}`;
 

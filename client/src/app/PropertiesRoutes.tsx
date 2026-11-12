@@ -2,7 +2,10 @@ import { lazyRetry as lazy } from "@/lib/lazyRetry";
 import { Switch, Route, Redirect } from "wouter";
 import PropertiesRentalsHub from "@/pages/properties/PropertiesRentalsHub";
 import { useCompany } from "@/contexts/CompanyContext";
-import { canUsePropertiesCapability, PROPERTIES_LEGACY_RENTAL_REDIRECTS } from "@/properties/config/propertiesNavigation";
+import {
+  canUsePropertiesCapability,
+  PROPERTIES_LEGACY_RENTAL_REDIRECTS,
+} from "@/properties/config/propertiesNavigation";
 import PropertiesContainerTrading from "@/pages/properties/PropertiesContainerTrading";
 import LinkedTradesEditor from "@/pages/intercompany/LinkedTradesEditor";
 import IntercompanyPayments from "@/pages/intercompany/IntercompanyPayments";
@@ -89,18 +92,10 @@ export function PropertiesRoutes({ user }: PropertiesRoutesProps) {
       <Route path="/properties/agents" component={Agents} />
       <Route path="/properties/daybook" component={PropertiesDaybook} />
 
-      {canTrade && (
-        <Route path="/properties/container-trading" component={PropertiesContainerTrading} />
-      )}
-      {canTrade && (
-        <Route path="/properties/linked-trades" component={LinkedTradesEditor} />
-      )}
-      {canTrade && (
-        <Route path="/properties/intercompany-payments" component={IntercompanyPayments} />
-      )}
-      {canTrade && (
-        <Route path="/properties/intercompany-lifecycle" component={IntercompanyLifecycle} />
-      )}
+      {canTrade && <Route path="/properties/container-trading" component={PropertiesContainerTrading} />}
+      {canTrade && <Route path="/properties/linked-trades" component={LinkedTradesEditor} />}
+      {canTrade && <Route path="/properties/intercompany-payments" component={IntercompanyPayments} />}
+      {canTrade && <Route path="/properties/intercompany-lifecycle" component={IntercompanyLifecycle} />}
       <Route path="/properties/rentals" component={PropertiesRentalsHub} />
       {Object.entries(PROPERTIES_LEGACY_RENTAL_REDIRECTS).map(([from, to]) => (
         <Route key={from} path={from}>

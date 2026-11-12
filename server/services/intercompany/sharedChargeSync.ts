@@ -117,7 +117,7 @@ function assertInvoiceInput(input: ConfirmSharedChargeInput) {
   if (
     !Number.isSafeInteger(input.sourceCompanyId) ||
     input.sourceCompanyId <= 0 ||
-    !/^[A-Za-z0-9._\/:-]{3,120}$/.test(input.invoiceKey) ||
+    !/^[A-Za-z0-9._/:-]{3,120}$/.test(input.invoiceKey) ||
     !FIELDS.has(input.chargeType) ||
     !input.evidenceReference?.trim() ||
     input.evidenceReference.trim().length < 3 ||

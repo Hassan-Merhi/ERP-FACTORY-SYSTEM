@@ -136,7 +136,9 @@ describe("Phase 3 intercompany linked edit migration guards", () => {
       await client.query(
         "INSERT INTO intercompany_shared_charge_po_allocations(invoice_id,trade_id,source_po_id,amount) VALUES (1,1,21,50)"
       );
-      await client.query("UPDATE intercompany_shared_charge_invoices SET state='confirmed', confirmed_at=NOW() WHERE id=1");
+      await client.query(
+        "UPDATE intercompany_shared_charge_invoices SET state='confirmed', confirmed_at=NOW() WHERE id=1"
+      );
       await client.query("SET CONSTRAINTS ALL IMMEDIATE");
       await rejects("UPDATE intercompany_shared_charge_invoices SET face_amount=51 WHERE id=1", "face");
       await rejects("UPDATE intercompany_shared_charge_allocations SET amount=40 WHERE id=1", "allocation");

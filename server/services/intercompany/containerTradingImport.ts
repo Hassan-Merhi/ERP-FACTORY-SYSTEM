@@ -41,7 +41,7 @@ import {
   getCompanyRequestRuntimeContext,
   runWithCompanyRequestRuntimeContext,
 } from "../security/companyRequestRuntimeContext";
-import { createContainerImportPlan, type ContainerImportPlan, type ImportLine } from "./containerImportPlan";
+import { createContainerImportPlan, type ImportLine } from "./containerImportPlan";
 
 const IMPORT_LOCK = 741235;
 const positive = z.number().int().positive();
@@ -709,19 +709,22 @@ export async function postIntercompanyImport(args: {
               status: "Open",
             })
             .returning();
-          const insertedSourceLines = await tx.insert(poLineItems).values(
-            group.lines.map((line) => {
-              const stockMatch = items.find((i) => i.line === line)!;
-              return {
-                poId: sourcePo.id,
-                stockItemId: stockMatch.sourceItemId,
-                itemName: line.itemName,
-                quantity: line.quantity,
-                rate: line.rate,
-                lineTotal: line.lineTotal,
-              };
-            })
-          ).returning({ id: poLineItems.id });
+          const insertedSourceLines = await tx
+            .insert(poLineItems)
+            .values(
+              group.lines.map((line) => {
+                const stockMatch = items.find((i) => i.line === line)!;
+                return {
+                  poId: sourcePo.id,
+                  stockItemId: stockMatch.sourceItemId,
+                  itemName: line.itemName,
+                  quantity: line.quantity,
+                  rate: line.rate,
+                  lineTotal: line.lineTotal,
+                };
+              })
+            )
+            .returning({ id: poLineItems.id });
           assert(insertedSourceLines.length === group.lines.length, "Source PO line insertion was incomplete");
           group.lines.forEach((line, index) => {
             assert(!sourceLineIdsByExcelRow.has(line.rowNum), "Original Excel row is not uniquely identified");
@@ -769,16 +772,19 @@ export async function postIntercompanyImport(args: {
             status: "Open",
           })
           .returning();
-        const insertedDestinationLines = await tx.insert(poLineItems).values(
-          items.map(({ line, destItemId }) => ({
-            poId: destPo.id,
-            stockItemId: destItemId,
-            itemName: line.itemName,
-            quantity: line.quantity,
-            rate: line.rate,
-            lineTotal: line.lineTotal,
-          }))
-        ).returning({ id: poLineItems.id });
+        const insertedDestinationLines = await tx
+          .insert(poLineItems)
+          .values(
+            items.map(({ line, destItemId }) => ({
+              poId: destPo.id,
+              stockItemId: destItemId,
+              itemName: line.itemName,
+              quantity: line.quantity,
+              rate: line.rate,
+              lineTotal: line.lineTotal,
+            }))
+          )
+          .returning({ id: poLineItems.id });
         assert(insertedDestinationLines.length === items.length, "Destination PO lines were incomplete");
 
         const [trade] = await tx
@@ -801,17 +807,21 @@ export async function postIntercompanyImport(args: {
           }))
         );
         // Immutable row mapping avoids guessing by item names, barcodes or order on later edits.
-        await tx.insert(intercompanyTradeLineLinks).values(items.map(({ line }, index) => {
-          const sourceLineId = sourceLineIdsByExcelRow.get(line.rowNum);
-          assert(sourceLineId && insertedDestinationLines[index]?.id,
-            "Missing verified original-to-destination row link");
-          return {
-            tradeId: trade.id,
-            sourceLineId,
-            destinationLineId: insertedDestinationLines[index].id,
-            originalExcelRow: line.rowNum,
-          };
-        }));
+        await tx.insert(intercompanyTradeLineLinks).values(
+          items.map(({ line }, index) => {
+            const sourceLineId = sourceLineIdsByExcelRow.get(line.rowNum);
+            assert(
+              sourceLineId && insertedDestinationLines[index]?.id,
+              "Missing verified original-to-destination row link"
+            );
+            return {
+              tradeId: trade.id,
+              sourceLineId,
+              destinationLineId: insertedDestinationLines[index].id,
+              originalExcelRow: line.rowNum,
+            };
+          })
+        );
         const saleVoucher = await postErpVoucherTx(tx, {
           companyId: sourceCompanyId,
           voucherType: "Sales",
@@ -866,7 +876,8 @@ export async function postIntercompanyImport(args: {
         // Only at NEW PO import: reuse older verified credit of this exact company pair.
         // Credit allocation has no voucher entries; the original cash receipt already posted.
         const previousCredit = await autoAllocateNewTradeCreditTx(tx, {
-          tradeId: trade.id, relationshipId: policy.id,
+          tradeId: trade.id,
+          relationshipId: policy.id,
           confirmedLandedCost: plan.landedTotal,
         });
         await tx.insert(intercompanyAuditEvents).values({

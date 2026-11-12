@@ -93,12 +93,10 @@ function fail(res: Response, error: unknown) {
       message: error.issues.map((x) => x.message).join("; "),
     });
   logger.error("Mirrored intercompany payment failed", { error });
-  return res
-    .status(500)
-    .json({
-      code: "IC_PAYMENT_INTERNAL",
-      message: "No partial mirrored payment was saved. Correct the evidence and retry.",
-    });
+  return res.status(500).json({
+    code: "IC_PAYMENT_INTERNAL",
+    message: "No partial mirrored payment was saved. Correct the evidence and retry.",
+  });
 }
 export function registerIntercompanyPhase4Routes(app: Express) {
   app.get("/api/intercompany-container-trading/payments/relationships", requireAuth, async (req, res) => {

@@ -26,12 +26,10 @@ function sendError(res: import("express").Response, error: unknown) {
       .json({ code: "INTERCOMPANY_INVALID_INPUT", message: error.issues.map((i) => i.message).join("; ") });
   }
   logger.error("Intercompany container trading error", { error });
-  return res
-    .status(500)
-    .json({
-      code: "INTERCOMPANY_INTERNAL_ERROR",
-      message: "Container trading could not be completed. No partial import was committed.",
-    });
+  return res.status(500).json({
+    code: "INTERCOMPANY_INTERNAL_ERROR",
+    message: "Container trading could not be completed. No partial import was committed.",
+  });
 }
 
 function companyFromSession(req: import("express").Request) {
@@ -71,13 +69,11 @@ export function registerIntercompanyContainerTradingRoutes(app: Express) {
         const { companyId, userId, role } = companyFromSession(req);
         const mapping = relationshipInputSchema.parse(req.body);
         const saved = await setTradingRelationship(companyId, userId, role, mapping);
-        return res
-          .status(201)
-          .json({
-            relationshipId: saved.id,
-            destinationCompanyId: saved.destinationCompanyId,
-            tradeEnabled: saved.tradeEnabled,
-          });
+        return res.status(201).json({
+          relationshipId: saved.id,
+          destinationCompanyId: saved.destinationCompanyId,
+          tradeEnabled: saved.tradeEnabled,
+        });
       } catch (error) {
         return sendError(res, error);
       }

@@ -171,7 +171,9 @@ export default function LinkedTradesEditor() {
   const previewMutation = useMutation({
     mutationFn: async () => {
       const response = await apiRequest("POST", BASE + "/shared-charges/preview", {
-        sourceCompanyId: companyId, tradeIds: chosen, amount: face,
+        sourceCompanyId: companyId,
+        tradeIds: chosen,
+        amount: face,
       });
       return response.json() as Promise<AllocationPreview>;
     },

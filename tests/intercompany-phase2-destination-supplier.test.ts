@@ -20,10 +20,7 @@ describe("Phase 2 destination Properties supplier liability", () => {
     });
     expect(lines[0].supplierId).toBeUndefined();
     expect(lines[1].ledgerAccountId).toBeUndefined();
-    expect(lines.map((line) => ("ledgerAccountId" in line ? "ledger" : "supplier"))).toEqual([
-      "ledger",
-      "supplier",
-    ]);
+    expect(lines.map((line) => ("ledgerAccountId" in line ? "ledger" : "supplier"))).toEqual(["ledger", "supplier"]);
   });
 
   it("refuses missing mapped GIT and supplier identifiers", () => {

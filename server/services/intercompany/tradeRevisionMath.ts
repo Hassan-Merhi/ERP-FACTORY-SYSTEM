@@ -86,7 +86,7 @@ export function allocateByWeights(total: Decimal, weights: readonly Decimal[]): 
     const floor = exact.floor();
     return { cents: floor.toNumber(), remainder: exact.minus(floor) };
   });
-  let left = centsTotal - allocated.reduce((sum, part) => sum + part.cents, 0);
+  const left = centsTotal - allocated.reduce((sum, part) => sum + part.cents, 0);
   const ranked = allocated
     .map((part, index) => ({ index, remainder: part.remainder }))
     .sort((a, b) => b.remainder.comparedTo(a.remainder) || a.index - b.index);
