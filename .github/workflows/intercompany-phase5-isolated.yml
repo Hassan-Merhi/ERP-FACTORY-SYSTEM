@@ -120,6 +120,10 @@ jobs:
             tests/intercompany-phase5-lifecycle-math.test.ts \
             tests/intercompany-phase5-mirrored-lines.test.ts
 
+      - name: Build client and server bundles for Phase 7 navigation
+        if: always() && steps.install.outcome == 'success'
+        run: npm run build
+
       - name: Initialize the disposable PostgreSQL reference application schema
         id: schema
         if: always() && steps.install.outcome == 'success'
