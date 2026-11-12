@@ -20,15 +20,14 @@ const authorized = [requireAuth, requireRole("Admin", "Owner", "Developer")] as 
 async function scopedAccount(req: Request, res: Response) {
   const companyId = Number(req.session.currentCompanyId);
   const accountId = Number(req.params.accountId);
-  if (!Number.isSafeInteger(companyId) || companyId < 1 ||
-      !Number.isSafeInteger(accountId) || accountId < 1) {
+  if (!Number.isSafeInteger(companyId) || companyId < 1 || !Number.isSafeInteger(accountId) || accountId < 1) {
     res.status(400).json({ message: "Select a valid Properties account" });
     return null;
   }
   const [[company], [account]] = await Promise.all([
-    db.select({ companyType: companies.companyType })
-      .from(companies).where(eq(companies.id, companyId)).limit(1),
-    db.select({ id: ledgerAccounts.id, name: ledgerAccounts.name })
+    db.select({ companyType: companies.companyType }).from(companies).where(eq(companies.id, companyId)).limit(1),
+    db
+      .select({ id: ledgerAccounts.id, name: ledgerAccounts.name })
       .from(ledgerAccounts)
       .where(and(eq(ledgerAccounts.id, accountId), eq(ledgerAccounts.companyId, companyId)))
       .limit(1),
@@ -65,20 +64,24 @@ export function registerPropertiesAccountStatementWhatsAppRoutes(app: Express): 
       await ensurePropertiesWaStatementSchema();
       const result = await pool.query(
         "SELECT chat_id, enabled, frequency, send_time, day_of_week, day_of_month, timezone, period_mode " +
-        "FROM properties_account_wa_schedules WHERE company_id=$1 AND account_id=$2",
+          "FROM properties_account_wa_schedules WHERE company_id=$1 AND account_id=$2",
         [account.companyId, account.accountId]
       );
       const saved = result.rows[0];
-      res.json(saved ? {
-        chatId: saved.chat_id,
-        enabled: saved.enabled,
-        frequency: saved.frequency,
-        sendTime: saved.send_time,
-        dayOfWeek: saved.day_of_week,
-        dayOfMonth: saved.day_of_month,
-        timezone: saved.timezone,
-        periodMode: saved.period_mode,
-      } : DEFAULT_PROPERTIES_WA_SCHEDULE);
+      res.json(
+        saved
+          ? {
+              chatId: saved.chat_id,
+              enabled: saved.enabled,
+              frequency: saved.frequency,
+              sendTime: saved.send_time,
+              dayOfWeek: saved.day_of_week,
+              dayOfMonth: saved.day_of_month,
+              timezone: saved.timezone,
+              periodMode: saved.period_mode,
+            }
+          : DEFAULT_PROPERTIES_WA_SCHEDULE
+      );
     } catch (error) {
       res.status(500).json({ message: getErrorMessage(error) });
     }
@@ -93,7 +96,8 @@ export function registerPropertiesAccountStatementWhatsAppRoutes(app: Express): 
         return res.status(400).json({ message: "Enable automatic delivery: true or false" });
       }
       const chatId = toChatId(input.chatId);
-      if (input.enabled && !chatId) return res.status(400).json({ message: "Choose a WhatsApp recipient before enabling the schedule" });
+      if (input.enabled && !chatId)
+        return res.status(400).json({ message: "Choose a WhatsApp recipient before enabling the schedule" });
       const frequency = input.frequency;
       if (!["daily", "weekly", "monthly"].includes(frequency)) {
         return res.status(400).json({ message: "Choose daily, weekly or monthly" });
@@ -104,14 +108,23 @@ export function registerPropertiesAccountStatementWhatsAppRoutes(app: Express): 
       }
       const dayOfWeek = Number(input.dayOfWeek);
       const dayOfMonth = Number(input.dayOfMonth);
-      if (!Number.isInteger(dayOfWeek) || dayOfWeek < 0 || dayOfWeek > 6 ||
-          !Number.isInteger(dayOfMonth) || dayOfMonth < 1 || dayOfMonth > 28) {
+      if (
+        !Number.isInteger(dayOfWeek) ||
+        dayOfWeek < 0 ||
+        dayOfWeek > 6 ||
+        !Number.isInteger(dayOfMonth) ||
+        dayOfMonth < 1 ||
+        dayOfMonth > 28
+      ) {
         return res.status(400).json({ message: "Choose a valid schedule day" });
       }
       const timezone = String(input.timezone ?? "Asia/Beirut");
       if (timezone.length > 80) return res.status(400).json({ message: "Invalid timezone" });
-      try { new Intl.DateTimeFormat("en-GB", { timeZone: timezone }); }
-      catch { return res.status(400).json({ message: "Invalid timezone" }); }
+      try {
+        new Intl.DateTimeFormat("en-GB", { timeZone: timezone });
+      } catch {
+        return res.status(400).json({ message: "Invalid timezone" });
+      }
       const periodMode = input.periodMode;
       if (!["current_month", "previous_month"].includes(periodMode)) {
         return res.status(400).json({ message: "Choose a statement period" });
@@ -126,7 +139,9 @@ export function registerPropertiesAccountStatementWhatsAppRoutes(app: Express): 
         }
         const chats = await fetchGreenApiChats(settings.instanceId, settings.apiToken);
         if (!chats.some((chat) => chat.id === chatId)) {
-          return res.status(400).json({ message: "Selected WhatsApp group is not accessible from the connected instance" });
+          return res
+            .status(400)
+            .json({ message: "Selected WhatsApp group is not accessible from the connected instance" });
         }
       }
 
@@ -142,8 +157,18 @@ export function registerPropertiesAccountStatementWhatsAppRoutes(app: Express): 
            day_of_week=EXCLUDED.day_of_week, day_of_month=EXCLUDED.day_of_month,
            timezone=EXCLUDED.timezone, period_mode=EXCLUDED.period_mode,
            updated_at=now()`,
-        [account.companyId, account.accountId, chatId, input.enabled, frequency, sendTime,
-          dayOfWeek, dayOfMonth, timezone, periodMode]
+        [
+          account.companyId,
+          account.accountId,
+          chatId,
+          input.enabled,
+          frequency,
+          sendTime,
+          dayOfWeek,
+          dayOfMonth,
+          timezone,
+          periodMode,
+        ]
       );
       res.json({ success: true });
     } catch (error) {
@@ -163,8 +188,11 @@ export function registerPropertiesAccountStatementWhatsAppRoutes(app: Express): 
       if (!setting.rows[0]?.chat_id) return res.status(400).json({ message: "Save a group or contact before sending" });
       const startDate = req.body?.startDate;
       const endDate = req.body?.endDate;
-      if (startDate != null && !validDate(startDate) || endDate != null && !validDate(endDate) ||
-          startDate && endDate && startDate > endDate) {
+      if (
+        (startDate != null && !validDate(startDate)) ||
+        (endDate != null && !validDate(endDate)) ||
+        (startDate && endDate && startDate > endDate)
+      ) {
         return res.status(400).json({ message: "Invalid statement date range" });
       }
       const requestId = String(req.body?.requestId ?? "");
@@ -180,11 +208,13 @@ export function registerPropertiesAccountStatementWhatsAppRoutes(app: Express): 
         startDate: startDate ?? undefined,
         endDate: endDate ?? undefined,
       });
-      if (result.duplicate) return res.status(409).json({ message: "This send request was already processed. Check delivery history." });
-      if (!result.accepted) return res.status(502).json({
-        message: result.error || "WhatsApp did not accept this statement",
-        status: result.status,
-      });
+      if (result.duplicate)
+        return res.status(409).json({ message: "This send request was already processed. Check delivery history." });
+      if (!result.accepted)
+        return res.status(502).json({
+          message: result.error || "WhatsApp did not accept this statement",
+          status: result.status,
+        });
       res.json({ success: true, deliveryStatus: "accepted" });
     } catch (error) {
       res.status(500).json({ message: getErrorMessage(error) });

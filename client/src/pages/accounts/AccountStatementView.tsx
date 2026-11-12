@@ -380,16 +380,19 @@ export function AccountStatementView({
                   <p className="font-mono text-xs text-muted-foreground">#{selectedAccount.accountId}</p>
                 )}
               </div>
-              {appMode === "properties" && selectedAccount.type === "ledger" && canChangeExistingRecords && !isEurTab && (
-                <PropertiesWhatsAppStatement
-                  key={selectedAccount.accountId}
-                  accountId={selectedAccount.accountId}
-                  accountName={selectedAccount.name}
-                  fromDate={periodFilter.fromDate}
-                  toDate={periodFilter.toDate}
-                  compact
-                />
-              )}
+              {appMode === "properties" &&
+                selectedAccount.type === "ledger" &&
+                canChangeExistingRecords &&
+                !isEurTab && (
+                  <PropertiesWhatsAppStatement
+                    key={selectedAccount.accountId}
+                    accountId={selectedAccount.accountId}
+                    accountName={selectedAccount.name}
+                    fromDate={periodFilter.fromDate}
+                    toDate={periodFilter.toDate}
+                    compact
+                  />
+                )}
               <ErpMobileActionsMenu
                 iconOnly
                 data-testid="button-statement-actions"
@@ -563,15 +566,18 @@ export function AccountStatementView({
                   )}
                 </>
               )}
-              {appMode === "properties" && selectedAccount.type === "ledger" && canChangeExistingRecords && !isEurTab && (
-                <PropertiesWhatsAppStatement
-                  key={selectedAccount.accountId}
-                  accountId={selectedAccount.accountId}
-                  accountName={selectedAccount.name}
-                  fromDate={periodFilter.fromDate}
-                  toDate={periodFilter.toDate}
-                />
-              )}
+              {appMode === "properties" &&
+                selectedAccount.type === "ledger" &&
+                canChangeExistingRecords &&
+                !isEurTab && (
+                  <PropertiesWhatsAppStatement
+                    key={selectedAccount.accountId}
+                    accountId={selectedAccount.accountId}
+                    accountName={selectedAccount.name}
+                    fromDate={periodFilter.fromDate}
+                    toDate={periodFilter.toDate}
+                  />
+                )}
               {selectedAccount &&
                 ["ledger", "bank-account", "bank", "supplier", "employee"].includes(selectedAccount.type) && (
                   <Button

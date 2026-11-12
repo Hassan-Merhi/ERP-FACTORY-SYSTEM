@@ -12,10 +12,7 @@ import { generateAccountStatementPdf } from "../lib/accountStatementPdfGenerator
 import { getErrorMessage } from "../lib/httpHandlers";
 import { logger } from "../lib/logger";
 import { sendWhatsAppFileByUploadPos } from "./whatsappService";
-import {
-  createTenantDatabaseScope,
-  runWithDatabaseScopeRuntimeContext,
-} from "./security/databaseScopeRuntimeContext";
+import { createTenantDatabaseScope, runWithDatabaseScopeRuntimeContext } from "./security/databaseScopeRuntimeContext";
 
 export type PropertiesWaFrequency = "daily" | "weekly" | "monthly";
 export type PropertiesWaPeriod = "current_month" | "previous_month";
@@ -97,8 +94,14 @@ export function ensurePropertiesWaStatementSchema(): Promise<void> {
 
 export function propertiesWaLocalParts(now: Date, timezone: string) {
   const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit",
-    weekday: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
   }).formatToParts(now);
   const get = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
   const days: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
@@ -127,9 +130,7 @@ export function propertiesWaDateRange(localDate: string, mode: PropertiesWaPerio
   const month = Number(localDate.slice(5, 7));
   const currentFirst = new Date(Date.UTC(year, month - 1, 1));
   const start = mode === "previous_month" ? new Date(Date.UTC(year, month - 2, 1)) : currentFirst;
-  const end = mode === "previous_month"
-    ? new Date(Date.UTC(year, month - 1, 0))
-    : new Date(localDate + "T00:00:00Z");
+  const end = mode === "previous_month" ? new Date(Date.UTC(year, month - 1, 0)) : new Date(localDate + "T00:00:00Z");
   const day = (date: Date) => date.toISOString().slice(0, 10);
   return { startDate: day(start), endDate: day(end) };
 }
@@ -161,25 +162,30 @@ export async function sendPropertiesWaStatement(input: PropertiesWaSendInput) {
   let error: string | null = null;
   try {
     // Scoped server reads also protect background-scheduler sends.
-    const accountAndPdf = await runWithDatabaseScopeRuntimeContext(
-      createTenantDatabaseScope(companyId),
-      async () => {
-        const [account] = await db.select({ id: ledgerAccounts.id, name: ledgerAccounts.name })
-          .from(ledgerAccounts)
-          .where(and(eq(ledgerAccounts.id, accountId), eq(ledgerAccounts.companyId, companyId)))
-          .limit(1);
-        if (!account) throw new Error("Properties account no longer exists");
-        const pdf = await generateAccountStatementPdf({
-          accountType: "ledger", accountId, companyId, startDate, endDate, lang: "en",
-        });
-        return { name: account.name, pdf };
-      }
-    );
+    const accountAndPdf = await runWithDatabaseScopeRuntimeContext(createTenantDatabaseScope(companyId), async () => {
+      const [account] = await db
+        .select({ id: ledgerAccounts.id, name: ledgerAccounts.name })
+        .from(ledgerAccounts)
+        .where(and(eq(ledgerAccounts.id, accountId), eq(ledgerAccounts.companyId, companyId)))
+        .limit(1);
+      if (!account) throw new Error("Properties account no longer exists");
+      const pdf = await generateAccountStatementPdf({
+        accountType: "ledger",
+        accountId,
+        companyId,
+        startDate,
+        endDate,
+        lang: "en",
+      });
+      return { name: account.name, pdf };
+    });
     const safeName = accountAndPdf.name.replace(/[^\w\s.()-]/g, "_").slice(0, 75);
     const suffix = endDate ?? "All-Time";
     const fileName = `${safeName}-Statement-${suffix}.pdf`;
     const result = await sendWhatsAppFileByUploadPos(
-      chatId, accountAndPdf.pdf, fileName,
+      chatId,
+      accountAndPdf.pdf,
+      fileName,
       `${accountAndPdf.name} — Properties account statement (through ${suffix})`
     );
     if (!result.success) {
@@ -214,7 +220,8 @@ export async function runScheduledPropertiesWaStatements(now = new Date()) {
       localDate = propertiesWaDue(schedule, now);
     } catch (error) {
       logger.warn("[properties-wa] invalid statement schedule", {
-        accountId: schedule.account_id, error: getErrorMessage(error),
+        accountId: schedule.account_id,
+        error: getErrorMessage(error),
       });
       continue;
     }
@@ -229,12 +236,16 @@ export async function runScheduledPropertiesWaStatements(now = new Date()) {
         mode: "scheduled",
         ...range,
       });
-      if (result.error) logger.warn("[properties-wa] statement delivery not accepted", {
-        accountId: schedule.account_id, status: result.status, error: result.error,
-      });
+      if (result.error)
+        logger.warn("[properties-wa] statement delivery not accepted", {
+          accountId: schedule.account_id,
+          status: result.status,
+          error: result.error,
+        });
     } catch (error) {
       logger.error("[properties-wa] scheduled send failed", {
-        accountId: schedule.account_id, error: getErrorMessage(error),
+        accountId: schedule.account_id,
+        error: getErrorMessage(error),
       });
     }
   }
