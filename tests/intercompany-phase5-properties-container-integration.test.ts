@@ -47,6 +47,7 @@ describe("Phase 5 Properties container workflow", () => {
     expect(lifecycle).toContain('"/cancel"');
     expect(receipt).toContain("await requireReceivingPairPermission(trade, actor)");
     expect(permissions).toContain("eq(userCompanyRoles.companyId, trade.destinationCompanyId)");
+    expect(permissions).toContain("!source[0]?.active || !destination[0]?.active");
     expect(receipt).toContain("receiveInventoryAtValue(tx");
   });
   it("automatically selects only a unique verified INVENTORY asset account in the correct ERP company", () => {
