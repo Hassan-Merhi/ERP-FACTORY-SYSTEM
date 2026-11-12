@@ -1,8 +1,20 @@
+import type { PreferencesPlugin } from "@capacitor/preferences";
+
 const CRED_KEY = "biometric_creds";
 
-export async function loadNativePreferences() {
+type NativePreferences = Pick<PreferencesPlugin, "get" | "set" | "remove">;
+
+export async function loadNativePreferences(): Promise<NativePreferences> {
   const { Preferences } = await import("@capacitor/preferences");
-  return Preferences;
+  // A Capacitor plugin is a Proxy that answers every property, `then` included.
+  // Returned directly from an async function it is treated as a thenable whose
+  // `then` never settles, so the caller's await would hang forever. Hand back a
+  // plain object instead.
+  return {
+    get: (options) => Preferences.get(options),
+    set: (options) => Preferences.set(options),
+    remove: (options) => Preferences.remove(options),
+  };
 }
 
 export async function saveBiometricCredentials(username: string, password: string) {
