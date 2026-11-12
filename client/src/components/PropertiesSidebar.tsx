@@ -68,15 +68,6 @@ export const PROPERTIES_NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    label: "Trading",
-    color: NAV_COLOR.finance,
-    items: [
-      { title: "Linked POs & Freight", url: "/properties/linked-trades", icon: Package },
-      { title: "Intercompany Payments & Credits", url: "/properties/intercompany-payments", icon: Landmark },
-      { title: "Receiving & Cancellation", url: "/properties/intercompany-lifecycle", icon: Package },
-    ],
-  },
-  {
     label: "Accounting Tools",
     color: NAV_COLOR.accounting,
     items: [{ title: "Accounting Toolbox", url: "/properties/accounting/toolbox", icon: ClipboardList }],
