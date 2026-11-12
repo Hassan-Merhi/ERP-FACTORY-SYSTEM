@@ -29,6 +29,12 @@ import { db } from "../../db";
 import { sumMoney } from "../../lib/money";
 import { postErpVoucherTx, type ErpVoucherLine } from "../accounting/erpVoucherPosting";
 import { destinationContainerGitPostingLines } from "./containerDestinationPosting";
+import {
+  finalizedStockItemId,
+  planDestinationStockMapping,
+  verifiedStockRowKey,
+} from "./destinationStockMapping";
+import { logAudit } from "../../routes/_helpers";
 import { autoAllocateNewTradeCreditTx } from "./paymentAllocationCore";
 import {
   createTenantDatabaseScope,
@@ -65,7 +71,6 @@ const IMPORT_LOCK = 741235;
 const positive = z.number().int().positive();
 type Policy = typeof intercompanyRelationshipPolicies.$inferSelect;
 type Account = typeof ledgerAccounts.$inferSelect;
-type Stock = typeof stockItems.$inferSelect;
 
 function verifyAccount(all: Account[], companyId: number, id: number | null, kind: RegExp, purpose: string): number {
   const match = all.find((a) => a.id === id && a.companyId === companyId && !a.deletedAt);
@@ -82,35 +87,6 @@ function validatedAccounts(p: Policy, all: Account[]) {
     cogs: verifyAccount(all, p.sourceCompanyId, p.sourceCostAccountId, /expense|cost/i, "COGS"),
     charges: verifyAccount(all, p.sourceCompanyId, p.sourceChargeAccrualAccountId, /liability/i, "Charge accrual"),
     git: verifyAccount(all, p.destinationCompanyId, p.destinationGitAccountId, /asset/i, "Goods in transit"),
-  };
-}
-
-function resolveCompanyStock(items: Stock[], aliases: (typeof stockItemCodeAliases.$inferSelect)[]) {
-  const active = items.filter((row) => row.active && !row.deletedAt);
-  const byCode = new Map(active.map((item) => [item.companyId + ":" + item.code.toLowerCase(), item]));
-  const byName = new Map<string, Stock[]>();
-  for (const row of active) {
-    const key = row.companyId + ":" + normalizedName(row.name);
-    byName.set(key, [...(byName.get(key) || []), row]);
-  }
-  for (const alias of aliases) {
-    const match = active.find((row) => row.id === alias.stockItemId && row.companyId === alias.companyId);
-    if (match) byCode.set(alias.companyId + ":" + alias.aliasCode.toLowerCase(), match);
-  }
-  return (companyId: number, line: ImportLine): Stock => {
-    const direct = line.barcode ? byCode.get(companyId + ":" + line.barcode.toLowerCase()) : null;
-    if (direct) return direct;
-    const matches = byName.get(companyId + ":" + normalizedName(line.itemName)) ?? [];
-    if (matches.length === 1) return matches[0];
-    throw new TradingImportError(
-      400,
-      "Excel row " +
-        line.rowNum +
-        ": no unique stock-item mapping for " +
-        (line.barcode || line.itemName) +
-        " in company " +
-        companyId
-    );
   };
 }
 
@@ -493,18 +469,80 @@ export async function postIntercompanyImport(args: {
           .from(purchaseOrders)
           .where(inArray(purchaseOrders.companyId, scopeIds)),
       ]);
-      const itemFor = resolveCompanyStock(stock, aliases);
-      // Validate all destination items before the first write. No partial import.
+      // PHASE 4 — Resolve every source line against verified Properties stock,
+      // then check destination code/aliases/name and UOM. A missing destination
+      // item is safe to create only when every batch row has passed this
+      // read-only plan. Conflicting or ambiguous identities reject the batch.
+      const plannedStock = planDestinationStockMapping({
+        sourceCompanyId,
+        items: stock,
+        aliases,
+        allowedDestinationIds: destinations,
+        lines: plans.flatMap((plan) => {
+          const policy = policies.find((p) => p.id === plan.relationshipId)!;
+          return plan.lines.map((line) => ({
+            containerNumber: plan.containerNumber,
+            destinationCompanyId: policy.destinationCompanyId,
+            rowNum: line.rowNum,
+            barcode: line.barcode,
+            itemName: line.itemName,
+          }));
+        }),
+      });
+
+      // The source-level advisory lock already serializes intercompany imports.
+      // All newly-created items, the paired POs, GIT journals and audit records
+      // are committed or rolled back together in this single transaction.
+      const createdStockItemIds = new Map<string, number>();
+      for (const missing of plannedStock.creations) {
+        const [created] = await tx
+          .insert(stockItems)
+          .values({
+            companyId: missing.companyId,
+            code: missing.code,
+            name: missing.name,
+            uom: missing.uom,
+            openingQty: "0",
+            openingRate: "0",
+            openingValue: "0",
+            sellingPrice: "0",
+            active: true,
+          })
+          .returning();
+        assert(created && created.companyId === missing.companyId, "Destination stock item creation failed");
+        createdStockItemIds.set(missing.key, created.id);
+        await logAudit(
+          {
+            userId,
+            companyId: created.companyId,
+            action: "create",
+            tableName: "stock_items",
+            recordId: created.id,
+            recordIdentifier: created.code,
+            changes: {
+              code: { old: null, new: created.code },
+              name: { old: null, new: created.name },
+              uom: { old: null, new: created.uom },
+              openingQty: { old: null, new: "0" },
+              openingValue: { old: null, new: "0" },
+              sourcePropertiesItemId: { old: null, new: missing.sourceItemId },
+            },
+          },
+          tx
+        );
+      }
+      const plannedRows = new Map(plannedStock.assignments.map((row) => [row.key, row]));
       const mapped = plans.map((plan) => {
         const policy = policies.find((p) => p.id === plan.relationshipId)!;
         const items = plan.lines.map((line) => {
-          const sourceItem = itemFor(sourceCompanyId, line);
-          const destItem = itemFor(policy.destinationCompanyId, line);
-          assert(
-            sourceItem.uom.toLowerCase() === destItem.uom.toLowerCase(),
-            "Stock unit mismatch on Excel row " + line.rowNum
-          );
-          return { line, sourceItemId: sourceItem.id, destItemId: destItem.id };
+          const verified = plannedRows.get(verifiedStockRowKey(plan.containerNumber, line.rowNum));
+          assert(verified && verified.destinationCompanyId === policy.destinationCompanyId, "Verified stock row is missing");
+          return {
+            line,
+            sourceItemId: verified.sourceItemId,
+            destItemId: finalizedStockItemId(verified, createdStockItemIds),
+            destinationItemAutoCreated: Boolean(verified.creationKey),
+          };
         });
         return { plan, policy, items, accounts: mappedAccounts.get(policy.id)! };
       });
@@ -794,6 +832,10 @@ export async function postIntercompanyImport(args: {
             sourceCostVoucherId: costVoucher.voucher.id,
             destinationPoId: destPo.id,
             destinationVoucherId: destVoucher.voucher.id,
+            destinationStockItemIds: items.map((item) => item.destItemId),
+            autoCreatedDestinationStockItemIds: items
+              .filter((item) => item.destinationItemAutoCreated)
+              .map((item) => item.destItemId),
             landedCost: plan.landedTotal,
             previousCreditAllocated: previousCredit.applied,
             unpaidAfterExistingCredit: previousCredit.remainingDue,
@@ -831,6 +873,8 @@ export async function postIntercompanyImport(args: {
         batchId: batch.id,
         containerCount: results.length,
         totalIntercompanyCost: total.toFixed(2),
+        createdDestinationStockItems: createdStockItemIds.size,
+        reusedDestinationStockLines: plannedStock.reusedCount,
         containers: results,
       };
     })
