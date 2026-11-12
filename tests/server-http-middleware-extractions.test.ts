@@ -34,6 +34,62 @@ describe("capacitorCors", () => {
     expect(res.headers["access-control-allow-methods"]).toContain("DELETE");
   });
 
+  it.each(["capacitor://localhost", "ionic://localhost", "https://localhost", "http://localhost"])(
+    "allows every header a preflight from %s asks for",
+    async (origin) => {
+      const asked = "content-type,x-client-date,x-csrf-token,x-request-id,x-idempotency-key";
+      const res = await request(buildApp())
+        .options("/api/ping")
+        .set("Origin", origin)
+        .set("Access-Control-Request-Method", "POST")
+        .set("Access-Control-Request-Headers", asked);
+
+      expect(res.status).toBe(204);
+      expect(res.headers["access-control-allow-origin"]).toBe(origin);
+      expect(res.headers["access-control-allow-headers"]).toBe(asked);
+      expect(res.headers["vary"]).toBe("Origin, Access-Control-Request-Headers");
+    }
+  );
+
+  it("falls back to the standard header list when a preflight names none", async () => {
+    const res = await request(buildApp())
+      .options("/api/ping")
+      .set("Origin", "https://localhost")
+      .set("Access-Control-Request-Method", "GET");
+
+    expect(res.headers["access-control-allow-headers"]).toBe(
+      "Content-Type,Authorization,X-CSRF-Token,X-Client-Date,X-Requested-With"
+    );
+  });
+
+  it("answers a simple request from a native origin with credentials allowed and lets it through", async () => {
+    const res = await request(buildApp()).get("/api/ping").set("Origin", "https://localhost");
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true });
+    expect(res.headers["access-control-allow-origin"]).toBe("https://localhost");
+    expect(res.headers["access-control-allow-credentials"]).toBe("true");
+  });
+
+  it.each([
+    "https://localhost:8443",
+    "https://localhost.evil.example.com",
+    "https://evil.example.com",
+    "null",
+    "file://",
+  ])("gives no CORS grant, and does not answer the preflight, for %s", async (origin) => {
+    const res = await request(buildApp())
+      .options("/api/ping")
+      .set("Origin", origin)
+      .set("Access-Control-Request-Method", "POST")
+      .set("Access-Control-Request-Headers", "x-request-id");
+
+    expect(res.headers["access-control-allow-origin"]).toBeUndefined();
+    expect(res.headers["access-control-allow-credentials"]).toBeUndefined();
+    expect(res.headers["access-control-allow-headers"]).toBeUndefined();
+    expect(res.status).not.toBe(204);
+  });
+
   it("passes through requests from non-Capacitor origins without CORS headers", async () => {
     const res = await request(buildApp()).get("/api/ping").set("Origin", "https://evil.example.com");
 
