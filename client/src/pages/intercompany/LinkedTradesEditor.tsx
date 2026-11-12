@@ -124,7 +124,9 @@ export default function LinkedTradesEditor({ physicalContainerId, embedded = fal
     : (list.data?.trades ?? []);
   useEffect(() => {
     if (!physicalContainerId || !list.data) return;
-    setSelected(list.data.trades.find((row) => row.physicalContainerId === physicalContainerId)?.tradeId ?? null);
+    const matching = list.data.trades.find((row) => row.physicalContainerId === physicalContainerId);
+    setSelected(matching?.tradeId ?? null);
+    if (matching) setChosen((previous) => previous.length ? previous : [matching.tradeId]);
   }, [physicalContainerId, list.data]);
   const validScopedSelection = !physicalContainerId || activeScopedTrades.some((row) => row.tradeId === selected);
 
@@ -173,6 +175,7 @@ export default function LinkedTradesEditor({ physicalContainerId, embedded = fal
         description: "The price adjustment and accounting vouchers were posted together.",
       });
       queryClient.invalidateQueries({ queryKey: companyQueryKey(BASE + "/linked-trades", companyId) });
+      queryClient.invalidateQueries({ queryKey: companyQueryKey(BASE + "/lifecycle", companyId) });
       queryClient.invalidateQueries({ queryKey: companyQueryKey(BASE + "/linked-trades/" + selected, companyId) });
       queryClient.invalidateQueries({ queryKey: ["/api/vouchers"] });
     },
@@ -224,6 +227,7 @@ export default function LinkedTradesEditor({ physicalContainerId, embedded = fal
       setProposal(null);
       toast({ title: "Shared invoice confirmed", description: "Every affected linked PO was updated atomically." });
       queryClient.invalidateQueries({ queryKey: companyQueryKey(BASE + "/linked-trades", companyId) });
+      queryClient.invalidateQueries({ queryKey: companyQueryKey(BASE + "/lifecycle", companyId) });
     },
     onError: (e: Error) => toast({ title: "Confirmation refused", description: e.message, variant: "destructive" }),
   });
@@ -248,6 +252,7 @@ export default function LinkedTradesEditor({ physicalContainerId, embedded = fal
       toast({ title: "Confirmed allocation updated", description: "Original invoice amount was preserved." });
       queryClient.invalidateQueries({ queryKey: companyQueryKey(BASE + "/shared-charges/" + lookupId, companyId) });
       queryClient.invalidateQueries({ queryKey: companyQueryKey(BASE + "/linked-trades", companyId) });
+      queryClient.invalidateQueries({ queryKey: companyQueryKey(BASE + "/lifecycle", companyId) });
     },
     onError: (e: Error) => toast({ title: "Redistribution refused", description: e.message, variant: "destructive" }),
   });
