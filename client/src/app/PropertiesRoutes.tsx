@@ -50,6 +50,16 @@ import {
   PropertiesVoucherDetail,
   PropertiesVoucherEdit,
   PropertiesVouchers,
+  TrackingHub,
+  ContainersPage,
+  ContainerDetailPage,
+  ContainerVerification,
+  Suppliers,
+  EditSupplier,
+  SupplierProformas,
+  PurchaseOrderEdit,
+  OffloadDetail,
+  AccountingCreate,
 } from "@/lazyPages";
 
 interface PropertiesRoutesProps {
@@ -91,6 +101,18 @@ export function PropertiesRoutes({ user }: PropertiesRoutesProps) {
       <Route path="/properties/analytics" component={PropertiesAnalytics} />
       <Route path="/properties/agents" component={Agents} />
       <Route path="/properties/daybook" component={PropertiesDaybook} />
+
+      {/* Phase 1: expose existing company-scoped logistics and supplier screens in Properties. */}
+      <Route path="/properties/tracking" component={TrackingHub} />
+      <Route path="/properties/containers/:containerId/verification" component={ContainerVerification} />
+      <Route path="/properties/containers/:id" component={ContainerDetailPage} />
+      <Route path="/properties/containers" component={ContainersPage} />
+      <Route path="/properties/offloads/:id" component={OffloadDetail} />
+      <Route path="/properties/suppliers/:supplierId/proformas" component={SupplierProformas} />
+      <Route path="/properties/suppliers/:id/edit" component={EditSupplier} />
+      <Route path="/properties/suppliers" component={Suppliers} />
+      <Route path="/properties/purchase-orders/:id/edit" component={PurchaseOrderEdit} />
+      <Route path="/properties/master-data" component={AccountingCreate} />
 
       {canTrade && <Route path="/properties/container-trading" component={PropertiesContainerTrading} />}
       {canTrade && <Route path="/properties/linked-trades" component={LinkedTradesEditor} />}
