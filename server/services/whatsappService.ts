@@ -70,19 +70,29 @@ function cleanGreenApiCredential(value: unknown): string {
  * the universal host until explicitly configured.
  */
 export function getGreenApiHost(instanceId: string, media = false): string {
-  const matchedPos = !!process.env.GREEN_API_POS_INSTANCE_ID
-    && cleanGreenApiCredential(instanceId) === cleanGreenApiCredential(process.env.GREEN_API_POS_INSTANCE_ID);
-  const configured = matchedPos
-    ? (media ? process.env.GREEN_API_POS_MEDIA_URL || process.env.GREEN_API_POS_API_URL : process.env.GREEN_API_POS_API_URL)
-    : undefined;
+  const matchedPos =
+    !!process.env.GREEN_API_POS_INSTANCE_ID &&
+    cleanGreenApiCredential(instanceId) === cleanGreenApiCredential(process.env.GREEN_API_POS_INSTANCE_ID);
+  const configured = !matchedPos
+    ? undefined
+    : media
+      ? process.env.GREEN_API_POS_MEDIA_URL || process.env.GREEN_API_POS_API_URL
+      : process.env.GREEN_API_POS_API_URL;
   if (!configured?.trim()) return "https://api.greenapi.com";
   try {
     const parsed = new URL(configured.trim());
     const host = parsed.hostname.toLowerCase();
-    const allowed = /^(?:[a-z0-9-]+\.)?api\.greenapi\.com$/.test(host)
-      || (media && host === "media.greenapi.com");
-    if (parsed.protocol !== "https:" || !allowed || parsed.port || parsed.username
-      || parsed.password || parsed.pathname !== "/" || parsed.search || parsed.hash) {
+    const allowed = /^(?:[a-z0-9-]+\.)?api\.greenapi\.com$/.test(host) || (media && host === "media.greenapi.com");
+    if (
+      parsed.protocol !== "https:" ||
+      !allowed ||
+      parsed.port ||
+      parsed.username ||
+      parsed.password ||
+      parsed.pathname !== "/" ||
+      parsed.search ||
+      parsed.hash
+    ) {
       throw new Error("Invalid host");
     }
     return parsed.origin;
