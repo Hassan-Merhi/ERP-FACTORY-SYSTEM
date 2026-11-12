@@ -10,6 +10,7 @@ import { getContainerOffloadingCost, getContainerTotalCost } from "./containerTo
 interface ActiveContainersTableProps {
   containers: Container[];
   allContainers: Container[];
+  propertiesMode?: boolean;
   isLoading: boolean;
   hideContainerCosts: boolean;
   formatDisplayDate: (d: string) => string;
@@ -28,6 +29,7 @@ interface ActiveContainersTableProps {
 export function ActiveContainersTable({
   containers,
   allContainers,
+  propertiesMode = false,
   isLoading,
   hideContainerCosts,
   formatDisplayDate,
@@ -64,7 +66,7 @@ export function ActiveContainersTable({
             ? "Import your first purchase order to get started"
             : "Try adjusting your search or filters"}
         </p>
-        {allContainers.length === 0 && (
+        {allContainers.length === 0 && !propertiesMode && (
           <Link href="/po-import">
             <Button>
               <Plus className="w-4 h-4 mr-2" />
@@ -186,7 +188,7 @@ export function ActiveContainersTable({
                   )}
                 </div>
               )}
-              <Link href={`/containers/${container.id}`} className="w-full sm:w-auto">
+              <Link href={`${propertiesMode ? "/properties" : ""}/containers/${container.id}`} className="w-full sm:w-auto">
                 <Button
                   size="sm"
                   variant="outline"
