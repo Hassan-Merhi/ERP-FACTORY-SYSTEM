@@ -20,6 +20,7 @@ describe("STO WhatsApp webhook callback readiness and linked phone replies", () 
     expect(code).toContain('provider.incomingWebhook === "yes"');
     expect(code).toContain('provider.outgoingMessageWebhook === "yes"');
     expect(code).toContain("webhookEndpointMatches");
+    expect(code).toContain('"www.hmdinternationalgroup.com"');
     expect(code).not.toContain("setSettings");
     expect(code).not.toContain("fetchGreenApiWithAuthFallback");
   });

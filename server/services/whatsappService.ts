@@ -347,7 +347,7 @@ export async function getStrictGreenMainWebhookReadiness(
       if (parsed.protocol === "https:" && parsed.username === "" && parsed.password === "") {
         webhookHost = parsed.hostname;
         webhookEndpointMatches =
-          ["hmdinternationalgroup.com", "erp-pos-system-copy.onrender.com"].includes(parsed.hostname) &&
+          ["hmdinternationalgroup.com", "www.hmdinternationalgroup.com", "erp-pos-system-copy.onrender.com"].includes(parsed.hostname) &&
           parsed.pathname.replace(/[/]$/, "") === "/api/stock-transfer-order/wa-approval/webhook" &&
           parsed.search === "" && parsed.hash === "" && !parsed.port;
       }
