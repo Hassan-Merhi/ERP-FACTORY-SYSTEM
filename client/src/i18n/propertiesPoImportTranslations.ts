@@ -1,5 +1,16 @@
 import type { ApplicationLanguage } from "@shared/applicationLanguageContract";
 
+/** Centralized validation messages used by the pure container-selection helper. */
+export const PROPERTIES_PO_IMPORT_ERRORS = {
+  fileProcessing: "Unable to process Excel file",
+  setupUnavailable: "Unable to read authorized destinations",
+  unknownContainer: "Container is not in the reviewed import preview",
+  missingSelections: "Review every container in the current purchase order preview",
+  duplicateContainer: "Duplicate or missing physical container number",
+  unauthorizedDestination: "Choose an authorized ERP destination for",
+  missingChargeEvidence: "Confirmed container charges require an evidence reference for",
+} as const;
+
 const en = {
   title: "Import Purchase Orders",
   subtitle: "Import the normal supplier Excel file, then assign each physical container to its ERP destination.",
