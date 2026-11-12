@@ -17,6 +17,7 @@ import { logAudit } from "../../routes/_helpers";
 import { classifyAccountType } from "../accounting/accountClassification";
 import { eligibleDestinations, withinTrustedPair } from "./containerTradingImport";
 import { TradingImportError } from "./containerTradingWorkbook";
+import { tradingProvisioningMessages } from "./tradingProvisioningMessages";
 import {
   normalizedTradingName,
   propertiesSupplierCode,
@@ -193,7 +194,7 @@ export async function autoProvisionTradingRelationship(args: {
         try {
           destinationSupplier = uniquePropertiesSupplier(suppliers, source.name);
         } catch (error) {
-          throw invalid(error instanceof Error ? error.message : "Ambiguous destination supplier");
+          throw invalid(error instanceof Error ? error.message : tradingProvisioningMessages.ambiguousSupplier);
         }
       }
 
