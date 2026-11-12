@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useApplicationLanguageCode } from "@/contexts/ApplicationLanguageContext";
+import { propertiesContainerIntercompanyText } from "@/i18n/propertiesContainerIntercompanyTranslations";
 import { companyQueryKey } from "@/lib/companyQueryScope";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -84,6 +86,7 @@ export function LinkedTradesEditorContent({
   embedded = false,
 }: { physicalContainerId?: number; embedded?: boolean } = {}) {
   const { selectedCompany } = useCompany();
+  const copy = propertiesContainerIntercompanyText(useApplicationLanguageCode());
   const { toast } = useToast();
   const companyId = Number(selectedCompany?.id || 0);
   const isProperties = selectedCompany?.companyType === "properties";
@@ -314,7 +317,7 @@ export function LinkedTradesEditorContent({
           )}
           {embedded && list.isSuccess && editTrades.length === 0 && (
             <p className="text-sm text-muted-foreground">
-              No active linked purchase order exists for this physical container.
+              {copy.noActiveLinked}
             </p>
           )}
           {!embedded && (
