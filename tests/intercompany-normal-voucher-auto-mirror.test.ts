@@ -110,6 +110,15 @@ describe("Phase 6 normal voucher linked-account auto-mirror", () => {
     const page = readFileSync("client/src/pages/Vouchers.tsx", "utf8");
     const sidebar = readFileSync("client/src/pages/vouchers/voucherSidebarGroups.ts", "utf8");
     expect(page).toContain("normalIntercompany.details");
+    const mirror = readFileSync("client/src/pages/vouchers/useNormalIntercompanyVoucher.tsx", "utf8");
+    const history = readFileSync("client/src/pages/vouchers/IntercompanyVoucherHistory.tsx", "utf8");
+    expect(mirror).toContain("IntercompanyVoucherHistory");
+    expect(history).toContain("intercompanyVoucherDetailPath(");
+    expect(history).toContain("/reverse");
+    expect(history).toContain("confirmedSourceReversal: true");
+    expect(history).toContain("confirmedDestinationReversal: true");
+    expect(history).toContain('apiRequestPrivileged("POST"');
+    expect(history).not.toContain('BASE + "/confirm"');
     expect(page).toContain("normalIntercompany.buildMirror()");
     expect(page).not.toContain('activeTab === "intercompany"');
     expect(sidebar).not.toContain('key: "intercompany"');
