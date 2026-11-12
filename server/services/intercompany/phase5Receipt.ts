@@ -19,6 +19,7 @@ import { createDatabaseStockMovementAdapter } from "../inventory/databaseStockMo
 import { postStockMovementTx } from "../inventory/stockMovementIntegrityService";
 import { INTERCOMPANY_PAYMENT_LOCK_NAMESPACE } from "./paymentAllocationCore";
 import { assertPhase5MirroredLines } from "./phase5LinkedLineGuard";
+import { requireReceivingPairPermission } from "./phase5ReceivingAccess";
 import { allocateByWeights, cents, exactPositiveQuantity, requireCostEqual } from "./tradeRevisionMath";
 import {
   assertTradeAccess,
@@ -140,14 +141,11 @@ export async function receiveLinkedTrade(input: ReceiveIntercompanyTradeInput, a
   }
   const fingerprint = receiptFingerprint(input);
   const trade = await assertTradeAccess(input.tradeId, actor);
-  if (actor.initiatingCompanyId !== trade.destinationCompanyId) {
-    rejectEdit(
-      "Receive destination inventory only while signed into the receiving ERP company",
-      "IC_RECEIPT_COMPANY",
-      403
-    );
-  }
-  return withTradeScope(actor, [trade.sourceCompanyId], () =>
+  // Allow the Properties Owner/Developer to receive directly from its
+  // canonical container detail *only* if the same user also holds a verified
+  // receiving role in the destination ERP. No role or company impersonation.
+  await requireReceivingPairPermission(trade, actor);
+  return withTradeScope(actor, [trade.sourceCompanyId, trade.destinationCompanyId], () =>
     db.transaction(async (tx) => {
       await tx.execute(
         sql.raw(
