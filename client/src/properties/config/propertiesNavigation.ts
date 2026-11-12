@@ -114,7 +114,7 @@ export const PROPERTIES_NAVIGATION: readonly NavEntry[] = [
   {
     path: "/properties/intercompany-payments",
     label: "Intercompany Payments & Credits",
-    parent: "/properties/vouchers?tab=intercompany",
+    parent: "/properties/vouchers?tab=payment",
     capability: "trading",
     navigation: "hidden",
   },
