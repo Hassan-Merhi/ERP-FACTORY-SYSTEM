@@ -1,3 +1,5 @@
+import { PROPERTIES_PO_IMPORT_ERRORS } from "@/i18n/propertiesPoImportTranslations";
+
 /**
  * Pure selection rules for the normal PO Import wizard when Properties is
  * purchasing containers on behalf of ERP companies.
@@ -51,7 +53,7 @@ export function updatePropertiesContainerDestination(
   defaultCompanyId: string
 ): PropertiesContainerDestinations {
   const original = current[containerNumber];
-  if (!original) throw new Error("Container is not in the reviewed import preview");
+  if (!original) throw new Error(PROPERTIES_PO_IMPORT_ERRORS.unknownContainer);
   return {
     ...current,
     [containerNumber]: {
@@ -68,7 +70,7 @@ export function updatePropertiesContainerCharges(
   change: Partial<Pick<PropertiesContainerDestination, "chargesConfirmed" | "chargeEvidenceReference">>
 ): PropertiesContainerDestinations {
   const original = current[containerNumber];
-  if (!original) throw new Error("Container is not in the reviewed import preview");
+  if (!original) throw new Error(PROPERTIES_PO_IMPORT_ERRORS.unknownContainer);
   return { ...current, [containerNumber]: { ...original, ...change } };
 }
 
@@ -88,22 +90,22 @@ export function validatePropertiesImportSelections(
   chargeEvidenceReference?: string;
 }> {
   if (containers.length === 0 || Object.keys(destinations).length !== containers.length) {
-    throw new Error("Review every container in the current purchase order preview");
+    throw new Error(PROPERTIES_PO_IMPORT_ERRORS.missingSelections);
   }
   const unique = new Set<string>();
   return containers.map((container) => {
     const normalized = container.containerNumber.trim().toUpperCase();
-    if (!normalized || unique.has(normalized)) throw new Error("Duplicate or missing physical container number");
+    if (!normalized || unique.has(normalized)) throw new Error(PROPERTIES_PO_IMPORT_ERRORS.duplicateContainer);
     unique.add(normalized);
     const selected = destinations[container.containerNumber];
     const destinationCompanyId = Number(selected?.destinationCompanyId);
     if (!selected || !Number.isSafeInteger(destinationCompanyId) ||
         !permittedCompanyIds.has(destinationCompanyId)) {
-      throw new Error("Choose an authorized ERP destination for " + container.containerNumber);
+      throw new Error(PROPERTIES_PO_IMPORT_ERRORS.unauthorizedDestination + " " + container.containerNumber);
     }
     const chargeEvidenceReference = selected.chargeEvidenceReference.trim();
     if (selected.chargesConfirmed && container.chargesTotal !== 0 && chargeEvidenceReference.length < 3) {
-      throw new Error("Confirmed container charges require an evidence reference for " + container.containerNumber);
+      throw new Error(PROPERTIES_PO_IMPORT_ERRORS.missingChargeEvidence + " " + container.containerNumber);
     }
     return {
       containerNumber: container.containerNumber,
