@@ -30,6 +30,7 @@ export async function exportDaybookSummary(
     rows: data,
     sheetName: operationalFiltered ? "Operational Filtered" : "Daybook",
     fileName: erpReportFileName(operationalFiltered ? "Operational_Filtered_Daybook" : "Daybook", "xlsx"),
+    universalDesign: true,
   });
 }
 
@@ -43,6 +44,7 @@ export async function exportDaybookDetail(
     rows: detailRows,
     sheetName: operationalFiltered ? "Operational Detail Filtered" : "Daybook Detail",
     fileName: erpReportFileName(operationalFiltered ? "Operational_Filtered_Detail" : "Daybook_Detail", "xlsx"),
+    universalDesign: true,
   });
   return detailRows;
 }
