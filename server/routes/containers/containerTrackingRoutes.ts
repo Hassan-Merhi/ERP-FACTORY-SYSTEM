@@ -123,7 +123,20 @@ export function registerContainerTrackingRoutes(app: Express) {
           .limit(1);
 
         if (!roleRow) {
-          return res.status(404).json({ message: "Container not found" });
+          // One physical record is shared by active intercompany trades. A user
+          // selected into the destination company can edit the same tracking
+          // fields; the parent immediately sees the update on that record.
+          const [linkedDestination] = await db.execute(sql`
+            SELECT 1 FROM intercompany_trades trade
+            WHERE trade.physical_container_id = ${id}
+              AND trade.destination_company_id = ${req.session.currentCompanyId!}
+              AND trade.source_company_id = ${existing.companyId}
+              AND trade.state = 'active'
+            LIMIT 1
+          `).then((result) => result.rows);
+          if (!linkedDestination) {
+            return res.status(404).json({ message: "Container not found" });
+          }
         }
       }
 
