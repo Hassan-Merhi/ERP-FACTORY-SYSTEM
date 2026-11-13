@@ -597,8 +597,8 @@ export async function postIntercompanyImport(args: {
           assert(!usedNumbers.has(sourceCompanyId + ":" + poNumber), "Source PO number collision");
           usedNumbers.add(sourceCompanyId + ":" + poNumber);
 
-          // Cost is recognized at the immediate at-cost resale, not as held HP stock.
-          // Only verified supplier and confirmed charge liabilities are credited.
+          // The selected supplier receives the FULL landed PO total by default,
+          // including freight and other charges; never leave a hidden charge payable.
           const lines: ErpVoucherLine[] = [
             {
               ledgerAccountId: acct.purchase,
@@ -612,12 +612,8 @@ export async function postIntercompanyImport(args: {
               credit: group.supplierCredit,
               narration: "Eurogulf/external supplier payable",
             });
-          if (money(group.chargeAccrualCredit).gt(0))
-            lines.push({
-              ledgerAccountId: acct.charges,
-              credit: group.chargeAccrualCredit,
-              narration: "Confirmed charges payable (not cash)",
-            });
+          // Dedicated third-party charge payees require an explicit import
+          // allocation feature; no such payee is selected in this workflow.
           const journal = await postErpVoucherTx(tx, {
             companyId: sourceCompanyId,
             voucherType: "Purchase",
