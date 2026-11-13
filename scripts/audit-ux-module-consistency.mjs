@@ -36,10 +36,9 @@ const lazyExportNames = [...lazyPages.matchAll(/^export const (\w+)\s*=\s*lazy\(
 // FactoryWorkersHub is pinned by the lazy-import contract, and its page is
 // also used by the payroll hub and offline preload. Keep that export.
 const testPinnedLazyExports = new Set(["FactoryWorkersHub"]);
+const activeLazyTokens = new Set(runtimeLazyReferences.split(/[^A-Za-z0-9_$]+/));
 const unreferencedLazyExports = lazyExportNames.filter(
-  (name) =>
-    !testPinnedLazyExports.has(name) &&
-    !new RegExp(`\\b${name}\\b`).test(runtimeLazyReferences)
+  (name) => !testPinnedLazyExports.has(name) && !activeLazyTokens.has(name)
 );
 if (unreferencedLazyExports.length > 0) {
   failures.push(`Unused lazy-page exports without route consumers: ${unreferencedLazyExports.join(", ")}`);
