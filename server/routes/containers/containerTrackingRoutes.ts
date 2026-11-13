@@ -14,6 +14,7 @@ import {
 import { eq, and, or, sql } from "drizzle-orm";
 import { getEtaTrackingSummary } from "../../services/jsonCargoTrackingService";
 import { parseMoneyInput } from "../../lib/money";
+import { isExistingRecordReadOnlyRole } from "@shared/createOnlyRolePolicy";
 
 export function registerContainerTrackingRoutes(app: Express) {
   app.patch("/api/containers/:id/tracking", requireAuth, requireNonPOS, async (req, res) => {
@@ -29,6 +30,9 @@ export function registerContainerTrackingRoutes(app: Express) {
       });
       if (!req.session.currentCompanyId) {
         return res.status(400).json({ message: "No company selected" });
+      }
+      if (isExistingRecordReadOnlyRole(req.session.currentRole ?? req.user?.role)) {
+        return res.status(403).json({ message: "This role cannot edit existing containers" });
       }
       const id = parseId(req.params.id);
       if (id === null) return res.status(400).json({ message: "Invalid id" });
@@ -176,6 +180,9 @@ export function registerContainerTrackingRoutes(app: Express) {
     try {
       if (!req.session.currentCompanyId) {
         return res.status(400).json({ message: "No company selected" });
+      }
+      if (isExistingRecordReadOnlyRole(req.session.currentRole ?? req.user?.role)) {
+        return res.status(403).json({ message: "This role cannot edit existing containers" });
       }
 
       const { rows } = req.body;
