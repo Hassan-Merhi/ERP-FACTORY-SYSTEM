@@ -33,7 +33,7 @@ import {
 import { PostingValidationError } from "../../services/accounting/centralPostingEngine";
 import { logger } from "../../lib/logger";
 import { storage } from "../../storage";
-import { upload } from "../_helpers";
+import { spreadsheetUpload } from "../_helpers";
 import { readExcel, sheetToJson } from "../../excelHelper";
 import { parsePoImportSheetRows } from "../import/poImportExcelParser";
 import { supplierService } from "../suppliers/supplierService";
@@ -385,7 +385,7 @@ export function registerSpContainerRoutes(app: Express) {
   // Partner container it describes: supplier, article lines, items total, charges,
   // discount %, freight estimate and the Goods OTW total. Nothing is written; the
   // dialog fills its form from this and POST /api/sp/containers posts the voucher.
-  app.post(SP_CONTAINER_EXCEL_IMPORT_PARSE_PATH, requireAuth, upload.single("file"), async (req, res) => {
+  app.post(SP_CONTAINER_EXCEL_IMPORT_PARSE_PATH, requireAuth, spreadsheetUpload.single("file"), async (req, res) => {
     try {
       const companyId = await requireSpCompany(req, res);
       if (!companyId) return;

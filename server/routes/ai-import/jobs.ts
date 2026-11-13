@@ -9,7 +9,7 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { db } from "../../db";
 import { requireAuth } from "../../auth";
-import { upload } from "../_helpers";
+import { spreadsheetUpload } from "../_helpers";
 import { readExcel, sheetToJson } from "../../excelHelper";
 import { aiImportJobs, aiImportRows } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
@@ -18,7 +18,7 @@ import { assertJobOwnership, validateRows } from "./_helpers";
 export function registerAiImportJobRoutes(app: Express) {
   // POST /api/ai-import/upload
   // Parse Excel, stage rows — does NOT insert business records
-  app.post("/api/ai-import/upload", requireAuth, upload.single("file"), async (req, res) => {
+  app.post("/api/ai-import/upload", requireAuth, spreadsheetUpload.single("file"), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       const userId = req.session.userId;
