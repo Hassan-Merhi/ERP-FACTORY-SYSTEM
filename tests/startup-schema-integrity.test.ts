@@ -197,8 +197,12 @@ import { stockTransferOrderWaReconciliationSchema } from "../server/startup-sche
  * count from 1480 to 1481 and changing the pre-034 baseline hash. The
  * statement is idempotent and nothing else moved.
  */
-const EXPECTED_STATEMENT_COUNT = 1537; // Reviewed 1481 baseline + 44 phase1 + 1 phase3 webhook index
-const EXPECTED_CONTENT_HASH = "83932076dfc1f98fad41c163f700041aedbc3d69fb74d735a2e98a2de7bead2b";
+// 1539: + 2 for the supplier proforma destination company (intercompany container
+// trading): ALTER TABLE supplier_proformas ADD COLUMN IF NOT EXISTS
+// destination_company_id and its lookup index, appended to
+// 010-security-notifications-and-precision. Both are idempotent; nothing else moved.
+const EXPECTED_STATEMENT_COUNT = 1539; // Reviewed 1481 baseline + 44 phase1 + 1 phase3 webhook index + 2 proforma destination
+const EXPECTED_CONTENT_HASH = "f97d04223edcda219e0ad6a4ae992232c50f9027afddb264122189a5de2d2512";
 /**
  * sha256 of JSON.stringify(startupMigrations) for the reviewed composed array.
  *

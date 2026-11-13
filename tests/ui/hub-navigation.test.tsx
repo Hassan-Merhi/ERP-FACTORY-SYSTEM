@@ -25,19 +25,20 @@ describe("hub tab navigation", () => {
     window.history.replaceState({}, "", "/stock");
     render(<StockHub />);
 
-    expect(screen.getByText("Stock items content")).toBeInTheDocument();
+    // StockHub tabs are lazy-loaded behind a Suspense fallback.
+    expect(await screen.findByText("Stock items content")).toBeInTheDocument();
     await user.click(screen.getByTestId("tab-stock-query"));
 
     expect(window.location.pathname).toBe("/stock");
     expect(window.location.search).toBe("?tab=query");
-    expect(screen.getByText("Stock query content")).toBeInTheDocument();
+    expect(await screen.findByText("Stock query content")).toBeInTheDocument();
   });
 
-  it("renders the StockHub tab selected by a valid direct URL", () => {
+  it("renders the StockHub tab selected by a valid direct URL", async () => {
     window.history.replaceState({}, "", "/stock?tab=offload");
     render(<StockHub />);
 
-    expect(screen.getByText("Offload content")).toBeInTheDocument();
+    expect(await screen.findByText("Offload content")).toBeInTheDocument();
     expect(screen.queryByText("Stock items content")).not.toBeInTheDocument();
   });
 

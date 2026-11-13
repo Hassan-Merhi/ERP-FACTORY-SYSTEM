@@ -184,7 +184,10 @@ export function registerGitReportRoutes(app: Express) {
       ]);
       // Linked physical containers retain the source owner ID while appearing in
       // the destination scope; resolve both names for accurate tracking labels.
-      const ownerNameMap = await loadCompanyNames([...new Set(raw.map((row) => row.companyId))]);
+      const ownerIds = [...new Set(raw.map((row) => row.companyId))].filter(
+        (id) => Number.isInteger(id) && !(id in scopeNameMap)
+      );
+      const ownerNameMap = ownerIds.length > 0 ? await loadCompanyNames(ownerIds) : {};
       const nameMap = { ...scopeNameMap, ...ownerNameMap };
 
       let enriched = enrichContainers(raw, nameMap);
@@ -324,7 +327,10 @@ export function registerGitReportRoutes(app: Express) {
         ]);
         // A linked container retains its parent's companyId even when requested
         // through a destination company; preserve the parent name in the detail.
-        const ownerNameMap = await loadCompanyNames([...new Set(rows.map((row) => row.companyId))]);
+        const ownerIds = [...new Set(rows.map((row) => row.companyId))].filter(
+          (id) => Number.isInteger(id) && !(id in scopeNameMap)
+        );
+        const ownerNameMap = ownerIds.length > 0 ? await loadCompanyNames(ownerIds) : {};
         const nameMap = { ...scopeNameMap, ...ownerNameMap };
         const container = enrichContainers(rows, nameMap)[0];
         if (!container) return res.status(404).json({ message: "Container not found" });
