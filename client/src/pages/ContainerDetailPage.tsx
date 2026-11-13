@@ -318,7 +318,7 @@ function SpContainerDetailView() {
               <Download className="h-4 w-4 mr-2" /> No Cost / Freight Export
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => window.print()} data-testid="button-export-pdf">
-              <Printer className="h-4 w-4 mr-2" /> Export PDF
+              <Printer className="h-4 w-4 mr-2" /> Print
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

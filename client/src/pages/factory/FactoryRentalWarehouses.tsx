@@ -9,6 +9,7 @@ export default function FactoryRentalWarehouses() {
       pageIcon={<Warehouse className="h-7 w-7 text-orange-600" />}
       testIdPrefix="factory-rental-warehouses"
       rentalModule="FACTORY"
+      paymentsLogUrl="/factory/rental/payments"
     />
   );
 }

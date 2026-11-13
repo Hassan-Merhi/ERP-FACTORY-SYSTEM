@@ -24,8 +24,7 @@ describe("sidebar navigation grouping", () => {
     expect(others?.items.map(({ title, url }) => [title, url])).toEqual(expectedItems);
     for (const [, url] of expectedItems) {
       expect(groupFor(ERP_NAV_SECTIONS, url)).toBe("Others");
-      expect(ERP_NAV_SECTIONS.flatMap((section) => section.items).filter((item) => item.url === url))
-        .toHaveLength(1);
+      expect(ERP_NAV_SECTIONS.flatMap((section) => section.items).filter((item) => item.url === url)).toHaveLength(1);
     }
   });
 
@@ -33,8 +32,9 @@ describe("sidebar navigation grouping", () => {
     expect(groupFor(ERP_NAV_SECTIONS, "/optional-vouchers")).toBe("Inventory");
     expect(groupFor(ERP_NAV_SECTIONS, "/supplier-profit-check")).toBe("Inventory");
     expect(groupFor(ERP_NAV_SECTIONS, "/cost-centers")).toBe("Accounting");
-    expect(ERP_NAV_SECTIONS.flatMap((section) => section.items).filter((item) => item.url === "/optional-vouchers"))
-      .toHaveLength(1);
+    expect(
+      ERP_NAV_SECTIONS.flatMap((section) => section.items).filter((item) => item.url === "/optional-vouchers")
+    ).toHaveLength(1);
   });
 
   it("moves Bale Explorer into Factory Production", () => {
@@ -54,6 +54,7 @@ describe("sidebar navigation grouping", () => {
     expect(others?.items.map((item) => item.title)).toEqual([
       "Comparison",
       "Product Comparison",
+      "Finalized Sale Returns",
       "Stock Query",
       "Ticket Management",
     ]);
@@ -70,6 +71,8 @@ describe("sidebar navigation grouping", () => {
     expect(groupFor(FACTORY_NAV_SECTIONS, "/factory/pos")).toBe("Sales & Loading");
     const both = section?.items.filter((item) => item.title === "POS & Dispatch") ?? [];
     expect(collapseFactorySalesDispatchNav(both, "/factory/pos").map((item) => item.url)).toEqual(["/factory/pos"]);
-    expect(collapseFactorySalesDispatchNav(both, "/factory/waste-dispatch").map((item) => item.url)).toEqual(["/factory/waste-dispatch"]);
+    expect(collapseFactorySalesDispatchNav(both, "/factory/waste-dispatch").map((item) => item.url)).toEqual([
+      "/factory/waste-dispatch",
+    ]);
   });
 });

@@ -19,6 +19,7 @@ import {
   BookCheck,
   MapPin,
   Building2,
+  Store,
   UserRound,
   CalendarDays,
   Pencil,
@@ -102,11 +103,16 @@ export default function PropertyRentalPage({
   // the recognized Rent Expense ledger, not the active-contract receipts subtotal.
   // This is presentation ONLY: no rent payments, vouchers or cash balances change.
   // Read the same account/date basis as the existing monthly ledger report.
-  const usesRentExpensePaidBasis =
-    rentalModule === "ERP" && unitType === "SHOP" && selectedCompany?.id === 1;
+  const usesRentExpensePaidBasis = rentalModule === "ERP" && unitType === "SHOP" && selectedCompany?.id === 1;
   const rentalBusinessDay = getAppDate();
   const { data: rentExpenseSummary } = useQuery<{ grandTotal: { closingBalance: number } }>({
-    queryKey: ["/api/reports/ledger-monthly-summary", 1007, selectedCompany?.id, rentalBusinessDay, "shop-rental-paid-kpi"],
+    queryKey: [
+      "/api/reports/ledger-monthly-summary",
+      1007,
+      selectedCompany?.id,
+      rentalBusinessDay,
+      "shop-rental-paid-kpi",
+    ],
     queryFn: async () => {
       const response = await fetch(
         `/api/reports/ledger-monthly-summary/1007?startDate=${rentalBusinessDay.slice(0, 4)}-01-01&endDate=${rentalBusinessDay}`,
@@ -121,7 +127,8 @@ export default function PropertyRentalPage({
   // Never fall back to contract receipts on query failure: that would show a
   // misleading mismatched Total Paid value on this specific page.
   const postedRentExpensePaid =
-    usesRentExpensePaidBasis && typeof rentExpenseSummary?.grandTotal?.closingBalance === "number" &&
+    usesRentExpensePaidBasis &&
+    typeof rentExpenseSummary?.grandTotal?.closingBalance === "number" &&
     Number.isFinite(rentExpenseSummary.grandTotal.closingBalance)
       ? -rentExpenseSummary.grandTotal.closingBalance
       : null;
@@ -172,7 +179,9 @@ export default function PropertyRentalPage({
           : null,
     showHistoricalPaid
       ? "reconciled-account-balances"
-      : usesRentExpensePaidBasis ? "posted-ledger-expense" : "contract-paid",
+      : usesRentExpensePaidBasis
+        ? "posted-ledger-expense"
+        : "contract-paid",
     usesRentExpensePaidBasis ? rentalBusinessDay : null
   );
   const ledgerUsdMoney = (amount: number) => formatMoneyDisplay(amount, { currency: "USD" });
@@ -216,7 +225,8 @@ export default function PropertyRentalPage({
   // Factory Payments Log is an admin page. Do not show a link that the
   // central Factory route guard will immediately reject for other roles.
   const showPaymentsLog = Boolean(
-    paymentsLogUrl && !isPropertiesRental &&
+    paymentsLogUrl &&
+    !isPropertiesRental &&
     (rentalModule !== "FACTORY" || currentRole === "Admin" || currentRole === "Developer")
   );
   const postDue = useMutation({
@@ -332,11 +342,13 @@ export default function PropertyRentalPage({
         data-testid={`button-${testIdPrefix}-actions`}
         actions={[
           showPaymentsLog && {
-              label: "Payments Log",
-              icon: ClipboardList,
-              onSelect: () => { if (paymentsLogUrl) navigate(paymentsLogUrl); },
-              testId: `button-${testIdPrefix}-payments-log`,
+            label: "Payments Log",
+            icon: ClipboardList,
+            onSelect: () => {
+              if (paymentsLogUrl) navigate(paymentsLogUrl);
             },
+            testId: `button-${testIdPrefix}-payments-log`,
+          },
           {
             label: "Run Monthly Update",
             icon: RefreshCw,
@@ -374,7 +386,9 @@ export default function PropertyRentalPage({
         <Button
           variant="outline"
           size="sm"
-          onClick={() => { if (paymentsLogUrl) navigate(paymentsLogUrl); }}
+          onClick={() => {
+            if (paymentsLogUrl) navigate(paymentsLogUrl);
+          }}
           data-testid={`button-${testIdPrefix}-payments-log`}
         >
           <ClipboardList className="h-4 w-4 mr-1" />
@@ -428,10 +442,13 @@ export default function PropertyRentalPage({
           />
         )}
         {isPropertiesRental ? (
-          <section className="properties-rentals-hero" aria-label="Warehouse rentals overview">
+          <section
+            className="properties-rentals-hero"
+            aria-label={unitType === "SHOP" ? "Shop rentals overview" : "Warehouse rentals overview"}
+          >
             <div className="properties-rentals-hero-copy">
               <span className="properties-rentals-hero-icon" aria-hidden="true">
-                <Building2 className="h-7 w-7" />
+                {unitType === "SHOP" ? <Store className="h-7 w-7" /> : <Building2 className="h-7 w-7" />}
               </span>
               <div className="properties-rentals-hero-text">
                 <span className="properties-rentals-eyebrow">PROPERTIES</span>
@@ -439,7 +456,8 @@ export default function PropertyRentalPage({
                   {pageTitle.replace(/^Properties\s*[—-]\s*/, "")}
                 </h1>
                 <p className="properties-rentals-subheading">
-                  Manage warehouse units, payments, rents, guarantees, and contracts in one place.
+                  Manage {unitType === "SHOP" ? "shop" : "warehouse"} units, payments, rents, guarantees, and contracts
+                  in one place.
                 </p>
               </div>
             </div>

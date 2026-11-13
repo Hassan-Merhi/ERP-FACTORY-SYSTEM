@@ -523,7 +523,7 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
       });
       return;
     }
-    if (isWalletPayment && !confirmWalletPayment(validEntries, toast)) return;
+    if (isWalletPayment && !(await confirmWalletPayment(validEntries, toast))) return;
     saveMutation.mutate({ ...data, entries: validEntries });
   };
 

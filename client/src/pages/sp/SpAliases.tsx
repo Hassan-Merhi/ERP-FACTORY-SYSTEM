@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Loader2, Link2, Trash2, Plus, Info } from "lucide-react";
+import { confirmAction } from "@/components/ConfirmHost";
 
 interface SpAlias {
   id: number;
@@ -187,7 +188,14 @@ export default function SpAliases() {
                           type="button"
                           variant="ghost"
                           size="icon"
-                          onClick={() => deleteMutation.mutate(a.id)}
+                          onClick={async () => {
+                            const confirmed = await confirmAction({
+                              title: "Delete this alias?",
+                              confirmText: "Delete",
+                              tone: "destructive",
+                            });
+                            if (confirmed) deleteMutation.mutate(a.id);
+                          }}
                           disabled={deleteMutation.isPending}
                           data-testid={`button-sp-delete-alias-${a.id}`}
                         >

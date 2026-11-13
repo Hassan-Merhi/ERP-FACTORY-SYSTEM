@@ -16,7 +16,11 @@ export const sharedInterfaceTranslations: SharedEntry[] = [
   { en: "Stock Allocation", ar: "تخصيص المخزون", fr: "Affectation du stock" },
   { en: "Clear search", ar: "مسح البحث", fr: "Effacer la recherche" },
   // Stock Allocation dashboard redesign (English, Arabic, French).
-  { en: "Monitor product stock, expected loading and available balances.", ar: "راقب مخزون المنتجات والكميات المتوقع تحميلها والأرصدة المتاحة.", fr: "Suivez les stocks des produits, les chargements prévus et les soldes disponibles." },
+  {
+    en: "Monitor product stock, expected loading and available balances.",
+    ar: "راقب مخزون المنتجات والكميات المتوقع تحميلها والأرصدة المتاحة.",
+    fr: "Suivez les stocks des produits, les chargements prévus et les soldes disponibles.",
+  },
   { en: "Total Products", ar: "إجمالي المنتجات", fr: "Total des produits" },
   { en: "Stock Available", ar: "المخزون المتاح", fr: "Stock disponible" },
   { en: "Expected to Load", ar: "المتوقع تحميله", fr: "Chargement prévu" },
@@ -26,7 +30,11 @@ export const sharedInterfaceTranslations: SharedEntry[] = [
   { en: "Show Zero Rows", ar: "إظهار الصفوف الصفرية", fr: "Afficher les lignes à zéro" },
   { en: "Negative Only", ar: "الأرصدة السالبة فقط", fr: "Soldes négatifs seulement" },
   { en: "Show Garbage/Wipers", ar: "إظهار النفايات والخرق", fr: "Afficher déchets et chiffons" },
-  { en: "Search product name or code...", ar: "ابحث عن اسم المنتج أو رمزه...", fr: "Rechercher un produit par nom ou code..." },
+  {
+    en: "Search product name or code...",
+    ar: "ابحث عن اسم المنتج أو رمزه...",
+    fr: "Rechercher un produit par nom ou code...",
+  },
   { en: "Refresh stock allocation", ar: "تحديث تخصيص المخزون", fr: "Actualiser l'affectation du stock" },
   { en: "Restore Cancelled", ar: "استعادة الملغى", fr: "Restaurer les éléments annulés" },
   { en: "Create Proforma", ar: "إنشاء فاتورة أولية", fr: "Créer un proforma" },
@@ -65,7 +73,11 @@ export const sharedInterfaceTranslations: SharedEntry[] = [
   { en: "Raw Stock", ar: "المخزون الخام", fr: "Stock de matières premières" },
   { en: "Mix Batches", ar: "الدفعات المختلطة", fr: "Lots mélangés" },
   { en: "Bales", ar: "البالات", fr: "Balles" },
-  { en: "Daily confirmed scans (Beirut time) · ranked by KG", ar: "عمليات المسح المؤكدة يوميًا (بتوقيت بيروت) · الترتيب حسب الكيلوغرام", fr: "Scans confirmés du jour (heure de Beyrouth) · classement par kg" },
+  {
+    en: "Daily confirmed scans (Beirut time) · ranked by KG",
+    ar: "عمليات المسح المؤكدة يوميًا (بتوقيت بيروت) · الترتيب حسب الكيلوغرام",
+    fr: "Scans confirmés du jour (heure de Beyrouth) · classement par kg",
+  },
   { en: "Scanned bales date", ar: "تاريخ مسح البالات", fr: "Date de scan des balles" },
   { en: "Bale Products", ar: "منتجات البالات", fr: "Produits en balles" },
   {
@@ -185,6 +197,7 @@ export const sharedInterfaceTranslations: SharedEntry[] = [
   { en: "Export Excel", ar: "تصدير Excel", fr: "Exporter vers Excel" },
   { en: "Import", ar: "استيراد", fr: "Importer" },
   { en: "Print", ar: "طباعة", fr: "Imprimer" },
+  { en: "Print Results", ar: "طباعة النتائج", fr: "Imprimer les résultats" },
   { en: "Download", ar: "تنزيل", fr: "Télécharger" },
   { en: "Upload", ar: "رفع", fr: "Téléverser" },
   { en: "Preview", ar: "معاينة", fr: "Aperçu" },

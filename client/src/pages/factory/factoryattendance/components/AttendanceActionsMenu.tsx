@@ -68,7 +68,7 @@ export function AttendanceActionsMenu({
         </DropdownMenuItem>
         <DropdownMenuItem data-testid="menu-export-pdf" onClick={() => onPrint("results")}>
           <Printer className="mr-2 h-4 w-4" />
-          Export PDF
+          Print Results
         </DropdownMenuItem>
         <DropdownMenuItem data-testid="menu-export-excel" onClick={() => onPrint("excel-results")}>
           <FileDown className="mr-2 h-4 w-4" />

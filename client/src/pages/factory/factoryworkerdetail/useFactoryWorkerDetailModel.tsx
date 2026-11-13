@@ -35,7 +35,7 @@ export function useFactoryWorkerDetailModel() {
   const { selectedCompany } = useCompany();
   const { wrapAdminAction, AdminDialog } = useAdminOverride();
   const [, navigate] = useLocation();
-  useEscapeToParent("/factory/payroll-hub?tab=workers");
+  useEscapeToParent("/factory/payroll-hub?section=workers");
   const [, params] = useRoute("/factory/workers/:id");
   const workerId = params?.id ? parseInt(params.id) : null;
   const { toast } = useToast();

@@ -28,6 +28,7 @@ import {
   isApprovedPriorityScanColor,
 } from "@shared/priorityScanColors";
 import { PriorityScanColorLetter } from "./PriorityScanColorLetter";
+import { confirmAction } from "@/components/ConfirmHost";
 
 const PRIORITY_SCAN_CONFIGS_URL = "/api/factory/customer-orders/loading-list/priority-scan-configs";
 const DEFAULT_COLOR = DEFAULT_PRIORITY_SCAN_COLOR;
@@ -347,7 +348,14 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
                   type="button"
                   variant="ghost"
                   className="text-destructive hover:text-destructive"
-                  onClick={() => removeMutation.mutate()}
+                  onClick={async () => {
+                    const confirmed = await confirmAction({
+                      title: tr("removePriority") + "?",
+                      confirmText: tr("removePriority"),
+                      tone: "destructive",
+                    });
+                    if (confirmed) removeMutation.mutate();
+                  }}
                   disabled={busy}
                   data-testid={`button-remove-priority-${load.id}`}
                 >

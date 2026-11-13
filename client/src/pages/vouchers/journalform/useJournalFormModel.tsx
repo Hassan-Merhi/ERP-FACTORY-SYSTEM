@@ -33,6 +33,7 @@ import type {
   Supplier,
 } from "./types";
 import { journalFormSchema } from "./utils";
+import { confirmAction } from "@/components/ConfirmHost";
 
 function isOfflineQueued(error: unknown): boolean {
   return error instanceof Error && error.name === "OfflineQueued";
@@ -511,7 +512,12 @@ export function useJournalFormModel({ voucherIdToEdit, isPOS }: JournalFormProps
         // Phase 22 (B), D6: a Golden Coast owner withdrawal is posted as its
         // template only when the user confirms it (OK); Cancel posts it as entered.
         if ((error as { code?: unknown } | null)?.code !== "GC_OWNER_WITHDRAWAL_TEMPLATE_CONFIRM") throw error;
-        const useTemplate = window.confirm(errorMessage(error, ""));
+        const useTemplate = await confirmAction({
+          title: "Post as owner withdrawal template?",
+          description: errorMessage(error, ""),
+          confirmText: "Use template",
+          cancelText: "Post as entered",
+        });
         const confirmed = { ...payload, goldenCoastOwnerWithdrawalTemplate: useTemplate };
         return (await modeApiRequest("POST", "/api/vouchers/journal", confirmed)).json();
       }

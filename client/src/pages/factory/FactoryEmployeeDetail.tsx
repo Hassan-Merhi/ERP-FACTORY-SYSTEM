@@ -104,7 +104,7 @@ export default function FactoryEmployeeDetail() {
   const { data: currentUser } = useQuery<{ role?: string }>({ queryKey: ["/api/auth/me"] });
   const isDeveloper = currentUser?.role === "Developer";
   const [, navigate] = useLocation();
-  useEscapeToParent("/factory/payroll-hub?tab=employees");
+  useEscapeToParent("/factory/payroll-hub?section=employees");
   const [, params] = useRoute("/factory/employees/:id");
   const employeeId = params?.id ? parseInt(params.id) : null;
   const { toast } = useToast();
@@ -320,7 +320,7 @@ export default function FactoryEmployeeDetail() {
   if (empError || !employee) {
     return (
       <div className="space-y-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate("/factory/payroll-hub?tab=employees")}>
+        <Button variant="ghost" size="icon" onClick={() => navigate("/factory/payroll-hub?section=employees")}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div className="flex items-center justify-center py-20 text-muted-foreground">Employee not found</div>
@@ -339,7 +339,7 @@ export default function FactoryEmployeeDetail() {
       <Button
         variant="ghost"
         size="icon"
-        onClick={() => navigate("/factory/payroll-hub?tab=employees")}
+        onClick={() => navigate("/factory/payroll-hub?section=employees")}
         data-testid="button-back"
       >
         <ArrowLeft className="h-4 w-4" />

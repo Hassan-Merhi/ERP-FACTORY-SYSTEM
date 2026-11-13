@@ -37,6 +37,7 @@ import {
   parseRetailSupplierSpreadsheetFile,
 } from "./retailSupplierImportSpreadsheet";
 import type { CatalogPreview, SupplierOption, SupplierPurchaseResult } from "./retailSupplierImportTypes";
+import { confirmAction } from "@/components/ConfirmHost";
 
 export function RetailSupplierImportDialog({
   open,
@@ -300,11 +301,13 @@ export function RetailSupplierImportDialog({
     mutationFn: async () => {
       if (!readyForPosting || !catalogPreview)
         throw new Error("Resolve all import validation errors before confirming");
-      if (
-        !window.confirm(
-          `Receive ${summary.totalUnits} items from ${knownSupplier?.legalName || knownSupplier?.name || "supplier"}? This posts the inventory and supplier credit voucher.`
-        )
-      ) {
+      const confirmed = await confirmAction({
+        title: `Receive ${summary.totalUnits} items from ${knownSupplier?.legalName || knownSupplier?.name || "supplier"}?`,
+        description: "This posts the inventory and supplier credit voucher.",
+        confirmText: "Receive and post",
+        tone: "warning",
+      });
+      if (!confirmed) {
         throw new Error("Purchase confirmation cancelled");
       }
       // Reuse uploaded URLs on retry. Otherwise a lost success response would

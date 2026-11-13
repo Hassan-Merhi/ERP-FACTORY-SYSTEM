@@ -14,6 +14,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, invalidateContainerLandedCostQueries } from "@/lib/queryClient";
 import { Loader2, Wrench } from "lucide-react";
+import { confirmAction } from "@/components/ConfirmHost";
 
 interface ChargeDrift {
   offloadId: number;
@@ -62,9 +63,13 @@ export function OffloadChargeRepairCard() {
   async function handleApply() {
     if (!drift || drift.length === 0) return;
     const containers = new Set(drift.map((row) => row.offloadId)).size;
-    if (!window.confirm(`Re-price ${containers} container(s) to match their vouchers? This updates inventory costs.`)) {
-      return;
-    }
+    const confirmed = await confirmAction({
+      title: `Re-price ${containers} container(s)?`,
+      description: "Their charges will be matched to their vouchers. This updates inventory costs.",
+      confirmText: "Re-price",
+      tone: "warning",
+    });
+    if (!confirmed) return;
     setApplying(true);
     try {
       const res = await apiRequest("POST", ENDPOINT, { offloadIds: drift.map((row) => row.offloadId) });

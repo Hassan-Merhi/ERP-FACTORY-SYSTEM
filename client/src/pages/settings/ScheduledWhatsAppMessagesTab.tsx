@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { CalendarClock, CheckCircle2, Clock, Pencil, Plus, Trash2, MessageSquare } from "lucide-react";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { ScheduledWhatsAppGroupPicker } from "./ScheduledWhatsAppGroupPicker";
+import { confirmAction } from "@/components/ConfirmHost";
 
 type WeeklyTimes = Record<string, string>;
 type Schedule = {
@@ -359,8 +360,14 @@ export function ScheduledWhatsAppMessagesTab() {
                     size="sm"
                     variant="ghost"
                     disabled={remove.isPending}
-                    onClick={() => {
-                      if (window.confirm("Delete this scheduled message and its history?")) remove.mutate(item.id);
+                    onClick={async () => {
+                      const confirmed = await confirmAction({
+                        title: "Delete this scheduled message?",
+                        description: "The message and its history will be deleted.",
+                        confirmText: "Delete",
+                        tone: "destructive",
+                      });
+                      if (confirmed) remove.mutate(item.id);
                     }}
                     aria-label={"Delete " + item.title}
                   >
