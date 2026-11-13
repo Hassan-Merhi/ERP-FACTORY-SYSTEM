@@ -245,24 +245,28 @@ export async function cancelUnreceivedTrade(input: CancelIntercompanyTradeInput,
             credit: money,
             narration: "Reverse unsold internal cost recognition",
           },
-          // New imports eliminate technical Sales/COGS on creation.
-          // Undo those exact elimination legs on cancellation.
-          ...(netted
-            ? [
-                {
-                  ledgerAccountId: data.policy.sourceCostAccountId!,
-                  debit: money,
-                  narration: "Reopen purchased goods after cancellation",
-                },
-                {
-                  ledgerAccountId: data.policy.sourceSalesAccountId!,
-                  credit: money,
-                  narration: "Release eliminated internal sales on cancellation",
-                },
-              ]
-            : []),
         ],
       });
+      // Phase 5's immutable cancellation guard expects exactly two legs in
+      // each original reversal voucher. Preserve that evidence and use a
+      // distinct, idempotent technical journal to undo at-cost elimination.
+      const nettingCancellation = netted
+        ? await postErpVoucherTx(tx, {
+            companyId: fresh.sourceCompanyId,
+            voucherType: "Journal",
+            voucherDate: input.postingDate,
+            sourceModule: "INTERCOMPANY_CONTAINER",
+            description: "Restore internal source classification after cancellation, trade " + fresh.id,
+            source: { type: "ic-phase5-cancel-netting", id: fresh.id },
+            actor: { userId: actor.actorUserId, reason },
+            lines: [
+              { ledgerAccountId: data.policy.sourceCostAccountId!, debit: money,
+                narration: "Undo technical COGS elimination" },
+              { ledgerAccountId: data.policy.sourceSalesAccountId!, credit: money,
+                narration: "Undo technical internal sales elimination" },
+            ],
+          })
+        : null;
       const destination = await postErpVoucherTx(tx, {
         companyId: fresh.destinationCompanyId,
         voucherType: "Journal",
@@ -333,6 +337,7 @@ export async function cancelUnreceivedTrade(input: CancelIntercompanyTradeInput,
           releasedOriginalPairCredit: totalReleased.toFixed(2),
           sourceSaleVoucherId: sourceSale.voucher.id,
           sourceCostVoucherId: sourceCost.voucher.id,
+          technicalNettingCancellationVoucherId: nettingCancellation?.voucher.id ?? null,
           destinationVoucherId: destination.voucher.id,
           evidence: input.cancellationEvidence.trim(),
         },
