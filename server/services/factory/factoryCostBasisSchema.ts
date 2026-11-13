@@ -32,6 +32,31 @@ export const FACTORY_COST_BASIS_DDL: readonly string[] = [
    )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS factory_pos_sale_bales_sale_bale_unique ON factory_pos_sale_bales (sale_id, bale_id)`,
   `CREATE INDEX IF NOT EXISTS factory_pos_sale_bales_sale_idx ON factory_pos_sale_bales (sale_id)`,
+  `CREATE TABLE IF NOT EXISTS factory_finalized_sale_returns (
+    id bigserial PRIMARY KEY,
+    return_batch varchar(50) NOT NULL,
+    company_id integer NOT NULL,
+    order_id integer NOT NULL,
+    customer_id integer NOT NULL,
+    invoice_number varchar(50) NOT NULL,
+    container_number varchar(100),
+    bale_id integer NOT NULL,
+    bale_reference varchar(100) NOT NULL,
+    article_code varchar(50),
+    product_name text,
+    weight_kg numeric(15,3),
+    sale_price numeric(20,2),
+    cost_usd numeric(20,7),
+    original_total numeric(20,2) NOT NULL,
+    revised_total numeric(20,2) NOT NULL,
+    reason text NOT NULL,
+    returned_by text NOT NULL,
+    returned_at timestamptz NOT NULL DEFAULT now()
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS factory_finalized_sale_returns_unique_bale
+    ON factory_finalized_sale_returns (company_id,order_id,bale_id)`,
+  `CREATE INDEX IF NOT EXISTS factory_finalized_sale_returns_company_date
+    ON factory_finalized_sale_returns (company_id,returned_at DESC)`,
   `CREATE TABLE IF NOT EXISTS factory_stock_value_events (
      id serial PRIMARY KEY,
      company_id integer NOT NULL,

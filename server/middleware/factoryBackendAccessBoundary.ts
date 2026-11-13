@@ -448,6 +448,12 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
     );
   }
 
+  // Admin/Developer finalized customer-loading returns belong to the Others hub.
+  // The route itself additionally gates both reads and writes to Admin/Developer.
+  if (hasPrefix(path, "/finalized-sale-returns")) {
+    return requirement("factory/production-report");
+  }
+
   // Invoicing and loading families.
   if (
     hasPrefix(path, "/customer-proformas") ||

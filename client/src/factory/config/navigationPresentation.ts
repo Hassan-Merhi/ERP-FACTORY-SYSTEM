@@ -1,3 +1,5 @@
+import { finalizedSaleReturnCopy } from "@/i18n/factoryFinalizedSaleReturnTranslations";
+
 /**
  * Factory-only navigation presentation metadata.
  * Canonical page destinations and role gates remain in factoryAccessRegistry.
@@ -65,6 +67,13 @@ export const FACTORY_OTHERS_NAV_LINKS = [
     accessKey: "factory/production-report",
     hideKey: "hide_tab_overview_product_comparison",
     iconKey: "productComparison",
+  },
+  {
+    title: finalizedSaleReturnCopy.en.tabLabel,
+    url: "/factory/others?tab=sale-returns",
+    accessKey: "factory/production-report",
+    iconKey: "saleReturns",
+    adminOnly: true,
   },
 ] as const;
 
