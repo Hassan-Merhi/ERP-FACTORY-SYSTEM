@@ -1,82 +1,75 @@
-import { writeFile, ExcelJS } from "@/lib/excelHelper";
+import { writeFile } from "@/lib/excelHelper";
+import { buildUniversalExcelWorkbook, type UniversalExcelColumn } from "@shared/universal-excel/engine";
 import { format } from "date-fns";
 import type { SalesReportItem } from "./types";
 
+/**
+ * Detailed ERP sales report. The shared engine owns its layout while original
+ * financial calculations, percentage representation and profit/loss colors
+ * remain exactly controlled by this report.
+ */
 export async function exportSalesReportExcel(salesData: SalesReportItem[]) {
-  const workbook = new ExcelJS.Workbook();
-  const worksheet = workbook.addWorksheet("Detailed Sales Report");
-
-  const currencyCols = [5, 6, 7, 8, 9, 10, 11, 13];
-  const percentCols = [12, 14];
-  const profitCols = [8, 11, 12, 13, 14];
-
-  worksheet.columns = [
-    { header: "Location", key: "location", width: 15 },
-    { header: "Item Code", key: "itemCode", width: 15 },
-    { header: "Item Name", key: "itemName", width: 30 },
-    { header: "Quantity", key: "quantity", width: 10 },
-    { header: "Sold Price", key: "soldPrice", width: 12 },
-    { header: "Cost Price", key: "costPrice", width: 12 },
-    { header: "Hassan's Price", key: "hassansPrice", width: 14 },
-    { header: "Unit Profit", key: "unitProfit", width: 12 },
-    { header: "Total Sales", key: "totalSales", width: 12 },
-    { header: "Total Cost", key: "totalCost", width: 12 },
-    { header: "Cost Profit", key: "costProfit", width: 12 },
-    { header: "Cost %", key: "costPercent", width: 10 },
-    { header: "Hassan's Profit", key: "hassansProfit", width: 14 },
-    { header: "Hassan's %", key: "hassansPercent", width: 12 },
+  const money = '"$"#,##0.00';
+  const columns: UniversalExcelColumn[] = [
+    { key: "location", header: "Location", width: 15 },
+    { key: "itemCode", header: "Item Code", width: 15 },
+    { key: "itemName", header: "Item Name", width: 30 },
+    { key: "quantity", header: "Quantity", type: "decimal", width: 10 },
+    { key: "soldPrice", header: "Sold Price", type: "money", numFmt: money, width: 12 },
+    { key: "costPrice", header: "Cost Price", type: "money", numFmt: money, width: 12 },
+    { key: "hassansPrice", header: "Hassan's Price", type: "money", numFmt: money, width: 14 },
+    { key: "unitProfit", header: "Unit Profit", type: "money", numFmt: money, width: 12 },
+    { key: "totalSales", header: "Total Sales", type: "money", numFmt: money, width: 12 },
+    { key: "totalCost", header: "Total Cost", type: "money", numFmt: money, width: 12 },
+    { key: "costProfit", header: "Cost Profit", type: "money", numFmt: money, width: 12 },
+    // Source percentages are already in units 0–100. Do not multiply by 100.
+    { key: "costPercent", header: "Cost %", type: "decimal", numFmt: '0.0"%"', width: 10 },
+    { key: "hassansProfit", header: "Hassan's Profit", type: "money", numFmt: money, width: 14 },
+    { key: "hassansPercent", header: "Hassan's %", type: "decimal", numFmt: '0.0"%"', width: 12 },
   ];
-
-  const headerRow = worksheet.getRow(1);
-  headerRow.font = { bold: true };
-  headerRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF5F5F5" } };
-  headerRow.eachCell((cell) => {
-    cell.border = {
-      top: { style: "medium", color: { argb: "FF999999" } },
-      bottom: { style: "medium", color: { argb: "FF999999" } },
-      left: { style: "medium", color: { argb: "FF999999" } },
-      right: { style: "medium", color: { argb: "FF999999" } },
-    };
+  const rows = salesData.map(item => ({
+    location: item.locationName || "N/A",
+    itemCode: item.stockItemCode || "",
+    itemName: item.stockItemName,
+    quantity: Number(item.quantity || 0),
+    soldPrice: Number(item.actualSellingPrice || 0),
+    costPrice: Number(item.costPrice || 0),
+    hassansPrice: Number(item.configuredSellingPrice || 0),
+    unitProfit: Number(item.actualSellingPrice || 0) - Number(item.costPrice || 0),
+    totalSales: Number(item.totalSales || 0),
+    totalCost: Number(item.totalCost || 0),
+    costProfit: Number(item.costProfit || 0),
+    costPercent: item.costProfitPercentage,
+    hassansProfit: item.configuredProfit,
+    hassansPercent: item.configuredProfitPercentage,
+  }));
+  const { workbook } = buildUniversalExcelWorkbook({
+    schemaVersion: 1,
+    mode: "report",
+    title: "Detailed Sales Report",
+    currencyCode: "USD",
+    sheets: [{
+      kind: "table",
+      name: "Detailed Sales Report",
+      columns,
+      rows,
+    }],
   });
 
-  salesData.forEach((item) => {
-    const unitProfit = parseFloat(item.actualSellingPrice) - parseFloat(item.costPrice);
-    const row = worksheet.addRow({
-      location: item.locationName || "N/A",
-      itemCode: item.stockItemCode || "",
-      itemName: item.stockItemName,
-      quantity: parseFloat(item.quantity),
-      soldPrice: parseFloat(item.actualSellingPrice),
-      costPrice: parseFloat(item.costPrice),
-      hassansPrice: parseFloat(item.configuredSellingPrice),
-      unitProfit: unitProfit,
-      totalSales: parseFloat(item.totalSales),
-      totalCost: parseFloat(item.totalCost),
-      costProfit: parseFloat(item.costProfit),
-      costPercent: item.costProfitPercentage,
-      hassansProfit: item.configuredProfit,
-      hassansPercent: item.configuredProfitPercentage,
-    });
+  // Preserve the existing red-loss/green-profit signal without changing
+  // accounting figures or creating extra columns.
+  const worksheet = workbook.getWorksheet("Detailed Sales Report")!;
+  const profitColumns = [8, 11, 12, 13, 14];
+  for (let i = 0; i < rows.length; i += 1) {
+    const row = worksheet.getRow(i + 6);
+    for (const col of profitColumns) {
+      const cell = row.getCell(col);
+      const value = typeof cell.value === "number" ? cell.value : 0;
+      if (value < 0) cell.font = { name: "Aptos", color: { argb: "FFE57373" } };
+      else if (value > 0) cell.font = { name: "Aptos", color: { argb: "FF4CAF50" } };
+    }
+  }
 
-    row.eachCell((cell, colNumber) => {
-      cell.border = {
-        top: { style: "medium", color: { argb: "FF999999" } },
-        bottom: { style: "medium", color: { argb: "FF999999" } },
-        left: { style: "medium", color: { argb: "FF999999" } },
-        right: { style: "medium", color: { argb: "FF999999" } },
-      };
-
-      if (currencyCols.includes(colNumber)) cell.numFmt = '"$"#,##0.00';
-      if (percentCols.includes(colNumber)) cell.numFmt = '0.0"%"';
-
-      const val = typeof cell.value === "number" ? cell.value : parseFloat(String(cell.value || 0));
-      if (profitCols.includes(colNumber) && !isNaN(val)) {
-        if (val < 0) cell.font = { color: { argb: "FFE57373" } };
-        else if (val > 0) cell.font = { color: { argb: "FF4CAF50" } };
-      }
-    });
-  });
-
-  const fileName = `detailed-sales-report-${format(new Date(), "yyyy-MM-dd")}.xlsx`;
+  const fileName = "detailed-sales-report-" + format(new Date(), "yyyy-MM-dd") + ".xlsx";
   await writeFile(workbook, fileName);
 }
