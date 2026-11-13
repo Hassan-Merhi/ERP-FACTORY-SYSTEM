@@ -11,6 +11,7 @@ import { eq, and, inArray, sql, isNull } from "drizzle-orm";
 import { buildVoucherPage, filterAndSortVouchers, parseVoucherListQuery } from "./voucherListPaging";
 import { loadVoucherRelatedData } from "./voucherDetailBatching";
 import { buildUnifiedSupplierLedger } from "./unifiedSupplierLedger";
+import { resolveSupplierDestinations } from "../../services/intercompany/supplierDestinationRead";
 
 import {
   assertActiveCompanyAccess,
@@ -184,6 +185,22 @@ export function registerVoucherQueryRoutes(app: Express) {
             t.containerId = containerIdMap.get(matches[0]) ?? null;
           }
         }
+      }
+
+      // Attribute supplier transactions using actual intercompany PO links.
+      // Unallocated payments and unrelated journals have no guessed destination.
+      const destinations = await resolveSupplierDestinations({
+        accessibleCompanyIds: companyIds,
+        voucherIds: result.flatMap((row) => row.voucherId == null ? [] : [row.voucherId]),
+      });
+      for (const row of result) {
+        if (row.type !== "voucher") continue;
+        const destination = row.voucherId == null ? undefined : destinations.byVoucherId.get(row.voucherId);
+        const ordinaryPurchase = !destination && row.voucherType === "Purchase";
+        row.destinationCompanyId = destination?.destinationCompanyId
+          ?? (ordinaryPurchase ? row.companyId : null);
+        row.destinationCompanyName = destination?.destinationCompanyName
+          ?? (ordinaryPurchase ? row.companyName : null);
       }
 
       res.json(result); // Already in chronological order
