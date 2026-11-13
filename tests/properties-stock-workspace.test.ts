@@ -7,7 +7,7 @@ import {
 } from "../client/src/properties/config/propertiesNavigation";
 
 const source = (path: string) => readFileSync(new URL("../" + path, import.meta.url), "utf8");
-const company = (role: string) => ({ companyType: "properties", role });
+const company = (role: string) => ({ companyType: "properties" as const, role });
 
 describe("Properties Stock/OTW workspace", () => {
   it("registers Stock, item details and Excel import inside Properties for trading roles only", () => {
