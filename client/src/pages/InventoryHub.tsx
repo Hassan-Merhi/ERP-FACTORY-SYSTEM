@@ -22,8 +22,14 @@ export default function InventoryHub({ access }: { access?: ErpFeatureAccess }) 
   const visibleTabs = TABS.filter((tab) => canAccessErpFeature(access, tab.featureKey));
   const showStockShortcut =
     selectedCompany?.companyType !== "retail" &&
-    (canAccessErpFeature(access, "stock_items") || canAccessErpFeature(access, "stock_query"));
-  const stockHref = canAccessErpFeature(access, "stock_items") ? "/stock?tab=items" : "/stock?tab=query";
+    (canAccessErpFeature(access, "stock_items") ||
+      canAccessErpFeature(access, "stock_query") ||
+      canAccessErpFeature(access, "stock_otw"));
+  const stockHref = canAccessErpFeature(access, "stock_items")
+    ? "/stock?tab=items"
+    : canAccessErpFeature(access, "stock_query")
+      ? "/stock?tab=query"
+      : "/stock?tab=otw";
   const visibleValues = visibleTabs.map((tab) => tab.value);
 
   const [activeTab, setTab] = useHubQueryState({
