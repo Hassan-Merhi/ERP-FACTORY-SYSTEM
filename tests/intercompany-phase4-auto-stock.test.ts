@@ -94,6 +94,61 @@ describe("Phase 4 verified destination stock mapping", () => {
     expect(result.creations).toHaveLength(0);
   });
 
+  it("accepts an Excel alias for the Properties source and reuses the destination by canonical code", () => {
+    const result = plan({
+      items: [source(), item(22)],
+      aliases: [{ companyId: 1, stockItemId: 11, aliasCode: "ALT-COTTON-01" }],
+      lines: [row({ barcode: " alt-cotton-01 " })],
+    });
+    expect(result.assignments[0]).toMatchObject({ sourceItemId: 11, destinationItemId: 22 });
+    expect(result.creations).toHaveLength(0);
+  });
+
+  it("accepts destination aliases when the destination canonical code differs and names are duplicated", () => {
+    const result = plan({
+      items: [
+        source(),
+        item(22, { code: "HADI-COTTON", name: "Cotton Grade A" }),
+        item(23, { code: "HADI-OTHER", name: "Cotton Grade A" }),
+      ],
+      aliases: [{ companyId: 2, stockItemId: 22, aliasCode: "BAL-001" }],
+    });
+    expect(result.assignments[0]).toMatchObject({ sourceItemId: 11, destinationItemId: 22 });
+    expect(result.creations).toHaveLength(0);
+  });
+
+  it("matches source and destination aliases together even with duplicate product names", () => {
+    const result = plan({
+      items: [
+        source({ code: "SRC-COTTON" }),
+        item(22, { code: "DST-COTTON" }),
+        item(23, { code: "DST-OTHER" }),
+      ],
+      aliases: [
+        { companyId: 1, stockItemId: 11, aliasCode: "PO-COTTON" },
+        { companyId: 2, stockItemId: 22, aliasCode: "PO-COTTON" },
+      ],
+      lines: [row({ barcode: "PO-COTTON" })],
+    });
+    expect(result.assignments[0]).toMatchObject({ sourceItemId: 11, destinationItemId: 22 });
+  });
+
+  it("refuses an alias that collides with another stock item's code or alias", () => {
+    expect(() => plan({
+      items: [source(), source({ id: 12, code: "ALT-COTTON", name: "Other Cotton" }), item(22)],
+      aliases: [{ companyId: 1, stockItemId: 11, aliasCode: "ALT-COTTON" }],
+      lines: [row({ barcode: "ALT-COTTON" })],
+    })).toThrow(/multiple items/);
+    expect(() => plan({
+      items: [source(), item(22), item(23, { code: "OTHER" })],
+      aliases: [
+        { companyId: 2, stockItemId: 22, aliasCode: "ALT-COTTON" },
+        { companyId: 2, stockItemId: 23, aliasCode: "ALT-COTTON" },
+      ],
+      lines: [row({ barcode: "ALT-COTTON" })],
+    })).toThrow(/multiple items/);
+  });
+
   it("uses the source stock barcode even when its workbook name is absent", () => {
     const result = plan({ lines: [row({ itemName: "" })] });
     expect(result.assignments[0].sourceItemId).toBe(11);
