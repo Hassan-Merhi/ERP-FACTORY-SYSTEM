@@ -221,6 +221,36 @@ describe("universal Excel engine: report and safety contracts", () => {
     expect(results[0].kind).toBe("custom");
   });
 
+  it("enforces required detail fields while allowing sparse total footers", () => {
+    const valid = report({
+      currencyCode: "USD",
+      sheets: [{
+        kind: "table",
+        name: "Required",
+        columns: [
+          { key: "article", header: "Article", required: true },
+          { key: "qty", header: "Quantity", type: "integer", required: true },
+        ],
+        rows: [{ article: "A", qty: 3 }],
+        footer: { article: "TOTAL" },
+      }],
+    });
+    const ws = buildUniversalExcelWorkbook(valid).workbook.getWorksheet("Required")!;
+    expect(ws.getCell("A2").value).toContain("Currency: USD");
+    expect(ws.getCell("A7").value).toBe("TOTAL");
+    expect(ws.getCell("B7").value).toBeNull();
+
+    const missing = report({
+      sheets: [{
+        kind: "table",
+        name: "Required",
+        columns: [{ key: "qty", header: "Quantity", type: "integer", required: true }],
+        rows: [{ qty: null }],
+      }],
+    });
+    expect(() => buildUniversalExcelWorkbook(missing)).toThrow(/Missing required Excel value/);
+  });
+
   it("rejects duplicate columns, duplicate sheet names, invalid numeric values and untrusted formulas", () => {
     expect(() => buildUniversalExcelWorkbook(report({
       sheets: [{
