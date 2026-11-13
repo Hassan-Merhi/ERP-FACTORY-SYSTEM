@@ -153,7 +153,8 @@ export function buildUniversalExcelDimensionColumns(
       type: family.type,
       width: family.width,
       numFmt: family.numFmt,
-      permissionTag: member.permissionTag ?? family.permissionTag,
+      permissionTag: family.permissionTag,
+      permissionTags: member.permissionTag ? [member.permissionTag] : undefined,
       sourceKeys: permittedSourceKeys,
       value: (row: UniversalExcelRecord) => {
         const value = sourceAt(
