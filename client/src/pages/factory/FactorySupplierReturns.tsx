@@ -11,6 +11,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { read, utils, writeFile } from "@/lib/excelHelper";
 import { buildErpSupplierReturnMatchWorkbook } from "./erpSupplierReturnMatchWorkbook";
+import { isValidSupplierReturnQuantity } from "./supplierReturnQuantityValidation";
 
 interface Candidate {
   offloadItemId: number;
@@ -199,7 +200,7 @@ export default function FactorySupplierReturns() {
     if (
       !code ||
       code.length > 50 ||
-      !/^(?:0|[1-9]\\d*)(?:\\.\\d{1,3})?$/.test(qty) ||
+      !isValidSupplierReturnQuantity(qty) ||
       Number(qty) <= 0 ||
       rawRows.length >= 1000
     ) {
@@ -275,7 +276,7 @@ export default function FactorySupplierReturns() {
       const parsed = rows.map((row, index) => {
         const code = String(excelCode(row, ["articlecode", "code", "itemcode", "barcode"]) ?? "").trim();
         const quantity = String(excelCode(row, ["qty", "quantity", "bales"]) ?? "").trim();
-        if (!code || !/^(?:0|[1-9]\d*)(?:\.\d{1,3})?$/.test(quantity) || Number(quantity) <= 0)
+        if (!code || !isValidSupplierReturnQuantity(quantity) || Number(quantity) <= 0)
           throw new Error([copy.rowInvalid, index + 2].join(" "));
         return { code, quantity };
       });
