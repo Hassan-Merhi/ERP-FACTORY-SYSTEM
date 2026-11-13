@@ -5,9 +5,7 @@ import { FileSpreadsheet, PackageCheck, ShieldCheck, Upload } from "lucide-react
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useApplicationLanguageCode } from "@/contexts/ApplicationLanguageContext";
@@ -18,7 +16,6 @@ import { propertiesPoImportText, PROPERTIES_PO_IMPORT_ERRORS } from "@/i18n/prop
 import {
   initializePropertiesDestinations,
   updatePropertiesDefaultDestination,
-  updatePropertiesContainerCharges,
   updatePropertiesContainerDestination,
   validatePropertiesImportSelections,
   type PropertiesContainerDestinations,
@@ -501,7 +498,7 @@ export default function PropertiesIntercompanyPOImport() {
                         <TableCell>{currency(container.itemsTotal)}</TableCell>
                         <TableCell>{currency(container.chargesTotal)}</TableCell>
                         <TableCell>
-                          {currency(container.itemsTotal + (selected?.chargesConfirmed ? container.chargesTotal : 0))}
+                          {currency(container.itemsTotal + container.chargesTotal)}
                         </TableCell>
                         <TableCell className="min-w-[220px] space-y-2">
                           <select
@@ -533,38 +530,6 @@ export default function PropertiesIntercompanyPOImport() {
                               </option>
                             ))}
                           </select>
-                          <Label className="flex items-center gap-2 text-xs">
-                            <Checkbox
-                              checked={Boolean(selected?.chargesConfirmed)}
-                              disabled={importMutation.isPending}
-                              onCheckedChange={(checked) =>
-                                setDestinations((current) =>
-                                  updatePropertiesContainerCharges(current, container.containerNumber, {
-                                    chargesConfirmed: checked === true,
-                                  })
-                                )
-                              }
-                            />
-                            {copy.confirmCharges}
-                          </Label>
-                          {selected?.chargesConfirmed && container.chargesTotal !== 0 && (
-                            <Input
-                              aria-label={`${copy.evidence}: ${container.containerNumber}`}
-                              placeholder={copy.evidencePlaceholder}
-                              value={selected.chargeEvidenceReference}
-                              disabled={importMutation.isPending}
-                              onChange={(event) =>
-                                setDestinations((current) =>
-                                  updatePropertiesContainerCharges(current, container.containerNumber, {
-                                    chargeEvidenceReference: event.target.value,
-                                  })
-                                )
-                              }
-                            />
-                          )}
-                          {!selected?.chargesConfirmed && container.chargesTotal !== 0 && (
-                            <p className="text-xs text-amber-700 dark:text-amber-300">{copy.chargeWarning}</p>
-                          )}
                         </TableCell>
                       </TableRow>
                     );
