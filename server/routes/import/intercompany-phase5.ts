@@ -16,6 +16,7 @@ import { requireAuth } from "../../auth";
 import { db } from "../../db";
 import { logger } from "../../lib/logger";
 import { cancelUnreceivedTrade } from "../../services/intercompany/phase5Cancel";
+import { deletePristineLinkedTrade } from "../../services/intercompany/linkedTradePhysicalDelete";
 import { receiveLinkedTrade } from "../../services/intercompany/phase5Receipt";
 import { requireReceivingPairPermission } from "../../services/intercompany/phase5ReceivingAccess";
 import {
@@ -263,6 +264,21 @@ export function registerIntercompanyPhase5Routes(app: Express) {
           actor(req)
         )
       );
+    } catch (error) {
+      return fail(res, error);
+    }
+  });
+  // Delete the complete untouched company pair: no reversal voucher is posted.
+  app.post("/api/intercompany-container-trading/lifecycle/:tradeId/delete-linked", requireAuth, async (req, res) => {
+    try {
+      const parsed = z.object({
+        expectedVersion: id,
+        confirmDeleteBothCompanies: z.literal(true),
+      }).strict().parse(req.body);
+      const result = await deletePristineLinkedTrade(
+        routeId.parse(req.params.tradeId), parsed.expectedVersion, actor(req)
+      );
+      return res.json(result);
     } catch (error) {
       return fail(res, error);
     }
