@@ -47,6 +47,8 @@ export interface UniversalExcelColumn {
   numFmt?: string;
   /** Column is omitted unless the caller explicitly grants this tag. */
   permissionTag?: string;
+  /** All additional tags are required, not alternatives. */
+  permissionTags?: readonly string[];
   /** Validated for detail rows; footers may intentionally leave it blank. */
   required?: boolean;
   /**
@@ -284,13 +286,15 @@ function resolveColumns(
     if (!column.key.trim() || !column.header.trim() || seen.has(column.key) ||
         (column.width != null && (!Number.isFinite(column.width) || column.width <= 0)) ||
         (column.value && !column.sourceKeys?.length) ||
-        column.sourceKeys?.some(key => !key.trim())) {
+        column.sourceKeys?.some(key => !key.trim()) ||
+        column.permissionTags?.some(tag => !tag.trim())) {
       throw new Error("Invalid or duplicate column: " + column.key);
     }
     seen.add(column.key);
     coveredSourceKeys.add(column.key);
     for (const key of column.sourceKeys ?? []) coveredSourceKeys.add(key);
     if (column.permissionTag && !allowed.has(column.permissionTag)) continue;
+    if (column.permissionTags?.some(tag => !allowed.has(tag))) continue;
     selected.push(column);
   }
   if (selected.length === 0 || selected.length > MAX_EXCEL_COLUMNS) {
