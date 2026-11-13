@@ -250,11 +250,11 @@ export async function fetchActiveContainers(
       supplierCode: suppliers.code,
       status: containers.status,
       importDate: containers.importDate,
-      grandTotal: sql<string>`COALESCE(
+      grandTotal: sql<string>`CASE WHEN EXISTS (SELECT 1 FROM intercompany_trades trade WHERE trade.physical_container_id = ${containers.id} AND trade.state = 'active') THEN ${containers.grandTotal}::text ELSE COALESCE(
         (SELECT COALESCE(SUM(po.items_total::numeric), 0) FROM purchase_orders po WHERE po.container_id = ${containers.id})
         + (SELECT COALESCE(SUM(cc.amount::numeric), 0) FROM container_charges cc WHERE cc.container_id = ${containers.id}),
         0
-      )::text`,
+      )::text END`,
       itemName: containers.itemName,
       shopName: containers.shopName,
       eta: containers.eta,
