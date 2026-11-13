@@ -169,8 +169,7 @@ export default function FactorySupplierReturns() {
     for (const entry of resolved) {
       if (!entry.candidate) continue;
       const item = entry.candidate;
-      if (offloadQty.get(item.offloadItemId)?.gt(item.remainingQty))
-        overOffloads.add(item.offloadItemId);
+      if (offloadQty.get(item.offloadItemId)?.gt(item.remainingQty)) overOffloads.add(item.offloadItemId);
       const key = item.locationId + ":" + item.stockItemId;
       if (stockQty.get(key)?.gt(item.availableQty)) overStock.add(key);
     }
@@ -231,8 +230,7 @@ export default function FactorySupplierReturns() {
           row: entry.row.row,
           code: entry.row.code,
           quantity: entry.row.quantity,
-          status:
-            entry.valid && !validEntry(entry) ? "combined-quantity-exceeds-balance" : entry.row.status,
+          status: entry.valid && !validEntry(entry) ? "combined-quantity-exceeds-balance" : entry.row.status,
           candidate: entry.candidate,
           valid: validEntry(entry),
         })),
