@@ -19,7 +19,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { columnsFromOperationalRows, exportOperationalWorkbook } from "@/lib/operationalExcelExport";
+import { columnsFromOperationalRows, exportOperationalWorkbook, type OperationalExcelSheet } from "@/lib/operationalExcelExport";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { spContainerInvoiceChargeLines } from "@shared/spContainerInvoiceCharges";
 import type { Container, Supplier } from "@shared/schema";
@@ -225,7 +225,7 @@ export function ContainerSpView({
         "Total (USD)": c.totalUsd,
         Source: c._source === "sp" ? "Supplier Partner" : "ERP",
       }));
-      const outputSheets = [{
+      const outputSheets: OperationalExcelSheet[] = [{
         name: "Containers",
         rows: summary,
         columns: columnsFromOperationalRows(summary, {
