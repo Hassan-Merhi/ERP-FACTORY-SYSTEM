@@ -28,6 +28,15 @@ describe("ERP Phase 3 desktop/phone/route parity", () => {
     }
   });
 
+  it("keeps ERP supplier returns strictly Admin/Developer only", () => {
+    for (const role of ["Normal User", "ERP Tester", "Create Only", "POS", "Owner"]) {
+      expect(isErpRouteRoleAllowed("/supplier-returns", role)).toBe(false);
+      expect(isErpNavigationItemVisible({ role, path: "/supplier-returns" })).toBe(false);
+    }
+    expect(isErpRouteRoleAllowed("/supplier-returns", "Admin")).toBe(true);
+    expect(isErpRouteRoleAllowed("/supplier-returns", "Developer")).toBe(true);
+  });
+
   it("hides unpermitted finance pages consistently from a restricted ERP user", () => {
     const access = { fullAccess: false, pageKeys: ["pos"] };
     for (const path of ["/accounts", "/daybook", "/vouchers", "/sales-report"]) {
