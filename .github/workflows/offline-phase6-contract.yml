@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: "24.22.2"
+          node-version: "24.22.3"
       - name: Syntax and fail-closed contract tests (no secrets or DB)
         run: |
           node --check scripts/edge/certify-offline-phase6.mjs
