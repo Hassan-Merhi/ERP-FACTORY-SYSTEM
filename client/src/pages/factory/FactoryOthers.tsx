@@ -1,21 +1,23 @@
 import { useEffect } from "react";
 import { useSearch } from "wouter";
-import { BarChart3, GitCompareArrows } from "lucide-react";
+import { BarChart3, GitCompareArrows, RotateCcw } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import { useFactoryNavigationAccess } from "@/hooks/useFactoryNavigationAccess";
 import ProductionComparison from "./ProductionComparison";
 import ProductComparisonCharts from "./productcomparison/ProductComparisonCharts";
+import FactoryFinalizedSaleReturns from "./FactoryFinalizedSaleReturns";
 
-type OthersTab = "comparison" | "product-comparison";
-const ALL_TABS: readonly OthersTab[] = ["comparison", "product-comparison"];
+type OthersTab = "comparison" | "product-comparison" | "sale-returns";
+const ALL_TABS: readonly OthersTab[] = ["comparison", "product-comparison", "sale-returns"];
 
 export default function FactoryOthers() {
-  const { ready, access, isPrivileged } = useFactoryNavigationAccess();
+  const { ready, access, isPrivileged, role } = useFactoryNavigationAccess();
+  const canManageReturns = role === "Admin" || role === "Developer";
   const search = useSearch();
   const hidden = isPrivileged ? [] : (access?.hiddenCostFields ?? []);
-  const visibleTabs = ALL_TABS.filter((tab) =>
+  const visibleTabs = ALL_TABS.filter((tab) => tab === "sale-returns" ? canManageReturns :
     !hidden.includes(tab === "comparison" ? "hide_tab_overview_comparison" : "hide_tab_overview_product_comparison")
   );
   const visibleTabsKey = visibleTabs.join(",");
@@ -58,6 +60,11 @@ export default function FactoryOthers() {
                 <BarChart3 className="mr-1.5 h-4 w-4" /> Product Comparison
               </TabsTrigger>
             )}
+            {canManageReturns && (
+              <TabsTrigger value="sale-returns" data-testid="tab-others-sale-returns">
+                <RotateCcw className="mr-1.5 h-4 w-4" /> Finalized Sale Returns
+              </TabsTrigger>
+            )}
           </TabsList>
         </div>
         {visibleTabs.includes("comparison") && (
@@ -68,6 +75,11 @@ export default function FactoryOthers() {
         {visibleTabs.includes("product-comparison") && (
           <TabsContent value="product-comparison" className="mt-0 flex-1 overflow-y-auto p-4 data-[state=inactive]:hidden">
             <ProductComparisonCharts />
+          </TabsContent>
+        )}
+        {canManageReturns && (
+          <TabsContent value="sale-returns" className="mt-0 flex-1 overflow-y-auto p-4 data-[state=inactive]:hidden">
+            <FactoryFinalizedSaleReturns />
           </TabsContent>
         )}
       </Tabs>

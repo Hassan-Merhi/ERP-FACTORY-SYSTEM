@@ -164,9 +164,11 @@ export const FACTORY_NAV_SECTIONS: FactoryNavSection[] = FACTORY_SIDEBAR_GROUP_O
     developerOnly: pages.length > 0 && pages.every((page) => page.accessLevel === "developer"),
     items: [
       ...(label === "Others"
-        ? FACTORY_OTHERS_NAV_LINKS.map(({ title, url, accessKey, hideKey, iconKey }) => ({
-            title, url, accessKey, hideKey,
-            icon: iconKey === "comparison" ? GitCompareArrows : BarChart3,
+        ? FACTORY_OTHERS_NAV_LINKS.map((item) => ({
+            title: item.title, url: item.url, accessKey: item.accessKey,
+            hideKey: "hideKey" in item ? item.hideKey : undefined,
+            adminOnly: "adminOnly" in item ? item.adminOnly : false,
+            icon: item.iconKey === "comparison" ? GitCompareArrows : item.iconKey === "saleReturns" ? History : BarChart3,
           }))
         : []),
       ...orderedPages.map((page) => ({
@@ -253,6 +255,7 @@ export function useFactoryVisibleSections(user?: FactorySidebarUser): {
   const isPinnedVisible = (item: Pick<NavItem, "url">): boolean => {
     const page = resolveFactoryPage(item.url);
     if (!page || !myAccess) return false; // Never show destinations before company grants resolve.
+    if (item.url.includes("tab=sale-returns") && !isAdmin) return false;
     if (!factoryPageAllowsRole(page, user?.role)) return false;
     if (page.featureFlag) {
       const defaultOn = !!page.featureFlagDefaultOn;
@@ -300,6 +303,7 @@ export function useFactoryVisibleSections(user?: FactorySidebarUser): {
       items: s.items.filter((item) => {
         // Use the same role, feature-flag, and per-company allow-list check as
         // pinned and recent navigation. An empty grant list remains default-deny.
+        if (item.adminOnly && !isAdmin) return false;
         if (!isPinnedVisible({ url: item.url })) return false;
         if (item.hideKey && myAccess?.hiddenCostFields?.includes(item.hideKey)) return false;
 

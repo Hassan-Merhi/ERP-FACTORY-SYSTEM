@@ -24,5 +24,5 @@ export function useFactoryNavigationAccess() {
     if (isPrivileged) return true;
     return !!access.fullAccess || hasFactoryPageKey(page, access.pageKeys ?? []);
   };
-  return { ready, canOpen, access, isPrivileged };
+  return { ready, canOpen, access, isPrivileged, role: user?.role };
 }

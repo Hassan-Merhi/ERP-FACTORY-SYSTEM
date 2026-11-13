@@ -66,6 +66,13 @@ export const FACTORY_OTHERS_NAV_LINKS = [
     hideKey: "hide_tab_overview_product_comparison",
     iconKey: "productComparison",
   },
+  {
+    title: "Finalized Sale Returns",
+    url: "/factory/others?tab=sale-returns",
+    accessKey: "factory/production-report",
+    iconKey: "saleReturns",
+    adminOnly: true,
+  },
 ] as const;
 
 /** This is a visibility filter, not an authorization decision. */
