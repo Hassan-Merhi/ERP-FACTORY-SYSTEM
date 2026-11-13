@@ -63,6 +63,7 @@ export const PROPERTIES_NAV_SECTIONS: NavSection[] = [
     items: [
       { title: "Tracking", url: "/properties/tracking", icon: Truck },
       { title: "Containers", url: "/properties/containers", icon: Package },
+      { title: "Stock", url: "/properties/stock", icon: Package },
       { title: "Import PO", url: "/properties/po-import", icon: FileSpreadsheet },
       { title: "Suppliers", url: "/properties/suppliers", icon: Users },
     ],
