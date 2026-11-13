@@ -144,6 +144,7 @@ jobs:
             tests/intercompany-phase7-navigation.test.ts \
             tests/intercompany-phase6-voucher-payments.test.ts \
             tests/intercompany-phase5-database-guards.test.ts \
+            tests/intercompany-linked-delete-contract.test.ts \
             tests/intercompany-phase5-lifecycle-math.test.ts \
             tests/intercompany-phase5-mirrored-lines.test.ts
 
