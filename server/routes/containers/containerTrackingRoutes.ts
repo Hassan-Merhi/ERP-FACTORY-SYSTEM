@@ -11,7 +11,7 @@ import {
   userCompanyRoles,
   type InsertContainer,
 } from "@shared/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { getEtaTrackingSummary } from "../../services/jsonCargoTrackingService";
 import { parseMoneyInput } from "../../lib/money";
 
