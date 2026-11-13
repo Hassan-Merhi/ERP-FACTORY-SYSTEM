@@ -168,12 +168,11 @@ export function createContainerImportPlan(
   );
   const sourcePos: SourcePoPlan[] = groupList.map(([key, lines], i) => {
     const split = splits[i];
-    const supplierCredit = split.itemsTotal.minus(split.discount);
-    const chargeAccrualCredit = split.freight
-      .plus(split.surcharge)
-      .plus(split.fumigation)
-      .plus(split.documentCharges)
-      .plus(split.otherCharges);
+    // The selected external supplier owns the complete imported landed cost by
+    // default. Freight and other PO charges are not a separate payable unless
+    // a dedicated creditor was explicitly selected (not supported by this flow).
+    const supplierCredit = split.grandTotal;
+    const chargeAccrualCredit = cents(0);
     if (supplierCredit.lt(0) || split.grandTotal.lte(0)) {
       throw new Error(name + ": invoice discount leaves an invalid external payable");
     }
