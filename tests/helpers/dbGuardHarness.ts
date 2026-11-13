@@ -43,6 +43,9 @@ interface ForeignKey {
  */
 const CHECK_SATISFYING_VALUES: Record<string, Row> = {
   accounting_fiscal_review_signoffs: { review_kind: "ACCOUNTING" },
+  factory_edge_attachment_outbox: { operation_kind: "attachment.file.v1" },
+  factory_edge_payment_outbox: { operation_kind: "voucher.payment-receipt.v1" },
+  factory_edge_stock_outbox: { operation_kind: "stock.quick-adjust.v1" },
   factory_production_target_bonus_weekly_methods: {
     effective_week: "2026-01-12",
     method: "per_extra_bale",
