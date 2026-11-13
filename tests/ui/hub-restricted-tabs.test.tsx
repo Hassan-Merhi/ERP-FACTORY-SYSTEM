@@ -43,6 +43,47 @@ describe("hub tabs restricted by ERP page access", () => {
     await waitFor(() => expect(window.location.search).toBe("?tab=query"));
   });
 
+  it("shows Stock Items, Stock Query, Offload Search, and On The Way in the same Stock workspace", async () => {
+    window.history.replaceState({}, "", "/stock?tab=items");
+    render(<StockHub access={access(["stock_items", "stock_query", "stock_otw"])} />);
+
+    expect(screen.getByRole("tab", { name: "Stock Items" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Stock Query" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Offload Search" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "On The Way" })).toBeInTheDocument();
+    expect(screen.getByText("Stock items content")).toBeInTheDocument();
+
+    act(() => screen.getByRole("tab", { name: "On The Way" }).click());
+    expect(screen.getByText("On the way content")).toBeInTheDocument();
+    await waitFor(() => expect(window.location.search).toBe("?tab=otw"));
+
+    act(() => screen.getByRole("tab", { name: "Stock Query" }).click());
+    expect(screen.getByText("Stock query content")).toBeInTheDocument();
+
+    act(() => screen.getByRole("tab", { name: "Offload Search" }).click());
+    expect(screen.getByText("Offload content")).toBeInTheDocument();
+  });
+
+  it("allows OTW-only grants into Stock without exposing Stock item management", async () => {
+    window.history.replaceState({}, "", "/stock?tab=items");
+    render(<StockHub access={access(["stock_otw"])} />);
+
+    expect(screen.getByText("On the way content")).toBeInTheDocument();
+    expect(screen.getByTestId("tab-stock-otw")).toBeInTheDocument();
+    expect(screen.queryByTestId("tab-stock-items")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("tab-stock-offload")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("tab-stock-query")).not.toBeInTheDocument();
+    await waitFor(() => expect(window.location.search).toBe("?tab=otw"));
+  });
+
+  it("retains On The Way in Inventory for existing bookmarks", () => {
+    window.history.replaceState({}, "", "/inventory?tab=on-the-way");
+    render(<InventoryHub access={access(["stock_otw"])} />);
+    expect(screen.getByText("On the way content")).toBeInTheDocument();
+    expect(screen.getByTestId("tab-on-the-way")).toBeInTheDocument();
+    expect(screen.getByTestId("link-inventory-stock-hub")).toHaveAttribute("href", "/stock?tab=otw");
+  });
+
   it("shows the restricted state when no InventoryHub tab is permitted", () => {
     window.history.replaceState({}, "", "/inventory");
     render(<InventoryHub access={access(["accounts"])} />);
