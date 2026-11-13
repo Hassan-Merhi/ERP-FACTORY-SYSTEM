@@ -1,0 +1,39 @@
+name: Temporary Factory PR Prettier formatting
+
+on:
+  push:
+    branches:
+      - fix/factory-unshipped-bale-removal-20261113
+    paths:
+      - .github/workflows/temporary-factory-format.yml
+
+permissions:
+  contents: write
+
+jobs:
+  format-branch:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: fix/factory-unshipped-bale-removal-20261113
+          persist-credentials: true
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24.22.2"
+          cache: npm
+      - run: npm ci --no-audit --bin-links=true
+      - name: Apply repository Prettier to changed Factory files
+        run: |
+          node node_modules/prettier/bin/prettier.cjs --write \
+            server/routes/factoryRoutes.ts \
+            server/routes/factory/customer-orders/bale-scanning/remove.ts \
+            tests/factory-posted-trip-unshipped-removal.test.ts
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add server/routes/factoryRoutes.ts server/routes/factory/customer-orders/bale-scanning/remove.ts tests/factory-posted-trip-unshipped-removal.test.ts
+          if ! git diff --cached --quiet; then
+            git commit -m "style(factory): apply Prettier to posted-trip removal fix"
+            git push origin HEAD:fix/factory-unshipped-bale-removal-20261113
+          fi
