@@ -5,7 +5,11 @@ import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import type { AuthMe } from "@shared/apiTypes";
 import { useCompany } from "@/contexts/CompanyContext";
-import { canUsePropertiesCapability, PROPERTIES_RENTAL_TABS, type PropertiesRentalTab } from "@/properties/config/propertiesNavigation";
+import {
+  canUsePropertiesCapability,
+  PROPERTIES_RENTAL_TABS,
+  type PropertiesRentalTab,
+} from "@/properties/config/propertiesNavigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
 // Each rentals tab owns independent data, calendars and report components.
@@ -43,7 +47,10 @@ export default function PropertiesRentalsHub() {
       )}
       <Tabs value={tab} onValueChange={(value) => setTab(value as PropertiesRentalTab)}>
         <div className="erp-mobile-scroll-tabs pb-1">
-          <TabsList className="properties-rentals-tabs w-max min-w-full sm:min-w-0 sm:w-fit" aria-label="Rental sections">
+          <TabsList
+            className="properties-rentals-tabs w-max min-w-full sm:min-w-0 sm:w-fit"
+            aria-label="Rental sections"
+          >
             <TabsTrigger value="warehouses" data-testid="tab-properties-rentals-warehouses">
               <Building2 className="mr-2 h-4 w-4" />
               Warehouses
@@ -60,17 +67,35 @@ export default function PropertiesRentalsHub() {
         </div>
 
         <TabsContent value="warehouses" className="mt-4">
-          <Suspense fallback={<div role="status" className="p-6 text-sm text-muted-foreground">Loading warehouses…</div>}>
+          <Suspense
+            fallback={
+              <div role="status" className="p-6 text-sm text-muted-foreground">
+                Loading warehouses…
+              </div>
+            }
+          >
             <PropertiesRentalWarehouses />
           </Suspense>
         </TabsContent>
         <TabsContent value="shops" className="mt-4">
-          <Suspense fallback={<div role="status" className="p-6 text-sm text-muted-foreground">Loading shops…</div>}>
+          <Suspense
+            fallback={
+              <div role="status" className="p-6 text-sm text-muted-foreground">
+                Loading shops…
+              </div>
+            }
+          >
             <PropertiesRentalShops />
           </Suspense>
         </TabsContent>
         <TabsContent value="payments" className="mt-4">
-          <Suspense fallback={<div role="status" className="p-6 text-sm text-muted-foreground">Loading rental payments…</div>}>
+          <Suspense
+            fallback={
+              <div role="status" className="p-6 text-sm text-muted-foreground">
+                Loading rental payments…
+              </div>
+            }
+          >
             <PropertiesRentalPayments />
           </Suspense>
         </TabsContent>

@@ -54,22 +54,46 @@ export default function StockHub({ access }: { access?: ErpFeatureAccess }) {
         </TabsList>
       </div>
       <TabsContent value="items" className="m-0">
-        <Suspense fallback={<div role="status" className="p-6 text-sm text-muted-foreground">Loading Stock Items…</div>}>
+        <Suspense
+          fallback={
+            <div role="status" className="p-6 text-sm text-muted-foreground">
+              Loading Stock Items…
+            </div>
+          }
+        >
           {visibleValues.includes("items") && <StockItems />}
         </Suspense>
       </TabsContent>
       <TabsContent value="query" className="m-0">
-        <Suspense fallback={<div role="status" className="p-6 text-sm text-muted-foreground">Loading Stock Query…</div>}>
+        <Suspense
+          fallback={
+            <div role="status" className="p-6 text-sm text-muted-foreground">
+              Loading Stock Query…
+            </div>
+          }
+        >
           {visibleValues.includes("query") && <StockQuery />}
         </Suspense>
       </TabsContent>
       <TabsContent value="offload" className="m-0">
-        <Suspense fallback={<div role="status" className="p-6 text-sm text-muted-foreground">Loading Offload Search…</div>}>
+        <Suspense
+          fallback={
+            <div role="status" className="p-6 text-sm text-muted-foreground">
+              Loading Offload Search…
+            </div>
+          }
+        >
           {visibleValues.includes("offload") && <OffloadItemSearch />}
         </Suspense>
       </TabsContent>
       <TabsContent value="otw" className="m-0">
-        <Suspense fallback={<div role="status" className="p-6 text-sm text-muted-foreground">Loading On The Way…</div>}>
+        <Suspense
+          fallback={
+            <div role="status" className="p-6 text-sm text-muted-foreground">
+              Loading On The Way…
+            </div>
+          }
+        >
           {visibleValues.includes("otw") && <StockOTW />}
         </Suspense>
       </TabsContent>
