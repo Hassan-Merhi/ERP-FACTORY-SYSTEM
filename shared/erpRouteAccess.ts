@@ -9,7 +9,7 @@ export const ERP_COMPOSITE_ROUTE_FEATURES: Record<string, readonly FeatureKey[]>
   "/financial-overview": ["dashboard"],
   "/cost-centers": ["accounts"],
   "/inventory": ["location_inventory", "stock_otw", "containers"],
-  "/stock": ["stock_items", "stock_query"],
+  "/stock": ["stock_items", "stock_query", "stock_otw"],
   "/parties": ["suppliers", "customers"],
   "/transaction-journal": ["daybook"],
   "/stock-in-sales-report": ["sales_report"],
