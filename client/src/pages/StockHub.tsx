@@ -33,7 +33,11 @@ export default function StockHub({ access }: { access?: ErpFeatureAccess }) {
   }
 
   return (
-    <Tabs value={activeTab} onValueChange={(value) => setTab(value as (typeof TAB_VALUES)[number])} className="stock-hub-shell min-w-0">
+    <Tabs
+      value={activeTab}
+      onValueChange={(value) => setTab(value as (typeof TAB_VALUES)[number])}
+      className="stock-hub-shell min-w-0"
+    >
       <div className="stock-hub-tabs erp-mobile-scroll-tabs mb-5 pb-1">
         <TabsList className="stock-hub-tab-list w-max min-w-full sm:min-w-0 sm:w-fit" aria-label="Stock sections">
           {visibleTabs.map(({ value, label, icon: Icon }) => (
