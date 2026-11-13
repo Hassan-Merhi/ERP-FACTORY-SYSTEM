@@ -26,7 +26,7 @@ describe("Properties normal PO Import intercompany destinations", () => {
     );
     const validated = validatePropertiesImportSelections(containers, selections, new Set([30, 31]));
     expect(validated.map((entry) => entry.destinationCompanyId)).toEqual([30, 30, 30]);
-    expect(validated.every((entry) => entry.chargesConfirmed === false)).toBe(true);
+    expect(validated.every((entry) => entry.chargesConfirmed === true)).toBe(true);
   });
 
   it("preserves individual overrides when the global default changes", () => {
@@ -70,21 +70,20 @@ describe("Properties normal PO Import intercompany destinations", () => {
     ).toThrow("Duplicate or missing");
   });
 
-  it("requires evidence for confirmed nonzero charges but never fabricates it", () => {
+  it("always includes Excel charges and allows optional invoice references", () => {
     let selections = initializePropertiesDestinations(
       containers.map((entry) => entry.containerNumber),
       "30"
     );
-    selections = updatePropertiesContainerCharges(selections, "TEST-CONT-001", { chargesConfirmed: true });
-    expect(() => validatePropertiesImportSelections(containers, selections, new Set([30]))).toThrow(
-      "evidence reference"
-    );
+    // Legacy drafts with a previously unchecked box cannot omit PO charges.
+    selections = updatePropertiesContainerCharges(selections, "TEST-CONT-001", { chargesConfirmed: false });
+    const validated = validatePropertiesImportSelections(containers, selections, new Set([30]));
+    expect(validated.every((entry) => entry.chargesConfirmed)).toBe(true);
     selections = updatePropertiesContainerCharges(selections, "TEST-CONT-001", {
       chargeEvidenceReference: "FRT-INV-1",
     });
-    const validated = validatePropertiesImportSelections(containers, selections, new Set([30]));
-    expect(validated[0]).toMatchObject({ chargesConfirmed: true, chargeEvidenceReference: "FRT-INV-1" });
-    expect(validated[1].chargesConfirmed).toBe(false);
+    expect(validatePropertiesImportSelections(containers, selections, new Set([30]))[0])
+      .toMatchObject({ chargesConfirmed: true, chargeEvidenceReference: "FRT-INV-1" });
   });
 
   it("keeps the import reachable only in Properties trading with Owner/Developer access", () => {
