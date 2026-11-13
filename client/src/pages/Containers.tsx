@@ -36,6 +36,8 @@ export default function Containers() {
     spContainersList,
     suppliers,
     isLoading,
+    containersError,
+    refetchContainers,
     spContainersLoading,
     hideContainerCosts,
   } = useContainerQueries(selectedCompany, isSupplierPartner, isFactory);
@@ -69,6 +71,20 @@ export default function Containers() {
 
   if (isLoading && !isSupplierPartner) {
     return <ContainerLoadingState />;
+  }
+
+  if (containersError && !isSupplierPartner) {
+    return (
+      <div role="alert" className="rounded-lg border border-destructive/40 p-6 space-y-3">
+        <p className="font-semibold">Cannot load containers for the selected company</p>
+        <p className="text-sm text-muted-foreground">
+          {containersError instanceof Error ? containersError.message : "The container request failed"}
+        </p>
+        <button type="button" className="underline text-sm" onClick={() => void refetchContainers()}>
+          Retry loading containers
+        </button>
+      </div>
+    );
   }
 
   if (isSupplierPartner) {
