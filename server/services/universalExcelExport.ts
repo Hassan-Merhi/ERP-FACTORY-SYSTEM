@@ -15,7 +15,7 @@ import { writeWorkbook, writeWorkbookToResponse } from "../excelHelper";
 export async function sendUniversalExcelWorkbook(
   response: ServerResponse,
   filename: string,
-  spec: UniversalExcelWorkbookSpec,
+  spec: UniversalExcelWorkbookSpec
 ): Promise<UniversalExcelSheetResult[]> {
   const safeName = validateUniversalExcelFilename(filename);
   const { workbook, results } = buildUniversalExcelWorkbook(spec);
@@ -25,7 +25,7 @@ export async function sendUniversalExcelWorkbook(
 
 /** For workflows that explicitly require XLSX bytes (e.g., attachments). */
 export async function buildUniversalExcelAttachment(
-  spec: UniversalExcelWorkbookSpec,
+  spec: UniversalExcelWorkbookSpec
 ): Promise<{ buffer: Buffer; results: UniversalExcelSheetResult[] }> {
   const { workbook, results } = buildUniversalExcelWorkbook(spec);
   return { buffer: await writeWorkbook(workbook), results };

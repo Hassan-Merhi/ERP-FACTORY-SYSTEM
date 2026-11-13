@@ -27,7 +27,7 @@ export async function exportSalesReportExcel(salesData: SalesReportItem[]) {
     { key: "hassansProfit", header: "Hassan's Profit", type: "money", numFmt: money, width: 14 },
     { key: "hassansPercent", header: "Hassan's %", type: "decimal", numFmt: '0.0"%"', width: 12 },
   ];
-  const rows = salesData.map(item => ({
+  const rows = salesData.map((item) => ({
     location: item.locationName || "N/A",
     itemCode: item.stockItemCode || "",
     itemName: item.stockItemName,
@@ -48,12 +48,14 @@ export async function exportSalesReportExcel(salesData: SalesReportItem[]) {
     mode: "report",
     title: "Detailed Sales Report",
     currencyCode: "USD",
-    sheets: [{
-      kind: "table",
-      name: "Detailed Sales Report",
-      columns,
-      rows,
-    }],
+    sheets: [
+      {
+        kind: "table",
+        name: "Detailed Sales Report",
+        columns,
+        rows,
+      },
+    ],
   });
 
   // Preserve the existing red-loss/green-profit signal without changing

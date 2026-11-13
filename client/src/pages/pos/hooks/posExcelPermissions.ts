@@ -6,7 +6,7 @@ import type { AuthMe } from "@shared/apiTypes";
  * The API serving inventory must also enforce its own company/role permissions.
  */
 export function canSeePosExcelFinancials(
-  user: Pick<AuthMe, "role" | "currentRole" | "posViewOnly" | "hiddenErpCostFields"> | null | undefined,
+  user: Pick<AuthMe, "role" | "currentRole" | "posViewOnly" | "hiddenErpCostFields"> | null | undefined
 ): boolean {
   if (!user) return false;
   const effectiveRole = user.currentRole ?? user.role ?? "";

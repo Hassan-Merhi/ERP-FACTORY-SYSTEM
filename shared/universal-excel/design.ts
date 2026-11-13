@@ -75,15 +75,15 @@ export const DEFAULT_UNIVERSAL_EXCEL_APPEARANCE: ResolvedUniversalExcelAppearanc
 };
 
 function readableTextOn(color: string): string {
-  const components = [2, 4, 6].map(position => parseInt(color.slice(position, position + 2), 16) / 255);
-  const linear = components.map(c => c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+  const components = [2, 4, 6].map((position) => parseInt(color.slice(position, position + 2), 16) / 255);
+  const linear = components.map((c) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)));
   const luminance = 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
   // Pick the foreground with better relative contrast on this accent.
   return luminance > 0.179 ? "FF172334" : "FFFFFFFF";
 }
 
 export function resolveUniversalExcelAppearance(
-  options: UniversalExcelAppearance = {},
+  options: UniversalExcelAppearance = {}
 ): ResolvedUniversalExcelAppearance {
   const preset = options.preset ?? "dakzo";
   if (preset !== "dakzo" && preset !== "slate") {
@@ -91,7 +91,7 @@ export function resolveUniversalExcelAppearance(
   }
   const rawBrand = options.brandName ?? DEFAULT_UNIVERSAL_EXCEL_APPEARANCE.brandName;
   const brandName = rawBrand.trim();
-  if (!brandName || brandName.length > 70 || Array.from(rawBrand).some(char => char.charCodeAt(0) < 32)) {
+  if (!brandName || brandName.length > 70 || Array.from(rawBrand).some((char) => char.charCodeAt(0) < 32)) {
     throw new Error("Invalid Excel brand name");
   }
   const base = preset === "slate" ? SLATE_PALETTE : DEFAULT_PALETTE;
@@ -120,7 +120,7 @@ export function paintExcelRow(
   worksheet: ExcelJS.Worksheet,
   rowNumber: number,
   columnCount: number,
-  color: string,
+  color: string
 ): void {
   const row = worksheet.getRow(rowNumber);
   for (let column = 1; column <= columnCount; column += 1) {
@@ -133,7 +133,7 @@ export function styleUniversalExcelTotal(
   rowNumber: number,
   columnCount: number,
   design: ResolvedUniversalExcelAppearance,
-  kind: "subtotal" | "grand-total",
+  kind: "subtotal" | "grand-total"
 ): void {
   const row = worksheet.getRow(rowNumber);
   const fill = kind === "grand-total" ? design.palette.grandTotal : design.palette.subtotal;
@@ -149,7 +149,7 @@ export function styleUniversalExcelGroup(
   worksheet: ExcelJS.Worksheet,
   rowNumber: number,
   columnCount: number,
-  design: ResolvedUniversalExcelAppearance,
+  design: ResolvedUniversalExcelAppearance
 ): void {
   paintExcelRow(worksheet, rowNumber, columnCount, design.palette.subtotal);
   const row = worksheet.getRow(rowNumber);
@@ -160,7 +160,9 @@ export function styleUniversalExcelGroup(
 function safePrintText(text: string): string {
   // Excel's header/footer control characters (&P, &N, etc.) must not come
   // from user-controlled report titles, filter labels or company names.
-  return Array.from(text, char => char === "&" ? "" : char.charCodeAt(0) < 32 ? " " : char).join("").slice(0, 90);
+  return Array.from(text, (char) => (char === "&" ? "" : char.charCodeAt(0) < 32 ? " " : char))
+    .join("")
+    .slice(0, 90);
 }
 
 /**
@@ -175,7 +177,7 @@ export function applyUniversalExcelPrintLayout(
     lastRow: number;
     columnCount: number;
     design: ResolvedUniversalExcelAppearance;
-  },
+  }
 ): void {
   if (!args.design.printLayout) return;
   worksheet.pageSetup.orientation = args.columnCount > 8 ? "landscape" : "portrait";

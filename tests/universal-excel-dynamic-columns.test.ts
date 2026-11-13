@@ -22,10 +22,18 @@ import {
   buildAgentStatementReportColumns,
   buildCustomAttributeReportColumns,
 } from "../shared/universal-excel/reportSchemas";
-import { buildUniversalExcelWorkbook, type UniversalExcelColumn, type UniversalExcelWorkbookSpec } from "../shared/universal-excel/engine";
+import {
+  buildUniversalExcelWorkbook,
+  type UniversalExcelColumn,
+  type UniversalExcelWorkbookSpec,
+} from "../shared/universal-excel/engine";
 import { addSheet } from "../server/services/export-excel/sheet-helpers";
 
-const sheet = (columns: readonly UniversalExcelColumn[], rows: readonly Record<string, unknown>[], tags: string[] = []) => {
+const sheet = (
+  columns: readonly UniversalExcelColumn[],
+  rows: readonly Record<string, unknown>[],
+  tags: string[] = []
+) => {
   const spec: UniversalExcelWorkbookSpec = {
     schemaVersion: 1,
     mode: "report",
@@ -69,8 +77,12 @@ describe("Phase 4: ERP stock smart location prices", () => {
       { id: 3, name: "Achrafieh" },
       { id: 5, name: "Hamra" },
     ]);
-    expect(columns.map(c => c.header).slice(-5)).toEqual([
-      "Cost Dubai", "Price - Achrafieh", "Price - Hamra", "Price - Zahle", "Active",
+    expect(columns.map((c) => c.header).slice(-5)).toEqual([
+      "Cost Dubai",
+      "Price - Achrafieh",
+      "Price - Hamra",
+      "Price - Zahle",
+      "Active",
     ]);
     const result = sheet(columns, [stockRow({ "3": "13.50", "5": "14.25" })], ["stock-rates", "stock-cost"]);
     expect(result.ws.getRow(5).getCell(11).value).toBe("Price - Achrafieh");
@@ -86,20 +98,33 @@ describe("Phase 4: ERP stock smart location prices", () => {
     const columns = buildStockItemReportColumns([{ id: 1, name: "Factory" }]);
     const result = sheet(columns, [stockRow({ "1": "15" })]);
     expect(result.results[0].columns).toEqual([
-      "code", "name", "barcode", "aliasCodes", "uom",
-      "stockGroup", "grade", "category", "active",
+      "code",
+      "name",
+      "barcode",
+      "aliasCodes",
+      "uom",
+      "stockGroup",
+      "grade",
+      "category",
+      "active",
     ]);
     expect(result.ws.getRow(6).getCell(9).value).toBe("Yes");
     expect(result.ws.getCell("J6").value).toBeNull();
   });
 
   it("rejects duplicate names and duplicate IDs rather than silently overwriting prices", () => {
-    expect(() => buildLocationPriceColumns([
-      { id: 1, name: "Mali" }, { id: 2, name: "mali" },
-    ])).toThrow(/Duplicate dynamic Excel dimension/);
-    expect(() => buildLocationPriceColumns([
-      { id: 1, name: "Lshi" }, { id: 1, name: "Other" },
-    ])).toThrow(/Duplicate dynamic Excel dimension/);
+    expect(() =>
+      buildLocationPriceColumns([
+        { id: 1, name: "Mali" },
+        { id: 2, name: "mali" },
+      ])
+    ).toThrow(/Duplicate dynamic Excel dimension/);
+    expect(() =>
+      buildLocationPriceColumns([
+        { id: 1, name: "Lshi" },
+        { id: 1, name: "Other" },
+      ])
+    ).toThrow(/Duplicate dynamic Excel dimension/);
   });
 
   it("requires both family and member visibility tags for dimension pricing", () => {
@@ -125,9 +150,10 @@ describe("Phase 4: ERP stock smart location prices", () => {
 
   it("does not include explicitly disabled locations", () => {
     const cols = buildLocationPriceColumns([
-      { id: 1, name: "Beirut" }, { id: 2, name: "Lshi", enabled: false },
+      { id: 1, name: "Beirut" },
+      { id: 2, name: "Lshi", enabled: false },
     ]);
-    expect(cols.map(c => c.header)).toEqual(["Price - Beirut"]);
+    expect(cols.map((c) => c.header)).toEqual(["Price - Beirut"]);
   });
 });
 
@@ -139,23 +165,36 @@ describe("Phase 4: Factory month columns", () => {
       { period: "2026-08", label: "Aug 2026" },
     ];
     const columns = buildProductionReportColumns(months, { sourceKey: "values", sourceFormat: "array" });
-    expect(columns.map(c => c.header)).toEqual([
-      "Item Name", "Article Code", "Category",
-      "Jan 2026", "Aug 2026", "Nov 2026", "Total Bales",
+    expect(columns.map((c) => c.header)).toEqual([
+      "Item Name",
+      "Article Code",
+      "Category",
+      "Jan 2026",
+      "Aug 2026",
+      "Nov 2026",
+      "Total Bales",
     ]);
-    const r = sheet(columns, [{
-      name: "Bales", articleCode: "001", categoryName: "Wipers",
-      values: [11, 1, 8], totalBales: 20,
-    }]);
-    expect([4, 5, 6].map(column => r.ws.getRow(6).getCell(column).value)).toEqual([1, 8, 11]);
+    const r = sheet(columns, [
+      {
+        name: "Bales",
+        articleCode: "001",
+        categoryName: "Wipers",
+        values: [11, 1, 8],
+        totalBales: 20,
+      },
+    ]);
+    expect([4, 5, 6].map((column) => r.ws.getRow(6).getCell(column).value)).toEqual([1, 8, 11]);
     expect(r.ws.getCell("G6").value).toBe(20);
   });
 
   it("rejects a shortened positional matrix instead of losing the final month", () => {
-    const cols = buildProductionMonthColumns([
-      { period: "2026-01", label: "January" },
-      { period: "2026-02", label: "February" },
-    ], { sourceKey: "values", sourceFormat: "array" });
+    const cols = buildProductionMonthColumns(
+      [
+        { period: "2026-01", label: "January" },
+        { period: "2026-02", label: "February" },
+      ],
+      { sourceKey: "values", sourceFormat: "array" }
+    );
     expect(() => sheet(cols, [{ values: [5] }])).toThrow(/Missing dynamic Excel value for production_month: 2026-02/);
   });
 
@@ -167,7 +206,9 @@ describe("Phase 4: Factory month columns", () => {
     const r = sheet(columns, [{ monthCounts: { "2025-12": 7, "2026-01": 9 } }]);
     expect(r.ws.getCell("A6").value).toBe(7);
     expect(r.ws.getCell("B6").value).toBe(9);
-    expect(() => buildProductionMonthColumns([{ period: "2026-13", label: "Invalid" }])).toThrow(/Invalid Excel month period/);
+    expect(() => buildProductionMonthColumns([{ period: "2026-13", label: "Invalid" }])).toThrow(
+      /Invalid Excel month period/
+    );
   });
 
   it("does not turn missing production counts into invented zeros", () => {
@@ -180,17 +221,24 @@ describe("Phase 4: Factory month columns", () => {
 describe("Phase 4: currencies, FX and optional financial fields", () => {
   it("inserts per-currency amount and 6-decimal FX columns before USD totals", async () => {
     const columns = buildFinanceCurrencyReportColumns(["USD", "EUR"], { includeFxRates: true });
-    expect(columns.map(c => c.header)).toEqual([
-      "Date", "Description", "Amount (EUR)", "Amount (USD)",
-      "FX Rate (EUR)", "FX Rate (USD)", "Total USD",
+    expect(columns.map((c) => c.header)).toEqual([
+      "Date",
+      "Description",
+      "Amount (EUR)",
+      "Amount (USD)",
+      "FX Rate (EUR)",
+      "FX Rate (USD)",
+      "Total USD",
     ]);
-    const r = sheet(columns, [{
-      date: "2026-11-13",
-      description: "Incoming stock",
-      amountsByCurrency: { USD: 10, EUR: 8.5 },
-      fxRatesByCurrency: { USD: 1, EUR: 1.125678 },
-      totalUsd: 19.56,
-    }]);
+    const r = sheet(columns, [
+      {
+        date: "2026-11-13",
+        description: "Incoming stock",
+        amountsByCurrency: { USD: 10, EUR: 8.5 },
+        fxRatesByCurrency: { USD: 1, EUR: 1.125678 },
+        totalUsd: 19.56,
+      },
+    ]);
     expect(r.ws.getCell("E6").value).toBe(1.125678);
     expect(r.ws.getCell("E6").numFmt).toBe("#,##0.000000");
     expect(r.ws.getCell("G6").value).toBe(19.56);
@@ -201,24 +249,42 @@ describe("Phase 4: currencies, FX and optional financial fields", () => {
   it("only includes optional FX fields when explicitly enabled", () => {
     const summary = buildFactoryDaybookReportColumns("summary");
     const detail = buildFactoryDaybookReportColumns("detailed");
-    expect(summary.map(c => c.header)).toEqual([
-      "Date", "Type", "Description", "Currency",
-      "Amount", "FX Rate", "Amount (USD)", "Optional",
+    expect(summary.map((c) => c.header)).toEqual([
+      "Date",
+      "Type",
+      "Description",
+      "Currency",
+      "Amount",
+      "FX Rate",
+      "Amount (USD)",
+      "Optional",
     ]);
-    expect(detail.map(c => c.header)).toEqual([
-      "Date", "Type", "Description", "Currency",
-      "Amount", "Amount (USD)", "Optional", "Account Name", "Debit", "Credit",
+    expect(detail.map((c) => c.header)).toEqual([
+      "Date",
+      "Type",
+      "Description",
+      "Currency",
+      "Amount",
+      "Amount (USD)",
+      "Optional",
+      "Account Name",
+      "Debit",
+      "Credit",
     ]);
-    expect(buildAgentStatementReportColumns().map(c => c.key)).not.toContain("fxRate");
-    expect(buildAgentStatementReportColumns({ fxRate: true }).map(c => c.key)).toContain("fxRate");
+    expect(buildAgentStatementReportColumns().map((c) => c.key)).not.toContain("fxRate");
+    expect(buildAgentStatementReportColumns({ fxRate: true }).map((c) => c.key)).toContain("fxRate");
   });
 
   it("does not display tagged sensitive currency columns without access", () => {
     const columns = buildFinanceCurrencyReportColumns(["EUR"], { hideCost: true });
-    const r = sheet(columns, [{
-      date: "2026-11-13", description: "Test",
-      amountsByCurrency: { EUR: 10 }, totalUsd: 12,
-    }]);
+    const r = sheet(columns, [
+      {
+        date: "2026-11-13",
+        description: "Test",
+        amountsByCurrency: { EUR: 10 },
+        totalUsd: 12,
+      },
+    ]);
     expect(r.results[0].columns).toEqual(["date", "description", "totalUsd"]);
     expect(r.ws.getCell("C6").value).toBe(12);
     expect(r.ws.getCell("D6").value).toBeNull();
@@ -234,62 +300,82 @@ describe("Phase 4: custom attributes, conditional columns and strict validation"
   it("outputs typed additional attributes in alphabetical order", () => {
     const columns = buildCustomAttributeReportColumns(
       [{ key: "code", header: "Code" }],
-      [{ id: "size", label: "Size", type: "integer" }, { id: "grade", label: "Grade" }],
+      [
+        { id: "size", label: "Size", type: "integer" },
+        { id: "grade", label: "Grade" },
+      ]
     );
-    expect(columns.map(c => c.header)).toEqual(["Code", "Grade", "Size"]);
+    expect(columns.map((c) => c.header)).toEqual(["Code", "Grade", "Size"]);
     const r = sheet(columns, [{ code: "001", attributes: { size: "44", grade: "A" } }]);
     expect(r.ws.getCell("C6").value).toBe(44);
   });
 
   it("keeps conditional exports deterministic and rejects duplicate composition", () => {
-    expect(selectUniversalExcelConditionalColumns([
-      { enabled: false, column: { key: "secret", header: "Secret" } },
-      { enabled: true, column: { key: "other", header: "Other" } },
-    ]).map(c => c.key)).toEqual(["other"]);
+    expect(
+      selectUniversalExcelConditionalColumns([
+        { enabled: false, column: { key: "secret", header: "Secret" } },
+        { enabled: true, column: { key: "other", header: "Other" } },
+      ]).map((c) => c.key)
+    ).toEqual(["other"]);
 
-    expect(() => composeUniversalExcelColumns(
-      [{ key: "a", header: "A" }], [{ after: "a", columns: [{ key: "a", header: "Again" }] }],
-    )).toThrow(/Duplicate Excel column key/);
-    expect(() => composeUniversalExcelColumns(
-      [{ key: "a", header: "A" }], [{ after: "missing", columns: [{ key: "b", header: "B" }] }],
-    )).toThrow(/Unknown Excel column insertion anchor/);
-    expect(composeUniversalExcelColumns([{ key: "a", header: "A" }], [
-      { after: "a", columns: [{ key: "b", header: "B" }] },
-      { after: "a", columns: [{ key: "c", header: "C" }] },
-    ]).map(c => c.key)).toEqual(["a", "b", "c"]);
+    expect(() =>
+      composeUniversalExcelColumns(
+        [{ key: "a", header: "A" }],
+        [{ after: "a", columns: [{ key: "a", header: "Again" }] }]
+      )
+    ).toThrow(/Duplicate Excel column key/);
+    expect(() =>
+      composeUniversalExcelColumns(
+        [{ key: "a", header: "A" }],
+        [{ after: "missing", columns: [{ key: "b", header: "B" }] }]
+      )
+    ).toThrow(/Unknown Excel column insertion anchor/);
+    expect(
+      composeUniversalExcelColumns(
+        [{ key: "a", header: "A" }],
+        [
+          { after: "a", columns: [{ key: "b", header: "B" }] },
+          { after: "a", columns: [{ key: "c", header: "C" }] },
+        ]
+      ).map((c) => c.key)
+    ).toEqual(["a", "b", "c"]);
   });
 
   it("rejects nested fields that have no declared derived-column source", () => {
-    expect(() => sheet(
-      [{ key: "code", header: "Code" }],
-      [{ code: "001", hiddenUnexpected: { x: 1 } }],
-    )).toThrow(/Unmapped Excel export column/);
-    expect(() => sheet(
-      [{ key: "derived", header: "Derived", value: row => row.unmapped }],
-      [{ unmapped: 10 }],
-    )).toThrow(/Invalid or duplicate column/);
+    expect(() => sheet([{ key: "code", header: "Code" }], [{ code: "001", hiddenUnexpected: { x: 1 } }])).toThrow(
+      /Unmapped Excel export column/
+    );
+    expect(() =>
+      sheet([{ key: "derived", header: "Derived", value: (row) => row.unmapped }], [{ unmapped: 10 }])
+    ).toThrow(/Invalid or duplicate column/);
   });
 
   it("rejects malformed source structures and doesn't reinterpret formulas in dimension values", () => {
     const columns = buildLocationPriceColumns([{ id: 2, name: "Shop" }]);
     expect(() => sheet(columns, [{ pricesByLocation: "not-an-object" }])).toThrow(/Expected Excel column record/);
     const code = buildAttributeColumns([{ id: "code", label: "Code" }]);
-    const r = sheet(code, [{ attributes: { code: "=HYPERLINK(\"evil\")" } }]);
-    expect(r.ws.getCell("A6").value).toBe("'=HYPERLINK(\"evil\")");
+    const r = sheet(code, [{ attributes: { code: '=HYPERLINK("evil")' } }]);
+    expect(r.ws.getCell("A6").value).toBe('\'=HYPERLINK("evil")');
   });
 
   it("discovers an allowlisted column whose source first appears after row 200", () => {
     const dynamic = buildProductionMonthColumns([{ period: "2026-11", label: "Nov" }]);
     const source = Array.from({ length: 230 }, (_, index) =>
-      index === 229 ? { code: "A230", monthCounts: { "2026-11": 15 } } : { code: "A" + index });
+      index === 229 ? { code: "A230", monthCounts: { "2026-11": 15 } } : { code: "A" + index }
+    );
     const spec: UniversalExcelWorkbookSpec = {
-      schemaVersion: 1, title: "Sparse", mode: "report",
-      sheets: [{
-        name: "Sparse", kind: "table",
-        columns: [{ key: "code", header: "Code" }],
-        discoverColumns: dynamic,
-        rows: source,
-      }],
+      schemaVersion: 1,
+      title: "Sparse",
+      mode: "report",
+      sheets: [
+        {
+          name: "Sparse",
+          kind: "table",
+          columns: [{ key: "code", header: "Code" }],
+          discoverColumns: dynamic,
+          rows: source,
+        },
+      ],
     };
     const r = buildUniversalExcelWorkbook(spec);
     expect(r.results[0].columns).toEqual(["code", "production_month__2026-11"]);
@@ -299,9 +385,7 @@ describe("Phase 4: custom attributes, conditional columns and strict validation"
 
 describe("Phase 4: full-company data export retains all fields", () => {
   it("discovers new fields after the first 200 rows without changing first-row headers or formats", () => {
-    const rows: Record<string, unknown>[] = Array.from(
-      { length: 210 }, (_, index) => ({ ref_code: "B" + index }),
-    );
+    const rows: Record<string, unknown>[] = Array.from({ length: 210 }, (_, index) => ({ ref_code: "B" + index }));
     rows[209].late_total_amount = 125.75;
     const wb = new ExcelJS.Workbook();
     addSheet(wb, "Factory Stock", rows);

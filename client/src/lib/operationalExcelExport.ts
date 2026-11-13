@@ -49,14 +49,14 @@ export function columnsFromOperationalRows(
     types?: Readonly<Record<string, UniversalExcelColumn["type"]>>;
     widths?: Readonly<Record<string, number>>;
     orderedHeaders?: readonly string[];
-  } = {},
+  } = {}
 ): UniversalExcelColumn[] {
   const keys = new Set(options.orderedHeaders ?? []);
   for (const row of rows) {
     for (const key of Object.keys(row)) keys.add(key);
   }
   if (!keys.size) throw new Error("Excel report has no columns; declare orderedHeaders for empty exports");
-  return [...keys].map(key => ({
+  return [...keys].map((key) => ({
     key,
     header: key,
     type: options.types?.[key] ?? "auto",
@@ -65,10 +65,10 @@ export function columnsFromOperationalRows(
 }
 
 export async function exportOperationalWorkbook(
-  input: OperationalExcelExportInput,
+  input: OperationalExcelExportInput
 ): Promise<UniversalExcelSheetResult[]> {
   if (!input.sheets.length) throw new Error("Excel operational export requires at least one sheet");
-  const sheets: UniversalExcelSheet[] = input.sheets.map(sheet => ({
+  const sheets: UniversalExcelSheet[] = input.sheets.map((sheet) => ({
     kind: "table",
     name: sheet.name,
     columns: sheet.columns,
@@ -76,15 +76,18 @@ export async function exportOperationalWorkbook(
     footer: sheet.footer,
     strictColumns: true,
   }));
-  return downloadUniversalExcelWorkbook({
-    schemaVersion: 1,
-    title: input.title,
-    mode: input.mode ?? "report",
-    companyName: input.companyName,
-    dateFormat: input.dateFormat,
-    currencyCode: input.currencyCode,
-    filters: input.filters,
-    allowedColumnTags: input.allowedColumnTags,
-    sheets,
-  }, input.fileName);
+  return downloadUniversalExcelWorkbook(
+    {
+      schemaVersion: 1,
+      title: input.title,
+      mode: input.mode ?? "report",
+      companyName: input.companyName,
+      dateFormat: input.dateFormat,
+      currencyCode: input.currencyCode,
+      filters: input.filters,
+      allowedColumnTags: input.allowedColumnTags,
+      sheets,
+    },
+    input.fileName
+  );
 }

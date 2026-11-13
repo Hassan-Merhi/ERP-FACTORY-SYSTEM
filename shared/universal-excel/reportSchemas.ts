@@ -43,9 +43,7 @@ export const EXCEL_STOCK_COST_TAG = "stock-cost";
 export const EXCEL_FINANCIAL_COST_TAG = "financial-cost";
 
 /** Stock Items: dynamic location prices are inserted before Active. */
-export function buildStockItemReportColumns(
-  locations: readonly UniversalExcelLocation[],
-): UniversalExcelColumn[] {
+export function buildStockItemReportColumns(locations: readonly UniversalExcelLocation[]): UniversalExcelColumn[] {
   const fixed: UniversalExcelColumn[] = [
     { key: "code", header: "Code", type: "text", width: 20, required: true },
     { key: "name", header: "Name", type: "text", width: 40 },
@@ -56,12 +54,18 @@ export function buildStockItemReportColumns(
     { key: "grade", header: "Grade", type: "text", width: 16 },
     { key: "category", header: "Category", type: "text", width: 22 },
     {
-      key: "defaultSellingPrice", header: "Default Selling Price",
-      type: "money", width: 23, permissionTag: EXCEL_STOCK_RATES_TAG,
+      key: "defaultSellingPrice",
+      header: "Default Selling Price",
+      type: "money",
+      width: 23,
+      permissionTag: EXCEL_STOCK_RATES_TAG,
     },
     {
-      key: "costDubai", header: "Cost Dubai",
-      type: "money", width: 18, permissionTag: EXCEL_STOCK_COST_TAG,
+      key: "costDubai",
+      header: "Cost Dubai",
+      type: "money",
+      width: 18,
+      permissionTag: EXCEL_STOCK_COST_TAG,
     },
     { key: "active", header: "Active", type: "text", width: 12 },
   ];
@@ -69,16 +73,18 @@ export function buildStockItemReportColumns(
     fallbackPriceKey: "defaultSellingPrice",
     permissionTag: EXCEL_STOCK_RATES_TAG,
   });
-  return composeUniversalExcelColumns(fixed, [{
-    after: "costDubai",
-    columns: dynamicColumns,
-  }]);
+  return composeUniversalExcelColumns(fixed, [
+    {
+      after: "costDubai",
+      columns: dynamicColumns,
+    },
+  ]);
 }
 
 /** Production: month columns sorted by YYYY-MM, but array indices unchanged. */
 export function buildProductionReportColumns(
   months: readonly UniversalExcelMonth[],
-  options: { sourceFormat?: "record" | "array"; sourceKey?: string } = {},
+  options: { sourceFormat?: "record" | "array"; sourceKey?: string } = {}
 ): UniversalExcelColumn[] {
   const fixed: UniversalExcelColumn[] = [
     { key: "name", header: "Item Name", type: "text", width: 38 },
@@ -86,10 +92,12 @@ export function buildProductionReportColumns(
     { key: "categoryName", header: "Category", type: "text", width: 24 },
     { key: "totalBales", header: "Total Bales", type: "integer", width: 18 },
   ];
-  return composeUniversalExcelColumns(fixed, [{
-    before: "totalBales",
-    columns: buildProductionMonthColumns(months, options),
-  }]);
+  return composeUniversalExcelColumns(fixed, [
+    {
+      before: "totalBales",
+      columns: buildProductionMonthColumns(months, options),
+    },
+  ]);
 }
 
 /**
@@ -98,7 +106,7 @@ export function buildProductionReportColumns(
  */
 export function buildFactoryDaybookReportColumns(
   mode: "summary" | "detailed",
-  options: { includeFxRate?: boolean } = {},
+  options: { includeFxRate?: boolean } = {}
 ): UniversalExcelColumn[] {
   const fixed: UniversalExcelColumn[] = [
     { key: "date", header: "Date", type: "date", width: 16 },
@@ -113,29 +121,34 @@ export function buildFactoryDaybookReportColumns(
     fixed.push(
       { key: "accountName", header: "Account Name", type: "text", width: 34 },
       { key: "debit", header: "Debit", type: "money", width: 18 },
-      { key: "credit", header: "Credit", type: "money", width: 18 },
+      { key: "credit", header: "Credit", type: "money", width: 18 }
     );
   }
   const includeFxRate = options.includeFxRate ?? mode === "summary";
-  const fx = selectUniversalExcelConditionalColumns([{
-    enabled: includeFxRate,
-    column: {
-      key: "fxRate",
-      header: "FX Rate",
-      type: "decimal",
-      numFmt: "#,##0.000000",
-      width: 18,
+  const fx = selectUniversalExcelConditionalColumns([
+    {
+      enabled: includeFxRate,
+      column: {
+        key: "fxRate",
+        header: "FX Rate",
+        type: "decimal",
+        numFmt: "#,##0.000000",
+        width: 18,
+      },
     },
-  }]);
-  return composeUniversalExcelColumns(fixed, [{
-    after: "amount", columns: fx,
-  }]);
+  ]);
+  return composeUniversalExcelColumns(fixed, [
+    {
+      after: "amount",
+      columns: fx,
+    },
+  ]);
 }
 
 /** Financial comparison: per-currency amounts and optional FX conversion. */
 export function buildFinanceCurrencyReportColumns(
   currencies: readonly string[],
-  options: { includeFxRates?: boolean; hideCost?: boolean } = {},
+  options: { includeFxRates?: boolean; hideCost?: boolean } = {}
 ): UniversalExcelColumn[] {
   const base: UniversalExcelColumn[] = [
     { key: "date", header: "Date", type: "date", width: 16 },
@@ -146,9 +159,7 @@ export function buildFinanceCurrencyReportColumns(
     measure: "amount",
     permissionTag: options.hideCost ? EXCEL_FINANCIAL_COST_TAG : undefined,
   });
-  const fxColumns = options.includeFxRates
-    ? buildCurrencyColumns(currencies, { measure: "fx-rate" })
-    : [];
+  const fxColumns = options.includeFxRates ? buildCurrencyColumns(currencies, { measure: "fx-rate" }) : [];
   return composeUniversalExcelColumns(base, [
     { before: "totalUsd", columns: amountColumns },
     { before: "totalUsd", columns: fxColumns },
@@ -165,22 +176,29 @@ export function buildAgentStatementReportColumns(options: { fxRate?: boolean } =
     { key: "runningBalance", header: "Running Balance", type: "money", width: 22 },
     { key: "date", header: "Date", type: "date", width: 16 },
     { key: "notes", header: "Notes", type: "text", width: 35 },
-    ...selectUniversalExcelConditionalColumns([{
-      enabled: options.fxRate === true,
-      column: {
-        key: "fxRate", header: "FX Rate", type: "decimal",
-        numFmt: "#,##0.000000", width: 18,
+    ...selectUniversalExcelConditionalColumns([
+      {
+        enabled: options.fxRate === true,
+        column: {
+          key: "fxRate",
+          header: "FX Rate",
+          type: "decimal",
+          numFmt: "#,##0.000000",
+          width: 18,
+        },
       },
-    }]),
+    ]),
   ];
 }
 
 /** User-configured fields are always drawn from an explicit attribute list. */
 export function buildCustomAttributeReportColumns(
   base: readonly UniversalExcelColumn[],
-  attributes: readonly (UniversalExcelDimension & { type?: UniversalExcelColumnType })[],
+  attributes: readonly (UniversalExcelDimension & { type?: UniversalExcelColumnType })[]
 ): UniversalExcelColumn[] {
-  return composeUniversalExcelColumns(base, [{
-    columns: buildAttributeColumns(attributes, { order: "label" }),
-  }]);
+  return composeUniversalExcelColumns(base, [
+    {
+      columns: buildAttributeColumns(attributes, { order: "label" }),
+    },
+  ]);
 }

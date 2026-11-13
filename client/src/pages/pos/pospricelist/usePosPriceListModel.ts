@@ -630,14 +630,14 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
           : "";
       const searchPart = search.trim() ? `_search-${search.trim().replace(/\s+/g, "_")}` : "";
 
-      const { columnsFromOperationalRows, exportOperationalWorkbook } = await import(
-        "@/lib/operationalExcelExport"
-      );
+      const { columnsFromOperationalRows, exportOperationalWorkbook } = await import("@/lib/operationalExcelExport");
       const headers = [
-        "Code", "Item Name", "Group",
+        "Code",
+        "Item Name",
+        "Group",
         ...(showCostPrice ? ["Cost Price", "Cost + Offloading"] : []),
         ...(isAllMode
-          ? ["Total Qty", ...masters.map(master => master.name)]
+          ? ["Total Qty", ...masters.map((master) => master.name)]
           : ["Highest Price Sold", "Lowest Price Sold", "Qty Sold", "Selling Price", "Qty in Stock"]),
       ];
       const types: Record<string, "auto" | "money" | "decimal"> = {};
@@ -648,15 +648,17 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
         title: "POS Price List",
         fileName: "price_list_" + locationLabel + filterPart + searchPart + "_" + dateStr + ".xlsx",
         mode: isAllMode ? "import-template" : "report",
-        filters: [{ label: "Location", value: isAllMode ? "All Locations" : selectedLocation?.name ?? "Unknown" }],
-        sheets: [{
-          name: "Price List",
-          rows,
-          columns: columnsFromOperationalRows(rows, {
-            orderedHeaders: headers,
-            types,
-          }),
-        }],
+        filters: [{ label: "Location", value: isAllMode ? "All Locations" : (selectedLocation?.name ?? "Unknown") }],
+        sheets: [
+          {
+            name: "Price List",
+            rows,
+            columns: columnsFromOperationalRows(rows, {
+              orderedHeaders: headers,
+              types,
+            }),
+          },
+        ],
       });
     } finally {
       setExporting(false);

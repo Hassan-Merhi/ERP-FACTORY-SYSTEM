@@ -150,143 +150,143 @@ export default function CombinedInventory({ headerActions }: CombinedInventoryPr
   const isLoadingOtw = containerDetailsQueries.some((q) => q.isLoading);
   const loadedOtwCount = containerDetailsQueries.filter((q) => !q.isLoading && q.data).length;
 
-  const calculateCombinedData = useCallback((inventoryRowsForExport: readonly InventoryRow[]): CombinedRow[] => {
-    // Use string keys so we can handle null stockItemId gracefully.
-    // Key strategy:
-    //   - stockItemId is set (non-null, non-zero) → "id:N"
-    //   - stockItemId is null/0 (legacy rows)     → "name:<normalised name>"
-    const map = new Map<string, CombinedRow>();
+  const calculateCombinedData = useCallback(
+    (inventoryRowsForExport: readonly InventoryRow[]): CombinedRow[] => {
+      // Use string keys so we can handle null stockItemId gracefully.
+      // Key strategy:
+      //   - stockItemId is set (non-null, non-zero) → "id:N"
+      //   - stockItemId is null/0 (legacy rows)     → "name:<normalised name>"
+      const map = new Map<string, CombinedRow>();
 
-    const idKey = (id: number | null | undefined) => (id != null && id !== 0 ? `id:${id}` : null);
-    const nameKey = (name: string) => `name:${(name || "").toLowerCase().trim()}`;
+      const idKey = (id: number | null | undefined) => (id != null && id !== 0 ? `id:${id}` : null);
+      const nameKey = (name: string) => `name:${(name || "").toLowerCase().trim()}`;
 
-    containerDetailsQueries.forEach((q) => {
-      if (!q.data) return;
-      const containerData = q.data as unknown as ContainerDetailPayload;
-      containerData?.pos?.forEach((po) => {
-        po.items?.forEach((item) => {
-          const qty = parseFloat(item.quantity || "0");
-          const rate = parseFloat(item.rate || "0");
-          const itemName = item.stockItemName || item.itemName || "";
-          const key = idKey(item.stockItemId) ?? nameKey(itemName);
+      containerDetailsQueries.forEach((q) => {
+        if (!q.data) return;
+        const containerData = q.data as unknown as ContainerDetailPayload;
+        containerData?.pos?.forEach((po) => {
+          po.items?.forEach((item) => {
+            const qty = parseFloat(item.quantity || "0");
+            const rate = parseFloat(item.rate || "0");
+            const itemName = item.stockItemName || item.itemName || "";
+            const key = idKey(item.stockItemId) ?? nameKey(itemName);
 
-          const existing = map.get(key);
-          if (existing) {
-            existing.otwQty += qty;
-            existing.totalQty += qty;
-            existing.otwWeightedCostSum += qty * rate;
-          } else {
-            map.set(key, {
-              stockItemId: item.stockItemId ?? null,
-              stockItemName: itemName,
-              stockGroupId: item.stockGroupId ?? null,
-              stockGroupName: item.stockGroupName || "",
-              otwQty: qty,
-              inHandQty: 0,
-              totalQty: qty,
-              inHandValue: 0,
-              otwWeightedCostSum: qty * rate,
-              avgRate: 0,
-              combinedValue: 0,
-            });
-          }
+            const existing = map.get(key);
+            if (existing) {
+              existing.otwQty += qty;
+              existing.totalQty += qty;
+              existing.otwWeightedCostSum += qty * rate;
+            } else {
+              map.set(key, {
+                stockItemId: item.stockItemId ?? null,
+                stockItemName: itemName,
+                stockGroupId: item.stockGroupId ?? null,
+                stockGroupName: item.stockGroupName || "",
+                otwQty: qty,
+                inHandQty: 0,
+                totalQty: qty,
+                inHandValue: 0,
+                otwWeightedCostSum: qty * rate,
+                avgRate: 0,
+                combinedValue: 0,
+              });
+            }
+          });
         });
       });
-    });
 
-    inventoryRowsForExport.forEach((inv) => {
-      const qty = parseFloat(inv.quantity || "0");
-      const value = parseFloat(inv.totalValue || "0");
+      inventoryRowsForExport.forEach((inv) => {
+        const qty = parseFloat(inv.quantity || "0");
+        const value = parseFloat(inv.totalValue || "0");
 
-      // Try ID key first; if OTW data for this item was stored under a name
-      // key (because its stockItemId was null at the time), find it that way.
-      const primaryKey = idKey(inv.stockItemId);
-      const fallbackKey = nameKey(inv.stockItemName);
-      let key = primaryKey ?? fallbackKey;
+        // Try ID key first; if OTW data for this item was stored under a name
+        // key (because its stockItemId was null at the time), find it that way.
+        const primaryKey = idKey(inv.stockItemId);
+        const fallbackKey = nameKey(inv.stockItemName);
+        let key = primaryKey ?? fallbackKey;
 
-      if (primaryKey && !map.has(primaryKey) && map.has(fallbackKey)) {
-        // The OTW entry exists under the name key — promote it to the ID key.
-        const otwEntry = map.get(fallbackKey)!;
-        otwEntry.stockItemId = inv.stockItemId;
-        if (!otwEntry.stockGroupId && inv.stockGroupId) {
-          otwEntry.stockGroupId = inv.stockGroupId;
-          otwEntry.stockGroupName = inv.stockGroupName;
+        if (primaryKey && !map.has(primaryKey) && map.has(fallbackKey)) {
+          // The OTW entry exists under the name key — promote it to the ID key.
+          const otwEntry = map.get(fallbackKey)!;
+          otwEntry.stockItemId = inv.stockItemId;
+          if (!otwEntry.stockGroupId && inv.stockGroupId) {
+            otwEntry.stockGroupId = inv.stockGroupId;
+            otwEntry.stockGroupName = inv.stockGroupName;
+          }
+          map.set(primaryKey, otwEntry);
+          map.delete(fallbackKey);
+          key = primaryKey;
         }
-        map.set(primaryKey, otwEntry);
-        map.delete(fallbackKey);
-        key = primaryKey;
-      }
 
-      const existing = map.get(key);
-      if (existing) {
-        existing.inHandQty += qty;
-        existing.totalQty += qty;
-        existing.inHandValue += value;
-        // Backfill group info if the OTW entry lacked it
-        if (!existing.stockGroupId && inv.stockGroupId) {
-          existing.stockGroupId = inv.stockGroupId;
-          existing.stockGroupName = inv.stockGroupName;
-        }
-        // Prefer the canonical name from inventory (from stockItems.name join)
-        if (!existing.stockItemName && inv.stockItemName) {
-          existing.stockItemName = inv.stockItemName;
-        }
-      } else {
-        map.set(key, {
-          stockItemId: inv.stockItemId,
-          stockItemName: inv.stockItemName,
-          stockGroupId: inv.stockGroupId ?? null,
-          stockGroupName: inv.stockGroupName || "",
-          otwQty: 0,
-          inHandQty: qty,
-          totalQty: qty,
-          inHandValue: value,
-          otwWeightedCostSum: 0,
-          avgRate: 0,
-          combinedValue: 0,
-        });
-      }
-    });
-
-    if (includeZero) {
-      allStockItems.forEach((item) => {
-        const zeroKey = `id:${item.id}`;
-        if (!map.has(zeroKey)) {
-          map.set(zeroKey, {
-            stockItemId: item.id,
-            stockItemName: item.name,
-            stockGroupId: item.stockGroupId ?? null,
-            stockGroupName: item.stockGroupName || "",
+        const existing = map.get(key);
+        if (existing) {
+          existing.inHandQty += qty;
+          existing.totalQty += qty;
+          existing.inHandValue += value;
+          // Backfill group info if the OTW entry lacked it
+          if (!existing.stockGroupId && inv.stockGroupId) {
+            existing.stockGroupId = inv.stockGroupId;
+            existing.stockGroupName = inv.stockGroupName;
+          }
+          // Prefer the canonical name from inventory (from stockItems.name join)
+          if (!existing.stockItemName && inv.stockItemName) {
+            existing.stockItemName = inv.stockItemName;
+          }
+        } else {
+          map.set(key, {
+            stockItemId: inv.stockItemId,
+            stockItemName: inv.stockItemName,
+            stockGroupId: inv.stockGroupId ?? null,
+            stockGroupName: inv.stockGroupName || "",
             otwQty: 0,
-            inHandQty: 0,
-            totalQty: 0,
-            inHandValue: 0,
+            inHandQty: qty,
+            totalQty: qty,
+            inHandValue: value,
             otwWeightedCostSum: 0,
             avgRate: 0,
             combinedValue: 0,
           });
         }
       });
-    }
 
-    map.forEach((row) => {
-      if (row.inHandQty > 0) {
-        row.avgRate = row.inHandValue / row.inHandQty;
-      } else if (row.otwQty > 0 && row.otwWeightedCostSum > 0) {
-        row.avgRate = row.otwWeightedCostSum / row.otwQty;
-      } else {
-        row.avgRate = 0;
+      if (includeZero) {
+        allStockItems.forEach((item) => {
+          const zeroKey = `id:${item.id}`;
+          if (!map.has(zeroKey)) {
+            map.set(zeroKey, {
+              stockItemId: item.id,
+              stockItemName: item.name,
+              stockGroupId: item.stockGroupId ?? null,
+              stockGroupName: item.stockGroupName || "",
+              otwQty: 0,
+              inHandQty: 0,
+              totalQty: 0,
+              inHandValue: 0,
+              otwWeightedCostSum: 0,
+              avgRate: 0,
+              combinedValue: 0,
+            });
+          }
+        });
       }
-      row.combinedValue = row.avgRate * row.totalQty;
-    });
 
-    return Array.from(map.values()).sort((a, b) => a.stockItemName.localeCompare(b.stockItemName));
-  }, [containerDetailsQueries, allStockItems, includeZero]);
+      map.forEach((row) => {
+        if (row.inHandQty > 0) {
+          row.avgRate = row.inHandValue / row.inHandQty;
+        } else if (row.otwQty > 0 && row.otwWeightedCostSum > 0) {
+          row.avgRate = row.otwWeightedCostSum / row.otwQty;
+        } else {
+          row.avgRate = 0;
+        }
+        row.combinedValue = row.avgRate * row.totalQty;
+      });
 
-  const combinedData = useMemo(
-    () => calculateCombinedData(inventoryRows),
-    [calculateCombinedData, inventoryRows],
+      return Array.from(map.values()).sort((a, b) => a.stockItemName.localeCompare(b.stockItemName));
+    },
+    [containerDetailsQueries, allStockItems, includeZero]
   );
+
+  const combinedData = useMemo(() => calculateCombinedData(inventoryRows), [calculateCombinedData, inventoryRows]);
 
   const filteredAll = useMemo(() => {
     if (!search.trim()) return combinedData;
@@ -347,7 +347,7 @@ export default function CombinedInventory({ headerActions }: CombinedInventoryPr
   const handleExport = async () => {
     try {
       if (!selectedCompany?.id) throw new Error("Choose a company before exporting");
-      if (containerDetailsQueries.some(query => query.isLoading || query.isError || !query.data)) {
+      if (containerDetailsQueries.some((query) => query.isLoading || query.isError || !query.data)) {
         throw new Error("OTW container details are not fully loaded; refresh before exporting");
       }
       if (includeZero && loadingStockItems) {
@@ -361,23 +361,27 @@ export default function CombinedInventory({ headerActions }: CombinedInventoryPr
       let expectedTotal: number | null = null;
       let totalPages = 1;
       for (let page = 1; page <= totalPages; page += 1) {
-        const response = await fetch(
-          "/api/inventory?page=" + page + "&pageSize=" + pageSize,
-          { credentials: "include" },
-        );
+        const response = await fetch("/api/inventory?page=" + page + "&pageSize=" + pageSize, {
+          credentials: "include",
+        });
         if (!response.ok) throw new Error("Inventory export page " + page + " failed");
-        const payload = await response.json() as {
+        const payload = (await response.json()) as {
           data?: InventoryRow[];
           total?: number;
           totalPages?: number;
           page?: number;
         };
-        if (!Array.isArray(payload.data) ||
-            typeof payload.total !== "number" || !Number.isSafeInteger(payload.total) || payload.total < 0 ||
-            typeof payload.totalPages !== "number" || !Number.isSafeInteger(payload.totalPages) ||
-            (payload.totalPages < 1 && !(payload.totalPages === 0 && payload.total === 0)) ||
-            (payload.totalPages ?? 0) > 10_000 ||
-            (payload.page != null && payload.page !== page)) {
+        if (
+          !Array.isArray(payload.data) ||
+          typeof payload.total !== "number" ||
+          !Number.isSafeInteger(payload.total) ||
+          payload.total < 0 ||
+          typeof payload.totalPages !== "number" ||
+          !Number.isSafeInteger(payload.totalPages) ||
+          (payload.totalPages < 1 && !(payload.totalPages === 0 && payload.total === 0)) ||
+          (payload.totalPages ?? 0) > 10_000 ||
+          (payload.page != null && payload.page !== page)
+        ) {
           throw new Error("Inventory export returned invalid pagination metadata");
         }
         if (expectedTotal === null) {
@@ -394,12 +398,10 @@ export default function CombinedInventory({ headerActions }: CombinedInventoryPr
 
       const completeCombined = calculateCombinedData(inventoryForExport);
       const searched = search.trim()
-        ? completeCombined.filter(row => searchAny(search, row.stockItemName, row.stockItemCode))
+        ? completeCombined.filter((row) => searchAny(search, row.stockItemName, row.stockItemCode))
         : completeCombined;
-      const exportRows = isDrillMode
-        ? searched.filter(row => row.stockGroupId === selectedGroupId)
-        : searched;
-      const data = exportRows.map(row => ({
+      const exportRows = isDrillMode ? searched.filter((row) => row.stockGroupId === selectedGroupId) : searched;
+      const data = exportRows.map((row) => ({
         "Item Name": row.stockItemName,
         "Stock Group": row.stockGroupName || "Uncategorized",
         "OTW Qty": row.otwQty,
@@ -409,12 +411,9 @@ export default function CombinedInventory({ headerActions }: CombinedInventoryPr
         "Total Value": Number(row.combinedValue.toFixed(2)),
       }));
       const fileName = isDrillMode
-        ? "combined_inventory_" +
-          (drillGroup?.stockGroupName || "group").replace(/\s+/g, "_") + ".xlsx"
+        ? "combined_inventory_" + (drillGroup?.stockGroupName || "group").replace(/\s+/g, "_") + ".xlsx"
         : "combined_inventory.xlsx";
-      const { columnsFromOperationalRows, exportOperationalWorkbook } = await import(
-        "@/lib/operationalExcelExport"
-      );
+      const { columnsFromOperationalRows, exportOperationalWorkbook } = await import("@/lib/operationalExcelExport");
       await exportOperationalWorkbook({
         title: "Combined Inventory",
         fileName,
@@ -424,20 +423,30 @@ export default function CombinedInventory({ headerActions }: CombinedInventoryPr
           { label: "Search", value: search || "All" },
           { label: "Stock Group", value: isDrillMode ? drillGroup?.stockGroupName || "Uncategorized" : "All" },
         ],
-        sheets: [{
-          name: "Combined Inventory",
-          rows: data,
-          columns: columnsFromOperationalRows(data, {
-            orderedHeaders: [
-              "Item Name", "Stock Group", "OTW Qty", "In-Hand Qty",
-              "Total Qty", "Avg Rate", "Total Value",
-            ],
-            types: {
-              "OTW Qty": "decimal", "In-Hand Qty": "decimal",
-              "Total Qty": "decimal", "Avg Rate": "money", "Total Value": "money",
-            },
-          }),
-        }],
+        sheets: [
+          {
+            name: "Combined Inventory",
+            rows: data,
+            columns: columnsFromOperationalRows(data, {
+              orderedHeaders: [
+                "Item Name",
+                "Stock Group",
+                "OTW Qty",
+                "In-Hand Qty",
+                "Total Qty",
+                "Avg Rate",
+                "Total Value",
+              ],
+              types: {
+                "OTW Qty": "decimal",
+                "In-Hand Qty": "decimal",
+                "Total Qty": "decimal",
+                "Avg Rate": "money",
+                "Total Value": "money",
+              },
+            }),
+          },
+        ],
       });
     } catch (error) {
       // Prefer a useful error to a silently partial workbook.

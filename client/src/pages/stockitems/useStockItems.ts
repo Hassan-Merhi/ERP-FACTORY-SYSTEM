@@ -365,23 +365,30 @@ export function useStockItems() {
             : "",
         });
       }
-      const { columnsFromOperationalRows, exportOperationalWorkbook } = await import(
-        "@/lib/operationalExcelExport"
-      );
+      const { columnsFromOperationalRows, exportOperationalWorkbook } = await import("@/lib/operationalExcelExport");
       await exportOperationalWorkbook({
         title: "Stock Items — Sales History",
         fileName: "stock-items-sales-history.xlsx",
         companyName: selectedCompany?.name,
-        sheets: [{
-          name: "Sales History",
-          columns: columnsFromOperationalRows(data, {
-            orderedHeaders: [
-              "Item Code", "Item Name", "Sale #", "Voucher No.", "Date",
-              "Location", "Qty", "Rate", "Amount",
-            ],
-          }),
-          rows: data,
-        }],
+        sheets: [
+          {
+            name: "Sales History",
+            columns: columnsFromOperationalRows(data, {
+              orderedHeaders: [
+                "Item Code",
+                "Item Name",
+                "Sale #",
+                "Voucher No.",
+                "Date",
+                "Location",
+                "Qty",
+                "Rate",
+                "Amount",
+              ],
+            }),
+            rows: data,
+          },
+        ],
       });
     } catch {
       toast({ title: "Export failed", description: "Could not export sales history", variant: "destructive" });
@@ -409,9 +416,7 @@ export function useStockItems() {
         allowStockRates
           ? fetch("/api/stock-item-location-prices/all", { credentials: "include" })
           : Promise.resolve(null),
-        allowStockRates
-          ? fetch("/api/stock-items/cost-dubai", { credentials: "include" })
-          : Promise.resolve(null),
+        allowStockRates ? fetch("/api/stock-items/cost-dubai", { credentials: "include" }) : Promise.resolve(null),
         fetch("/api/stock-items/all-code-aliases", { credentials: "include" }),
       ]);
       if (!aliasesRes.ok || (allowStockRates && (!pricesRes?.ok || !costDubaiRes?.ok))) {
@@ -427,8 +432,7 @@ export function useStockItems() {
         locationName: string;
         sellingPrice: string;
       }[] = pricesRes ? await pricesRes.json() : [];
-      const costDubaiData: { stockItemId: number; costDubai: string }[] =
-        costDubaiRes ? await costDubaiRes.json() : [];
+      const costDubaiData: { stockItemId: number; costDubai: string }[] = costDubaiRes ? await costDubaiRes.json() : [];
       const aliasData: { stockItemId: number; aliasCode: string }[] = await aliasesRes.json();
 
       const costDubaiMap = new Map<number, string>();
@@ -448,9 +452,7 @@ export function useStockItems() {
         aliasMap.get(alias.stockItemId)!.push(alias.aliasCode);
       }
 
-      const { buildStockItemReportColumns } = await import(
-        "@shared/universal-excel/reportSchemas"
-      );
+      const { buildStockItemReportColumns } = await import("@shared/universal-excel/reportSchemas");
       const { exportOperationalWorkbook } = await import("@/lib/operationalExcelExport");
       const data = allItems.map((item) => ({
         code: item.code,
@@ -462,8 +464,8 @@ export function useStockItems() {
         grade: getGradeName(item.gradeId) || "",
         category: getCategoryName(item.categoryId) || "",
         defaultSellingPrice: allowStockRates ? item.sellingPrice || "0" : null,
-        costDubai: allowStockRates ? costDubaiMap.get(item.id) ?? null : null,
-        pricesByLocation: allowStockRates ? priceMap.get(item.id) ?? {} : {},
+        costDubai: allowStockRates ? (costDubaiMap.get(item.id) ?? null) : null,
+        pricesByLocation: allowStockRates ? (priceMap.get(item.id) ?? {}) : {},
         active: item.active ? "Yes" : "No",
       }));
       await exportOperationalWorkbook({
@@ -477,11 +479,13 @@ export function useStockItems() {
           { label: "Category", value: String(selectedCategoryFilter ?? "All") },
         ],
         allowedColumnTags: allowStockRates ? ["stock-rates", "stock-cost"] : [],
-        sheets: [{
-          name: "Stock Items",
-          columns: buildStockItemReportColumns(locations),
-          rows: data,
-        }],
+        sheets: [
+          {
+            name: "Stock Items",
+            columns: buildStockItemReportColumns(locations),
+            rows: data,
+          },
+        ],
       });
     } catch (error) {
       toast({

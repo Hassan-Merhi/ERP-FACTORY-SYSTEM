@@ -6,11 +6,7 @@
  * so we do not allocate full flattened copies of large datasets. All accessors
  * are read-only; external authorization is mandatory before passing records.
  */
-import type {
-  UniversalExcelColumn,
-  UniversalExcelColumnType,
-  UniversalExcelRecord,
-} from "./engine";
+import type { UniversalExcelColumn, UniversalExcelColumnType, UniversalExcelRecord } from "./engine";
 
 export interface UniversalExcelDimension {
   id: string | number;
@@ -28,10 +24,7 @@ export interface UniversalExcelDimension {
 
 export type UniversalExcelColumnOrder = "provided" | "label" | "id" | "period";
 export type UniversalExcelMissingValue =
-  | { mode: "blank" }
-  | { mode: "zero" }
-  | { mode: "error" }
-  | { mode: "fallback"; key: string };
+  { mode: "blank" } | { mode: "zero" } | { mode: "error" } | { mode: "fallback"; key: string };
 
 export interface UniversalExcelColumnFamily {
   /** Stable key namespace, e.g. location_price or month_count. */
@@ -67,17 +60,25 @@ function validToken(token: string): boolean {
 
 function validateDimension(dimension: UniversalExcelDimension): void {
   const id = String(dimension.id);
-  if (!id.trim() || !dimension.label.trim() ||
-      Array.from(id + dimension.label).some(char => char.charCodeAt(0) < 32)) {
+  if (
+    !id.trim() ||
+    !dimension.label.trim() ||
+    Array.from(id + dimension.label).some((char) => char.charCodeAt(0) < 32)
+  ) {
     throw new Error("Invalid Excel column dimension id or label");
   }
-  if (dimension.index !== undefined &&
-      (!Number.isSafeInteger(dimension.index) || dimension.index < 0)) {
+  if (dimension.index !== undefined && (!Number.isSafeInteger(dimension.index) || dimension.index < 0)) {
     throw new Error("Invalid Excel source array index: " + id);
   }
 }
 
-function sourceAt(row: UniversalExcelRecord, sourceKey: string, id: string, index: number, format: "record" | "array"): unknown {
+function sourceAt(
+  row: UniversalExcelRecord,
+  sourceKey: string,
+  id: string,
+  index: number,
+  format: "record" | "array"
+): unknown {
   const values = row[sourceKey];
   if (format === "array") {
     if (values == null) return undefined;
@@ -93,9 +94,7 @@ function sourceAt(row: UniversalExcelRecord, sourceKey: string, id: string, inde
   return (values as Record<string, unknown>)[id];
 }
 
-export function buildUniversalExcelDimensionColumns(
-  family: UniversalExcelColumnFamily,
-): UniversalExcelColumn[] {
+export function buildUniversalExcelDimensionColumns(family: UniversalExcelColumnFamily): UniversalExcelColumn[] {
   const { namespace, sourceKey } = family;
   if (!validToken(namespace) || !sourceKey.trim()) {
     throw new Error("Invalid dynamic Excel namespace or source key");
@@ -129,24 +128,20 @@ export function buildUniversalExcelDimensionColumns(
       throw new Error("Invalid Excel month period: " + member.idText);
     }
   }
-  const sorted = rawMembers.filter(member => member.enabled !== false);
+  const sorted = rawMembers.filter((member) => member.enabled !== false);
   if (order === "label") sorted.sort((a, b) => compareKey(a.labelText, b.labelText) || compareKey(a.idText, b.idText));
   else if (order === "id") sorted.sort((a, b) => compareKey(a.idText, b.idText));
   else if (order === "period") sorted.sort((a, b) => a.idText.localeCompare(b.idText));
 
   const missing = family.missing ?? { mode: "blank" as const };
-  if (missing.mode !== "blank" && missing.mode !== "zero" &&
-      missing.mode !== "fallback" && missing.mode !== "error") {
+  if (missing.mode !== "blank" && missing.mode !== "zero" && missing.mode !== "fallback" && missing.mode !== "error") {
     throw new Error("Invalid dynamic Excel missing-value policy");
   }
   if (missing.mode === "fallback" && !missing.key.trim()) {
     throw new Error("Invalid dynamic Excel fallback key");
   }
-  const permittedSourceKeys = [
-    sourceKey,
-    ...(missing.mode === "fallback" ? [missing.key] : []),
-  ];
-  return sorted.map(member => {
+  const permittedSourceKeys = [sourceKey, ...(missing.mode === "fallback" ? [missing.key] : [])];
+  return sorted.map((member) => {
     // Use a percent-encoded ID, never the display label, as the stable key.
     const key = namespace + "__" + encodeURIComponent(member.idText);
     const column: UniversalExcelColumn = {
@@ -159,10 +154,7 @@ export function buildUniversalExcelDimensionColumns(
       permissionTags: member.permissionTag ? [member.permissionTag] : undefined,
       sourceKeys: permittedSourceKeys,
       value: (row: UniversalExcelRecord) => {
-        const value = sourceAt(
-          row, sourceKey, member.idText,
-          member.index ?? member.originalIndex, format,
-        );
+        const value = sourceAt(row, sourceKey, member.idText, member.index ?? member.originalIndex, format);
         if (value !== null && value !== undefined && value !== "") return value;
         if (missing.mode === "zero") return 0;
         if (missing.mode === "error") {
@@ -191,7 +183,7 @@ function ensureColumnIds(columns: readonly UniversalExcelColumn[]): void {
  */
 export function composeUniversalExcelColumns(
   base: readonly UniversalExcelColumn[],
-  insertions: readonly UniversalExcelColumnInsertion[],
+  insertions: readonly UniversalExcelColumnInsertion[]
 ): UniversalExcelColumn[] {
   const merged = [...base];
   ensureColumnIds(merged);
@@ -202,8 +194,8 @@ export function composeUniversalExcelColumns(
     const anchorKey = insertion.after || insertion.before;
     let position = merged.length;
     if (anchorKey) {
-      const anchor = insertion.after ? lastInsertedAfter.get(anchorKey) ?? anchorKey : anchorKey;
-      const match = merged.findIndex(column => column.key === anchor);
+      const anchor = insertion.after ? (lastInsertedAfter.get(anchorKey) ?? anchorKey) : anchorKey;
+      const match = merged.findIndex((column) => column.key === anchor);
       if (match < 0) throw new Error("Unknown Excel column insertion anchor: " + anchorKey);
       position = match + (insertion.after ? 1 : 0);
     }
@@ -218,9 +210,9 @@ export function composeUniversalExcelColumns(
 
 /** Explicit conditional fields; never infer access rights from a data value. */
 export function selectUniversalExcelConditionalColumns(
-  candidates: readonly { column: UniversalExcelColumn; enabled: boolean }[],
+  candidates: readonly { column: UniversalExcelColumn; enabled: boolean }[]
 ): UniversalExcelColumn[] {
-  const selected = candidates.filter(candidate => candidate.enabled).map(candidate => candidate.column);
+  const selected = candidates.filter((candidate) => candidate.enabled).map((candidate) => candidate.column);
   ensureColumnIds(selected);
   return selected;
 }
@@ -239,12 +231,12 @@ export function buildLocationPriceColumns(
     fallbackPriceKey?: string;
     permissionTag?: string;
     width?: number;
-  } = {},
+  } = {}
 ): UniversalExcelColumn[] {
   return buildUniversalExcelDimensionColumns({
     namespace: "location_price",
     sourceKey: options.sourceKey ?? "pricesByLocation",
-    dimensions: locations.map(location => ({
+    dimensions: locations.map((location) => ({
       id: location.id,
       label: location.name,
       enabled: location.enabled,
@@ -254,9 +246,7 @@ export function buildLocationPriceColumns(
     permissionTag: options.permissionTag,
     headerPrefix: "Price - ",
     order: "label",
-    ...(options.fallbackPriceKey
-      ? { missing: { mode: "fallback" as const, key: options.fallbackPriceKey } }
-      : {}),
+    ...(options.fallbackPriceKey ? { missing: { mode: "fallback" as const, key: options.fallbackPriceKey } } : {}),
   });
 }
 
@@ -269,23 +259,23 @@ export interface UniversalExcelMonth {
 /** Factory: chronological month columns; optional positional matrix arrays. */
 export function buildProductionMonthColumns(
   months: readonly UniversalExcelMonth[],
-  options: { sourceKey?: string; sourceFormat?: "record" | "array" } = {},
+  options: { sourceKey?: string; sourceFormat?: "record" | "array" } = {}
 ): UniversalExcelColumn[] {
   return buildUniversalExcelDimensionColumns({
     namespace: "production_month",
     sourceKey: options.sourceKey ?? "monthCounts",
     sourceFormat: options.sourceFormat ?? "record",
-    dimensions: months.map(month => ({
-      id: month.period, label: month.label, enabled: month.enabled,
+    dimensions: months.map((month) => ({
+      id: month.period,
+      label: month.label,
+      enabled: month.enabled,
     })),
     type: "integer",
     width: 16,
     order: "period",
     // Each array position is a specified month; a shortened array indicates
     // mismatched report data and must not silently leave a month blank.
-    missing: (options.sourceFormat ?? "record") === "array"
-      ? { mode: "error" }
-      : { mode: "blank" },
+    missing: (options.sourceFormat ?? "record") === "array" ? { mode: "error" } : { mode: "blank" },
   });
 }
 
@@ -296,7 +286,7 @@ export function buildCurrencyColumns(
     measure: "amount" | "fx-rate";
     sourceKey?: string;
     permissionTag?: string;
-  },
+  }
 ): UniversalExcelColumn[] {
   for (const currency of currencies) {
     if (!/^[A-Z]{3}$/.test(currency)) throw new Error("Invalid Excel currency code: " + currency);
@@ -304,7 +294,7 @@ export function buildCurrencyColumns(
   return buildUniversalExcelDimensionColumns({
     namespace: options.measure === "fx-rate" ? "currency_fx_rate" : "currency_amount",
     sourceKey: options.sourceKey ?? (options.measure === "fx-rate" ? "fxRatesByCurrency" : "amountsByCurrency"),
-    dimensions: currencies.map(currency => ({ id: currency, label: currency })),
+    dimensions: currencies.map((currency) => ({ id: currency, label: currency })),
     type: options.measure === "fx-rate" ? "decimal" : "money",
     numFmt: options.measure === "fx-rate" ? "#,##0.000000" : "#,##0.00",
     permissionTag: options.permissionTag,
@@ -318,7 +308,7 @@ export function buildCurrencyColumns(
 /** Page-specific, explicitly declared optional attributes (no key guessing). */
 export function buildAttributeColumns(
   attributes: readonly (UniversalExcelDimension & { type?: UniversalExcelColumnType })[],
-  options: { sourceKey?: string; order?: UniversalExcelColumnOrder } = {},
+  options: { sourceKey?: string; order?: UniversalExcelColumnOrder } = {}
 ): UniversalExcelColumn[] {
   // Attributes may carry different types, so build one at a time in the
   // requested order. Validate duplicate headers and IDs as one family first.
@@ -330,8 +320,8 @@ export function buildAttributeColumns(
     order: options.order ?? "provided",
   };
   const columns = buildUniversalExcelDimensionColumns(common);
-  const typeById = new Map(attributes.map(attribute => [String(attribute.id), attribute.type ?? "text"]));
-  return columns.map(column => {
+  const typeById = new Map(attributes.map((attribute) => [String(attribute.id), attribute.type ?? "text"]));
+  return columns.map((column) => {
     const id = decodeURIComponent(column.key.slice("attribute__".length));
     return { ...column, type: typeById.get(id) };
   });

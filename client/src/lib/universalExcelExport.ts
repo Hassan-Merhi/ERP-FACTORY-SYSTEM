@@ -7,7 +7,7 @@ import { validateUniversalExcelFilename } from "@shared/universal-excel/filename
 
 export async function downloadUniversalExcelWorkbook(
   spec: UniversalExcelWorkbookSpec,
-  fileName: string,
+  fileName: string
 ): Promise<UniversalExcelSheetResult[]> {
   const safeName = validateUniversalExcelFilename(fileName);
   const [{ buildUniversalExcelWorkbook }, { writeFile }] = await Promise.all([

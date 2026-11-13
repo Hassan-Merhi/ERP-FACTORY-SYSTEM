@@ -41,7 +41,11 @@ export function usePosInvoiceActions({
     const pdfUrl = `/api/pos/invoice/${encodeURIComponent(String(voucherId))}/pdf`;
     const printWindow = window.open(pdfUrl, "_blank", "noopener,noreferrer");
     if (!printWindow) {
-      toast({ title: "Pop-up blocked", description: "Allow pop-ups to open the invoice PDF and print it.", variant: "destructive" });
+      toast({
+        title: "Pop-up blocked",
+        description: "Allow pop-ups to open the invoice PDF and print it.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -58,42 +62,55 @@ export function usePosInvoiceActions({
       return;
     }
     try {
-      const data = (Array.isArray(apiInventory) ? apiInventory : []).map(item => ({
+      const data = (Array.isArray(apiInventory) ? apiInventory : []).map((item) => ({
         Code: item.stockItemCode || "",
         "Item Name": item.stockItemName || "",
         UOM: item.stockItemUom || "",
         "Stock Qty": Number(item.quantity || 0),
-        ...(canSeeFinancials ? {
-          "Avg Rate (USD)": Number(item.averageRate || 0),
-          "Total Value (USD)": Number(item.totalValue || 0),
-        } : {}),
+        ...(canSeeFinancials
+          ? {
+              "Avg Rate (USD)": Number(item.averageRate || 0),
+              "Total Value (USD)": Number(item.totalValue || 0),
+            }
+          : {}),
         Group: item.stockGroupName || "",
       }));
       const headers = [
-        "Code", "Item Name", "UOM", "Stock Qty",
+        "Code",
+        "Item Name",
+        "UOM",
+        "Stock Qty",
         ...(canSeeFinancials ? ["Avg Rate (USD)", "Total Value (USD)"] : []),
         "Group",
       ];
-      const fileName = "Inventory_" + activeLocation.name.replace(/\s+/g, "_") +
-        "_" + new Date().toLocaleDateString("en-CA") + ".xlsx";
+      const fileName =
+        "Inventory_" +
+        activeLocation.name.replace(/\s+/g, "_") +
+        "_" +
+        new Date().toLocaleDateString("en-CA") +
+        ".xlsx";
       await exportOperationalWorkbook({
         title: "POS Inventory",
         fileName,
         filters: [{ label: "Location", value: activeLocation.name }],
-        sheets: [{
-          name: "Inventory",
-          columns: columnsFromOperationalRows(data, {
-            orderedHeaders: headers,
-            types: {
-              "Stock Qty": "decimal",
-              ...(canSeeFinancials ? {
-                "Avg Rate (USD)": "money" as const,
-                "Total Value (USD)": "money" as const,
-              } : {}),
-            },
-          }),
-          rows: data,
-        }],
+        sheets: [
+          {
+            name: "Inventory",
+            columns: columnsFromOperationalRows(data, {
+              orderedHeaders: headers,
+              types: {
+                "Stock Qty": "decimal",
+                ...(canSeeFinancials
+                  ? {
+                      "Avg Rate (USD)": "money" as const,
+                      "Total Value (USD)": "money" as const,
+                    }
+                  : {}),
+              },
+            }),
+            rows: data,
+          },
+        ],
       });
       toast({ title: "Export successful", description: "Downloaded " + fileName });
     } catch {
@@ -102,26 +119,32 @@ export function usePosInvoiceActions({
   };
 
   const handleSummaryExport = async () => {
-    const validRows = rows.filter(r => r.stockItemId && r.quantity > 0);
+    const validRows = rows.filter((r) => r.stockItemId && r.quantity > 0);
     if (validRows.length === 0) {
       toast({ title: "Nothing to export", description: "Add items first.", variant: "destructive" });
       return;
     }
     const data = validRows.map((r, i) => ({
-      "#": i + 1, Item: r.itemName, Qty: r.quantity, Rate: r.rate, Amount: r.amount,
+      "#": i + 1,
+      Item: r.itemName,
+      Qty: r.quantity,
+      Rate: r.rate,
+      Amount: r.amount,
     }));
     try {
       await exportOperationalWorkbook({
         title: "POS Sale Summary",
         fileName: "POS_Summary_" + new Date().toLocaleDateString("en-CA") + ".xlsx",
-        sheets: [{
-          name: "Summary",
-          columns: columnsFromOperationalRows(data, {
-            orderedHeaders: ["#", "Item", "Qty", "Rate", "Amount"],
-            types: { "#": "integer", Qty: "decimal", Rate: "money", Amount: "money" },
-          }),
-          rows: data,
-        }],
+        sheets: [
+          {
+            name: "Summary",
+            columns: columnsFromOperationalRows(data, {
+              orderedHeaders: ["#", "Item", "Qty", "Rate", "Amount"],
+              types: { "#": "integer", Qty: "decimal", Rate: "money", Amount: "money" },
+            }),
+            rows: data,
+          },
+        ],
       });
       toast({ title: "Summary exported" });
     } catch {
@@ -130,7 +153,7 @@ export function usePosInvoiceActions({
   };
 
   const handleDetailedExport = async () => {
-    const validRows = rows.filter(r => r.stockItemId && r.quantity > 0);
+    const validRows = rows.filter((r) => r.stockItemId && r.quantity > 0);
     if (validRows.length === 0) {
       toast({ title: "Nothing to export", description: "Add items first.", variant: "destructive" });
       return;
@@ -145,30 +168,42 @@ export function usePosInvoiceActions({
         Qty: r.quantity,
         "Rate (USD)": r.rateUSD,
         Amount: r.amount,
-        ...(canSeeFinancials ? {
-          "P/L per unit": cfgUSD > 0 ? plBale : null,
-          "Total P/L": cfgUSD > 0 ? plBale * r.quantity : null,
-        } : {}),
+        ...(canSeeFinancials
+          ? {
+              "P/L per unit": cfgUSD > 0 ? plBale : null,
+              "Total P/L": cfgUSD > 0 ? plBale * r.quantity : null,
+            }
+          : {}),
       };
     });
     try {
       await exportOperationalWorkbook({
         title: "POS Sale Details",
         fileName: "POS_Detailed_" + new Date().toLocaleDateString("en-CA") + ".xlsx",
-        sheets: [{
-          name: "Detailed",
-          columns: columnsFromOperationalRows(data, {
-            orderedHeaders: [
-              "#", "Code", "Item", "Qty", "Rate (USD)", "Amount",
-              ...(canSeeFinancials ? ["P/L per unit", "Total P/L"] : []),
-            ],
-            types: {
-              "#": "integer", Qty: "decimal", "Rate (USD)": "money", Amount: "money",
-              ...(canSeeFinancials ? { "P/L per unit": "money" as const, "Total P/L": "money" as const } : {}),
-            },
-          }),
-          rows: data,
-        }],
+        sheets: [
+          {
+            name: "Detailed",
+            columns: columnsFromOperationalRows(data, {
+              orderedHeaders: [
+                "#",
+                "Code",
+                "Item",
+                "Qty",
+                "Rate (USD)",
+                "Amount",
+                ...(canSeeFinancials ? ["P/L per unit", "Total P/L"] : []),
+              ],
+              types: {
+                "#": "integer",
+                Qty: "decimal",
+                "Rate (USD)": "money",
+                Amount: "money",
+                ...(canSeeFinancials ? { "P/L per unit": "money" as const, "Total P/L": "money" as const } : {}),
+              },
+            }),
+            rows: data,
+          },
+        ],
       });
       toast({ title: "Detailed export downloaded" });
     } catch {

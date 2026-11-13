@@ -357,16 +357,14 @@ export default function StockInSalesReportDetail() {
     try {
       const exportParams = new URLSearchParams(baseParams);
       exportParams.set("exportAll", "true");
-      const detailResponse = await fetch(
-        "/api/reports/stock-in-sales/detail?" + exportParams.toString(),
-        { credentials: "include" },
-      );
+      const detailResponse = await fetch("/api/reports/stock-in-sales/detail?" + exportParams.toString(), {
+        credentials: "include",
+      });
       if (!detailResponse.ok) throw new Error("Failed to load export details");
       const exportData = (await detailResponse.json()) as DetailResponse;
 
       // Do not download a 20,000-row truncated "complete" workbook.
-      if (exportData.stockIn.truncated || exportData.stockOut.truncated ||
-          exportData.adjustments?.truncated) {
+      if (exportData.stockIn.truncated || exportData.stockOut.truncated || exportData.adjustments?.truncated) {
         throw new Error("Stock flow detail exceeds the API export limit; the workbook would be incomplete");
       }
       const stockIn = groupStockInRows(exportData.stockIn.rows);
@@ -388,20 +386,16 @@ export default function StockInSalesReportDetail() {
         { metric: "Gross Profit", value: exportData.summary.costProfit },
         { metric: "Average Profit / Bale", value: exportData.summary.avgProfitPerBale },
       ];
-      const stockInRows = stockIn.map(row => ({
+      const stockInRows = stockIn.map((row) => ({
         Dates: row.dates.join(", "),
-        Containers: row.containers.map(entry =>
-          entry.name + " (" + formatNumber(entry.quantity, 0) + ")"
-        ).join(", "),
-        Locations: row.locations.map(entry =>
-          entry.name + " (" + formatNumber(entry.quantity, 0) + ")"
-        ).join(", "),
+        Containers: row.containers.map((entry) => entry.name + " (" + formatNumber(entry.quantity, 0) + ")").join(", "),
+        Locations: row.locations.map((entry) => entry.name + " (" + formatNumber(entry.quantity, 0) + ")").join(", "),
         Item: row.stockItemName,
         Qty: row.quantity,
         "Avg Rate": row.avgRate,
         Value: row.totalValue,
       }));
-      const adjustmentRows = adjustments.map(row => ({
+      const adjustmentRows = adjustments.map((row) => ({
         Date: row.activityDate,
         Voucher: row.voucherNumber,
         Type: row.adjustmentType,
@@ -412,11 +406,9 @@ export default function StockInSalesReportDetail() {
         Rate: row.unitRate,
         Value: row.totalValue,
       }));
-      const salesRows = sales.map(row => ({
+      const salesRows = sales.map((row) => ({
         Date: row.activityDate,
-        Locations: row.locations.map(entry =>
-          entry.name + " (" + formatNumber(entry.quantity, 0) + ")"
-        ).join(", "),
+        Locations: row.locations.map((entry) => entry.name + " (" + formatNumber(entry.quantity, 0) + ")").join(", "),
         Item: row.stockItemName,
         Qty: row.quantity,
         "Avg Rate": row.avgRate,
@@ -424,12 +416,15 @@ export default function StockInSalesReportDetail() {
         "Profit / Bale": row.profitPerBale,
         "Total Profit": row.totalProfit,
       }));
-      const { columnsFromOperationalRows, exportOperationalWorkbook } = await import(
-        "@/lib/operationalExcelExport"
-      );
-      const money = { "Avg Rate": "money" as const, Rate: "money" as const,
-        Value: "money" as const, "Profit / Bale": "money" as const, "Total Profit": "money" as const,
-        Qty: "decimal" as const };
+      const { columnsFromOperationalRows, exportOperationalWorkbook } = await import("@/lib/operationalExcelExport");
+      const money = {
+        "Avg Rate": "money" as const,
+        Rate: "money" as const,
+        Value: "money" as const,
+        "Profit / Bale": "money" as const,
+        "Total Profit": "money" as const,
+        Qty: "decimal" as const,
+      };
       const safeLabel = periodLabel.replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/^-|-$/g, "");
       await exportOperationalWorkbook({
         title: "Stock Flow Details",
@@ -471,8 +466,14 @@ export default function StockInSalesReportDetail() {
             rows: salesRows,
             columns: columnsFromOperationalRows(salesRows, {
               orderedHeaders: [
-                "Date", "Locations", "Item", "Qty", "Avg Rate",
-                "Value", "Profit / Bale", "Total Profit",
+                "Date",
+                "Locations",
+                "Item",
+                "Qty",
+                "Avg Rate",
+                "Value",
+                "Profit / Bale",
+                "Total Profit",
               ],
               types: money,
             }),

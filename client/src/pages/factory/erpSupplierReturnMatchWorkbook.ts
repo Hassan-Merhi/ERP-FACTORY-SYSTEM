@@ -31,7 +31,7 @@ export type ReturnMatchReportInput = {
 const excelText = (value: unknown): string => {
   const text = String(value ?? "");
   // Excel formula-safe strings: codes, names and imported references are user-owned.
-  const first = Array.from(text).find(char => char.charCodeAt(0) > 32 && char !== "\uFEFF");
+  const first = Array.from(text).find((char) => char.charCodeAt(0) > 32 && char !== "\uFEFF");
   return first && "=+-@".includes(first) ? "'" + text : text;
 };
 export function buildErpSupplierReturnMatchWorkbook(wb: ExcelJS.Workbook, data: ReturnMatchReportInput) {

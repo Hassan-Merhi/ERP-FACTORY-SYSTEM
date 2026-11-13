@@ -15,7 +15,13 @@ import {
 } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
-import { ErpListTable, ErpReportExportMenu, ErpReportPrintFooter, erpReportFileName, exportErpReportCsv } from "@/erp-core";
+import {
+  ErpListTable,
+  ErpReportExportMenu,
+  ErpReportPrintFooter,
+  erpReportFileName,
+  exportErpReportCsv,
+} from "@/erp-core";
 import { erpCompanyDataKey, erpReferenceKeys } from "@/erp-core/erpData";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -338,7 +344,7 @@ function StockInSalesReportSummary() {
     setIsExporting(true);
     try {
       const { exportOperationalWorkbook } = await import("@/lib/operationalExcelExport");
-      const exportRows = rows.map(row => ({
+      const exportRows = rows.map((row) => ({
         period: formatPeriodLabel(row),
         openingStockQty: row.openingStockQty,
         stockInQty: row.stockInQty,
@@ -359,20 +365,22 @@ function StockInSalesReportSummary() {
           { label: "Groups", value: selectedStockGroups.join(",") || "All" },
           { label: "Search", value: debouncedSearch || "All" },
         ],
-        sheets: [{
-          name: "Stock & Sales Report",
-          columns: [
-            { key: "period", header: periodColumnLabel, width: 22 },
-            { key: "openingStockQty", header: "Opening Qty", type: "decimal", width: 16 },
-            { key: "stockInQty", header: "Stock In", type: "decimal", width: 16 },
-            { key: "stockOutQty", header: "Stock Out", type: "decimal", width: 16 },
-            { key: "closingStockQty", header: "Closing Qty", type: "decimal", width: 16 },
-            { key: "closingStockValue", header: "Closing Value", type: "money", width: 18 },
-            { key: "totalSales", header: "Sales", type: "money", width: 18 },
-            { key: "costProfit", header: "Gross Profit", type: "money", width: 18 },
-          ],
-          rows: exportRows,
-        }],
+        sheets: [
+          {
+            name: "Stock & Sales Report",
+            columns: [
+              { key: "period", header: periodColumnLabel, width: 22 },
+              { key: "openingStockQty", header: "Opening Qty", type: "decimal", width: 16 },
+              { key: "stockInQty", header: "Stock In", type: "decimal", width: 16 },
+              { key: "stockOutQty", header: "Stock Out", type: "decimal", width: 16 },
+              { key: "closingStockQty", header: "Closing Qty", type: "decimal", width: 16 },
+              { key: "closingStockValue", header: "Closing Value", type: "money", width: 18 },
+              { key: "totalSales", header: "Sales", type: "money", width: 18 },
+              { key: "costProfit", header: "Gross Profit", type: "money", width: 18 },
+            ],
+            rows: exportRows,
+          },
+        ],
       });
     } catch (exportError: unknown) {
       toast({
@@ -579,7 +587,13 @@ function StockInSalesReportSummary() {
         </p>
         <div className="overflow-hidden rounded-xl border max-sm:overflow-visible max-sm:border-0">
           <div className="overflow-x-auto">
-            <ErpListTable pageKey="stock-in-sales-report" companyId={selectedCompany?.id} className="min-w-[900px]" mobileLayout="cards" scrollLabel="Stock and sales reporting">
+            <ErpListTable
+              pageKey="stock-in-sales-report"
+              companyId={selectedCompany?.id}
+              className="min-w-[900px]"
+              mobileLayout="cards"
+              scrollLabel="Stock and sales reporting"
+            >
               <TableHeader>
                 <TableRow className="bg-muted/40 hover:bg-muted/40">
                   <TableHead>{periodColumnLabel}</TableHead>
