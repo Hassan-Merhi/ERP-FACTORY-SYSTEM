@@ -79,7 +79,7 @@ function actor(req: Request): EditIdentity {
     actorRole: String(req.session.currentRole),
   };
 }
-function fail(res: Response, error: unknown) {
+function fail(res: Response, error: unknown, operation: "lifecycle" | "delete-linked" = "lifecycle") {
   if (error instanceof IntercompanyEditError) {
     return res.status(error.status).json({ code: error.code, message: error.message });
   }
@@ -89,7 +89,18 @@ function fail(res: Response, error: unknown) {
       message: error.issues.map((issue) => issue.message).join("; "),
     });
   }
-  logger.error("Phase 5 intercompany lifecycle refused", { error });
+  logger.error("Phase 5 intercompany lifecycle refused", {
+    operation,
+    error,
+    pgCode: typeof error === "object" && error != null && "code" in error ? String(error.code) : undefined,
+    pgConstraint: typeof error === "object" && error != null && "constraint" in error ? String(error.constraint) : undefined,
+  });
+  if (operation === "delete-linked") {
+    return res.status(409).json({
+      code: "IC_DELETE_DATABASE_REFUSED",
+      message: "The database refused the linked PO deletion; both companies and their vouchers remain unchanged. Ask a developer to inspect the IC_DELETE_DATABASE_REFUSED server log.",
+    });
+  }
   return res.status(500).json({
     code: "IC_PHASE5_INTERNAL",
     message: "No partial stock receipt or trade cancellation was saved. Refresh and reconcile the evidence.",
@@ -292,7 +303,7 @@ export function registerIntercompanyPhase5Routes(app: Express) {
       }
       return res.json(await deletePristineLinkedTrade(trade.tradeId, trade.version, actor(req)));
     } catch (error) {
-      return fail(res, error);
+      return fail(res, error, "delete-linked");
     }
   });
   // Delete the complete untouched company pair: no reversal voucher is posted.
@@ -307,7 +318,7 @@ export function registerIntercompanyPhase5Routes(app: Express) {
       );
       return res.json(result);
     } catch (error) {
-      return fail(res, error);
+      return fail(res, error, "delete-linked");
     }
   });
   app.post("/api/intercompany-container-trading/lifecycle/:tradeId/cancel", requireAuth, async (req, res) => {
