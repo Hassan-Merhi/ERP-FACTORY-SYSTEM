@@ -300,7 +300,7 @@ describe("Phase 4: full-company data export retains all fields", () => {
     const ws = wb.getWorksheet("Factory Stock")!;
     expect(ws.getRow(1).values).toEqual([undefined, "Ref Code", "Late Total Amount"]);
     expect(ws.getCell("B211").value).toBe(125.75);
-    expect(ws.getColumn(2).numFmt).toBe("#,##0.00");
+    expect(ws.getColumn(2).style?.numFmt).toBe("#,##0.00");
     expect(ws.autoFilter).toMatchObject({ from: { row: 1, column: 1 } });
   });
 
