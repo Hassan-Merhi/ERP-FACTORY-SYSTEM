@@ -1,10 +1,15 @@
+import { Suspense } from "react";
+import { lazyRetry as lazy } from "@/lib/lazyRetry";
 import { Package, Search, Ship, Truck } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
-import StockItems from "@/pages/StockItems";
-import StockQuery from "@/pages/StockQuery";
-import OffloadItemSearch from "@/pages/OffloadItemSearch";
-import StockOTW from "@/pages/StockOTW";
+// Load only the selected Stock tab. These screens have sizable independent
+// import, Excel, container and inventory dependencies; downloading all four
+// before the first tab renders delays Properties and ERP navigation.
+const StockItems = lazy(() => import("@/pages/StockItems"));
+const StockQuery = lazy(() => import("@/pages/StockQuery"));
+const OffloadItemSearch = lazy(() => import("@/pages/OffloadItemSearch"));
+const StockOTW = lazy(() => import("@/pages/StockOTW"));
 import { canAccessErpFeature, type ErpFeatureAccess } from "@/app/erpAccess";
 import { RestrictedTabsState } from "@/components/RestrictedTabsState";
 
@@ -49,16 +54,24 @@ export default function StockHub({ access }: { access?: ErpFeatureAccess }) {
         </TabsList>
       </div>
       <TabsContent value="items" className="m-0">
-        {visibleValues.includes("items") && <StockItems />}
+        <Suspense fallback={<div role="status" className="p-6 text-sm text-muted-foreground">Loading Stock Items…</div>}>
+          {visibleValues.includes("items") && <StockItems />}
+        </Suspense>
       </TabsContent>
       <TabsContent value="query" className="m-0">
-        {visibleValues.includes("query") && <StockQuery />}
+        <Suspense fallback={<div role="status" className="p-6 text-sm text-muted-foreground">Loading Stock Query…</div>}>
+          {visibleValues.includes("query") && <StockQuery />}
+        </Suspense>
       </TabsContent>
       <TabsContent value="offload" className="m-0">
-        {visibleValues.includes("offload") && <OffloadItemSearch />}
+        <Suspense fallback={<div role="status" className="p-6 text-sm text-muted-foreground">Loading Offload Search…</div>}>
+          {visibleValues.includes("offload") && <OffloadItemSearch />}
+        </Suspense>
       </TabsContent>
       <TabsContent value="otw" className="m-0">
-        {visibleValues.includes("otw") && <StockOTW />}
+        <Suspense fallback={<div role="status" className="p-6 text-sm text-muted-foreground">Loading On The Way…</div>}>
+          {visibleValues.includes("otw") && <StockOTW />}
+        </Suspense>
       </TabsContent>
     </Tabs>
   );
