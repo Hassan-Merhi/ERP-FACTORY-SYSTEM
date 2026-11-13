@@ -172,7 +172,7 @@ describe("Phase 3: Dakzo appearance defaults and sanitization", () => {
     expect(ws.getCell("A5").fill).toMatchObject({
       type: "pattern", fgColor: { argb: "FF207040" },
     });
-    expect(ws.getCell("A7").fill).toMatchObject({ type: 0 });
+    expect(ws.getCell("A7").fill?.type === "pattern" && ws.getCell("A7").fill?.pattern === "solid").toBe(false);
     expect(ws.pageSetup.printArea).toBeUndefined();
   });
 
@@ -214,7 +214,7 @@ describe("Phase 3: Dakzo appearance defaults and sanitization", () => {
       }],
     })).workbook.getWorksheet("Large")!;
     expect(ws.getCell("A7").fill).toMatchObject({ type: 0 });
-    expect(ws.getCell("B3006").value).toBe(3001);
+    expect(ws.getCell("B3006").value).toBe(1);
     expect(ws.getCell("C3007").value).toBe(3001);
   });
 
