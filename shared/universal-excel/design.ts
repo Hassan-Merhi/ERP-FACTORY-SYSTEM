@@ -91,7 +91,7 @@ export function resolveUniversalExcelAppearance(
   }
   const rawBrand = options.brandName ?? DEFAULT_UNIVERSAL_EXCEL_APPEARANCE.brandName;
   const brandName = rawBrand.trim();
-  if (!brandName || brandName.length > 70 || /[\u0000-\u001F]/.test(brandName)) {
+  if (!brandName || brandName.length > 70 || /[\u0000-\u001F]/.test(rawBrand)) {
     throw new Error("Invalid Excel brand name");
   }
   const base = preset === "slate" ? SLATE_PALETTE : DEFAULT_PALETTE;
