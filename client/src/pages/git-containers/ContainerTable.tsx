@@ -1,7 +1,7 @@
 import React from "react";
 import { Link } from "wouter";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { EnrichedContainerRow, OtwColId, fmtDate } from "./gitContainerTypes";
+import { EnrichedContainerRow, OtwColId, fmtDate, canEditTrackedContainer } from "./gitContainerTypes";
 import {
   EtaCell,
   InlineTextCell,
@@ -127,7 +127,7 @@ export function ContainerTable({
                   {visibleContainers.map((c, visibleIndex) => {
                     const idx = virtualRows.startIndex + visibleIndex;
                     const freight = parseFloat(c.poFreight ?? "0");
-                    const canEditRow = !readOnly && (sessionCompanyId === null || c.companyId === sessionCompanyId);
+                    const canEditRow = canEditTrackedContainer(c, sessionCompanyId, readOnly);
 
                     const transUpper = (c.transporter ?? "").toUpperCase();
                     const transDays = transUpper.includes("FARHAT") || transUpper.includes("CONTINENTAL") ? 11 : 14;
