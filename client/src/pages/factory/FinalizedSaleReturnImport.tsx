@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { useToast } from "@/hooks/use-toast";
@@ -10,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { readFinalizedReturnImport } from "./finalizedSaleReturnImportFile";
+import { buildFinalizedReturnMatchWorkbook } from "./finalizedSaleReturnMatchWorkbook";
 
 type PreviewRow = {
   reference: string;
@@ -24,7 +27,15 @@ type PreviewRow = {
   articleCode?: string | null;
   productName?: string | null;
 };
-type Preview = { rows: PreviewRow[]; matched: number; issues: number; note: string };
+type Preview = {
+  customerId: number;
+  customerName: string;
+  rows: PreviewRow[];
+  matched: number;
+  issues: number;
+  note: string;
+};
+type CustomerOption = { id: number; legalName: string };
 type Posted = {
   invoiceNumber: string;
   quantity: number;
@@ -43,6 +54,12 @@ type InvoiceGroup = {
 type Outcome = { success: boolean; quantity: number; message: string };
 
 const endpoint = "/api/factory/finalized-sale-returns";
+async function getJson<T>(path: string): Promise<T> {
+  const response = await fetch(path, { credentials: "include" });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.message || "Unable to load customers");
+  return data as T;
+}
 async function postJson<T>(path: string, body: object): Promise<T> {
   const response = await fetch(path, {
     credentials: "include",
@@ -61,6 +78,17 @@ export default function FinalizedSaleReturnImport() {
   const { toast } = useToast();
   const copy = getFinalizedSaleReturnCopy(language);
   const [fileName, setFileName] = useState("");
+  const [customerId, setCustomerId] = useState<number | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const {
+    data: customers = [],
+    isLoading: customersLoading,
+    isError: customersError,
+  } = useQuery<CustomerOption[]>({
+    queryKey: companyQueryKey(endpoint + "/customers", selectedCompany?.id),
+    queryFn: () => getJson<CustomerOption[]>(endpoint + "/customers"),
+    enabled: !!selectedCompany?.id,
+  });
   const [preview, setPreview] = useState<Preview | null>(null);
   const [selectedOrders, setSelectedOrders] = useState<number[]>([]);
   const [reason, setReason] = useState("");
@@ -73,6 +101,7 @@ export default function FinalizedSaleReturnImport() {
     setPreview(null);
     setSelectedOrders([]);
     setFileName("");
+    setCustomerId(null);
     setReason("");
     setConfirmed(false);
     setOutcomes({});
@@ -100,6 +129,8 @@ export default function FinalizedSaleReturnImport() {
   const totalSelected = chosen.reduce((sum, group) => sum + group.rows.length, 0);
   const canPost =
     !!preview &&
+    customerId !== null &&
+    preview.customerId === customerId &&
     preview.issues === 0 &&
     totalSelected > 0 &&
     reason.trim().length >= 5 &&
@@ -113,6 +144,10 @@ export default function FinalizedSaleReturnImport() {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file || reading || posting) return;
+    if (!customerId) {
+      toast({ title: copy.importCustomerRequired, variant: "destructive" });
+      return;
+    }
     setReading(true);
     setPreview(null);
     setFileName(file.name);
@@ -121,7 +156,8 @@ export default function FinalizedSaleReturnImport() {
     setOutcomes({});
     try {
       const references = await readFinalizedReturnImport(file);
-      const mapped = await postJson<Preview>(endpoint + "/import-preview", { references });
+      const mapped = await postJson<Preview>(endpoint + "/import-preview", { references, customerId });
+      if (mapped.customerId !== customerId) throw new Error(copy.importCustomerRequired);
       setPreview(mapped);
       setSelectedOrders([...new Set(mapped.rows.filter((r) => r.status === "matched").map((r) => r.orderId!))]);
     } catch (error) {
@@ -132,6 +168,31 @@ export default function FinalizedSaleReturnImport() {
       });
     } finally {
       setReading(false);
+    }
+  };
+
+  const downloadPreview = async () => {
+    if (!preview || !customerId || preview.customerId !== customerId || posting || exporting) return;
+    setExporting(true);
+    try {
+      const { ExcelJS, writeFile } = await import("@/lib/excelHelper");
+      const workbook = new ExcelJS.Workbook();
+      buildFinalizedReturnMatchWorkbook(workbook, {
+        customerName: preview.customerName,
+        uploadedFile: fileName,
+        rows: preview.rows,
+      });
+      const safeCustomer = preview.customerName.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 50);
+      await writeFile(workbook, "Finalized_Return_Matches_" + (safeCustomer || customerId) + ".xlsx");
+      toast({ title: copy.importExportReady, description: copy.importExportExplanation });
+    } catch (error) {
+      toast({
+        title: copy.importExportFailed,
+        description: String(error instanceof Error ? error.message : error),
+        variant: "destructive",
+      });
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -218,6 +279,37 @@ export default function FinalizedSaleReturnImport() {
         <h3 className="font-semibold">{copy.importTitle}</h3>
         <p className="text-sm text-muted-foreground">{copy.importDescription}</p>
       </div>
+      <div className="space-y-2">
+        <Label htmlFor="finalized-return-customer">{copy.importCustomerLabel}</Label>
+        <select
+          id="finalized-return-customer"
+          data-testid="finalized-return-customer"
+          className="flex h-10 w-full max-w-lg rounded-md border border-input bg-background px-3 py-2 text-sm"
+          value={customerId ?? ""}
+          disabled={reading || posting || customersLoading}
+          onChange={(event) => {
+            const next = Number(event.target.value) || null;
+            setCustomerId(next);
+            setPreview(null);
+            setSelectedOrders([]);
+            setConfirmed(false);
+            setOutcomes({});
+            setFileName("");
+          }}
+        >
+          <option value="">{customersLoading ? copy.importCustomerLoading : copy.importCustomerPlaceholder}</option>
+          {customers.map((customer) => (
+            <option key={customer.id} value={customer.id}>
+              {customer.legalName}
+            </option>
+          ))}
+        </select>
+        {customersError && (
+          <p role="alert" className="text-sm text-destructive">
+            {copy.importCustomerLoadFailed}
+          </p>
+        )}
+      </div>
       <div className="flex flex-wrap items-end gap-3">
         <div className="min-w-64 flex-1 space-y-2">
           <Label htmlFor="finalized-returns-excel">{copy.importFile}</Label>
@@ -225,7 +317,7 @@ export default function FinalizedSaleReturnImport() {
             id="finalized-returns-excel"
             type="file"
             accept=".xlsx,.csv"
-            disabled={reading || posting}
+            disabled={reading || posting || !customerId}
             onChange={onFile}
           />
         </div>
@@ -240,9 +332,16 @@ export default function FinalizedSaleReturnImport() {
       )}
       {preview && (
         <div className="space-y-4" data-testid="finalized-return-import-preview">
-          <p className="text-sm font-medium">
-            {fileName} · {preview.matched} {copy.importMatches} · {preview.issues} {copy.importIssues}
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm font-medium">
+              {preview.customerName} · {fileName} · {preview.matched} {copy.importMatches} · {preview.issues}{" "}
+              {copy.importIssues}
+            </p>
+            <Button type="button" variant="outline" onClick={downloadPreview} disabled={exporting || posting}>
+              {exporting ? copy.importExporting : copy.importExportPreview}
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">{copy.importExportExplanation}</p>
           {preview.issues > 0 && (
             <p role="alert" className="text-sm text-destructive">
               {copy.importFixIssues}
@@ -254,6 +353,7 @@ export default function FinalizedSaleReturnImport() {
                 <tr>
                   <th className="p-2">{copy.references}</th>
                   <th className="p-2">{copy.importStatus}</th>
+                  <th className="p-2">{copy.importQuantity}</th>
                   <th className="p-2">{copy.dateInvoice}</th>
                   <th className="p-2">
                     {copy.name} / {copy.articleCode}
@@ -268,6 +368,7 @@ export default function FinalizedSaleReturnImport() {
                     <td className={"p-2 " + (row.status === "matched" ? "text-emerald-600" : "text-destructive")}>
                       {row.status}
                     </td>
+                    <td className="p-2 font-mono">{row.status === "matched" ? 1 : 0}</td>
                     <td className="p-2">
                       {row.invoiceNumber || "—"} {row.containerNumber ? " / " + row.containerNumber : ""}
                     </td>
