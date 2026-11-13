@@ -325,3 +325,26 @@ export async function reread(client: PoolClient, table: string, id: unknown): Pr
   expect(rows, `${table} row ${String(id)} is gone`).toHaveLength(1);
   return rows[0];
 }
+
+/** The named triggers that are missing from the database right now. */
+export async function missingTriggers(
+  triggers: ReadonlyArray<readonly [table: string, trigger: string]>
+): Promise<Array<readonly [table: string, trigger: string]>> {
+  const missing: Array<readonly [string, string]> = [];
+  for (const [table, trigger] of triggers) {
+    const { rowCount } = await pool.query(
+      `SELECT 1 FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid
+        WHERE c.relname = $1 AND t.tgname = $2 AND NOT t.tgisinternal`,
+      [table, trigger]
+    );
+    if (!rowCount) missing.push([table, trigger]);
+  }
+  return missing;
+}
+
+/** Removes triggers a suite installed for itself, so the database is left as it was found. */
+export async function dropTriggers(triggers: ReadonlyArray<readonly [table: string, trigger: string]>): Promise<void> {
+  for (const [table, trigger] of triggers) {
+    await pool.query(`DROP TRIGGER IF EXISTS "${trigger}" ON "${table}"`);
+  }
+}

@@ -8,15 +8,46 @@
  * forbidden write and reads the refusal, then shows the nearest allowed write.
  */
 import type { PoolClient } from "pg";
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { expectAccepted, expectRefused, reread, seedRow, withRollback } from "./helpers/dbGuardHarness";
+import { pool } from "../server/db";
+import {
+  ensureOpeningBalanceLock,
+  OPENING_BALANCE_LOCK_TABLES,
+  openingBalanceLockTriggerName,
+} from "../server/services/accounting/openingBalanceLock";
+
+import {
+  dropTriggers,
+  expectAccepted,
+  expectRefused,
+  missingTriggers,
+  reread,
+  seedRow,
+  withRollback,
+} from "./helpers/dbGuardHarness";
 
 const CHECK_VIOLATION = "23514";
 const PERIOD_CLOSED = "EPL01";
 const DELETED = "2026-02-01T00:00:00Z";
 
 type Row = Record<string, unknown>;
+
+// Other suites remove the opening-balance lock when they finish, so it cannot
+// be assumed present: install it here and leave the database as it was found.
+const LOCK_TRIGGERS = OPENING_BALANCE_LOCK_TABLES.map(
+  (table) => [table, openingBalanceLockTriggerName(table)] as const
+);
+let installedHere: Awaited<ReturnType<typeof missingTriggers>> = [];
+
+beforeAll(async () => {
+  installedHere = await missingTriggers(LOCK_TRIGGERS);
+  expect(await ensureOpeningBalanceLock(pool)).toBe(true);
+}, 60000);
+
+afterAll(async () => {
+  await dropTriggers(installedHere);
+}, 60000);
 
 async function seedAccount(client: PoolClient, companyId: unknown, values: Row = {}): Promise<Row> {
   return seedRow(client, "ledger_accounts", { company_id: companyId, account_type: "Asset", ...values });
@@ -360,6 +391,7 @@ const OPENING_BALANCE_TABLES = [
   { table: "factory_suppliers", side: false, softDelete: false },
   { table: "fixed_assets", side: false, softDelete: true },
   { table: "ledger_accounts", side: true, softDelete: true },
+  { table: "suppliers", side: true, softDelete: true },
 ];
 
 describe("the set of tables with a locked opening balance", () => {
@@ -375,6 +407,7 @@ describe("the set of tables with a locked opening balance", () => {
       );
 
       expect(rows.map((row) => row.table_name)).toEqual(OPENING_BALANCE_TABLES.map((entry) => entry.table));
+      expect([...OPENING_BALANCE_LOCK_TABLES].sort()).toEqual(rows.map((row) => row.table_name));
       for (const row of rows) {
         // Row-level (1), before (2), insert (4), delete (8) and update (16).
         expect(row.tgtype & 31, row.table_name).toBe(31);

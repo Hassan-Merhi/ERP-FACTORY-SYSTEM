@@ -9,15 +9,27 @@
  *
  * The balance checks are held until commit, so the tests ask the database to
  * run them early (expectRefusedAtCommit / expectCommittable).
+ *
+ * The shared test database does not keep the balance guard installed: other
+ * suites write unbalanced fixtures, so the suites that test it install it and
+ * take it away again. This one installs it and leaves the database as it was.
  */
 import type { PoolClient } from "pg";
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+
+import { pool } from "../server/db";
+import {
+  ensureVoucherBalanceGuard,
+  VOUCHER_BALANCE_GUARD_TRIGGERS,
+} from "../server/services/accounting/voucherBalanceGuard";
 
 import {
+  dropTriggers,
   expectAccepted,
   expectCommittable,
   expectRefused,
   expectRefusedAtCommit,
+  missingTriggers,
   reread,
   seedRow,
   withRollback,
@@ -27,6 +39,17 @@ const CHECK_VIOLATION = "23514";
 const PERIOD_CLOSED = "EPL01";
 
 type Row = Record<string, unknown>;
+
+let installedHere: Awaited<ReturnType<typeof missingTriggers>> = [];
+
+beforeAll(async () => {
+  installedHere = await missingTriggers(VOUCHER_BALANCE_GUARD_TRIGGERS);
+  expect(await ensureVoucherBalanceGuard(pool)).toBe(true);
+}, 60000);
+
+afterAll(async () => {
+  await dropTriggers(installedHere);
+}, 60000);
 
 let voucherSequence = 0;
 
