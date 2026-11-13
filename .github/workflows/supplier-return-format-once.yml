@@ -1,0 +1,48 @@
+# Temporary feature-branch formatting action; removed after commit.
+name: Supplier Return One-Time Format
+on:
+  push:
+    branches:
+      - feature/erp-supplier-offload-returns
+permissions:
+  contents: write
+jobs:
+  format-feature:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: feature/erp-supplier-offload-returns
+          persist-credentials: true
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24.22.2"
+          cache: npm
+      - name: Normalize package registry
+        run: sed -i 's#http://package-firewall.replit.local/npm/#https://registry.npmjs.org/#g' package-lock.json
+      - name: Install locked dependencies
+        run: npm ci --no-audit --bin-links=true
+      - name: Format Supplier Returns feature files
+        run: |
+          node node_modules/prettier/bin/prettier.cjs --write \
+            client/src/i18n/supplierReturnsTranslations.ts \
+            client/src/pages/factory/FactoryOthers.tsx \
+            client/src/pages/factory/FactorySupplierReturns.tsx \
+            client/src/pages/OffloadDetail.tsx \
+            server/routes/offloadRoutes.ts \
+            server/routes/erpSupplierReturnRoutes.ts \
+            server/routes/debugRoutes.ts \
+            server/routes/applicationRoutes.ts
+      - name: Commit formatting
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add client/src/i18n/supplierReturnsTranslations.ts client/src/pages/factory/FactoryOthers.tsx client/src/pages/factory/FactorySupplierReturns.tsx client/src/pages/OffloadDetail.tsx server/routes/offloadRoutes.ts server/routes/erpSupplierReturnRoutes.ts server/routes/debugRoutes.ts server/routes/applicationRoutes.ts
+          if ! git diff --cached --quiet; then
+            git commit -m "Format translated Supplier Returns source"
+            git push origin HEAD:feature/erp-supplier-offload-returns
+          fi
