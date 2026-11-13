@@ -13,7 +13,7 @@ import { logger } from "../../lib/logger";
 import { db } from "../../db";
 import { requireAuth, requireRole } from "../../auth";
 import { containers } from "../../../shared/schema";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, or, sql } from "drizzle-orm";
 import { importUndoStore, pruneImportUndoStore, gitUpload } from "./_helpers";
 import { parseMoneyInput } from "../../lib/money";
 
@@ -37,7 +37,16 @@ export function registerGitImportRoutes(app: Express) {
           .from(containers)
           .where(
             and(
-              eq(containers.companyId, companyId),
+              or(
+                eq(containers.companyId, companyId),
+                sql`EXISTS (
+                  SELECT 1 FROM intercompany_trades trade
+                  WHERE trade.physical_container_id = ${containers.id}
+                    AND trade.source_company_id = ${containers.companyId}
+                    AND trade.destination_company_id = ${companyId}
+                    AND trade.state = 'active'
+                )`
+              ),
               sql`LOWER(${containers.status}) NOT IN ('offloaded','closed','completed')`
             )
           )
@@ -421,13 +430,27 @@ export function registerGitImportRoutes(app: Express) {
         }
         const VALID_FREIGHT = new Set(["Yes", "No", "Pending"]);
 
-        // Fetch all containers accessible to this session company
+        // A destination edits the same physical tracking row held by the parent.
+        // Only include containers with an explicitly active trade into this company.
+        const selectedCompanyId = req.session.currentCompanyId;
         const allContainers = await db
           .select({ id: containers.id, containerNumber: containers.containerNumber, companyId: containers.companyId })
           .from(containers)
-          .where(eq(containers.companyId, req.session.currentCompanyId));
-
-        const byNumber = new Map(allContainers.map((c) => [c.containerNumber.trim().toUpperCase(), c]));
+          .where(or(
+            eq(containers.companyId, selectedCompanyId),
+            sql`EXISTS (
+              SELECT 1 FROM intercompany_trades trade
+              WHERE trade.physical_container_id = ${containers.id}
+                AND trade.source_company_id = ${containers.companyId}
+                AND trade.destination_company_id = ${selectedCompanyId}
+                AND trade.state = 'active'
+            )`
+          ));
+        const byNumber = new Map<string, typeof allContainers>();
+        for (const candidate of allContainers) {
+          const key = candidate.containerNumber.trim().toUpperCase();
+          byNumber.set(key, [...(byNumber.get(key) ?? []), candidate]);
+        }
 
         let updated = 0;
         let skipped = 0;
@@ -482,7 +505,17 @@ export function registerGitImportRoutes(app: Express) {
             continue;
           }
 
-          const match = byNumber.get(ctrNum);
+          const candidates = byNumber.get(ctrNum) ?? [];
+          // Prefer local records where the same number also exists in the parent;
+          // never silently update an arbitrary container when matches are ambiguous.
+          const owned = candidates.filter((candidate) => candidate.companyId === selectedCompanyId);
+          const matches = owned.length ? owned : candidates;
+          if (matches.length > 1) {
+            errors.push(`Row ${rowNum}: "${ctrNum}" matches multiple containers; use a unique container number`);
+            skipped++;
+            continue;
+          }
+          const match = matches[0];
           if (!match) {
             notFound++;
             errors.push(`Row ${rowNum}: "${ctrNum}" not found in system`);
