@@ -94,7 +94,13 @@ export default function StockQuery() {
     : (pagedStockItems?.data ?? []).map((p) => ({ id: p.id, code: p.code, name: p.name, active: p.active }));
 
   const handleItemClick = (item: { id: number }) => {
-    navigate(isFactory ? `/factory/stock-query/${item.id}` : `/stock-query/${item.id}`);
+    navigate(
+      isFactory
+        ? `/factory/stock-query/${item.id}`
+        : selectedCompany?.companyType === "properties"
+          ? `/properties/stock-query/${item.id}`
+          : `/stock-query/${item.id}`
+    );
   };
 
   const hasSearch = debouncedSearch.trim().length > 0;
