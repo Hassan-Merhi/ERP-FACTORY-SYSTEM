@@ -126,7 +126,7 @@ export async function deletePristineLinkedTrade(
       // Remove only original engine idempotency rows, never external voucher
       // data. Voucher entries use the voucher FK's ON DELETE CASCADE.
       await tx.execute(sql`DELETE FROM accounting_posting_requests
-        WHERE voucher_id = ANY(${voucherIds}::int[])`);
+        WHERE voucher_id IN (${sql.join(voucherIds.map((id) => sql`${id}`), sql`, `)})`);
       const deleted = await tx.delete(vouchers).where(inArray(vouchers.id, voucherIds)).returning({ id: vouchers.id });
       if (deleted.length !== voucherIds.length) rejectEdit("Voucher deletion was incomplete", "IC_DELETE_PARTIAL");
 
