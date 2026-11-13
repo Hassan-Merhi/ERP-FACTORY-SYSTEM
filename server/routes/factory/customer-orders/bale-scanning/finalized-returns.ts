@@ -228,6 +228,35 @@ export function registerFinalizedLoadingReturnRoutes(app: Express): void {
           .for("update");
         if (balances.length !== 1 || balances[0].transactionType !== "SALE")
           fail("Invoice has payment/settlement history; review credit allocation before returning");
+        if (
+          !toMoney(balances[0].debitAmount).eq(original) ||
+          !toMoney(balances[0].balance).eq(original) ||
+          !toMoney(balances[0].creditAmount).isZero()
+        ) {
+          fail("Invoice balance was already adjusted or allocated. Reconcile customer payments before returning");
+        }
+
+        // The shared totals calculator reads the *current* supplier/customer
+        // proforma for per-kg pricing. Do not retroactively reprice an already
+        // finalized sale if the proforma's rate or mode changed since invoicing.
+        if (order.proformaIdUsed) {
+          const drift = await tx.execute(sql`
+            SELECT EXISTS (
+              SELECT 1 FROM customer_order_lines l
+              LEFT JOIN customer_proforma_lines p
+                ON p.proforma_id = ${order.proformaIdUsed}
+               AND LOWER(p.article_code) = LOWER(l.article_code)
+              WHERE l.order_id = ${oid} AND l.pricing_mode = 'per_kg'
+                AND (
+                  p.id IS NULL OR COALESCE(p.pricing_mode,'per_bale') <> 'per_kg'
+                  OR ABS(COALESCE(p.price_per_kg,0) - COALESCE(l.price_per_kg,0)) > 0.0000005
+                )
+            ) AS changed
+          `);
+          if (drift.rows[0]?.changed === true) {
+            fail("The finalized per-kg rate changed after invoicing. Restore the original rate or use a credit note");
+          }
+        }
 
         const assignments = await tx
           .select()
