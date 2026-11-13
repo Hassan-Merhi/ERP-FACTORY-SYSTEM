@@ -38,6 +38,7 @@ interface DaybookTableProps {
   handleDelete: (v: Voucher) => void;
   canEdit: (v: Voucher) => boolean;
   canDelete: () => boolean;
+  linkedVoucherIds: ReadonlySet<number>;
   daybookRowLimit: number;
   setDaybookRowLimit: (n: number | ((prev: number) => number)) => void;
   DAYBOOK_PAGE_SIZE: number;
@@ -74,6 +75,7 @@ export function DaybookTable({
   handleDelete,
   canEdit: canEditVoucher,
   canDelete: canDeleteVoucher,
+  linkedVoucherIds,
   setDaybookRowLimit,
   DAYBOOK_PAGE_SIZE,
   navigate,
@@ -569,7 +571,7 @@ export function DaybookTable({
                     <EyeOff className="w-4 h-4 text-muted-foreground" />
                   )}
                 </Button>
-                {canDelete() && !voucherLocked && (
+                {canDelete() && (!voucherLocked || linkedVoucherIds.has(voucher.id)) && (
                   <Button
                     variant="ghost"
                     size="icon"
@@ -830,7 +832,7 @@ export function DaybookTable({
                     <Edit className="w-3.5 h-3.5" />
                   </Button>
                 ) : null}
-                {canDelete() && !voucherLocked && (
+                {canDelete() && (!voucherLocked || linkedVoucherIds.has(voucher.id)) && (
                   <Button
                     variant="ghost"
                     size="icon"
