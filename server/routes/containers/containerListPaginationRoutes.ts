@@ -174,14 +174,28 @@ export function registerContainerListPaginationRoutes(app: Express): void {
       if (!companyId)
         return res.status(400).json({ message: "No company selected" });
       const { page, limit, offset } = parsePagination(req);
-      const condition = eq(containers.companyId, companyId);
+      const condition = or(
+        eq(containers.companyId, companyId),
+        sql`EXISTS (SELECT 1 FROM intercompany_trades trade
+          WHERE trade.physical_container_id = ${containers.id}
+            AND trade.source_company_id = ${containers.companyId}
+            AND trade.destination_company_id = ${companyId}
+            AND trade.state = 'active')`
+      );
       const [countRows, items] = await Promise.all([
         db
           .select({ total: sql<number>`count(*)::int` })
           .from(containers)
           .where(condition),
         db
-          .select()
+          .select({
+            ...getTableColumns(containers),
+            linkedParentCompanyName: sql<string | null>`(SELECT parent.name FROM intercompany_trades trade
+              JOIN companies parent ON parent.id = trade.source_company_id
+              WHERE trade.physical_container_id = ${containers.id}
+                AND trade.destination_company_id = ${companyId}
+                AND trade.state = 'active' LIMIT 1)`,
+          })
           .from(containers)
           .where(condition)
           .orderBy(asc(containers.containerNumber), asc(containers.id))
