@@ -326,7 +326,7 @@ export default function OffloadDetail() {
                       <th className="text-right p-3 font-medium">Returned</th>
                       <th className="text-right p-3 font-medium">Net Qty</th>
                       <th className="text-right p-3 font-medium">Rate</th>
-                      <th className="text-right p-3 font-medium">Total</th>
+                      <th className="text-right p-3 font-medium">Original Landed Value</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -353,6 +353,13 @@ export default function OffloadDetail() {
                   </tbody>
                 </table>
               </div>
+
+              {Number(offload.totalBales) > Number(offload.netTotalBales ?? offload.totalBales) && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+                  Returned bales are deducted from net quantity. Original landed costs are retained as
+                  historic evidence; supplier-return vouchers record the stock, supplier and cost corrections.
+                </p>
+              )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm mt-3">
                 <div>
@@ -472,7 +479,7 @@ export default function OffloadDetail() {
 
           <div className="border rounded-md p-4 flex items-center justify-between bg-muted/20">
             <div>
-              <p className="text-sm text-muted-foreground">Grand Total (charges included in rates)</p>
+              <p className="text-sm text-muted-foreground">Original Grand Total (before supplier return credit notes)</p>
               <p className="text-2xl font-semibold font-mono mt-0.5">{formatAmount(itemsTotal)}</p>
             </div>
             <Button
