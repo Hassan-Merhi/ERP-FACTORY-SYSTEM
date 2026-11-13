@@ -10,7 +10,6 @@ permissions:
 
 jobs:
   format-once:
-    if: github.repository == 'Hassan-Merhi/ERP-FACTORY-SYSTEM' && github.event.head_commit.message != 'chore(excel): one-time Prettier formatting'
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     steps:
