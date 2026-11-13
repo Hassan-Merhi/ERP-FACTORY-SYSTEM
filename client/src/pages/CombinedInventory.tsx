@@ -2,6 +2,7 @@ import { searchAny } from "@shared/searchNormalization";
 import { useState, useMemo, useCallback, type ReactNode } from "react";
 import { useQuery, useQueries } from "@tanstack/react-query";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useToast } from "@/hooks/use-toast";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -91,6 +92,7 @@ export default function CombinedInventory({ headerActions }: CombinedInventoryPr
   const [includeZero, setIncludeZero] = useState(false);
   const { formatAmount } = useCurrencyContext();
   const { selectedCompany } = useCompany();
+  const { toast } = useToast();
 
   const { data: containers = [], isLoading: loadingContainers } = useQuery<Container[]>({
     queryKey: ["/api/containers"],
@@ -371,17 +373,17 @@ export default function CombinedInventory({ headerActions }: CombinedInventoryPr
           page?: number;
         };
         if (!Array.isArray(payload.data) ||
-            !Number.isSafeInteger(payload.total) || (payload.total ?? -1) < 0 ||
-            !Number.isSafeInteger(payload.totalPages) ||
-            (payload.totalPages ?? 0) < 1 ||
+            typeof payload.total !== "number" || !Number.isSafeInteger(payload.total) || payload.total < 0 ||
+            typeof payload.totalPages !== "number" || !Number.isSafeInteger(payload.totalPages) ||
+            (payload.totalPages < 1 && !(payload.totalPages === 0 && payload.total === 0)) ||
             (payload.totalPages ?? 0) > 10_000 ||
             (payload.page != null && payload.page !== page)) {
           throw new Error("Inventory export returned invalid pagination metadata");
         }
         if (expectedTotal === null) {
           expectedTotal = payload.total!;
-          totalPages = payload.totalPages!;
-        } else if (payload.total !== expectedTotal || payload.totalPages !== totalPages) {
+          totalPages = Math.max(1, payload.totalPages!);
+        } else if (payload.total !== expectedTotal || Math.max(1, payload.totalPages!) !== totalPages) {
           throw new Error("Inventory changed while exporting; please retry");
         }
         inventoryForExport.push(...payload.data);
@@ -439,7 +441,11 @@ export default function CombinedInventory({ headerActions }: CombinedInventoryPr
       });
     } catch (error) {
       // Prefer a useful error to a silently partial workbook.
-      window.alert(error instanceof Error ? error.message : "Could not export inventory");
+      toast({
+        title: "Inventory export failed",
+        description: error instanceof Error ? error.message : "Could not export inventory",
+        variant: "destructive",
+      });
     }
   };
 
