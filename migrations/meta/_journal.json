@@ -358,6 +358,13 @@
       "when": 1793881000000,
       "tag": "20261105_005_intercompany_phase5_lifecycle",
       "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1794560400000,
+      "tag": "20261113_001_intercompany_pristine_physical_delete",
+      "breakpoints": true
     }
   ]
 }
