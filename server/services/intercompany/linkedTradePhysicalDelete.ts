@@ -15,7 +15,6 @@ import {
   poLineItems, purchaseOrders, vouchers,
 } from "@shared/schema";
 import { db } from "../../db";
-import { resultRows } from "../../lib/queryResult";
 import { INTERCOMPANY_PAYMENT_LOCK_NAMESPACE } from "./paymentAllocationCore";
 import {
   assertTradeAccess, loadTradeTx, rejectEdit, requireUnreceived,
@@ -116,6 +115,7 @@ export async function deletePristineLinkedTrade(
       // Financial dependencies on any of these vouchers are left to database
       // FK constraints (which abort the ENTIRE transaction) rather than CASCADE.
       // Never delete independent receipts, payments, stock or audit records.
+      await tx.execute(sql`SELECT set_config('erp.ic_physical_delete', ${String(tradeId)}, true)`);
       await tx.delete(intercompanyTradeLineLinks).where(eq(intercompanyTradeLineLinks.tradeId, tradeId));
       await tx.delete(intercompanyTradeSourcePos).where(eq(intercompanyTradeSourcePos.tradeId, tradeId));
       await tx.delete(intercompanyImportBatchContainers).where(eq(intercompanyImportBatchContainers.tradeId, tradeId));
@@ -162,6 +162,7 @@ export async function deletePristineLinkedTrade(
           noReversalVoucherCreated: true,
         },
       });
+      await tx.execute(sql`SELECT set_config('erp.ic_physical_delete', '', true)`);
       return {
         deleted: true, tradeId, containerNumber: data.physical.containerNumber,
         poIds, voucherIds, companies: [data.trade.sourceCompanyId, data.trade.destinationCompanyId],
