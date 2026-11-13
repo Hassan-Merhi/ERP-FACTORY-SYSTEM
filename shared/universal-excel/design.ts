@@ -91,7 +91,7 @@ export function resolveUniversalExcelAppearance(
   }
   const rawBrand = options.brandName ?? DEFAULT_UNIVERSAL_EXCEL_APPEARANCE.brandName;
   const brandName = rawBrand.trim();
-  if (!brandName || brandName.length > 70 || /[\u0000-\u001F]/.test(rawBrand)) {
+  if (!brandName || brandName.length > 70 || Array.from(rawBrand).some(char => char.charCodeAt(0) < 32)) {
     throw new Error("Invalid Excel brand name");
   }
   const base = preset === "slate" ? SLATE_PALETTE : DEFAULT_PALETTE;
@@ -160,7 +160,7 @@ export function styleUniversalExcelGroup(
 function safePrintText(text: string): string {
   // Excel's header/footer control characters (&P, &N, etc.) must not come
   // from user-controlled report titles, filter labels or company names.
-  return text.replace(/&/g, "").replace(/[\u0000-\u001F]/g, " ").slice(0, 90);
+  return Array.from(text, char => char === "&" ? "" : char.charCodeAt(0) < 32 ? " " : char).join("").slice(0, 90);
 }
 
 /**
