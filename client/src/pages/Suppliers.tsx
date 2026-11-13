@@ -174,6 +174,8 @@ export default function Suppliers() {
       rows: supplierLedgerToExportRows(unifiedLedger),
       sheetName: "Supplier Ledger",
       fileName: erpReportFileName(`${selectedSupplier.legalName}_Ledger`, "xlsx"),
+      universalDesign: true,
+      companyName: selectedCompany?.name,
     });
   };
 
