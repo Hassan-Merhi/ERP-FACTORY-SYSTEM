@@ -20,8 +20,8 @@ describe("Factory delete one unshipped bale after a trip has posted", () => {
 
   it("does not short circuit normal single-bale deletion at the global financial gate", () => {
     expect(middleware).toContain('const continuingUnshippedRemoval = req.method === "DELETE"');
-    expect(middleware).toContain('/^bales\\/\\d+$/.test(suffix)');
-    expect(middleware).toContain('!continuingLoadingScan && !continuingUnshippedRemoval');
+    expect(middleware).toContain("/^bales\\/\\d+$/.test(suffix)");
+    expect(middleware).toContain("!continuingLoadingScan && !continuingUnshippedRemoval");
     expect(middleware).toContain('code: "POSTED_DISPATCH_LOCK"');
   });
 

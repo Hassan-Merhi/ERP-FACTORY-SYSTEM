@@ -205,19 +205,26 @@ export function registerFactoryRoutes(app: Express, requireAuth: RequestHandler,
         // dispatch scans under the customer-order lock. Do not treat removing
         // an unshipped item as a rewrite of a financially posted trip.
         const continuingUnshippedRemoval = req.method === "DELETE" && /^bales\/\d+$/.test(suffix);
-        const reconcileMissingBale = req.method === "DELETE" &&
-          /^bales\/\d+$/.test(suffix) && req.query.source === "dispatch-reconciliation";
-        if (!dispatchOperation && !readOnlyMetadata && !statusTransition && !continuingLoadingScan && !continuingUnshippedRemoval && !reconcileMissingBale) {
+        const reconcileMissingBale =
+          req.method === "DELETE" && /^bales\/\d+$/.test(suffix) && req.query.source === "dispatch-reconciliation";
+        if (
+          !dispatchOperation &&
+          !readOnlyMetadata &&
+          !statusTransition &&
+          !continuingLoadingScan &&
+          !continuingUnshippedRemoval &&
+          !reconcileMissingBale
+        ) {
           const companyId = Number(req.session.factoryCompanyId);
           const orderId = Number(match[1]);
-          if (Number.isSafeInteger(companyId) && companyId > 0 &&
-              Number.isSafeInteger(orderId) && orderId > 0) {
+          if (Number.isSafeInteger(companyId) && companyId > 0 && Number.isSafeInteger(orderId) && orderId > 0) {
             try {
-              const posted = await db.transaction(tx => hasLiveFinancialTripTx(tx, companyId, orderId));
+              const posted = await db.transaction((tx) => hasLiveFinancialTripTx(tx, companyId, orderId));
               if (posted) {
                 return res.status(409).json({
                   code: "POSTED_DISPATCH_LOCK",
-                  message: "This loading has financially posted trips. Reverse the trip accounting or complete the authorized combined-invoice workflow before changing the original order.",
+                  message:
+                    "This loading has financially posted trips. Reverse the trip accounting or complete the authorized combined-invoice workflow before changing the original order.",
                 });
               }
             } catch (error) {

@@ -28,7 +28,10 @@ import { FactoryInvoiceRateRefusalError } from "../../../../services/accounting/
 import { lockCustomerOrderTx, syncOrderTotalsTx } from "../orderChargeLedger";
 import { closedPeriodErrorResponse } from "../../../../lib/closedPeriodError";
 import { getFactoryAccessState } from "../../../../lib/factoryAccessControl";
-import { hasLiveFinancialTripTx, isPostedDispatchBaleTx } from "../../../../services/factory/dispatchTripFinancialGuards";
+import {
+  hasLiveFinancialTripTx,
+  isPostedDispatchBaleTx,
+} from "../../../../services/factory/dispatchTripFinancialGuards";
 import { canEmptyFactoryLoadingContainer } from "@shared/factoryPermissionCatalog";
 
 class DispatchReconciliationRefusal extends Error {
@@ -85,8 +88,10 @@ export function registerOrderBaleRemovalRoutes(app: Express) {
         // with the same parent lock as trip financial posting and reject that.
         await lockCustomerOrderTx(tx, companyId, orderId);
         if (await hasLiveFinancialTripTx(tx, companyId, orderId)) {
-          throw new DispatchReconciliationRefusal(409,
-            "Financially posted dispatch trips cannot be emptied. Reverse their accounting first.");
+          throw new DispatchReconciliationRefusal(
+            409,
+            "Financially posted dispatch trips cannot be emptied. Reverse their accounting first."
+          );
         }
         if (order.proformaIdUsed) {
           await acquireProformaCapacityTransactionLock(tx, {
@@ -186,7 +191,8 @@ export function registerOrderBaleRemovalRoutes(app: Express) {
       if (reconciliation) {
         return res.status(409).json({
           code: "USE_ATOMIC_DISPATCH_RECONCILIATION",
-          message: "Use Compare All Trips → approve a batch of unshipped bales with a reason. Individual dispatch-reconciliation deletes are disabled.",
+          message:
+            "Use Compare All Trips → approve a batch of unshipped bales with a reason. Individual dispatch-reconciliation deletes are disabled.",
         });
       }
       const access = reconciliation ? await getFactoryAccessState(req) : null;
@@ -232,8 +238,10 @@ export function registerOrderBaleRemovalRoutes(app: Express) {
             .from(customerOrders)
             .where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId)));
           if (!currentOrder || !["DRAFT", "LOADING"].includes(currentOrder.status) || currentOrder.invoiceNumber) {
-            throw new DispatchReconciliationRefusal(409,
-              "This loading has posted trips and is no longer open. Use the approved dispatch reconciliation workflow.");
+            throw new DispatchReconciliationRefusal(
+              409,
+              "This loading has posted trips and is no longer open. Use the approved dispatch reconciliation workflow."
+            );
           }
         }
         if (reconciliation) {
@@ -266,9 +274,11 @@ export function registerOrderBaleRemovalRoutes(app: Express) {
 
         // A shipped/financially posted physical bale must NEVER be returned
         // to stock, even through a normal (non-reconciliation) remove action.
-        if (orderBale && await isPostedDispatchBaleTx(tx, companyId, orderId, orderBale.baleId)) {
-          throw new DispatchReconciliationRefusal(409,
-            "This bale belongs to a financially posted truck. Reverse that trip before removing it.");
+        if (orderBale && (await isPostedDispatchBaleTx(tx, companyId, orderId, orderBale.baleId))) {
+          throw new DispatchReconciliationRefusal(
+            409,
+            "This bale belongs to a financially posted truck. Reverse that trip before removing it."
+          );
         }
         if (postedTrips && !orderBale) {
           throw new DispatchReconciliationRefusal(409, "This item is no longer in the loading. Refresh and try again.");
@@ -278,7 +288,8 @@ export function registerOrderBaleRemovalRoutes(app: Express) {
         // from the parent loading, whether or not that truck has posted yet.
         // Use the dedicated dispatch workflow to correct its scans instead.
         if (orderBale) {
-          const scanned = resultRows(await tx.execute(sql`
+          const scanned = resultRows(
+            await tx.execute(sql`
             SELECT 1
               FROM factory_loading_dispatch_scans s
               JOIN factory_loading_dispatches d
@@ -287,10 +298,13 @@ export function registerOrderBaleRemovalRoutes(app: Express) {
                AND s.bale_id = ${orderBale.baleId} AND s.removed_at IS NULL
                AND d.status <> 'CANCELLED'
              LIMIT 1
-          `));
+          `)
+          );
           if (scanned.length > 0) {
-            throw new DispatchReconciliationRefusal(409,
-              "This item is scanned on a dispatch trip. Remove the scan through Dispatch Management first.");
+            throw new DispatchReconciliationRefusal(
+              409,
+              "This item is scanned on a dispatch trip. Remove the scan through Dispatch Management first."
+            );
           }
         }
 
@@ -314,15 +328,22 @@ export function registerOrderBaleRemovalRoutes(app: Express) {
 
         let baleDetails: typeof factoryBales.$inferSelect | undefined;
         if (orderBale) {
-          const [found] = await tx.select().from(factoryBales)
+          const [found] = await tx
+            .select()
+            .from(factoryBales)
             .where(and(eq(factoryBales.id, orderBale.baleId), eq(factoryBales.companyId, companyId)))
             .for("update");
           baleDetails = found;
         }
-        if (postedTrips && orderBale && (!baleDetails ||
-            !["IN_STOCK", "RESERVED_FOR_ORDER"].includes(baleDetails.status))) {
-          throw new DispatchReconciliationRefusal(409,
-            "This unshipped item's stock ownership has changed. Refresh and inspect its dispatch history.");
+        if (
+          postedTrips &&
+          orderBale &&
+          (!baleDetails || !["IN_STOCK", "RESERVED_FOR_ORDER"].includes(baleDetails.status))
+        ) {
+          throw new DispatchReconciliationRefusal(
+            409,
+            "This unshipped item's stock ownership has changed. Refresh and inspect its dispatch history."
+          );
         }
 
         await tx
