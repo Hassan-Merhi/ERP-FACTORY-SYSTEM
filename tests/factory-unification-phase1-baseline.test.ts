@@ -103,5 +103,4 @@ describe("Factory Phase 1 pinned source baseline (not a browser/API fixture)", (
     expect(viewOnly["dispatch.reopen"]).toBe(false);
     expect(factoryActionCapabilities({ role: "Developer" })["production.manage-bonuses"]).toBe(false);
   });
-
 });

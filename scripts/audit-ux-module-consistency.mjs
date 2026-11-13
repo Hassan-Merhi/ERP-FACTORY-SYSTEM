@@ -22,6 +22,29 @@ if (uniqueModules.length < MIN_LAZY_MODULES) {
   failures.push(`Lazy module inventory unexpectedly fell to ${uniqueModules.length}; expected at least ${MIN_LAZY_MODULES} modules`);
 }
 
+// Only these route tables import the shared lazy-page registry. Add future
+// router consumers when they start importing client/src/lazyPages.ts.
+// A missing registration is not proof that the underlying page is unused.
+const lazyRouteConsumers = [
+  "client/src/routes/ErpRoutes.tsx",
+  "client/src/routes/PosRoutes.tsx",
+  "client/src/components/FactoryRoutes.tsx",
+  "client/src/app/PropertiesRoutes.tsx",
+];
+const runtimeLazyReferences = (await Promise.all(lazyRouteConsumers.map(read))).join("\n");
+const lazyExportNames = [...lazyPages.matchAll(/^export const (\w+)\s*=\s*lazy\(/gm)].map((match) => match[1]);
+// FactoryWorkersHub is pinned by the lazy-import contract, and its page is
+// also used by the payroll hub and offline preload. Keep that export.
+const testPinnedLazyExports = new Set(["FactoryWorkersHub"]);
+const unreferencedLazyExports = lazyExportNames.filter(
+  (name) =>
+    !testPinnedLazyExports.has(name) &&
+    !new RegExp(`\\b${name}\\b`).test(runtimeLazyReferences)
+);
+if (unreferencedLazyExports.length > 0) {
+  failures.push(`Unused lazy-page exports without route consumers: ${unreferencedLazyExports.join(", ")}`);
+}
+
 for (const modulePath of uniqueModules) {
   const candidates = [
     `client/src/pages/${modulePath}.tsx`,
@@ -169,6 +192,8 @@ console.log(
     {
       status: "complete",
       lazyModuleSurfaces: uniqueModules.length,
+      lazyPageExports: lazyExportNames.length,
+      unusedLazyPageExports: unreferencedLazyExports.length,
       workspaceShells: shells.length,
       moduleGroups: groups,
       globalContracts: [
