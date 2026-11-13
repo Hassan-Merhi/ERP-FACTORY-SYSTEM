@@ -41,6 +41,7 @@ type Trade = {
   canceled: null | { id: number; date: string; releasedCredit: string };
   hasSharedInvoices: boolean;
   pendingSharedAllocation: boolean;
+  accountingNetted: boolean;
 };
 type Lifecycle = {
   trades: Trade[];
@@ -76,6 +77,7 @@ export function IntercompanyLifecycleContent({
   const [receiptKey, setReceiptKey] = useState(newKey);
   const [cancelKey, setCancelKey] = useState(newKey);
   const [deleteBothConfirmed, setDeleteBothConfirmed] = useState(false);
+  const [profitNettingConfirmed, setProfitNettingConfirmed] = useState(false);
 
   const query = useQuery({
     queryKey: companyQueryKey(API, companyId),
@@ -122,6 +124,7 @@ export function IntercompanyLifecycleContent({
     setReceiptKey(newKey());
     setCancelKey(newKey());
     setDeleteBothConfirmed(false);
+    setProfitNettingConfirmed(false);
   }, [companyId, physicalContainerId]);
   useEffect(() => {
     if (!physicalContainerId || !query.data) return;
@@ -201,6 +204,31 @@ export function IntercompanyLifecycleContent({
     },
     onError: (error: Error) =>
       toast({ title: "Cancellation refused", description: error.message, variant: "destructive" }),
+  });
+  const normalizeInternalProfit = useMutation({
+    mutationFn: async () => {
+      if (!trade || !profitNettingConfirmed) throw new Error("Confirm the accounting normalization");
+      const response = await apiRequest("POST", API + "/" + trade.tradeId + "/normalize-internal-profit", {
+        expectedVersion: trade.version,
+        postingDate: date,
+        confirmNoCashOrStockChange: true,
+      });
+      return response.json() as Promise<{ amount?: string; alreadyNetted: boolean }>;
+    },
+    onSuccess: (result) => {
+      toast({
+        title: result.alreadyNetted ? "Already reconciled" : "Intercompany accounts normalized",
+        description: result.alreadyNetted
+          ? "The technical Sales and COGS balances have already been eliminated."
+          : "Internal Sales and COGS were netted without changing cash, stock or supplier balances.",
+      });
+      setProfitNettingConfirmed(false);
+      refresh();
+      queryClient.invalidateQueries({ queryKey: ["/api/accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/vouchers"] });
+    },
+    onError: (error: Error) =>
+      toast({ title: "Accounting normalization refused", description: error.message, variant: "destructive" }),
   });
   const deleteLinked = useMutation({
     mutationFn: async () => {
@@ -431,6 +459,28 @@ export function IntercompanyLifecycleContent({
                     </label>
                     <Button disabled={!canReceive} onClick={() => receive.mutate()}>
                       {receive.isPending ? "Validating stock and GIT…" : "Receive stock and post GIT reclassification"}
+                    </Button>
+                  </div>
+                )}
+                {!trade.accountingNetted && trade.state === "active" && !trade.received && !trade.canceled && (
+                  <div className="space-y-3 rounded-lg border p-4">
+                    <h3 className="font-semibold">Normalize old intercompany accounting</h3>
+                    <p className="text-sm text-muted-foreground">
+                      For an older at-cost imported PO, clear the technical internal Sales and COGS
+                      balances with an audited journal. The parent intercompany debit and external
+                      supplier credit stay unchanged. No cash, stock, or original voucher is removed.
+                    </p>
+                    <label className="flex items-center gap-2 text-sm">
+                      <Checkbox checked={profitNettingConfirmed}
+                        onCheckedChange={(v) => setProfitNettingConfirmed(v === true)} />
+                      I confirm that only technical internal Sales and COGS should be netted.
+                    </label>
+                    <Button
+                      disabled={!profitNettingConfirmed ||
+                        !["Owner", "Developer"].includes(selectedCompany?.role ?? "") ||
+                        normalizeInternalProfit.isPending}
+                      onClick={() => normalizeInternalProfit.mutate()}>
+                      {normalizeInternalProfit.isPending ? "Verifying original vouchers…" : "Normalize parent intercompany accounts"}
                     </Button>
                   </div>
                 )}
