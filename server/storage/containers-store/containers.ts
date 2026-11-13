@@ -66,7 +66,7 @@ export async function getContainerByIdForCompany(id: number, companyId: number):
   const [container] = await db
     .select()
     .from(schema.containers)
-    .where(and(eq(schema.containers.id, id), or(eq(schema.containers.companyId, companyId), sql`EXISTS (SELECT 1 FROM intercompany_trades trade WHERE trade.physical_container_id = ${schema.containers.id} AND trade.destination_company_id = ${companyId} AND trade.state = 'active')`)));
+    .where(and(eq(schema.containers.id, id), eq(schema.containers.companyId, companyId)));
   return container;
 }
 
