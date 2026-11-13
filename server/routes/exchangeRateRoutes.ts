@@ -172,13 +172,15 @@ export function registerExchangeRateRoutes(app: Express) {
   // Atomic audited save. Admin/Owner/Developer may save any date and replace a
   // rate. Every other writing role (POS, Manager, ...) may set TODAY's rate
   // once: the first user to set it sets it for the whole company, so nobody
-  // else is prompted again that day. View Only / Create Only never save.
+  // else is prompted again that day. View Only / Create Only and view-only POS users never save.
   // The server chooses the active company; the caller cannot inject a rate
   // into a different company or an unconfigured pair.
   app.post("/api/exchange-rates", requireAuth, async (req, res) => {
     try {
       const role = req.user?.role;
-      if (!role || isExistingRecordReadOnlyRole(role)) return res.status(403).json({ message: "Forbidden" });
+      if (!role || isExistingRecordReadOnlyRole(role) || req.session.posViewOnly) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
       const isRateEditor = RATE_EDITOR_ROLES.includes(role);
       const companyId = activeRateCompanyId(req, res);
       if (companyId === null) return;

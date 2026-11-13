@@ -78,7 +78,7 @@ export function DailyRateModal({ companyId }: DailyRateModalProps) {
   // Every writing user is prompted until someone sets today's rate; the first
   // save applies to the whole company and closes the prompt for everyone.
   const { data: currentUser } = useQuery(authenticatedUserQueryOptions());
-  const canEditRate = canSetDailyExchangeRate(currentUser?.role);
+  const canEditRate = canSetDailyExchangeRate(currentUser?.role, currentUser?.posViewOnly);
 
   const form = useForm<RateFormData>({
     resolver: zodResolver(rateFormSchema),

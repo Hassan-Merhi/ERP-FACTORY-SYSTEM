@@ -238,6 +238,17 @@ describe("Exchange rate is a shared company-wide record, not per-user", () => {
       const rate = (value: string, effectiveDate = today) =>
         agentB.post("/api/exchange-rates").send({ fromCurrency: "USD", toCurrency: "CFA", rate: value, effectiveDate });
 
+      // A view-only POS account cannot set the shared rate.
+      const viewOnly = (posViewOnly: boolean) =>
+        roleOfB("POS").then(() =>
+          db.update(schema.userCompanyRoles).set({ posViewOnly }).where(eq(schema.userCompanyRoles.userId, userBId))
+        );
+      await viewOnly(true);
+      await agentB.post("/api/auth/set-company").send({ companyId: ctx.companyId });
+      expect((await rate("595", today)).status).toBe(403);
+      await viewOnly(false);
+      await agentB.post("/api/auth/set-company").send({ companyId: ctx.companyId });
+
       // Past dates stay with Admin/Owner/Developer.
       expect((await rate("590", "2020-01-01")).status).toBe(403);
       expect((await rate("595", today)).status).toBe(200);
@@ -258,6 +269,10 @@ describe("Exchange rate is a shared company-wide record, not per-user", () => {
       const rows = await pool.query(`SELECT rate::text FROM exchange_rates WHERE company_id = $1`, [ctx.companyId]);
       expect(rows.rows).toEqual([{ rate: "596.000000" }]);
     } finally {
+      await db
+        .update(schema.userCompanyRoles)
+        .set({ posViewOnly: false })
+        .where(eq(schema.userCompanyRoles.userId, userBId));
       await roleOfB("Admin");
     }
   });
