@@ -105,7 +105,7 @@ export default function FactorySupplierReturns() {
       const parsed=rows.map((row,index)=>{
         const code=String(excelCode(row,["articlecode","code","itemcode","barcode"])??"").trim();
         const quantity=String(excelCode(row,["qty","quantity","bales"])??"").trim();
-        if(!code || !/^(?:0|[1-9]\\d*)(?:\\.\\d{1,3})?$/.test(quantity) || Number(quantity)<=0)
+        if(!code || !/^(?:0|[1-9]\d*)(?:\.\d{1,3})?$/.test(quantity) || Number(quantity)<=0)
           throw new Error(`Excel row ${index+2}: valid article code and positive qty (maximum 3 decimals) required`);
         return {code,quantity};
       });
