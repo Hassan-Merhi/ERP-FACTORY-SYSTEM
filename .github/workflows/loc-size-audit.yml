@@ -1,0 +1,71 @@
+name: File line count audit (300/500)
+on:
+  push:
+    branches:
+      - audit/loc-300-500-20261113
+    paths:
+      - .github/workflows/loc-size-audit.yml
+jobs:
+  audit:
+    name: Count tracked source file lines
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate full file-size and line-count report
+        shell: bash
+        run: |
+          mkdir -p reports
+          python3 - <<'PY'
+          import os, subprocess, json, csv, collections, pathlib
+          files = subprocess.check_output(['git', 'ls-files', '-z']).split(b'\0')
+          extensions = {'.ts','.tsx','.js','.jsx','.mjs','.mts','.cjs','.css','.scss'}
+          rows=[]
+          for item in files:
+              if not item: continue
+              p=os.fsdecode(item)
+              if pathlib.PurePosixPath(p).suffix.lower() not in extensions: continue
+              if not os.path.isfile(p): continue
+              with open(p,'rb') as f: data=f.read()
+              if b'\0' in data: continue
+              lines=len(data.splitlines())
+              if p.startswith(('client/src/i18n/','server/i18n/')): kind='translation'
+              elif p.startswith(('tests/','client/tests/','server/tests/')) or '.test.' in p or '.spec.' in p or '/__tests__/' in p: kind='test'
+              elif p.startswith(('scripts/','.github/')): kind='tooling'
+              elif p.startswith(('server/startup-schema/','drizzle/','migrations/','server/migrations/')): kind='schema_migration'
+              elif p.startswith(('client/src/','server/','shared/','desktop/','build/')): kind='application'
+              else: kind='other'
+              if '.generated.' in p or '/generated/' in p or '/__generated__/' in p: kind='generated'
+              status='hard_cap' if lines>500 else 'warning' if lines>300 else 'ok'
+              rows.append({'path':p,'lines':lines,'bytes':len(data),'category':kind,'status':status})
+          rows.sort(key=lambda r:(-r['lines'],r['path']))
+          categories=collections.defaultdict(lambda:{'files':0,'hard_cap':0,'warning':0,'ok':0})
+          for r in rows:
+              k=categories[r['category']]
+              k['files']+=1
+              k[r['status']]+=1
+          summary={'commit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'limits':{'warning_above':300,'hard_cap_above':500},'source_files':len(rows),'groups':dict(categories),'all_hard_cap':sum(r['lines']>500 for r in rows),'all_warning':sum(300<r['lines']<=500 for r in rows)}
+          with open('reports/loc-audit.json','w') as f: json.dump({'summary':summary,'files':rows},f,indent=2)
+          with open('reports/loc-audit-all-files.csv','w',newline='') as f:
+              writer=csv.DictWriter(f,fieldnames=['path','lines','bytes','category','status']);writer.writeheader();writer.writerows(rows)
+          with open('reports/loc-audit-over-300.csv','w',newline='') as f:
+              writer=csv.DictWriter(f,fieldnames=['path','lines','bytes','category','status']);writer.writeheader();writer.writerows(r for r in rows if r['lines']>300)
+          lines=['# Exact lines-of-code audit','',f"Commit: {summary['commit']}",'','| Category | Files | Over 500 | 301-500 | <=300 |','|---|---:|---:|---:|---:|']
+          for kind,d in sorted(categories.items()):
+              lines.append(f"| {kind} | {d['files']} | {d['hard_cap']} | {d['warning']} | {d['ok']} |")
+          lines+=['','## Largest application files','', '| Lines | File |','|---:|---|']
+          app=[r for r in rows if r['category']=='application']
+          for r in app[:150]:lines.append(f"| {r['lines']} | `{r['path']}` |")
+          with open('reports/summary.md','w') as f:f.write('\n'.join(lines)+'\n')
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as f:f.write('\n'.join(lines[:165])+'\n')
+          print('AUDIT_SUMMARY_JSON='+json.dumps(summary,separators=(',',':')))
+          print('LARGEST_APPLICATION_FILES_START')
+          for r in app[:120]:print(str(r['lines'])+'\t'+r['path'])
+          print('LARGEST_APPLICATION_FILES_END')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: file-line-cap-audit-300-500
+          path: reports/
+          retention-days: 30
