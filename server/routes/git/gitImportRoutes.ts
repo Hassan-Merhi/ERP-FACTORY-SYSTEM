@@ -436,16 +436,18 @@ export function registerGitImportRoutes(app: Express) {
         const allContainers = await db
           .select({ id: containers.id, containerNumber: containers.containerNumber, companyId: containers.companyId })
           .from(containers)
-          .where(or(
-            eq(containers.companyId, selectedCompanyId),
-            sql`EXISTS (
+          .where(
+            or(
+              eq(containers.companyId, selectedCompanyId),
+              sql`EXISTS (
               SELECT 1 FROM intercompany_trades trade
               WHERE trade.physical_container_id = ${containers.id}
                 AND trade.source_company_id = ${containers.companyId}
                 AND trade.destination_company_id = ${selectedCompanyId}
                 AND trade.state = 'active'
             )`
-          ));
+            )
+          );
         const byNumber = new Map<string, typeof allContainers>();
         for (const candidate of allContainers) {
           const key = candidate.containerNumber.trim().toUpperCase();

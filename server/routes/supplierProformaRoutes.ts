@@ -5,7 +5,7 @@ import { logAudit } from "./_helpers";
 import { Express } from "express";
 import type { Request, Response, RequestHandler } from "express";
 import { db, type DbTransaction } from "../db";
-import { eq, and, ne, sql, isNull } from "drizzle-orm";
+import { eq, and, ne, sql } from "drizzle-orm";
 import ExcelJS from "exceljs";
 import { buildAliasMap, resolveBarcode } from "./helpers/proformaBarcodeHelpers";
 import { registerContainerLoadedItemsRoutes } from "./container-loaded-items";
@@ -70,7 +70,12 @@ export function registerSupplierProformaRoutes(app: Express, requireAuth: Reques
       const proformas = await db
         .select()
         .from(supplierProformas)
-        .where(and(eq(supplierProformas.supplierId, supplierId), sql`(${supplierProformas.companyId} = ${companyId} OR (${supplierProformas.destinationCompanyId} = ${companyId} AND EXISTS (SELECT 1 FROM companies child WHERE child.id = ${companyId} AND child.parent_company_id = ${supplierProformas.companyId})))`));
+        .where(
+          and(
+            eq(supplierProformas.supplierId, supplierId),
+            sql`(${supplierProformas.companyId} = ${companyId} OR (${supplierProformas.destinationCompanyId} = ${companyId} AND EXISTS (SELECT 1 FROM companies child WHERE child.id = ${companyId} AND child.parent_company_id = ${supplierProformas.companyId})))`
+          )
+        );
       res.json(proformas);
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
@@ -86,7 +91,12 @@ export function registerSupplierProformaRoutes(app: Express, requireAuth: Reques
       const [proforma] = await db
         .select()
         .from(supplierProformas)
-        .where(and(eq(supplierProformas.id, proformaId), sql`(${supplierProformas.companyId} = ${companyId} OR (${supplierProformas.destinationCompanyId} = ${companyId} AND EXISTS (SELECT 1 FROM companies child WHERE child.id = ${companyId} AND child.parent_company_id = ${supplierProformas.companyId})))`));
+        .where(
+          and(
+            eq(supplierProformas.id, proformaId),
+            sql`(${supplierProformas.companyId} = ${companyId} OR (${supplierProformas.destinationCompanyId} = ${companyId} AND EXISTS (SELECT 1 FROM companies child WHERE child.id = ${companyId} AND child.parent_company_id = ${supplierProformas.companyId})))`
+          )
+        );
       if (!proforma) return res.status(404).json({ message: "Proforma not found" });
       const lines = await db
         .select()
@@ -113,7 +123,8 @@ export function registerSupplierProformaRoutes(app: Express, requireAuth: Reques
           AND (destination.id = owner.id OR destination.parent_company_id = owner.id)
         LIMIT 1
       `);
-      if (!destinationAllowed.rows.length) return res.status(403).json({ message: "Destination must be this company or its linked child company" });
+      if (!destinationAllowed.rows.length)
+        return res.status(403).json({ message: "Destination must be this company or its linked child company" });
 
       // The proforma record belongs to the active company, but a child company
       // may create one for a supplier master owned by its explicitly linked
@@ -195,10 +206,16 @@ export function registerSupplierProformaRoutes(app: Express, requireAuth: Reques
       if (destinationCompanyId !== undefined) {
         const destinationId = parseId(String(destinationCompanyId));
         if (destinationId === null) return res.status(400).json({ message: "Invalid destination company" });
-        const allowed = await db.execute(sql`SELECT 1 FROM companies WHERE id = ${destinationId} AND (id = ${companyId} OR parent_company_id = ${companyId}) LIMIT 1`);
+        const allowed = await db.execute(
+          sql`SELECT 1 FROM companies WHERE id = ${destinationId} AND (id = ${companyId} OR parent_company_id = ${companyId}) LIMIT 1`
+        );
         if (!allowed.rows.length) return res.status(403).json({ message: "Destination not linked to company" });
-        const [existing] = await db.select().from(supplierProformas).where(and(eq(supplierProformas.id, proformaId), eq(supplierProformas.companyId, companyId)));
-        if (existing?.isStarred && (existing.destinationCompanyId ?? companyId) !== destinationId) return res.status(409).json({ message: "Unstar this proforma before changing its destination" });
+        const [existing] = await db
+          .select()
+          .from(supplierProformas)
+          .where(and(eq(supplierProformas.id, proformaId), eq(supplierProformas.companyId, companyId)));
+        if (existing?.isStarred && (existing.destinationCompanyId ?? companyId) !== destinationId)
+          return res.status(409).json({ message: "Unstar this proforma before changing its destination" });
       }
       const updates: Partial<typeof supplierProformas.$inferInsert> = { updatedAt: new Date() };
       if (reference !== undefined) updates.reference = reference;
@@ -614,10 +631,16 @@ export function registerSupplierProformaRoutes(app: Express, requireAuth: Reques
         if (supplierId === null || proformaId === null) return res.status(400).json({ message: "Invalid id" });
 
         const [current] = await db
-          .select({ id: supplierProformas.id, isStarred: supplierProformas.isStarred, destinationCompanyId: supplierProformas.destinationCompanyId, supplierId: supplierProformas.supplierId })
+          .select({
+            id: supplierProformas.id,
+            isStarred: supplierProformas.isStarred,
+            destinationCompanyId: supplierProformas.destinationCompanyId,
+            supplierId: supplierProformas.supplierId,
+          })
           .from(supplierProformas)
           .where(and(eq(supplierProformas.id, proformaId), eq(supplierProformas.companyId, companyId)));
-        if (!current || current.supplierId !== supplierId) return res.status(404).json({ message: "Proforma not found" });
+        if (!current || current.supplierId !== supplierId)
+          return res.status(404).json({ message: "Proforma not found" });
 
         const newStarred = !current.isStarred;
 

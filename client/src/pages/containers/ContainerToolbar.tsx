@@ -15,12 +15,7 @@ interface ContainerToolbarProps {
   propertiesMode?: boolean;
 }
 
-export function ContainerToolbar({
-  onExportExcel,
-  onExportAllFull,
-  propertiesMode = false,
-}: ContainerToolbarProps) {
-
+export function ContainerToolbar({ onExportExcel, onExportAllFull, propertiesMode = false }: ContainerToolbarProps) {
   return (
     <div className="flex w-full flex-wrap gap-2 *:flex-auto sm:w-auto sm:*:flex-none">
       <DropdownMenu>

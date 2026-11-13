@@ -91,14 +91,16 @@ export function SupplierDetailDialog({
   const matchesDestination = (id: number | null | undefined) => matchesSupplierDestination(id, destinationFilter);
   const openingEntry = destinationFilter === "all" ? unifiedLedger.find((t) => t.type === "opening") : undefined;
   const ledgerRows = unifiedLedger.filter((t) => t.type !== "opening");
-  const filteredLedgerRows = filterLedgerRowsByDate(ledgerRows, dateFilter)
-    .filter((row) => matchesDestination(row.destinationCompanyId));
+  const filteredLedgerRows = filterLedgerRowsByDate(ledgerRows, dateFilter).filter((row) =>
+    matchesDestination(row.destinationCompanyId)
+  );
   const { txCount, totalPurchases, totalPayments, totalPurchasesQty } = computeLedgerKpis(filteredLedgerRows);
   // A single destination cannot inherit the combined supplier opening balance.
   // In this mode display the period's net movement, not a misleading global balance.
-  const currentBalance = destinationFilter === "all"
-    ? currentLedgerBalance(unifiedLedger)
-    : filteredLedgerRows.reduce((sum, row) => sum + Number(row.credit || 0) - Number(row.debit || 0), 0);
+  const currentBalance =
+    destinationFilter === "all"
+      ? currentLedgerBalance(unifiedLedger)
+      : filteredLedgerRows.reduce((sum, row) => sum + Number(row.credit || 0) - Number(row.debit || 0), 0);
   const runningDestinationNet = new Map<SupplierLedgerRow, number>();
   let destinationNet = 0;
   for (const row of filteredLedgerRows) {
@@ -116,7 +118,9 @@ export function SupplierDetailDialog({
     if (row.destinationCompanyId != null) {
       destinations.set(
         row.destinationCompanyId,
-        row.destinationCompanyName || companies.find((company) => company.id === row.destinationCompanyId)?.name || "Unknown"
+        row.destinationCompanyName ||
+          companies.find((company) => company.id === row.destinationCompanyId)?.name ||
+          "Unknown"
       );
     }
   }
@@ -145,13 +149,19 @@ export function SupplierDetailDialog({
               </SelectContent>
             </Select>
             <Select value={destinationFilter} onValueChange={onDestinationFilterChange}>
-              <SelectTrigger className="w-48" data-testid="select-destination-filter" aria-label="Filter destination company">
+              <SelectTrigger
+                className="w-48"
+                data-testid="select-destination-filter"
+                aria-label="Filter destination company"
+              >
                 <SelectValue placeholder="All Destinations" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Destinations</SelectItem>
                 {destinationOptions.map(([id, name]) => (
-                  <SelectItem key={id} value={String(id)}>{name}</SelectItem>
+                  <SelectItem key={id} value={String(id)}>
+                    {name}
+                  </SelectItem>
                 ))}
                 {hasUnassigned && <SelectItem value="unassigned">Unassigned</SelectItem>}
               </SelectContent>
@@ -202,7 +212,9 @@ export function SupplierDetailDialog({
               {ledgerLoading ? <Skeleton className="h-5 w-10" /> : <p className="font-semibold text-sm">{txCount}</p>}
             </div>
             <div className="rounded-lg border bg-muted/30 px-4 py-2.5">
-              <p className="text-xs text-muted-foreground mb-1">{destinationFilter === "all" ? "Balance" : "Destination Net"}</p>
+              <p className="text-xs text-muted-foreground mb-1">
+                {destinationFilter === "all" ? "Balance" : "Destination Net"}
+              </p>
               {ledgerLoading ? (
                 <Skeleton className="h-5 w-24" />
               ) : (
@@ -321,7 +333,9 @@ export function SupplierDetailDialog({
                       <TableHead className="h-9 text-xs font-semibold">Ref</TableHead>
                       <TableHead className="h-9 text-xs font-semibold text-right">Debit</TableHead>
                       <TableHead className="h-9 text-xs font-semibold text-right">Credit</TableHead>
-                      <TableHead className="h-9 text-xs font-semibold text-right">{destinationFilter === "all" ? "Balance" : "Net"}</TableHead>
+                      <TableHead className="h-9 text-xs font-semibold text-right">
+                        {destinationFilter === "all" ? "Balance" : "Net"}
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -346,9 +360,7 @@ export function SupplierDetailDialog({
                                 {txn.companyName}
                               </Badge>
                             </TableCell>
-                            <TableCell className="py-2.5">
-                              {txn.destinationCompanyName || "Unassigned"}
-                            </TableCell>
+                            <TableCell className="py-2.5">{txn.destinationCompanyName || "Unassigned"}</TableCell>
                             <TableCell className="py-2.5">
                               <Badge
                                 variant="secondary"
@@ -385,7 +397,9 @@ export function SupplierDetailDialog({
                               {txn.credit > 0 ? formatAmount(txn.credit) : "—"}
                             </TableCell>
                             <TableCell className="py-2.5 text-right font-mono font-semibold">
-                              {formatAmount(destinationFilter === "all" ? txn.balance : runningDestinationNet.get(txn) ?? 0)}
+                              {formatAmount(
+                                destinationFilter === "all" ? txn.balance : (runningDestinationNet.get(txn) ?? 0)
+                              )}
                             </TableCell>
                           </TableRow>
                         );
@@ -466,9 +480,7 @@ export function SupplierDetailDialog({
                             {po.companyName}
                           </Badge>
                         </TableCell>
-                        <TableCell className="py-3 text-sm">
-                          {po.destinationCompanyName || "Unassigned"}
-                        </TableCell>
+                        <TableCell className="py-3 text-sm">{po.destinationCompanyName || "Unassigned"}</TableCell>
                         <TableCell className="py-3 text-right font-mono font-semibold">
                           {formatAmount(po.totalAmount)}
                         </TableCell>
@@ -478,7 +490,9 @@ export function SupplierDetailDialog({
                 </Table>
                 <div className="flex justify-end">
                   <div className="flex items-center gap-2 rounded-lg border bg-muted/30 px-4 py-2 text-sm">
-                    <span className="text-muted-foreground">{sortedPOs.length} PO{sortedPOs.length === 1 ? "" : "s"} · Grand Total</span>
+                    <span className="text-muted-foreground">
+                      {sortedPOs.length} PO{sortedPOs.length === 1 ? "" : "s"} · Grand Total
+                    </span>
                     <span className="font-mono font-semibold">{formatAmount(grandTotal)}</span>
                   </div>
                 </div>

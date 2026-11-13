@@ -14,12 +14,13 @@ import { isPaymentRow, type SupplierLedgerRow, type SupplierPurchaseOrder } from
 export type SupplierDateFilter = "all" | "today" | "yesterday" | "this_month" | "this_year";
 
 /** Stable destination predicate shared by the detail table and its Excel export. */
-export function matchesSupplierDestination(
-  destinationCompanyId: number | null | undefined,
-  filter: string
-): boolean {
-  return filter === "all" ||
-    (filter === "unassigned" ? destinationCompanyId == null : /^\d+$/.test(filter) && destinationCompanyId === Number(filter));
+export function matchesSupplierDestination(destinationCompanyId: number | null | undefined, filter: string): boolean {
+  return (
+    filter === "all" ||
+    (filter === "unassigned"
+      ? destinationCompanyId == null
+      : /^\d+$/.test(filter) && destinationCompanyId === Number(filter))
+  );
 }
 
 export interface SupplierLedgerKpis {
@@ -41,8 +42,10 @@ function matchesSupplierDate(date: string | null, dateFilter: SupplierDateFilter
   const value = new Date(date);
   if (Number.isNaN(value.getTime())) return false;
   if (dateFilter === "today") return format(value, "yyyy-MM-dd") === format(now, "yyyy-MM-dd");
-  if (dateFilter === "yesterday") return format(value, "yyyy-MM-dd") === format(new Date(Date.now() - 86400000), "yyyy-MM-dd");
-  if (dateFilter === "this_month") return value.getFullYear() === now.getFullYear() && value.getMonth() === now.getMonth();
+  if (dateFilter === "yesterday")
+    return format(value, "yyyy-MM-dd") === format(new Date(Date.now() - 86400000), "yyyy-MM-dd");
+  if (dateFilter === "this_month")
+    return value.getFullYear() === now.getFullYear() && value.getMonth() === now.getMonth();
   return value.getFullYear() === now.getFullYear();
 }
 

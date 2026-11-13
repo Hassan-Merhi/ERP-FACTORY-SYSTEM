@@ -242,7 +242,10 @@ export function IntercompanyLifecycleContent({
     onSuccess: (result) => {
       toast({
         title: "Linked purchase orders deleted in both companies",
-        description: result.poIds.length + " POs and " + result.voucherIds.length +
+        description:
+          result.poIds.length +
+          " POs and " +
+          result.voucherIds.length +
           " original vouchers removed. No reversal vouchers created.",
       });
       setSelectedTradeId(null);
@@ -466,31 +469,37 @@ export function IntercompanyLifecycleContent({
                   <div className="space-y-3 rounded-lg border p-4">
                     <h3 className="font-semibold">Normalize old intercompany accounting</h3>
                     <p className="text-sm text-muted-foreground">
-                      For an older at-cost imported PO, clear the technical internal Sales and COGS
-                      balances with an audited journal. The parent intercompany debit and external
-                      supplier credit stay unchanged. No cash, stock, or original voucher is removed.
+                      For an older at-cost imported PO, clear the technical internal Sales and COGS balances with an
+                      audited journal. The parent intercompany debit and external supplier credit stay unchanged. No
+                      cash, stock, or original voucher is removed.
                     </p>
                     <label className="flex items-center gap-2 text-sm">
-                      <Checkbox checked={profitNettingConfirmed}
-                        onCheckedChange={(v) => setProfitNettingConfirmed(v === true)} />
+                      <Checkbox
+                        checked={profitNettingConfirmed}
+                        onCheckedChange={(v) => setProfitNettingConfirmed(v === true)}
+                      />
                       I confirm that only technical internal Sales and COGS should be netted.
                     </label>
                     <Button
-                      disabled={!profitNettingConfirmed ||
+                      disabled={
+                        !profitNettingConfirmed ||
                         !["Owner", "Developer"].includes(selectedCompany?.role ?? "") ||
-                        normalizeInternalProfit.isPending}
-                      onClick={() => normalizeInternalProfit.mutate()}>
-                      {normalizeInternalProfit.isPending ? "Verifying original vouchers…" : "Normalize parent intercompany accounts"}
+                        normalizeInternalProfit.isPending
+                      }
+                      onClick={() => normalizeInternalProfit.mutate()}
+                    >
+                      {normalizeInternalProfit.isPending
+                        ? "Verifying original vouchers…"
+                        : "Normalize parent intercompany accounts"}
                     </Button>
                   </div>
                 )}
                 <div className="space-y-3 rounded-lg border p-4">
                   <h3 className="font-semibold">Delete original linked POs and vouchers</h3>
                   <p className="text-sm text-muted-foreground">
-                    Physically deletes both companies' connected POs, their original vouchers and
-                    the unused linked container in one transaction. Creates no reversal vouchers.
-                    Only allowed before receipt, payments, shared charges or other activity.
-                    The deletion audit remains.
+                    Physically deletes both companies' connected POs, their original vouchers and the unused linked
+                    container in one transaction. Creates no reversal vouchers. Only allowed before receipt, payments,
+                    shared charges or other activity. The deletion audit remains.
                   </p>
                   <label className="flex items-center gap-2 text-sm">
                     <Checkbox
@@ -501,8 +510,11 @@ export function IntercompanyLifecycleContent({
                   </label>
                   <Button
                     variant="destructive"
-                    disabled={!deleteBothConfirmed || !["Owner", "Developer"].includes(selectedCompany?.role ?? "") ||
-                      deleteLinked.isPending}
+                    disabled={
+                      !deleteBothConfirmed ||
+                      !["Owner", "Developer"].includes(selectedCompany?.role ?? "") ||
+                      deleteLinked.isPending
+                    }
                     onClick={() => deleteLinked.mutate()}
                   >
                     {deleteLinked.isPending ? "Checking both companies…" : "Delete linked POs and vouchers"}

@@ -158,9 +158,13 @@ export function ActiveContainersTable({
                   </Badge>
                 </div>
                 {container.linkedParentCompanyName ? (
-                  <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mt-0.5">Linked to parent company: {container.linkedParentCompanyName}</p>
+                  <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mt-0.5">
+                    Linked to parent company: {container.linkedParentCompanyName}
+                  </p>
                 ) : (
-                  <p className="text-xs text-muted-foreground mt-0.5 wrap-break-word">{getSupplierName(container.supplierId)}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5 wrap-break-word">
+                    {getSupplierName(container.supplierId)}
+                  </p>
                 )}
               </div>
             </div>

@@ -27,7 +27,12 @@ export function useContainerQueries(
     _allowedRoles.includes(currentUser?.currentRole ?? "") || _allowedRoles.includes(currentUser?.role ?? "");
   const isDeveloper = currentUser?.role === "Developer";
 
-  const { data: rawContainers = [], isLoading, error: containersError, refetch: refetchContainers } = useQuery<Container[]>({
+  const {
+    data: rawContainers = [],
+    isLoading,
+    error: containersError,
+    refetch: refetchContainers,
+  } = useQuery<Container[]>({
     queryKey: ["/api/containers/active", selectedCompany?.id],
     queryFn: async () => {
       const response = await fetch("/api/containers/active", { credentials: "include" });

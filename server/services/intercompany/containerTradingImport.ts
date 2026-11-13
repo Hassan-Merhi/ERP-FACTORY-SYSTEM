@@ -809,7 +809,8 @@ export async function postIntercompanyImport(args: {
           physicalContainerId: physical.id,
           tradeId: trade.id,
           chargesConfirmed: plan.chargesConfirmed,
-          chargeEvidenceReference: plan.chargeEvidenceReference ?? (plan.chargesConfirmed ? `PO workbook SHA-256: ${preview.sha256}` : null),
+          chargeEvidenceReference:
+            plan.chargeEvidenceReference ?? (plan.chargesConfirmed ? `PO workbook SHA-256: ${preview.sha256}` : null),
           confirmedLandedCost: plan.landedTotal,
         });
         // Only at NEW PO import: reuse older verified credit of this exact company pair.

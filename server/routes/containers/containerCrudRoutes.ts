@@ -258,16 +258,22 @@ export function registerContainerCrudRoutes(app: Express) {
       if (containerId === null) return res.status(400).json({ message: "Invalid id" });
       // Linked destination reads use the canonical physical container. Writes
       // still require source ownership via their original mutation boundaries.
-      const [container] = await db.select().from(containers).where(and(
-        eq(containers.id, containerId),
-        sql`(${containers.companyId} = ${req.session.currentCompanyId!} OR EXISTS (
+      const [container] = await db
+        .select()
+        .from(containers)
+        .where(
+          and(
+            eq(containers.id, containerId),
+            sql`(${containers.companyId} = ${req.session.currentCompanyId!} OR EXISTS (
           SELECT 1 FROM intercompany_trades trade
           WHERE trade.physical_container_id = ${containers.id}
             AND trade.destination_company_id = ${req.session.currentCompanyId!}
             AND trade.source_company_id = ${containers.companyId}
             AND trade.state = 'active'
-        ))`,
-      )).limit(1);
+        ))`
+          )
+        )
+        .limit(1);
 
       if (!container) {
         return res.status(404).json({ message: "Container not found" });

@@ -33,7 +33,10 @@ import { AccountSearchResults } from "./accountslegacy/AccountSearchResults";
 import { FindVoucherTab } from "./accountslegacy/FindVoucherTab";
 import { EditAccountDialog } from "./accountslegacy/EditAccountDialog";
 import { AccountsConfirmDialogs } from "./accountslegacy/AccountsConfirmDialogs";
-import { presentIntercompanyAccount, showInIntercompanyAccountsOverview } from "./accountslegacy/intercompanyAccountPresentation";
+import {
+  presentIntercompanyAccount,
+  showInIntercompanyAccountsOverview,
+} from "./accountslegacy/intercompanyAccountPresentation";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import type { FactoryMyAccess } from "@shared/apiTypes";
 import {

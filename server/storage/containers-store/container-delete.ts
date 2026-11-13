@@ -23,8 +23,11 @@ export async function deleteContainer(
   await db.transaction(async (tx) => {
     const [container] = await tx.select().from(schema.containers).where(eq(schema.containers.id, id)).limit(1);
     if (!container) throw new Error("Container not found");
-    const [linked] = await tx.select({ id: schema.intercompanyTrades.id })
-      .from(schema.intercompanyTrades).where(eq(schema.intercompanyTrades.physicalContainerId, id)).limit(1);
+    const [linked] = await tx
+      .select({ id: schema.intercompanyTrades.id })
+      .from(schema.intercompanyTrades)
+      .where(eq(schema.intercompanyTrades.physicalContainerId, id))
+      .limit(1);
     if (linked) throw new Error("This container is linked to another company. Use the coordinated linked PO delete.");
     const retire = (voucherIds: (number | null)[], reason: string) =>
       retireVouchersTx(tx, { companyId: container.companyId, voucherIds, reason, actor });

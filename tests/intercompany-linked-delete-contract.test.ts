@@ -11,8 +11,10 @@ const pagination = readFileSync("server/routes/containers/containerListPaginatio
 describe("linked intercompany container and Daybook deletion contract", () => {
   it("records every original source and destination voucher ID on import", () => {
     for (const name of [
-      "originalSupplierVoucherIds", "sourceSaleVoucherId",
-      "sourceCostVoucherId", "destinationVoucherId",
+      "originalSupplierVoucherIds",
+      "sourceSaleVoucherId",
+      "sourceCostVoucherId",
+      "destinationVoucherId",
     ]) {
       expect(importService).toContain(name);
       expect(service).toContain(name);
@@ -42,10 +44,16 @@ describe("linked intercompany container and Daybook deletion contract", () => {
   });
   it("refuses deletion when payments, stock, revisions or charges exist", () => {
     for (const marker of [
-      "requireUnreceived(data)", "allocations.length", "receipt.length",
-      "revisions.length", "shared.length", "sharedPo.length",
-      "activeSiblings.length !== 1", "IC_DELETE_VOUCHER_EVIDENCE",
-    ]) expect(service).toContain(marker);
+      "requireUnreceived(data)",
+      "allocations.length",
+      "receipt.length",
+      "revisions.length",
+      "shared.length",
+      "sharedPo.length",
+      "activeSiblings.length !== 1",
+      "IC_DELETE_VOUCHER_EVIDENCE",
+    ])
+      expect(service).toContain(marker);
   });
   it("qualifies canonical container columns inside linked-company subqueries", () => {
     const source = readFileSync("server/storage/containers-store/containers.ts", "utf8");
@@ -53,8 +61,8 @@ describe("linked intercompany container and Daybook deletion contract", () => {
     for (const text of [source, pagination]) {
       expect(text).toContain('trade.physical_container_id = "containers"."id"');
       expect(text).toContain('trade.source_company_id = "containers"."company_id"');
-      expect(text).not.toContain('trade.physical_container_id = ${containers.id}');
-      expect(text).not.toContain('trade.physical_container_id = ${schema.containers.id}');
+      expect(text).not.toContain("trade.physical_container_id = ${containers.id}");
+      expect(text).not.toContain("trade.physical_container_id = ${schema.containers.id}");
     }
   });
   it("shows the physical linked container in both list endpoint families", () => {

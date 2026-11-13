@@ -498,9 +498,7 @@ export default function PropertiesIntercompanyPOImport() {
                         </TableCell>
                         <TableCell>{currency(container.itemsTotal)}</TableCell>
                         <TableCell>{currency(container.chargesTotal)}</TableCell>
-                        <TableCell>
-                          {currency(container.itemsTotal + container.chargesTotal)}
-                        </TableCell>
+                        <TableCell>{currency(container.itemsTotal + container.chargesTotal)}</TableCell>
                         <TableCell className="min-w-[220px] space-y-2">
                           <select
                             aria-label={`${copy.destination}: ${container.containerNumber}`}

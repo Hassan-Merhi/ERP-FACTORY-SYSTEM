@@ -82,8 +82,10 @@ describe("Properties normal PO Import intercompany destinations", () => {
     selections = updatePropertiesContainerCharges(selections, "TEST-CONT-001", {
       chargeEvidenceReference: "FRT-INV-1",
     });
-    expect(validatePropertiesImportSelections(containers, selections, new Set([30]))[0])
-      .toMatchObject({ chargesConfirmed: true, chargeEvidenceReference: "FRT-INV-1" });
+    expect(validatePropertiesImportSelections(containers, selections, new Set([30]))[0]).toMatchObject({
+      chargesConfirmed: true,
+      chargeEvidenceReference: "FRT-INV-1",
+    });
   });
 
   it("keeps the import reachable only in Properties trading with Owner/Developer access", () => {

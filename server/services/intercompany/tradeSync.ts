@@ -354,10 +354,12 @@ export async function isNettedIntercompanyTradeTx(tx: DbTransaction, tradeId: nu
   const [event] = await tx
     .select({ payload: intercompanyAuditEvents.payload })
     .from(intercompanyAuditEvents)
-    .where(and(
-      eq(intercompanyAuditEvents.eventType, "container-import-confirmed"),
-      sql`${intercompanyAuditEvents.eventKey} LIKE ${"ic-container-import:%:" + tradeId}`
-    ))
+    .where(
+      and(
+        eq(intercompanyAuditEvents.eventType, "container-import-confirmed"),
+        sql`${intercompanyAuditEvents.eventKey} LIKE ${"ic-container-import:%:" + tradeId}`
+      )
+    )
     .limit(1);
   if ((event?.payload as { technicalProfitNetting?: unknown } | null)?.technicalProfitNetting === true) {
     return true;

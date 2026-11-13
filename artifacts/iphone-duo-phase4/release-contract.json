@@ -20,8 +20,8 @@
       "workspace": "properties",
       "companyCode": "PHASE9-PROPERTIES",
       "requiredRole": "Developer",
-      "staticRoutes": 36,
-      "parameterizedRoutes": 4
+      "staticRoutes": 43,
+      "parameterizedRoutes": 11
     },
     {
       "workspace": "supplier-partner",
@@ -52,7 +52,7 @@
       "parameterizedRoutes": 0
     }
   ],
-  "parameterizedRoutesNeedingSeededBrowserEvidence": 56,
+  "parameterizedRoutesNeedingSeededBrowserEvidence": 63,
   "physicalSafariCertification": "NOT VERIFIED — requires user-owned device",
   "fullBrowserMatrixCertification": "NOT VERIFIED by this source-only script",
   "violations": []

@@ -17,7 +17,10 @@ import { requireAuth } from "../../auth";
 import { db } from "../../db";
 import { logger } from "../../lib/logger";
 import { cancelUnreceivedTrade } from "../../services/intercompany/phase5Cancel";
-import { daybookLinkedVoucherTrades, deletePristineLinkedTrade } from "../../services/intercompany/linkedTradePhysicalDelete";
+import {
+  daybookLinkedVoucherTrades,
+  deletePristineLinkedTrade,
+} from "../../services/intercompany/linkedTradePhysicalDelete";
 import { normalizeLegacyIntercompanyProfit } from "../../services/intercompany/legacyProfitNetting";
 import { receiveLinkedTrade } from "../../services/intercompany/phase5Receipt";
 import { requireReceivingPairPermission } from "../../services/intercompany/phase5ReceivingAccess";
@@ -95,12 +98,14 @@ function fail(res: Response, error: unknown, operation: "lifecycle" | "delete-li
     operation,
     error,
     pgCode: typeof error === "object" && error != null && "code" in error ? String(error.code) : undefined,
-    pgConstraint: typeof error === "object" && error != null && "constraint" in error ? String(error.constraint) : undefined,
+    pgConstraint:
+      typeof error === "object" && error != null && "constraint" in error ? String(error.constraint) : undefined,
   });
   if (operation === "delete-linked") {
     return res.status(409).json({
       code: "IC_DELETE_DATABASE_REFUSED",
-      message: "The database refused the linked PO deletion; both companies and their vouchers remain unchanged. Ask a developer to inspect the IC_DELETE_DATABASE_REFUSED server log.",
+      message:
+        "The database refused the linked PO deletion; both companies and their vouchers remain unchanged. Ask a developer to inspect the IC_DELETE_DATABASE_REFUSED server log.",
     });
   }
   return res.status(500).json({
@@ -127,8 +132,8 @@ async function lifecycleList(identity: EditIdentity) {
   return withTradeScope(identity, pairs, async () => {
     const tradeIds = trades.map((t) => t.id);
     const physicalIds = trades.map((t) => t.physicalContainerId);
-    const [imported, received, canceled, charges, physical, localLocations, localInventoryAccounts, technicalEvents] = await Promise.all(
-      [
+    const [imported, received, canceled, charges, physical, localLocations, localInventoryAccounts, technicalEvents] =
+      await Promise.all([
         tradeIds.length
           ? db
               .select()
@@ -174,16 +179,16 @@ async function lifecycleList(identity: EditIdentity) {
             )
           ),
         trades.length
-          ? db.select({
-              eventType: intercompanyAuditEvents.eventType,
-              eventKey: intercompanyAuditEvents.eventKey,
-              payload: intercompanyAuditEvents.payload,
-            }).from(intercompanyAuditEvents).where(
-              inArray(intercompanyAuditEvents.relationshipId, [...new Set(trades.map((t) => t.relationshipId))])
-            )
+          ? db
+              .select({
+                eventType: intercompanyAuditEvents.eventType,
+                eventKey: intercompanyAuditEvents.eventKey,
+                payload: intercompanyAuditEvents.payload,
+              })
+              .from(intercompanyAuditEvents)
+              .where(inArray(intercompanyAuditEvents.relationshipId, [...new Set(trades.map((t) => t.relationshipId))]))
           : [],
-      ]
-    );
+      ]);
     return {
       trades: trades.map((trade) => {
         const r = received.find((item) => item.tradeId === trade.id);
@@ -205,13 +210,14 @@ async function lifecycleList(identity: EditIdentity) {
             ? { id: r.id, locationId: r.locationId, date: r.postingDate, voucherId: r.receiptVoucherId }
             : null,
           canceled: c ? { id: c.id, date: c.postingDate, releasedCredit: c.releasedCredit } : null,
-          accountingNetted: technicalEvents.some((event) =>
-            (event.eventKey === "ic-technical-profit-normalized:" + trade.id &&
-              event.eventType === "intercompany-internal-profit-netted") ||
-            (event.eventType === "container-import-confirmed" &&
-              event.eventKey.startsWith("ic-container-import:") &&
-              event.eventKey.endsWith(":" + trade.id) &&
-              (event.payload as { technicalProfitNetting?: unknown } | null)?.technicalProfitNetting === true)
+          accountingNetted: technicalEvents.some(
+            (event) =>
+              (event.eventKey === "ic-technical-profit-normalized:" + trade.id &&
+                event.eventType === "intercompany-internal-profit-netted") ||
+              (event.eventType === "container-import-confirmed" &&
+                event.eventKey.startsWith("ic-container-import:") &&
+                event.eventKey.endsWith(":" + trade.id) &&
+                (event.payload as { technicalProfitNetting?: unknown } | null)?.technicalProfitNetting === true)
           ),
           hasSharedInvoices: invoiceCharges.length > 0,
           pendingSharedAllocation: invoiceCharges.some((item) => Number(item.amount) > 0),
@@ -308,49 +314,73 @@ export function registerIntercompanyPhase5Routes(app: Express) {
       return fail(res, error);
     }
   });
-  app.post("/api/intercompany-container-trading/daybook-voucher/:voucherId/delete-linked", requireAuth, async (req, res) => {
-    try {
-      const voucherId = routeId.parse(req.params.voucherId);
-      const parsed = z.object({
-        expectedVersion: id,
-        confirmDeleteBothCompanies: z.literal(true),
-      }).strict().parse(req.body);
-      const linked = await daybookLinkedVoucherTrades([voucherId], actor(req));
-      const trade = linked[voucherId];
-      if (!trade || trade.version !== parsed.expectedVersion) {
-        throw new IntercompanyEditError("IC_DELETE_STALE", "Linked Daybook voucher changed; refresh and review", 409);
+  app.post(
+    "/api/intercompany-container-trading/daybook-voucher/:voucherId/delete-linked",
+    requireAuth,
+    async (req, res) => {
+      try {
+        const voucherId = routeId.parse(req.params.voucherId);
+        const parsed = z
+          .object({
+            expectedVersion: id,
+            confirmDeleteBothCompanies: z.literal(true),
+          })
+          .strict()
+          .parse(req.body);
+        const linked = await daybookLinkedVoucherTrades([voucherId], actor(req));
+        const trade = linked[voucherId];
+        if (!trade || trade.version !== parsed.expectedVersion) {
+          throw new IntercompanyEditError("IC_DELETE_STALE", "Linked Daybook voucher changed; refresh and review", 409);
+        }
+        return res.json(await deletePristineLinkedTrade(trade.tradeId, trade.version, actor(req)));
+      } catch (error) {
+        return fail(res, error, "delete-linked");
       }
-      return res.json(await deletePristineLinkedTrade(trade.tradeId, trade.version, actor(req)));
-    } catch (error) {
-      return fail(res, error, "delete-linked");
     }
-  });
+  );
   // Explicit audited neutralization of old internal at-cost Sales and COGS.
   // No external supplier, intercompany balance, stock or cash change.
-  app.post("/api/intercompany-container-trading/lifecycle/:tradeId/normalize-internal-profit", requireAuth, async (req, res) => {
-    try {
-      const body = z.object({
-        expectedVersion: id,
-        postingDate: day,
-        confirmNoCashOrStockChange: z.literal(true),
-      }).strict().parse(req.body);
-      return res.json(await normalizeLegacyIntercompanyProfit({
-        tradeId: routeId.parse(req.params.tradeId),
-        ...body,
-      }, actor(req)));
-    } catch (error) {
-      return fail(res, error);
+  app.post(
+    "/api/intercompany-container-trading/lifecycle/:tradeId/normalize-internal-profit",
+    requireAuth,
+    async (req, res) => {
+      try {
+        const body = z
+          .object({
+            expectedVersion: id,
+            postingDate: day,
+            confirmNoCashOrStockChange: z.literal(true),
+          })
+          .strict()
+          .parse(req.body);
+        return res.json(
+          await normalizeLegacyIntercompanyProfit(
+            {
+              tradeId: routeId.parse(req.params.tradeId),
+              ...body,
+            },
+            actor(req)
+          )
+        );
+      } catch (error) {
+        return fail(res, error);
+      }
     }
-  });
+  );
   // Delete the complete untouched company pair: no reversal voucher is posted.
   app.post("/api/intercompany-container-trading/lifecycle/:tradeId/delete-linked", requireAuth, async (req, res) => {
     try {
-      const parsed = z.object({
-        expectedVersion: id,
-        confirmDeleteBothCompanies: z.literal(true),
-      }).strict().parse(req.body);
+      const parsed = z
+        .object({
+          expectedVersion: id,
+          confirmDeleteBothCompanies: z.literal(true),
+        })
+        .strict()
+        .parse(req.body);
       const result = await deletePristineLinkedTrade(
-        routeId.parse(req.params.tradeId), parsed.expectedVersion, actor(req)
+        routeId.parse(req.params.tradeId),
+        parsed.expectedVersion,
+        actor(req)
       );
       return res.json(result);
     } catch (error) {

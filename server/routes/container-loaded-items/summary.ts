@@ -44,7 +44,12 @@ export function registerContainerLoadedItemSummaryRoutes(app: Express, requireAu
         const [proforma] = await db
           .select()
           .from(supplierProformas)
-          .where(and(eq(supplierProformas.id, proformaId), sql`(${supplierProformas.companyId} = ${companyId} OR (${supplierProformas.destinationCompanyId} = ${companyId} AND EXISTS (SELECT 1 FROM companies child WHERE child.id = ${companyId} AND child.parent_company_id = ${supplierProformas.companyId})))`));
+          .where(
+            and(
+              eq(supplierProformas.id, proformaId),
+              sql`(${supplierProformas.companyId} = ${companyId} OR (${supplierProformas.destinationCompanyId} = ${companyId} AND EXISTS (SELECT 1 FROM companies child WHERE child.id = ${companyId} AND child.parent_company_id = ${supplierProformas.companyId})))`
+            )
+          );
         if (!proforma) return res.status(404).json({ message: "Proforma not found" });
 
         const [container] = await db.select().from(containers).where(eq(containers.id, containerId));

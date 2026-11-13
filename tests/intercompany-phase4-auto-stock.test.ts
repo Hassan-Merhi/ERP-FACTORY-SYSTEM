@@ -119,11 +119,7 @@ describe("Phase 4 verified destination stock mapping", () => {
 
   it("matches source and destination aliases together even with duplicate product names", () => {
     const result = plan({
-      items: [
-        source({ code: "SRC-COTTON" }),
-        item(22, { code: "DST-COTTON" }),
-        item(23, { code: "DST-OTHER" }),
-      ],
+      items: [source({ code: "SRC-COTTON" }), item(22, { code: "DST-COTTON" }), item(23, { code: "DST-OTHER" })],
       aliases: [
         { companyId: 1, stockItemId: 11, aliasCode: "PO-COTTON" },
         { companyId: 2, stockItemId: 22, aliasCode: "PO-COTTON" },
@@ -134,19 +130,23 @@ describe("Phase 4 verified destination stock mapping", () => {
   });
 
   it("refuses an alias that collides with another stock item's code or alias", () => {
-    expect(() => plan({
-      items: [source(), source({ id: 12, code: "ALT-COTTON", name: "Other Cotton" }), item(22)],
-      aliases: [{ companyId: 1, stockItemId: 11, aliasCode: "ALT-COTTON" }],
-      lines: [row({ barcode: "ALT-COTTON" })],
-    })).toThrow(/multiple items/);
-    expect(() => plan({
-      items: [source(), item(22), item(23, { code: "OTHER" })],
-      aliases: [
-        { companyId: 2, stockItemId: 22, aliasCode: "ALT-COTTON" },
-        { companyId: 2, stockItemId: 23, aliasCode: "ALT-COTTON" },
-      ],
-      lines: [row({ barcode: "ALT-COTTON" })],
-    })).toThrow(/multiple items/);
+    expect(() =>
+      plan({
+        items: [source(), source({ id: 12, code: "ALT-COTTON", name: "Other Cotton" }), item(22)],
+        aliases: [{ companyId: 1, stockItemId: 11, aliasCode: "ALT-COTTON" }],
+        lines: [row({ barcode: "ALT-COTTON" })],
+      })
+    ).toThrow(/multiple items/);
+    expect(() =>
+      plan({
+        items: [source(), item(22), item(23, { code: "OTHER" })],
+        aliases: [
+          { companyId: 2, stockItemId: 22, aliasCode: "ALT-COTTON" },
+          { companyId: 2, stockItemId: 23, aliasCode: "ALT-COTTON" },
+        ],
+        lines: [row({ barcode: "ALT-COTTON" })],
+      })
+    ).toThrow(/multiple items/);
   });
 
   it("uses the source stock barcode even when its workbook name is absent", () => {
@@ -204,8 +204,20 @@ describe("Phase 4 verified destination stock mapping", () => {
   });
 
   it("matches SP.059 instead of TS.020 when both companies have duplicate article names", () => {
-    const propertiesSp = source({ id: 9757, companyId: 22, code: "SP.059", name: "AJ M SPORT T-SHIRT (40kg)", uom: "BL" });
-    const propertiesTs = source({ id: 9756, companyId: 22, code: "TS.020", name: "AJ M SPORT T-SHIRT (40kg)", uom: "BL" });
+    const propertiesSp = source({
+      id: 9757,
+      companyId: 22,
+      code: "SP.059",
+      name: "AJ M SPORT T-SHIRT (40kg)",
+      uom: "BL",
+    });
+    const propertiesTs = source({
+      id: 9756,
+      companyId: 22,
+      code: "TS.020",
+      name: "AJ M SPORT T-SHIRT (40kg)",
+      uom: "BL",
+    });
     const erpSp = source({ id: 10153, companyId: 24, code: "SP.059", name: "AJ M SPORT T-SHIRT (40kg)", uom: "BL" });
     const erpTs = source({ id: 10152, companyId: 24, code: "TS.020", name: "AJ M SPORT T-SHIRT (40kg)", uom: "BL" });
     const result = planDestinationStockMapping({
@@ -213,16 +225,26 @@ describe("Phase 4 verified destination stock mapping", () => {
       items: [propertiesSp, propertiesTs, erpSp, erpTs],
       aliases: [],
       allowedDestinationIds: [24],
-      lines: [{ containerNumber: "MRSU4976363", destinationCompanyId: 24, rowNum: 67, barcode: "SP.059", itemName: propertiesSp.name }],
+      lines: [
+        {
+          containerNumber: "MRSU4976363",
+          destinationCompanyId: 24,
+          rowNum: 67,
+          barcode: "SP.059",
+          itemName: propertiesSp.name,
+        },
+      ],
     });
     expect(result.assignments[0]).toMatchObject({ sourceItemId: 9757, destinationItemId: 10153 });
     expect(result.creations).toHaveLength(0);
   });
 
   it("rejects a name-only lookup when the destination name remains ambiguous", () => {
-    expect(() => plan({
-      items: [source(), item(22, { code: "DEST-A" }), item(23, { code: "DEST-B" })],
-    })).toThrow(/multiple items/);
+    expect(() =>
+      plan({
+        items: [source(), item(22, { code: "DEST-A" }), item(23, { code: "DEST-B" })],
+      })
+    ).toThrow(/multiple items/);
   });
 
   it("rejects a destination unit mismatch before any creation is planned", () => {

@@ -4,12 +4,7 @@
  * intercompany trade links; no narration parsing or guessed company IDs.
  */
 import { and, eq, inArray, or } from "drizzle-orm";
-import {
-  companies,
-  intercompanyTrades,
-  intercompanyTradeSourcePos,
-  purchaseOrders,
-} from "@shared/schema";
+import { companies, intercompanyTrades, intercompanyTradeSourcePos, purchaseOrders } from "@shared/schema";
 import { db } from "../../db";
 
 export interface SupplierDestination {
@@ -32,56 +27,67 @@ export async function resolveSupplierDestinations(input: {
 
   const voucherIds = [...new Set(input.voucherIds ?? [])].filter((id) => Number.isSafeInteger(id) && id > 0);
   const voucherPos = voucherIds.length
-    ? await db.select({ id: purchaseOrders.id, voucherId: purchaseOrders.voucherId })
+    ? await db
+        .select({ id: purchaseOrders.id, voucherId: purchaseOrders.voucherId })
         .from(purchaseOrders)
         .where(and(inArray(purchaseOrders.companyId, accessible), inArray(purchaseOrders.voucherId, voucherIds)))
     : [];
-  const ids = [...new Set([...(input.poIds ?? []), ...voucherPos.map((po) => po.id)])]
-    .filter((id) => Number.isSafeInteger(id) && id > 0);
+  const ids = [...new Set([...(input.poIds ?? []), ...voucherPos.map((po) => po.id)])].filter(
+    (id) => Number.isSafeInteger(id) && id > 0
+  );
   if (!ids.length) return { byPoId, byVoucherId };
 
   const [linked, direct] = await Promise.all([
-    db.select({
-      poId: intercompanyTradeSourcePos.sourcePoId,
-      destinationCompanyId: intercompanyTrades.destinationCompanyId,
-      destinationCompanyName: companies.name,
-    })
+    db
+      .select({
+        poId: intercompanyTradeSourcePos.sourcePoId,
+        destinationCompanyId: intercompanyTrades.destinationCompanyId,
+        destinationCompanyName: companies.name,
+      })
       .from(intercompanyTradeSourcePos)
       .innerJoin(intercompanyTrades, eq(intercompanyTradeSourcePos.tradeId, intercompanyTrades.id))
       .innerJoin(companies, eq(companies.id, intercompanyTrades.destinationCompanyId))
-      .where(and(
-        inArray(intercompanyTradeSourcePos.sourcePoId, ids),
-        eq(intercompanyTrades.state, "active"),
-        inArray(intercompanyTrades.sourceCompanyId, accessible),
-        inArray(intercompanyTrades.destinationCompanyId, accessible),
-      )),
-    db.select({
-      originalSupplierPoId: intercompanyTrades.originalSupplierPoId,
-      destinationPoId: intercompanyTrades.destinationPoId,
-      destinationCompanyId: intercompanyTrades.destinationCompanyId,
-      destinationCompanyName: companies.name,
-    })
+      .where(
+        and(
+          inArray(intercompanyTradeSourcePos.sourcePoId, ids),
+          eq(intercompanyTrades.state, "active"),
+          inArray(intercompanyTrades.sourceCompanyId, accessible),
+          inArray(intercompanyTrades.destinationCompanyId, accessible)
+        )
+      ),
+    db
+      .select({
+        originalSupplierPoId: intercompanyTrades.originalSupplierPoId,
+        destinationPoId: intercompanyTrades.destinationPoId,
+        destinationCompanyId: intercompanyTrades.destinationCompanyId,
+        destinationCompanyName: companies.name,
+      })
       .from(intercompanyTrades)
       .innerJoin(companies, eq(companies.id, intercompanyTrades.destinationCompanyId))
-      .where(and(
-        eq(intercompanyTrades.state, "active"),
-        inArray(intercompanyTrades.sourceCompanyId, accessible),
-        inArray(intercompanyTrades.destinationCompanyId, accessible),
-        or(
-          inArray(intercompanyTrades.originalSupplierPoId, ids),
-          inArray(intercompanyTrades.destinationPoId, ids),
-        ),
-      )),
+      .where(
+        and(
+          eq(intercompanyTrades.state, "active"),
+          inArray(intercompanyTrades.sourceCompanyId, accessible),
+          inArray(intercompanyTrades.destinationCompanyId, accessible),
+          or(inArray(intercompanyTrades.originalSupplierPoId, ids), inArray(intercompanyTrades.destinationPoId, ids))
+        )
+      ),
   ]);
 
   const assign = (poId: number | null, destination: SupplierDestination) => {
     if (poId != null && ids.includes(poId)) byPoId.set(poId, destination);
   };
   for (const row of linked) {
-    assign(row.poId, { destinationCompanyId: row.destinationCompanyId, destinationCompanyName: row.destinationCompanyName });
+    assign(row.poId, {
+      destinationCompanyId: row.destinationCompanyId,
+      destinationCompanyName: row.destinationCompanyName,
+    });
   }
   for (const row of direct) {
-    const destination = { destinationCompanyId: row.destinationCompanyId, destinationCompanyName: row.destinationCompanyName };
+    const destination = {
+      destinationCompanyId: row.destinationCompanyId,
+      destinationCompanyName: row.destinationCompanyName,
+    };
     assign(row.originalSupplierPoId, destination);
     assign(row.destinationPoId, destination);
   }
@@ -97,7 +103,10 @@ export async function resolveSupplierDestinations(input: {
   }
   for (const [voucherId, destinations] of grouped) {
     const first = destinations[0];
-    if (first && destinations.every((destination) => destination?.destinationCompanyId === first.destinationCompanyId)) {
+    if (
+      first &&
+      destinations.every((destination) => destination?.destinationCompanyId === first.destinationCompanyId)
+    ) {
       byVoucherId.set(voucherId, first);
     }
   }

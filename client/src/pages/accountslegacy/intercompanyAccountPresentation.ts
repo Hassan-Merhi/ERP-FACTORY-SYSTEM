@@ -7,10 +7,7 @@ import type { Account } from "../accounts/accountTypes";
  *
  * Never filter financial API data or zero balances: this is presentation only.
  */
-export function showInIntercompanyAccountsOverview(
-  account: Account,
-  appMode: string
-): boolean {
+export function showInIntercompanyAccountsOverview(account: Account, appMode: string): boolean {
   if (appMode === "factory" || account.type !== "ledger") return true;
   const code = account.code.toUpperCase();
   const name = account.name.toLowerCase();
@@ -26,10 +23,7 @@ export function showInIntercompanyAccountsOverview(
 
 export function presentIntercompanyAccount(account: Account, appMode: string): Account {
   if (appMode === "factory" || account.type !== "ledger") return account;
-  if (
-    /^IC-AR-/i.test(account.code) ||
-    /^intercompany receivable - /i.test(account.name)
-  ) {
+  if (/^IC-AR-/i.test(account.code) || /^intercompany receivable - /i.test(account.name)) {
     return {
       ...account,
       name: account.name.replace(/^intercompany receivable - /i, "Intercompany - "),

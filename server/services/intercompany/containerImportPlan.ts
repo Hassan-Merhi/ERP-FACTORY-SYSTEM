@@ -1,4 +1,4 @@
- /**
+/**
  * Exact, deterministic Phase 2 Excel container pricing plan.
  * The uploaded workbook is re-parsed server-side at confirmation. Never trust a
  * browser-calculated total or a file hash supplied by a client.
@@ -60,7 +60,7 @@ export interface ContainerImportPlan {
   };
 }
 
- const cents = (input: number | string) => toMoney(input).toDecimalPlaces(2);
+const cents = (input: number | string) => toMoney(input).toDecimalPlaces(2);
 const amount = (value: number | undefined, label: string) => {
   if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
     throw new Error(label + " must be a non-negative number");

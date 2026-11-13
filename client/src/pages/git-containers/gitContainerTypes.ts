@@ -52,13 +52,12 @@ export interface EnrichedContainerRow {
 export function canEditTrackedContainer(
   container: Pick<EnrichedContainerRow, "companyId" | "linkedDestinationCompanyIds"> | null,
   sessionCompanyId: number | null,
-  readOnly = false,
+  readOnly = false
 ): boolean {
   if (readOnly || !container) return false;
   if (sessionCompanyId === null) return true; // privileged all-companies view
   return (
-    container.companyId === sessionCompanyId ||
-    (container.linkedDestinationCompanyIds ?? []).includes(sessionCompanyId)
+    container.companyId === sessionCompanyId || (container.linkedDestinationCompanyIds ?? []).includes(sessionCompanyId)
   );
 }
 

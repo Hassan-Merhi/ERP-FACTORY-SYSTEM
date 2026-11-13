@@ -33,7 +33,13 @@ import { useSuppliersFilters } from "./suppliers/useSuppliersFilters";
 import type { Company } from "@/contexts/CompanyContext";
 import type { SupplierLedgerRow, SupplierPurchaseOrder, SupplierWithStats } from "./suppliers/supplierDisplay";
 import { getAvatarColor, getInitials } from "./suppliers/supplierDisplay";
-import { filterLedgerRowsByDate, matchesSupplierDestination, supplierLedgerToExportRows, voucherTabForType, type SupplierDateFilter } from "./suppliers/ledgerSummaries";
+import {
+  filterLedgerRowsByDate,
+  matchesSupplierDestination,
+  supplierLedgerToExportRows,
+  voucherTabForType,
+  type SupplierDateFilter,
+} from "./suppliers/ledgerSummaries";
 import { SupplierDetailDialog, type SupplierDetailTab } from "./suppliers/SupplierDetailDialog";
 
 export default function Suppliers() {
@@ -193,9 +199,10 @@ export default function Suppliers() {
       return;
     }
     const exportRows = filterLedgerRowsByDate(
-      unifiedLedger.filter((row) =>
-        matchesSupplierDestination(row.destinationCompanyId, destinationFilter) &&
-        (destinationFilter === "all" || row.type !== "opening")
+      unifiedLedger.filter(
+        (row) =>
+          matchesSupplierDestination(row.destinationCompanyId, destinationFilter) &&
+          (destinationFilter === "all" || row.type !== "opening")
       ),
       dateFilter
     );

@@ -558,18 +558,27 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
   );
   const displayedRows = useMemo(() => visibleRows.slice(0, daybookRowLimit), [visibleRows, daybookRowLimit]);
   const daybookVoucherIds = useMemo(
-    () => displayedRows.filter((r) => r._type === "voucher" && r.data.id > 0)
-      .map((r) => r.data.id).slice(0, 100), [displayedRows]);
+    () =>
+      displayedRows
+        .filter((r) => r._type === "voucher" && r.data.id > 0)
+        .map((r) => r.data.id)
+        .slice(0, 100),
+    [displayedRows]
+  );
   const { data: linkedDaybookVouchers } = useQuery<{
     linked: Record<number, { tradeId: number; version: number }>;
   }>({
-    queryKey: ["/api/intercompany-container-trading/daybook-linked-vouchers", selectedCompany?.id,
-      daybookVoucherIds.join(",")],
+    queryKey: [
+      "/api/intercompany-container-trading/daybook-linked-vouchers",
+      selectedCompany?.id,
+      daybookVoucherIds.join(","),
+    ],
     enabled: !!selectedCompany?.id && daybookVoucherIds.length > 0,
     queryFn: async () => {
       const response = await fetch(
         "/api/intercompany-container-trading/daybook-linked-vouchers?ids=" + daybookVoucherIds.join(","),
-        { credentials: "include" });
+        { credentials: "include" }
+      );
       if (!response.ok) {
         const issue = await response.json().catch(() => ({}));
         throw new Error(issue.message || "Cannot verify intercompany voucher links");
@@ -580,7 +589,8 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
   });
   const linkedVoucherIds = useMemo(
     () => new Set(Object.keys(linkedDaybookVouchers?.linked ?? {}).map(Number)),
-    [linkedDaybookVouchers]);
+    [linkedDaybookVouchers]
+  );
 
   const canEdit = (v: Voucher) =>
     recordChanges.allowed &&
@@ -618,22 +628,22 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
       if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       // Refresh ownership at deletion time. Never silently fall back to a
       // single-company voucher delete when link lookup is stale or fails.
-      const linkResponse = await fetch(
-        "/api/intercompany-container-trading/daybook-linked-vouchers?ids=" + id,
-        { credentials: "include" }
-      );
+      const linkResponse = await fetch("/api/intercompany-container-trading/daybook-linked-vouchers?ids=" + id, {
+        credentials: "include",
+      });
       if (!linkResponse.ok) {
         const issue = await linkResponse.json().catch(() => ({}));
         throw new Error(issue.message || "Cannot verify whether this voucher belongs to another company");
       }
-      const currentLinks = await linkResponse.json() as {
+      const currentLinks = (await linkResponse.json()) as {
         linked: Record<number, { tradeId: number; version: number }>;
       };
       const linked = currentLinks.linked[id];
       if (linked) {
-        await apiRequest("POST",
-          "/api/intercompany-container-trading/daybook-voucher/" + id + "/delete-linked",
-          { expectedVersion: linked.version, confirmDeleteBothCompanies: true });
+        await apiRequest("POST", "/api/intercompany-container-trading/daybook-voucher/" + id + "/delete-linked", {
+          expectedVersion: linked.version,
+          confirmDeleteBothCompanies: true,
+        });
         return { linked: true };
       }
       if (voucherToDelete && isVoucherMutationBlocked(voucherToDelete)) {
@@ -644,15 +654,22 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
     },
     onSuccess: ({ linked }) => {
       void invalidateCompanyApiFamily(queryClient, "/api/vouchers", selectedCompany?.id);
-      for (const key of ["/api/intercompany-container-trading/daybook-linked-vouchers",
-          "/api/intercompany-container-trading/lifecycle", "/api/purchase-orders",
-          "/api/containers", "/api/suppliers"]) {
+      for (const key of [
+        "/api/intercompany-container-trading/daybook-linked-vouchers",
+        "/api/intercompany-container-trading/lifecycle",
+        "/api/purchase-orders",
+        "/api/containers",
+        "/api/suppliers",
+      ]) {
         void queryClient.invalidateQueries({ queryKey: [key] });
       }
       refreshBalances();
-      toast({ title: "Success", description: linked
-        ? "Linked POs and original vouchers deleted in both companies. No reversals created."
-        : "Voucher deleted" });
+      toast({
+        title: "Success",
+        description: linked
+          ? "Linked POs and original vouchers deleted in both companies. No reversals created."
+          : "Voucher deleted",
+      });
       setVoucherToDelete(null);
       setDeleteDialogOpen(false);
     },

@@ -48,7 +48,8 @@ describe("simple intercompany account presentation", () => {
 describe("cent-exact technical profit normalization", () => {
   it("eliminates internal sale and cost equally without touching supplier or intercompany accounts", () => {
     const amount = 50928.75;
-    const saleId = 4098, cogsId = 4100;
+    const saleId = 4098,
+      cogsId = 4100;
     const lines = technicalProfitNettingLines(saleId, cogsId, String(amount));
     expect(lines).toHaveLength(2);
     expect(lines[0]).toMatchObject({ ledgerAccountId: saleId, debit: amount.toFixed(2) });

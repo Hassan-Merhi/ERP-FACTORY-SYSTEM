@@ -15,9 +15,13 @@ export function technicalProfitNettingLines(
   costAccountId: number,
   signedAmount: Decimal.Value
 ): ErpVoucherLine[] {
-  if (!Number.isSafeInteger(salesAccountId) || salesAccountId <= 0 ||
-      !Number.isSafeInteger(costAccountId) || costAccountId <= 0 ||
-      salesAccountId === costAccountId) {
+  if (
+    !Number.isSafeInteger(salesAccountId) ||
+    salesAccountId <= 0 ||
+    !Number.isSafeInteger(costAccountId) ||
+    costAccountId <= 0 ||
+    salesAccountId === costAccountId
+  ) {
     throw new Error("Internal sales and COGS must be distinct valid company ledger accounts");
   }
   return signedPair(

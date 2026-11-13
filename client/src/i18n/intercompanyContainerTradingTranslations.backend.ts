@@ -247,4 +247,63 @@ export const intercompanyBackendPhrases: readonly { en: string; ar: string; fr: 
     ar: "تسوية تكلفة مرتبطة في عملية واحدة",
     fr: "Ajustement de coût lié atomique",
   },
+  {
+    en: "This role cannot edit existing containers",
+    ar: "لا يمكن لهذا الدور تعديل الحاويات الموجودة",
+    fr: "Ce rôle ne peut pas modifier les conteneurs existants",
+  },
+  {
+    en: "The database refused the linked PO deletion; both companies and their vouchers remain unchanged. Ask a developer to inspect the IC_DELETE_DATABASE_REFUSED server log.",
+    ar: "رفضت قاعدة البيانات حذف أمر الشراء المرتبط؛ بقيت الشركتان وسنداتهما دون تغيير. اطلب من مطوّر فحص سجل الخادم IC_DELETE_DATABASE_REFUSED.",
+    fr: "La base de données a refusé la suppression de la commande liée ; les deux sociétés et leurs pièces restent inchangées. Demandez à un développeur d’examiner le journal serveur IC_DELETE_DATABASE_REFUSED.",
+  },
+  { en: "Invalid destination company", ar: "الشركة الوجهة غير صالحة", fr: "Société de destination non valide" },
+  {
+    en: "Destination must be this company or its linked child company",
+    ar: "يجب أن تكون الوجهة هذه الشركة أو شركتها التابعة المرتبطة",
+    fr: "La destination doit être cette société ou sa filiale liée",
+  },
+  { en: "Destination not linked to company", ar: "الوجهة غير مرتبطة بالشركة", fr: "Destination non liée à la société" },
+  {
+    en: "Unstar this proforma before changing its destination",
+    ar: "أزل النجمة عن هذه الفاتورة المبدئية قبل تغيير وجهتها",
+    fr: "Retirez l’étoile de cette proforma avant de modifier sa destination",
+  },
+  {
+    en: "The paired voucher could not be posted. No partial intercompany transfer was saved.",
+    ar: "تعذّر ترحيل السند المتقابل. لم يُحفظ أي تحويل جزئي بين الشركات.",
+    fr: "La pièce appariée n’a pas pu être comptabilisée. Aucun transfert intersociétés partiel n’a été enregistré.",
+  },
+  { en: "No accessible companies", ar: "لا توجد شركات متاحة", fr: "Aucune société accessible" },
+  {
+    en: "IC_DELETE_SCHEMA_MISSING: install intercompany Phase 1-5 migrations first",
+    ar: "IC_DELETE_SCHEMA_MISSING: ثبّت أولًا ترحيلات المراحل 1-5 بين الشركات",
+    fr: "IC_DELETE_SCHEMA_MISSING : installez d’abord les migrations intersociétés des phases 1 à 5",
+  },
+  { en: "IC_DELETE_GUARD_NOT_INSTALLED", ar: "IC_DELETE_GUARD_NOT_INSTALLED", fr: "IC_DELETE_GUARD_NOT_INSTALLED" },
+  {
+    en: "Normalize internal Sales and COGS for",
+    ar: "تسوية المبيعات الداخلية وتكلفة البضاعة المباعة لـ",
+    fr: "Normaliser les ventes internes et le coût des ventes pour",
+  },
+  {
+    en: "Restore internal source classification after cancellation, trade",
+    ar: "استعادة تصنيف المصدر الداخلي بعد الإلغاء، الصفقة",
+    fr: "Rétablir la classification de la source interne après annulation, transaction",
+  },
+  {
+    en: "Internal sales and COGS must be distinct valid company ledger accounts",
+    ar: "يجب أن تكون المبيعات الداخلية وتكلفة البضاعة المباعة حسابين مختلفين وصالحين في دفتر الشركة",
+    fr: "Les ventes internes et le coût des ventes doivent être des comptes distincts et valides du grand livre de la société",
+  },
+  {
+    en: "This container is linked to another company. Use the coordinated linked PO delete.",
+    ar: "هذه الحاوية مرتبطة بشركة أخرى. استخدم الحذف المنسّق لأمر الشراء المرتبط.",
+    fr: "Ce conteneur est lié à une autre société. Utilisez la suppression coordonnée de la commande liée.",
+  },
+  {
+    en: "This PO is linked to another company. Delete the full linked trade from Intercompany Receiving & Cancellation.",
+    ar: "أمر الشراء هذا مرتبط بشركة أخرى. احذف الصفقة المرتبطة كاملة من الاستلام والإلغاء بين الشركات.",
+    fr: "Cette commande est liée à une autre société. Supprimez toute la transaction liée depuis Réception et annulation intersociétés.",
+  },
 ];

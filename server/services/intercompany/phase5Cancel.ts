@@ -260,10 +260,16 @@ export async function cancelUnreceivedTrade(input: CancelIntercompanyTradeInput,
             source: { type: "ic-phase5-cancel-netting", id: fresh.id },
             actor: { userId: actor.actorUserId, reason },
             lines: [
-              { ledgerAccountId: data.policy.sourceCostAccountId!, debit: money,
-                narration: "Undo technical COGS elimination" },
-              { ledgerAccountId: data.policy.sourceSalesAccountId!, credit: money,
-                narration: "Undo technical internal sales elimination" },
+              {
+                ledgerAccountId: data.policy.sourceCostAccountId!,
+                debit: money,
+                narration: "Undo technical COGS elimination",
+              },
+              {
+                ledgerAccountId: data.policy.sourceSalesAccountId!,
+                credit: money,
+                narration: "Undo technical internal sales elimination",
+              },
             ],
           })
         : null;

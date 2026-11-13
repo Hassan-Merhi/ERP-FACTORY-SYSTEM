@@ -237,77 +237,86 @@ export async function fetchActiveContainers(
   const statusFilter = opts.includeOffloaded ? [...ACTIVE_STATUSES, ...INACTIVE_STATUSES] : [...ACTIVE_STATUSES];
 
   const conditions = [
-    sql`(${inArray(containers.companyId, companyIds)} OR EXISTS (SELECT 1 FROM intercompany_trades trade WHERE trade.physical_container_id = ${containers.id} AND trade.source_company_id = ${containers.companyId} AND trade.destination_company_id IN (${sql.join(companyIds.map((id) => sql`${id}`), sql`, `)}) AND trade.state = 'active'))`,
+    sql`(${inArray(containers.companyId, companyIds)} OR EXISTS (SELECT 1 FROM intercompany_trades trade WHERE trade.physical_container_id = ${containers.id} AND trade.source_company_id = ${containers.companyId} AND trade.destination_company_id IN (${sql.join(
+      companyIds.map((id) => sql`${id}`),
+      sql`, `
+    )}) AND trade.state = 'active'))`,
     inArray(containers.status, statusFilter),
   ];
   if (opts.containerId) conditions.push(eq(containers.id, opts.containerId));
 
-  const erpRows = opts.containerId !== undefined && opts.containerId < 0 ? [] : await db
-    .select({
-      id: containers.id,
-      companyId: containers.companyId,
-      linkedDestinationCompanyIds: sql<number[]>`(
+  const erpRows =
+    opts.containerId !== undefined && opts.containerId < 0
+      ? []
+      : await db
+          .select({
+            id: containers.id,
+            companyId: containers.companyId,
+            linkedDestinationCompanyIds: sql<number[]>`(
         SELECT COALESCE(array_agg(DISTINCT trade.destination_company_id), ARRAY[]::integer[])
         FROM intercompany_trades trade
         WHERE trade.physical_container_id = ${containers.id}
           AND trade.source_company_id = ${containers.companyId}
           AND trade.state = 'active'
-          AND trade.destination_company_id IN (${sql.join(companyIds.map((id) => sql`${id}`), sql`, `)})
+          AND trade.destination_company_id IN (${sql.join(
+            companyIds.map((id) => sql`${id}`),
+            sql`, `
+          )})
       )`,
-      containerNumber: containers.containerNumber,
-      supplierId: containers.supplierId,
-      supplierName: suppliers.legalName,
-      supplierCode: suppliers.code,
-      status: containers.status,
-      importDate: containers.importDate,
-      grandTotal: sql<string>`CASE WHEN EXISTS (SELECT 1 FROM intercompany_trades trade WHERE trade.physical_container_id = ${containers.id} AND trade.state = 'active') THEN ${containers.grandTotal}::text ELSE COALESCE(
+            containerNumber: containers.containerNumber,
+            supplierId: containers.supplierId,
+            supplierName: suppliers.legalName,
+            supplierCode: suppliers.code,
+            status: containers.status,
+            importDate: containers.importDate,
+            grandTotal: sql<string>`CASE WHEN EXISTS (SELECT 1 FROM intercompany_trades trade WHERE trade.physical_container_id = ${containers.id} AND trade.state = 'active') THEN ${containers.grandTotal}::text ELSE COALESCE(
         (SELECT COALESCE(SUM(po.items_total::numeric), 0) FROM purchase_orders po WHERE po.container_id = ${containers.id})
         + (SELECT COALESCE(SUM(cc.amount::numeric), 0) FROM container_charges cc WHERE cc.container_id = ${containers.id}),
         0
       )::text END`,
-      itemName: containers.itemName,
-      shopName: containers.shopName,
-      eta: containers.eta,
-      portDepartureDate: containers.portDepartureDate,
-      etaSource: containers.etaSource,
-      transporter: containers.transporter,
-      transportFee: containers.transportFee,
-      numberPlate: containers.numberPlate,
-      trackingLocation: containers.trackingLocation,
-      borderDate: containers.borderDate,
-      offloadDate: containers.offloadDate,
-      agent: containers.agent,
-      dutyFee: containers.dutyFee,
-      docReceived: containers.docReceived,
-      trackingDescription: containers.trackingDescription,
-      blDocs: containers.blDocs,
-      docsSentDate: containers.docsSentDate,
-      freightStatus: containers.freightStatus,
-      trackingLink: containers.trackingLink,
-      poFreight: sql<string>`(SELECT COALESCE(SUM(po.freight::numeric), 0) FROM purchase_orders po WHERE po.container_id = ${containers.id})::text`,
-      // ParcelsApp tracking fields
-      trackingProvider: containers.trackingProvider,
-      trackingEnabled: containers.trackingEnabled,
-      trackingAutoUpdate: containers.trackingAutoUpdate,
-      trackingCarrierHint: containers.trackingCarrierHint,
-      trackingLastCheckedAt: containers.trackingLastCheckedAt,
-      trackingLastStatus: containers.trackingLastStatus,
-      trackingLastLocation: containers.trackingLastLocation,
-      trackingLastEventDate: containers.trackingLastEventDate,
-      trackingLastDescription: containers.trackingLastDescription,
-      trackingError: containers.trackingError,
-      trackingChangedAt: containers.trackingChangedAt,
-      trackingDetectedCarrier: containers.trackingDetectedCarrier,
-      trackingFallbackUsed: containers.trackingFallbackUsed,
-      trackingFallbackReason: containers.trackingFallbackReason,
-      trackingNextCheckAt: containers.trackingNextCheckAt,
-      trackingLastSkipReason: containers.trackingLastSkipReason,
-      createdAt: containers.createdAt,
-    })
-    .from(containers)
-    .leftJoin(suppliers, eq(containers.supplierId, suppliers.id))
-    .where(and(...conditions))
-    .orderBy(containers.containerNumber);
+            itemName: containers.itemName,
+            shopName: containers.shopName,
+            eta: containers.eta,
+            portDepartureDate: containers.portDepartureDate,
+            etaSource: containers.etaSource,
+            transporter: containers.transporter,
+            transportFee: containers.transportFee,
+            numberPlate: containers.numberPlate,
+            trackingLocation: containers.trackingLocation,
+            borderDate: containers.borderDate,
+            offloadDate: containers.offloadDate,
+            agent: containers.agent,
+            dutyFee: containers.dutyFee,
+            docReceived: containers.docReceived,
+            trackingDescription: containers.trackingDescription,
+            blDocs: containers.blDocs,
+            docsSentDate: containers.docsSentDate,
+            freightStatus: containers.freightStatus,
+            trackingLink: containers.trackingLink,
+            poFreight: sql<string>`(SELECT COALESCE(SUM(po.freight::numeric), 0) FROM purchase_orders po WHERE po.container_id = ${containers.id})::text`,
+            // ParcelsApp tracking fields
+            trackingProvider: containers.trackingProvider,
+            trackingEnabled: containers.trackingEnabled,
+            trackingAutoUpdate: containers.trackingAutoUpdate,
+            trackingCarrierHint: containers.trackingCarrierHint,
+            trackingLastCheckedAt: containers.trackingLastCheckedAt,
+            trackingLastStatus: containers.trackingLastStatus,
+            trackingLastLocation: containers.trackingLastLocation,
+            trackingLastEventDate: containers.trackingLastEventDate,
+            trackingLastDescription: containers.trackingLastDescription,
+            trackingError: containers.trackingError,
+            trackingChangedAt: containers.trackingChangedAt,
+            trackingDetectedCarrier: containers.trackingDetectedCarrier,
+            trackingFallbackUsed: containers.trackingFallbackUsed,
+            trackingFallbackReason: containers.trackingFallbackReason,
+            trackingNextCheckAt: containers.trackingNextCheckAt,
+            trackingLastSkipReason: containers.trackingLastSkipReason,
+            createdAt: containers.createdAt,
+          })
+          .from(containers)
+          .leftJoin(suppliers, eq(containers.supplierId, suppliers.id))
+          .where(and(...conditions))
+          .orderBy(containers.containerNumber);
 
   // Supplier Partner source ids are negative in GIT only; never mirror them
   // into ERP containers or post another Goods OTW voucher.

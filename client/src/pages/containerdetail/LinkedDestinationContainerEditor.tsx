@@ -45,8 +45,8 @@ export default function LinkedDestinationContainerEditor({ containerId }: { cont
   return (
     <section aria-label="Linked parent company purchase order" className="space-y-3">
       <p className="text-sm text-muted-foreground">
-        This is the same physical container as in the parent company. Tracking updates
-        are shared, and PO cost or line revisions must use the synchronized editor below.
+        This is the same physical container as in the parent company. Tracking updates are shared, and PO cost or line
+        revisions must use the synchronized editor below.
       </p>
       <Suspense fallback={<p className="text-sm text-muted-foreground">Loading linked PO editor...</p>}>
         <LinkedTradesEditor physicalContainerId={containerId} embedded />

@@ -424,11 +424,7 @@ export default function ContainerVerification() {
             <div>
               <label className="text-xs font-medium mb-1 block">Proforma</label>
               <div className="flex items-center gap-2">
-                <Select
-                  value={selectedProformaId}
-                  onValueChange={setSelectedProformaId}
-                  disabled={!selectedSupplierId}
-                >
+                <Select value={selectedProformaId} onValueChange={setSelectedProformaId} disabled={!selectedSupplierId}>
                   <SelectTrigger className="flex-1" data-testid="select-proforma">
                     <SelectValue placeholder={selectedSupplierId ? "Select proforma" : "Select a supplier first"} />
                   </SelectTrigger>

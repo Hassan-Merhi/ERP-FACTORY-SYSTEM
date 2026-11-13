@@ -297,7 +297,8 @@ export interface GreenChat {
 }
 
 /** Green API instance states returned by getStateInstance */
-export type GreenInstanceState = "authorized" | "notAuthorized" | "sleepMode" | "starting" | "yellowCard" | "blocked" | "suspended" | "unknown";
+export type GreenInstanceState =
+  "authorized" | "notAuthorized" | "sleepMode" | "starting" | "yellowCard" | "blocked" | "suspended" | "unknown";
 
 /**
  * Call Green API's getStateInstance to get the real connection state.
@@ -312,7 +313,15 @@ export async function getGreenInstanceState(instanceId: string, apiToken: string
     if (!response.ok) return "unknown";
     const json = await response.json().catch(() => null);
     const state: string = json?.stateInstance ?? "unknown";
-    const validStates: GreenInstanceState[] = ["authorized", "notAuthorized", "sleepMode", "starting", "yellowCard", "blocked", "suspended"];
+    const validStates: GreenInstanceState[] = [
+      "authorized",
+      "notAuthorized",
+      "sleepMode",
+      "starting",
+      "yellowCard",
+      "blocked",
+      "suspended",
+    ];
     return validStates.includes(state as GreenInstanceState) ? (state as GreenInstanceState) : "unknown";
   } catch (error) {
     logger.warn("[WhatsApp] Green API instance status unavailable", { error: getErrorMessage(error) });
@@ -343,7 +352,15 @@ export async function getStrictGreenMainInstanceState(
     if (!response.ok) return "unknown";
     const body = (await response.json().catch(() => null)) as { stateInstance?: unknown } | null;
     const state = body?.stateInstance;
-    const allowed: GreenInstanceState[] = ["authorized", "notAuthorized", "sleepMode", "starting", "yellowCard", "blocked", "suspended"];
+    const allowed: GreenInstanceState[] = [
+      "authorized",
+      "notAuthorized",
+      "sleepMode",
+      "starting",
+      "yellowCard",
+      "blocked",
+      "suspended",
+    ];
     return typeof state === "string" && allowed.includes(state as GreenInstanceState)
       ? (state as GreenInstanceState)
       : "unknown";

@@ -25,37 +25,22 @@ function parsePagination(req: Request): {
   limit: number;
   offset: number;
 } {
-  const limit = Math.min(
-    MAX_PAGE_SIZE,
-    parsePositiveInt(req.query.limit ?? req.query.pageSize, DEFAULT_PAGE_SIZE),
-  );
+  const limit = Math.min(MAX_PAGE_SIZE, parsePositiveInt(req.query.limit ?? req.query.pageSize, DEFAULT_PAGE_SIZE));
   if (req.query.offset !== undefined) {
-    const offset = Math.max(
-      0,
-      Number.parseInt(String(req.query.offset), 10) || 0,
-    );
+    const offset = Math.max(0, Number.parseInt(String(req.query.offset), 10) || 0);
     return { page: Math.floor(offset / limit) + 1, limit, offset };
   }
   const page = parsePositiveInt(req.query.page, 1);
   return { page, limit, offset: (page - 1) * limit };
 }
 
-function sendPage(
-  res: Response,
-  items: unknown[],
-  total: number,
-  page: number,
-  limit: number,
-): Response {
+function sendPage(res: Response, items: unknown[], total: number, page: number, limit: number): Response {
   const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
   res.setHeader("X-Total-Count", String(total));
   res.setHeader("X-Page", String(page));
   res.setHeader("X-Page-Size", String(limit));
   res.setHeader("X-Total-Pages", String(totalPages));
-  res.setHeader(
-    "Access-Control-Expose-Headers",
-    "X-Total-Count, X-Page, X-Page-Size, X-Total-Pages",
-  );
+  res.setHeader("Access-Control-Expose-Headers", "X-Total-Count, X-Page, X-Page-Size, X-Total-Pages");
   return res.json({
     items,
     total,
@@ -85,12 +70,14 @@ export function registerContainerListPaginationRoutes(app: Express): void {
     requireNonPOS,
     guard(async (req, res) => {
       const companyId = req.session.currentCompanyId;
-      if (!companyId)
-        return res.status(400).json({ message: "No company selected" });
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
       const { page, limit, offset } = parsePagination(req);
       const condition = and(
-        or(eq(containers.companyId, companyId), sql`EXISTS (SELECT 1 FROM intercompany_trades trade WHERE trade.physical_container_id = "containers"."id" AND trade.source_company_id = "containers"."company_id" AND trade.destination_company_id = ${companyId} AND trade.state = 'active')`),
-        ne(containers.status, "SOLD"),
+        or(
+          eq(containers.companyId, companyId),
+          sql`EXISTS (SELECT 1 FROM intercompany_trades trade WHERE trade.physical_container_id = "containers"."id" AND trade.source_company_id = "containers"."company_id" AND trade.destination_company_id = ${companyId} AND trade.state = 'active')`
+        ),
+        ne(containers.status, "SOLD")
       );
       const [countRows, items] = await Promise.all([
         db
@@ -100,7 +87,9 @@ export function registerContainerListPaginationRoutes(app: Express): void {
         db
           .select({
             ...getTableColumns(containers),
-            linkedParentCompanyName: sql<string | null>`(SELECT parent.name FROM intercompany_trades trade JOIN companies parent ON parent.id=trade.source_company_id WHERE trade.physical_container_id="containers"."id" AND trade.destination_company_id=${companyId} AND trade.state='active' LIMIT 1)`,
+            linkedParentCompanyName: sql<
+              string | null
+            >`(SELECT parent.name FROM intercompany_trades trade JOIN companies parent ON parent.id=trade.source_company_id WHERE trade.physical_container_id="containers"."id" AND trade.destination_company_id=${companyId} AND trade.state='active' LIMIT 1)`,
           })
           .from(containers)
           .where(condition)
@@ -108,8 +97,14 @@ export function registerContainerListPaginationRoutes(app: Express): void {
           .limit(limit)
           .offset(offset),
       ]);
-      return sendPage(res, await enrichContainerListOffloadingCost(items, companyId), countRows[0]?.total ?? 0, page, limit);
-    }),
+      return sendPage(
+        res,
+        await enrichContainerListOffloadingCost(items, companyId),
+        countRows[0]?.total ?? 0,
+        page,
+        limit
+      );
+    })
   );
 
   app.get(
@@ -118,13 +113,9 @@ export function registerContainerListPaginationRoutes(app: Express): void {
     requireNonPOS,
     guard(async (req, res) => {
       const companyId = req.session.currentCompanyId;
-      if (!companyId)
-        return res.status(400).json({ message: "No company selected" });
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
       const { page, limit, offset } = parsePagination(req);
-      const condition = and(
-        eq(containers.companyId, companyId),
-        eq(containers.status, "SOLD"),
-      );
+      const condition = and(eq(containers.companyId, companyId), eq(containers.status, "SOLD"));
       const [countRows, items] = await Promise.all([
         db
           .select({ total: sql<number>`count(*)::int` })
@@ -151,10 +142,7 @@ export function registerContainerListPaginationRoutes(app: Express): void {
             notes: containerSales.notes,
           })
           .from(containers)
-          .innerJoin(
-            containerSales,
-            eq(containers.id, containerSales.containerId),
-          )
+          .innerJoin(containerSales, eq(containers.id, containerSales.containerId))
           .innerJoin(customers, eq(containerSales.customerId, customers.id))
           .where(condition)
           .orderBy(desc(containerSales.saleDate), desc(containerSales.id))
@@ -162,7 +150,7 @@ export function registerContainerListPaginationRoutes(app: Express): void {
           .offset(offset),
       ]);
       return sendPage(res, items, countRows[0]?.total ?? 0, page, limit);
-    }),
+    })
   );
 
   app.get(
@@ -171,8 +159,7 @@ export function registerContainerListPaginationRoutes(app: Express): void {
     requireNonPOS,
     guard(async (req, res) => {
       const companyId = req.session.currentCompanyId;
-      if (!companyId)
-        return res.status(400).json({ message: "No company selected" });
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
       const { page, limit, offset } = parsePagination(req);
       const condition = or(
         eq(containers.companyId, companyId),
@@ -203,6 +190,6 @@ export function registerContainerListPaginationRoutes(app: Express): void {
           .offset(offset),
       ]);
       return sendPage(res, items, countRows[0]?.total ?? 0, page, limit);
-    }),
+    })
   );
 }

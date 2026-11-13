@@ -101,7 +101,7 @@ export function validatePropertiesImportSelections(
       throw new Error(PROPERTIES_PO_IMPORT_ERRORS.unauthorizedDestination + " " + container.containerNumber);
     }
     const chargeEvidenceReference = selected.chargeEvidenceReference.trim();
-     return {
+    return {
       containerNumber: container.containerNumber,
       destinationCompanyId,
       chargesConfirmed: true,
