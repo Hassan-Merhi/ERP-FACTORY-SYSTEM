@@ -204,7 +204,10 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
       <Route path="/factory/reprint-labels" component={FactoryReprintLabels} />
       <Route path="/factory/location-inventory" component={FactoryLocationInventory} />
       {/* Historical developer-only preview URL renders the live inventory instead of sample data. */}
-      <Route path="/factory/location-inventory-mockup" component={FactoryLocationInventory} />
+      <Route
+        path="/factory/location-inventory-mockup"
+        component={FactoryLocationInventory}
+      />
       <Route
         path="/factory/bale-product-history/:productId/:locationId/:year/all"
         component={FactoryBaleProductAllMonths}
