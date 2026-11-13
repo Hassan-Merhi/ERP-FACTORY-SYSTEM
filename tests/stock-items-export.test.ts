@@ -36,11 +36,8 @@ describe("Stock Items Excel export pagination", () => {
       expect(params.get("categoryId")).toBe("none");
       const page = Number(params.get("page"));
       const start = (page - 1) * 250;
-      return pageResponse(
-        page,
-        501,
-        Array.from({ length: Math.min(250, 501 - start) }, (_, index) => ({ id: start + index + 1 }))
-      );
+      const rows = Array.from({ length: Math.min(250, 501 - start) }, (_, index) => ({ id: start + index + 1 }));
+      return pageResponse(page, 501, rows);
     });
 
     const result = await loadStockItemsForExport(
@@ -55,12 +52,8 @@ describe("Stock Items Excel export pagination", () => {
     const fetcher = vi.fn(async (url: string) => {
       const page = Number(new URL(url, "https://example.test").searchParams.get("page"));
       const start = (page - 1) * 125;
-      return pageResponse(
-        page,
-        350,
-        Array.from({ length: Math.min(125, 350 - start) }, (_, index) => ({ id: start + index + 1 })),
-        125
-      );
+      const rows = Array.from({ length: Math.min(125, 350 - start) }, (_, index) => ({ id: start + index + 1 }));
+      return pageResponse(page, 350, rows, 125);
     });
     const result = await loadStockItemsForExport(noFilters, fetcher as unknown as typeof fetch);
     expect(result).toHaveLength(350);
@@ -78,11 +71,8 @@ describe("Stock Items Excel export pagination", () => {
       const page = Number(new URL(url, "https://example.test").searchParams.get("page"));
       const start = (page - 1) * 250;
       if (page === 3) return pageResponse(page, 501, []);
-      return pageResponse(
-        page,
-        501,
-        Array.from({ length: 250 }, (_, index) => ({ id: start + index + 1 }))
-      );
+      const rows = Array.from({ length: 250 }, (_, index) => ({ id: start + index + 1 }));
+      return pageResponse(page, 501, rows);
     });
     await expect(loadStockItemsForExport(noFilters, fetcher as unknown as typeof fetch)).rejects.toThrow("incomplete");
   });
@@ -92,11 +82,8 @@ describe("Stock Items Excel export pagination", () => {
       const page = Number(new URL(url, "https://example.test").searchParams.get("page"));
       const start = (page - 1) * 250;
       if (page === 3) return pageResponse(page, 501, [{ id: 500 }]);
-      return pageResponse(
-        page,
-        501,
-        Array.from({ length: 250 }, (_, index) => ({ id: start + index + 1 }))
-      );
+      const rows = Array.from({ length: 250 }, (_, index) => ({ id: start + index + 1 }));
+      return pageResponse(page, 501, rows);
     });
     await expect(loadStockItemsForExport(noFilters, fetcher as unknown as typeof fetch)).rejects.toThrow("incomplete");
   });
