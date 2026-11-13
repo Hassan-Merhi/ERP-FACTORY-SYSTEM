@@ -38,6 +38,8 @@ export interface UniversalExcelColumn {
   numFmt?: string;
   /** Column is omitted unless the caller explicitly grants this tag. */
   permissionTag?: string;
+  /** Validated for detail rows; footers may intentionally leave it blank. */
+  required?: boolean;
 }
 
 export interface UniversalExcelGroup {
@@ -104,6 +106,7 @@ export interface UniversalExcelWorkbookSpec {
   mode: UniversalExcelMode;
   sheets: readonly UniversalExcelSheet[];
   companyName?: string;
+  currencyCode?: string;
   exportedAt?: Date;
   dateFormat?: "dd/mm/yyyy" | "mm/dd/yyyy";
   filters?: readonly { label: string; value: string }[];
@@ -282,10 +285,15 @@ function writeRow(
   rowNumber: number,
   columns: readonly UniversalExcelColumn[],
   data: UniversalExcelRecord,
+  validateRequired = true,
 ): void {
   const row = worksheet.getRow(rowNumber);
   for (let i = 0; i < columns.length; i += 1) {
-    row.getCell(i + 1).value = asCell(data[columns[i].key], columns[i]);
+    const value = data[columns[i].key];
+    if (validateRequired && columns[i].required && (value === undefined || value === null || value === "")) {
+      throw new Error("Missing required Excel value for " + columns[i].key + " at row " + rowNumber);
+    }
+    row.getCell(i + 1).value = asCell(value, columns[i]);
   }
 }
 
@@ -311,8 +319,11 @@ function styleHeader(ws: ExcelJS.Worksheet, rowNumber: number, columns: readonly
 function styleMetadata(ws: ExcelJS.Worksheet, spec: UniversalExcelWorkbookSpec, width: number): void {
   const timestamp = spec.exportedAt ?? new Date();
   if (!Number.isFinite(timestamp.getTime())) throw new Error("Invalid export timestamp");
-  const parts = [spec.companyName ? "Company: " + spec.companyName : "",
-    "Exported: " + displayDate(timestamp, spec.dateFormat)].filter(Boolean);
+  const parts = [
+    spec.companyName ? "Company: " + spec.companyName : "",
+    spec.currencyCode ? "Currency: " + spec.currencyCode : "",
+    "Exported: " + displayDate(timestamp, spec.dateFormat),
+  ].filter(Boolean);
   const filters = (spec.filters ?? []).map(f => f.label + ": " + f.value).join(" | ");
   if (width > 1) ws.mergeCells(1, 1, 1, width);
   ws.getCell(1, 1).value = safeText(spec.title);
@@ -362,14 +373,14 @@ function renderDataSheet(
   let next = headerRow + 1;
   let count = 0;
   let lastDataRow = headerRow;
-  const put = (record: UniversalExcelRecord) => {
+  const put = (record: UniversalExcelRecord, validateRequired = true) => {
     if (next > MAX_EXCEL_ROWS) throw new Error("Excel worksheet row limit exceeded: " + sheet.name);
-    writeRow(ws, next, cols, record);
+    writeRow(ws, next, cols, record, validateRequired);
     lastDataRow = next++;
     count += 1;
   };
   const footer = (record: UniversalExcelRecord) => {
-    put(record);
+    put(record, false);
     const footerRow = ws.getRow(next - 1);
     footerRow.font = { bold: true, color: { argb: NAVY } };
     // Footer styling is deliberately bounded to the handful of footer rows.
