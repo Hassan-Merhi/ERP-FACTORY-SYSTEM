@@ -111,7 +111,8 @@ describe("Factory Phase 1 pinned source baseline (not a browser/API fixture)", (
     expect(routes).toContain('<Redirect replace to="/factory/location-inventory" />');
     expect(routes).not.toContain("component={FactoryLocationInventoryMockup}");
     expect(lazyPages).not.toContain("FactoryLocationInventoryMockup");
-    expect(existsSync(resolve(process.cwd(), "client/src/pages/factory/FactoryLocationInventoryMockup.tsx"))).toBe(false);
+    const retiredMockupPath = resolve(process.cwd(), "client/src/pages/factory/FactoryLocationInventoryMockup.tsx");
+    expect(existsSync(retiredMockupPath)).toBe(false);
 
     const legacyPage = resolveFactoryPage("/factory/location-inventory-mockup");
     expect(legacyPage?.key).toBe("factory/location-inventory-mockup");
