@@ -53,6 +53,8 @@ interface OffloadItem {
   quantity: string;
   rate: string;
   totalValue: string;
+  returnedQty?: string;
+  netQty?: string;
 }
 
 interface PoCharges {
@@ -95,6 +97,7 @@ interface OffloadDetailData {
   transportFees: string;
   totalCharges: string;
   totalBales: string;
+  netTotalBales?: string;
   additionalCostPerBale: string;
   offloadedAt: string;
   containerChargesTotal: string;
@@ -319,7 +322,9 @@ export default function OffloadDetail() {
                   <thead className="sticky top-0 z-30 bg-muted">
                     <tr className="border-b bg-muted/40">
                       <th className="text-left p-3 font-medium">Item</th>
-                      <th className="text-right p-3 font-medium">Qty</th>
+                      <th className="text-right p-3 font-medium">Offloaded</th>
+                      <th className="text-right p-3 font-medium">Returned</th>
+                      <th className="text-right p-3 font-medium">Net Qty</th>
                       <th className="text-right p-3 font-medium">Rate</th>
                       <th className="text-right p-3 font-medium">Total</th>
                     </tr>
@@ -329,6 +334,8 @@ export default function OffloadDetail() {
                       <tr key={item.id} className="border-b last:border-0">
                         <td className="p-3">{offloadItemDisplayName(item)}</td>
                         <td className="p-3 text-right font-mono">{formatNumber(Number(item.quantity))}</td>
+                        <td className="p-3 text-right font-mono text-amber-600">{Number(item.returnedQty || 0) ? `-${formatNumber(Number(item.returnedQty))}` : "—"}</td>
+                        <td className="p-3 text-right font-mono font-semibold">{formatNumber(Number(item.netQty ?? item.quantity))}</td>
                         <td className="p-3 text-right font-mono">{formatAmount(Number(item.rate))}</td>
                         <td className="p-3 text-right font-mono">{formatAmount(Number(item.totalValue))}</td>
                       </tr>
@@ -338,6 +345,8 @@ export default function OffloadDetail() {
                       <td className="p-3 text-right font-mono">
                         {formatNumber(offload.items.reduce((s, i) => s + Number(i.quantity), 0))}
                       </td>
+                      <td className="p-3 text-right font-mono text-amber-600">{formatNumber(offload.items.reduce((s, i) => s + Number(i.returnedQty || 0), 0))}</td>
+                      <td className="p-3 text-right font-mono">{formatNumber(Number(offload.netTotalBales ?? offload.totalBales))}</td>
                       <td></td>
                       <td className="p-3 text-right font-mono">{formatAmount(itemsTotal)}</td>
                     </tr>
@@ -348,7 +357,7 @@ export default function OffloadDetail() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm mt-3">
                 <div>
                   <p className="text-muted-foreground">Total Bales</p>
-                  <p className="font-medium font-mono">{formatNumber(Number(offload.totalBales))}</p>
+                  <p className="font-medium font-mono">{formatNumber(Number(offload.netTotalBales ?? offload.totalBales))} net / {formatNumber(Number(offload.totalBales))} offloaded</p>
                 </div>
               </div>
             </div>
