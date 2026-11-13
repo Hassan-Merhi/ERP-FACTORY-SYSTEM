@@ -13,6 +13,7 @@ import { makeFocusCell } from "../utils/posKeyboardHelpers";
 import { usePosRowCalculations } from "./usePosRowCalculations";
 import { usePosCheckout } from "./usePosCheckout";
 import { usePosInvoiceActions } from "./usePosInvoiceActions";
+import { canSeePosExcelFinancials } from "./posExcelPermissions";
 import { usePosKeyboardNavigation } from "./usePosKeyboardNavigation";
 
 interface PosHandlersParams {
@@ -162,15 +163,7 @@ export function usePosHandlers(params: PosHandlersParams) {
       activeLocation: params.activeLocation,
       apiInventory: params.apiInventory,
       toast: params.toast,
-      // Respect the active role, not only the user's base role. Never expose
-      // cost or configured P/L for POS/View Only or hidden-stock-rate sessions.
-      canSeeFinancials: (() => {
-        const user = params.authUser ?? params.posUser;
-        return !!user &&
-          ["Admin", "Owner", "Developer"].includes(user.currentRole ?? user.role ?? "") &&
-          !user.posViewOnly &&
-          !(user.hiddenErpCostFields ?? []).includes("stock_rates");
-      })(),
+      canSeeFinancials: canSeePosExcelFinancials(params.authUser ?? params.posUser),
     });
 
   const { makeHandleKeyDown } = usePosKeyboardNavigation({
