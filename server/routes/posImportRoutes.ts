@@ -17,7 +17,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "../db";
 import { storage } from "../storage";
 import { requireAuth } from "../auth";
-import { upload } from "./_helpers";
+import { spreadsheetUpload } from "./_helpers";
 import { adjustInventory } from "../inventoryHelper";
 import { createDatabaseStockMovementAdapter } from "../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../services/inventory/stockMovementIntegrityService";
@@ -88,7 +88,7 @@ function firstNumeric(row: Record<string, unknown>, ...columns: string[]): Inven
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
 export function registerPosImportRoutes(app: Express) {
-  app.post("/api/pos-import/parse", requireAuth, upload.single("file"), async (req, res) => {
+  app.post("/api/pos-import/parse", requireAuth, spreadsheetUpload.single("file"), async (req, res) => {
     try {
       if (!req.session.currentCompanyId) return res.status(400).json({ message: "No company selected" });
       if (!req.file) return res.status(400).json({ message: "No file uploaded" });

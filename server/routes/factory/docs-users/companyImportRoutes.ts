@@ -5,6 +5,7 @@
  * first-match, so that order is behaviour.
  */
 import type { Express, Request, Response } from "express";
+import { FILE_SIZE_LIMITS } from "@shared/fileSizePolicy";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { db } from "../../../db";
@@ -85,10 +86,10 @@ export function registerFactoryCompanyImportRoutes(app: Express) {
   app.post("/api/factory/import-company-data", requireAuth, adminOrOwner, async (req: Request, res: Response) => {
     try {
       const multer = (await import("multer")).default;
-      const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 } });
+      const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: FILE_SIZE_LIMITS.privilegedSpreadsheetImport, files: 1 } });
 
       upload.single("file")(req, res, async (err) => {
-        if (err) return res.status(400).json({ message: "File upload error: " + err.message });
+        if (err) return res.status(err.code === "LIMIT_FILE_SIZE" ? 413 : 400).json({ code: err.code === "LIMIT_FILE_SIZE" ? "UPLOAD_FILE_TOO_LARGE" : "INVALID_UPLOAD", message: err.code === "LIMIT_FILE_SIZE" ? "Company data import exceeds the 100 MB administrator limit" : "File upload error: " + err.message });
         if (!req.file) return res.status(400).json({ message: "No file uploaded" });
 
         try {

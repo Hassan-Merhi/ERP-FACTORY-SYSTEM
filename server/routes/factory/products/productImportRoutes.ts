@@ -1,3 +1,4 @@
+import { spreadsheetImportLimitBytes } from "@shared/fileSizePolicy";
 /**
  * factoryProductsRoutes: FactoryProductImport endpoints.
  *
@@ -32,11 +33,11 @@ export function registerFactoryProductImportRoutes(app: Express) {
   app.post("/api/factory/bale-products/import-excel", requireAuth, async (req: Request, res: Response) => {
     try {
       const multer = (await import("multer")).default;
-      const upload = multer({ storage: multer.memoryStorage() });
+      const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: spreadsheetImportLimitBytes(req.session?.currentRole), files: 1 } });
 
       upload.single("file")(req, res, async (err) => {
         try {
-          if (err) return res.status(400).json({ message: getErrorMessage(err) });
+          if (err) return res.status(err.code === "LIMIT_FILE_SIZE" ? 413 : 400).json({ message: err.code === "LIMIT_FILE_SIZE" ? "Excel file exceeds the 50 MB standard / 100 MB admin limit." : getErrorMessage(err) });
 
           const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
           if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -237,11 +238,11 @@ export function registerFactoryProductImportRoutes(app: Express) {
   app.post("/api/factory/bales/validate-import", requireAuth, async (req: Request, res: Response) => {
     try {
       const multer = (await import("multer")).default;
-      const upload = multer({ storage: multer.memoryStorage() });
+      const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: spreadsheetImportLimitBytes(req.session?.currentRole), files: 1 } });
 
       upload.single("file")(req, res, async (err) => {
         try {
-          if (err) return res.status(400).json({ message: getErrorMessage(err) });
+          if (err) return res.status(err.code === "LIMIT_FILE_SIZE" ? 413 : 400).json({ message: err.code === "LIMIT_FILE_SIZE" ? "Excel file exceeds the 50 MB standard / 100 MB admin limit." : getErrorMessage(err) });
 
           const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
           if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -384,11 +385,11 @@ export function registerFactoryProductImportRoutes(app: Express) {
   app.post("/api/factory/bales/import-excel", requireAuth, adminOrOwner, async (req: Request, res: Response) => {
     try {
       const multer = (await import("multer")).default;
-      const upload = multer({ storage: multer.memoryStorage() });
+      const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: spreadsheetImportLimitBytes(req.session?.currentRole), files: 1 } });
 
       upload.single("file")(req, res, async (err) => {
         try {
-          if (err) return res.status(400).json({ message: getErrorMessage(err) });
+          if (err) return res.status(err.code === "LIMIT_FILE_SIZE" ? 413 : 400).json({ message: err.code === "LIMIT_FILE_SIZE" ? "Excel file exceeds the 50 MB standard / 100 MB admin limit." : getErrorMessage(err) });
 
           const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
           if (!companyId) return res.status(400).json({ message: "No company selected" });
