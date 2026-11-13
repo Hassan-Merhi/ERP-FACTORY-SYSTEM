@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { loadStockItemsForExport, type StockItemsExportFilters } from "../client/src/pages/stockitems/stockItemsExport";
+import {
+  loadStockItemsForExport,
+  type StockItemsExportFilters,
+} from "../client/src/pages/stockitems/stockItemsExport";
 
 const noFilters: StockItemsExportFilters = { search: "", stockGroupId: null, gradeId: null, categoryId: null };
 
@@ -36,9 +39,10 @@ describe("Stock Items Excel export pagination", () => {
       expect(params.get("categoryId")).toBe("none");
       const page = Number(params.get("page"));
       const total = 501;
-      return pageResponse(page, total, page === 1
-        ? Array.from({ length: 500 }, (_, index) => ({ id: index + 1 }))
-        : [{ id: 501 }]);
+      if (page === 1) {
+        return pageResponse(page, total, Array.from({ length: 500 }, (_, index) => ({ id: index + 1 })));
+      }
+      return pageResponse(page, total, [{ id: 501 }]);
     });
 
     const result = await loadStockItemsForExport(
@@ -58,23 +62,27 @@ describe("Stock Items Excel export pagination", () => {
   it("rejects missing rows instead of exporting a partial workbook", async () => {
     const fetcher = vi.fn(async (url: string) => {
       const page = Number(new URL(url, "https://example.test").searchParams.get("page"));
-      return pageResponse(page, 501, page === 1
-        ? Array.from({ length: 500 }, (_, index) => ({ id: index + 1 }))
-        : []);
+      if (page === 1) {
+        return pageResponse(page, 501, Array.from({ length: 500 }, (_, index) => ({ id: index + 1 })));
+      }
+      return pageResponse(page, 501, []);
     });
-    await expect(loadStockItemsForExport(noFilters, fetcher as unknown as typeof fetch))
-      .rejects.toThrow("incomplete");
+    await expect(loadStockItemsForExport(noFilters, fetcher as unknown as typeof fetch)).rejects.toThrow(
+      "incomplete"
+    );
   });
 
   it("rejects duplicate item IDs across page boundaries", async () => {
     const fetcher = vi.fn(async (url: string) => {
       const page = Number(new URL(url, "https://example.test").searchParams.get("page"));
-      return pageResponse(page, 501, page === 1
-        ? Array.from({ length: 500 }, (_, index) => ({ id: index + 1 }))
-        : [{ id: 500 }]);
+      if (page === 1) {
+        return pageResponse(page, 501, Array.from({ length: 500 }, (_, index) => ({ id: index + 1 })));
+      }
+      return pageResponse(page, 501, [{ id: 500 }]);
     });
-    await expect(loadStockItemsForExport(noFilters, fetcher as unknown as typeof fetch))
-      .rejects.toThrow("incomplete");
+    await expect(loadStockItemsForExport(noFilters, fetcher as unknown as typeof fetch)).rejects.toThrow(
+      "incomplete"
+    );
   });
 
   it("fails safely when any request fails", async () => {
@@ -84,7 +92,8 @@ describe("Stock Items Excel export pagination", () => {
         ? pageResponse(1, 501, Array.from({ length: 500 }, (_, index) => ({ id: index + 1 })))
         : ({ ok: false, status: 500 } as Response);
     });
-    await expect(loadStockItemsForExport(noFilters, fetcher as unknown as typeof fetch))
-      .rejects.toThrow("Failed to load stock items");
+    await expect(loadStockItemsForExport(noFilters, fetcher as unknown as typeof fetch)).rejects.toThrow(
+      "Failed to load stock items"
+    );
   });
 });
