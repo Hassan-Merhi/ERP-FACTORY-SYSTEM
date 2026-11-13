@@ -23,7 +23,7 @@ The entry point is buildUniversalExcelWorkbook(spec), returning an ExcelJS workb
 - schemaVersion: 1 is required. Future incompatible updates must advance this contract.
 - mode: report creates a branded title/metadata block with header row 5 by default. import-template never inserts report metadata; its default header is row 1 and it supports an explicit headerRow plus preceding rows for positional formats.
 - sheets: ordered table, grouped or custom definitions; worksheet names and ordering are never silently changed.
-- columns: exact key, header, optional type/width/numFmt/permissionTag. Additional dynamicColumns are appended in their supplied order. discoverColumns is an explicit authorization-conscious allowlist scanned across ALL rows, including late sparse fields.
+- columns: exact key, header, optional type/width/numFmt/permissionTag/required; required detail fields fail fast if absent, while explicit subtotal/footer rows may omit them. Additional dynamicColumns are appended in their supplied order. discoverColumns is an explicit authorization-conscious allowlist scanned across ALL rows, including late sparse fields.
 - strictColumns: defaults true to reject unrecognized data keys rather than silently omit them. Only explicitly set false after the exporting adapter documents why extra keys should be ignored.
 - allowedColumnTags: hides tagged columns by default, unless the already-authorized caller explicitly enables the tag. NOT a backend authorization boundary.
 - footer/group.footer: authoritative precomputed values, not invented or recomputed by the styling layer.
@@ -31,7 +31,7 @@ The entry point is buildUniversalExcelWorkbook(spec), returning an ExcelJS workb
 - type text: text identifiers retain leading zeros, while formula-like leading symbols are apostrophe-escaped.
 - numeric/money/integer/percentage/date/boolean: preserved as native workbook values and number/date formats; malformed inputs fail explicitly.
 - custom: uses exact existing builder body (e.g. invoice, matrix, stock-transfer form); the engine only allocates the named worksheet and leaves layout untouched.
-- filters, companyName, exportedAt/dateFormat: visual metadata in report mode only.
+- filters, companyName, currencyCode, exportedAt/dateFormat: visual metadata in report mode only.
 
 ### Minimal example (for Phase 3–8 adopters)
 
@@ -99,6 +99,7 @@ Added tests/universal-excel-engine.test.ts for:
 - importer headers at row 1 and A3:D3
 - exact custom invoice/matrix builder layout
 - duplicate names/columns, invalid numbers and untrusted formula rejection
+- required detail-field validation and sparse precomputed footer rows
 - safe filename validation
 
 **Execution:** Tests were added to the existing backend Vitest collection, but a complete repository checkout/dependencies and a runnable CI or local environment are needed to execute npm/tsc/vitest. The GitHub-only integration in this session supports source commits and diff inspection, not running application code. Do not claim a passing test run based only on source review. Run the focused tests before migrating the first production exporter:
