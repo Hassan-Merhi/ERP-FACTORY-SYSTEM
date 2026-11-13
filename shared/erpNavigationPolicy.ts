@@ -47,6 +47,7 @@ export const ERP_ADMIN_ONLY_ROUTES: ReadonlySet<string> = new Set([
   "/containers-otw",
   "/mock-git",
   "/git",
+  "/supplier-returns",
 ]);
 
 export const ERP_ADMIN_OWNER_ONLY_ROUTES: ReadonlySet<string> = new Set([
@@ -71,6 +72,7 @@ export const ERP_RETAIL_HIDDEN_ROUTES: ReadonlySet<string> = new Set([
   "/sales-tools",
   "/stock-in-sales-report",
   "/supplier-profit-reconciliation",
+  "/supplier-returns",
   "/erp/rental/shops",
   "/ai-command-center",
   "/ai-validation",
