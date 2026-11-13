@@ -170,6 +170,16 @@ describe("ErpRoutes access guard", () => {
     allowed.unmount();
   });
 
+  it("allows an OTW-only inventory grant to open the Stock workspace", async () => {
+    const { ErpRoutes } = await import("@/routes/ErpRoutes");
+    const { memory } = mountAt("/stock?tab=otw", <ErpRoutes user={{ role: "Admin" }} />, [
+      [["/api/my-erp-pages", 7], { fullAccess: false, pageKeys: ["stock_otw"] }],
+    ]);
+
+    expect(await screen.findByTestId("page-StockHub")).toBeInTheDocument();
+    expect(memory.history.at(-1)).toBe("/stock?tab=otw");
+  });
+
   it("follows the legacy /stock-items alias to the stock hub items tab", async () => {
     const { ErpRoutes } = await import("@/routes/ErpRoutes");
     const { memory } = mountAt("/stock-items", <ErpRoutes user={{ role: "Admin" }} />);
