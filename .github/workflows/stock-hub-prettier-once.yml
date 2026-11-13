@@ -1,0 +1,35 @@
+name: Temporary Stock Hub Formatter
+on:
+  push:
+    branches:
+      - feature/intercompany-container-trading
+    paths:
+      - .github/workflows/stock-hub-prettier-once.yml
+permissions:
+  contents: write
+jobs:
+  format:
+    if: contains(github.event.head_commit.message, '[stock-hub-prettier-once]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: feature/intercompany-container-trading
+          persist-credentials: true
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24.22.2"
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --bin-links=true
+      - name: Format Stock hub with pinned project Prettier
+        run: node node_modules/prettier/bin/prettier.cjs --write client/src/pages/StockHub.tsx
+      - name: Commit formatting to isolated test branch only
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add client/src/pages/StockHub.tsx
+          if ! git diff --cached --quiet; then
+            git commit -m "style(stock): format unified Stock workspace"
+            git push origin HEAD:refs/heads/feature/intercompany-container-trading
+          fi
