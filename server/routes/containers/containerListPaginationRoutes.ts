@@ -89,7 +89,7 @@ export function registerContainerListPaginationRoutes(app: Express): void {
         return res.status(400).json({ message: "No company selected" });
       const { page, limit, offset } = parsePagination(req);
       const condition = and(
-        or(eq(containers.companyId, companyId), sql`EXISTS (SELECT 1 FROM intercompany_trades trade WHERE trade.physical_container_id = ${containers.id} AND trade.source_company_id = ${containers.companyId} AND trade.destination_company_id = ${companyId} AND trade.state = 'active')`),
+        or(eq(containers.companyId, companyId), sql`EXISTS (SELECT 1 FROM intercompany_trades trade WHERE trade.physical_container_id = "containers"."id" AND trade.source_company_id = "containers"."company_id" AND trade.destination_company_id = ${companyId} AND trade.state = 'active')`),
         ne(containers.status, "SOLD"),
       );
       const [countRows, items] = await Promise.all([
@@ -100,7 +100,7 @@ export function registerContainerListPaginationRoutes(app: Express): void {
         db
           .select({
             ...getTableColumns(containers),
-            linkedParentCompanyName: sql<string | null>`(SELECT parent.name FROM intercompany_trades trade JOIN companies parent ON parent.id=trade.source_company_id WHERE trade.physical_container_id=${containers.id} AND trade.destination_company_id=${companyId} AND trade.state='active' LIMIT 1)`,
+            linkedParentCompanyName: sql<string | null>`(SELECT parent.name FROM intercompany_trades trade JOIN companies parent ON parent.id=trade.source_company_id WHERE trade.physical_container_id="containers"."id" AND trade.destination_company_id=${companyId} AND trade.state='active' LIMIT 1)`,
           })
           .from(containers)
           .where(condition)
@@ -177,8 +177,8 @@ export function registerContainerListPaginationRoutes(app: Express): void {
       const condition = or(
         eq(containers.companyId, companyId),
         sql`EXISTS (SELECT 1 FROM intercompany_trades trade
-          WHERE trade.physical_container_id = ${containers.id}
-            AND trade.source_company_id = ${containers.companyId}
+          WHERE trade.physical_container_id = "containers"."id"
+            AND trade.source_company_id = "containers"."company_id"
             AND trade.destination_company_id = ${companyId}
             AND trade.state = 'active')`
       );
@@ -192,7 +192,7 @@ export function registerContainerListPaginationRoutes(app: Express): void {
             ...getTableColumns(containers),
             linkedParentCompanyName: sql<string | null>`(SELECT parent.name FROM intercompany_trades trade
               JOIN companies parent ON parent.id = trade.source_company_id
-              WHERE trade.physical_container_id = ${containers.id}
+              WHERE trade.physical_container_id = "containers"."id"
                 AND trade.destination_company_id = ${companyId}
                 AND trade.state = 'active' LIMIT 1)`,
           })
