@@ -509,12 +509,10 @@ export function registerErpSupplierReturnRoutes(app: Express) {
     } catch (error) {
       const err = error as ReturnError;
       const status = err.status || (String((error as { code?: string }).code) === "23505" ? 409 : 500);
-      res
-        .status(status)
-        .json({
-          code: err.code || "RETURN_COMMIT_FAILED",
-          message: err.message || "Supplier return could not be posted",
-        });
+      res.status(status).json({
+        code: err.code || "RETURN_COMMIT_FAILED",
+        message: err.message || "Supplier return could not be posted",
+      });
     }
   });
 }

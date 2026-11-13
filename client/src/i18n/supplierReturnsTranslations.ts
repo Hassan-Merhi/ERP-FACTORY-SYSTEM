@@ -6,14 +6,16 @@ export const supplierReturnsCopy = {
     hubSubtitle: "Production analysis and authorized supplier returns",
     tab: "Supplier Returns",
     header: "Supplier Returns — Offloaded Containers",
-    intro: "Import article code + quantity, verify the source container, then post an audited supplier debit and stock deduction.",
+    intro:
+      "Import article code + quantity, verify the source container, then post an audited supplier debit and stock deduction.",
     template: "Excel template",
     upload: "Upload Excel (.xlsx)",
     map: "Map to containers",
     date: "Return date",
     reason: "Reference / reason (optional)",
     reasonPlaceholder: "Supplier return reference or reason",
-    warning: "Original offload and charge vouchers remain in history. Supplier credit is booked against the original supplier; stock is relieved at its current inventory valuation and any difference is recorded separately. Foreign-currency or mixed-supplier POs require review.",
+    warning:
+      "Original offload and charge vouchers remain in history. Supplier credit is booked against the original supplier; stock is relieved at its current inventory valuation and any difference is recorded separately. Foreign-currency or mixed-supplier POs require review.",
     mapping: "Container mapping",
     validRows: "valid rows",
     totalRequested: "Total requested",
@@ -34,7 +36,8 @@ export const supplierReturnsCopy = {
     notFound: "Not found",
     selectContainer: "Select container",
     reviewQty: "Review quantity",
-    confirmation: "I verified the supplier, original container, returned quantities, current stock, and accounting amounts.",
+    confirmation:
+      "I verified the supplier, original container, returned quantities, current stock, and accounting amounts.",
     confirmButton: "Confirm & post supplier returns",
     processing: "Processing...",
     success: "Supplier return posted",
@@ -73,7 +76,8 @@ export const supplierReturnsCopy = {
     originalLanded: "Original Landed Value",
     originalGrand: "Original Grand Total (before supplier return credit notes)",
     netQty: "Net Qty",
-    offloadReturnNotice: "Returned bales are deducted from net quantity. Original landed costs are retained as historic evidence; supplier-return vouchers record the stock, supplier and cost corrections.",
+    offloadReturnNotice:
+      "Returned bales are deducted from net quantity. Original landed costs are retained as historic evidence; supplier-return vouchers record the stock, supplier and cost corrections.",
     offloadedUnit: "offloaded",
   },
   ar: {
@@ -87,7 +91,8 @@ export const supplierReturnsCopy = {
     date: "تاريخ الإرجاع",
     reason: "المرجع / السبب (اختياري)",
     reasonPlaceholder: "مرجع أو سبب الإرجاع إلى المورد",
-    warning: "تبقى سندات التفريغ والمصاريف الأصلية في السجل. يُسجل الخصم على المورد الأصلي، وتُخصم قيمة المخزون الحالية، ويُسجل الفرق بشكل منفصل. الطلبات متعددة الموردين أو العملات تتطلب مراجعة.",
+    warning:
+      "تبقى سندات التفريغ والمصاريف الأصلية في السجل. يُسجل الخصم على المورد الأصلي، وتُخصم قيمة المخزون الحالية، ويُسجل الفرق بشكل منفصل. الطلبات متعددة الموردين أو العملات تتطلب مراجعة.",
     mapping: "مطابقة الحاويات",
     validRows: "صفوف صالحة",
     totalRequested: "إجمالي المطلوب",
@@ -147,21 +152,24 @@ export const supplierReturnsCopy = {
     originalLanded: "القيمة الأصلية بعد المصاريف",
     originalGrand: "الإجمالي الأصلي (قبل خصومات مرتجعات الموردين)",
     netQty: "الكمية الصافية",
-    offloadReturnNotice: "تُخصم البالات المرتجعة من الكمية الصافية. تُحفظ التكلفة الأصلية في السجل، وتوثق سندات المرتجع تصحيحات المخزون والمورد والتكلفة.",
+    offloadReturnNotice:
+      "تُخصم البالات المرتجعة من الكمية الصافية. تُحفظ التكلفة الأصلية في السجل، وتوثق سندات المرتجع تصحيحات المخزون والمورد والتكلفة.",
     offloadedUnit: "مفرغ",
   },
   fr: {
     hubSubtitle: "Analyse de production et retours fournisseurs autorisés",
     tab: "Retours fournisseurs",
     header: "Retours fournisseurs — conteneurs déchargés",
-    intro: "Importez code article et quantité, vérifiez le conteneur source, puis comptabilisez le retour fournisseur et la sortie de stock.",
+    intro:
+      "Importez code article et quantité, vérifiez le conteneur source, puis comptabilisez le retour fournisseur et la sortie de stock.",
     template: "Modèle Excel",
     upload: "Importer Excel (.xlsx)",
     map: "Associer aux conteneurs",
     date: "Date de retour",
     reason: "Référence / motif (facultatif)",
     reasonPlaceholder: "Référence ou motif du retour fournisseur",
-    warning: "Les écritures d'origine et les charges de déchargement restent archivées. Le crédit concerne le fournisseur d'origine; le stock est sorti à sa valeur actuelle et l'écart est comptabilisé séparément. Les commandes multidevises ou multifournisseurs exigent une vérification.",
+    warning:
+      "Les écritures d'origine et les charges de déchargement restent archivées. Le crédit concerne le fournisseur d'origine; le stock est sorti à sa valeur actuelle et l'écart est comptabilisé séparément. Les commandes multidevises ou multifournisseurs exigent une vérification.",
     mapping: "Correspondance des conteneurs",
     validRows: "lignes valides",
     totalRequested: "Total demandé",
@@ -182,7 +190,8 @@ export const supplierReturnsCopy = {
     notFound: "Introuvable",
     selectContainer: "Choisir le conteneur",
     reviewQty: "Vérifier la quantité",
-    confirmation: "J'ai vérifié le fournisseur, le conteneur d'origine, les quantités retournées, le stock et les montants comptables.",
+    confirmation:
+      "J'ai vérifié le fournisseur, le conteneur d'origine, les quantités retournées, le stock et les montants comptables.",
     confirmButton: "Confirmer et comptabiliser les retours",
     processing: "Traitement...",
     success: "Retour fournisseur comptabilisé",
@@ -221,7 +230,8 @@ export const supplierReturnsCopy = {
     originalLanded: "Valeur d'origine avec frais",
     originalGrand: "Total d'origine (avant avoirs des retours fournisseurs)",
     netQty: "Qté nette",
-    offloadReturnNotice: "Les balles retournées sont déduites de la quantité nette. Les coûts d'origine restent dans l'historique et les écritures de retour enregistrent les corrections.",
+    offloadReturnNotice:
+      "Les balles retournées sont déduites de la quantité nette. Les coûts d'origine restent dans l'historique et les écritures de retour enregistrent les corrections.",
     offloadedUnit: "déchargé",
   },
 } as const;

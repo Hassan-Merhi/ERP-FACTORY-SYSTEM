@@ -253,9 +253,7 @@ export default function FactorySupplierReturns() {
             <PackageMinus className="h-5 w-5" />
             {copy.header}
           </h2>
-          <p className="text-sm text-muted-foreground mt-1">
-            {copy.intro}
-          </p>
+          <p className="text-sm text-muted-foreground mt-1">{copy.intro}</p>
         </div>
         <Button variant="outline" onClick={() => void downloadTemplate()}>
           <Download className="h-4 w-4 mr-2" />
@@ -295,9 +293,7 @@ export default function FactorySupplierReturns() {
             />
           </label>
         </div>
-        <p className="text-xs text-muted-foreground">
-          {copy.warning}
-        </p>
+        <p className="text-xs text-muted-foreground">{copy.warning}</p>
       </div>
       {preview.length > 0 && (
         <div className="rounded-lg border overflow-hidden">
@@ -357,7 +353,8 @@ export default function FactorySupplierReturns() {
                           <option value="">{copy.chooseSource}</option>
                           {candidates.map((c) => (
                             <option key={c.offloadItemId} value={c.offloadItemId}>
-                              {c.containerNumber} — {c.supplierName ?? copy.supplierUnknown} ({copy.available} {c.remainingQty})
+                              {c.containerNumber} — {c.supplierName ?? copy.supplierUnknown} ({copy.available}{" "}
+                              {c.remainingQty})
                             </option>
                           ))}
                         </select>
@@ -383,7 +380,11 @@ export default function FactorySupplierReturns() {
                         ) : (
                           <span className="text-amber-600 inline-flex gap-1 items-center">
                             <AlertTriangle className="h-4 w-4" />
-                            {!row.candidates.length ? copy.notFound : !candidate ? copy.selectContainer : copy.reviewQty}
+                            {!row.candidates.length
+                              ? copy.notFound
+                              : !candidate
+                                ? copy.selectContainer
+                                : copy.reviewQty}
                           </span>
                         )}
                       </td>
@@ -428,9 +429,7 @@ export default function FactorySupplierReturns() {
         {history.isLoading ? (
           <p className="p-4 text-sm">{copy.loadingHistory}</p>
         ) : history.isError ? (
-          <p className="p-4 text-sm text-destructive">
-            {copy.unavailable}
-          </p>
+          <p className="p-4 text-sm text-destructive">{copy.unavailable}</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -478,7 +477,9 @@ export default function FactorySupplierReturns() {
         )}
         {selectedBatch !== null && (
           <div className="border-t p-4 space-y-2">
-            <strong>{copy.batch} #{selectedBatch} — {copy.breakdown}</strong>
+            <strong>
+              {copy.batch} #{selectedBatch} — {copy.breakdown}
+            </strong>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-muted">

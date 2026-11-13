@@ -367,9 +367,7 @@ export default function OffloadDetail() {
               </div>
 
               {Number(offload.totalBales) > Number(offload.netTotalBales ?? offload.totalBales) && (
-                <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
-                  {copy.offloadReturnNotice}
-                </p>
+                <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">{copy.offloadReturnNotice}</p>
               )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm mt-3">
@@ -493,9 +491,7 @@ export default function OffloadDetail() {
 
           <div className="border rounded-md p-4 flex items-center justify-between bg-muted/20">
             <div>
-              <p className="text-sm text-muted-foreground">
-                {copy.originalGrand}
-              </p>
+              <p className="text-sm text-muted-foreground">{copy.originalGrand}</p>
               <p className="text-2xl font-semibold font-mono mt-0.5">{formatAmount(itemsTotal)}</p>
             </div>
             <Button
