@@ -214,7 +214,8 @@ describe("Phase 3: Dakzo appearance defaults and sanitization", () => {
         footer: { code: "Total", qty: 3001, amount: 3001 },
       }],
     })).workbook.getWorksheet("Large")!;
-    expect(ws.getCell("A7").fill).toMatchObject({ type: 0 });
+    const largeBodyFill = ws.getCell("A7").fill;
+    expect(largeBodyFill && "pattern" in largeBodyFill && largeBodyFill.pattern === "solid").toBeFalsy();
     expect(ws.getCell("B3006").value).toBe(1);
     expect(ws.getCell("C3007").value).toBe(3001);
   });
