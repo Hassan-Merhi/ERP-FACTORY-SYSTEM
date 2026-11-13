@@ -5,6 +5,7 @@ import { registerInventoryDebugRoutes } from "./debug/inventoryDebugRoutes";
 import { registerOrphanedChargeVoucherRoutes } from "./debug/orphanedChargeVoucherRoutes";
 import { registerOffloadActiveVoucherGuard } from "./offloadActiveVoucherGuard";
 import { registerOffloadRoutes } from "./offloadRoutes";
+import { registerErpSupplierReturnRoutes } from "./erpSupplierReturnRoutes";
 
 export function registerDebugRoutes(app: Express) {
   registerInventoryDebugRoutes(app);
@@ -12,5 +13,6 @@ export function registerDebugRoutes(app: Express) {
   registerOrphanedChargeVoucherRoutes(app);
   registerOffloadActiveVoucherGuard(app);
   registerOffloadRoutes(app);
+  registerErpSupplierReturnRoutes(app);
   registerFactoryOrderRepairRoutes(app);
 }
