@@ -409,7 +409,8 @@ export function registerErpSupplierReturnRoutes(app: Express) {
             RETURNING id
           `)
           );
-          if (!returnLine) throw new ReturnError(500, "RETURN_LINE_AUDIT_FAILED", "Could not record supplier return line");
+          if (!returnLine)
+            throw new ReturnError(500, "RETURN_LINE_AUDIT_FAILED", "Could not record supplier return line");
           await postStockMovementTx(
             tx,
             {

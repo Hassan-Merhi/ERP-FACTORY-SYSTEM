@@ -204,7 +204,8 @@ export default function OffloadDetail() {
   // Always show the stock lines by item name, even when the API/cache returns insertion order.
   const sortedItems = offload ? sortOffloadItemsByName(offload.items) : [];
   const itemsTotal = offload?.items.reduce((s, i) => s + Number(i.totalValue), 0) ?? 0;
-  const hasSupplierReturns = !!offload && Number(offload.totalBales) > Number(offload.netTotalBales ?? offload.totalBales);
+  const hasSupplierReturns =
+    !!offload && Number(offload.totalBales) > Number(offload.netTotalBales ?? offload.totalBales);
   const live = offload?.liveCharges;
   // Prefer live voucher amounts when available
   const displayDuties = live?.hasVouchers ? live.duties : Number(offload?.duties || 0);
