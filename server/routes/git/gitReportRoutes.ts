@@ -321,6 +321,9 @@ export function registerGitReportRoutes(app: Express) {
           fetchActiveContainers(companyIds, { includeOffloaded: true, containerId }),
           loadCompanyNames(companyIds),
         ]);
+        // A linked container retains its parent's companyId even when requested
+        // through a destination company; preserve the parent name in the detail.
+        Object.assign(nameMap, await loadCompanyNames([...new Set(rows.map((row) => row.companyId))]));
         const container = enrichContainers(rows, nameMap)[0];
         if (!container) return res.status(404).json({ message: "Container not found" });
         res.setHeader("Cache-Control", "private, max-age=15, stale-while-revalidate=15");
