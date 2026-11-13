@@ -62,7 +62,7 @@ export default function InventoryHub({ access }: { access?: ErpFeatureAccess }) 
             className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border bg-card px-3 text-sm font-medium hover:bg-muted"
             data-testid="link-inventory-stock-hub"
           >
-            Stock items &amp; search <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
+            Open Stock workspace <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
           </Link>
         </nav>
       )}
