@@ -152,7 +152,7 @@ const MAX_EXCEL_COLUMNS = 16_384;
 const NAVY = "FF1E3A5F";
 const PALE = "FFEFF4FA";
 const WHITE = "FFFFFFFF";
-const TEXT_FORMULA_PREFIX = /^[\s\uFEFF\u0000-\u001F]*[=+\-@]/u;
+const TEXT_FORMULA_PREFIX = /^\s*[=+@-]/u;
 
 function safeText(value: unknown): string {
   const raw = String(value ?? "");
@@ -256,7 +256,7 @@ function defaultNumFmt(type: UniversalExcelColumnType | undefined, dateFormat: U
 }
 
 function assertSheetName(name: string, seen: Set<string>): void {
-  if (!name || name.length > 31 || /[\\/*?:\[\]]/.test(name) ||
+  if (!name || name.length > 31 || Array.from("\\/*?:[]").some(char => name.includes(char)) ||
       name.startsWith("'") || name.endsWith("'") || seen.has(name.toLowerCase())) {
     throw new Error("Invalid or duplicate Excel worksheet name: " + name);
   }
