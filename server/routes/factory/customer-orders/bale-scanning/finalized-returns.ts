@@ -246,9 +246,10 @@ export function registerFinalizedLoadingReturnRoutes(app: Express): void {
               LEFT JOIN customer_proforma_lines p
                 ON p.proforma_id = ${order.proformaIdUsed}
                AND LOWER(p.article_code) = LOWER(l.article_code)
-              WHERE l.order_id = ${oid} AND l.pricing_mode = 'per_kg'
+              WHERE l.order_id = ${oid}
+                AND (l.pricing_mode = 'per_kg' OR COALESCE(p.pricing_mode,'per_bale') = 'per_kg')
                 AND (
-                  p.id IS NULL OR COALESCE(p.pricing_mode,'per_bale') <> 'per_kg'
+                  p.id IS NULL OR COALESCE(p.pricing_mode,'per_bale') <> l.pricing_mode
                   OR ABS(COALESCE(p.price_per_kg,0) - COALESCE(l.price_per_kg,0)) > 0.0000005
                 )
             ) AS changed
