@@ -373,7 +373,7 @@ export function registerErpSupplierReturnRoutes(app: Express) {
           RETURNING id
         `)
         );
-        if (!batch) throw new Error("Could not record supplier return batch");
+        if (!batch) throw new ReturnError(500, "RETURN_BATCH_AUDIT_FAILED", "Could not record supplier return batch");
         const inventoryAccount = await getOrCreateInventoryControlAccount(tx, companyId);
         const varianceAccountId = await ledgerAccountByCodeTx(
           tx,
@@ -409,7 +409,7 @@ export function registerErpSupplierReturnRoutes(app: Express) {
             RETURNING id
           `)
           );
-          if (!returnLine) throw new Error("Could not record supplier return line");
+          if (!returnLine) throw new ReturnError(500, "RETURN_LINE_AUDIT_FAILED", "Could not record supplier return line");
           await postStockMovementTx(
             tx,
             {
