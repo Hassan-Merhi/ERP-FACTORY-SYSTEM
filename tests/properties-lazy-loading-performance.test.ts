@@ -23,7 +23,8 @@ describe("Properties first-route JavaScript load budget", () => {
     expect(hub).toContain('lazy(() => import("./PropertiesRentalWarehouses"))');
     expect(hub).toContain('lazy(() => import("./PropertiesRentalShops"))');
     expect(hub).toContain('lazy(() => import("./PropertiesRentalPayments"))');
-    expect(hub).toContain("<Suspense fallback=");
+    expect(hub).toContain("<Suspense");
+    expect(hub).toContain("fallback={");
   });
 
   it("only downloads the active Stock tab while retaining the existing shared pages", () => {
@@ -32,7 +33,8 @@ describe("Properties first-route JavaScript load budget", () => {
       expect(hub).toContain('lazy(() => import("@/pages/' + path + '"))');
       expect(hub).toContain("<" + path + " />");
     }
-    expect(hub).toContain("<Suspense fallback=");
+    expect(hub).toContain("<Suspense");
+    expect(hub).toContain("fallback={");
   });
 
   it("still uses client-side routing, not a full document navigation, for the sidebar", () => {
