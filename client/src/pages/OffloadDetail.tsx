@@ -334,8 +334,12 @@ export default function OffloadDetail() {
                       <tr key={item.id} className="border-b last:border-0">
                         <td className="p-3">{offloadItemDisplayName(item)}</td>
                         <td className="p-3 text-right font-mono">{formatNumber(Number(item.quantity))}</td>
-                        <td className="p-3 text-right font-mono text-amber-600">{Number(item.returnedQty || 0) ? `-${formatNumber(Number(item.returnedQty))}` : "—"}</td>
-                        <td className="p-3 text-right font-mono font-semibold">{formatNumber(Number(item.netQty ?? item.quantity))}</td>
+                        <td className="p-3 text-right font-mono text-amber-600">
+                          {Number(item.returnedQty || 0) ? `-${formatNumber(Number(item.returnedQty))}` : "—"}
+                        </td>
+                        <td className="p-3 text-right font-mono font-semibold">
+                          {formatNumber(Number(item.netQty ?? item.quantity))}
+                        </td>
                         <td className="p-3 text-right font-mono">{formatAmount(Number(item.rate))}</td>
                         <td className="p-3 text-right font-mono">{formatAmount(Number(item.totalValue))}</td>
                       </tr>
@@ -345,8 +349,12 @@ export default function OffloadDetail() {
                       <td className="p-3 text-right font-mono">
                         {formatNumber(offload.items.reduce((s, i) => s + Number(i.quantity), 0))}
                       </td>
-                      <td className="p-3 text-right font-mono text-amber-600">{formatNumber(offload.items.reduce((s, i) => s + Number(i.returnedQty || 0), 0))}</td>
-                      <td className="p-3 text-right font-mono">{formatNumber(Number(offload.netTotalBales ?? offload.totalBales))}</td>
+                      <td className="p-3 text-right font-mono text-amber-600">
+                        {formatNumber(offload.items.reduce((s, i) => s + Number(i.returnedQty || 0), 0))}
+                      </td>
+                      <td className="p-3 text-right font-mono">
+                        {formatNumber(Number(offload.netTotalBales ?? offload.totalBales))}
+                      </td>
                       <td></td>
                       <td className="p-3 text-right font-mono">{formatAmount(itemsTotal)}</td>
                     </tr>
@@ -356,15 +364,18 @@ export default function OffloadDetail() {
 
               {Number(offload.totalBales) > Number(offload.netTotalBales ?? offload.totalBales) && (
                 <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
-                  Returned bales are deducted from net quantity. Original landed costs are retained as
-                  historic evidence; supplier-return vouchers record the stock, supplier and cost corrections.
+                  Returned bales are deducted from net quantity. Original landed costs are retained as historic
+                  evidence; supplier-return vouchers record the stock, supplier and cost corrections.
                 </p>
               )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm mt-3">
                 <div>
                   <p className="text-muted-foreground">Total Bales</p>
-                  <p className="font-medium font-mono">{formatNumber(Number(offload.netTotalBales ?? offload.totalBales))} net / {formatNumber(Number(offload.totalBales))} offloaded</p>
+                  <p className="font-medium font-mono">
+                    {formatNumber(Number(offload.netTotalBales ?? offload.totalBales))} net /{" "}
+                    {formatNumber(Number(offload.totalBales))} offloaded
+                  </p>
                 </div>
               </div>
             </div>
@@ -479,7 +490,9 @@ export default function OffloadDetail() {
 
           <div className="border rounded-md p-4 flex items-center justify-between bg-muted/20">
             <div>
-              <p className="text-sm text-muted-foreground">Original Grand Total (before supplier return credit notes)</p>
+              <p className="text-sm text-muted-foreground">
+                Original Grand Total (before supplier return credit notes)
+              </p>
               <p className="text-2xl font-semibold font-mono mt-0.5">{formatAmount(itemsTotal)}</p>
             </div>
             <Button

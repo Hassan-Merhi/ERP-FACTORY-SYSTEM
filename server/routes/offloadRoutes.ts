@@ -229,9 +229,9 @@ export function registerOffloadRoutes(app: Express) {
       // for the offload invoice display instead of rewriting a posted receipt.
       // A deployment without the controlled migration must not break existing
       // offload invoice reads. The supplier return writer still requires it.
-      let returnQuantities: Array<{offload_item_id:number;returned_qty:string}> = [];
+      let returnQuantities: Array<{ offload_item_id: number; returned_qty: string }> = [];
       try {
-  returnQuantities = resultRows<{offload_item_id:number;returned_qty:string}>(
+        returnQuantities = resultRows<{ offload_item_id: number; returned_qty: string }>(
           await db.execute(sql`
             SELECT l.offload_item_id, SUM(l.quantity)::text AS returned_qty
               FROM erp_supplier_return_lines l
@@ -239,18 +239,19 @@ export function registerOffloadRoutes(app: Express) {
              GROUP BY l.offload_item_id
           `)
         );
-  
       } catch (error) {
-        const dbError = error as {code?:string;cause?:{code?:string}};
+        const dbError = error as { code?: string; cause?: { code?: string } };
         if (dbError.code !== "42P01" && dbError.cause?.code !== "42P01") throw error;
       }
-      const returnedByItem = new Map(returnQuantities.map(r=>[Number(r.offload_item_id),toMoney(r.returned_qty)]));
-      const itemsWithReturns = items.map(item=>{
-        const returned=returnedByItem.get(item.id)??toMoney(0);
-        const net=toMoney(item.quantity).minus(returned);
-        return {...item,returnedQty:returned.toFixed(3),netQty:net.toFixed(3)};
+      const returnedByItem = new Map(returnQuantities.map((r) => [Number(r.offload_item_id), toMoney(r.returned_qty)]));
+      const itemsWithReturns = items.map((item) => {
+        const returned = returnedByItem.get(item.id) ?? toMoney(0);
+        const net = toMoney(item.quantity).minus(returned);
+        return { ...item, returnedQty: returned.toFixed(3), netQty: net.toFixed(3) };
       });
-      const netTotalBales = itemsWithReturns.reduce((sum,item)=>sum.plus(toMoney(item.netQty)),toMoney(0)).toFixed(3);
+      const netTotalBales = itemsWithReturns
+        .reduce((sum, item) => sum.plus(toMoney(item.netQty)), toMoney(0))
+        .toFixed(3);
 
       // Fetch PO-level charges for the container (freight, fumigation, surcharge, documentCharges, discount, otherCharges)
       const pos = await db
@@ -353,7 +354,14 @@ export function registerOffloadRoutes(app: Express) {
         hasVouchers: liveVouchers.length > 0,
       };
 
-      res.json({ ...offload, items: sortOffloadItemsByName(itemsWithReturns), netTotalBales, poCharges, additionalCharges, liveCharges });
+      res.json({
+        ...offload,
+        items: sortOffloadItemsByName(itemsWithReturns),
+        netTotalBales,
+        poCharges,
+        additionalCharges,
+        liveCharges,
+      });
     } catch (error: unknown) {
       return sendCompanyAccessError(res, error);
     }
@@ -629,7 +637,8 @@ export function registerOffloadRoutes(app: Express) {
       if (Number(selectedCompanyId) === 12) {
         return res.status(409).json({
           code: "HISTORICAL_POC_BACKFILL_REPLAY_DISABLED",
-          message: "Historical company-12 post-offload vouchers have already been backfilled. Replaying would risk duplicate payable and expense entries; use the private reconciliation audit.",
+          message:
+            "Historical company-12 post-offload vouchers have already been backfilled. Replaying would risk duplicate payable and expense entries; use the private reconciliation audit.",
         });
       }
       try {
