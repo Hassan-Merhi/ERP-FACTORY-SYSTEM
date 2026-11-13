@@ -89,7 +89,7 @@ export function registerContainerListPaginationRoutes(app: Express): void {
         return res.status(400).json({ message: "No company selected" });
       const { page, limit, offset } = parsePagination(req);
       const condition = and(
-        or(eq(containers.companyId, companyId), sql`EXISTS (SELECT 1 FROM intercompany_trades trade WHERE trade.physical_container_id = ${containers.id} AND trade.destination_company_id = ${companyId} AND trade.state = 'active')`),
+        or(eq(containers.companyId, companyId), sql`EXISTS (SELECT 1 FROM intercompany_trades trade WHERE trade.physical_container_id = ${containers.id} AND trade.source_company_id = ${containers.companyId} AND trade.destination_company_id = ${companyId} AND trade.state = 'active')`),
         ne(containers.status, "SOLD"),
       );
       const [countRows, items] = await Promise.all([
