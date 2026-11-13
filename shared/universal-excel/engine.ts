@@ -49,6 +49,14 @@ export interface UniversalExcelColumn {
   permissionTag?: string;
   /** Validated for detail rows; footers may intentionally leave it blank. */
   required?: boolean;
+  /**
+   * Optional read-only accessor for derived/dimension columns. The returned
+   * value uses this column's normal numeric/date/text validation.
+   * A value accessor MUST declare every source record key it needs.
+   */
+  value?: (row: UniversalExcelRecord) => unknown;
+  /** Raw data keys consumed by value(); also counted for strict validation. */
+  sourceKeys?: readonly string[];
 }
 
 export interface UniversalExcelGroup {
@@ -268,12 +276,20 @@ function resolveColumns(
   }
   const selected: UniversalExcelColumn[] = [];
   const seen = new Set<string>();
-  for (const column of [...sheet.columns, ...(sheet.dynamicColumns ?? []), ...(sheet.discoverColumns ?? []).filter(c => present.has(c.key))]) {
+  const coveredSourceKeys = new Set<string>();
+  const discovered = (sheet.discoverColumns ?? []).filter(column =>
+    present.has(column.key) || column.sourceKeys?.some(key => present.has(key))
+  );
+  for (const column of [...sheet.columns, ...(sheet.dynamicColumns ?? []), ...discovered]) {
     if (!column.key.trim() || !column.header.trim() || seen.has(column.key) ||
-        (column.width != null && (!Number.isFinite(column.width) || column.width <= 0))) {
+        (column.width != null && (!Number.isFinite(column.width) || column.width <= 0)) ||
+        (column.value && !column.sourceKeys?.length) ||
+        column.sourceKeys?.some(key => !key.trim())) {
       throw new Error("Invalid or duplicate column: " + column.key);
     }
     seen.add(column.key);
+    coveredSourceKeys.add(column.key);
+    for (const key of column.sourceKeys ?? []) coveredSourceKeys.add(key);
     if (column.permissionTag && !allowed.has(column.permissionTag)) continue;
     selected.push(column);
   }
@@ -285,7 +301,7 @@ function resolveColumns(
     // their contents into the output. Unrecognized fields fail rather than
     // silently disappearing (even if they only occur after row 200).
     for (const key of present) {
-      if (!seen.has(key)) throw new Error("Unmapped Excel export column: " + key + " in " + sheet.name);
+      if (!coveredSourceKeys.has(key)) throw new Error("Unmapped Excel export column: " + key + " in " + sheet.name);
     }
   }
   return selected;
@@ -300,7 +316,7 @@ function writeRow(
 ): void {
   const row = worksheet.getRow(rowNumber);
   for (let i = 0; i < columns.length; i += 1) {
-    const value = data[columns[i].key];
+    const value = columns[i].value ? columns[i].value(data) : data[columns[i].key];
     if (validateRequired && columns[i].required && (value === undefined || value === null || value === "")) {
       throw new Error("Missing required Excel value for " + columns[i].key + " at row " + rowNumber);
     }
