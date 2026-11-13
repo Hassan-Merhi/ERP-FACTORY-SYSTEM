@@ -1,5 +1,6 @@
 import { LayoutDashboard, ShoppingCart, Package, FileText, Layers, ListTree, BarChart3, FolderPlus, Wallet, Receipt, Book, UserCheck, PieChart, Ship, Calculator, TableProperties, ExternalLink, UserRound, ScrollText, Store, LayoutGrid, Handshake, Bot, ShieldCheck, Ticket, Replace, PackageMinus } from "lucide-react";
 import { NAV_COLOR, type NavItem, type NavSection } from "@/components/sidebar/sidebarPrimitives";
+import { supplierReturnsCopy } from "@/i18n/supplierReturnsTranslations";
 
 /** Canonical metadata for ERP desktop, phone, and command navigation. */
 export const ERP_PINNED_ITEMS: NavItem[] = [
@@ -78,7 +79,7 @@ export const ERP_NAV_SECTIONS: NavSection[] = [
       { title: "Stock & Sales Report", url: "/stock-in-sales-report", icon: BarChart3 },
       { title: "Market Price Analysis", url: "/item-market-analysis", icon: BarChart3 },
       { title: "POS Item Replacement", url: "/pos-item-replacement", icon: Replace },
-      { title: "Supplier Returns", url: "/supplier-returns", icon: PackageMinus },
+      { title: supplierReturnsCopy.en.tab, url: "/supplier-returns", icon: PackageMinus },
     ],
   },
 ];
