@@ -66,12 +66,10 @@ export function buildFinalizedReturnMatchWorkbook(
   populate("Unmatched - Review", issues);
 
   const summary = workbook.addWorksheet("Quantity Summary");
-  summary.columns = [
-    { header: "Article Number", key: "article", width: 26 },
-    { header: "Bale Name", key: "name", width: 40 },
-    { header: "Invoice Number", key: "invoice", width: 28 },
-    { header: "Qty Matched", key: "quantity", width: 18 },
-  ];
+  summary.getColumn(1).width = 26;
+  summary.getColumn(2).width = 40;
+  summary.getColumn(3).width = 28;
+  summary.getColumn(4).width = 18;
   summary.addRow(["Customer", spreadsheetText(input.customerName)]);
   summary.addRow(["Source file", spreadsheetText(input.uploadedFile)]);
   summary.addRow(["Matched references", matched.length]);
