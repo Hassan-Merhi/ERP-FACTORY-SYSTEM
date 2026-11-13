@@ -75,7 +75,7 @@ export const DEFAULT_UNIVERSAL_EXCEL_APPEARANCE: ResolvedUniversalExcelAppearanc
 };
 
 function readableTextOn(color: string): string {
-  const components = [1, 3, 5].map(position => parseInt(color.slice(position, position + 2), 16) / 255);
+  const components = [2, 4, 6].map(position => parseInt(color.slice(position, position + 2), 16) / 255);
   const linear = components.map(c => c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
   const luminance = 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
   // Pick the foreground with better relative contrast on this accent.
