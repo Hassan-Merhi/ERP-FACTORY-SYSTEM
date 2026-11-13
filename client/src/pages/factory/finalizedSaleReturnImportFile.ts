@@ -1,3 +1,4 @@
+import { FILE_SIZE_LIMITS } from "@shared/fileSizePolicy";
 import type ExcelJS from "exceljs";
 
 const REFERENCE_HEADERS = new Set([
@@ -17,7 +18,7 @@ const REFERENCE_HEADERS = new Set([
   "stockreference",
 ]);
 const MAX_ROWS = 1000;
-const MAX_FILE_SIZE = 5 * 1024 * 1024;
+const MAX_FILE_SIZE = FILE_SIZE_LIMITS.spreadsheetImport;
 const clean = (text: string) => text.replace(/^\uFEFF/, "").trim();
 const headerKey = (text: string) =>
   clean(text)
@@ -59,7 +60,7 @@ export function extractFinalizedReturnReferences(sheet: ExcelJS.Worksheet): stri
 
 export async function readFinalizedReturnImport(file: File): Promise<string[]> {
   if (!/\.(xlsx|csv)$/i.test(file.name)) throw new Error("Select a .xlsx or .csv file containing bale reference codes");
-  if (file.size > MAX_FILE_SIZE || !file.size) throw new Error("Spreadsheet is empty or exceeds 5 MB");
+  if (file.size > MAX_FILE_SIZE || !file.size) throw new Error("Spreadsheet is empty or exceeds 50 MB");
   const { read } = await import("@/lib/excelHelper");
   const workbook = await read(await file.arrayBuffer(), { type: "array" });
   const sheet = workbook.Sheets[workbook.SheetNames[0]];

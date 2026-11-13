@@ -1,3 +1,4 @@
+import { FILE_SIZE_LIMITS } from "@shared/fileSizePolicy";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -425,8 +426,8 @@ export function RetailSupplierImportDialog({
       setFileError("Choose an .xlsx or .csv spreadsheet");
       return;
     }
-    if (file.size > 15 * 1024 * 1024) {
-      setFileError("Spreadsheet must be 15 MB or smaller");
+    if (file.size > FILE_SIZE_LIMITS.spreadsheetImport) {
+      setFileError("Spreadsheet must be 50 MB or smaller");
       return;
     }
     setBusy(true);

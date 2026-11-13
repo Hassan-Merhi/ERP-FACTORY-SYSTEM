@@ -1,3 +1,4 @@
+import { FILE_SIZE_LIMITS } from "@shared/fileSizePolicy";
 import type { StockItem, StockTransferFormData } from "../stocktransferform/types";
 import type { TransferInventoryItem } from "./useTransferFormDerived";
 
@@ -109,8 +110,8 @@ export async function parsePosTransferImportFile(
   if (!/\.(xlsx|csv)$/i.test(file.name)) {
     return { entries: [], errors: ["Upload an .xlsx or .csv spreadsheet."] };
   }
-  if (file.size > 10 * 1024 * 1024) {
-    return { entries: [], errors: ["File exceeds the 10 MB limit."] };
+  if (file.size > FILE_SIZE_LIMITS.spreadsheetImport) {
+    return { entries: [], errors: ["File exceeds the 50 MB limit."] };
   }
 
   const { read, utils } = await import("@/lib/excelHelper");
