@@ -1,5 +1,5 @@
 import { searchAny } from "@shared/searchNormalization";
-import { useState, useMemo, type ReactNode } from "react";
+import { useState, useMemo, useCallback, type ReactNode } from "react";
 import { useQuery, useQueries } from "@tanstack/react-query";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
@@ -148,7 +148,7 @@ export default function CombinedInventory({ headerActions }: CombinedInventoryPr
   const isLoadingOtw = containerDetailsQueries.some((q) => q.isLoading);
   const loadedOtwCount = containerDetailsQueries.filter((q) => !q.isLoading && q.data).length;
 
-  const combinedData = useMemo((): CombinedRow[] => {
+  const calculateCombinedData = useCallback((inventoryRowsForExport: readonly InventoryRow[]): CombinedRow[] => {
     // Use string keys so we can handle null stockItemId gracefully.
     // Key strategy:
     //   - stockItemId is set (non-null, non-zero) → "id:N"
@@ -192,7 +192,7 @@ export default function CombinedInventory({ headerActions }: CombinedInventoryPr
       });
     });
 
-    inventoryRows.forEach((inv) => {
+    inventoryRowsForExport.forEach((inv) => {
       const qty = parseFloat(inv.quantity || "0");
       const value = parseFloat(inv.totalValue || "0");
 
@@ -279,7 +279,12 @@ export default function CombinedInventory({ headerActions }: CombinedInventoryPr
     });
 
     return Array.from(map.values()).sort((a, b) => a.stockItemName.localeCompare(b.stockItemName));
-  }, [containerDetailsQueries, inventoryRows, allStockItems, includeZero]);
+  }, [containerDetailsQueries, allStockItems, includeZero]);
+
+  const combinedData = useMemo(
+    () => calculateCombinedData(inventoryRows),
+    [calculateCombinedData, inventoryRows],
+  );
 
   const filteredAll = useMemo(() => {
     if (!search.trim()) return combinedData;
@@ -338,28 +343,104 @@ export default function CombinedInventory({ headerActions }: CombinedInventoryPr
   const isDrillMode = viewMode === "groups" && selectedGroupId !== undefined;
 
   const handleExport = async () => {
-    const XLSX = await import("@/lib/excelHelper");
-    const exportRows = isDrillMode ? groupItems : filteredAll;
-    const wsData = [
-      ["Item Name", "Stock Group", "OTW Qty", "In-Hand Qty", "Total Qty", "Avg Rate", "Total Value"],
-      ...exportRows.map((r) => [
-        r.stockItemName,
-        r.stockGroupName || "Uncategorized",
-        r.otwQty,
-        r.inHandQty,
-        r.totalQty,
-        parseFloat(r.avgRate.toFixed(2)),
-        parseFloat(r.combinedValue.toFixed(2)),
-      ]),
-    ];
-    const ws = XLSX.utils.aoa_to_sheet(wsData);
-    ws["!cols"] = [{ wch: 35 }, { wch: 20 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 14 }, { wch: 16 }];
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Combined Inventory");
-    const filename = isDrillMode
-      ? `combined_inventory_${(drillGroup?.stockGroupName || "group").replace(/\s+/g, "_")}.xlsx`
-      : "combined_inventory.xlsx";
-    await XLSX.writeFile(wb, filename);
+    try {
+      if (!selectedCompany?.id) throw new Error("Choose a company before exporting");
+      if (containerDetailsQueries.some(query => query.isLoading || query.isError || !query.data)) {
+        throw new Error("OTW container details are not fully loaded; refresh before exporting");
+      }
+      if (includeZero && loadingStockItems) {
+        throw new Error("Stock items are still loading; retry after loading completes");
+      }
+
+      // The page deliberately previews 100 inventory rows. Export must fetch
+      // ALL pages, not the preview, and reject a truncated or moving dataset.
+      const pageSize = 100;
+      const inventoryForExport: InventoryRow[] = [];
+      let expectedTotal: number | null = null;
+      let totalPages = 1;
+      for (let page = 1; page <= totalPages; page += 1) {
+        const response = await fetch(
+          "/api/inventory?page=" + page + "&pageSize=" + pageSize,
+          { credentials: "include" },
+        );
+        if (!response.ok) throw new Error("Inventory export page " + page + " failed");
+        const payload = await response.json() as {
+          data?: InventoryRow[];
+          total?: number;
+          totalPages?: number;
+          page?: number;
+        };
+        if (!Array.isArray(payload.data) ||
+            !Number.isSafeInteger(payload.total) || (payload.total ?? -1) < 0 ||
+            !Number.isSafeInteger(payload.totalPages) ||
+            (payload.totalPages ?? 0) < 1 ||
+            (payload.totalPages ?? 0) > 10_000 ||
+            (payload.page != null && payload.page !== page)) {
+          throw new Error("Inventory export returned invalid pagination metadata");
+        }
+        if (expectedTotal === null) {
+          expectedTotal = payload.total!;
+          totalPages = payload.totalPages!;
+        } else if (payload.total !== expectedTotal || payload.totalPages !== totalPages) {
+          throw new Error("Inventory changed while exporting; please retry");
+        }
+        inventoryForExport.push(...payload.data);
+      }
+      if (inventoryForExport.length !== expectedTotal) {
+        throw new Error("Inventory export is incomplete; please retry");
+      }
+
+      const completeCombined = calculateCombinedData(inventoryForExport);
+      const searched = search.trim()
+        ? completeCombined.filter(row => searchAny(search, row.stockItemName, row.stockItemCode))
+        : completeCombined;
+      const exportRows = isDrillMode
+        ? searched.filter(row => row.stockGroupId === selectedGroupId)
+        : searched;
+      const data = exportRows.map(row => ({
+        "Item Name": row.stockItemName,
+        "Stock Group": row.stockGroupName || "Uncategorized",
+        "OTW Qty": row.otwQty,
+        "In-Hand Qty": row.inHandQty,
+        "Total Qty": row.totalQty,
+        "Avg Rate": Number(row.avgRate.toFixed(2)),
+        "Total Value": Number(row.combinedValue.toFixed(2)),
+      }));
+      const fileName = isDrillMode
+        ? "combined_inventory_" +
+          (drillGroup?.stockGroupName || "group").replace(/\s+/g, "_") + ".xlsx"
+        : "combined_inventory.xlsx";
+      const { columnsFromOperationalRows, exportOperationalWorkbook } = await import(
+        "@/lib/operationalExcelExport"
+      );
+      await exportOperationalWorkbook({
+        title: "Combined Inventory",
+        fileName,
+        companyName: selectedCompany.name,
+        currencyCode: "USD",
+        filters: [
+          { label: "Search", value: search || "All" },
+          { label: "Stock Group", value: isDrillMode ? drillGroup?.stockGroupName || "Uncategorized" : "All" },
+        ],
+        sheets: [{
+          name: "Combined Inventory",
+          rows: data,
+          columns: columnsFromOperationalRows(data, {
+            orderedHeaders: [
+              "Item Name", "Stock Group", "OTW Qty", "In-Hand Qty",
+              "Total Qty", "Avg Rate", "Total Value",
+            ],
+            types: {
+              "OTW Qty": "decimal", "In-Hand Qty": "decimal",
+              "Total Qty": "decimal", "Avg Rate": "money", "Total Value": "money",
+            },
+          }),
+        }],
+      });
+    } catch (error) {
+      // Prefer a useful error to a silently partial workbook.
+      window.alert(error instanceof Error ? error.message : "Could not export inventory");
+    }
   };
 
   if (isLoading) {
