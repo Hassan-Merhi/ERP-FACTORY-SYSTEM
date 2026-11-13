@@ -182,6 +182,9 @@ export function registerGitReportRoutes(app: Express) {
         fetchActiveContainers(companyIds, { includeOffloaded }),
         loadCompanyNames(companyIds),
       ]);
+      // Linked physical containers retain the source owner ID while appearing in
+      // the destination scope; resolve both names for accurate tracking labels.
+      Object.assign(nameMap, await loadCompanyNames([...new Set(raw.map((row) => row.companyId))]));
 
       let enriched = enrichContainers(raw, nameMap);
 
