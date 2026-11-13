@@ -92,7 +92,11 @@ describe("Stock Items Excel export pagination", () => {
     const fetcher = vi.fn(async (url: string) => {
       const page = Number(new URL(url, "https://example.test").searchParams.get("page"));
       return page === 1
-        ? pageResponse(1, 501, Array.from({ length: 250 }, (_, index) => ({ id: index + 1 })))
+        ? pageResponse(
+            1,
+            501,
+            Array.from({ length: 250 }, (_, index) => ({ id: index + 1 }))
+          )
         : ({ ok: false, status: 500 } as Response);
     });
     await expect(loadStockItemsForExport(noFilters, fetcher as unknown as typeof fetch)).rejects.toThrow(
