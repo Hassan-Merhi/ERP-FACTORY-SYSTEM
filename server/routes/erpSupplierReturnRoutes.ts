@@ -233,6 +233,9 @@ export function registerErpSupplierReturnRoutes(app: Express) {
       if (input.some(x=>!Number.isInteger(x.id)||x.id<1) || input.some((x,i)=>i>0&&x.id===input[i-1].id))
         throw new ReturnError(400, "RETURN_LINES_DUPLICATE", "Each offload item may appear only once per return; combine duplicate quantities");
       const result = await db.transaction(async tx => {
+        // Serialize the same idempotency key BEFORE reading or changing stock.
+        // Concurrent retries cannot both see a missing batch and double-post.
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${companyId}, hashtext(${body.requestKey!}))`);
         const [existing] = resultRows<{id:number}>(await tx.execute(sql`
           SELECT id FROM erp_supplier_return_batches
            WHERE company_id=${companyId} AND request_key=${body.requestKey!} FOR UPDATE
