@@ -45,6 +45,16 @@ describe("linked intercompany container and Daybook deletion contract", () => {
       "activeSiblings.length !== 1", "IC_DELETE_VOUCHER_EVIDENCE",
     ]) expect(service).toContain(marker);
   });
+  it("qualifies canonical container columns inside linked-company subqueries", () => {
+    const source = readFileSync("server/storage/containers-store/containers.ts", "utf8");
+    const pagination = readFileSync("server/routes/containers/containerListPaginationRoutes.ts", "utf8");
+    for (const text of [source, pagination]) {
+      expect(text).toContain('trade.physical_container_id = "containers"."id"');
+      expect(text).toContain('trade.source_company_id = "containers"."company_id"');
+      expect(text).not.toContain('trade.physical_container_id = ${containers.id}');
+      expect(text).not.toContain('trade.physical_container_id = ${schema.containers.id}');
+    }
+  });
   it("shows the physical linked container in both list endpoint families", () => {
     expect(storage).toContain("trade.destination_company_id");
     expect(storage).toContain("trade.source_company_id");
