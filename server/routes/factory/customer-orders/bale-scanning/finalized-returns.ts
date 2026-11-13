@@ -168,8 +168,9 @@ export function registerFinalizedLoadingReturnRoutes(app: Express): void {
         if (other.rows.length) fail("Bale is also assigned to a different loading");
         for(const a of assignments){
           const b=byId.get(a.baleId);
-          if(!b || b.deletedAt || !["SOLD","IN_STOCK"].includes(b.status))
-            fail("Bale "+a.baleReference+" has an incompatible stock status");
+          if (!b) fail("Bale " + a.baleReference + " is missing");
+          if (b.deletedAt || !["SOLD","IN_STOCK"].includes(b.status))
+            fail("Bale " + a.baleReference + " has an incompatible stock status");
           if (b.erpLocationId!==a.locationId)
             fail("Bale "+a.baleReference+" moved locations; reconcile stock before return");
         }
@@ -224,7 +225,7 @@ export function registerFinalizedLoadingReturnRoutes(app: Express): void {
         }
         await writeAuditEvent({
           userId:req.session.userId ?? undefined,username:req.session.username ?? undefined,
-          companyId:cid,action:"factory_finalized_sale_return",
+          companyId:cid,action:"update",
           tableName:"factory_finalized_sale_returns",recordId:oid,
           recordIdentifier:"Invoice "+order.invoiceNumber,
           changes:{
