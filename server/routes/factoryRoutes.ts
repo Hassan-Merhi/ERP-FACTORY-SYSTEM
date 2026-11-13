@@ -201,9 +201,13 @@ export function registerFactoryRoutes(app: Express, requireAuth: RequestHandler,
         // into the still-open parent loading. The scan route enforces stock,
         // duplicate, proforma and order-status rules in its own transaction.
         const continuingLoadingScan = req.method === "POST" && suffix === "bales";
+        // The per-bale delete handler validates posted-trip ownership and live
+        // dispatch scans under the customer-order lock. Do not treat removing
+        // an unshipped item as a rewrite of a financially posted trip.
+        const continuingUnshippedRemoval = req.method === "DELETE" && /^bales\/\d+$/.test(suffix);
         const reconcileMissingBale = req.method === "DELETE" &&
           /^bales\/\d+$/.test(suffix) && req.query.source === "dispatch-reconciliation";
-        if (!dispatchOperation && !readOnlyMetadata && !statusTransition && !continuingLoadingScan && !reconcileMissingBale) {
+        if (!dispatchOperation && !readOnlyMetadata && !statusTransition && !continuingLoadingScan && !continuingUnshippedRemoval && !reconcileMissingBale) {
           const companyId = Number(req.session.factoryCompanyId);
           const orderId = Number(match[1]);
           if (Number.isSafeInteger(companyId) && companyId > 0 &&
