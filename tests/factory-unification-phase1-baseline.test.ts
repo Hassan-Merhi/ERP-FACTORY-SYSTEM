@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
@@ -103,4 +103,22 @@ describe("Factory Phase 1 pinned source baseline (not a browser/API fixture)", (
     expect(viewOnly["dispatch.reopen"]).toBe(false);
     expect(factoryActionCapabilities({ role: "Developer" })["production.manage-bonuses"]).toBe(false);
   });
+  it("retires the sample-data inventory mockup but preserves the developer-only bookmark", () => {
+    const routes = readSource("client/src/components/FactoryRoutes.tsx");
+    const lazyPages = readSource("client/src/lazyPages.ts");
+    expect(routes).toContain(
+      '<Route path="/factory/location-inventory-mockup">\\n        <Redirect replace to="/factory/location-inventory" />',
+    );
+    expect(routes).not.toContain("component={FactoryLocationInventoryMockup}");
+    expect(lazyPages).not.toContain("FactoryLocationInventoryMockup");
+    expect(existsSync(resolve(process.cwd(), "client/src/pages/factory/FactoryLocationInventoryMockup.tsx"))).toBe(false);
+
+    const legacyPage = resolveFactoryPage("/factory/location-inventory-mockup");
+    expect(legacyPage?.key).toBe("factory/location-inventory-mockup");
+    expect(legacyPage).not.toBeNull();
+    expect(factoryPageAllowsRole(legacyPage!, "Developer")).toBe(true);
+    expect(factoryPageAllowsRole(legacyPage!, "Admin")).toBe(false);
+    expect(resolveFactoryPage("/factory/location-inventory")?.key).toBe("factory/location-inventory");
+  });
+
 });

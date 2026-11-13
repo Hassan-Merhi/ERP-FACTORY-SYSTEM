@@ -73,7 +73,6 @@ import {
   FactoryKpis,
   FactoryLoadingsHub,
   FactoryLocationInventory,
-  FactoryLocationInventoryMockup,
   FactoryNetPositionDetails,
   FactoryOpeningBalanceEdit,
   FactoryPOS,
@@ -204,7 +203,10 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
       <Route path="/factory/bales-hub" component={FactoryBalesHub} />
       <Route path="/factory/reprint-labels" component={FactoryReprintLabels} />
       <Route path="/factory/location-inventory" component={FactoryLocationInventory} />
-      <Route path="/factory/location-inventory-mockup" component={FactoryLocationInventoryMockup} />
+      {/* Keep developer-only legacy bookmarks working without loading sample data. */}
+      <Route path="/factory/location-inventory-mockup">
+        <Redirect replace to="/factory/location-inventory" />
+      </Route>
       <Route
         path="/factory/bale-product-history/:productId/:locationId/:year/all"
         component={FactoryBaleProductAllMonths}

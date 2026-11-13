@@ -550,9 +550,11 @@ export const FACTORY_ACCESS_REGISTRY: readonly FactoryPageDefinition[] = [
     settingsVisible: false,
     accessLevel: "developer",
   },
+  // Compatibility-only access entry: keep old developer-only preview bookmarks
+  // guarded, but the route now redirects to real Location Inventory.
   {
     key: "factory/location-inventory-mockup",
-    label: "Location Inventory Mockup",
+    label: "Retired Location Inventory Preview",
     group: "Other",
     route: "/factory/location-inventory-mockup",
     settingsVisible: false,

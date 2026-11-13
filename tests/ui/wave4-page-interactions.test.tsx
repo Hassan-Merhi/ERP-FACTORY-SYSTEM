@@ -104,11 +104,6 @@ const PAGES: Array<{
     factory: true,
   },
   { name: "FactoryEmployees", load: () => import("@/pages/factory/FactoryEmployees"), factory: true },
-  {
-    name: "FactoryLocationInventoryMockup",
-    load: () => import("@/pages/factory/FactoryLocationInventoryMockup"),
-    factory: true,
-  },
   { name: "FactoryPendingInvoices", load: () => import("@/pages/factory/FactoryPendingInvoices"), factory: true },
   { name: "FactoryPendingLoadings", load: () => import("@/pages/factory/FactoryPendingLoadings"), factory: true },
   { name: "FactoryPriceList", load: () => import("@/pages/factory/FactoryPriceList"), factory: true },
