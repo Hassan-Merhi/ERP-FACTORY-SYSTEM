@@ -7,7 +7,7 @@ import Decimal from "decimal.js";
 import { sql } from "drizzle-orm";
 import type { Express } from "express";
 import { requireAuth, requireRole } from "../auth";
-import { db } from "../db";
+import { db, type DatabaseOrTransaction } from "../db";
 import { resultRows } from "../lib/queryResult";
 import { adjustInventory } from "../inventoryHelper";
 import { getOrCreateInventoryControlAccount } from "../services/accounting/inventoryControlAccount";
@@ -78,7 +78,7 @@ function mapCandidate(row: Row): Candidate {
     unitLandedCost: original.gt(0) ? new Decimal(String(row.landed_total ?? "0")).div(original).toFixed(4) : "0",
   };
 }
-async function candidates(executor: typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0], companyId: number, code: string): Promise<Candidate[]> {
+async function candidates(executor: DatabaseOrTransaction, companyId: number, code: string): Promise<Candidate[]> {
   const rows = resultRows<Row>(await executor.execute(sql`
     SELECT coi.id AS offload_item_id, co.id AS offload_id, c.id AS container_id,
            c.container_number, co.location_id, coi.stock_item_id,
@@ -118,7 +118,7 @@ async function candidates(executor: typeof db | Parameters<Parameters<typeof db.
   `));
   return rows.map(mapCandidate);
 }
-async function byId(executor: typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0], companyId: number, itemId: number): Promise<Candidate> {
+async function byId(executor: DatabaseOrTransaction, companyId: number, itemId: number): Promise<Candidate> {
   // Resolve by the authoritative item code, not a client-provided cost or supplier.
   const [ref] = resultRows<{code:string}>(await executor.execute(sql`
     SELECT si.code FROM container_offload_items coi
