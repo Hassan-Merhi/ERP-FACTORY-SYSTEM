@@ -5,7 +5,8 @@ export const finalizedSaleReturnCopy = {
   en: {
     tabLabel: "Finalized Sale Returns",
     title: "Finalized Loading Sale Returns",
-    subtitle: "Return physical bales from regular finalized customer container loadings. This changes the original invoice amount, customer receivable, cost of goods sold and available stock together. Factory POS and posted dispatch-trip invoices are not affected.",
+    subtitle:
+      "Return physical bales from regular finalized customer container loadings. This changes the original invoice amount, customer receivable, cost of goods sold and available stock together. Factory POS and posted dispatch-trip invoices are not affected.",
     searchLabel: "Search invoice / container / customer",
     searchPlaceholder: "Enter invoice, container number or customer",
     noInvoices: "No finalized loading found.",
@@ -44,7 +45,8 @@ export const finalizedSaleReturnCopy = {
   ar: {
     tabLabel: "مرتجعات البيع النهائي",
     title: "مرتجعات التحميلات المفوترة نهائياً",
-    subtitle: "إرجاع البالات من تحميلات الحاويات المفوترة إلى المخزون مع تعديل الفاتورة ورصيد العميل وتكلفة البضاعة المباعة. لا يشمل نقاط البيع أو رحلات الإرسال المحاسبية.",
+    subtitle:
+      "إرجاع البالات من تحميلات الحاويات المفوترة إلى المخزون مع تعديل الفاتورة ورصيد العميل وتكلفة البضاعة المباعة. لا يشمل نقاط البيع أو رحلات الإرسال المحاسبية.",
     searchLabel: "البحث بالفاتورة أو الحاوية أو العميل",
     searchPlaceholder: "رقم الفاتورة أو الحاوية أو اسم العميل",
     noInvoices: "لم يتم العثور على تحميل نهائي.",
@@ -83,7 +85,8 @@ export const finalizedSaleReturnCopy = {
   fr: {
     tabLabel: "Retours de ventes finalisées",
     title: "Retours des chargements facturés",
-    subtitle: "Renvoyer en stock des balles de chargements de conteneurs finalisés, avec correction de la facture, du solde client et du coût des ventes. Sans impact sur le POS ni les trajets d'expédition comptabilisés.",
+    subtitle:
+      "Renvoyer en stock des balles de chargements de conteneurs finalisés, avec correction de la facture, du solde client et du coût des ventes. Sans impact sur le POS ni les trajets d'expédition comptabilisés.",
     searchLabel: "Chercher une facture, un conteneur ou un client",
     searchPlaceholder: "Numéro de facture, de conteneur ou client",
     noInvoices: "Aucun chargement finalisé trouvé.",
@@ -99,7 +102,8 @@ export const finalizedSaleReturnCopy = {
     priceNote: "La réduction de la facture est recalculée avec les prix d'origine à la balle ou au kilo.",
     reason: "Motif",
     reasonPlaceholder: "Pourquoi ces balles ont-elles été retournées ?",
-    physicalConfirm: "Je confirme que ces balles ont été retournées, et autorise la correction de la facture, du solde client et des journaux.",
+    physicalConfirm:
+      "Je confirme que ces balles ont été retournées, et autorise la correction de la facture, du solde client et des journaux.",
     posting: "Enregistrement du retour…",
     apply: "Retourner les balles sélectionnées et corriger la facture",
     posted: "Enregistré :",

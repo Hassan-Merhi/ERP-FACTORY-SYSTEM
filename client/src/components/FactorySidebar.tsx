@@ -66,7 +66,11 @@ import {
   hasFactoryPageKey,
   resolveFactoryPage,
 } from "@/app/factoryAccessRegistry";
-import { FACTORY_OTHERS_NAV_LINKS, FACTORY_SALES_DISPATCH_ROUTES, factoryHubTabHideKey } from "@/factory/config/navigationPresentation";
+import {
+  FACTORY_OTHERS_NAV_LINKS,
+  FACTORY_SALES_DISPATCH_ROUTES,
+  factoryHubTabHideKey,
+} from "@/factory/config/navigationPresentation";
 
 interface FactoryNavItem extends NavItem {
   accessKey: string;
@@ -151,13 +155,16 @@ export const FACTORY_NAV_SECTIONS: FactoryNavSection[] = FACTORY_SIDEBAR_GROUP_O
       visibleFactoryGroup(page) === label &&
       !page.pinned &&
       page.key !== "factory/monthly-production-matrix" &&
-      page.key !== "factory/sheets-sacks",
+      page.key !== "factory/sheets-sacks"
   );
-  const orderedPages = label === "Others"
-    ? [...pages].sort((a, b) =>
-        ["factory/stock-query", "factory/tickets"].indexOf(a.key) -
-        ["factory/stock-query", "factory/tickets"].indexOf(b.key))
-    : pages;
+  const orderedPages =
+    label === "Others"
+      ? [...pages].sort(
+          (a, b) =>
+            ["factory/stock-query", "factory/tickets"].indexOf(a.key) -
+            ["factory/stock-query", "factory/tickets"].indexOf(b.key)
+        )
+      : pages;
   return {
     label,
     color: FACTORY_SIDEBAR_COLORS[label],
@@ -165,10 +172,13 @@ export const FACTORY_NAV_SECTIONS: FactoryNavSection[] = FACTORY_SIDEBAR_GROUP_O
     items: [
       ...(label === "Others"
         ? FACTORY_OTHERS_NAV_LINKS.map((item) => ({
-            title: item.title, url: item.url, accessKey: item.accessKey,
+            title: item.title,
+            url: item.url,
+            accessKey: item.accessKey,
             hideKey: "hideKey" in item ? item.hideKey : undefined,
             adminOnly: "adminOnly" in item ? item.adminOnly : false,
-            icon: item.iconKey === "comparison" ? GitCompareArrows : item.iconKey === "saleReturns" ? History : BarChart3,
+            icon:
+              item.iconKey === "comparison" ? GitCompareArrows : item.iconKey === "saleReturns" ? History : BarChart3,
           }))
         : []),
       ...orderedPages.map((page) => ({
@@ -194,13 +204,15 @@ export const FACTORY_NAV_SECTIONS: FactoryNavSection[] = FACTORY_SIDEBAR_GROUP_O
  * A single sidebar entry represents POS and Waste Dispatch, but keeps whichever
  * direct route is active highlighted. Each route still enforces its own grants.
  */
-export function collapseFactorySalesDispatchNav<T extends { accessKey: string }>(
-  items: T[],
-  location: string,
-): T[] {
-  if (!items.some((item) => item.accessKey === "factory/pos") ||
-      !items.some((item) => item.accessKey === "factory/waste-dispatch")) return items;
-  const hide = location.startsWith(FACTORY_SALES_DISPATCH_ROUTES.wasteDispatch) ? "factory/pos" : "factory/waste-dispatch";
+export function collapseFactorySalesDispatchNav<T extends { accessKey: string }>(items: T[], location: string): T[] {
+  if (
+    !items.some((item) => item.accessKey === "factory/pos") ||
+    !items.some((item) => item.accessKey === "factory/waste-dispatch")
+  )
+    return items;
+  const hide = location.startsWith(FACTORY_SALES_DISPATCH_ROUTES.wasteDispatch)
+    ? "factory/pos"
+    : "factory/waste-dispatch";
   return items.filter((item) => item.accessKey !== hide);
 }
 
@@ -311,7 +323,8 @@ export function useFactoryVisibleSections(user?: FactorySidebarUser): {
         // from a parent hub. Visibility remains controlled by the access registry.
         return true;
       }),
-    })).map((s) => ({
+    }))
+    .map((s) => ({
       ...s,
       items: s.label === "Sales & Loading" ? collapseFactorySalesDispatchNav(s.items, currentLocation) : s.items,
     }))

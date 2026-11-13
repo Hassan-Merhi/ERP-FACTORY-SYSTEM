@@ -21,8 +21,10 @@ export default function FactoryOthers() {
   const returnCopy = getFinalizedSaleReturnCopy(language);
   const search = useSearch();
   const hidden = isPrivileged ? [] : (access?.hiddenCostFields ?? []);
-  const visibleTabs = ALL_TABS.filter((tab) => tab === "sale-returns" ? canManageReturns :
-    !hidden.includes(tab === "comparison" ? "hide_tab_overview_comparison" : "hide_tab_overview_product_comparison")
+  const visibleTabs = ALL_TABS.filter((tab) =>
+    tab === "sale-returns"
+      ? canManageReturns
+      : !hidden.includes(tab === "comparison" ? "hide_tab_overview_comparison" : "hide_tab_overview_product_comparison")
   );
   const visibleTabsKey = visibleTabs.join(",");
   const [activeTab, setActiveTab] = useHubQueryState<OthersTab>({
@@ -51,7 +53,11 @@ export default function FactoryOthers() {
       <div className="shrink-0 border-b px-4 pt-4 pb-3">
         <PageHeader title="Others" subtitle="Compare production performance and products" />
       </div>
-      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as OthersTab)} className="flex min-h-0 flex-1 flex-col">
+      <Tabs
+        value={activeTab}
+        onValueChange={(value) => setActiveTab(value as OthersTab)}
+        className="flex min-h-0 flex-1 flex-col"
+      >
         <div className="erp-mobile-scroll-tabs mx-4 mt-3 shrink-0 pb-1">
           <TabsList className="w-max min-w-full sm:min-w-0 sm:w-fit" aria-label="Other factory reports">
             {visibleTabs.includes("comparison") && (
@@ -77,7 +83,10 @@ export default function FactoryOthers() {
           </TabsContent>
         )}
         {visibleTabs.includes("product-comparison") && (
-          <TabsContent value="product-comparison" className="mt-0 flex-1 overflow-y-auto p-4 data-[state=inactive]:hidden">
+          <TabsContent
+            value="product-comparison"
+            className="mt-0 flex-1 overflow-y-auto p-4 data-[state=inactive]:hidden"
+          >
             <ProductComparisonCharts />
           </TabsContent>
         )}
