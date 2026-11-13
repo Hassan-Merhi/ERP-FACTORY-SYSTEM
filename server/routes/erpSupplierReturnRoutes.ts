@@ -188,6 +188,32 @@ export function registerErpSupplierReturnRoutes(app: Express) {
       res.status(500).json({message: (error as Error).message});
     }
   });
+  app.get("/api/erp/supplier-returns/history/:batchId", ...guards, async (req, res) => {
+    try {
+      const { activeCompanyId: companyId } = await assertActiveCompanyAccess(req);
+      const batchId=Number(req.params.batchId);
+      if(!Number.isInteger(batchId)||batchId<1) throw new ReturnError(400,"RETURN_BATCH_ID_INVALID","Invalid batch");
+      const rows=resultRows<Row>(await db.execute(sql`
+        SELECT l.id,l.article_code AS "articleCode",l.item_name AS "itemName",
+               l.quantity::text AS quantity,c.container_number AS "containerNumber",
+               l.offload_id AS "offloadId",s.legal_name AS supplier,
+               l.supplier_credit_usd::text AS "supplierCreditUsd",
+               l.inventory_reduction_usd::text AS "inventoryReductionUsd",
+               v.voucher_number AS "voucherNumber",l.voucher_id AS "voucherId"
+          FROM erp_supplier_return_lines l
+          JOIN erp_supplier_return_batches b ON b.id=l.batch_id AND b.company_id=${companyId}
+          JOIN containers c ON c.id=l.container_id AND c.company_id=${companyId}
+          JOIN suppliers s ON s.id=l.supplier_id
+          LEFT JOIN vouchers v ON v.id=l.voucher_id
+         WHERE l.company_id=${companyId} AND l.batch_id=${batchId}
+         ORDER BY l.id
+      `));
+      res.json({rows});
+    } catch(error) {
+      const err=error as ReturnError;
+      res.status(err.status||500).json({code:err.code,message:err.message});
+    }
+  });
   app.post("/api/erp/supplier-returns/commit", ...guards, async (req, res) => {
     try {
       const { activeCompanyId: companyId } = await assertActiveCompanyAccess(req);
