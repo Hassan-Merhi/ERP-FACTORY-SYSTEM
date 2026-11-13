@@ -175,8 +175,10 @@ export function usePaginatedGITContainers(filters: PaginatedContainerFilters) {
       }
     : undefined;
 
-  const loadContainerDetail = async (id: number, companyId: number): Promise<EnrichedContainerRow> => {
-    const detailUrl = canonicalApiUrl(`/api/git/containers/${id}`, { companyId });
+  const loadContainerDetail = async (id: number, companyId: number, allCompanies = false): Promise<EnrichedContainerRow> => {
+    // The physical row may belong to a parent the user cannot select directly;
+    // resolve it through all authorized linked destinations in the all-companies view.
+    const detailUrl = canonicalApiUrl(`/api/git/containers/${id}`, allCompanies ? { allCompanies: true } : { companyId });
     const response = await fetch(detailUrl, { credentials: "include" });
     if (!response.ok) {
       const body = (await response.json().catch(() => ({ message: "Failed to load container details" }))) as {
