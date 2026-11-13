@@ -8,7 +8,12 @@ import {
 } from "./centralPostingEngine";
 import { assertTransactionCompanyScope, type CompanyScopedTransaction } from "../security/transactionCompanyScope";
 import type { DbTransaction } from "../../db";
-import { sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
+import { vouchers } from "@shared/schema";
+import {
+  isIntercompanyPairedVoucher,
+  INTERCOMPANY_PAIRED_VOUCHER_LOCK_MESSAGE,
+} from "../../lib/migratedVoucherGuard";
 import { assertNoInventoryCutoverTx } from "./perpetualInventory/cutoverRefusal";
 
 /**
@@ -144,6 +149,9 @@ export function buildExactVoucherReversal(input: {
       "VOUCHER_REVERSAL_COMPANY_MISMATCH",
       "Locked original voucher belongs to a different company"
     );
+  }
+  if (isIntercompanyPairedVoucher(originalVoucher)) {
+    throw new PostingValidationError("IC_VOUCHER_IMMUTABLE", INTERCOMPANY_PAIRED_VOUCHER_LOCK_MESSAGE);
   }
   if (originalVoucher.deletedAt != null) {
     throw new PostingValidationError(
@@ -318,6 +326,14 @@ export async function assertExactReversalAllowedTx(
   companyId: number,
   voucherId: number
 ): Promise<void> {
+  const [original] = await tx
+    .select({ sourceModule: vouchers.sourceModule })
+    .from(vouchers)
+    .where(and(eq(vouchers.id, voucherId), eq(vouchers.companyId, companyId)))
+    .limit(1);
+  if (original && isIntercompanyPairedVoucher(original)) {
+    throw new PostingValidationError("IC_VOUCHER_IMMUTABLE", INTERCOMPANY_PAIRED_VOUCHER_LOCK_MESSAGE);
+  }
   if (!(await isStockVoucherTx(tx, companyId, voucherId))) return;
   await assertNoInventoryCutoverTx(tx, companyId, "exact-voucher-reversal");
 }
