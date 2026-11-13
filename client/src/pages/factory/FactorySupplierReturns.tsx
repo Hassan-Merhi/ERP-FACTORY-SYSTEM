@@ -1,4 +1,6 @@
 import Decimal from "decimal.js";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { getSupplierReturnsCopy } from "@/i18n/supplierReturnsTranslations";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle2, Download, PackageMinus, RefreshCw, Upload } from "lucide-react";
@@ -71,6 +73,8 @@ function excelCode(row: Record<string, unknown>, names: string[]) {
 }
 export default function FactorySupplierReturns() {
   const { selectedCompany } = useCompany();
+  const { language } = useApplicationLanguage();
+  const copy = getSupplierReturnsCopy(language);
   const { toast } = useToast();
   const [sourceFile, setSourceFile] = useState("");
   const [rawRows, setRawRows] = useState<Array<{ code: string; quantity: string }>>([]);
@@ -156,11 +160,11 @@ export default function FactorySupplierReturns() {
       });
       setRawRows(parsed);
       toast({
-        title: "Excel read",
-        description: `${parsed.length} rows loaded. Review matching containers before posting.`,
+        title: copy.readTitle,
+        description: `${parsed.length} ${copy.readBody}`,
       });
     } catch (e) {
-      toast({ title: "Invalid Excel file", description: (e as Error).message, variant: "destructive" });
+      toast({ title: copy.invalidExcel, description: (e as Error).message, variant: "destructive" });
     }
   }
   async function mapRows() {
@@ -174,11 +178,11 @@ export default function FactorySupplierReturns() {
       setPreview(result.rows);
       setChosen({});
       toast({
-        title: "Mapping ready",
-        description: "Review the container, supplier, available stock, and cost for each line.",
+        title: copy.mappedTitle,
+        description: copy.mappedBody,
       });
     } catch (e) {
-      toast({ title: "Mapping failed", description: (e as Error).message, variant: "destructive" });
+      toast({ title: copy.mapFailed, description: (e as Error).message, variant: "destructive" });
     } finally {
       setBusy(false);
     }
@@ -195,7 +199,7 @@ export default function FactorySupplierReturns() {
       setDetailRows(detail.rows);
       setSelectedBatch(id);
     } catch (e) {
-      toast({ title: "History unavailable", description: (e as Error).message, variant: "destructive" });
+      toast({ title: copy.historyFailed, description: (e as Error).message, variant: "destructive" });
     }
   }
   async function post() {
@@ -229,11 +233,11 @@ export default function FactorySupplierReturns() {
       setConfirm(false);
       await queryClient.invalidateQueries();
       toast({
-        title: "Supplier return posted",
-        description: `Batch #${response.id}: ${response.totalQty} bales returned and accounted for.`,
+        title: copy.success,
+        description: `${copy.batch} #${response.id}: ${response.totalQty} ${copy.balesPosted}`,
       });
     } catch (e) {
-      toast({ title: "Return NOT posted", description: (e as Error).message, variant: "destructive" });
+      toast({ title: copy.postFailed, description: (e as Error).message, variant: "destructive" });
     } finally {
       setBusy(false);
     }
@@ -244,23 +248,22 @@ export default function FactorySupplierReturns() {
         <div>
           <h2 className="text-xl font-semibold flex items-center gap-2">
             <PackageMinus className="h-5 w-5" />
-            Supplier Returns — Offloaded Containers
+            {copy.header}
           </h2>
           <p className="text-sm text-muted-foreground mt-1">
-            Import article code + quantity, verify the source container, then post an audited supplier debit and stock
-            deduction.
+            {copy.intro}
           </p>
         </div>
         <Button variant="outline" onClick={() => void downloadTemplate()}>
           <Download className="h-4 w-4 mr-2" />
-          Excel template
+          {copy.template}
         </Button>
       </div>
       <div className="rounded-lg border p-4 space-y-4">
         <div className="flex items-center gap-3 flex-wrap">
           <label className="cursor-pointer inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium">
             <Upload className="h-4 w-4" />
-            Upload Excel (.xlsx)
+            {copy.upload}
             <input
               type="file"
               accept=".xlsx,.xls"
@@ -271,18 +274,18 @@ export default function FactorySupplierReturns() {
           <span className="text-sm text-muted-foreground">{sourceFile || "No file selected"}</span>
           <Button onClick={() => void mapRows()} disabled={busy || !rawRows.length}>
             <RefreshCw className="h-4 w-4 mr-2" />
-            Map to containers
+            {copy.map}
           </Button>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <label className="text-sm space-y-1">
-            <span>Return date</span>
+            <span>{copy.date}</span>
             <Input type="date" value={returnDate} onChange={(e) => setReturnDate(e.target.value)} />
           </label>
           <label className="text-sm space-y-1 sm:col-span-2">
-            <span>Reference / reason (optional)</span>
+            <span>{copy.reason}</span>
             <Input
-              placeholder="Supplier return reference or reason"
+              placeholder={copy.reasonPlaceholder}
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               maxLength={1000}
@@ -290,19 +293,17 @@ export default function FactorySupplierReturns() {
           </label>
         </div>
         <p className="text-xs text-muted-foreground">
-          Original offload and charge vouchers remain in history. Supplier credit is booked against the original
-          supplier; stock is relieved at its current inventory valuation and any difference is recorded separately.
-          Foreign-currency or mixed-supplier POs require review.
+          {copy.warning}
         </p>
       </div>
       {preview.length > 0 && (
         <div className="rounded-lg border overflow-hidden">
           <div className="px-4 py-3 border-b flex flex-wrap gap-3 justify-between">
             <strong>
-              Container mapping: {resolved.filter((x) => x.valid).length}/{preview.length} valid rows
+              {copy.mapping}: {resolved.filter((x) => x.valid).length}/{preview.length} {copy.validRows}
             </strong>
             <span className="text-sm">
-              Total requested: <strong>{totalBales}</strong> bales
+              {copy.totalRequested}: <strong>{totalBales}</strong>
             </span>
           </div>
           <div className="overflow-x-auto">
@@ -310,16 +311,16 @@ export default function FactorySupplierReturns() {
               <thead className="bg-muted">
                 <tr>
                   {[
-                    "Excel row",
-                    "Article code / item",
-                    "Qty",
-                    "Source container / supplier",
-                    "Offloaded",
-                    "Returned",
-                    "Remaining",
-                    "Stock on hand",
-                    "Purchase / landed $",
-                    "Status",
+                    copy.row,
+                    copy.article,
+                    copy.qty,
+                    copy.source,
+                    copy.offloaded,
+                    copy.returned,
+                    copy.remaining,
+                    copy.stock,
+                    copy.costs,
+                    copy.status,
                   ].map((h) => (
                     <th key={h} className="text-left p-2 whitespace-nowrap">
                       {h}
@@ -350,10 +351,10 @@ export default function FactorySupplierReturns() {
                             setConfirm(false);
                           }}
                         >
-                          <option value="">Choose source container</option>
+                          <option value="">{copy.chooseSource}</option>
                           {candidates.map((c) => (
                             <option key={c.offloadItemId} value={c.offloadItemId}>
-                              {c.containerNumber} — {c.supplierName ?? "Supplier unknown"} (available {c.remainingQty})
+                              {c.containerNumber} — {c.supplierName ?? copy.supplierUnknown} ({copy.available} {c.remainingQty})
                             </option>
                           ))}
                         </select>
@@ -374,12 +375,12 @@ export default function FactorySupplierReturns() {
                         {valid ? (
                           <span className="text-green-600 inline-flex gap-1 items-center">
                             <CheckCircle2 className="h-4 w-4" />
-                            Ready
+                            {copy.ready}
                           </span>
                         ) : (
                           <span className="text-amber-600 inline-flex gap-1 items-center">
                             <AlertTriangle className="h-4 w-4" />
-                            {!row.candidates.length ? "Not found" : !candidate ? "Select container" : "Review quantity"}
+                            {!row.candidates.length ? copy.notFound : !candidate ? copy.selectContainer : copy.reviewQty}
                           </span>
                         )}
                       </td>
@@ -401,32 +402,31 @@ export default function FactorySupplierReturns() {
               disabled={!ready || !!receipt}
               className="mt-1"
             />
-            I verified the supplier, original container, returned quantities, current stock, and accounting amounts.
+            {copy.confirmation}
           </label>
           <Button disabled={!ready || !confirm || busy || !!receipt} onClick={() => void post()}>
-            {busy ? "Processing..." : "Confirm & post supplier returns"}
+            {busy ? copy.processing : copy.confirmButton}
           </Button>
         </div>
       )}
       {receipt && (
         <div className="border rounded-lg p-4 text-green-700 dark:text-green-400">
           <CheckCircle2 className="h-4 w-4 inline mr-2" />
-          Return batch #{receipt.id} posted successfully. Original offload retained; stock and supplier ledger
-          corrected.
+          {copy.batch} #{receipt.id}: {copy.successBody}
         </div>
       )}
       <div className="rounded-lg border overflow-hidden">
         <div className="p-4 flex items-center justify-between">
-          <strong>Return history</strong>
+          <strong>{copy.history}</strong>
           <Button variant="outline" size="sm" onClick={() => void history.refetch()}>
-            Refresh
+            {copy.refresh}
           </Button>
         </div>
         {history.isLoading ? (
-          <p className="p-4 text-sm">Loading history...</p>
+          <p className="p-4 text-sm">{copy.loadingHistory}</p>
         ) : history.isError ? (
           <p className="p-4 text-sm text-destructive">
-            Unable to load history. Verify the database migration has been applied.
+            {copy.unavailable}
           </p>
         ) : (
           <div className="overflow-x-auto">
@@ -434,14 +434,14 @@ export default function FactorySupplierReturns() {
               <thead className="bg-muted">
                 <tr>
                   {[
-                    "Batch",
-                    "Date",
-                    "File / reference",
-                    "By",
-                    "Lines",
-                    "Bales removed",
-                    "Supplier credit",
-                    "Inventory reduction",
+                    copy.batch,
+                    copy.date,
+                    copy.fileReference,
+                    copy.by,
+                    copy.lines,
+                    copy.balesRemoved,
+                    copy.supplierCredit,
+                    copy.inventoryReduction,
                   ].map((x) => (
                     <th key={x} className="p-2 text-left">
                       {x}
@@ -454,12 +454,12 @@ export default function FactorySupplierReturns() {
                   <tr key={r.id} className="border-t">
                     <td className="p-2">
                       <Button size="sm" variant="ghost" onClick={() => void openBatch(r.id)}>
-                        #{r.id} {selectedBatch === r.id ? "(hide)" : "(view)"}
+                        #{r.id} {selectedBatch === r.id ? `(${copy.hide})` : `(${copy.view})`}
                       </Button>
                     </td>
                     <td className="p-2">{r.returnDate}</td>
                     <td className="p-2">
-                      {r.fileName || "Manual"}
+                      {r.fileName || copy.manual}
                       <div className="text-muted-foreground text-xs">{r.reason}</div>
                     </td>
                     <td className="p-2">{r.createdBy}</td>
@@ -475,21 +475,21 @@ export default function FactorySupplierReturns() {
         )}
         {selectedBatch !== null && (
           <div className="border-t p-4 space-y-2">
-            <strong>Batch #{selectedBatch} — returned article breakdown</strong>
+            <strong>{copy.batch} #{selectedBatch} — {copy.breakdown}</strong>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-muted">
                   <tr>
                     {[
-                      "Article code",
-                      "Item name",
-                      "Container",
-                      "Original offload",
-                      "Supplier",
-                      "Qty removed",
-                      "Supplier credit",
-                      "Stock cost",
-                      "Voucher",
+                      copy.article,
+                      copy.itemName,
+                      copy.container,
+                      copy.originalOffload,
+                      copy.supplier,
+                      copy.qtyRemoved,
+                      copy.supplierCredit,
+                      copy.stockCost,
+                      copy.voucher,
                     ].map((x) => (
                       <th key={x} className="p-2 text-left">
                         {x}
