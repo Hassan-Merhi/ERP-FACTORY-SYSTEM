@@ -109,10 +109,7 @@ export default function FactoryOthers() {
           </TabsContent>
         )}
         {mayReturnToSupplier && (
-          <TabsContent
-            value="sale-returns"
-            className="mt-0 flex-1 overflow-y-auto p-4 data-[state=inactive]:hidden"
-          >
+          <TabsContent value="sale-returns" className="mt-0 flex-1 overflow-y-auto p-4 data-[state=inactive]:hidden">
             <FactoryFinalizedSaleReturns />
           </TabsContent>
         )}

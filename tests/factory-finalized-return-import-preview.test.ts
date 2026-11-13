@@ -1,10 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const h = vi.hoisted(() => {
-  const state = { rows: [] as Array<Record<string, unknown>> };
+  const state = {
+    rows: [] as Array<Record<string, unknown>>,
+    customers: [{ id: 7, legalName: "Customer One" }] as Array<Record<string, unknown>>,
+    calls: 0,
+  };
   return {
     state,
-    execute: vi.fn(async () => ({ rows: state.rows })),
+    // The handler first looks the customer up, then matches the references (#3198).
+    execute: vi.fn(async () => {
+      state.calls += 1;
+      return { rows: state.calls === 1 ? state.customers : state.rows };
+    }),
   };
 });
 vi.mock("../server/auth", () => ({
@@ -25,15 +33,23 @@ import { registerFinalizedReturnImportPreview } from "../server/routes/factory/c
 type Handler = (req: any, res: any, next: () => void) => unknown;
 let handlers: Handler[] = [];
 const app: any = {
+  // The module also registers its customer picker (#3198); only the preview is under test here.
+  get: () => undefined,
   post: (path: string, ...next: Handler[]) => {
     if (path === "/api/factory/finalized-sale-returns/import-preview") handlers = next;
   },
 };
 registerFinalizedReturnImportPreview(app);
 
-async function request(references: unknown, options?: { role?: string; companyId?: number | null }) {
+async function request(
+  references: unknown,
+  options?: { role?: string; companyId?: number | null; customerId?: unknown }
+) {
+  h.state.calls = 0;
   const req = {
-    body: { references },
+    headers: {},
+    query: {},
+    body: { references, customerId: options && "customerId" in options ? options.customerId : 7 },
     session: { factoryCompanyId: options?.companyId === undefined ? 10 : options.companyId },
     user: { role: options?.role ?? "Admin" },
   };
@@ -84,6 +100,7 @@ describe("Finalized loading return Excel reference preview", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     h.state.rows = [];
+    h.state.customers = [{ id: 7, legalName: "Customer One" }];
   });
 
   it("enforces Admin/Developer-only access to the invoice match endpoint", async () => {
@@ -97,7 +114,19 @@ describe("Finalized loading return Excel reference preview", () => {
     expect((await request([""])).status).toBe(400);
     expect((await request(Array(1001).fill("HMD1"))).status).toBe(400);
     expect((await request(["HMD1"], { companyId: null })).status).toBe(400);
+    // Only the customer lookup ran, once per request that named a company; no reference was matched.
+    expect(h.execute).toHaveBeenCalledTimes(3);
+  });
+
+  it("requires a customer of the selected company before matching anything", async () => {
+    for (const customerId of [undefined, "7", 0, 1.5]) {
+      expect((await request(["HMD1"], { customerId })).status).toBe(400);
+    }
     expect(h.execute).not.toHaveBeenCalled();
+
+    h.state.customers = [];
+    expect((await request(["HMD1"])).status).toBe(404);
+    expect(h.execute).toHaveBeenCalledOnce();
   });
 
   it("maps a unique bale to its exact invoice without writing changes", async () => {
@@ -119,7 +148,7 @@ describe("Finalized loading return Excel reference preview", () => {
         },
       ],
     });
-    expect(h.execute).toHaveBeenCalledOnce();
+    expect(h.execute).toHaveBeenCalledTimes(2);
   });
 
   it("flags repeated references even with case/spacing differences", async () => {

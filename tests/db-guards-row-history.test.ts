@@ -68,7 +68,11 @@ type HistoryRow = {
 async function historyOf(client: PoolClient, table: string, id: unknown): Promise<HistoryRow[]> {
   const { rows } = await client.query(
     `SELECT op, actor, company_id, old_values, new_values
-       FROM factory_row_history WHERE table_name = $1 AND record_id = $2 ORDER BY id`,
+       FROM factory_row_history
+      WHERE table_name = $1 AND record_id = $2
+        -- Only what this transaction recorded: ids can be reissued after a table is reset.
+        AND recorded_at >= (transaction_timestamp() AT TIME ZONE 'UTC')
+      ORDER BY id`,
     [table, id]
   );
   return rows;
