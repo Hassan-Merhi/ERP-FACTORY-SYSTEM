@@ -31,6 +31,25 @@ type Match = {
 const MAX_REFERENCES = 1000;
 const normalized = (reference: string) => reference.trim().toLocaleUpperCase("en-US");
 
+const customerErrors = {
+  required: {
+    en: "Choose a valid customer before importing references",
+    ar: "اختر عميلاً صحيحاً قبل استيراد المراجع",
+    fr: "Choisissez un client valide avant d'importer les références",
+  },
+  notFound: {
+    en: "Selected customer not found in this Factory company",
+    ar: "العميل المحدد غير موجود في شركة المصنع الحالية",
+    fr: "Client sélectionné introuvable dans cette société",
+  },
+} as const;
+
+function customerError(req: Request, kind: keyof typeof customerErrors): string {
+  const requested = String(req.headers["accept-language"] ?? "en").slice(0, 2).toLowerCase();
+  const language = requested === "ar" || requested === "fr" ? requested : "en";
+  return customerErrors[kind][language];
+}
+
 export function registerFinalizedReturnImportPreview(app: Express): void {
   // Lightweight, company-scoped customer picker. No balances or accounting reads.
   app.get(
@@ -66,7 +85,7 @@ export function registerFinalizedReturnImportPreview(app: Express): void {
         if (!cid) return res.status(400).json({ message: "Select a Factory company" });
         const customerId = req.body?.customerId;
         if (typeof customerId !== "number" || !Number.isSafeInteger(customerId) || customerId <= 0) {
-          return res.status(400).json({ message: "Choose a valid customer before importing references" });
+          return res.status(400).json({ message: customerError(req, "required") });
         }
         const customer = await db.execute(sql`
           SELECT c.id, c.legal_name AS "legalName" FROM customers c
@@ -74,7 +93,7 @@ export function registerFinalizedReturnImportPreview(app: Express): void {
            LIMIT 1
         `);
         if (!customer.rows.length) {
-          return res.status(404).json({ message: "Selected customer not found in this Factory company" });
+          return res.status(404).json({ message: customerError(req, "notFound") });
         }
         if (
           !Array.isArray(raw) ||
