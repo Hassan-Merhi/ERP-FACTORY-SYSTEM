@@ -75,6 +75,7 @@ export function IntercompanyLifecycleContent({
   const [redistributed, setRedistributed] = useState(false);
   const [receiptKey, setReceiptKey] = useState(newKey);
   const [cancelKey, setCancelKey] = useState(newKey);
+  const [deleteBothConfirmed, setDeleteBothConfirmed] = useState(false);
 
   const query = useQuery({
     queryKey: companyQueryKey(API, companyId),
@@ -120,6 +121,7 @@ export function IntercompanyLifecycleContent({
     setRedistributed(false);
     setReceiptKey(newKey());
     setCancelKey(newKey());
+    setDeleteBothConfirmed(false);
   }, [companyId, physicalContainerId]);
   useEffect(() => {
     if (!physicalContainerId || !query.data) return;
@@ -199,6 +201,31 @@ export function IntercompanyLifecycleContent({
     },
     onError: (error: Error) =>
       toast({ title: "Cancellation refused", description: error.message, variant: "destructive" }),
+  });
+  const deleteLinked = useMutation({
+    mutationFn: async () => {
+      if (!trade || !deleteBothConfirmed) throw new Error("Confirm deletion of both company POs");
+      const response = await apiRequest("POST", API + "/" + trade.tradeId + "/delete-linked", {
+        expectedVersion: trade.version,
+        confirmDeleteBothCompanies: true,
+      });
+      return response.json() as Promise<{ poIds: number[]; voucherIds: number[] }>;
+    },
+    onSuccess: (result) => {
+      toast({
+        title: "Linked purchase orders deleted in both companies",
+        description: result.poIds.length + " POs and " + result.voucherIds.length +
+          " original vouchers removed. No reversal vouchers created.",
+      });
+      setSelectedTradeId(null);
+      setDeleteBothConfirmed(false);
+      refresh();
+      queryClient.invalidateQueries({ queryKey: ["/api/purchase-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/vouchers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/suppliers"] });
+    },
+    onError: (error: Error) =>
+      toast({ title: "Linked deletion refused", description: error.message, variant: "destructive" }),
   });
   const canReceive = Boolean(
     trade &&
@@ -299,6 +326,7 @@ export function IntercompanyLifecycleContent({
                             setRedistributed(false);
                             setReceiptKey(newKey());
                             setCancelKey(newKey());
+                            setDeleteBothConfirmed(false);
                           }}
                         >
                           Review
@@ -406,6 +434,30 @@ export function IntercompanyLifecycleContent({
                     </Button>
                   </div>
                 )}
+                <div className="space-y-3 rounded-lg border p-4">
+                  <h3 className="font-semibold">Delete original linked POs and vouchers</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Physically deletes both companies' connected POs, their original vouchers and
+                    the unused linked container in one transaction. Creates no reversal vouchers.
+                    Only allowed before receipt, payments, shared charges or other activity.
+                    The deletion audit remains.
+                  </p>
+                  <label className="flex items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={deleteBothConfirmed}
+                      onCheckedChange={(value) => setDeleteBothConfirmed(value === true)}
+                    />
+                    I understand that both companies' POs and original vouchers will be permanently deleted.
+                  </label>
+                  <Button
+                    variant="destructive"
+                    disabled={!deleteBothConfirmed || !["Owner", "Developer"].includes(selectedCompany?.role ?? "") ||
+                      deleteLinked.isPending}
+                    onClick={() => deleteLinked.mutate()}
+                  >
+                    {deleteLinked.isPending ? "Checking both companies…" : "Delete linked POs and vouchers"}
+                  </Button>
+                </div>
                 <div className="space-y-3 rounded-lg border p-4">
                   <h3 className="font-semibold">Cancel before goods are received</h3>
                   <p className="text-sm text-muted-foreground">
