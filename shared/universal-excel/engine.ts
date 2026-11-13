@@ -330,7 +330,8 @@ function writeRow(
 ): void {
   const row = worksheet.getRow(rowNumber);
   for (let i = 0; i < columns.length; i += 1) {
-    const value = columns[i].value ? columns[i].value(data) : data[columns[i].key];
+    const column = columns[i];
+    const value = column.value ? column.value(data) : data[column.key];
     if (validateRequired && columns[i].required && (value === undefined || value === null || value === "")) {
       throw new Error("Missing required Excel value for " + columns[i].key + " at row " + rowNumber);
     }
