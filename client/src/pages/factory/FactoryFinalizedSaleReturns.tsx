@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import FinalizedSaleReturnImport from "./FinalizedSaleReturnImport";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
@@ -160,6 +161,7 @@ export default function FactoryFinalizedSaleReturns() {
         <h2 className="text-lg font-semibold">{copy.title}</h2>
         <p className="text-sm text-muted-foreground">{copy.subtitle}</p>
       </div>
+      <FinalizedSaleReturnImport />
       <div className="space-y-2">
         <Label htmlFor="return-invoice-search">{copy.searchLabel}</Label>
         <Input
