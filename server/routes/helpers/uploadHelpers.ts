@@ -1,5 +1,6 @@
 import type { NextFunction, Request, RequestHandler, Response } from "express";
 import multer from "multer";
+import { FILE_SIZE_LIMITS, generalUploadLimitBytes, sizeLimitLabel, spreadsheetImportLimitBytes } from "@shared/fileSizePolicy";
 
 import {
   createTenantDatabaseScope,
@@ -88,3 +89,47 @@ export const upload = new Proxy(baseUpload, {
     return Reflect.get(target, property, receiver);
   },
 });
+
+/**
+ * Role-aware Excel imports and general file-store uploads. Create the parser
+ * after authentication using only req.session.currentRole, never form fields.
+ * The existing 10 MB `upload` remains for specialized legacy endpoints.
+ */
+function scopedPolicyUpload(kind: "spreadsheet" | "general") {
+  return {
+    single(fieldName: string): RequestHandler {
+      return withPostMultipartTenantScope((req, res, next) => {
+        const maxBytes = kind === "spreadsheet"
+          ? spreadsheetImportLimitBytes(req.session?.currentRole)
+          : FILE_SIZE_LIMITS.general;
+        multer({
+          storage: multer.memoryStorage(),
+          limits: { fileSize: maxBytes, files: 1 },
+        }).single(fieldName)(req, res, (error?: unknown) => {
+          if (error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE") {
+            res.status(413).json({
+              code: "UPLOAD_FILE_TOO_LARGE",
+              message: `File exceeds the ${sizeLimitLabel(maxBytes)} upload limit.`,
+            });
+            return;
+          }
+          if (error) return next(error);
+          if (kind === "general" && req.file) {
+            const tailored = generalUploadLimitBytes(req.file.originalname, req.file.mimetype);
+            if (req.file.size > tailored) {
+              res.status(413).json({
+                code: "UPLOAD_FILE_TOO_LARGE",
+                message: `File exceeds the ${sizeLimitLabel(tailored)} limit for this file type.`,
+              });
+              return;
+            }
+          }
+          next();
+        });
+      });
+    },
+  };
+}
+
+export const spreadsheetUpload = scopedPolicyUpload("spreadsheet");
+export const generalUpload = scopedPolicyUpload("general");
