@@ -1,8 +1,9 @@
 /**
  * Exchange-rate saves (accounting audit wave 14, owner decision 2).
  *
- * A rate decides the USD value of every later foreign-currency posting, so a
- * save is restricted to Admin/Owner (and Developer) at the route, and every
+ * A rate decides the USD value of every later foreign-currency posting, so
+ * changing a rate is restricted to Admin/Owner (and Developer) at the route
+ * (any other writing role may only set today's company rate once), and every
  * save, change or delete writes its audit row, with the old and the new value,
  * in the same transaction as the rate itself: a rate never changes without its
  * audit, and an audit never records a change that did not commit.
@@ -40,7 +41,11 @@ export interface CompanyRateInput {
 }
 
 /** Saves the company rate for its date and pair, with its audit, in one transaction. */
-export async function saveCompanyExchangeRate(actor: RateActor, input: CompanyRateInput): Promise<ExchangeRate> {
+export async function saveCompanyExchangeRate(
+  actor: RateActor,
+  input: CompanyRateInput,
+  options: { createOnly?: boolean } = {}
+): Promise<ExchangeRate> {
   return db.transaction(async (tx) => {
     // Serialises saves of one company/date/pair (the unique index may be absent
     // where startup migrations are off), so "old" is the row this save replaces.
@@ -65,6 +70,16 @@ export async function saveCompanyExchangeRate(actor: RateActor, input: CompanyRa
       );
     }
     const [existing] = sameDayRows;
+    // A non-editor (POS, Manager, ...) sets the day's rate once for the whole
+    // company; it never replaces a rate someone already set. Checked under the
+    // advisory lock, so two simultaneous first saves cannot both win.
+    if (existing && options.createOnly && !new Decimal(String(existing.rate)).eq(new Decimal(input.rate))) {
+      throw new MonetaryFxError(
+        "EXCHANGE_RATE_ALREADY_SET",
+        "Today's exchange rate has already been set. Ask an Admin or Owner to change it.",
+        409
+      );
+    }
     // A repeated submission of the same numerical rate is not a new revision.
     // Do not rewrite the row or create another audit event for a no-op.
     if (existing && new Decimal(String(existing.rate)).eq(new Decimal(input.rate))) {
@@ -97,7 +112,10 @@ export async function saveCompanyExchangeRate(actor: RateActor, input: CompanyRa
         changes: {
           rate: { old: existing ? String(existing.rate) : null, new: String(saved.rate) },
           effectiveDate: { old: existing ? String(existing.effectiveDate) : null, new: input.effectiveDate },
-          pair: { old: existing ? `${existing.fromCurrency}/${existing.toCurrency}` : null, new: `${input.fromCurrency}/${input.toCurrency}` },
+          pair: {
+            old: existing ? `${existing.fromCurrency}/${existing.toCurrency}` : null,
+            new: `${input.fromCurrency}/${input.toCurrency}`,
+          },
           // This is a reporting-rate amendment only. Original voucher rates
           // and foreign-currency balances are not changed.
           valuationScope: { new: "CURRENT_MANAGEMENT_USD_ONLY" },
@@ -131,21 +149,36 @@ export async function saveFactoryFxRate(actor: RateActor, input: FactoryRateInpu
     // Keep one active manual rate per currency and effective date. Previous
     // same-day revisions remain archived evidence rather than being overwritten
     // or deleted (documents may have used their exact original value).
-    const sameDay = await tx.select().from(factoryFxRates).where(and(
-      eq(factoryFxRates.companyId, actor.companyId),
-      eq(factoryFxRates.currencyCode, input.currencyCode),
-      eq(factoryFxRates.effectiveDate, input.effectiveDate),
-      eq(factoryFxRates.source, "manual")
-    )).orderBy(asc(factoryFxRates.id)).for("update");
+    const sameDay = await tx
+      .select()
+      .from(factoryFxRates)
+      .where(
+        and(
+          eq(factoryFxRates.companyId, actor.companyId),
+          eq(factoryFxRates.currencyCode, input.currencyCode),
+          eq(factoryFxRates.effectiveDate, input.effectiveDate),
+          eq(factoryFxRates.source, "manual")
+        )
+      )
+      .orderBy(asc(factoryFxRates.id))
+      .for("update");
     const latest = sameDay[sameDay.length - 1];
     if (sameDay.length === 1 && latest && String(latest.rateToUsd) === Number(input.rateToUsd).toFixed(8)) {
       return latest; // Repeated save of an identical rate is idempotent.
     }
     if (sameDay.length > 0) {
-      await tx.update(factoryFxRates).set({ source: "archived" }).where(and(
-        eq(factoryFxRates.companyId, actor.companyId),
-        inArray(factoryFxRates.id, sameDay.map((row) => row.id))
-      ));
+      await tx
+        .update(factoryFxRates)
+        .set({ source: "archived" })
+        .where(
+          and(
+            eq(factoryFxRates.companyId, actor.companyId),
+            inArray(
+              factoryFxRates.id,
+              sameDay.map((row) => row.id)
+            )
+          )
+        );
     }
     const [saved] = await tx
       .insert(factoryFxRates)
@@ -325,35 +358,48 @@ export async function removeFactoryFxRateById(
   rateId: number
 ): Promise<{ id: number; currencyCode: string; effectiveDate: string; archived: boolean } | null> {
   return db.transaction(async (tx) => {
-    const [candidate] = await tx.select().from(factoryFxRates).where(
-      and(
-        eq(factoryFxRates.id, rateId),
-        eq(factoryFxRates.companyId, actor.companyId),
-        eq(factoryFxRates.source, "manual")
+    const [candidate] = await tx
+      .select()
+      .from(factoryFxRates)
+      .where(
+        and(
+          eq(factoryFxRates.id, rateId),
+          eq(factoryFxRates.companyId, actor.companyId),
+          eq(factoryFxRates.source, "manual")
+        )
       )
-    ).limit(1);
+      .limit(1);
     if (!candidate) return null;
 
     // Coordinate with inserts, currency deletes and other single-row removals.
     await tx.execute(
       sql`SELECT pg_advisory_xact_lock(hashtext(${`factory_fx_rates:${actor.companyId}:${candidate.currencyCode}`}))`
     );
-    const [row] = await tx.select().from(factoryFxRates).where(
-      and(
-        eq(factoryFxRates.id, rateId),
-        eq(factoryFxRates.companyId, actor.companyId),
-        eq(factoryFxRates.source, "manual")
+    const [row] = await tx
+      .select()
+      .from(factoryFxRates)
+      .where(
+        and(
+          eq(factoryFxRates.id, rateId),
+          eq(factoryFxRates.companyId, actor.companyId),
+          eq(factoryFxRates.source, "manual")
+        )
       )
-    ).limit(1).for("update");
+      .limit(1)
+      .for("update");
     if (!row) return null;
 
-    const manualDates = await tx.select({ effectiveDate: factoryFxRates.effectiveDate })
+    const manualDates = await tx
+      .select({ effectiveDate: factoryFxRates.effectiveDate })
       .from(factoryFxRates)
-      .where(and(
-        eq(factoryFxRates.companyId, actor.companyId),
-        eq(factoryFxRates.currencyCode, row.currencyCode),
-        eq(factoryFxRates.source, "manual")
-      )).orderBy(asc(factoryFxRates.effectiveDate));
+      .where(
+        and(
+          eq(factoryFxRates.companyId, actor.companyId),
+          eq(factoryFxRates.currencyCode, row.currencyCode),
+          eq(factoryFxRates.source, "manual")
+        )
+      )
+      .orderBy(asc(factoryFxRates.effectiveDate));
     const date = String(row.effectiveDate);
     const next = manualDates.map((r) => String(r.effectiveDate)).find((d) => d > date);
     // Treat same-day duplicates conservatively: an older ID could have priced
@@ -362,10 +408,13 @@ export async function removeFactoryFxRateById(
     const used = documentDates.some((d) => d >= date && (!next || d < next));
 
     if (used) {
-      await tx.update(factoryFxRates).set({ source: "archived" })
+      await tx
+        .update(factoryFxRates)
+        .set({ source: "archived" })
         .where(and(eq(factoryFxRates.id, rateId), eq(factoryFxRates.companyId, actor.companyId)));
     } else {
-      await tx.delete(factoryFxRates)
+      await tx
+        .delete(factoryFxRates)
         .where(and(eq(factoryFxRates.id, rateId), eq(factoryFxRates.companyId, actor.companyId)));
     }
 
