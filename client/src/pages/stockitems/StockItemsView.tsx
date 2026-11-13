@@ -268,7 +268,11 @@ export function StockItemsView({ stockItems }: { stockItems: StockItemsModel }) 
                 <Edit className="h-4 w-4 mr-2" />
                 Adjust Stock
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={exportToExcel} disabled={exportingStockItems} data-testid="menu-export">
+              <DropdownMenuItem
+                onClick={exportToExcel}
+                disabled={exportingStockItems}
+                data-testid="menu-export"
+              >
                 <Download className="h-4 w-4 mr-2" />
                 {exportingStockItems ? "Exporting all matching items..." : "Export Stock Items"}
               </DropdownMenuItem>
