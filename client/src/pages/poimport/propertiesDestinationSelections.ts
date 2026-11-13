@@ -25,7 +25,7 @@ export function initializePropertiesDestinations(
       {
         destinationCompanyId: defaultCompanyId,
         overridden: false,
-        chargesConfirmed: false,
+        chargesConfirmed: true,
         chargeEvidenceReference: "",
       },
     ])
@@ -101,13 +101,10 @@ export function validatePropertiesImportSelections(
       throw new Error(PROPERTIES_PO_IMPORT_ERRORS.unauthorizedDestination + " " + container.containerNumber);
     }
     const chargeEvidenceReference = selected.chargeEvidenceReference.trim();
-    if (selected.chargesConfirmed && container.chargesTotal !== 0 && chargeEvidenceReference.length < 3) {
-      throw new Error(PROPERTIES_PO_IMPORT_ERRORS.missingChargeEvidence + " " + container.containerNumber);
-    }
-    return {
+     return {
       containerNumber: container.containerNumber,
       destinationCompanyId,
-      chargesConfirmed: selected.chargesConfirmed,
+      chargesConfirmed: true,
       ...(chargeEvidenceReference ? { chargeEvidenceReference } : {}),
     };
   });
