@@ -199,7 +199,7 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
           <Redirect replace to="/tracking" />
         </Route>
       )}
-      {canAccessAny(["stock_items", "stock_query"]) ? (
+      {canAccessAny(["stock_items", "stock_query", "stock_otw"]) ? (
         <Route path="/stock">{() => <StockHub access={erpAccess} />}</Route>
       ) : (
         <Route path="/stock">
