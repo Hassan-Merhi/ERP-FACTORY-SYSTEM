@@ -51,7 +51,7 @@ export function registerSupplierPurchaseOrderPaginationRoutes(app: Express): voi
       const access = await assertActiveCompanyAccess(req);
       const companyIds = req.query.companyId != null
         ? [await resolveAuthorizedCompanyId(req, req.query.companyId)]
-        : isPrivilegedRole(access.role)
+        : req.query.includeAccessibleCompanies === "1" && isPrivilegedRole(access.role)
           ? [...(await getAccessibleCompanyIds(access.userId))].sort((left, right) => left - right)
           : [access.activeCompanyId];
       if (!companyIds.length) return res.status(403).json({ message: "No accessible companies" });
