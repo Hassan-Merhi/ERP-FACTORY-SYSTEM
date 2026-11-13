@@ -208,30 +208,3 @@ console.log(
     2,
   ),
 );
-
-// TEMPORARY PHASE 3 DIAGNOSTIC ONLY: print Prettier's expected source lines.
-// This block will be removed before marking the PR ready for merge.
-{
-  const { default: prettier } = await import("prettier");
-  const file = "client/src/components/FactoryRoutes.tsx";
-  const source = await read(file);
-  const options = (await prettier.resolveConfig(file)) ?? {};
-  const formatted = await prettier.format(source, { ...options, filepath: file });
-  const originalLines = source.split("\n");
-  const formattedLines = formatted.split("\n");
-  let firstMismatch = -1;
-  for (let i = 0; i < Math.max(originalLines.length, formattedLines.length); i++) {
-    if (originalLines[i] !== formattedLines[i]) { firstMismatch = i; break; }
-  }
-  if (firstMismatch >= 0) {
-    console.log("PHASE3_PRETTIER_DIAGNOSTIC", JSON.stringify({
-      firstMismatch: firstMismatch + 1,
-      actual: originalLines.slice(Math.max(0, firstMismatch - 3), firstMismatch + 10),
-      expected: formattedLines.slice(Math.max(0, firstMismatch - 3), firstMismatch + 10),
-      actualLines: originalLines.length,
-      expectedLines: formattedLines.length
-    }));
-  } else {
-    console.log("PHASE3_PRETTIER_DIAGNOSTIC file already formatted");
-  }
-}
