@@ -60,7 +60,7 @@ type ApplyResult = {
   warning: string | null;
 };
 const api = "/api/factory/finalized-sale-returns";
-async function read<T>(path: string, init?: RequestInit): Promise<T> {
+async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     ...init,
     credentials: "include",
@@ -96,17 +96,17 @@ export default function FactoryFinalizedSaleReturns() {
 
   const { data: invoices = [] } = useQuery<Invoice[]>({
     queryKey: companyQueryKey(api + "/orders", selectedCompany?.id, search),
-    queryFn: () => read(api + "/orders?search=" + encodeURIComponent(search)),
+    queryFn: () => fetchJson(api + "/orders?search=" + encodeURIComponent(search)),
     enabled: !!selectedCompany?.id,
   });
   const { data: detail } = useQuery<Detail>({
     queryKey: companyQueryKey(api + "/orders/" + orderId, selectedCompany?.id),
-    queryFn: () => read(api + "/orders/" + orderId),
+    queryFn: () => fetchJson(api + "/orders/" + orderId),
     enabled: !!selectedCompany?.id && orderId !== null,
   });
   const { data: history = [] } = useQuery<ReturnHistory[]>({
     queryKey: companyQueryKey(api + "/history", selectedCompany?.id),
-    queryFn: () => read(api + "/history"),
+    queryFn: () => fetchJson(api + "/history"),
     enabled: !!selectedCompany?.id,
   });
 
@@ -127,7 +127,7 @@ export default function FactoryFinalizedSaleReturns() {
 
   const mutation = useMutation({
     mutationFn: () =>
-      read<ApplyResult>(api + "/apply", {
+      fetchJson<ApplyResult>(api + "/apply", {
         method: "POST",
         body: JSON.stringify({
           orderId,

@@ -30,6 +30,45 @@ import { writeAuditEvent } from "../../../../services/audit/auditService";
 const gate = [requireAuth, requireRole("Admin", "Developer")] as const;
 const company = (req: Request) => req.session.factoryCompanyId || req.session.currentCompanyId;
 const id = (v: unknown) => (Number.isSafeInteger(Number(v)) && Number(v) > 0 ? Number(v) : null);
+
+const returnErrors = {
+  invoiceInvalid: {
+    en: "Invalid company or invoice",
+    ar: "الشركة أو الفاتورة غير صالحة",
+    fr: "Société ou facture non valide",
+  },
+  invoiceMissing: {
+    en: "Finalized invoice not found",
+    ar: "تعذر العثور على الفاتورة النهائية",
+    fr: "Facture finalisée introuvable",
+  },
+  baleDuplicate: {
+    en: "A bale was selected twice",
+    ar: "تم تحديد البالة مرتين",
+    fr: "Une balle a été sélectionnée deux fois",
+  },
+  reasonRequired: {
+    en: "Return reason must be 5–500 characters",
+    ar: "يجب أن يتراوح سبب الإرجاع بين 5 و500 حرف",
+    fr: "Le motif du retour doit comporter entre 5 et 500 caractères",
+  },
+  physicalConfirm: {
+    en: "Confirm selected bales are physically returned",
+    ar: "أكد أن البالات المحددة قد عادت فعلياً",
+    fr: "Confirmez le retour physique des balles sélectionnées",
+  },
+  refreshInvoice: {
+    en: "Refresh invoice before returning its bales",
+    ar: "حدّث الفاتورة قبل إرجاع البالات",
+    fr: "Actualisez la facture avant de retourner ses balles",
+  },
+} as const;
+function returnMessage(req: Request, key: keyof typeof returnErrors): string {
+  const requested = String(req.headers["accept-language"] ?? "en").slice(0, 2).toLowerCase();
+  const language = requested === "ar" || requested === "fr" ? requested : "en";
+  return returnErrors[key][language];
+}
+
 class ReturnBlocked extends Error {}
 const fail = (reason: string): never => {
   throw new ReturnBlocked(reason);
@@ -69,13 +108,13 @@ export function registerFinalizedLoadingReturnRoutes(app: Express): void {
     try {
       const cid = company(req),
         oid = id(req.params.id);
-      if (!cid || !oid) return res.status(400).json({ message: "Invalid company or invoice" });
+      if (!cid || !oid) return res.status(400).json({ message: returnMessage(req, "invoiceInvalid") });
       const [order] = await db
         .select()
         .from(customerOrders)
         .where(and(eq(customerOrders.companyId, cid), eq(customerOrders.id, oid)));
       if (!order || order.status !== "FINALIZED" || order.deletedAt)
-        return res.status(404).json({ message: "Finalized invoice not found" });
+        return res.status(404).json({ message: returnMessage(req, "invoiceMissing") });
       const rows = await db.execute(sql`
         SELECT ob.bale_id AS "baleId", ob.bale_reference AS "referenceNumber",
           ob.article_code AS "articleCode", ob.bale_name AS "productName",
@@ -148,13 +187,13 @@ export function registerFinalizedLoadingReturnRoutes(app: Express): void {
         return res.status(400).json({ message: "Select 1–200 valid physical bale references" });
       const baleIds = raw.map(Number) as number[];
       if (new Set(baleIds).size !== baleIds.length)
-        return res.status(400).json({ message: "A bale was selected twice" });
+        return res.status(400).json({ message: returnMessage(req, "baleDuplicate") });
       if (reason.length < 5 || reason.length > 500)
-        return res.status(400).json({ message: "Return reason must be 5–500 characters" });
+        return res.status(400).json({ message: returnMessage(req, "reasonRequired") });
       if (req.body?.confirmReturn !== true)
-        return res.status(400).json({ message: "Confirm selected bales are physically returned" });
+        return res.status(400).json({ message: returnMessage(req, "physicalConfirm") });
       if (!/^[0-9]+(?:\.[0-9]{1,2})?$/.test(expected))
-        return res.status(400).json({ message: "Refresh invoice before returning its bales" });
+        return res.status(400).json({ message: returnMessage(req, "refreshInvoice") });
 
       const applied = await db.transaction(async (tx) => {
         await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, ${cid})`);
