@@ -45,7 +45,9 @@ const customerErrors = {
 } as const;
 
 function customerError(req: Request, kind: keyof typeof customerErrors): string {
-  const requested = String(req.headers["accept-language"] ?? "en").slice(0, 2).toLowerCase();
+  const requested = String(req.headers["accept-language"] ?? "en")
+    .slice(0, 2)
+    .toLowerCase();
   const language = requested === "ar" || requested === "fr" ? requested : "en";
   return customerErrors[kind][language];
 }

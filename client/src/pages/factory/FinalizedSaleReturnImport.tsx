@@ -80,7 +80,11 @@ export default function FinalizedSaleReturnImport() {
   const [fileName, setFileName] = useState("");
   const [customerId, setCustomerId] = useState<number | null>(null);
   const [exporting, setExporting] = useState(false);
-  const { data: customers = [], isLoading: customersLoading, isError: customersError } = useQuery<CustomerOption[]>({
+  const {
+    data: customers = [],
+    isLoading: customersLoading,
+    isError: customersError,
+  } = useQuery<CustomerOption[]>({
     queryKey: companyQueryKey(endpoint + "/customers", selectedCompany?.id),
     queryFn: () => getJson<CustomerOption[]>(endpoint + "/customers"),
     enabled: !!selectedCompany?.id,
@@ -295,10 +299,16 @@ export default function FinalizedSaleReturnImport() {
         >
           <option value="">{customersLoading ? copy.importCustomerLoading : copy.importCustomerPlaceholder}</option>
           {customers.map((customer) => (
-            <option key={customer.id} value={customer.id}>{customer.legalName}</option>
+            <option key={customer.id} value={customer.id}>
+              {customer.legalName}
+            </option>
           ))}
         </select>
-        {customersError && <p role="alert" className="text-sm text-destructive">{copy.importCustomerLoadFailed}</p>}
+        {customersError && (
+          <p role="alert" className="text-sm text-destructive">
+            {copy.importCustomerLoadFailed}
+          </p>
+        )}
       </div>
       <div className="flex flex-wrap items-end gap-3">
         <div className="min-w-64 flex-1 space-y-2">
@@ -324,7 +334,8 @@ export default function FinalizedSaleReturnImport() {
         <div className="space-y-4" data-testid="finalized-return-import-preview">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm font-medium">
-              {preview.customerName} · {fileName} · {preview.matched} {copy.importMatches} · {preview.issues} {copy.importIssues}
+              {preview.customerName} · {fileName} · {preview.matched} {copy.importMatches} · {preview.issues}{" "}
+              {copy.importIssues}
             </p>
             <Button type="button" variant="outline" onClick={downloadPreview} disabled={exporting || posting}>
               {exporting ? copy.importExporting : copy.importExportPreview}

@@ -23,10 +23,7 @@ const spreadsheetText = (text: string | null | undefined) => {
   return /^[\s\u0000-\u001f]*[=+\-@]/.test(value) ? "'" + value : value;
 };
 
-export function buildFinalizedReturnMatchWorkbook(
-  workbook: ExcelJS.Workbook,
-  input: FinalizedReturnMatchExport
-): void {
+export function buildFinalizedReturnMatchWorkbook(workbook: ExcelJS.Workbook, input: FinalizedReturnMatchExport): void {
   const matched = input.rows.filter((row) => row.status === "matched");
   const issues = input.rows.filter((row) => row.status !== "matched");
   const headers: Array<{ header: string; key: string; width: number }> = [
@@ -89,8 +86,8 @@ export function buildFinalizedReturnMatchWorkbook(
     entry.quantity += 1;
     aggregate.set(key, entry);
   }
-  for (const entry of [...aggregate.values()].sort((a, b) =>
-    a.article.localeCompare(b.article) || a.invoice.localeCompare(b.invoice) || a.name.localeCompare(b.name)
+  for (const entry of [...aggregate.values()].sort(
+    (a, b) => a.article.localeCompare(b.article) || a.invoice.localeCompare(b.invoice) || a.name.localeCompare(b.name)
   )) {
     summary.addRow([entry.article, entry.name, entry.invoice, entry.quantity]);
   }
