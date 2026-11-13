@@ -32,6 +32,29 @@ const MAX_REFERENCES = 1000;
 const normalized = (reference: string) => reference.trim().toLocaleUpperCase("en-US");
 
 export function registerFinalizedReturnImportPreview(app: Express): void {
+  // Lightweight, company-scoped customer picker. No balances or accounting reads.
+  app.get(
+    "/api/factory/finalized-sale-returns/customers",
+    requireAuth,
+    requireRole("Admin", "Developer"),
+    async (req: Request, res: Response) => {
+      try {
+        const cid = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!cid) return res.status(400).json({ message: "Select a Factory company" });
+        const result = await db.execute(sql`
+          SELECT c.id, c.legal_name AS "legalName"
+            FROM customers c
+           WHERE c.company_id = ${cid}
+             AND c.deleted_at IS NULL
+           ORDER BY c.legal_name ASC, c.id ASC
+        `);
+        return res.json(result.rows);
+      } catch (error) {
+        logger.error("finalized sale return customers lookup failed", { error });
+        return res.status(500).json({ message: getErrorMessage(error) });
+      }
+    }
+  );
   app.post(
     "/api/factory/finalized-sale-returns/import-preview",
     requireAuth,
@@ -41,6 +64,18 @@ export function registerFinalizedReturnImportPreview(app: Express): void {
         const cid = req.session.factoryCompanyId || req.session.currentCompanyId;
         const raw: unknown = req.body?.references;
         if (!cid) return res.status(400).json({ message: "Select a Factory company" });
+        const customerId = req.body?.customerId;
+        if (typeof customerId !== "number" || !Number.isSafeInteger(customerId) || customerId <= 0) {
+          return res.status(400).json({ message: "Choose a valid customer before importing references" });
+        }
+        const customer = await db.execute(sql`
+          SELECT c.id, c.legal_name AS "legalName" FROM customers c
+           WHERE c.id = ${customerId} AND c.company_id = ${cid} AND c.deleted_at IS NULL
+           LIMIT 1
+        `);
+        if (!customer.rows.length) {
+          return res.status(404).json({ message: "Selected customer not found in this Factory company" });
+        }
         if (
           !Array.isArray(raw) ||
           raw.length < 1 ||
@@ -87,7 +122,8 @@ export function registerFinalizedReturnImportPreview(app: Express): void {
               AND cb.reference_type = 'INVOICE'
               AND cb.reference_id = o.id
           ) fin ON TRUE
-          WHERE o.company_id = ${cid} AND o.deleted_at IS NULL
+          WHERE o.company_id = ${cid} AND o.customer_id = ${customerId}
+            AND o.deleted_at IS NULL
             AND o.status = 'FINALIZED' AND o.invoice_number IS NOT NULL
             AND (o.previous_status = 'LOADING' OR o.loading_started_at IS NOT NULL OR o.loading_finalized_at IS NOT NULL)
             AND UPPER(BTRIM(ob.bale_reference)) IN (${sql.join(
@@ -115,7 +151,7 @@ export function registerFinalizedReturnImportPreview(app: Express): void {
             return {
               reference,
               status: "missing" as const,
-              message: "Not found on an active finalized loading invoice for this company (or already returned)",
+              message: "Not found on a finalized loading invoice for the selected customer (or already returned)",
             };
           if (matches.length > 1)
             return {
@@ -147,6 +183,8 @@ export function registerFinalizedReturnImportPreview(app: Express): void {
           };
         });
         return res.json({
+          customerId,
+          customerName: String(customer.rows[0].legalName),
           rows,
           matched: rows.filter((row) => row.status === "matched").length,
           issues: rows.filter((row) => row.status !== "matched").length,
