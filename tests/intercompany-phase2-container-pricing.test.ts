@@ -79,7 +79,8 @@ describe("intercompany Phase 2 landed cost and preserved supplier PO groups", ()
     expect(plan.sourcePos.map((po) => po.freight)).toEqual(["160.00", "240.00"]);
     expect(plan.sourcePos.map((po) => po.discount)).toEqual(["20.00", "30.00"]);
     for (const po of plan.sourcePos) {
-      expect(Number(po.supplierCredit) + Number(po.chargeAccrualCredit)).toBe(Number(po.grandTotal));
+      expect(po.supplierCredit).toBe(po.grandTotal);
+      expect(po.chargeAccrualCredit).toBe("0.00");
     }
   });
 
