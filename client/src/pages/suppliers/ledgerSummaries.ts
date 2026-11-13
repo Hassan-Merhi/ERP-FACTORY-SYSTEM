@@ -19,7 +19,7 @@ export function matchesSupplierDestination(
   filter: string
 ): boolean {
   return filter === "all" ||
-    (filter === "unassigned" ? destinationCompanyId == null : /^\\d+$/.test(filter) && destinationCompanyId === Number(filter));
+    (filter === "unassigned" ? destinationCompanyId == null : /^\d+$/.test(filter) && destinationCompanyId === Number(filter));
 }
 
 export interface SupplierLedgerKpis {
