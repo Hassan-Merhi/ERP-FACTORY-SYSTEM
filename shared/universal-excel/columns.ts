@@ -30,6 +30,7 @@ export type UniversalExcelColumnOrder = "provided" | "label" | "id" | "period";
 export type UniversalExcelMissingValue =
   | { mode: "blank" }
   | { mode: "zero" }
+  | { mode: "error" }
   | { mode: "fallback"; key: string };
 
 export interface UniversalExcelColumnFamily {
@@ -134,7 +135,8 @@ export function buildUniversalExcelDimensionColumns(
   else if (order === "period") sorted.sort((a, b) => a.idText.localeCompare(b.idText));
 
   const missing = family.missing ?? { mode: "blank" as const };
-  if (missing.mode !== "blank" && missing.mode !== "zero" && missing.mode !== "fallback") {
+  if (missing.mode !== "blank" && missing.mode !== "zero" &&
+      missing.mode !== "fallback" && missing.mode !== "error") {
     throw new Error("Invalid dynamic Excel missing-value policy");
   }
   if (missing.mode === "fallback" && !missing.key.trim()) {
@@ -163,6 +165,9 @@ export function buildUniversalExcelDimensionColumns(
         );
         if (value !== null && value !== undefined && value !== "") return value;
         if (missing.mode === "zero") return 0;
+        if (missing.mode === "error") {
+          throw new Error("Missing dynamic Excel value for " + namespace + ": " + member.idText);
+        }
         if (missing.mode === "fallback") return row[missing.key];
         return null;
       },
@@ -276,6 +281,11 @@ export function buildProductionMonthColumns(
     type: "integer",
     width: 16,
     order: "period",
+    // Each array position is a specified month; a shortened array indicates
+    // mismatched report data and must not silently leave a month blank.
+    missing: (options.sourceFormat ?? "record") === "array"
+      ? { mode: "error" }
+      : { mode: "blank" },
   });
 }
 
