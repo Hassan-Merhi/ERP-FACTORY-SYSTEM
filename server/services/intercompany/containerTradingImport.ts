@@ -29,6 +29,7 @@ import { db } from "../../db";
 import { sumMoney } from "../../lib/money";
 import { postErpVoucherTx, type ErpVoucherLine } from "../accounting/erpVoucherPosting";
 import { destinationContainerGitPostingLines } from "./containerDestinationPosting";
+import { technicalProfitNettingLines } from "./technicalProfitNetting";
 import { finalizedStockItemId, planDestinationStockMapping, verifiedStockRowKey } from "./destinationStockMapping";
 import { logAudit } from "../../routes/_helpers";
 import { autoAllocateNewTradeCreditTx } from "./paymentAllocationCore";
@@ -785,8 +786,7 @@ export async function postIntercompanyImport(args: {
             // NOT external revenue or a realized COGS expense for Properties.
             // Leave just Dr intercompany balance / Cr original supplier in
             // the source company's final ledger balances.
-            { ledgerAccountId: acct.sales, debit: plan.landedTotal, narration: "Eliminate internal at-cost sales" },
-            { ledgerAccountId: acct.cogs, credit: plan.landedTotal, narration: "Eliminate internal COGS" },
+            ...technicalProfitNettingLines(acct.sales, acct.cogs, plan.landedTotal),
           ],
           source: { type: "ic-container-source-cost", id: trade.id },
           actor: { userId, reason: "Cost of goods sold on at-cost intercompany resale" },
