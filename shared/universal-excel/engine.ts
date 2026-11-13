@@ -229,24 +229,27 @@ function assertSheetName(name: string, seen: Set<string>): void {
   seen.add(name.toLowerCase());
 }
 
-function sourceRows(sheet: UniversalExcelTableSheet | UniversalExcelGroupedSheet): readonly UniversalExcelRecord[] {
-  if (sheet.kind === "table") return [...sheet.rows, ...(sheet.footer ? [sheet.footer] : [])];
-  const rows: UniversalExcelRecord[] = [];
-  for (const group of sheet.groups) {
-    rows.push(...group.rows);
-    if (group.footer) rows.push(group.footer);
+/** Iterate lazily; do not allocate a second array of a large export's rows. */
+function* sourceRows(
+  sheet: UniversalExcelTableSheet | UniversalExcelGroupedSheet,
+): Generator<UniversalExcelRecord> {
+  if (sheet.kind === "table") {
+    yield* sheet.rows;
+  } else {
+    for (const group of sheet.groups) {
+      yield* group.rows;
+      if (group.footer) yield group.footer;
+    }
   }
-  if (sheet.footer) rows.push(sheet.footer);
-  return rows;
+  if (sheet.footer) yield sheet.footer;
 }
 
 function resolveColumns(
   sheet: UniversalExcelTableSheet | UniversalExcelGroupedSheet,
   allowed: ReadonlySet<string>,
 ): UniversalExcelColumn[] {
-  const source = sourceRows(sheet);
   const present = new Set<string>();
-  for (const row of source) {
+  for (const row of sourceRows(sheet)) {
     for (const key of Object.keys(row)) present.add(key);
   }
   const selected: UniversalExcelColumn[] = [];
