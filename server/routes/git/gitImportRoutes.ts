@@ -432,7 +432,7 @@ export function registerGitImportRoutes(app: Express) {
 
         // A destination edits the same physical tracking row held by the parent.
         // Only include containers with an explicitly active trade into this company.
-        const selectedCompanyId = req.session.currentCompanyId;
+        const selectedCompanyId = req.session.currentCompanyId!;
         const allContainers = await db
           .select({ id: containers.id, containerNumber: containers.containerNumber, companyId: containers.companyId })
           .from(containers)
