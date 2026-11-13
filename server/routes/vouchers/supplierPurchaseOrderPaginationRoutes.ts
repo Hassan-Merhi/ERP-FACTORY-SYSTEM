@@ -1,9 +1,15 @@
 import type { Express, Request } from "express";
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { requireAuth } from "../../auth";
 import { db } from "../../db";
-import { getErrorMessage } from "../../lib/httpHandlers";
-import { authorizeCompanyIdParam } from "../helpers/supplierBalanceHelpers";
+import {
+  assertActiveCompanyAccess,
+  getAccessibleCompanyIds,
+  isPrivilegedRole,
+  resolveAuthorizedCompanyId,
+  sendCompanyAccessError,
+} from "../../security/companyAccessBoundary";
+import { resolveSupplierDestinations } from "../../services/intercompany/supplierDestinationRead";
 import { companies, containers, purchaseOrders } from "@shared/schema";
 import { companyScopedSuppliers } from "@shared/schema/supplierCompanyScope";
 import { parsePositiveInt } from "../../lib/listPagination";
@@ -42,14 +48,13 @@ export function registerSupplierPurchaseOrderPaginationRoutes(app: Express): voi
       if (!Number.isInteger(supplierId)) {
         return res.status(400).json({ message: "Invalid supplier ID" });
       }
-      const requestedCompanyId =
-        typeof req.query.companyId === "string"
-          ? Number.parseInt(req.query.companyId, 10)
-          : req.session.currentCompanyId;
-      const companyId = await authorizeCompanyIdParam(req, requestedCompanyId);
-      if (companyId === null) {
-        return res.status(403).json({ message: "No access to this company" });
-      }
+      const access = await assertActiveCompanyAccess(req);
+      const companyIds = req.query.companyId != null
+        ? [await resolveAuthorizedCompanyId(req, req.query.companyId)]
+        : isPrivilegedRole(access.role)
+          ? [...(await getAccessibleCompanyIds(access.userId))].sort((left, right) => left - right)
+          : [access.activeCompanyId];
+      if (!companyIds.length) return res.status(403).json({ message: "No accessible companies" });
 
       const [supplier] = await db
         .select({ id: companyScopedSuppliers.id })
@@ -57,7 +62,7 @@ export function registerSupplierPurchaseOrderPaginationRoutes(app: Express): voi
         .where(
           and(
             eq(companyScopedSuppliers.id, supplierId),
-            eq(companyScopedSuppliers.companyId, companyId),
+            inArray(companyScopedSuppliers.companyId, companyIds),
             isNull(companyScopedSuppliers.deletedAt)
           )
         )
@@ -65,40 +70,49 @@ export function registerSupplierPurchaseOrderPaginationRoutes(app: Express): voi
       if (!supplier) return res.status(404).json({ message: "Supplier not found" });
 
       const { page, limit, offset } = parsePagination(req);
-      const condition = and(eq(purchaseOrders.supplierId, supplierId), eq(purchaseOrders.companyId, companyId));
+      const condition = and(eq(purchaseOrders.supplierId, supplierId), inArray(purchaseOrders.companyId, companyIds));
+      const structured = wantsStructuredPagination(req);
+      const selectOrders = () => db
+        .select({
+          id: purchaseOrders.id,
+          poNumber: purchaseOrders.poNumber,
+          companyId: purchaseOrders.companyId,
+          companyName: companies.name,
+          containerId: purchaseOrders.containerId,
+          containerNumber: containers.containerNumber,
+          importDate: containers.importDate,
+          itemsTotal: purchaseOrders.itemsTotal,
+          freight: purchaseOrders.freight,
+          surcharge: purchaseOrders.surcharge,
+          fumigation: purchaseOrders.fumigation,
+          documentCharges: purchaseOrders.documentCharges,
+          discount: purchaseOrders.discount,
+          otherCharges: purchaseOrders.otherCharges,
+          currency: purchaseOrders.currency,
+          createdAt: purchaseOrders.createdAt,
+          voucherId: purchaseOrders.voucherId,
+        })
+        .from(purchaseOrders)
+        .leftJoin(containers, eq(purchaseOrders.containerId, containers.id))
+        .leftJoin(companies, eq(purchaseOrders.companyId, companies.id))
+        .where(condition)
+        .orderBy(desc(purchaseOrders.createdAt), desc(purchaseOrders.id));
       const [countRows, rows] = await Promise.all([
-        db
-          .select({ total: sql<number>`count(*)::int` })
-          .from(purchaseOrders)
-          .where(condition),
-        db
-          .select({
-            id: purchaseOrders.id,
-            poNumber: purchaseOrders.poNumber,
-            companyId: purchaseOrders.companyId,
-            companyName: companies.name,
-            containerId: purchaseOrders.containerId,
-            containerNumber: containers.containerNumber,
-            importDate: containers.importDate,
-            itemsTotal: purchaseOrders.itemsTotal,
-            freight: purchaseOrders.freight,
-            surcharge: purchaseOrders.surcharge,
-            fumigation: purchaseOrders.fumigation,
-            documentCharges: purchaseOrders.documentCharges,
-            discount: purchaseOrders.discount,
-            otherCharges: purchaseOrders.otherCharges,
-            currency: purchaseOrders.currency,
-            createdAt: purchaseOrders.createdAt,
-            voucherId: purchaseOrders.voucherId,
-          })
-          .from(purchaseOrders)
-          .leftJoin(containers, eq(purchaseOrders.containerId, containers.id))
-          .leftJoin(companies, eq(purchaseOrders.companyId, companies.id))
-          .where(condition)
-          .orderBy(desc(purchaseOrders.createdAt), desc(purchaseOrders.id))
-          .limit(limit)
-          .offset(offset),
+        db.select({ total: sql<number>`count(*)::int` }).from(purchaseOrders).where(condition),
+        structured ? selectOrders().limit(limit).offset(offset) : selectOrders(),
       ]);
+      const destinations = await resolveSupplierDestinations({
+        accessibleCompanyIds: companyIds,
+        poIds: rows.map((po) => po.id),
+      });
+      const attributedRows = rows.map((po) => {
+        const destination = destinations.byPoId.get(po.id);
+        return {
+          ...po,
+          destinationCompanyId: destination?.destinationCompanyId ?? po.companyId,
+          destinationCompanyName: destination?.destinationCompanyName ?? po.companyName ?? "Unknown",
+        };
+      });
 
       const total = countRows[0]?.total ?? 0;
       const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
@@ -108,9 +122,9 @@ export function registerSupplierPurchaseOrderPaginationRoutes(app: Express): voi
       res.setHeader("X-Total-Pages", String(totalPages));
       res.setHeader("Access-Control-Expose-Headers", "X-Total-Count, X-Page, X-Page-Size, X-Total-Pages");
 
-      if (!wantsStructuredPagination(req)) return res.json(rows);
+      if (!structured) return res.json(attributedRows);
       return res.json({
-        items: rows,
+        items: attributedRows,
         total,
         page,
         limit,
@@ -119,7 +133,7 @@ export function registerSupplierPurchaseOrderPaginationRoutes(app: Express): voi
         hasPreviousPage: page > 1 && totalPages > 0,
       });
     } catch (error: unknown) {
-      return res.status(500).json({ message: getErrorMessage(error) });
+      return sendCompanyAccessError(res, error);
     }
   });
 }
