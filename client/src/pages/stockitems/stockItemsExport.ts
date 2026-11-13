@@ -7,12 +7,13 @@ export type StockItemsExportFilters = {
   categoryId: number | "none" | null;
 };
 
-const EXPORT_PAGE_SIZE = 500;
+// The first /api/stock-items paginated route accepts at most 250 items.
+const EXPORT_PAGE_SIZE = 250;
 
 /**
- * Export the full current filter result, not the currently displayed page.
- * The endpoint caps pageSize at 500, so walk every page and reject incomplete
- * responses rather than silently generating a truncated workbook.
+ * Export every matching stock item, independent of the visible page.
+ * Honor the *effective* page size reported by the server, even if a route
+ * applies a smaller cap than requested. Never download a partial workbook.
  */
 export async function loadStockItemsForExport(
   filters: StockItemsExportFilters,
@@ -26,6 +27,7 @@ export async function loadStockItemsForExport(
 
   const items: StockItem[] = [];
   let expectedTotal = 0;
+  let expectedPageSize = 0;
   let expectedPages = 1;
 
   for (let page = 1; page <= expectedPages; page++) {
@@ -39,16 +41,24 @@ export async function loadStockItemsForExport(
       !Number.isSafeInteger(batch.total) ||
       batch.total < 0 ||
       batch.page !== page ||
-      batch.pageSize !== EXPORT_PAGE_SIZE
+      !Number.isSafeInteger(batch.pageSize) ||
+      batch.pageSize < 1 ||
+      batch.pageSize > EXPORT_PAGE_SIZE ||
+      !Number.isSafeInteger(batch.totalPages)
     ) {
       throw new Error("Invalid stock items export response");
     }
 
     if (page === 1) {
       expectedTotal = batch.total;
-      expectedPages = Math.max(1, Math.ceil(expectedTotal / EXPORT_PAGE_SIZE));
+      expectedPageSize = batch.pageSize;
+      expectedPages = Math.max(1, Math.ceil(expectedTotal / expectedPageSize));
     }
-    if (batch.total !== expectedTotal || batch.totalPages !== Math.ceil(expectedTotal / EXPORT_PAGE_SIZE)) {
+    if (
+      batch.total !== expectedTotal ||
+      batch.pageSize !== expectedPageSize ||
+      batch.totalPages !== Math.ceil(expectedTotal / expectedPageSize)
+    ) {
       throw new Error("Stock items changed during export. Please try again");
     }
     items.push(...batch.data);
