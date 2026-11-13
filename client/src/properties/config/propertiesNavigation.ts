@@ -23,6 +23,21 @@ export const PROPERTIES_NAVIGATION: readonly NavEntry[] = [
   { path: "/properties/rentals", label: "Rentals", parent: null, capability: "workspace", navigation: "pinned" },
   { path: "/properties/tracking", label: "Tracking", parent: null, capability: "workspace", navigation: "tool" },
   { path: "/properties/containers", label: "Containers", parent: null, capability: "workspace", navigation: "tool" },
+  { path: "/properties/stock", label: "Stock", parent: null, capability: "trading", navigation: "tool" },
+  {
+    path: "/properties/stock-query/:id",
+    label: "Stock Item Details",
+    parent: "/properties/stock?tab=query",
+    capability: "trading",
+    navigation: "hidden",
+  },
+  {
+    path: "/properties/import-stock-items",
+    label: "Import Stock Items",
+    parent: "/properties/stock?tab=items",
+    capability: "trading",
+    navigation: "hidden",
+  },
   {
     path: "/properties/po-import",
     label: "Import PO",
