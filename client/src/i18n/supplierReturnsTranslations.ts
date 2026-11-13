@@ -83,6 +83,22 @@ export const supplierReturnsCopy = {
     offloadReturnNotice:
       "Returned bales are deducted from net quantity. Original landed costs are retained as historic evidence; supplier-return vouchers record the stock, supplier and cost corrections.",
     offloadedUnit: "offloaded",
+    manualEntry: "Manual article entries (no file selected)",
+    filterSupplier: "Supplier (optional)",
+    allSuppliers: "All suppliers — search every offloaded container",
+    supplierListError: "Unable to load supplier list",
+    manualArticle: "Article code / alias",
+    manualArticlePlaceholder: "Enter or scan an article code",
+    addArticle: "Add article",
+    clearRows: "Clear entered rows",
+    staged: "ready to match",
+    invalidManual: "Enter a valid article code and quantity (maximum 1,000 rows)",
+    exportPreview: "Export matched Excel",
+    exporting: "Exporting...",
+    exported: "Preview Excel exported",
+    exportFailed: "Excel export failed",
+    exportPreviewNote:
+      "Read-only Excel lists the offload reference, article number, bale name, quantity, container, supplier and estimated credit. No stock, invoice or accounting changes were posted.",
   },
   ar: {
     hubSubtitle: "تحليل الإنتاج ومرتجعات الموردين المصرح بها",
@@ -163,6 +179,22 @@ export const supplierReturnsCopy = {
     offloadReturnNotice:
       "تُخصم البالات المرتجعة من الكمية الصافية. تُحفظ التكلفة الأصلية في السجل، وتوثق سندات المرتجع تصحيحات المخزون والمورد والتكلفة.",
     offloadedUnit: "مفرغ",
+    manualEntry: "إدخال الأصناف يدوياً (لم يُحدد ملف)",
+    filterSupplier: "المورد (اختياري)",
+    allSuppliers: "جميع الموردين — البحث في كل الحاويات المفرغة",
+    supplierListError: "تعذر تحميل قائمة الموردين",
+    manualArticle: "رمز الصنف / الرمز البديل",
+    manualArticlePlaceholder: "أدخل أو امسح رمز الصنف",
+    addArticle: "إضافة صنف",
+    clearRows: "مسح الصفوف",
+    staged: "جاهزة للمطابقة",
+    invalidManual: "أدخل رمز صنف وكمية صحيحة (حد أقصى 1000 صف)",
+    exportPreview: "تصدير المطابقة إلى إكسل",
+    exporting: "جارٍ التصدير...",
+    exported: "تم تصدير معاينة إكسل",
+    exportFailed: "فشل تصدير إكسل",
+    exportPreviewNote:
+      "يعرض إكسل المرجع الأصلي ورمز الصنف واسمه والكمية والحاوية والمورد والخصم التقديري دون تغيير المخزون أو الفواتير أو الحسابات.",
   },
   fr: {
     hubSubtitle: "Analyse de production et retours fournisseurs autorisés",
@@ -245,6 +277,22 @@ export const supplierReturnsCopy = {
     offloadReturnNotice:
       "Les balles retournées sont déduites de la quantité nette. Les coûts d'origine restent dans l'historique et les écritures de retour enregistrent les corrections.",
     offloadedUnit: "déchargé",
+    manualEntry: "Saisie manuelle (aucun fichier sélectionné)",
+    filterSupplier: "Fournisseur (facultatif)",
+    allSuppliers: "Tous les fournisseurs — tous les conteneurs déchargés",
+    supplierListError: "Liste des fournisseurs indisponible",
+    manualArticle: "Code article / alias",
+    manualArticlePlaceholder: "Saisir ou scanner un code article",
+    addArticle: "Ajouter l'article",
+    clearRows: "Effacer les lignes",
+    staged: "à associer",
+    invalidManual: "Saisir un code et une quantité valides (maximum 1000 lignes)",
+    exportPreview: "Exporter les correspondances Excel",
+    exporting: "Export en cours...",
+    exported: "Aperçu Excel exporté",
+    exportFailed: "Échec de l'export Excel",
+    exportPreviewNote:
+      "Excel montre référence de déchargement, code, nom, quantité, conteneur, fournisseur et avoir estimé. Aucun stock, facture ou compte n'est modifié.",
   },
 } as const;
 

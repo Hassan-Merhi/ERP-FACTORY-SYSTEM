@@ -1,7 +1,7 @@
 import Decimal from "decimal.js";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { getSupplierReturnsCopy } from "@/i18n/supplierReturnsTranslations";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle2, Download, PackageMinus, RefreshCw, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useCompany } from "@/contexts/CompanyContext";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { read, utils, writeFile } from "@/lib/excelHelper";
+import { buildErpSupplierReturnMatchWorkbook } from "./erpSupplierReturnMatchWorkbook";
+import { isValidSupplierReturnQuantity } from "./supplierReturnQuantityValidation";
 
 interface Candidate {
   offloadItemId: number;
@@ -18,6 +20,8 @@ interface Candidate {
   containerNumber: string;
   supplierId: number | null;
   supplierName: string | null;
+  stockItemId: number;
+  locationId: number;
   supplierCount: number;
   currencyCount: number;
   currency: string | null;
@@ -77,6 +81,16 @@ export default function FactorySupplierReturns() {
   const copy = getSupplierReturnsCopy(language);
   const { toast } = useToast();
   const [sourceFile, setSourceFile] = useState("");
+  const [manualCode, setManualCode] = useState("");
+  const [manualQty, setManualQty] = useState("1");
+  const [supplierId, setSupplierId] = useState<number | null>(null);
+  const [previewSupplierId, setPreviewSupplierId] = useState<number | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const suppliers = useQuery<{ rows: Array<{ id: number; name: string }> }>({
+    queryKey: ["/api/erp/supplier-returns/suppliers", selectedCompany?.id],
+    enabled: !!selectedCompany,
+    queryFn: async () => (await apiRequest("GET", "/api/erp/supplier-returns/suppliers")).json(),
+  });
   // Retry the same financial operation after a network error, never create a second posting.
   const [requestKey, setRequestKey] = useState(() => crypto.randomUUID());
   const [rawRows, setRawRows] = useState<Array<{ code: string; quantity: string }>>([]);
@@ -109,6 +123,20 @@ export default function FactorySupplierReturns() {
       voucherNumber: string | null;
     }>
   >([]);
+  useEffect(() => {
+    setSourceFile("");
+    setManualCode("");
+    setManualQty("1");
+    setSupplierId(null);
+    setPreviewSupplierId(null);
+    setRawRows([]);
+    setPreview([]);
+    setChosen({});
+    setConfirm(false);
+    setReceipt(null);
+    setRequestKey(crypto.randomUUID());
+  }, [selectedCompany?.id]);
+
   const history = useQuery<{ rows: HistoryRow[] }>({
     queryKey: ["/api/erp/supplier-returns/history", selectedCompany?.id],
     enabled: !!selectedCompany,
@@ -124,8 +152,98 @@ export default function FactorySupplierReturns() {
       }),
     [preview, chosen]
   );
-  const ready = preview.length > 0 && resolved.every((row) => row.valid);
+  const combined = useMemo(() => {
+    const offloadQty = new Map<number, Decimal>();
+    const stockQty = new Map<string, Decimal>();
+    for (const entry of resolved) {
+      if (!entry.valid || !entry.candidate) continue;
+      const item = entry.candidate;
+      offloadQty.set(
+        item.offloadItemId,
+        (offloadQty.get(item.offloadItemId) ?? new Decimal(0)).add(entry.row.quantity)
+      );
+      const stockKey = item.locationId + ":" + item.stockItemId;
+      stockQty.set(stockKey, (stockQty.get(stockKey) ?? new Decimal(0)).add(entry.row.quantity));
+    }
+    const overOffloads = new Set<number>();
+    const overStock = new Set<string>();
+    for (const entry of resolved) {
+      if (!entry.candidate) continue;
+      const item = entry.candidate;
+      if (offloadQty.get(item.offloadItemId)?.gt(item.remainingQty)) overOffloads.add(item.offloadItemId);
+      const key = item.locationId + ":" + item.stockItemId;
+      if (stockQty.get(key)?.gt(item.availableQty)) overStock.add(key);
+    }
+    return {
+      overOffloads,
+      overStock,
+      valid: resolved.every(
+        (entry) =>
+          entry.valid &&
+          !!entry.candidate &&
+          !overOffloads.has(entry.candidate.offloadItemId) &&
+          !overStock.has(entry.candidate.locationId + ":" + entry.candidate.stockItemId)
+      ),
+    };
+  }, [resolved]);
+  const validEntry = (entry: (typeof resolved)[number]) =>
+    entry.valid &&
+    !!entry.candidate &&
+    !combined.overOffloads.has(entry.candidate.offloadItemId) &&
+    !combined.overStock.has(entry.candidate.locationId + ":" + entry.candidate.stockItemId);
+  const ready = preview.length > 0 && previewSupplierId === supplierId && combined.valid;
   const totalBales = resolved.reduce((s, x) => s.add(x.row.quantity), new Decimal(0)).toFixed(3);
+
+  function addManual() {
+    const code = manualCode.trim();
+    const qty = manualQty.trim();
+    if (
+      !code ||
+      code.length > 50 ||
+      !isValidSupplierReturnQuantity(qty) ||
+      Number(qty) <= 0 ||
+      rawRows.length >= 1000
+    ) {
+      toast({ title: copy.invalidManual, variant: "destructive" });
+      return;
+    }
+    setRawRows((current) => [...current, { code, quantity: qty }]);
+    setManualCode("");
+    setManualQty("1");
+    setSourceFile("");
+    setPreview([]);
+    setPreviewSupplierId(null);
+    setChosen({});
+    setReceipt(null);
+    setConfirm(false);
+    setRequestKey(crypto.randomUUID());
+  }
+
+  async function exportPreview() {
+    if (!preview.length || busy || exporting || previewSupplierId !== supplierId) return;
+    setExporting(true);
+    try {
+      const wb = utils.book_new();
+      buildErpSupplierReturnMatchWorkbook(wb, {
+        supplierName: suppliers.data?.rows.find((x) => x.id === supplierId)?.name,
+        fileName: sourceFile || undefined,
+        entries: resolved.map((entry) => ({
+          row: entry.row.row,
+          code: entry.row.code,
+          quantity: entry.row.quantity,
+          status: entry.valid && !validEntry(entry) ? "combined-quantity-exceeds-balance" : entry.row.status,
+          candidate: entry.candidate,
+          valid: validEntry(entry),
+        })),
+      });
+      await writeFile(wb, "ERP_Supplier_Return_Container_Matches.xlsx");
+      toast({ title: copy.exported, description: copy.exportPreviewNote });
+    } catch (e) {
+      toast({ title: copy.exportFailed, description: (e as Error).message, variant: "destructive" });
+    } finally {
+      setExporting(false);
+    }
+  }
 
   async function downloadTemplate() {
     const wb = utils.book_new();
@@ -142,6 +260,7 @@ export default function FactorySupplierReturns() {
   async function upload(file?: File) {
     if (!file) return;
     setPreview([]);
+    setPreviewSupplierId(null);
     setChosen({});
     setConfirm(false);
     setReceipt(null);
@@ -157,7 +276,7 @@ export default function FactorySupplierReturns() {
       const parsed = rows.map((row, index) => {
         const code = String(excelCode(row, ["articlecode", "code", "itemcode", "barcode"]) ?? "").trim();
         const quantity = String(excelCode(row, ["qty", "quantity", "bales"]) ?? "").trim();
-        if (!code || !/^(?:0|[1-9]\d*)(?:\.\d{1,3})?$/.test(quantity) || Number(quantity) <= 0)
+        if (!code || !isValidSupplierReturnQuantity(quantity) || Number(quantity) <= 0)
           throw new Error([copy.rowInvalid, index + 2].join(" "));
         return { code, quantity };
       });
@@ -174,11 +293,14 @@ export default function FactorySupplierReturns() {
     setBusy(true);
     setConfirm(false);
     setReceipt(null);
+    setPreview([]);
+    setPreviewSupplierId(null);
     try {
       const result = (await (
-        await apiRequest("POST", "/api/erp/supplier-returns/preview", { rows: rawRows })
-      ).json()) as { rows: PreviewRow[] };
+        await apiRequest("POST", "/api/erp/supplier-returns/preview", { rows: rawRows, supplierId })
+      ).json()) as { rows: PreviewRow[]; supplierId: number | null };
       setPreview(result.rows);
+      setPreviewSupplierId(result.supplierId);
       setChosen({});
       toast({
         title: copy.mappedTitle,
@@ -223,6 +345,7 @@ export default function FactorySupplierReturns() {
       const response = (await (
         await apiRequest("POST", "/api/erp/supplier-returns/commit", {
           lines,
+          supplierId,
           requestKey,
           returnDate,
           reason,
@@ -270,11 +393,84 @@ export default function FactorySupplierReturns() {
               onChange={(event) => void upload(event.currentTarget.files?.[0])}
             />
           </label>
-          <span className="text-sm text-muted-foreground">{sourceFile || "No file selected"}</span>
+          <span className="text-sm text-muted-foreground">{sourceFile || copy.manualEntry}</span>
           <Button onClick={() => void mapRows()} disabled={busy || !rawRows.length}>
             <RefreshCw className="h-4 w-4 mr-2" />
             {copy.map}
           </Button>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <label className="text-sm space-y-1 sm:col-span-3">
+            <span>{copy.filterSupplier}</span>
+            <select
+              className="flex h-10 w-full max-w-lg rounded-md border border-input bg-background px-3 py-2 text-sm"
+              value={supplierId ?? ""}
+              disabled={busy || !!receipt}
+              onChange={(event) => {
+                setSupplierId(Number(event.target.value) || null);
+                setPreview([]);
+                setChosen({});
+                setPreviewSupplierId(null);
+                setConfirm(false);
+                setRequestKey(crypto.randomUUID());
+              }}
+            >
+              <option value="">{copy.allSuppliers}</option>
+              {(suppliers.data?.rows ?? []).map((supplier) => (
+                <option key={supplier.id} value={supplier.id}>
+                  {supplier.name}
+                </option>
+              ))}
+            </select>
+            {suppliers.isError && <span className="text-destructive">{copy.supplierListError}</span>}
+          </label>
+          <div className="sm:col-span-3 flex flex-wrap items-end gap-3 rounded-md bg-muted/30 p-3">
+            <label className="text-sm space-y-1 min-w-52 flex-1">
+              <span>{copy.manualArticle}</span>
+              <Input
+                value={manualCode}
+                maxLength={50}
+                onChange={(event) => setManualCode(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    addManual();
+                  }
+                }}
+                placeholder={copy.manualArticlePlaceholder}
+              />
+            </label>
+            <label className="text-sm space-y-1 w-28">
+              <span>{copy.qty}</span>
+              <Input value={manualQty} onChange={(event) => setManualQty(event.target.value)} />
+            </label>
+            <Button variant="outline" type="button" onClick={addManual} disabled={busy || !!receipt}>
+              {copy.addArticle}
+            </Button>
+          </div>
+          {rawRows.length > 0 && (
+            <div className="sm:col-span-3 flex flex-wrap gap-2 items-center text-sm">
+              <span>
+                {rawRows.length} {copy.lines} {copy.staged}
+              </span>
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={busy || !!receipt}
+                onClick={() => {
+                  setRawRows([]);
+                  setPreview([]);
+                  setChosen({});
+                  setConfirm(false);
+                  setSourceFile("");
+                  setPreviewSupplierId(null);
+                  setRequestKey(crypto.randomUUID());
+                }}
+              >
+                {copy.clearRows}
+              </Button>
+            </div>
+          )}
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <label className="text-sm space-y-1">
@@ -297,11 +493,23 @@ export default function FactorySupplierReturns() {
         <div className="rounded-lg border overflow-hidden">
           <div className="px-4 py-3 border-b flex flex-wrap gap-3 justify-between">
             <strong>
-              {copy.mapping}: {resolved.filter((x) => x.valid).length}/{preview.length} {copy.validRows}
+              {copy.mapping}: {resolved.filter(validEntry).length}/{preview.length} {copy.validRows}
             </strong>
-            <span className="text-sm">
-              {copy.totalRequested}: <strong>{totalBales}</strong>
-            </span>
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="text-sm">
+                {copy.totalRequested}: <strong>{totalBales}</strong>
+              </span>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => void exportPreview()}
+                disabled={busy || exporting || previewSupplierId !== supplierId}
+              >
+                <Download className="h-4 w-4 mr-1" />
+                {exporting ? copy.exporting : copy.exportPreview}
+              </Button>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -326,7 +534,9 @@ export default function FactorySupplierReturns() {
                 </tr>
               </thead>
               <tbody>
-                {resolved.map(({ row, candidate, selected, valid }) => {
+                {resolved.map((entry) => {
+                  const { row, candidate, selected } = entry;
+                  const valid = validEntry(entry);
                   const candidates = row.candidates.filter(
                     (x) => x.supplierCount === 1 && x.currencyCount === 1 && x.currency === "USD"
                   );
