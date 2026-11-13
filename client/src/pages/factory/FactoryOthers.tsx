@@ -1,5 +1,7 @@
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { getSupplierReturnsCopy } from "@/i18n/supplierReturnsTranslations";
 import { useSearch } from "wouter";
 import { BarChart3, GitCompareArrows, PackageMinus } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
@@ -15,6 +17,8 @@ const ALL_TABS: readonly OthersTab[] = ["comparison", "product-comparison", "sup
 
 export default function FactoryOthers() {
   const { ready, access, isPrivileged } = useFactoryNavigationAccess();
+  const { language } = useApplicationLanguage();
+  const copy = getSupplierReturnsCopy(language);
   const { data: user } = useQuery<{ role?: string }>({ queryKey: ["/api/auth/me"] });
   const mayReturnToSupplier = user?.role === "Admin" || user?.role === "Developer";
   const search = useSearch();
@@ -49,7 +53,7 @@ export default function FactoryOthers() {
   return (
     <div className="flex h-full min-w-0 flex-col overflow-hidden">
       <div className="shrink-0 border-b px-4 pt-4 pb-3">
-        <PageHeader title="Others" subtitle="Production analysis and authorized supplier returns" />
+        <PageHeader title="Others" subtitle={copy.hubSubtitle} />
       </div>
       <Tabs
         value={activeTab}
@@ -70,7 +74,7 @@ export default function FactoryOthers() {
             )}
             {mayReturnToSupplier && (
               <TabsTrigger value="supplier-returns" data-testid="tab-others-supplier-returns">
-                <PackageMinus className="mr-1.5 h-4 w-4" /> Supplier Returns
+                <PackageMinus className="mr-1.5 h-4 w-4" /> {copy.tab}
               </TabsTrigger>
             )}
           </TabsList>
