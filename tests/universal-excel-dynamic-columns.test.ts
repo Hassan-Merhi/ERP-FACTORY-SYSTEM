@@ -102,6 +102,27 @@ describe("Phase 4: ERP stock smart location prices", () => {
     ])).toThrow(/Duplicate dynamic Excel dimension/);
   });
 
+  it("requires both family and member visibility tags for dimension pricing", () => {
+    const columns = buildUniversalExcelDimensionColumns({
+      namespace: "custom_price",
+      sourceKey: "prices",
+      dimensions: [
+        { id: "1", label: "A", permissionTag: "shop-a" },
+        { id: "2", label: "B" },
+      ],
+      type: "money",
+      permissionTag: "rates",
+    });
+    const row = { prices: { "1": 11, "2": 12 } };
+    const base = [{ key: "code", header: "Code" }, ...columns];
+    const onlyMember = sheet(base, [{ code: "A", ...row }], ["shop-a"]);
+    expect(onlyMember.results[0].columns).toEqual(["code"]);
+    const onlyFamily = sheet(base, [{ code: "A", ...row }], ["rates"]);
+    expect(onlyFamily.results[0].columns).toEqual(["code", "custom_price__2"]);
+    const both = sheet(base, [{ code: "A", ...row }], ["rates", "shop-a"]);
+    expect(both.results[0].columns).toEqual(["code", "custom_price__1", "custom_price__2"]);
+  });
+
   it("does not include explicitly disabled locations", () => {
     const cols = buildLocationPriceColumns([
       { id: 1, name: "Beirut" }, { id: 2, name: "Lshi", enabled: false },
