@@ -162,10 +162,15 @@ export function usePosHandlers(params: PosHandlersParams) {
       activeLocation: params.activeLocation,
       apiInventory: params.apiInventory,
       toast: params.toast,
-      // Do not disclose configured-price P/L or stock cost to POS operators.
-      canSeeFinancials: ["Admin", "Owner", "Developer"].includes(
-        params.authUser?.role ?? params.posUser?.role ?? ""
-      ),
+      // Respect the active role, not only the user's base role. Never expose
+      // cost or configured P/L for POS/View Only or hidden-stock-rate sessions.
+      canSeeFinancials: (() => {
+        const user = params.authUser ?? params.posUser;
+        return !!user &&
+          ["Admin", "Owner", "Developer"].includes(user.currentRole ?? user.role ?? "") &&
+          !user.posViewOnly &&
+          !(user.hiddenErpCostFields ?? []).includes("stock_rates");
+      })(),
     });
 
   const { makeHandleKeyDown } = usePosKeyboardNavigation({
