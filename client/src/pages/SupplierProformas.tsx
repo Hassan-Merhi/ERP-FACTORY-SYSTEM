@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, Table
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -40,6 +41,7 @@ interface Proforma {
   reference: string;
   notes: string | null;
   isStarred: boolean;
+  destinationCompanyId: number | null;
   createdAt: string;
   updatedAt: string;
   lines?: ProformaLine[];
@@ -70,6 +72,12 @@ export default function SupplierProformas() {
   const [pendingDelete, setPendingDelete] = useState<(() => void) | null>(null);
   const [createRef, setCreateRef] = useState("");
   const [createNotes, setCreateNotes] = useState("");
+  const [createDestinationId, setCreateDestinationId] = useState("");
+  const [filterDestinationId, setFilterDestinationId] = useState("all");
+  const { data: companies = [] } = useQuery<{ id: number; name: string; parentCompanyId?: number | null }[]>({ queryKey: ["/api/companies"] });
+  const ownerCompanyId = selectedCompany?.id;
+  const destinations = companies.filter((company) => company.id === ownerCompanyId || company.parentCompanyId === ownerCompanyId);
+  const destinationLabel = (id: number | null) => companies.find((company) => company.id === (id ?? ownerCompanyId))?.name ?? `Company #${id ?? ownerCompanyId}`;
   const [addingLine, setAddingLine] = useState(false);
   const [newLine, setNewLine] = useState({
     barcode: "",
@@ -123,7 +131,7 @@ export default function SupplierProformas() {
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: { reference: string; notes: string }) => {
+    mutationFn: async (data: { reference: string; notes: string; destinationCompanyId: number }) => {
       const res = await apiRequest("POST", `/api/suppliers/${supplierId}/proformas`, data);
       return res.json();
     },
@@ -132,6 +140,7 @@ export default function SupplierProformas() {
       setShowCreateDialog(false);
       setCreateRef("");
       setCreateNotes("");
+      setCreateDestinationId("");
       setSelectedProformaId(p.id);
       toast({ title: "Proforma created" });
     },
@@ -383,7 +392,16 @@ export default function SupplierProformas() {
               {(!proformas || proformas.length === 0) && (
                 <p className="text-sm text-muted-foreground">No proformas yet. Create one to get started.</p>
               )}
-              {proformas?.map((p) => (
+              <div className="mb-3">
+                <Select value={filterDestinationId} onValueChange={setFilterDestinationId}>
+                  <SelectTrigger data-testid="filter-proforma-company"><SelectValue placeholder="Destination company" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All destinations</SelectItem>
+                    {destinations.map((company) => <SelectItem key={company.id} value={String(company.id)}>{company.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              {proformas?.filter((p) => filterDestinationId === "all" || String(p.destinationCompanyId ?? ownerCompanyId) === filterDestinationId).sort((a,b) => (a.destinationCompanyId ?? ownerCompanyId ?? 0) - (b.destinationCompanyId ?? ownerCompanyId ?? 0)).map((p) => (
                 <div
                   key={p.id}
                   className={`flex items-center justify-between gap-2 p-2 rounded-md cursor-pointer ${selectedProformaId === p.id ? "bg-accent" : "hover-elevate"}`}
@@ -418,7 +436,7 @@ export default function SupplierProformas() {
                           <span className="text-sm font-medium truncate">{p.reference}</span>
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          {format(new Date(p.createdAt), "MMM d, yyyy")}
+                          {destinationLabel(p.destinationCompanyId)} · {format(new Date(p.createdAt), "MMM d, yyyy")}
                         </div>
                       </>
                     )}
@@ -443,7 +461,7 @@ export default function SupplierProformas() {
                         starMutation.mutate(p.id);
                       }}
                       data-testid={`button-star-proforma-${p.id}`}
-                      title={p.isStarred ? "Unstar (remove as default)" : "Star (use for auto-comparison)"}
+                      title={p.isStarred ? "Remove default for this destination" : "Use as default for this destination"}
                     >
                       <Star
                         className={`h-3.5 w-3.5 ${p.isStarred ? "fill-amber-400 text-amber-400" : "text-muted-foreground"}`}
@@ -757,13 +775,20 @@ export default function SupplierProformas() {
                 data-testid="input-proforma-notes"
               />
             </div>
+            <div>
+              <label className="text-sm font-medium mb-1 block">Destination company *</label>
+              <Select value={createDestinationId || String(ownerCompanyId ?? "")} onValueChange={setCreateDestinationId}>
+                <SelectTrigger data-testid="select-proforma-destination"><SelectValue placeholder="Select destination" /></SelectTrigger>
+                <SelectContent>{destinations.map((company) => <SelectItem key={company.id} value={String(company.id)}>{company.name}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
             <div className="flex items-center justify-end gap-2">
               <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
                 Cancel
               </Button>
               <Button
-                onClick={() => createMutation.mutate({ reference: createRef, notes: createNotes })}
-                disabled={!createRef.trim() || createMutation.isPending}
+                onClick={() => createMutation.mutate({ reference: createRef, notes: createNotes, destinationCompanyId: Number(createDestinationId || ownerCompanyId) })}
+                disabled={!createRef.trim() || !Number(createDestinationId || ownerCompanyId) || createMutation.isPending}
                 data-testid="button-confirm-create"
               >
                 Create
