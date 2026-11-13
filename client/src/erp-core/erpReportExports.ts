@@ -44,7 +44,7 @@ export async function exportErpReportRowsExcel<Row extends object>({
     const { columnsFromOperationalRows, exportOperationalWorkbook } = await import(
       "@/lib/operationalExcelExport"
     );
-    const records = rows as readonly Record<string, unknown>[];
+    const records = rows as unknown as readonly Record<string, unknown>[];
     await exportOperationalWorkbook({
       title: sheetName,
       companyName,
