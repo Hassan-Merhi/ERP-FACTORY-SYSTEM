@@ -41,9 +41,17 @@ export function registerFinalizedReturnImportPreview(app: Express): void {
         const cid = req.session.factoryCompanyId || req.session.currentCompanyId;
         const raw: unknown = req.body?.references;
         if (!cid) return res.status(400).json({ message: "Select a Factory company" });
-        if (!Array.isArray(raw) || raw.length < 1 || raw.length > MAX_REFERENCES ||
-            raw.some((value: unknown) => typeof value !== "string" || value.trim().length < 1 || value.trim().length > 100)) {
-          return res.status(400).json({ message: "Import 1–1000 non-empty bale reference codes (maximum 100 characters each)" });
+        if (
+          !Array.isArray(raw) ||
+          raw.length < 1 ||
+          raw.length > MAX_REFERENCES ||
+          raw.some(
+            (value: unknown) => typeof value !== "string" || value.trim().length < 1 || value.trim().length > 100
+          )
+        ) {
+          return res
+            .status(400)
+            .json({ message: "Import 1–1000 non-empty bale reference codes (maximum 100 characters each)" });
         }
 
         const references = raw.map((value: string) => value.trim());
@@ -82,7 +90,10 @@ export function registerFinalizedReturnImportPreview(app: Express): void {
           WHERE o.company_id = ${cid} AND o.deleted_at IS NULL
             AND o.status = 'FINALIZED' AND o.invoice_number IS NOT NULL
             AND (o.previous_status = 'LOADING' OR o.loading_started_at IS NOT NULL OR o.loading_finalized_at IS NOT NULL)
-            AND UPPER(BTRIM(ob.bale_reference)) IN (${sql.join(unique.map((key) => sql`${key}`), sql`, `)})
+            AND UPPER(BTRIM(ob.bale_reference)) IN (${sql.join(
+              unique.map((key) => sql`${key}`),
+              sql`, `
+            )})
         `);
 
         const byReference = new Map<string, Match[]>();
@@ -94,16 +105,27 @@ export function registerFinalizedReturnImportPreview(app: Express): void {
         const rows = references.map((reference, index) => {
           const key = keys[index];
           if (counts.get(key)! > 1)
-            return { reference, status: "duplicate" as const, message: "Reference appears more than once in this file" };
+            return {
+              reference,
+              status: "duplicate" as const,
+              message: "Reference appears more than once in this file",
+            };
           const matches = byReference.get(key) || [];
           if (matches.length === 0)
-            return { reference, status: "missing" as const, message: "Not found on an active finalized loading invoice for this company (or already returned)" };
+            return {
+              reference,
+              status: "missing" as const,
+              message: "Not found on an active finalized loading invoice for this company (or already returned)",
+            };
           if (matches.length > 1)
-            return { reference, status: "ambiguous" as const, message: "Multiple finalized invoices contain this reference; select manually" };
+            return {
+              reference,
+              status: "ambiguous" as const,
+              message: "Multiple finalized invoices contain this reference; select manually",
+            };
           const match = matches[0];
           let problem: string | null = null;
-          if (match.dispatchBatchId)
-            problem = "Invoice has an active dispatch batch; use dispatch-trip reversal";
+          if (match.dispatchBatchId) problem = "Invoice has an active dispatch batch; use dispatch-trip reversal";
           else if (match.baleDeletedAt || !["SOLD", "IN_STOCK"].includes(match.baleStatus))
             problem = "Bale has an incompatible physical stock status";
           else if (match.currentLocationId !== match.soldLocationId)
@@ -112,7 +134,7 @@ export function registerFinalizedReturnImportPreview(app: Express): void {
             problem = "Invoice has a paid, adjusted or missing receivable; it cannot be automatically repriced";
           return {
             reference,
-            status: problem ? "blocked" as const : "matched" as const,
+            status: problem ? ("blocked" as const) : ("matched" as const),
             message: problem,
             baleId: match.baleId,
             orderId: match.orderId,

@@ -9,13 +9,15 @@ const h = vi.hoisted(() => {
 });
 vi.mock("../server/auth", () => ({
   requireAuth: (_req: unknown, _res: unknown, next: () => void) => next(),
-  requireRole: (...roles: string[]) => (req: any, res: any, next: () => void) =>
-    roles.includes(req.user?.role) ? next() : res.status(403).json({ message: "Forbidden" }),
+  requireRole:
+    (...roles: string[]) =>
+    (req: any, res: any, next: () => void) =>
+      roles.includes(req.user?.role) ? next() : res.status(403).json({ message: "Forbidden" }),
 }));
 vi.mock("../server/db", () => ({ db: { execute: h.execute } }));
 vi.mock("../server/lib/logger", () => ({ logger: { error: vi.fn() } }));
 vi.mock("../server/lib/httpHandlers", () => ({
-  getErrorMessage: (error: unknown) => error instanceof Error ? error.message : String(error),
+  getErrorMessage: (error: unknown) => (error instanceof Error ? error.message : String(error)),
 }));
 
 import { registerFinalizedReturnImportPreview } from "../server/routes/factory/customer-orders/bale-scanning/finalized-return-import-preview";
@@ -38,12 +40,20 @@ async function request(references: unknown, options?: { role?: string; companyId
   const res: any = {
     statusCode: 200,
     body: null,
-    status(code: number) { res.statusCode = code; return res; },
-    json(body: unknown) { res.body = body; return res; },
+    status(code: number) {
+      res.statusCode = code;
+      return res;
+    },
+    json(body: unknown) {
+      res.body = body;
+      return res;
+    },
   };
   for (const fn of handlers) {
     let continued = false;
-    await fn(req, res, () => { continued = true; });
+    await fn(req, res, () => {
+      continued = true;
+    });
     if (!continued) break;
   }
   return { status: res.statusCode, body: res.body };
@@ -97,15 +107,17 @@ describe("Finalized loading return Excel reference preview", () => {
     expect(result.body).toMatchObject({
       matched: 1,
       issues: 0,
-      rows: [{
-        status: "matched",
-        reference: "hmd0001",
-        orderId: 42,
-        baleId: 15,
-        invoiceNumber: "INV-42",
-        containerNumber: "ABCD-1",
-        articleCode: "ARTICLE",
-      }],
+      rows: [
+        {
+          status: "matched",
+          reference: "hmd0001",
+          orderId: 42,
+          baleId: 15,
+          invoiceNumber: "INV-42",
+          containerNumber: "ABCD-1",
+          articleCode: "ARTICLE",
+        },
+      ],
     });
     expect(h.execute).toHaveBeenCalledOnce();
   });
@@ -118,10 +130,7 @@ describe("Finalized loading return Excel reference preview", () => {
   });
 
   it("never guesses when a reference belongs to multiple active invoices", async () => {
-    h.state.rows = [
-      match("HMD2"),
-      match("HMD2", { orderId: 44, invoiceNumber: "INV-44", baleId: 24 }),
-    ];
+    h.state.rows = [match("HMD2"), match("HMD2", { orderId: 44, invoiceNumber: "INV-44", baleId: 24 })];
     const result = await request(["HMD2"]);
     expect(result.body.matched).toBe(0);
     expect(result.body.rows[0].status).toBe("ambiguous");
@@ -138,7 +147,11 @@ describe("Finalized loading return Excel reference preview", () => {
     expect(result.body.matched).toBe(0);
     expect(result.body.issues).toBe(5);
     expect(result.body.rows.map((row: any) => row.status)).toEqual([
-      "blocked", "blocked", "blocked", "blocked", "missing",
+      "blocked",
+      "blocked",
+      "blocked",
+      "blocked",
+      "missing",
     ]);
   });
 });

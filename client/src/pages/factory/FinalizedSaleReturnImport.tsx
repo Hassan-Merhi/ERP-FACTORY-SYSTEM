@@ -98,9 +98,16 @@ export default function FinalizedSaleReturnImport() {
 
   const chosen = groups.filter((group) => selectedOrders.includes(group.orderId));
   const totalSelected = chosen.reduce((sum, group) => sum + group.rows.length, 0);
-  const canPost = !!preview && preview.issues === 0 && totalSelected > 0 &&
-    reason.trim().length >= 5 && reason.trim().length <= 500 && confirmed &&
-    !posting && !reading && Object.keys(outcomes).length === 0;
+  const canPost =
+    !!preview &&
+    preview.issues === 0 &&
+    totalSelected > 0 &&
+    reason.trim().length >= 5 &&
+    reason.trim().length <= 500 &&
+    confirmed &&
+    !posting &&
+    !reading &&
+    Object.keys(outcomes).length === 0;
 
   const onFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -118,7 +125,11 @@ export default function FinalizedSaleReturnImport() {
       setPreview(mapped);
       setSelectedOrders([...new Set(mapped.rows.filter((r) => r.status === "matched").map((r) => r.orderId!))]);
     } catch (error) {
-      toast({ title: copy.importReadFailed, description: String(error instanceof Error ? error.message : error), variant: "destructive" });
+      toast({
+        title: copy.importReadFailed,
+        description: String(error instanceof Error ? error.message : error),
+        variant: "destructive",
+      });
     } finally {
       setReading(false);
     }
@@ -222,7 +233,11 @@ export default function FinalizedSaleReturnImport() {
           {copy.importTemplate}
         </Button>
       </div>
-      {reading && <p className="text-sm" role="status">{copy.importMapping}</p>}
+      {reading && (
+        <p className="text-sm" role="status">
+          {copy.importMapping}
+        </p>
+      )}
       {preview && (
         <div className="space-y-4" data-testid="finalized-return-import-preview">
           <p className="text-sm font-medium">
@@ -240,7 +255,9 @@ export default function FinalizedSaleReturnImport() {
                   <th className="p-2">{copy.references}</th>
                   <th className="p-2">{copy.importStatus}</th>
                   <th className="p-2">{copy.dateInvoice}</th>
-                  <th className="p-2">{copy.name} / {copy.articleCode}</th>
+                  <th className="p-2">
+                    {copy.name} / {copy.articleCode}
+                  </th>
                   <th className="p-2">{copy.importDetails}</th>
                 </tr>
               </thead>
@@ -251,8 +268,12 @@ export default function FinalizedSaleReturnImport() {
                     <td className={"p-2 " + (row.status === "matched" ? "text-emerald-600" : "text-destructive")}>
                       {row.status}
                     </td>
-                    <td className="p-2">{row.invoiceNumber || "—"} {row.containerNumber ? " / " + row.containerNumber : ""}</td>
-                    <td className="p-2">{row.productName || "—"} / {row.articleCode || "—"}</td>
+                    <td className="p-2">
+                      {row.invoiceNumber || "—"} {row.containerNumber ? " / " + row.containerNumber : ""}
+                    </td>
+                    <td className="p-2">
+                      {row.productName || "—"} / {row.articleCode || "—"}
+                    </td>
                     <td className="p-2">{row.message || row.customerName || "—"}</td>
                   </tr>
                 ))}
@@ -268,14 +289,20 @@ export default function FinalizedSaleReturnImport() {
                     checked={selectedOrders.includes(group.orderId)}
                     disabled={posting || Object.keys(outcomes).length > 0 || preview.issues > 0}
                     onCheckedChange={(checked) =>
-                      setSelectedOrders((current) => checked === true
-                        ? [...new Set([...current, group.orderId])]
-                        : current.filter((id) => id !== group.orderId))
+                      setSelectedOrders((current) =>
+                        checked === true
+                          ? [...new Set([...current, group.orderId])]
+                          : current.filter((id) => id !== group.orderId)
+                      )
                     }
                   />
                   <span className="font-semibold">{group.invoiceNumber}</span>
-                  <span className="text-muted-foreground">{group.containerNumber || copy.noContainer} · {group.customerName || copy.customer}</span>
-                  <span className="ml-auto font-medium">{group.rows.length} {copy.bales}</span>
+                  <span className="text-muted-foreground">
+                    {group.containerNumber || copy.noContainer} · {group.customerName || copy.customer}
+                  </span>
+                  <span className="ml-auto font-medium">
+                    {group.rows.length} {copy.bales}
+                  </span>
                   {outcomes[group.orderId] && (
                     <span className={outcomes[group.orderId].success ? "text-emerald-600" : "text-destructive"}>
                       {outcomes[group.orderId].quantity} {copy.importPosted} · {outcomes[group.orderId].message}
