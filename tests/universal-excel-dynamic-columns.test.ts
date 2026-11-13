@@ -151,6 +151,14 @@ describe("Phase 4: Factory month columns", () => {
     expect(r.ws.getCell("G6").value).toBe(20);
   });
 
+  it("rejects a shortened positional matrix instead of losing the final month", () => {
+    const cols = buildProductionMonthColumns([
+      { period: "2026-01", label: "January" },
+      { period: "2026-02", label: "February" },
+    ], { sourceKey: "values", sourceFormat: "array" });
+    expect(() => sheet(cols, [{ values: [5] }])).toThrow(/Missing dynamic Excel value for production_month: 2026-02/);
+  });
+
   it("supports record-valued month counts and rejects invalid month strings", () => {
     const columns = buildProductionMonthColumns([
       { period: "2025-12", label: "Dec 2025" },
