@@ -109,6 +109,11 @@ jobs:
             client/src/pages/vouchers/voucherSidebarGroups.ts \
             client/src/pages/Vouchers.tsx \
             client/src/pages/intercompany/IntercompanyPayments.tsx \
+            client/src/pages/StockHub.tsx \
+            client/src/pages/InventoryHub.tsx \
+            shared/erpRouteAccess.ts \
+            tests/ui/hub-restricted-tabs.test.tsx \
+            tests/ui/route-guards-render.test.tsx \
             client/src/pages/intercompany/intercompanyLegacyNavigation.ts \
             client/src/properties/config/propertiesNavigation.ts \
             client/src/components/PropertiesSidebar.tsx \
@@ -126,6 +131,7 @@ jobs:
             client/src/pages/Vouchers.tsx \
             tests/intercompany-normal-voucher-auto-mirror.test.ts \
             tests/intercompany-paired-voucher-protection.test.ts \
+            tests/stock-workspace-integration.test.ts \
             tests/intercompany-phase7-navigation.test.ts \
             tests/intercompany-phase6-voucher-payments.test.ts \
             tests/intercompany-phase5-database-guards.test.ts \
@@ -135,6 +141,13 @@ jobs:
       - name: Build client and server bundles for Phase 7 navigation
         if: always() && steps.install.outcome == 'success'
         run: npm run build
+
+      - name: Test Stock, OTW and Inventory tabs and ERP access guards
+        if: always() && steps.install.outcome == 'success'
+        run: |
+          node node_modules/vitest/vitest.mjs run --config vitest.config.frontend.ts --maxWorkers=2 \
+            tests/ui/hub-restricted-tabs.test.tsx \
+            tests/ui/route-guards-render.test.tsx
 
       - name: Initialize the disposable PostgreSQL reference application schema
         id: schema
@@ -159,6 +172,7 @@ jobs:
             tests/intercompany-phase5-properties-container-integration.test.ts \
             tests/intercompany-normal-voucher-auto-mirror.test.ts \
             tests/intercompany-paired-voucher-protection.test.ts \
+            tests/stock-workspace-integration.test.ts \
             tests/intercompany-phase7-navigation.test.ts \
             tests/intercompany-phase6-voucher-payments.test.ts \
             tests/intercompany-phase5-database-guards.test.ts \
