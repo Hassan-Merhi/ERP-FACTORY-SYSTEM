@@ -1,10 +1,9 @@
-import type Decimal from "decimal.js";
-/**
+ /**
  * Exact, deterministic Phase 2 Excel container pricing plan.
  * The uploaded workbook is re-parsed server-side at confirmation. Never trust a
  * browser-calculated total or a file hash supplied by a client.
  */
-import { MoneyDecimal, toMoney, sumMoney } from "../../lib/money";
+import { toMoney, sumMoney } from "../../lib/money";
 import { allocatePoCharges } from "../../routes/import/poChargeAllocation";
 import type { ParsedContainerPreview } from "../../routes/import/poImportExcelParser";
 
@@ -61,8 +60,7 @@ export interface ContainerImportPlan {
   };
 }
 
-const zero = new MoneyDecimal(0);
-const cents = (input: number | string) => toMoney(input).toDecimalPlaces(2);
+ const cents = (input: number | string) => toMoney(input).toDecimalPlaces(2);
 const amount = (value: number | undefined, label: string) => {
   if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
     throw new Error(label + " must be a non-negative number");
@@ -145,23 +143,21 @@ export function createContainerImportPlan(
   if (!proposalNet.eq(cents(container.chargesTotal)) || !goods.plus(proposalNet).eq(cents(container.grandTotal))) {
     throw new Error(name + ": Excel grand total and charges do not reconcile");
   }
+  // The uploaded PO is authoritative: its validated charges must always be
+  // included. A UI confirmation checkbox cannot silently discard PO charges.
+  // An optional invoice reference remains available for audit evidence.
   const chosenEvidence = selection.chargeEvidenceReference?.trim() || null;
   const hasProposedCharges = !freight.plus(surcharge).plus(fumigation).plus(documentCharges).plus(discount).isZero();
-  if (selection.chargesConfirmed && hasProposedCharges && (!chosenEvidence || chosenEvidence.length < 3)) {
-    throw new Error(name + ": confirmed charges require a supplier invoice or document reference");
-  }
   if (chosenEvidence && chosenEvidence.length > 250) {
     throw new Error(name + ": charge evidence reference is too long");
   }
 
-  const confirmed = selection.chargesConfirmed;
-  const zeroOr = (v: Decimal) => (confirmed ? v : zero);
   const charges = {
-    freight: zeroOr(freight).toFixed(2),
-    surcharge: zeroOr(surcharge).toFixed(2),
-    fumigation: zeroOr(fumigation).toFixed(2),
-    documentCharges: zeroOr(documentCharges).toFixed(2),
-    discount: zeroOr(discount).toFixed(2),
+    freight: freight.toFixed(2),
+    surcharge: surcharge.toFixed(2),
+    fumigation: fumigation.toFixed(2),
+    documentCharges: documentCharges.toFixed(2),
+    discount: discount.toFixed(2),
     otherCharges: "0.00",
   };
   const groupList = [...groups.entries()];
@@ -199,7 +195,7 @@ export function createContainerImportPlan(
       chargeAccrualCredit: chargeAccrualCredit.toFixed(2),
     };
   });
-  const chargesNet = confirmed ? proposalNet : zero;
+  const chargesNet = proposalNet;
   const landed = goods.plus(chargesNet);
   if (landed.lte(0) || !sumMoney(sourcePos.map((p) => p.grandTotal)).eq(landed)) {
     throw new Error(name + ": confirmed landed cost does not reconcile");
@@ -207,8 +203,8 @@ export function createContainerImportPlan(
   return {
     containerNumber: name,
     relationshipId: selection.relationshipId,
-    chargesConfirmed: confirmed && hasProposedCharges,
-    chargeEvidenceReference: confirmed && hasProposedCharges ? chosenEvidence : null,
+    chargesConfirmed: hasProposedCharges,
+    chargeEvidenceReference: hasProposedCharges ? chosenEvidence : null,
     proposedCharges: proposed,
     goodsTotal: goods.toFixed(2),
     chargesNet: chargesNet.toFixed(2),
