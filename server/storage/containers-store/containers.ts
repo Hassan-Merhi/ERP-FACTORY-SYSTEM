@@ -9,11 +9,33 @@ import { enrichContainerListOffloadingCost } from "../../services/containers/enr
 // Containers
 // ---------------------------------------------------------------------------
 
-export async function getAllContainers(companyId: number): Promise<Container[]> {
-  return await db
-    .select()
+/** The canonical physical container is owned by the source Properties company,
+ * but it is also visible to the active linked destination company. */
+export async function getAllContainers(
+  companyId: number
+): Promise<Array<Container & { linkedParentCompanyName: string | null }>> {
+  return db
+    .select({
+      ...getTableColumns(schema.containers),
+      linkedParentCompanyName: sql<string | null>`(
+        SELECT parent.name FROM intercompany_trades trade
+        JOIN companies parent ON parent.id = trade.source_company_id
+        WHERE trade.physical_container_id = ${schema.containers.id}
+          AND trade.destination_company_id = ${companyId}
+          AND trade.state = 'active' LIMIT 1
+      )`,
+    })
     .from(schema.containers)
-    .where(eq(schema.containers.companyId, companyId))
+    .where(or(
+      eq(schema.containers.companyId, companyId),
+      sql`EXISTS (
+        SELECT 1 FROM intercompany_trades trade
+        WHERE trade.physical_container_id = ${schema.containers.id}
+          AND trade.source_company_id = ${schema.containers.companyId}
+          AND trade.destination_company_id = ${companyId}
+          AND trade.state = 'active'
+      )`
+    ))
     .orderBy(asc(schema.containers.containerNumber));
 }
 
