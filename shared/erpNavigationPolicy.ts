@@ -6,7 +6,12 @@
  * authoritative. Feature-page grants are still evaluated separately.
  */
 import { isExistingRecordReadOnlyRole } from "./createOnlyRolePolicy";
-import { canonicalErpAccessPath, getErpRouteFeatureKeys, ERP_POS_ROLE_ROUTES, isErpDeveloperOnlyRoute } from "./erpRouteAccess";
+import {
+  canonicalErpAccessPath,
+  getErpRouteFeatureKeys,
+  ERP_POS_ROLE_ROUTES,
+  isErpDeveloperOnlyRoute,
+} from "./erpRouteAccess";
 
 export interface ErpNavigationUser {
   role?: string | null;
@@ -55,10 +60,7 @@ export const ERP_ADMIN_OWNER_ONLY_ROUTES: ReadonlySet<string> = new Set([
   "/accounts/historical-openings",
 ]);
 
-export const ERP_DEVELOPER_ADDITIONAL_ROUTES: ReadonlySet<string> = new Set([
-  "/ai-validation",
-  "/ai-command-center",
-]);
+export const ERP_DEVELOPER_ADDITIONAL_ROUTES: ReadonlySet<string> = new Set(["/ai-validation", "/ai-command-center"]);
 
 export const ERP_RETAIL_HIDDEN_ROUTES: ReadonlySet<string> = new Set([
   "/tracking",
@@ -78,11 +80,7 @@ export const ERP_RETAIL_HIDDEN_ROUTES: ReadonlySet<string> = new Set([
   "/ai-validation",
 ]);
 
-export const ERP_PERSONAL_SETTINGS_HIDDEN_ROLES: ReadonlySet<string> = new Set([
-  "Admin",
-  "Developer",
-  "ERP Tester",
-]);
+export const ERP_PERSONAL_SETTINGS_HIDDEN_ROLES: ReadonlySet<string> = new Set(["Admin", "Developer", "ERP Tester"]);
 
 export function effectiveErpRole(user: ErpNavigationUser | undefined): string {
   return user?.currentRole ?? user?.role ?? "";

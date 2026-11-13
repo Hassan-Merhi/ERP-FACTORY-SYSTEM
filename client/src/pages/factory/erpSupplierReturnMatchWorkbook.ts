@@ -120,11 +120,17 @@ export function buildErpSupplierReturnMatchWorkbook(wb: ExcelJS.Workbook, data: 
     total.credit = total.credit.add(new Decimal(line.quantity).mul(item.unitPurchaseCost));
     totals.set(key, total);
   }
-  const ordered = [...totals.values()].sort((a, b) =>
-    a.article.localeCompare(b.article) || a.container.localeCompare(b.container)
+  const ordered = [...totals.values()].sort(
+    (a, b) => a.article.localeCompare(b.article) || a.container.localeCompare(b.container)
   );
   for (const row of ordered)
-    summary.addRow([row.article, row.name, row.container, row.qty.toNumber(), row.credit.toDecimalPlaces(2).toNumber()]);
+    summary.addRow([
+      row.article,
+      row.name,
+      row.container,
+      row.qty.toNumber(),
+      row.credit.toDecimalPlaces(2).toNumber(),
+    ]);
   const sumQty = ordered.reduce((amount, row) => amount.add(row.qty), new Decimal(0));
   const sumCredit = ordered.reduce((amount, row) => amount.add(row.credit), new Decimal(0));
   summary.addRow(["TOTAL", "", "", sumQty.toNumber(), sumCredit.toDecimalPlaces(2).toNumber()]).font = { bold: true };

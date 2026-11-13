@@ -156,10 +156,11 @@ export default function FactorySupplierReturns() {
       const id = entry.candidate.offloadItemId;
       totals.set(id, (totals.get(id) ?? new Decimal(0)).add(entry.row.quantity));
     }
-    return resolved.every((entry) =>
-      !!entry.candidate &&
-      totals.get(entry.candidate.offloadItemId)!.lte(entry.candidate.remainingQty) &&
-      totals.get(entry.candidate.offloadItemId)!.lte(entry.candidate.availableQty)
+    return resolved.every(
+      (entry) =>
+        !!entry.candidate &&
+        totals.get(entry.candidate.offloadItemId)!.lte(entry.candidate.remainingQty) &&
+        totals.get(entry.candidate.offloadItemId)!.lte(entry.candidate.availableQty)
     );
   }, [resolved]);
   const ready = preview.length > 0 && previewSupplierId === supplierId && combinedValid;
@@ -388,7 +389,9 @@ export default function FactorySupplierReturns() {
             >
               <option value="">{copy.allSuppliers}</option>
               {(suppliers.data?.rows ?? []).map((supplier) => (
-                <option key={supplier.id} value={supplier.id}>{supplier.name}</option>
+                <option key={supplier.id} value={supplier.id}>
+                  {supplier.name}
+                </option>
               ))}
             </select>
             {suppliers.isError && <span className="text-destructive">{copy.supplierListError}</span>}
@@ -419,7 +422,9 @@ export default function FactorySupplierReturns() {
           </div>
           {rawRows.length > 0 && (
             <div className="sm:col-span-3 flex flex-wrap gap-2 items-center text-sm">
-              <span>{rawRows.length} {copy.lines} {copy.staged}</span>
+              <span>
+                {rawRows.length} {copy.lines} {copy.staged}
+              </span>
               <Button
                 size="sm"
                 variant="ghost"
@@ -466,8 +471,13 @@ export default function FactorySupplierReturns() {
               <span className="text-sm">
                 {copy.totalRequested}: <strong>{totalBales}</strong>
               </span>
-              <Button type="button" size="sm" variant="outline" onClick={() => void exportPreview()}
-                disabled={busy || exporting || previewSupplierId !== supplierId}>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => void exportPreview()}
+                disabled={busy || exporting || previewSupplierId !== supplierId}
+              >
                 <Download className="h-4 w-4 mr-1" />
                 {exporting ? copy.exporting : copy.exportPreview}
               </Button>

@@ -193,12 +193,12 @@ export function registerErpSupplierReturnRoutes(app: Express) {
   app.post("/api/erp/supplier-returns/preview", ...guards, async (req, res) => {
     try {
       const { activeCompanyId: companyId } = await assertActiveCompanyAccess(req);
-      const { rows, supplierId: suppliedSupplierId } = (req.body as {
-        rows?: unknown;
-        supplierId?: unknown;
-      }) || {};
-      const supplierId =
-        suppliedSupplierId == null ? null : Number(suppliedSupplierId);
+      const { rows, supplierId: suppliedSupplierId } =
+        (req.body as {
+          rows?: unknown;
+          supplierId?: unknown;
+        }) || {};
+      const supplierId = suppliedSupplierId == null ? null : Number(suppliedSupplierId);
       if (supplierId !== null && (!Number.isSafeInteger(supplierId) || supplierId <= 0)) {
         throw new ReturnError(400, "RETURN_SUPPLIER_INVALID", "Choose a valid supplier");
       }
@@ -302,10 +302,8 @@ export function registerErpSupplierReturnRoutes(app: Express) {
         fileName?: string;
         lines?: Array<{ offloadItemId?: number; quantity?: string }>;
       };
-      if (
-        body?.supplierId != null &&
-        (!Number.isSafeInteger(body.supplierId) || body.supplierId <= 0)
-      ) throw new ReturnError(400, "RETURN_SUPPLIER_INVALID", "Choose a valid supplier");
+      if (body?.supplierId != null && (!Number.isSafeInteger(body.supplierId) || body.supplierId <= 0))
+        throw new ReturnError(400, "RETURN_SUPPLIER_INVALID", "Choose a valid supplier");
       if (!/^[a-zA-Z0-9._:-]{8,128}$/.test(body?.requestKey ?? ""))
         throw new ReturnError(400, "RETURN_IDEMPOTENCY_KEY_REQUIRED", "A valid unique request key is required");
       const returnDay = String(body?.returnDate ?? "");
