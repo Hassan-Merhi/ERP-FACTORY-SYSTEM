@@ -37,7 +37,7 @@ export function registerFactoryProductImportRoutes(app: Express) {
 
       upload.single("file")(req, res, async (err) => {
         try {
-          if (err) return res.status(400).json({ message: getErrorMessage(err) });
+          if (err) return res.status(err.code === "LIMIT_FILE_SIZE" ? 413 : 400).json({ message: err.code === "LIMIT_FILE_SIZE" ? "Excel file exceeds the 50 MB standard / 100 MB admin limit." : getErrorMessage(err) });
 
           const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
           if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -242,7 +242,7 @@ export function registerFactoryProductImportRoutes(app: Express) {
 
       upload.single("file")(req, res, async (err) => {
         try {
-          if (err) return res.status(400).json({ message: getErrorMessage(err) });
+          if (err) return res.status(err.code === "LIMIT_FILE_SIZE" ? 413 : 400).json({ message: err.code === "LIMIT_FILE_SIZE" ? "Excel file exceeds the 50 MB standard / 100 MB admin limit." : getErrorMessage(err) });
 
           const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
           if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -389,7 +389,7 @@ export function registerFactoryProductImportRoutes(app: Express) {
 
       upload.single("file")(req, res, async (err) => {
         try {
-          if (err) return res.status(400).json({ message: getErrorMessage(err) });
+          if (err) return res.status(err.code === "LIMIT_FILE_SIZE" ? 413 : 400).json({ message: err.code === "LIMIT_FILE_SIZE" ? "Excel file exceeds the 50 MB standard / 100 MB admin limit." : getErrorMessage(err) });
 
           const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
           if (!companyId) return res.status(400).json({ message: "No company selected" });

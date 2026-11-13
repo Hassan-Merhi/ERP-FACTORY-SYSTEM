@@ -128,6 +128,28 @@ function scopedPolicyUpload(kind: "spreadsheet" | "general") {
         });
       });
     },
+    fields(fields: Parameters<ReturnType<typeof multer>["fields"]>[0]): RequestHandler {
+      return withPostMultipartTenantScope((req, res, next) => {
+        const maxBytes = kind === "spreadsheet"
+          ? spreadsheetImportLimitBytes(req.session?.currentRole)
+          : FILE_SIZE_LIMITS.general;
+        const files = fields.reduce((count, field) => count + (field.maxCount ?? 1), 0);
+        multer({
+          storage: multer.memoryStorage(),
+          limits: { fileSize: maxBytes, files },
+        }).fields(fields)(req, res, (error?: unknown) => {
+          if (error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE") {
+            res.status(413).json({
+              code: "UPLOAD_FILE_TOO_LARGE",
+              message: `File exceeds the ${sizeLimitLabel(maxBytes)} upload limit.`,
+            });
+            return;
+          }
+          if (error) return next(error);
+          next();
+        });
+      });
+    },
   };
 }
 
