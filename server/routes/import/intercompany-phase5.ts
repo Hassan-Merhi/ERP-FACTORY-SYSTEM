@@ -16,7 +16,7 @@ import { requireAuth } from "../../auth";
 import { db } from "../../db";
 import { logger } from "../../lib/logger";
 import { cancelUnreceivedTrade } from "../../services/intercompany/phase5Cancel";
-import { deletePristineLinkedTrade } from "../../services/intercompany/linkedTradePhysicalDelete";
+import { daybookLinkedVoucherTrades, deletePristineLinkedTrade } from "../../services/intercompany/linkedTradePhysicalDelete";
 import { receiveLinkedTrade } from "../../services/intercompany/phase5Receipt";
 import { requireReceivingPairPermission } from "../../services/intercompany/phase5ReceivingAccess";
 import {
@@ -264,6 +264,33 @@ export function registerIntercompanyPhase5Routes(app: Express) {
           actor(req)
         )
       );
+    } catch (error) {
+      return fail(res, error);
+    }
+  });
+  // Daybook looks up the actual import-owned vouchers, not description text.
+  app.get("/api/intercompany-container-trading/daybook-linked-vouchers", requireAuth, async (req, res) => {
+    try {
+      const raw = z.string().min(1).max(1500).parse(req.query.ids);
+      const ids = z.array(routeId).min(1).max(100).parse(raw.split(","));
+      return res.json({ linked: await daybookLinkedVoucherTrades(ids, actor(req)) });
+    } catch (error) {
+      return fail(res, error);
+    }
+  });
+  app.post("/api/intercompany-container-trading/daybook-voucher/:voucherId/delete-linked", requireAuth, async (req, res) => {
+    try {
+      const voucherId = routeId.parse(req.params.voucherId);
+      const parsed = z.object({
+        expectedVersion: id,
+        confirmDeleteBothCompanies: z.literal(true),
+      }).strict().parse(req.body);
+      const linked = await daybookLinkedVoucherTrades([voucherId], actor(req));
+      const trade = linked[voucherId];
+      if (!trade || trade.version !== parsed.expectedVersion) {
+        throw new IntercompanyEditError("IC_DELETE_STALE", "Linked Daybook voucher changed; refresh and review", 409);
+      }
+      return res.json(await deletePristineLinkedTrade(trade.tradeId, trade.version, actor(req)));
     } catch (error) {
       return fail(res, error);
     }
