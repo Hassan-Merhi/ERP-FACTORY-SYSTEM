@@ -19,7 +19,7 @@ import type { RentalModule } from "../../routes/rental/shared";
 import { postErpVoucherTx, type ErpVoucherLine } from "../accounting/erpVoucherPosting";
 import { findOrCreateLedgerAccount, maybeRunAutoTransfer } from "../../routes/rental/shared";
 import { isRentalPeriodDue, getRentalBillingDay, getRentalPeriodDueDate } from "./rentalPeriodService";
-import { buildAllocationsForPayment, findEarliestOutstandingMonth } from "./rentalPaymentAllocationService";
+import { approvedLegacyNonCashBillingAdjustment, buildAllocationsForPayment, findEarliestOutstandingMonth } from "./rentalPaymentAllocationService";
 import { recordedRentalPaymentRate } from "./rentalPaymentRate";
 import { rentalPaymentGroupIdentity, rentalPaymentVoucherSuffix } from "./rentalPostingIdentity";
 import { shouldRunRentalAutoTransfer } from "./rentalCashboxPolicy";
@@ -638,9 +638,10 @@ export async function createRentalPaymentGroup(opts: RentalPaymentGroupOptions) 
     await tx.execute(
       sql`SELECT pg_advisory_xact_lock(hashtext(${`rental-contract:${contractCompanyId}:${contract.id}`}))`
     );
-    // Never allocate additional rent over a historical POSTED payment whose
-    // original voucher is missing/retired. It may already have affected CASH.
-    // Flag for manual reconciliation rather than booking replacement money.
+    // Never allocate more rent over a POSTED cash payment whose original
+    // voucher is missing or retired. The audited $800 historical noncash
+    // billing transition is valid for allocation, not for cash.
+    // All other voucherless POSTED rows must fail closed.
     const invalidPosted = (await tx.execute(sql`
       SELECT p.id FROM property_payments p
       LEFT JOIN vouchers v ON v.id=p.voucher_id
@@ -649,6 +650,7 @@ export async function createRentalPaymentGroup(opts: RentalPaymentGroupOptions) 
       WHERE p.company_id=${companyId} AND p.module=${mod}
         AND p.contract_id=${contract.id} AND p.ledger_row_id IS NOT NULL
         AND p.posting_status='POSTED' AND v.id IS NULL
+        AND NOT (${approvedLegacyNonCashBillingAdjustment})
       LIMIT 1
     `)).rows;
     if (invalidPosted.length > 0) {
@@ -926,11 +928,12 @@ export async function postScheduledGroup(
     const bookedAmounts = (await tx.execute(sql`
       SELECT p.ledger_row_id,COALESCE(SUM(p.amount::numeric),0) AS paid
       FROM property_payments p
-      JOIN vouchers v ON v.id=p.voucher_id AND v.company_id=p.company_id
+      LEFT JOIN vouchers v ON v.id=p.voucher_id AND v.company_id=p.company_id
         AND v.deleted_at IS NULL AND v.optional=FALSE
       WHERE p.company_id=${companyId} AND p.module=${module}
         AND p.contract_id=${contract.id}
         AND p.posting_status='POSTED'
+        AND (v.id IS NOT NULL OR (${approvedLegacyNonCashBillingAdjustment}))
         AND p.ledger_row_id IN (${sql.raw(monthIds.join(","))})
       GROUP BY p.ledger_row_id
     `)).rows as Array<{ ledger_row_id: number; paid: string }>;

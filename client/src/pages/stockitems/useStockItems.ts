@@ -9,6 +9,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Location, PagedStockItemsResponse, StockCategory, StockGrade, StockGroup, StockItem } from "./types";
 import { PAGE_SIZE } from "./utils";
 import { useStockItemsFilters } from "./useStockItemsFilters";
+import { loadStockItemsForExport } from "./stockItemsExport";
 
 export function useStockItems() {
   const { selectedCompany } = useCompany();
@@ -41,6 +42,7 @@ export function useStockItems() {
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [exportingStockItems, setExportingStockItems] = useState(false);
   const [assignCategoryDialogOpen, setAssignCategoryDialogOpen] = useState(false);
   const [pendingCategoryId, setPendingCategoryId] = useState("");
 
@@ -374,20 +376,35 @@ export function useStockItems() {
   };
 
   const exportToExcel = async () => {
+    if (exportingStockItems) return;
+    if (!navigator.onLine) {
+      toast({ title: "Not available offline", description: "Exports require a connection", variant: "destructive" });
+      return;
+    }
+    setExportingStockItems(true);
     try {
-      const [allRes, pricesRes, costDubaiRes, aliasesRes] = await Promise.all([
-        fetch("/api/stock-items", { credentials: "include" }),
+      const [allItems, pricesRes, costDubaiRes, aliasesRes] = await Promise.all([
+        loadStockItemsForExport({
+          search: searchTerm,
+          stockGroupId: selectedGroupFilter,
+          gradeId: selectedGradeFilter,
+          categoryId: selectedCategoryFilter,
+        }),
         fetch("/api/stock-item-location-prices/all", { credentials: "include" }),
         fetch("/api/stock-items/cost-dubai", { credentials: "include" }),
         fetch("/api/stock-items/all-code-aliases", { credentials: "include" }),
       ]);
-      const allItems: StockItem[] = allRes.ok ? await allRes.json() : [];
+      if (!pricesRes.ok || !costDubaiRes.ok || !aliasesRes.ok) {
+        throw new Error("Failed to fetch stock item pricing or aliases");
+      }
+      if (allItems.length === 0) {
+        toast({ title: "No stock items", description: "No items match the current filters." });
+        return;
+      }
       const locationPrices: { stockItemId: number; locationId: number; locationName: string; sellingPrice: string }[] =
-        pricesRes.ok ? await pricesRes.json() : [];
-      const costDubaiData: { stockItemId: number; costDubai: string }[] = costDubaiRes.ok
-        ? await costDubaiRes.json()
-        : [];
-      const aliasData: { stockItemId: number; aliasCode: string }[] = aliasesRes.ok ? await aliasesRes.json() : [];
+        await pricesRes.json();
+      const costDubaiData: { stockItemId: number; costDubai: string }[] = await costDubaiRes.json();
+      const aliasData: { stockItemId: number; aliasCode: string }[] = await aliasesRes.json();
 
       const costDubaiMap = new Map<number, string>();
       for (const costDubai of costDubaiData) costDubaiMap.set(costDubai.stockItemId, costDubai.costDubai);
@@ -433,8 +450,14 @@ export function useStockItems() {
       const workbook = utils.book_new();
       utils.book_append_sheet(workbook, worksheet, "Stock Items");
       await writeFile(workbook, "stock-items.xlsx");
-    } catch {
-      toast({ title: "Export failed", description: "Could not export stock items", variant: "destructive" });
+    } catch (error) {
+      toast({
+        title: "Export failed",
+        description: error instanceof Error ? error.message : "Could not export stock items",
+        variant: "destructive",
+      });
+    } finally {
+      setExportingStockItems(false);
     }
   };
 
@@ -536,5 +559,6 @@ export function useStockItems() {
     handleEditClick,
     exportSalesHistory,
     exportToExcel,
+    exportingStockItems,
   };
 }
