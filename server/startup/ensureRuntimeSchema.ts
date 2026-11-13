@@ -502,6 +502,14 @@ export async function ensurePropertyUnitsWriteSchema(pool: Pool): Promise<void> 
 }
 
 export async function ensureRuntimeSchema(pool: Pool): Promise<void> {
+  // Confirm the branch's physical-delete trigger actually exists in PostgreSQL.
+  // The feature service skips the versioned migration runner on some deploys.
+  const { ensureLinkedPhysicalDeleteGuard } =
+    await import("../services/intercompany/ensureLinkedPhysicalDeleteGuard");
+  if (process.env.INTERCOMPANY_PHYSICAL_DELETE_ENABLED === "true") {
+    await ensureLinkedPhysicalDeleteGuard(pool);
+  }
+
   await ensurePropertyUnitsWriteSchema(pool);
   try {
     await pool.query(
