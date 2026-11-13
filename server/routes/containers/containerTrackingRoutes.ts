@@ -11,7 +11,7 @@ import {
   userCompanyRoles,
   type InsertContainer,
 } from "@shared/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, or, sql } from "drizzle-orm";
 import { getEtaTrackingSummary } from "../../services/jsonCargoTrackingService";
 import { parseMoneyInput } from "../../lib/money";
 
@@ -202,18 +202,34 @@ export function registerContainerTrackingRoutes(app: Express) {
             continue;
           }
 
-          // Find container by number
-          const [container] = await db
+          // Resolve local or actively linked parent physical container. Tracking
+          // edits are written once to that shared row (no mirrored copies).
+          const selectedCompanyId = req.session.currentCompanyId!;
+          const candidates = await db
             .select()
             .from(containers)
             .where(
               and(
                 eq(containers.containerNumber, containerNumber),
-                eq(containers.companyId, req.session.currentCompanyId!)
+                or(
+                  eq(containers.companyId, selectedCompanyId),
+                  sql`EXISTS (
+                    SELECT 1 FROM intercompany_trades trade
+                    WHERE trade.physical_container_id = ${containers.id}
+                      AND trade.source_company_id = ${containers.companyId}
+                      AND trade.destination_company_id = ${selectedCompanyId}
+                      AND trade.state = 'active'
+                  )`
+                )
               )
-            )
-            .limit(1);
-
+            );
+          const owned = candidates.filter((item) => item.companyId === selectedCompanyId);
+          const matches = owned.length ? owned : candidates;
+          if (matches.length > 1) {
+            errors.push(`Ambiguous container number: ${containerNumber}. Use a unique number.`);
+            continue;
+          }
+          const container = matches[0];
           if (!container) {
             notFound++;
             errors.push(`Container not found: ${containerNumber}`);
