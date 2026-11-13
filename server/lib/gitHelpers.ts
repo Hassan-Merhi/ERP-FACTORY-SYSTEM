@@ -164,6 +164,8 @@ export function calcIsOverdue(maxOffloadDate: string | null, status: string): bo
 export type RawContainerRow = {
   id: number;
   companyId: number;
+  // Active destination links to this one physical tracking record, scoped to the requested companies.
+  linkedDestinationCompanyIds?: number[];
   containerNumber: string;
   supplierId: number;
   supplierName: string | null;
@@ -244,6 +246,14 @@ export async function fetchActiveContainers(
     .select({
       id: containers.id,
       companyId: containers.companyId,
+      linkedDestinationCompanyIds: sql<number[]>`(
+        SELECT COALESCE(array_agg(DISTINCT trade.destination_company_id), ARRAY[]::integer[])
+        FROM intercompany_trades trade
+        WHERE trade.physical_container_id = ${containers.id}
+          AND trade.source_company_id = ${containers.companyId}
+          AND trade.state = 'active'
+          AND trade.destination_company_id IN (${sql.join(companyIds.map((id) => sql`${id}`), sql`, `)})
+      )`,
       containerNumber: containers.containerNumber,
       supplierId: containers.supplierId,
       supplierName: suppliers.legalName,
