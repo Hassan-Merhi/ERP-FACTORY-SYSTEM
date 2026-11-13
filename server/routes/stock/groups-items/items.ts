@@ -81,7 +81,7 @@ export function registerStockItemRoutes(app: Express) {
         .select()
         .from(stockItems)
         .where(where)
-        .orderBy(asc(stockItems.name))
+        .orderBy(asc(stockItems.name), asc(stockItems.id))
         .limit(pageSizeNum)
         .offset(offset);
 
