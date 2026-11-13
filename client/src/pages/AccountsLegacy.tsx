@@ -33,6 +33,7 @@ import { AccountSearchResults } from "./accountslegacy/AccountSearchResults";
 import { FindVoucherTab } from "./accountslegacy/FindVoucherTab";
 import { EditAccountDialog } from "./accountslegacy/EditAccountDialog";
 import { AccountsConfirmDialogs } from "./accountslegacy/AccountsConfirmDialogs";
+import { presentIntercompanyAccount, showInIntercompanyAccountsOverview } from "./accountslegacy/intercompanyAccountPresentation";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import type { FactoryMyAccess } from "@shared/apiTypes";
 import {
@@ -126,7 +127,9 @@ export default function Accounts() {
       ? presentedFilteredAccounts
           .filter((account) => !account.name.trim().toLocaleLowerCase().startsWith("insurance - "))
           .map(withFxWallet)
-      : presentedFilteredAccounts;
+      : presentedFilteredAccounts
+          .filter((account) => showInIntercompanyAccountsOverview(account, model.appMode))
+          .map((account) => presentIntercompanyAccount(account, model.appMode));
   const selectedFreshStartPresentation =
     selectedAccount?.subType === "gc_partner_capital" && selectedAccount.accountId === freshStartAccount?.accountId
       ? freshStartPresentation
@@ -148,7 +151,8 @@ export default function Accounts() {
     (account) =>
       account.type !== "displayGroup" &&
       account.subType !== "Group" &&
-      (model.appMode !== "factory" || !account.name.trim().toLocaleLowerCase().startsWith("insurance - "))
+      (model.appMode !== "factory" || !account.name.trim().toLocaleLowerCase().startsWith("insurance - ")) &&
+      showInIntercompanyAccountsOverview(account, model.appMode)
   );
   const totalAccounts = overviewAccounts.length;
   const accountsWithBalance = overviewAccounts.filter(
