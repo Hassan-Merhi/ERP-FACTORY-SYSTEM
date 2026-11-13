@@ -1,0 +1,434 @@
+/**
+ * Universal Excel Export Engine — Phase 2.
+ *
+ * Opt-in workbook builder shared by ERP, Factory, and Properties. The data
+ * adapter must supply authorized, complete records; this is NOT a replacement
+ * for endpoint authentication, company scoping, or cost-field authorization.
+ *
+ * Do not insert decorative report rows into import templates: many parsers
+ * depend on the first worksheet and absolute cell/header coordinates.
+ */
+import ExcelJS from "exceljs";
+
+export const UNIVERSAL_EXCEL_SCHEMA_VERSION = 1 as const;
+export type UniversalExcelMode = "report" | "import-template";
+export type UniversalExcelColumnType =
+  | "text"
+  | "integer"
+  | "decimal"
+  | "money"
+  | "percentage"
+  | "date"
+  | "boolean"
+  | "formula";
+
+export type UniversalExcelRecord = Readonly<Record<string, unknown>>;
+
+/** Formulas must be deliberately constructed by a trusted report builder. */
+export interface TrustedExcelFormula {
+  trustedFormula: string;
+  result?: string | number | boolean | null;
+}
+
+export interface UniversalExcelColumn {
+  key: string;
+  header: string;
+  type?: UniversalExcelColumnType;
+  width?: number;
+  numFmt?: string;
+  /** Column is omitted unless the caller explicitly grants this tag. */
+  permissionTag?: string;
+}
+
+export interface UniversalExcelGroup {
+  label: string;
+  rows: readonly UniversalExcelRecord[];
+  /** Precomputed by the page/ledger, never recalculated by this engine. */
+  footer?: UniversalExcelRecord;
+}
+
+interface UniversalExcelSheetBase {
+  name: string;
+  /**
+   * In report mode the default data header is row 5; in import-template mode
+   * it is row 1. Overrides are exact, never silently shifted.
+   */
+  headerRow?: number;
+  columns: readonly UniversalExcelColumn[];
+  /** Additional page-defined fields such as per-location prices or months. */
+  dynamicColumns?: readonly UniversalExcelColumn[];
+  /**
+   * Only discover keys in this explicit, already-authorized allowlist.
+   * Search EVERY row (not only the first 200) for late/sparse values.
+   * Keys not present in any row are not rendered.
+   */
+  discoverColumns?: readonly UniversalExcelColumn[];
+  /** Reject any record keys not covered by the effective schema (default true). */
+  strictColumns?: boolean;
+  /** Optional rows before an import template's exact header row. */
+  prefaceRows?: readonly (readonly unknown[])[];
+  footer?: UniversalExcelRecord;
+  autoFilter?: boolean;
+  freezeHeader?: boolean;
+}
+
+export interface UniversalExcelTableSheet extends UniversalExcelSheetBase {
+  kind: "table";
+  rows: readonly UniversalExcelRecord[];
+}
+
+export interface UniversalExcelGroupedSheet extends UniversalExcelSheetBase {
+  kind: "grouped";
+  groups: readonly UniversalExcelGroup[];
+}
+
+/**
+ * Escape hatch for invoice/matrix/print layouts whose original worksheet
+ * contract must remain intact. This path deliberately applies no title rows,
+ * filters, renaming, formulas, or other structural changes to the worksheet.
+ */
+export interface UniversalExcelCustomSheet {
+  kind: "custom";
+  name: string;
+  build: (worksheet: ExcelJS.Worksheet) => void;
+}
+
+export type UniversalExcelSheet =
+  | UniversalExcelTableSheet
+  | UniversalExcelGroupedSheet
+  | UniversalExcelCustomSheet;
+
+export interface UniversalExcelWorkbookSpec {
+  schemaVersion: typeof UNIVERSAL_EXCEL_SCHEMA_VERSION;
+  title: string;
+  mode: UniversalExcelMode;
+  sheets: readonly UniversalExcelSheet[];
+  companyName?: string;
+  exportedAt?: Date;
+  dateFormat?: "dd/mm/yyyy" | "mm/dd/yyyy";
+  filters?: readonly { label: string; value: string }[];
+  /**
+   * Display-level safeguard only: all sensitive data must ALREADY have been
+   * authorized and filtered at its API/data source.
+   */
+  allowedColumnTags?: readonly string[];
+}
+
+export interface UniversalExcelSheetResult {
+  name: string;
+  kind: UniversalExcelSheet["kind"];
+  headerRow: number | null;
+  dataRows: number;
+  columns: readonly string[];
+}
+
+const MAX_EXCEL_ROWS = 1_048_576;
+const MAX_EXCEL_COLUMNS = 16_384;
+const NAVY = "FF1E3A5F";
+const PALE = "FFEFF4FA";
+const WHITE = "FFFFFFFF";
+const TEXT_FORMULA_PREFIX = /^[\s\uFEFF\u0000-\u001F]*[=+\-@]/u;
+
+function safeText(value: unknown): string {
+  const raw = String(value ?? "");
+  return TEXT_FORMULA_PREFIX.test(raw) ? "'" + raw : raw;
+}
+
+function displayDate(date: Date, format: UniversalExcelWorkbookSpec["dateFormat"]): string {
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = date.getFullYear();
+  return format === "mm/dd/yyyy"
+    ? month + "/" + day + "/" + year
+    : day + "/" + month + "/" + year;
+}
+
+function toDate(value: unknown, key: string): Date {
+  if (value instanceof Date) {
+    if (!Number.isFinite(value.getTime())) throw new Error("Invalid date in column " + key);
+    return new Date(value.getTime());
+  }
+  // A date-only value is kept at local midnight, avoiding a TZ-dependent shift.
+  const raw = String(value);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    throw new Error("Date column " + key + " requires YYYY-MM-DD or Date");
+  }
+  const year = Number(raw.slice(0, 4));
+  const month = Number(raw.slice(5, 7));
+  const day = Number(raw.slice(8, 10));
+  const date = new Date(year, month - 1, day);
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
+    throw new Error("Invalid date in column " + key);
+  }
+  return date;
+}
+
+function numeric(value: unknown, key: string, integer: boolean): number {
+  const raw = typeof value === "string" ? value.trim() : value;
+  if (typeof raw !== "number" && (typeof raw !== "string" || !/^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/.test(raw))) {
+    throw new Error("Column " + key + " requires a numeric value");
+  }
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || (integer && !Number.isSafeInteger(parsed))) {
+    throw new Error("Invalid numeric value in column " + key);
+  }
+  return parsed;
+}
+
+function asCell(value: unknown, column: UniversalExcelColumn): ExcelJS.CellValue {
+  if (value === null || value === undefined || value === "") return null;
+  switch (column.type ?? "text") {
+    case "text":
+      return safeText(value);
+    case "integer":
+      return numeric(value, column.key, true);
+    case "decimal":
+    case "money":
+    case "percentage":
+      return numeric(value, column.key, false);
+    case "date":
+      return toDate(value, column.key);
+    case "boolean":
+      if (typeof value !== "boolean") throw new Error("Column " + column.key + " requires a boolean");
+      return value;
+    case "formula": {
+      if (typeof value !== "object" || !("trustedFormula" in value) ||
+          typeof value.trustedFormula !== "string" || !value.trustedFormula.trim()) {
+        throw new Error("Column " + column.key + " requires a trusted formula object");
+      }
+      const formula = value as TrustedExcelFormula;
+      if (formula.result !== undefined && formula.result !== null &&
+          typeof formula.result !== "number" && typeof formula.result !== "string" &&
+          typeof formula.result !== "boolean") {
+        throw new Error("Invalid formula result in column " + column.key);
+      }
+      if (typeof formula.result === "number" && !Number.isFinite(formula.result)) {
+        throw new Error("Invalid formula result in column " + column.key);
+      }
+      return { formula: formula.trustedFormula, ...(formula.result == null ? {} : { result: formula.result }) };
+    }
+  }
+}
+
+function defaultNumFmt(type: UniversalExcelColumnType | undefined, dateFormat: UniversalExcelWorkbookSpec["dateFormat"]): string | undefined {
+  switch (type) {
+    case "integer": return "#,##0";
+    case "decimal": return "#,##0.###";
+    case "money": return "#,##0.00";
+    case "percentage": return "0.00%";
+    case "date": return dateFormat ?? "dd/mm/yyyy";
+    default: return undefined;
+  }
+}
+
+function assertSheetName(name: string, seen: Set<string>): void {
+  if (!name || name.length > 31 || /[\\/*?:\[\]]/.test(name) ||
+      name.startsWith("'") || name.endsWith("'") || seen.has(name.toLowerCase())) {
+    throw new Error("Invalid or duplicate Excel worksheet name: " + name);
+  }
+  seen.add(name.toLowerCase());
+}
+
+function sourceRows(sheet: UniversalExcelTableSheet | UniversalExcelGroupedSheet): readonly UniversalExcelRecord[] {
+  if (sheet.kind === "table") return [...sheet.rows, ...(sheet.footer ? [sheet.footer] : [])];
+  const rows: UniversalExcelRecord[] = [];
+  for (const group of sheet.groups) {
+    rows.push(...group.rows);
+    if (group.footer) rows.push(group.footer);
+  }
+  if (sheet.footer) rows.push(sheet.footer);
+  return rows;
+}
+
+function resolveColumns(
+  sheet: UniversalExcelTableSheet | UniversalExcelGroupedSheet,
+  allowed: ReadonlySet<string>,
+): UniversalExcelColumn[] {
+  const source = sourceRows(sheet);
+  const present = new Set<string>();
+  for (const row of source) {
+    for (const key of Object.keys(row)) present.add(key);
+  }
+  const selected: UniversalExcelColumn[] = [];
+  const seen = new Set<string>();
+  for (const column of [...sheet.columns, ...(sheet.dynamicColumns ?? []), ...(sheet.discoverColumns ?? []).filter(c => present.has(c.key))]) {
+    if (!column.key.trim() || !column.header.trim() || seen.has(column.key) ||
+        (column.width != null && (!Number.isFinite(column.width) || column.width <= 0))) {
+      throw new Error("Invalid or duplicate column: " + column.key);
+    }
+    seen.add(column.key);
+    if (column.permissionTag && !allowed.has(column.permissionTag)) continue;
+    selected.push(column);
+  }
+  if (selected.length === 0 || selected.length > MAX_EXCEL_COLUMNS) {
+    throw new Error("Excel sheet must contain 1 to 16384 visible columns");
+  }
+  if (sheet.strictColumns !== false) {
+    // Keys blocked by permission are allowed in source only to avoid leaking
+    // their contents into the output. Unrecognized fields fail rather than
+    // silently disappearing (even if they only occur after row 200).
+    for (const key of present) {
+      if (!seen.has(key)) throw new Error("Unmapped Excel export column: " + key + " in " + sheet.name);
+    }
+  }
+  return selected;
+}
+
+function writeRow(
+  worksheet: ExcelJS.Worksheet,
+  rowNumber: number,
+  columns: readonly UniversalExcelColumn[],
+  data: UniversalExcelRecord,
+): void {
+  const row = worksheet.getRow(rowNumber);
+  for (let i = 0; i < columns.length; i += 1) {
+    row.getCell(i + 1).value = asCell(data[columns[i].key], columns[i]);
+  }
+}
+
+function fillRow(worksheet: ExcelJS.Worksheet, rowNumber: number, count: number, color: string): void {
+  const row = worksheet.getRow(rowNumber);
+  for (let i = 1; i <= count; i += 1) {
+    row.getCell(i).fill = { type: "pattern", pattern: "solid", fgColor: { argb: color } };
+  }
+}
+
+function styleHeader(ws: ExcelJS.Worksheet, rowNumber: number, columns: readonly UniversalExcelColumn[]): void {
+  const row = ws.getRow(rowNumber);
+  row.height = 24;
+  for (let i = 0; i < columns.length; i += 1) {
+    const cell = row.getCell(i + 1);
+    cell.value = safeText(columns[i].header);
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: NAVY } };
+    cell.font = { bold: true, color: { argb: WHITE }, size: 10 };
+    cell.alignment = { vertical: "middle", wrapText: true };
+  }
+}
+
+function styleMetadata(ws: ExcelJS.Worksheet, spec: UniversalExcelWorkbookSpec, width: number): void {
+  const timestamp = spec.exportedAt ?? new Date();
+  if (!Number.isFinite(timestamp.getTime())) throw new Error("Invalid export timestamp");
+  const parts = [spec.companyName ? "Company: " + spec.companyName : "",
+    "Exported: " + displayDate(timestamp, spec.dateFormat)].filter(Boolean);
+  const filters = (spec.filters ?? []).map(f => f.label + ": " + f.value).join(" | ");
+  ws.mergeCells(1, 1, 1, width);
+  ws.getCell(1, 1).value = safeText(spec.title);
+  ws.getCell(1, 1).font = { bold: true, color: { argb: WHITE }, size: 15 };
+  fillRow(ws, 1, width, NAVY);
+  ws.getRow(1).height = 32;
+  ws.mergeCells(2, 1, 2, width);
+  ws.getCell(2, 1).value = safeText(parts.join(" | "));
+  ws.mergeCells(3, 1, 3, width);
+  ws.getCell(3, 1).value = safeText(filters ? "Filters: " + filters : "Filters: All");
+  ws.getCell(2, 1).font = { size: 10, color: { argb: NAVY } };
+  ws.getCell(3, 1).font = { size: 9, color: { argb: NAVY }, italic: true };
+}
+
+function renderDataSheet(
+  workbook: ExcelJS.Workbook,
+  spec: UniversalExcelWorkbookSpec,
+  sheet: UniversalExcelTableSheet | UniversalExcelGroupedSheet,
+  allowed: ReadonlySet<string>,
+): UniversalExcelSheetResult {
+  const cols = resolveColumns(sheet, allowed);
+  const headerRow = sheet.headerRow ?? (spec.mode === "import-template" ? 1 : 5);
+  if (!Number.isSafeInteger(headerRow) || headerRow < (spec.mode === "report" ? 5 : 1)) {
+    throw new Error("Invalid header position for " + sheet.name);
+  }
+  if (spec.mode === "report" && sheet.prefaceRows?.length) {
+    throw new Error("Preface rows are reserved for import templates");
+  }
+  if ((sheet.prefaceRows?.length ?? 0) >= headerRow) {
+    throw new Error("Preface rows overlap the import header in " + sheet.name);
+  }
+  const ws = workbook.addWorksheet(sheet.name);
+  if (spec.mode === "report") styleMetadata(ws, spec, cols.length);
+  for (let i = 0; i < (sheet.prefaceRows?.length ?? 0); i += 1) {
+    const preface = sheet.prefaceRows![i];
+    if (preface.length > cols.length) throw new Error("Preface width exceeds column count");
+    for (let j = 0; j < preface.length; j += 1) {
+      ws.getRow(i + 1).getCell(j + 1).value = safeText(preface[j]);
+    }
+  }
+  for (let i = 0; i < cols.length; i += 1) {
+    const col = ws.getColumn(i + 1);
+    col.width = cols[i].width ?? 18;
+    col.numFmt = cols[i].numFmt ?? defaultNumFmt(cols[i].type, spec.dateFormat) ?? "General";
+  }
+  styleHeader(ws, headerRow, cols);
+  let next = headerRow + 1;
+  let count = 0;
+  let lastDataRow = headerRow;
+  const put = (record: UniversalExcelRecord) => {
+    if (next > MAX_EXCEL_ROWS) throw new Error("Excel worksheet row limit exceeded: " + sheet.name);
+    writeRow(ws, next, cols, record);
+    lastDataRow = next++;
+    count += 1;
+  };
+  const footer = (record: UniversalExcelRecord) => {
+    put(record);
+    const footerRow = ws.getRow(next - 1);
+    footerRow.font = { bold: true, color: { argb: NAVY } };
+    // Footer styling is deliberately bounded to the handful of footer rows.
+    fillRow(ws, next - 1, cols.length, PALE);
+  };
+  if (sheet.kind === "table") {
+    for (const record of sheet.rows) put(record);
+  } else {
+    for (const group of sheet.groups) {
+      if (next > MAX_EXCEL_ROWS) throw new Error("Excel worksheet row limit exceeded: " + sheet.name);
+      const rowNo = next++;
+      if (cols.length > 1) ws.mergeCells(rowNo, 1, rowNo, cols.length);
+      const groupCell = ws.getRow(rowNo).getCell(1);
+      groupCell.value = safeText(group.label);
+      groupCell.font = { bold: true, color: { argb: NAVY } };
+      groupCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: PALE } };
+      for (const record of group.rows) put(record);
+      if (group.footer) footer(group.footer);
+    }
+  }
+  if (sheet.footer) footer(sheet.footer);
+  const enableFilter = sheet.autoFilter ?? (spec.mode === "report" && sheet.kind === "table");
+  if (enableFilter) {
+    ws.autoFilter = {
+      from: { row: headerRow, column: 1 },
+      to: { row: Math.max(headerRow, lastDataRow - (sheet.footer ? 1 : 0)), column: cols.length },
+    };
+  }
+  if (sheet.freezeHeader ?? spec.mode === "report") {
+    ws.views = [{ state: "frozen", xSplit: 0, ySplit: headerRow }];
+  }
+  return { name: sheet.name, kind: sheet.kind, headerRow, dataRows: count, columns: cols.map(c => c.key) };
+}
+
+/**
+ * Builds a new workbook but performs NO I/O. Server and client adapters must
+ * reuse their established safe ExcelJS writing paths.
+ */
+export function buildUniversalExcelWorkbook(spec: UniversalExcelWorkbookSpec): {
+  workbook: ExcelJS.Workbook;
+  results: UniversalExcelSheetResult[];
+} {
+  if (spec.schemaVersion !== UNIVERSAL_EXCEL_SCHEMA_VERSION ||
+      !spec.title.trim() || !spec.sheets.length || !["report", "import-template"].includes(spec.mode)) {
+    throw new Error("Invalid universal Excel export specification");
+  }
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = "Dakzo Systems";
+  workbook.created = spec.exportedAt ?? new Date();
+  const names = new Set<string>();
+  const allowed = new Set(spec.allowedColumnTags ?? []);
+  const results: UniversalExcelSheetResult[] = [];
+  for (const sheet of spec.sheets) {
+    assertSheetName(sheet.name, names);
+    if (sheet.kind === "custom") {
+      // Custom layouts retain exact structure; the caller controls its
+      // permissions and must supply already-authorized data.
+      sheet.build(workbook.addWorksheet(sheet.name));
+      results.push({ name: sheet.name, kind: "custom", headerRow: null, dataRows: 0, columns: [] });
+      continue;
+    }
+    results.push(renderDataSheet(workbook, spec, sheet, allowed));
+  }
+  return { workbook, results };
+}
