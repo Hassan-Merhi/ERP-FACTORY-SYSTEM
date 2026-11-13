@@ -7,6 +7,7 @@ const ErpHelpTraining = lazy(() =>
   import("@/pages/HelpTrainingWorkspaces").then((m) => ({ default: m.ErpHelpTraining }))
 );
 const TicketManagement = lazy(() => import("@/pages/TicketManagement"));
+const ErpSupplierReturns = lazy(() => import("@/pages/factory/FactorySupplierReturns"));
 import { canAccessAnyErpFeature, canAccessErpFeature, type ErpFeatureAccess } from "@/app/erpAccess";
 import { erpPageAccessQueryOptions } from "@/app/erpAccessQuery";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -162,6 +163,7 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
       <Route path="/tracking" component={TrackingHub} />
       <Route path="/help-training">{() => <ErpHelpTraining user={user} />}</Route>
       {R("/financial-overview", canAccess("dashboard"), Dashboard)}
+      {R("/supplier-returns", canAccess("suppliers"), ErpSupplierReturns)}
 
       {canAccess("pos") ? (
         <Route path="/pos">{() => <POSPage />}</Route>
