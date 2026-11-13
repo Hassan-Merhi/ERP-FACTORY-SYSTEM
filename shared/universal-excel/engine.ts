@@ -22,6 +22,7 @@ import {
 export const UNIVERSAL_EXCEL_SCHEMA_VERSION = 1 as const;
 export type UniversalExcelMode = "report" | "import-template";
 export type UniversalExcelColumnType =
+  | "auto"
   | "text"
   | "integer"
   | "decimal"
@@ -202,6 +203,15 @@ function numeric(value: unknown, key: string, integer: boolean): number {
 function asCell(value: unknown, column: UniversalExcelColumn): ExcelJS.CellValue {
   if (value === null || value === undefined || value === "") return null;
   switch (column.type ?? "text") {
+    case "auto":
+      if (typeof value === "number") {
+        if (!Number.isFinite(value)) throw new Error("Invalid numeric value in column " + column.key);
+        return value;
+      }
+      if (typeof value === "boolean") return value;
+      if (value instanceof Date) return toDate(value, column.key);
+      if (typeof value !== "string") throw new Error("Unsupported Excel cell value in " + column.key);
+      return safeText(value);
     case "text":
       return safeText(value);
     case "integer":
