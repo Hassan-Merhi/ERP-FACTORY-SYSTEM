@@ -101,6 +101,7 @@ export function StockItemsView({ stockItems }: { stockItems: StockItemsModel }) 
     handleEditClick,
     exportSalesHistory,
     exportToExcel,
+    exportingStockItems,
   } = stockItems;
 
   const searchControl = (
@@ -267,9 +268,13 @@ export function StockItemsView({ stockItems }: { stockItems: StockItemsModel }) 
                 <Edit className="h-4 w-4 mr-2" />
                 Adjust Stock
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={exportToExcel} data-testid="menu-export">
+              <DropdownMenuItem
+                onClick={exportToExcel}
+                disabled={exportingStockItems}
+                data-testid="menu-export"
+              >
                 <Download className="h-4 w-4 mr-2" />
-                Export Stock Items
+                {exportingStockItems ? "Exporting all matching items..." : "Export Stock Items"}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={exportSalesHistory} data-testid="menu-export-sales-history">
                 <Download className="h-4 w-4 mr-2" />
