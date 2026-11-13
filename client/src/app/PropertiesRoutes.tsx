@@ -53,6 +53,9 @@ import {
   ContainerDetailPage,
   ContainerVerification,
   Suppliers,
+  StockHub,
+  StockItemDetail,
+  ImportStockItems,
   EditSupplier,
   SupplierProformas,
   PurchaseOrderEdit,
@@ -106,6 +109,11 @@ export function PropertiesRoutes({ user }: PropertiesRoutesProps) {
       <Route path="/properties/containers/:containerId/verification" component={ContainerVerification} />
       <Route path="/properties/containers/:id" component={ContainerDetailPage} />
       <Route path="/properties/containers" component={ContainersPage} />
+      {/* Reuse company-scoped Stock Items, Query, Offload Search and OTW.
+          Keep all management and import routes inside Properties mode. */}
+      {canTrade && <Route path="/properties/stock-query/:id" component={StockItemDetail} />}
+      {canTrade && <Route path="/properties/import-stock-items" component={ImportStockItems} />}
+      {canTrade && <Route path="/properties/stock">{() => <StockHub />}</Route>}
       <Route path="/properties/offloads/:id" component={OffloadDetail} />
       <Route path="/properties/suppliers/:supplierId/proformas" component={SupplierProformas} />
       <Route path="/properties/suppliers/:id/edit" component={EditSupplier} />
