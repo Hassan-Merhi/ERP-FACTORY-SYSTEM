@@ -1,6 +1,6 @@
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Download, Plus, ChevronDown, RefreshCw } from "lucide-react";
+import { Download, Plus, ChevronDown } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -8,28 +8,18 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
-import { getContainerSyncButtonLabel } from "@/i18n/containerSyncTranslations";
 
 interface ContainerToolbarProps {
   onExportExcel: () => void;
   onExportAllFull: () => void;
-  onSyncAll: () => void;
-  isSyncing: boolean;
-  showSyncAll: boolean;
   propertiesMode?: boolean;
 }
 
 export function ContainerToolbar({
   onExportExcel,
   onExportAllFull,
-  onSyncAll,
-  isSyncing,
-  showSyncAll,
   propertiesMode = false,
 }: ContainerToolbarProps) {
-  const { language } = useApplicationLanguage();
-  const syncLabel = getContainerSyncButtonLabel(language);
 
   return (
     <div className="flex w-full flex-wrap gap-2 *:flex-auto sm:w-auto sm:*:flex-none">
