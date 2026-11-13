@@ -53,17 +53,17 @@ const sample = (): ParsedContainerPreview => ({
 });
 
 describe("intercompany Phase 2 landed cost and preserved supplier PO groups", () => {
-  it("preserves both original Eurogulf PO groups, excluding unconfirmed estimates", () => {
+  it("preserves full original Eurogulf PO amounts even when legacy confirmation is false", () => {
     const plan = createContainerImportPlan(sample(), {
       containerNumber: "MSCU-001",
       relationshipId: 5,
       chargesConfirmed: false,
     });
     expect(plan.sourcePos.map((po) => po.originalPoNumber)).toEqual(["EURO-100", "EURO-101"]);
-    expect(plan.landedTotal).toBe("10000.00");
-    expect(plan.charges.freight).toBe("0.00");
-    expect(plan.chargesConfirmed).toBe(false);
-    expect(plan.sourcePos.map((po) => po.grandTotal)).toEqual(["4000.00", "6000.00"]);
+    expect(plan.landedTotal).toBe("10450.00");
+    expect(plan.charges.freight).toBe("400.00");
+    expect(plan.chargesConfirmed).toBe(true);
+    expect(plan.sourcePos.map((po) => po.grandTotal)).toEqual(["4180.00", "6270.00"]);
   });
 
   it("allocates confirmed freight and discount exactly, preserving zero markup", () => {
@@ -83,14 +83,15 @@ describe("intercompany Phase 2 landed cost and preserved supplier PO groups", ()
     }
   });
 
-  it("requires charge evidence before marking proposed charges confirmed", () => {
-    expect(() =>
-      createContainerImportPlan(sample(), {
-        containerNumber: "MSCU-001",
-        relationshipId: 2,
-        chargesConfirmed: true,
-      })
-    ).toThrow(/evidence|reference/i);
+  it("does not require an extra checkbox or invoice reference to include supplied PO charges", () => {
+    const plan = createContainerImportPlan(sample(), {
+      containerNumber: "MSCU-001",
+      relationshipId: 2,
+      chargesConfirmed: false,
+    });
+    expect(plan.landedTotal).toBe("10450.00");
+    expect(plan.chargesNet).toBe("450.00");
+    expect(plan.chargeEvidenceReference).toBeNull();
   });
 
   it("rejects price tampering and non-USD invoices before any transaction", () => {
