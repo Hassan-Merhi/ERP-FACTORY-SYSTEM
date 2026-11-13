@@ -29,7 +29,6 @@ export default function Containers() {
   const isProperties = selectedCompany?.companyType === "properties";
   const isSupplierPartner = selectedCompany?.companyType === "supplier_partner";
   const isFactory = selectedCompany?.companyType === "factory" || selectedCompany?.companyType === "factory_v2";
-  const canSyncAllVouchers = selectedCompany?.companyType === "erp";
 
   const {
     allContainers,
@@ -96,9 +95,6 @@ export default function Containers() {
         <ContainerToolbar
           onExportExcel={importExport.exportToExcel}
           onExportAllFull={importExport.exportAllContainersFull}
-          onSyncAll={() => syncAll.setSyncAllConfirmOpen(true)}
-          isSyncing={syncAll.syncAllMutation.isPending}
-          showSyncAll={canSyncAllVouchers && canChangeExistingRecords}
           propertiesMode={isProperties}
         />
       </PageHeader>
