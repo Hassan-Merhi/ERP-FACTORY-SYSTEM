@@ -28,7 +28,6 @@ import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/compon
 import { useCompany } from "@/contexts/CompanyContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useToast } from "@/hooks/use-toast";
-import { ExcelJS, writeFile } from "@/lib/excelHelper";
 import { formatNumber } from "@/lib/formatNumber";
 
 import StockInSalesReportComparison from "./StockInSalesReportComparison";
@@ -338,21 +337,43 @@ function StockInSalesReportSummary() {
     if (!data || rows.length === 0) return;
     setIsExporting(true);
     try {
-      const workbook = new ExcelJS.Workbook();
-      const sheet = workbook.addWorksheet("Stock & Sales Report");
-      sheet.columns = [
-        { header: periodColumnLabel, key: "period", width: 22 },
-        { header: "Opening Qty", key: "openingStockQty", width: 16 },
-        { header: "Stock In", key: "stockInQty", width: 16 },
-        { header: "Stock Out", key: "stockOutQty", width: 16 },
-        { header: "Closing Qty", key: "closingStockQty", width: 16 },
-        { header: "Closing Value", key: "closingStockValue", width: 18 },
-        { header: "Sales", key: "totalSales", width: 18 },
-        { header: "Gross Profit", key: "costProfit", width: 18 },
-      ];
-      rows.forEach((row) => sheet.addRow({ period: formatPeriodLabel(row), ...row }));
-      sheet.getRow(1).font = { bold: true };
-      await writeFile(workbook, erpReportFileName("stock-in-sales-report", "xlsx", new Date(), "-"));
+      const { exportOperationalWorkbook } = await import("@/lib/operationalExcelExport");
+      const exportRows = rows.map(row => ({
+        period: formatPeriodLabel(row),
+        openingStockQty: row.openingStockQty,
+        stockInQty: row.stockInQty,
+        stockOutQty: row.stockOutQty,
+        closingStockQty: row.closingStockQty,
+        closingStockValue: row.closingStockValue,
+        totalSales: row.totalSales,
+        costProfit: row.costProfit,
+      }));
+      await exportOperationalWorkbook({
+        title: "Stock & Sales Report",
+        fileName: erpReportFileName("stock-in-sales-report", "xlsx", new Date(), "-"),
+        companyName: selectedCompany?.name,
+        currencyCode: "USD",
+        filters: [
+          { label: "Period", value: periodFilter.fromDate + " — " + periodFilter.toDate },
+          { label: "Locations", value: selectedLocations.join(",") || "All" },
+          { label: "Groups", value: selectedStockGroups.join(",") || "All" },
+          { label: "Search", value: debouncedSearch || "All" },
+        ],
+        sheets: [{
+          name: "Stock & Sales Report",
+          columns: [
+            { key: "period", header: periodColumnLabel, width: 22 },
+            { key: "openingStockQty", header: "Opening Qty", type: "decimal", width: 16 },
+            { key: "stockInQty", header: "Stock In", type: "decimal", width: 16 },
+            { key: "stockOutQty", header: "Stock Out", type: "decimal", width: 16 },
+            { key: "closingStockQty", header: "Closing Qty", type: "decimal", width: 16 },
+            { key: "closingStockValue", header: "Closing Value", type: "money", width: 18 },
+            { key: "totalSales", header: "Sales", type: "money", width: 18 },
+            { key: "costProfit", header: "Gross Profit", type: "money", width: 18 },
+          ],
+          rows: exportRows,
+        }],
+      });
     } catch (exportError: unknown) {
       toast({
         title: "Export failed",
