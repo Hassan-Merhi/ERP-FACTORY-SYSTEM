@@ -151,20 +151,20 @@ export default function FactorySupplierReturns() {
     try {
       const wb = await read(await file.arrayBuffer());
       const sheet = wb.Sheets[wb.SheetNames[0]];
-      if (!sheet) throw new Error("This workbook has no first sheet");
+      if (!sheet) throw new Error(copy.workbookMissing);
       const rows = utils.sheet_to_json(sheet) as Record<string, unknown>[];
-      if (!rows.length || rows.length > 1000) throw new Error("Excel must contain between 1 and 1000 data rows");
+      if (!rows.length || rows.length > 1000) throw new Error(copy.workbookRows);
       const parsed = rows.map((row, index) => {
         const code = String(excelCode(row, ["articlecode", "code", "itemcode", "barcode"]) ?? "").trim();
         const quantity = String(excelCode(row, ["qty", "quantity", "bales"]) ?? "").trim();
         if (!code || !/^(?:0|[1-9]\d*)(?:\.\d{1,3})?$/.test(quantity) || Number(quantity) <= 0)
-          throw new Error(`Excel row ${index + 2}: valid article code and positive qty (maximum 3 decimals) required`);
+          throw new Error([copy.rowInvalid, index + 2].join(" "));
         return { code, quantity };
       });
       setRawRows(parsed);
       toast({
         title: copy.readTitle,
-        description: `${parsed.length} ${copy.readBody}`,
+        description: [parsed.length, copy.readBody].join(" "),
       });
     } catch (e) {
       toast({ title: copy.invalidExcel, description: (e as Error).message, variant: "destructive" });
@@ -217,9 +217,7 @@ export default function FactorySupplierReturns() {
       for (const [id, qty] of totals) {
         const source = resolved.find((x) => x.candidate?.offloadItemId === id)!.candidate!;
         if (qty.gt(source.remainingQty) || qty.gt(source.availableQty))
-          throw new Error(
-            `Combined Excel quantity for ${source.code} exceeds the stock or offload balance. Select a different source container.`
-          );
+          throw new Error([copy.combinedQtyInvalid, source.code].join(" "));
       }
       const lines = [...totals].map(([offloadItemId, qty]) => ({ offloadItemId, quantity: qty.toFixed(3) }));
       const response = (await (
@@ -237,7 +235,7 @@ export default function FactorySupplierReturns() {
       await queryClient.invalidateQueries();
       toast({
         title: copy.success,
-        description: `${copy.batch} #${response.id}: ${response.totalQty} ${copy.balesPosted}`,
+        description: [copy.batch, `#${response.id}:`, response.totalQty, copy.balesPosted].join(" "),
       });
     } catch (e) {
       toast({ title: copy.postFailed, description: (e as Error).message, variant: "destructive" });
