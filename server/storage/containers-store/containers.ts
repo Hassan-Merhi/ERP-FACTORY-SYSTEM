@@ -20,7 +20,7 @@ export async function getAllContainers(
       linkedParentCompanyName: sql<string | null>`(
         SELECT parent.name FROM intercompany_trades trade
         JOIN companies parent ON parent.id = trade.source_company_id
-        WHERE trade.physical_container_id = ${schema.containers.id}
+        WHERE trade.physical_container_id = "containers"."id"
           AND trade.destination_company_id = ${companyId}
           AND trade.state = 'active' LIMIT 1
       )`,
@@ -30,8 +30,8 @@ export async function getAllContainers(
       eq(schema.containers.companyId, companyId),
       sql`EXISTS (
         SELECT 1 FROM intercompany_trades trade
-        WHERE trade.physical_container_id = ${schema.containers.id}
-          AND trade.source_company_id = ${schema.containers.companyId}
+        WHERE trade.physical_container_id = "containers"."id"
+          AND trade.source_company_id = "containers"."company_id"
           AND trade.destination_company_id = ${companyId}
           AND trade.state = 'active'
       )`
@@ -43,10 +43,10 @@ export async function getActiveContainers(companyId: number): Promise<Array<Cont
   const rows = await db
     .select({
       ...getTableColumns(schema.containers),
-      linkedParentCompanyName: sql<string | null>`(SELECT parent.name FROM intercompany_trades trade JOIN companies parent ON parent.id = trade.source_company_id WHERE trade.physical_container_id = ${schema.containers.id} AND trade.destination_company_id = ${companyId} AND trade.state = 'active' LIMIT 1)`,
+      linkedParentCompanyName: sql<string | null>`(SELECT parent.name FROM intercompany_trades trade JOIN companies parent ON parent.id = trade.source_company_id WHERE trade.physical_container_id = "containers"."id" AND trade.destination_company_id = ${companyId} AND trade.state = 'active' LIMIT 1)`,
     })
     .from(schema.containers)
-    .where(and(or(eq(schema.containers.companyId, companyId), sql`EXISTS (SELECT 1 FROM intercompany_trades trade WHERE trade.physical_container_id = ${schema.containers.id} AND trade.destination_company_id = ${companyId} AND trade.state = 'active')`), ne(schema.containers.status, "SOLD")))
+    .where(and(or(eq(schema.containers.companyId, companyId), sql`EXISTS (SELECT 1 FROM intercompany_trades trade WHERE trade.physical_container_id = "containers"."id" AND trade.destination_company_id = ${companyId} AND trade.state = 'active')`), ne(schema.containers.status, "SOLD")))
     .orderBy(asc(schema.containers.containerNumber));
   return enrichContainerListOffloadingCost(rows, companyId);
 }
