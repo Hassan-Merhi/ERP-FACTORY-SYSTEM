@@ -40,6 +40,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [architecture.md](architecture.md) | How the codebase fits together |
 | [core-concepts.md](core-concepts.md) | Companies, modes, tenancy, the vocabulary |
 | [contributing.md](contributing.md) | Project layout and how to work in it |
+| [file-size-limits-20261113.md](file-size-limits-20261113.md) | Current source file size warning and hard cap policy |
 
 ## How the business logic works
 
