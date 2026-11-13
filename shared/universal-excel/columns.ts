@@ -68,7 +68,7 @@ function validToken(token: string): boolean {
 function validateDimension(dimension: UniversalExcelDimension): void {
   const id = String(dimension.id);
   if (!id.trim() || !dimension.label.trim() ||
-      /[\u0000-\u001f]/.test(id + dimension.label)) {
+      Array.from(id + dimension.label).some(char => char.charCodeAt(0) < 32)) {
     throw new Error("Invalid Excel column dimension id or label");
   }
   if (dimension.index !== undefined &&
