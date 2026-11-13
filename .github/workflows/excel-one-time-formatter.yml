@@ -1,0 +1,43 @@
+name: One-time Universal Excel Prettier
+
+on:
+  push:
+    branches:
+      - feature/universal-excel-export-system
+
+permissions:
+  contents: write
+
+jobs:
+  format-once:
+    if: github.repository == 'Hassan-Merhi/ERP-FACTORY-SYSTEM' && github.event.head_commit.message != 'chore(excel): one-time Prettier formatting'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: feature/universal-excel-export-system
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 24.22.2
+      - name: Install locked formatter
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Format all source changes on this feature branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          base="$(git merge-base origin/main HEAD)"
+          mapfile -t files < <(git diff --name-only --diff-filter=ACMR "$base" HEAD -- client/src server shared tests scripts build | grep -E '\.(ts|tsx|css|mjs)$' || true)
+          if [ "${#files[@]}" -eq 0 ]; then exit 0; fi
+          node node_modules/prettier/bin/prettier.cjs --write "${files[@]}"
+          git add -- "${files[@]}"
+          if git diff --cached --quiet; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore(excel): one-time Prettier formatting"
+          git push origin HEAD:feature/universal-excel-export-system
