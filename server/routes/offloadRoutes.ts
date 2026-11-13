@@ -224,6 +224,25 @@ export function registerOffloadRoutes(app: Express) {
         .where(eq(containerOffloadItems.offloadId, offloadId))
         .execute();
 
+      // Return correction is a separate, immutable debit-note/stock-issue event.
+      // Keep original offload lines for accounting provenance, expose net quantities
+      // for the offload invoice display instead of rewriting a posted receipt.
+      const returnQuantities = resultRows<{offload_item_id:number;returned_qty:string}>(
+        await db.execute(sql`
+          SELECT l.offload_item_id, SUM(l.quantity)::text AS returned_qty
+            FROM erp_supplier_return_lines l
+           WHERE l.company_id=${access.activeCompanyId} AND l.offload_id=${offloadId}
+           GROUP BY l.offload_item_id
+        `)
+      );
+      const returnedByItem = new Map(returnQuantities.map(r=>[Number(r.offload_item_id),toMoney(r.returned_qty)]));
+      const itemsWithReturns = items.map(item=>{
+        const returned=returnedByItem.get(item.id)??toMoney(0);
+        const net=toMoney(item.quantity).minus(returned);
+        return {...item,returnedQty:returned.toFixed(3),netQty:net.toFixed(3)};
+      });
+      const netTotalBales = itemsWithReturns.reduce((sum,item)=>sum.plus(toMoney(item.netQty)),toMoney(0)).toFixed(3);
+
       // Fetch PO-level charges for the container (freight, fumigation, surcharge, documentCharges, discount, otherCharges)
       const pos = await db
         .select({
@@ -325,7 +344,7 @@ export function registerOffloadRoutes(app: Express) {
         hasVouchers: liveVouchers.length > 0,
       };
 
-      res.json({ ...offload, items: sortOffloadItemsByName(items), poCharges, additionalCharges, liveCharges });
+      res.json({ ...offload, items: sortOffloadItemsByName(itemsWithReturns), netTotalBales, poCharges, additionalCharges, liveCharges });
     } catch (error: unknown) {
       return sendCompanyAccessError(res, error);
     }
