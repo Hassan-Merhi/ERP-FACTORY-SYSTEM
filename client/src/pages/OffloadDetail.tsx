@@ -1,4 +1,6 @@
 import type { ClientErrorLike } from "@/lib/clientError";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { getSupplierReturnsCopy } from "@/i18n/supplierReturnsTranslations";
 import { offloadItemDisplayName, sortOffloadItemsByName } from "@shared/offloadItemSort";
 import { useParams, useLocation } from "wouter";
 import { useBackToParent } from "@/hooks/use-back-to-parent";
@@ -162,6 +164,8 @@ function ChargeRow({
 }
 
 export default function OffloadDetail() {
+  const { language } = useApplicationLanguage();
+  const copy = getSupplierReturnsCopy(language);
   const params = useParams<{ id: string }>();
   const [, navigate] = useLocation();
   const handleBack = useBackToParent();
@@ -322,11 +326,11 @@ export default function OffloadDetail() {
                   <thead className="sticky top-0 z-30 bg-muted">
                     <tr className="border-b bg-muted/40">
                       <th className="text-left p-3 font-medium">Item</th>
-                      <th className="text-right p-3 font-medium">Offloaded</th>
-                      <th className="text-right p-3 font-medium">Returned</th>
-                      <th className="text-right p-3 font-medium">Net Qty</th>
+                      <th className="text-right p-3 font-medium">{copy.offloaded}</th>
+                      <th className="text-right p-3 font-medium">{copy.returned}</th>
+                      <th className="text-right p-3 font-medium">{copy.netQty}</th>
                       <th className="text-right p-3 font-medium">Rate</th>
-                      <th className="text-right p-3 font-medium">Original Landed Value</th>
+                      <th className="text-right p-3 font-medium">{copy.originalLanded}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -364,8 +368,7 @@ export default function OffloadDetail() {
 
               {Number(offload.totalBales) > Number(offload.netTotalBales ?? offload.totalBales) && (
                 <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
-                  Returned bales are deducted from net quantity. Original landed costs are retained as historic
-                  evidence; supplier-return vouchers record the stock, supplier and cost corrections.
+                  {copy.offloadReturnNotice}
                 </p>
               )}
 
@@ -374,7 +377,7 @@ export default function OffloadDetail() {
                   <p className="text-muted-foreground">Total Bales</p>
                   <p className="font-medium font-mono">
                     {formatNumber(Number(offload.netTotalBales ?? offload.totalBales))} net /{" "}
-                    {formatNumber(Number(offload.totalBales))} offloaded
+                    {formatNumber(Number(offload.totalBales))} {copy.offloadedUnit}
                   </p>
                 </div>
               </div>
@@ -491,7 +494,7 @@ export default function OffloadDetail() {
           <div className="border rounded-md p-4 flex items-center justify-between bg-muted/20">
             <div>
               <p className="text-sm text-muted-foreground">
-                Original Grand Total (before supplier return credit notes)
+                {copy.originalGrand}
               </p>
               <p className="text-2xl font-semibold font-mono mt-0.5">{formatAmount(itemsTotal)}</p>
             </div>
