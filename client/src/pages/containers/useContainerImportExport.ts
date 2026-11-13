@@ -33,10 +33,21 @@ export function useContainerImportExport({
       Amount: parseFloat(container.grandTotal || "0"),
       "Import Date": formatDisplayDate(container.importDate),
     }));
-    const worksheet = utils.json_to_sheet(data);
-    const workbook = utils.book_new();
-    utils.book_append_sheet(workbook, worksheet, "Containers");
-    await writeFile(workbook, "containers.xlsx");
+    const { columnsFromOperationalRows, exportOperationalWorkbook } = await import(
+      "@/lib/operationalExcelExport"
+    );
+    await exportOperationalWorkbook({
+      title: "Containers",
+      fileName: "containers.xlsx",
+      sheets: [{
+        name: "Containers",
+        rows: data,
+        columns: columnsFromOperationalRows(data, {
+          orderedHeaders: ["Container Number", "Supplier", "Status", "Amount", "Import Date"],
+          types: { Amount: "money" },
+        }),
+      }],
+    });
   };
 
   const exportAllContainersFull = async () => {
@@ -80,10 +91,28 @@ export function useContainerImportExport({
       "Doc Received": c.docReceived ? "Yes" : "No",
       Description: c.trackingDescription || "",
     }));
-    const worksheet = utils.json_to_sheet(data);
-    const workbook = utils.book_new();
-    utils.book_append_sheet(workbook, worksheet, "OTW Containers");
-    await writeFile(workbook, "otw_containers.xlsx");
+    const { columnsFromOperationalRows, exportOperationalWorkbook } = await import(
+      "@/lib/operationalExcelExport"
+    );
+    // The OTW import parser expects Container # and the other input headers
+    // in the first row. Do NOT prepend the report title/metadata here.
+    await exportOperationalWorkbook({
+      title: "OTW Containers",
+      fileName: "otw_containers.xlsx",
+      mode: "import-template",
+      sheets: [{
+        name: "OTW Containers",
+        rows: data,
+        columns: columnsFromOperationalRows(data, {
+          orderedHeaders: [
+            "Container #", "Supplier", "Amount", "Shop", "ETA", "Transporter",
+            "Transport Fee", "Number Plate", "Location", "Border Date",
+            "Offload Date", "Agent", "Duty Fee", "Doc Received", "Description",
+          ],
+          types: { Amount: "money" },
+        }),
+      }],
+    });
   };
 
   const downloadImportTemplate = async () => {
