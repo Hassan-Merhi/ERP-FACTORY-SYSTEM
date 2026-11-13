@@ -193,8 +193,10 @@ export async function seedRow(
   client: PoolClient,
   table: string,
   values: Row = {},
-  options: { parents: boolean } = { parents: true }
+  options: { parents?: boolean; triggers?: boolean } = {}
 ): Promise<Row> {
+  const withParents = options.parents ?? true;
+  const withTriggers = options.triggers ?? false;
   const columns = await columnsOf(client, table);
   const known = new Set(columns.map((column) => column.name));
   for (const name of Object.keys(values)) {
@@ -208,7 +210,7 @@ export async function seedRow(
       row[column.name] = await placeholder(client, column, seedSequence);
     }
   }
-  if (options.parents) await seedParents(client, table, row);
+  if (withParents) await seedParents(client, table, row);
 
   const names = Object.keys(row);
   const text =
@@ -220,7 +222,7 @@ export async function seedRow(
   // A savepoint keeps a refused seed (a check constraint the placeholder values
   // break, say) from aborting the transaction and hiding the real error.
   await client.query("SAVEPOINT guard_seed");
-  await client.query("SET LOCAL session_replication_role = replica");
+  if (!withTriggers) await client.query("SET LOCAL session_replication_role = replica");
   try {
     const { rows } = await client.query(
       text,
@@ -232,8 +234,18 @@ export async function seedRow(
   } catch (error) {
     await client.query("ROLLBACK TO SAVEPOINT guard_seed");
     await client.query("SET LOCAL session_replication_role = origin");
+    if (withTriggers) throw error;
     throw new Error(`Could not seed ${table}: ${(error as Error).message}`, { cause: error });
   }
+}
+
+/**
+ * Inserts one row the way an application would, with every trigger and foreign
+ * key on, filling the required columns the caller did not supply. Use it to
+ * test what an insert trigger does; a refusal reaches the caller unchanged.
+ */
+export async function insertRow(client: PoolClient, table: string, values: Row = {}): Promise<Row> {
+  return seedRow(client, table, values, { triggers: true });
 }
 
 export interface Refusal {
