@@ -1,6 +1,8 @@
 import { lazyRetry as lazy } from "@/lib/lazyRetry";
 import { Switch, Route, Redirect } from "wouter";
 const PropertiesRentalsHub = lazy(() => import("@/pages/properties/PropertiesRentalsHub"));
+// Keep the Properties PO route isolated from the large shared ERP/SPA import bundle.
+const PropertiesPOImport = lazy(() => import("@/pages/poimport/PropertiesIntercompanyPOImport"));
 import { useCompany } from "@/contexts/CompanyContext";
 import {
   canUsePropertiesCapability,
@@ -49,7 +51,6 @@ import {
   PropertiesVouchers,
   TrackingHub,
   ContainersPage,
-  POImport,
   ContainerDetailPage,
   ContainerVerification,
   Suppliers,
@@ -104,7 +105,7 @@ export function PropertiesRoutes({ user }: PropertiesRoutesProps) {
       <Route path="/properties/daybook" component={PropertiesDaybook} />
 
       {/* Phase 1: expose existing company-scoped logistics and supplier screens in Properties. */}
-      {canTrade && <Route path="/properties/po-import" component={POImport} />}
+      {canTrade && <Route path="/properties/po-import" component={PropertiesPOImport} />}
       <Route path="/properties/tracking" component={TrackingHub} />
       <Route path="/properties/containers/:containerId/verification" component={ContainerVerification} />
       <Route path="/properties/containers/:id" component={ContainerDetailPage} />
