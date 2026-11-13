@@ -13,6 +13,15 @@ import { isPaymentRow, type SupplierLedgerRow, type SupplierPurchaseOrder } from
 
 export type SupplierDateFilter = "all" | "today" | "yesterday" | "this_month" | "this_year";
 
+/** Stable destination predicate shared by the detail table and its Excel export. */
+export function matchesSupplierDestination(
+  destinationCompanyId: number | null | undefined,
+  filter: string
+): boolean {
+  return filter === "all" ||
+    (filter === "unassigned" ? destinationCompanyId == null : /^\\d+$/.test(filter) && destinationCompanyId === Number(filter));
+}
+
 export interface SupplierLedgerKpis {
   txCount: number;
   totalPurchases: number;
