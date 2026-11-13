@@ -115,6 +115,9 @@ jobs:
             client/src/app/PropertiesRoutes.tsx \
             client/src/routes/ErpRoutes.tsx \
             server/services/intercompany/normalVoucherMatching.ts \
+            server/lib/migratedVoucherGuard.ts \
+            server/services/accounting/voucherCorrection.ts \
+            server/services/accounting/voucherReversal.ts \
             server/routes/vouchers/normalIntercompanyVoucherRoutes.ts \
             server/routes/voucherRoutes.ts \
             client/src/pages/vouchers/useNormalIntercompanyVoucher.tsx \
@@ -122,6 +125,7 @@ jobs:
             client/src/pages/vouchers/useVoucherSaveMutation.ts \
             client/src/pages/Vouchers.tsx \
             tests/intercompany-normal-voucher-auto-mirror.test.ts \
+            tests/intercompany-paired-voucher-protection.test.ts \
             tests/intercompany-phase7-navigation.test.ts \
             tests/intercompany-phase6-voucher-payments.test.ts \
             tests/intercompany-phase5-database-guards.test.ts \
@@ -154,6 +158,7 @@ jobs:
             tests/intercompany-phase4-payment-money.test.ts \
             tests/intercompany-phase5-properties-container-integration.test.ts \
             tests/intercompany-normal-voucher-auto-mirror.test.ts \
+            tests/intercompany-paired-voucher-protection.test.ts \
             tests/intercompany-phase7-navigation.test.ts \
             tests/intercompany-phase6-voucher-payments.test.ts \
             tests/intercompany-phase5-database-guards.test.ts \
