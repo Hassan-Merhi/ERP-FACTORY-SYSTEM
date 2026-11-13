@@ -346,6 +346,21 @@ export async function completeRevisionTx(
   await tx.execute(sql.raw("SELECT set_config('erp.ic_edit_revision','',true)"));
   return updated.version;
 }
+/**
+ * The import audit locks the accounting treatment per trade. Older imports
+ * retain their historical accounting until an explicit reviewed restatement.
+ */
+export async function isNettedIntercompanyTradeTx(tx: DbTransaction, tradeId: number): Promise<boolean> {
+  const [event] = await tx
+    .select({ payload: intercompanyAuditEvents.payload })
+    .from(intercompanyAuditEvents)
+    .where(and(
+      eq(intercompanyAuditEvents.eventType, "container-import-confirmed"),
+      sql`${intercompanyAuditEvents.eventKey} LIKE ${"ic-container-import:%:" + tradeId}`
+    ))
+    .limit(1);
+  return (event?.payload as { technicalProfitNetting?: unknown } | null)?.technicalProfitNetting === true;
+}
 /** Exact source PO deltas, mirrored sale/COGS and destination GIT/supplier payable, without touching old vouchers. */
 export async function applyCostDeltasTx(
   tx: DbTransaction,
@@ -365,6 +380,7 @@ export async function applyCostDeltasTx(
 ) {
   const p = data.policy,
     original = new Map(data.source.map((g) => [g.po.id, g.po]));
+  const netted = await isNettedIntercompanyTradeTx(tx, data.trade.id);
   const goodsDelta = sumMoney(input.poDeltas.map((x) => x.goods));
   const chargesDelta = sumMoney(input.poDeltas.map((x) => x.charge));
   const totalDelta = goodsDelta.plus(chargesDelta);
@@ -385,7 +401,7 @@ export async function applyCostDeltasTx(
       ),
       ...signedPair(
         { ledgerAccountId: p.sourcePurchaseAccountId! },
-        { ledgerAccountId: p.sourceChargeAccrualAccountId! },
+        netted ? { supplierId: po.supplierId } : { ledgerAccountId: p.sourceChargeAccrualAccountId! },
         change.charge,
         "Confirmed charge accrual adjustment, PO " + po.poNumber
       ),
@@ -437,6 +453,15 @@ export async function applyCostDeltasTx(
           { ledgerAccountId: p.sourcePurchaseAccountId! },
           totalDelta,
           "Cost of goods sold reclassification"
+        ).concat(
+          netted
+            ? signedPair(
+                { ledgerAccountId: p.sourceSalesAccountId! },
+                { ledgerAccountId: p.sourceCostAccountId! },
+                totalDelta,
+                "Eliminate internal sales and COGS at cost"
+              )
+            : []
         ),
       },
       {
