@@ -33,12 +33,13 @@ import { useSuppliersFilters } from "./suppliers/useSuppliersFilters";
 import type { Company } from "@/contexts/CompanyContext";
 import type { SupplierLedgerRow, SupplierPurchaseOrder, SupplierWithStats } from "./suppliers/supplierDisplay";
 import { getAvatarColor, getInitials } from "./suppliers/supplierDisplay";
-import { supplierLedgerToExportRows, voucherTabForType, type SupplierDateFilter } from "./suppliers/ledgerSummaries";
+import { filterLedgerRowsByDate, supplierLedgerToExportRows, voucherTabForType, type SupplierDateFilter } from "./suppliers/ledgerSummaries";
 import { SupplierDetailDialog, type SupplierDetailTab } from "./suppliers/SupplierDetailDialog";
 
 export default function Suppliers() {
   const [selectedSupplier, setSelectedSupplier] = useState<SupplierWithStats | null>(null);
   const [dialogTab, setDialogTab] = useState<SupplierDetailTab>("transactions");
+  const [destinationFilter, setDestinationFilter] = useState("all");
   const [supplierToDelete, setSupplierToDelete] = useState<{ id: number; name: string } | null>(null);
 
   useEscapeBack(selectedSupplier ? () => setSelectedSupplier(null) : null);
@@ -147,6 +148,7 @@ export default function Suppliers() {
   const handleSupplierClick = (supplier: SupplierWithStats) => {
     setSelectedSupplier(supplier);
     setCompanyFilter("all");
+    setDestinationFilter("all");
     setDialogTab("transactions");
     setDateFilter("all");
   };
@@ -154,6 +156,7 @@ export default function Suppliers() {
   const handleCloseDialog = () => {
     setSelectedSupplier(null);
     setCompanyFilter("all");
+    setDestinationFilter("all");
     setDialogTab("transactions");
     setDateFilter("all");
   };
@@ -189,8 +192,22 @@ export default function Suppliers() {
       });
       return;
     }
+    const exportRows = filterLedgerRowsByDate(
+      unifiedLedger.filter((row) =>
+        destinationFilter === "all"
+          ? true
+          : row.type !== "opening" && (destinationFilter === "unassigned"
+            ? row.destinationCompanyId == null
+            : row.destinationCompanyId === Number(destinationFilter))
+      ),
+      dateFilter
+    );
+    if (!exportRows.length) {
+      toast({ title: "No transactions to export", description: "Change the destination or date filter." });
+      return;
+    }
     await exportErpReportRowsExcel({
-      rows: supplierLedgerToExportRows(unifiedLedger),
+      rows: supplierLedgerToExportRows(exportRows),
       sheetName: "Supplier Ledger",
       fileName: erpReportFileName(`${selectedSupplier.legalName}_Ledger`, "xlsx"),
     });
@@ -439,6 +456,8 @@ export default function Suppliers() {
         formatAmount={formatAmount}
         companyFilter={companyFilter}
         onCompanyFilterChange={setCompanyFilter}
+        destinationFilter={destinationFilter}
+        onDestinationFilterChange={setDestinationFilter}
         dateFilter={dateFilter}
         onDateFilterChange={(v: SupplierDateFilter) => setDateFilter(v)}
         hidePayments={hidePayments}
