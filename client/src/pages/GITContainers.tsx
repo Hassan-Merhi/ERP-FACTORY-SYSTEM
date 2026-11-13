@@ -192,7 +192,7 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
     setDrawerContainer(c);
     setDrawerOpen(true);
     try {
-      const detail = await loadContainerDetail(c.id, c.companyId);
+      const detail = await loadContainerDetail(c.id, data?.mode === "single" && data.companyId ? data.companyId : c.companyId);
       setDrawerContainer((current) => (current?.id === c.id ? detail : current));
     } catch (detailError) {
       toast({
