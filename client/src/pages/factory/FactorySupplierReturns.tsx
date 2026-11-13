@@ -19,6 +19,8 @@ interface Candidate {
   containerNumber: string;
   supplierId: number | null;
   supplierName: string | null;
+  stockItemId: number;
+  locationId: number;
   supplierCount: number;
   currencyCount: number;
   currency: string | null;
@@ -149,21 +151,47 @@ export default function FactorySupplierReturns() {
       }),
     [preview, chosen]
   );
-  const combinedValid = useMemo(() => {
-    const totals = new Map<number, Decimal>();
+  const combined = useMemo(() => {
+    const offloadQty = new Map<number, Decimal>();
+    const stockQty = new Map<string, Decimal>();
     for (const entry of resolved) {
-      if (!entry.valid || !entry.candidate) return false;
-      const id = entry.candidate.offloadItemId;
-      totals.set(id, (totals.get(id) ?? new Decimal(0)).add(entry.row.quantity));
+      if (!entry.valid || !entry.candidate) continue;
+      const item = entry.candidate;
+      offloadQty.set(
+        item.offloadItemId,
+        (offloadQty.get(item.offloadItemId) ?? new Decimal(0)).add(entry.row.quantity)
+      );
+      const stockKey = item.locationId + ":" + item.stockItemId;
+      stockQty.set(stockKey, (stockQty.get(stockKey) ?? new Decimal(0)).add(entry.row.quantity));
     }
-    return resolved.every(
-      (entry) =>
-        !!entry.candidate &&
-        totals.get(entry.candidate.offloadItemId)!.lte(entry.candidate.remainingQty) &&
-        totals.get(entry.candidate.offloadItemId)!.lte(entry.candidate.availableQty)
-    );
+    const overOffloads = new Set<number>();
+    const overStock = new Set<string>();
+    for (const entry of resolved) {
+      if (!entry.candidate) continue;
+      const item = entry.candidate;
+      if (offloadQty.get(item.offloadItemId)?.gt(item.remainingQty))
+        overOffloads.add(item.offloadItemId);
+      const key = item.locationId + ":" + item.stockItemId;
+      if (stockQty.get(key)?.gt(item.availableQty)) overStock.add(key);
+    }
+    return {
+      overOffloads,
+      overStock,
+      valid: resolved.every(
+        (entry) =>
+          entry.valid &&
+          !!entry.candidate &&
+          !overOffloads.has(entry.candidate.offloadItemId) &&
+          !overStock.has(entry.candidate.locationId + ":" + entry.candidate.stockItemId)
+      ),
+    };
   }, [resolved]);
-  const ready = preview.length > 0 && previewSupplierId === supplierId && combinedValid;
+  const validEntry = (entry: (typeof resolved)[number]) =>
+    entry.valid &&
+    !!entry.candidate &&
+    !combined.overOffloads.has(entry.candidate.offloadItemId) &&
+    !combined.overStock.has(entry.candidate.locationId + ":" + entry.candidate.stockItemId);
+  const ready = preview.length > 0 && previewSupplierId === supplierId && combined.valid;
   const totalBales = resolved.reduce((s, x) => s.add(x.row.quantity), new Decimal(0)).toFixed(3);
 
   function addManual() {
@@ -203,9 +231,10 @@ export default function FactorySupplierReturns() {
           row: entry.row.row,
           code: entry.row.code,
           quantity: entry.row.quantity,
-          status: entry.row.status,
+          status:
+            entry.valid && !validEntry(entry) ? "combined-quantity-exceeds-balance" : entry.row.status,
           candidate: entry.candidate,
-          valid: entry.valid && combinedValid,
+          valid: validEntry(entry),
         })),
       });
       await writeFile(wb, "ERP_Supplier_Return_Container_Matches.xlsx");
@@ -465,7 +494,7 @@ export default function FactorySupplierReturns() {
         <div className="rounded-lg border overflow-hidden">
           <div className="px-4 py-3 border-b flex flex-wrap gap-3 justify-between">
             <strong>
-              {copy.mapping}: {resolved.filter((x) => x.valid).length}/{preview.length} {copy.validRows}
+              {copy.mapping}: {resolved.filter(validEntry).length}/{preview.length} {copy.validRows}
             </strong>
             <div className="flex flex-wrap items-center gap-3">
               <span className="text-sm">
@@ -506,7 +535,9 @@ export default function FactorySupplierReturns() {
                 </tr>
               </thead>
               <tbody>
-                {resolved.map(({ row, candidate, selected, valid }) => {
+                {resolved.map((entry) => {
+                  const { row, candidate, selected } = entry;
+                  const valid = validEntry(entry);
                   const candidates = row.candidates.filter(
                     (x) => x.supplierCount === 1 && x.currencyCount === 1 && x.currency === "USD"
                   );
