@@ -245,6 +245,16 @@ export interface Refusal {
   constraint?: string;
 }
 
+type DatabaseError = Error & { code?: string; constraint?: string };
+
+function expectRefusal(caught: DatabaseError | null, attempted: string, refusal: Refusal): void {
+  expect(caught, `The database accepted a write it must refuse: ${attempted}`).not.toBeNull();
+  if (refusal.code !== undefined) expect(caught?.code, caught?.message).toBe(refusal.code);
+  if (refusal.constraint !== undefined) expect(caught?.constraint, caught?.message).toBe(refusal.constraint);
+  if (typeof refusal.message === "string") expect(caught?.message).toContain(refusal.message);
+  else if (refusal.message) expect(caught?.message).toMatch(refusal.message);
+}
+
 /**
  * Runs a statement that the database must refuse, and checks how it refused.
  * The statement runs inside a savepoint, so the surrounding transaction stays
@@ -256,20 +266,50 @@ export async function expectRefused(
   params: unknown[],
   refusal: Refusal
 ): Promise<void> {
-  let caught: (Error & { code?: string; constraint?: string }) | null = null;
+  let caught: DatabaseError | null = null;
   await client.query("SAVEPOINT guard_attempt");
   try {
     await client.query(text, params);
   } catch (error) {
-    caught = error as Error & { code?: string; constraint?: string };
+    caught = error as DatabaseError;
   }
   await client.query("ROLLBACK TO SAVEPOINT guard_attempt");
+  expectRefusal(caught, text, refusal);
+}
 
-  expect(caught, `The database accepted a write it must refuse: ${text}`).not.toBeNull();
-  if (refusal.code !== undefined) expect(caught?.code, caught?.message).toBe(refusal.code);
-  if (refusal.constraint !== undefined) expect(caught?.constraint, caught?.message).toBe(refusal.constraint);
-  if (typeof refusal.message === "string") expect(caught?.message).toContain(refusal.message);
-  else if (refusal.message) expect(caught?.message).toMatch(refusal.message);
+/**
+ * For guards that only run at commit (deferred constraint triggers): performs
+ * `work`, which must itself succeed, then asks the database to run the checks
+ * it has been holding, and expects those to refuse. Everything `work` did is
+ * undone afterwards, as a failed commit would undo it.
+ */
+export async function expectRefusedAtCommit(
+  client: PoolClient,
+  work: () => Promise<unknown>,
+  refusal: Refusal
+): Promise<void> {
+  let caught: DatabaseError | null = null;
+  await client.query("SAVEPOINT guard_commit_attempt");
+  try {
+    await work();
+    try {
+      await client.query("SET CONSTRAINTS ALL IMMEDIATE");
+    } catch (error) {
+      caught = error as DatabaseError;
+    }
+  } finally {
+    await client.query("ROLLBACK TO SAVEPOINT guard_commit_attempt");
+  }
+  expectRefusal(caught, "the checks held until commit", refusal);
+}
+
+/**
+ * Runs the checks the database holds until commit and expects them to pass,
+ * then goes back to holding them, so the test can carry on writing.
+ */
+export async function expectCommittable(client: PoolClient): Promise<void> {
+  await client.query("SET CONSTRAINTS ALL IMMEDIATE");
+  await client.query("SET CONSTRAINTS ALL DEFERRED");
 }
 
 /** Runs a statement the database must accept and returns the affected rows. */
