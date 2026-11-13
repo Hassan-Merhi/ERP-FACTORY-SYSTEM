@@ -430,7 +430,8 @@ function renderDataSheet(
     : sheet.groups.reduce((total, group) => total + group.rows.length, 0);
   // Uniformly skip zebra fills on large reports; no partial styling and no
   // millions of unnecessary per-cell style allocations.
-  const useAlternating = !!design?.alternateRows && detailCount <= design.maxAlternatingRows;
+  const useAlternating = design !== undefined && design.alternateRows &&
+    detailCount <= design.maxAlternatingRows;
   const put = (record: UniversalExcelRecord, validateRequired = true, isDetail = true) => {
     if (next > MAX_EXCEL_ROWS) throw new Error("Excel worksheet row limit exceeded: " + sheet.name);
     writeRow(ws, next, cols, record, validateRequired);
