@@ -110,6 +110,12 @@ jobs:
             client/src/pages/Vouchers.tsx \
             client/src/pages/intercompany/IntercompanyPayments.tsx \
             client/src/pages/StockHub.tsx \
+            client/src/components/PropertiesSidebar.tsx \
+            client/src/properties/config/propertiesNavigation.ts \
+            client/src/pages/StockQuery.tsx \
+            client/src/pages/StockItemDetail.tsx \
+            client/src/components/CombinedImportDialog.tsx \
+            tests/properties-stock-workspace.test.ts \
             client/src/pages/InventoryHub.tsx \
             shared/erpRouteAccess.ts \
             tests/ui/hub-restricted-tabs.test.tsx \
@@ -173,6 +179,7 @@ jobs:
             tests/intercompany-normal-voucher-auto-mirror.test.ts \
             tests/intercompany-paired-voucher-protection.test.ts \
             tests/stock-workspace-integration.test.ts \
+            tests/properties-stock-workspace.test.ts \
             tests/intercompany-phase7-navigation.test.ts \
             tests/intercompany-phase6-voucher-payments.test.ts \
             tests/intercompany-phase5-database-guards.test.ts \
