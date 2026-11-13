@@ -159,12 +159,17 @@ export function planDestinationStockMapping(input: {
       throw new StockMappingError(label + ": " + messages.sourceMismatch);
     }
 
+    // Code/alias identity wins over a non-unique descriptive name. Distinct
+    // articles can legitimately share their display name (e.g. SP.059 and
+    // TS.020). Keep strict rejection for ambiguous codes/aliases and for
+    // conflicting identities returned by the two explicit code lookups.
     const destinationBySourceCode = byItemCode(line.destinationCompanyId, source.code, label);
     const destinationByBarcode = byItemCode(line.destinationCompanyId, line.barcode, label);
-    const destinationByName = byItemName(line.destinationCompanyId, source.name, label);
-    const candidates = [destinationBySourceCode, destinationByBarcode, destinationByName].filter(
+    const codeCandidates = [destinationBySourceCode, destinationByBarcode].filter(
       (item): item is StockIdentity => item !== null
     );
+    const destinationByName = codeCandidates.length ? null : byItemName(line.destinationCompanyId, source.name, label);
+    const candidates = [...codeCandidates, ...(destinationByName ? [destinationByName] : [])];
     if (new Set(candidates.map((candidate) => candidate.id)).size > 1) {
       throw new StockMappingError(label + ": " + messages.destinationMismatch);
     }
