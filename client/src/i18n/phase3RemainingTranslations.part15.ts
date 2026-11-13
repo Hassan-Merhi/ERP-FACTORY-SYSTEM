@@ -848,4 +848,44 @@ export const phase3RemainingTranslationsPart15: readonly Phase3SharedUiEntry[] =
   },
   { en: "Other Charges (legacy)", ar: "رسوم أخرى (الإرث)", fr: "Autres charges (légation)" },
   { en: "Other Charges Account", ar: "حساب المصروفات الأخرى", fr: "Compte Autres charges" },
+  {
+    en: "Exporting all matching items...",
+    ar: "جارٍ تصدير جميع الأصناف المطابقة...",
+    fr: "Exportation de tous les articles correspondants…",
+  },
+  {
+    en: "No stock items",
+    ar: "لا توجد أصناف في المخزون",
+    fr: "Aucun article en stock",
+  },
+  {
+    en: "No items match the current filters.",
+    ar: "لا توجد أصناف تطابق عوامل التصفية الحالية.",
+    fr: "Aucun article ne correspond aux filtres actuels.",
+  },
+  {
+    en: "Failed to fetch stock item pricing or aliases",
+    ar: "تعذّر تحميل أسعار الأصناف أو رموزها البديلة",
+    fr: "Impossible de charger les prix ou les codes alternatifs des articles",
+  },
+  {
+    en: "Failed to load stock items for export",
+    ar: "تعذّر تحميل أصناف المخزون للتصدير",
+    fr: "Impossible de charger les articles à exporter",
+  },
+  {
+    en: "Invalid stock items export response",
+    ar: "استجابة تصدير أصناف المخزون غير صالحة",
+    fr: "Réponse d’exportation des articles non valide",
+  },
+  {
+    en: "Stock items changed during export. Please try again",
+    ar: "تغيّرت أصناف المخزون أثناء التصدير. يُرجى إعادة المحاولة.",
+    fr: "Les articles ont changé pendant l’exportation. Veuillez réessayer.",
+  },
+  {
+    en: "Stock items export was incomplete. Please try again",
+    ar: "لم يكتمل تصدير أصناف المخزون. يُرجى إعادة المحاولة.",
+    fr: "L’exportation des articles est incomplète. Veuillez réessayer.",
+  },
 ];

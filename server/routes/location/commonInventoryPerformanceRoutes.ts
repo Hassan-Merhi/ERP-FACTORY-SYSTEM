@@ -64,7 +64,7 @@ export function registerCommonInventoryPerformanceRoutes(app: Express): void {
           .select({ total: sql<number>`count(*)::int` })
           .from(stockItems)
           .where(where),
-        db.select().from(stockItems).where(where).orderBy(asc(stockItems.name)).limit(pageSize).offset(offset),
+        db.select().from(stockItems).where(where).orderBy(asc(stockItems.name), asc(stockItems.id)).limit(pageSize).offset(offset),
       ]);
       const total = countRows[0]?.total ?? 0;
 

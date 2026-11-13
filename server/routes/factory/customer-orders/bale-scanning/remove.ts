@@ -28,7 +28,10 @@ import { FactoryInvoiceRateRefusalError } from "../../../../services/accounting/
 import { lockCustomerOrderTx, syncOrderTotalsTx } from "../orderChargeLedger";
 import { closedPeriodErrorResponse } from "../../../../lib/closedPeriodError";
 import { getFactoryAccessState } from "../../../../lib/factoryAccessControl";
-import { hasLiveFinancialTripTx, isPostedDispatchBaleTx } from "../../../../services/factory/dispatchTripFinancialGuards";
+import {
+  hasLiveFinancialTripTx,
+  isPostedDispatchBaleTx,
+} from "../../../../services/factory/dispatchTripFinancialGuards";
 import { canEmptyFactoryLoadingContainer } from "@shared/factoryPermissionCatalog";
 
 class DispatchReconciliationRefusal extends Error {
@@ -85,8 +88,10 @@ export function registerOrderBaleRemovalRoutes(app: Express) {
         // with the same parent lock as trip financial posting and reject that.
         await lockCustomerOrderTx(tx, companyId, orderId);
         if (await hasLiveFinancialTripTx(tx, companyId, orderId)) {
-          throw new DispatchReconciliationRefusal(409,
-            "Financially posted dispatch trips cannot be emptied. Reverse their accounting first.");
+          throw new DispatchReconciliationRefusal(
+            409,
+            "Financially posted dispatch trips cannot be emptied. Reverse their accounting first."
+          );
         }
         if (order.proformaIdUsed) {
           await acquireProformaCapacityTransactionLock(tx, {
@@ -186,7 +191,8 @@ export function registerOrderBaleRemovalRoutes(app: Express) {
       if (reconciliation) {
         return res.status(409).json({
           code: "USE_ATOMIC_DISPATCH_RECONCILIATION",
-          message: "Use Compare All Trips → approve a batch of unshipped bales with a reason. Individual dispatch-reconciliation deletes are disabled.",
+          message:
+            "Use Compare All Trips → approve a batch of unshipped bales with a reason. Individual dispatch-reconciliation deletes are disabled.",
         });
       }
       const access = reconciliation ? await getFactoryAccessState(req) : null;
@@ -221,8 +227,23 @@ export function registerOrderBaleRemovalRoutes(app: Express) {
           });
         }
 
-        // Phase 22 (C), DI7: the order row is locked before it changes.
+        // Serialize with trip financial posting and physical scanner updates.
+        // Posted trips lock their own shipped bales, not every unshipped item
+        // still waiting in the parent loading.
         await lockCustomerOrderTx(tx, companyId, orderId);
+        const postedTrips = await hasLiveFinancialTripTx(tx, companyId, orderId);
+        if (postedTrips) {
+          const [currentOrder] = await tx
+            .select({ status: customerOrders.status, invoiceNumber: customerOrders.invoiceNumber })
+            .from(customerOrders)
+            .where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId)));
+          if (!currentOrder || !["DRAFT", "LOADING"].includes(currentOrder.status) || currentOrder.invoiceNumber) {
+            throw new DispatchReconciliationRefusal(
+              409,
+              "This loading has posted trips and is no longer open. Use the approved dispatch reconciliation workflow."
+            );
+          }
+        }
         if (reconciliation) {
           // This check is inside the same order lock used by physical scanners.
           // A bale cannot be removed if it was scanned or if a trip is still open.
@@ -253,13 +274,38 @@ export function registerOrderBaleRemovalRoutes(app: Express) {
 
         // A shipped/financially posted physical bale must NEVER be returned
         // to stock, even through a normal (non-reconciliation) remove action.
-        if (orderBale && await isPostedDispatchBaleTx(tx, companyId, orderId, orderBale.baleId)) {
-          throw new DispatchReconciliationRefusal(409,
-            "This bale belongs to a financially posted truck. Reverse that trip before removing it.");
+        if (orderBale && (await isPostedDispatchBaleTx(tx, companyId, orderId, orderBale.baleId))) {
+          throw new DispatchReconciliationRefusal(
+            409,
+            "This bale belongs to a financially posted truck. Reverse that trip before removing it."
+          );
         }
-        if (!reconciliation && await hasLiveFinancialTripTx(tx, companyId, orderId)) {
-          throw new DispatchReconciliationRefusal(409,
-            "Only authorized Pending Loading reconciliation may remove unshipped bales while trips are financially posted.");
+        if (postedTrips && !orderBale) {
+          throw new DispatchReconciliationRefusal(409, "This item is no longer in the loading. Refresh and try again.");
+        }
+
+        // A bale physically scanned into ANY active truck cannot be released
+        // from the parent loading, whether or not that truck has posted yet.
+        // Use the dedicated dispatch workflow to correct its scans instead.
+        if (orderBale) {
+          const scanned = resultRows(
+            await tx.execute(sql`
+            SELECT 1
+              FROM factory_loading_dispatch_scans s
+              JOIN factory_loading_dispatches d
+                ON d.id = s.dispatch_id AND d.company_id = s.company_id AND d.order_id = s.order_id
+             WHERE s.company_id = ${companyId} AND s.order_id = ${orderId}
+               AND s.bale_id = ${orderBale.baleId} AND s.removed_at IS NULL
+               AND d.status <> 'CANCELLED'
+             LIMIT 1
+          `)
+          );
+          if (scanned.length > 0) {
+            throw new DispatchReconciliationRefusal(
+              409,
+              "This item is scanned on a dispatch trip. Remove the scan through Dispatch Management first."
+            );
+          }
         }
 
         if (reconciliation) {
@@ -282,8 +328,22 @@ export function registerOrderBaleRemovalRoutes(app: Express) {
 
         let baleDetails: typeof factoryBales.$inferSelect | undefined;
         if (orderBale) {
-          const [found] = await tx.select().from(factoryBales).where(eq(factoryBales.id, orderBale.baleId));
+          const [found] = await tx
+            .select()
+            .from(factoryBales)
+            .where(and(eq(factoryBales.id, orderBale.baleId), eq(factoryBales.companyId, companyId)))
+            .for("update");
           baleDetails = found;
+        }
+        if (
+          postedTrips &&
+          orderBale &&
+          (!baleDetails || !["IN_STOCK", "RESERVED_FOR_ORDER"].includes(baleDetails.status))
+        ) {
+          throw new DispatchReconciliationRefusal(
+            409,
+            "This unshipped item's stock ownership has changed. Refresh and inspect its dispatch history."
+          );
         }
 
         await tx
@@ -316,10 +376,12 @@ export function registerOrderBaleRemovalRoutes(app: Express) {
         }
 
         await recalculateOrderTotals(tx, orderId);
-        // A bale removed from a finalized invoice moves its receivable, daybook
-        // row and invoice journal with it (phase 22 C, F13; they were left on
-        // the old total).
-        await syncOrderTotalsTx(tx, companyId, orderId);
+        // Existing posted trips already own their immutable receivables and
+        // vouchers. Recompute only the still-open loading; never run the legacy
+        // full-invoice sync against a partially posted dispatch order.
+        if (!postedTrips) {
+          await syncOrderTotalsTx(tx, companyId, orderId);
+        }
         if (orderBale) {
           await reversePriorityAllocationForDeletedBaleTx(tx, {
             companyId,
