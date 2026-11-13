@@ -227,14 +227,23 @@ export function registerOffloadRoutes(app: Express) {
       // Return correction is a separate, immutable debit-note/stock-issue event.
       // Keep original offload lines for accounting provenance, expose net quantities
       // for the offload invoice display instead of rewriting a posted receipt.
-      const returnQuantities = resultRows<{offload_item_id:number;returned_qty:string}>(
-        await db.execute(sql`
-          SELECT l.offload_item_id, SUM(l.quantity)::text AS returned_qty
-            FROM erp_supplier_return_lines l
-           WHERE l.company_id=${access.activeCompanyId} AND l.offload_id=${offloadId}
-           GROUP BY l.offload_item_id
-        `)
-      );
+      // A deployment without the controlled migration must not break existing
+      // offload invoice reads. The supplier return writer still requires it.
+      let returnQuantities: Array<{offload_item_id:number;returned_qty:string}> = [];
+      try {
+  returnQuantities = resultRows<{offload_item_id:number;returned_qty:string}>(
+          await db.execute(sql`
+            SELECT l.offload_item_id, SUM(l.quantity)::text AS returned_qty
+              FROM erp_supplier_return_lines l
+             WHERE l.company_id=${access.activeCompanyId} AND l.offload_id=${offloadId}
+             GROUP BY l.offload_item_id
+          `)
+        );
+  
+      } catch (error) {
+        const dbError = error as {code?:string;cause?:{code?:string}};
+        if (dbError.code !== "42P01" && dbError.cause?.code !== "42P01") throw error;
+      }
       const returnedByItem = new Map(returnQuantities.map(r=>[Number(r.offload_item_id),toMoney(r.returned_qty)]));
       const itemsWithReturns = items.map(item=>{
         const returned=returnedByItem.get(item.id)??toMoney(0);
