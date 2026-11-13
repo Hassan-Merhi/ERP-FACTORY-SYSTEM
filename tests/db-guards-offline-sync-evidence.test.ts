@@ -8,15 +8,78 @@
  * tests attempt both on each table and check the row is still there, and pin
  * the list of protected tables so a new evidence table cannot arrive unguarded
  * without this suite noticing.
+ *
+ * The offline schema is not created when the server starts: a DBA installs it
+ * (server/edge/offlineSchemaInstall.ts), the cloud half on the cloud database
+ * and the LAN half on a site's. The test database has neither until a suite
+ * installs it, so this one runs the same installers first.
  */
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
-import { expectRefused, reread, seedRow, withRollback } from "./helpers/dbGuardHarness";
+// The site-side installers only act when the server is configured as a LAN site.
+vi.mock("../server/edge/edgeRuntimePolicy.mjs", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  readFactoryEdgeConfiguration: () => ({ mode: "lan" }),
+}));
+
+import { pool } from "../server/db";
+import { ensureCloudEdgeStageSchema } from "../server/edge/edgeCloudStaging";
+import { ensureEdgeVoucherOutboxSchema } from "../server/edge/edgeVoucherOutbox";
+import { ensurePhase10SyncControlSchema } from "../server/edge/phase10SyncControl.mjs";
+import { ensurePhase8ApplySchema } from "../server/edge/phase8ApplyStore.mjs";
+import { ensurePhase9AttachmentOutboxSchema } from "../server/edge/phase9AttachmentOutbox";
+import { ensurePhase9CloudEventSchema } from "../server/edge/phase9CloudEventStore.mjs";
+import { ensurePhase9PaymentOutboxSchema } from "../server/edge/phase9PaymentOutbox";
+import { ensurePhase9PosOutboxSchema } from "../server/edge/phase9PosOutbox";
+import { ensurePhase9PressingOutboxSchema } from "../server/edge/phase9PressingOutbox";
+import { ensurePhase9ReceivingOutboxSchema } from "../server/edge/phase9ReceivingOutbox";
+import { ensurePhase9StockItemMapSchema } from "../server/edge/phase9StockItemMap.mjs";
+import { ensurePhase9StockOutboxSchema } from "../server/edge/phase9StockOutbox";
+
+import { dropTriggers, expectRefused, reread, seedRow, withRollback } from "./helpers/dbGuardHarness";
 
 const CHECK_VIOLATION = "23514";
 
+type TriggerName = readonly [table: string, trigger: string];
+
+async function edgeTriggers(): Promise<TriggerName[]> {
+  const { rows } = await pool.query(
+    `SELECT c.relname AS table_name, t.tgname AS trigger_name
+       FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid
+      WHERE c.relname LIKE 'factory\\_edge\\_%' AND NOT t.tgisinternal`
+  );
+  return rows.map((row) => [row.table_name, row.trigger_name] as const);
+}
+
+let presentBefore = new Set<string>();
+
+// Other offline suites clear these tables between tests and expect whatever
+// guards they did not install to be absent, so anything added here is removed.
+afterAll(async () => {
+  await dropTriggers((await edgeTriggers()).filter(([table, trigger]) => !presentBefore.has(`${table}.${trigger}`)));
+}, 60000);
+
+beforeAll(async () => {
+  presentBefore = new Set((await edgeTriggers()).map(([table, trigger]) => `${table}.${trigger}`));
+  // The cloud half, then the LAN half, in the installer's own order.
+  await ensureCloudEdgeStageSchema(pool, true);
+  await ensurePhase8ApplySchema(pool);
+  await ensurePhase9CloudEventSchema(pool);
+  await ensurePhase9StockItemMapSchema(pool);
+  await ensureEdgeVoucherOutboxSchema(pool);
+  await ensurePhase9PressingOutboxSchema(pool);
+  await ensurePhase9StockOutboxSchema(pool);
+  await ensurePhase9PosOutboxSchema(pool);
+  await ensurePhase9ReceivingOutboxSchema(pool);
+  await ensurePhase9AttachmentOutboxSchema(pool);
+  await ensurePhase9PaymentOutboxSchema(pool);
+  await ensurePhase10SyncControlSchema(pool);
+}, 120000);
+
 const EVIDENCE_TABLES = [
   { table: "factory_edge_applied_events", message: "PHASE9_EVENT_EVIDENCE_IMMUTABLE" },
+  { table: "factory_edge_applied_receipts", message: "EDGE_OUTBOX_IMMUTABLE" },
+  { table: "factory_edge_applied_vouchers", message: "PHASE8_APPLIED_RECEIPT_IMMUTABLE" },
   { table: "factory_edge_attachment_file_receipts", message: "PHASE9_ATTACHMENT_OUTBOX_IMMUTABLE" },
   { table: "factory_edge_attachment_outbox", message: "PHASE9_ATTACHMENT_OUTBOX_IMMUTABLE" },
   { table: "factory_edge_event_applied_receipts", message: "PHASE9_PRESSING_OUTBOX_IMMUTABLE" },
@@ -27,11 +90,14 @@ const EVIDENCE_TABLES = [
   { table: "factory_edge_pos_outbox", message: "PHASE9_POS_OUTBOX_IMMUTABLE" },
   { table: "factory_edge_pressing_outbox", message: "PHASE9_PRESSING_OUTBOX_IMMUTABLE" },
   { table: "factory_edge_receiving_outbox", message: "PHASE9_RECEIVING_OUTBOX_IMMUTABLE" },
+  { table: "factory_edge_stage_receipts", message: "EDGE_OUTBOX_IMMUTABLE" },
   { table: "factory_edge_staged_events", message: "PHASE9_EVENT_EVIDENCE_IMMUTABLE" },
   { table: "factory_edge_staged_files", message: "PHASE9_EVENT_EVIDENCE_IMMUTABLE" },
+  { table: "factory_edge_staged_vouchers", message: "EDGE_STAGED_VOUCHER_IMMUTABLE" },
   { table: "factory_edge_stock_item_map", message: "PHASE9_STOCK_ITEM_MAP_IMMUTABLE" },
   { table: "factory_edge_stock_outbox", message: "PHASE9_STOCK_OUTBOX_IMMUTABLE" },
   { table: "factory_edge_sync_control_log", message: "PHASE10_SYNC_CONTROL_IMMUTABLE" },
+  { table: "factory_edge_voucher_outbox", message: "EDGE_OUTBOX_IMMUTABLE" },
 ];
 
 /** Counters and cursors: working state that is meant to change. */
@@ -50,19 +116,11 @@ const WORKING_STATE_TABLES = [
 ];
 
 /**
- * The first-generation voucher sync records. The application only ever inserts
- * into them, but unlike the later tables above they have no trigger refusing an
- * update or delete. Recorded here as they are, and reported to the owner: when
- * a guard is added, move the table to EVIDENCE_TABLES.
+ * Cloud apply approvals are protected differently: the application's database
+ * role is denied every write on the table (server/edge/phase8ApplyStore.mjs
+ * checks that before it trusts an approval), so there is no trigger to attack.
  */
-const UNGUARDED_RECORD_TABLES = [
-  "factory_edge_applied_receipts",
-  "factory_edge_applied_vouchers",
-  "factory_edge_apply_approvals",
-  "factory_edge_stage_receipts",
-  "factory_edge_staged_vouchers",
-  "factory_edge_voucher_outbox",
-];
+const PRIVILEGE_PROTECTED_TABLES = ["factory_edge_apply_approvals"];
 
 /** The column that identifies a row: `id` where there is one, otherwise the first primary-key column. */
 async function keyColumn(client: Parameters<Parameters<typeof withRollback>[0]>[0], table: string): Promise<string> {
@@ -85,7 +143,7 @@ describe("the set of offline-sync evidence tables", () => {
            FROM pg_trigger t
            JOIN pg_proc p ON p.oid = t.tgfoid
            JOIN pg_class c ON c.oid = t.tgrelid
-          WHERE p.proname LIKE 'factory\\_edge\\_%\\_immutable' AND NOT t.tgisinternal
+          WHERE p.proname LIKE 'factory\\_edge\\_%immutable' AND NOT t.tgisinternal
           ORDER BY c.relname`
       );
 
@@ -110,7 +168,7 @@ describe("the set of offline-sync evidence tables", () => {
 
       // A new factory_edge table must be added to one of the lists on purpose.
       expect(rows.map((row) => row.table_name).filter((name) => !guarded.has(name))).toEqual(
-        [...WORKING_STATE_TABLES, ...UNGUARDED_RECORD_TABLES].sort()
+        [...WORKING_STATE_TABLES, ...PRIVILEGE_PROTECTED_TABLES].sort()
       );
     });
   });
