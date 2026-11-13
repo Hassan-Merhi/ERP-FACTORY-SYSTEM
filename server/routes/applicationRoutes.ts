@@ -17,7 +17,6 @@ import { registerBarcodeImageBandwidthMiddleware } from "./barcodeImageBandwidth
 import { registerBankAssetRoutes } from "./bankAssetRoutes";
 import { registerBusinessAlertRoutes } from "./businessAlertsRoutes";
 import { registerContainerRoutes } from "./containerRoutes";
-import { registerErpSupplierReturnRoutes } from "./erpSupplierReturnRoutes";
 import { registerCreditNoteRoutes } from "./creditNoteRouteRegistry";
 import { registerCustomerRoutes } from "./customerRoutes";
 import { registerDebugRoutes } from "./debugRoutes";
@@ -160,7 +159,6 @@ export async function registerApplicationRoutes(app: Express): Promise<Server> {
   registerStockRoutes(app);
   registerBankAssetRoutes(app);
   registerContainerRoutes(app);
-  registerErpSupplierReturnRoutes(app);
   registerImportRoutes(app);
   registerAccountRoutes(app);
   registerCostCenterReportingRoutes(app);
