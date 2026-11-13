@@ -2,8 +2,9 @@ import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { getSupplierReturnsCopy } from "@/i18n/supplierReturnsTranslations";
+import { getFinalizedSaleReturnCopy } from "@/i18n/factoryFinalizedSaleReturnTranslations";
 import { useSearch } from "wouter";
-import { BarChart3, GitCompareArrows, PackageMinus } from "lucide-react";
+import { BarChart3, GitCompareArrows, PackageMinus, RotateCcw } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
@@ -11,20 +12,22 @@ import { useFactoryNavigationAccess } from "@/hooks/useFactoryNavigationAccess";
 import ProductionComparison from "./ProductionComparison";
 import ProductComparisonCharts from "./productcomparison/ProductComparisonCharts";
 import FactorySupplierReturns from "./FactorySupplierReturns";
+import FactoryFinalizedSaleReturns from "./FactoryFinalizedSaleReturns";
 
-type OthersTab = "comparison" | "product-comparison" | "supplier-returns";
-const ALL_TABS: readonly OthersTab[] = ["comparison", "product-comparison", "supplier-returns"];
+type OthersTab = "comparison" | "product-comparison" | "supplier-returns" | "sale-returns";
+const ALL_TABS: readonly OthersTab[] = ["comparison", "product-comparison", "supplier-returns", "sale-returns"];
 
 export default function FactoryOthers() {
   const { ready, access, isPrivileged } = useFactoryNavigationAccess();
   const { language } = useApplicationLanguage();
   const copy = getSupplierReturnsCopy(language);
+  const returnCopy = getFinalizedSaleReturnCopy(language);
   const { data: user } = useQuery<{ role?: string }>({ queryKey: ["/api/auth/me"] });
   const mayReturnToSupplier = user?.role === "Admin" || user?.role === "Developer";
   const search = useSearch();
   const hidden = isPrivileged ? [] : (access?.hiddenCostFields ?? []);
   const visibleTabs = ALL_TABS.filter((tab) =>
-    tab === "supplier-returns"
+    tab === "supplier-returns" || tab === "sale-returns"
       ? mayReturnToSupplier
       : !hidden.includes(tab === "comparison" ? "hide_tab_overview_comparison" : "hide_tab_overview_product_comparison")
   );
@@ -77,6 +80,11 @@ export default function FactoryOthers() {
                 <PackageMinus className="mr-1.5 h-4 w-4" /> {copy.tab}
               </TabsTrigger>
             )}
+            {mayReturnToSupplier && (
+              <TabsTrigger value="sale-returns" data-testid="tab-others-sale-returns">
+                <RotateCcw className="mr-1.5 h-4 w-4" /> {returnCopy.tabLabel}
+              </TabsTrigger>
+            )}
           </TabsList>
         </div>
         {visibleTabs.includes("comparison") && (
@@ -98,6 +106,14 @@ export default function FactoryOthers() {
             className="mt-0 flex-1 overflow-y-auto p-4 data-[state=inactive]:hidden"
           >
             <FactorySupplierReturns />
+          </TabsContent>
+        )}
+        {mayReturnToSupplier && (
+          <TabsContent
+            value="sale-returns"
+            className="mt-0 flex-1 overflow-y-auto p-4 data-[state=inactive]:hidden"
+          >
+            <FactoryFinalizedSaleReturns />
           </TabsContent>
         )}
       </Tabs>
