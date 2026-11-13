@@ -10,10 +10,7 @@ import { assertTransactionCompanyScope, type CompanyScopedTransaction } from "..
 import type { DbTransaction } from "../../db";
 import { and, eq, sql } from "drizzle-orm";
 import { vouchers } from "@shared/schema";
-import {
-  isIntercompanyPairedVoucher,
-  INTERCOMPANY_PAIRED_VOUCHER_LOCK_MESSAGE,
-} from "../../lib/migratedVoucherGuard";
+import { isIntercompanyPairedVoucher, INTERCOMPANY_PAIRED_VOUCHER_LOCK_MESSAGE } from "../../lib/migratedVoucherGuard";
 import { assertNoInventoryCutoverTx } from "./perpetualInventory/cutoverRefusal";
 
 /**
