@@ -162,6 +162,10 @@ export function usePosHandlers(params: PosHandlersParams) {
       activeLocation: params.activeLocation,
       apiInventory: params.apiInventory,
       toast: params.toast,
+      // Do not disclose configured-price P/L or stock cost to POS operators.
+      canSeeFinancials: ["Admin", "Owner", "Developer"].includes(
+        params.authUser?.role ?? params.posUser?.role ?? ""
+      ),
     });
 
   const { makeHandleKeyDown } = usePosKeyboardNavigation({
