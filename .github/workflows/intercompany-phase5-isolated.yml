@@ -110,6 +110,9 @@ jobs:
             client/src/pages/Vouchers.tsx \
             client/src/pages/intercompany/IntercompanyPayments.tsx \
             client/src/pages/StockHub.tsx \
+            client/src/app/PropertiesShell.tsx \
+            client/src/pages/properties/PropertiesRentalsHub.tsx \
+            tests/properties-lazy-loading-performance.test.ts \
             client/src/components/PropertiesSidebar.tsx \
             client/src/properties/config/propertiesNavigation.ts \
             client/src/pages/StockQuery.tsx \
@@ -180,6 +183,7 @@ jobs:
             tests/intercompany-paired-voucher-protection.test.ts \
             tests/stock-workspace-integration.test.ts \
             tests/properties-stock-workspace.test.ts \
+            tests/properties-lazy-loading-performance.test.ts \
             tests/intercompany-phase7-navigation.test.ts \
             tests/intercompany-phase6-voucher-payments.test.ts \
             tests/intercompany-phase5-database-guards.test.ts \
