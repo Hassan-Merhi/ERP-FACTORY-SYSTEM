@@ -7,7 +7,7 @@
 import type { Express, Request, Response, RequestHandler } from "express";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import ExcelJS from "exceljs";
 import { db } from "../../db";
 import { parseId, parseOptionalId } from "../../lib/parseId";
