@@ -26,6 +26,7 @@ import {
   displayedLedgerRows,
   enrichPurchaseOrderTotals,
   filterLedgerRowsByDate,
+  matchesSupplierDestination,
   filterPurchaseOrdersByDate,
   hiddenPaymentsCount,
   purchaseOrderGrandTotal,
@@ -87,9 +88,7 @@ export function SupplierDetailDialog({
   onPOClick,
   onContainerClick,
 }: SupplierDetailDialogProps) {
-  const matchesDestination = (id: number | null | undefined) =>
-    destinationFilter === "all" ||
-    (destinationFilter === "unassigned" ? id == null : id === Number(destinationFilter));
+  const matchesDestination = (id: number | null | undefined) => matchesSupplierDestination(id, destinationFilter);
   const openingEntry = destinationFilter === "all" ? unifiedLedger.find((t) => t.type === "opening") : undefined;
   const ledgerRows = unifiedLedger.filter((t) => t.type !== "opening");
   const filteredLedgerRows = filterLedgerRowsByDate(ledgerRows, dateFilter)
