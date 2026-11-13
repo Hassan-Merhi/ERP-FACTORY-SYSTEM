@@ -570,7 +570,10 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
       const response = await fetch(
         "/api/intercompany-container-trading/daybook-linked-vouchers?ids=" + daybookVoucherIds.join(","),
         { credentials: "include" });
-      if (!response.ok) return { linked: {} };
+      if (!response.ok) {
+        const issue = await response.json().catch(() => ({}));
+        throw new Error(issue.message || "Cannot verify intercompany voucher links");
+      }
       return response.json();
     },
     staleTime: 0,
@@ -613,7 +616,20 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
       if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
-      const linked = linkedDaybookVouchers?.linked?.[id];
+      // Refresh ownership at deletion time. Never silently fall back to a
+      // single-company voucher delete when link lookup is stale or fails.
+      const linkResponse = await fetch(
+        "/api/intercompany-container-trading/daybook-linked-vouchers?ids=" + id,
+        { credentials: "include" }
+      );
+      if (!linkResponse.ok) {
+        const issue = await linkResponse.json().catch(() => ({}));
+        throw new Error(issue.message || "Cannot verify whether this voucher belongs to another company");
+      }
+      const currentLinks = await linkResponse.json() as {
+        linked: Record<number, { tradeId: number; version: number }>;
+      };
+      const linked = currentLinks.linked[id];
       if (linked) {
         await apiRequest("POST",
           "/api/intercompany-container-trading/daybook-voucher/" + id + "/delete-linked",
@@ -640,8 +656,10 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
       setVoucherToDelete(null);
       setDeleteDialogOpen(false);
     },
-    onError: (error: Error) =>
-      toast({ title: "Deletion refused", description: error.message, variant: "destructive" }),
+    onError: (error: Error) => {
+      toast({ title: "Deletion refused", description: error.message, variant: "destructive" });
+      setDeleteDialogOpen(false);
+    },
   });
 
   const editMutation = useMutation({
