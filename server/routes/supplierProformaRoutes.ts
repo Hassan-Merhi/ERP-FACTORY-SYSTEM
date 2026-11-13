@@ -70,7 +70,7 @@ export function registerSupplierProformaRoutes(app: Express, requireAuth: Reques
       const proformas = await db
         .select()
         .from(supplierProformas)
-        .where(and(eq(supplierProformas.companyId, companyId), eq(supplierProformas.supplierId, supplierId)));
+        .where(and(eq(supplierProformas.supplierId, supplierId), sql`(${supplierProformas.companyId} = ${companyId} OR (${supplierProformas.destinationCompanyId} = ${companyId} AND EXISTS (SELECT 1 FROM companies child WHERE child.id = ${companyId} AND child.parent_company_id = ${supplierProformas.companyId})))`));
       res.json(proformas);
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
@@ -86,7 +86,7 @@ export function registerSupplierProformaRoutes(app: Express, requireAuth: Reques
       const [proforma] = await db
         .select()
         .from(supplierProformas)
-        .where(and(eq(supplierProformas.id, proformaId), eq(supplierProformas.companyId, companyId)));
+        .where(and(eq(supplierProformas.id, proformaId), sql`(${supplierProformas.companyId} = ${companyId} OR (${supplierProformas.destinationCompanyId} = ${companyId} AND EXISTS (SELECT 1 FROM companies child WHERE child.id = ${companyId} AND child.parent_company_id = ${supplierProformas.companyId})))`));
       if (!proforma) return res.status(404).json({ message: "Proforma not found" });
       const lines = await db
         .select()
@@ -197,7 +197,7 @@ export function registerSupplierProformaRoutes(app: Express, requireAuth: Reques
         if (destinationId === null) return res.status(400).json({ message: "Invalid destination company" });
         const allowed = await db.execute(sql`SELECT 1 FROM companies WHERE id = ${destinationId} AND (id = ${companyId} OR parent_company_id = ${companyId}) LIMIT 1`);
         if (!allowed.rows.length) return res.status(403).json({ message: "Destination not linked to company" });
-        const existing = await db.query.supplierProformas.findFirst({ where: and(eq(supplierProformas.id, proformaId), eq(supplierProformas.companyId, companyId)) });
+        const [existing] = await db.select().from(supplierProformas).where(and(eq(supplierProformas.id, proformaId), eq(supplierProformas.companyId, companyId)));
         if (existing?.isStarred && (existing.destinationCompanyId ?? companyId) !== destinationId) return res.status(409).json({ message: "Unstar this proforma before changing its destination" });
       }
       const updates: Partial<typeof supplierProformas.$inferInsert> = { updatedAt: new Date() };
