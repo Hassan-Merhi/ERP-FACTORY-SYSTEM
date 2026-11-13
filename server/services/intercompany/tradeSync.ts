@@ -359,7 +359,15 @@ export async function isNettedIntercompanyTradeTx(tx: DbTransaction, tradeId: nu
       sql`${intercompanyAuditEvents.eventKey} LIKE ${"ic-container-import:%:" + tradeId}`
     ))
     .limit(1);
-  return (event?.payload as { technicalProfitNetting?: unknown } | null)?.technicalProfitNetting === true;
+  if ((event?.payload as { technicalProfitNetting?: unknown } | null)?.technicalProfitNetting === true) {
+    return true;
+  }
+  const [normalized] = await tx
+    .select({ id: intercompanyAuditEvents.id })
+    .from(intercompanyAuditEvents)
+    .where(eq(intercompanyAuditEvents.eventKey, "ic-technical-profit-normalized:" + tradeId))
+    .limit(1);
+  return Boolean(normalized);
 }
 /** Exact source PO deltas, mirrored sale/COGS and destination GIT/supplier payable, without touching old vouchers. */
 export async function applyCostDeltasTx(
