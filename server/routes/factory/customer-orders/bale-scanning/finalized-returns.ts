@@ -1,4 +1,6 @@
 import type { Express, Request, Response } from "express";
+import { registerFinalizedReturnImportPreview } from "./finalized-return-import-preview";
+
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { requireAuth, requireRole } from "../../../../auth";
@@ -77,6 +79,7 @@ const fail = (reason: string): never => {
 };
 
 export function registerFinalizedLoadingReturnRoutes(app: Express): void {
+  registerFinalizedReturnImportPreview(app);
   app.get("/api/factory/finalized-sale-returns/orders", ...gate, async (req: Request, res: Response) => {
     try {
       const cid = company(req);
