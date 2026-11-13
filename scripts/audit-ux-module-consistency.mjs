@@ -13,8 +13,13 @@ const moduleImports = [
 ].map((match) => match[1]);
 const uniqueModules = [...new Set(moduleImports)].sort();
 
-if (uniqueModules.length < 200) {
-  failures.push(`Lazy module inventory unexpectedly fell to ${uniqueModules.length}; expected at least 200 routed surfaces`);
+// This counts direct lazy import modules, not routed pages. The 2026-11
+// dead-code cleanup retired 28 unused exports (including a sample-data mockup)
+// while preserving every live route and underlying hub module. Keep a floor
+// below the verified post-cleanup inventory of 190 to catch accidental loss.
+const MIN_LAZY_MODULES = 180;
+if (uniqueModules.length < MIN_LAZY_MODULES) {
+  failures.push(`Lazy module inventory unexpectedly fell to ${uniqueModules.length}; expected at least ${MIN_LAZY_MODULES} modules`);
 }
 
 for (const modulePath of uniqueModules) {
