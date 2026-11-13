@@ -129,7 +129,7 @@ export default function Suppliers() {
   const purchaseOrdersUrl =
     companyFilter !== "all"
       ? `/api/suppliers/${selectedSupplier?.id}/purchase-orders?companyId=${companyFilter}`
-      : `/api/suppliers/${selectedSupplier?.id}/purchase-orders`;
+      : `/api/suppliers/${selectedSupplier?.id}/purchase-orders?includeAccessibleCompanies=1`;
 
   const { data: purchaseOrders = [], isLoading: posLoading } = useQuery<SupplierPurchaseOrder[]>({
     queryKey: erpCompanyDataKey(purchaseOrdersUrl, selectedCompany?.id),
