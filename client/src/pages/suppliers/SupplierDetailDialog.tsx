@@ -26,6 +26,7 @@ import {
   displayedLedgerRows,
   enrichPurchaseOrderTotals,
   filterLedgerRowsByDate,
+  filterPurchaseOrdersByDate,
   hiddenPaymentsCount,
   purchaseOrderGrandTotal,
   type SupplierDateFilter,
@@ -39,6 +40,8 @@ export interface SupplierDetailDialogProps {
   formatAmount: (amount: number) => string;
   companyFilter: string;
   onCompanyFilterChange: (value: string) => void;
+  destinationFilter: string;
+  onDestinationFilterChange: (value: string) => void;
   dateFilter: SupplierDateFilter;
   onDateFilterChange: (value: SupplierDateFilter) => void;
   hidePayments: boolean;
@@ -64,6 +67,8 @@ export function SupplierDetailDialog({
   formatAmount,
   companyFilter,
   onCompanyFilterChange,
+  destinationFilter,
+  onDestinationFilterChange,
   dateFilter,
   onDateFilterChange,
   hidePayments,
@@ -82,15 +87,42 @@ export function SupplierDetailDialog({
   onPOClick,
   onContainerClick,
 }: SupplierDetailDialogProps) {
-  const openingEntry = unifiedLedger.find((t) => t.type === "opening");
+  const matchesDestination = (id: number | null | undefined) =>
+    destinationFilter === "all" ||
+    (destinationFilter === "unassigned" ? id == null : id === Number(destinationFilter));
+  const openingEntry = destinationFilter === "all" ? unifiedLedger.find((t) => t.type === "opening") : undefined;
   const ledgerRows = unifiedLedger.filter((t) => t.type !== "opening");
-  const filteredLedgerRows = filterLedgerRowsByDate(ledgerRows, dateFilter);
+  const filteredLedgerRows = filterLedgerRowsByDate(ledgerRows, dateFilter)
+    .filter((row) => matchesDestination(row.destinationCompanyId));
   const { txCount, totalPurchases, totalPayments, totalPurchasesQty } = computeLedgerKpis(filteredLedgerRows);
-  const currentBalance = currentLedgerBalance(unifiedLedger);
+  // A single destination cannot inherit the combined supplier opening balance.
+  // In this mode display the period's net movement, not a misleading global balance.
+  const currentBalance = destinationFilter === "all"
+    ? currentLedgerBalance(unifiedLedger)
+    : filteredLedgerRows.reduce((sum, row) => sum + Number(row.credit || 0) - Number(row.debit || 0), 0);
+  const runningDestinationNet = new Map<SupplierLedgerRow, number>();
+  let destinationNet = 0;
+  for (const row of filteredLedgerRows) {
+    destinationNet += Number(row.credit || 0) - Number(row.debit || 0);
+    runningDestinationNet.set(row, destinationNet);
+  }
   const displayedRows = displayedLedgerRows(filteredLedgerRows, hidePayments);
   const hiddenCount = hiddenPaymentsCount(filteredLedgerRows, hidePayments);
-  const sortedPOs = enrichPurchaseOrderTotals(purchaseOrders);
+  const sortedPOs = enrichPurchaseOrderTotals(
+    filterPurchaseOrdersByDate(purchaseOrders, dateFilter).filter((po) => matchesDestination(po.destinationCompanyId))
+  );
   const grandTotal = purchaseOrderGrandTotal(sortedPOs);
+  const destinations = new Map<number, string>();
+  for (const row of [...purchaseOrders, ...ledgerRows]) {
+    if (row.destinationCompanyId != null) {
+      destinations.set(
+        row.destinationCompanyId,
+        row.destinationCompanyName || companies.find((company) => company.id === row.destinationCompanyId)?.name || "Unknown"
+      );
+    }
+  }
+  const destinationOptions = [...destinations.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  const hasUnassigned = ledgerRows.some((row) => row.destinationCompanyId == null);
 
   return (
     <Dialog open={!!supplier} onOpenChange={onClose}>
@@ -111,6 +143,18 @@ export function SupplierDetailDialog({
                     {company.name}
                   </SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+            <Select value={destinationFilter} onValueChange={onDestinationFilterChange}>
+              <SelectTrigger className="w-48" data-testid="select-destination-filter" aria-label="Filter destination company">
+                <SelectValue placeholder="All Destinations" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Destinations</SelectItem>
+                {destinationOptions.map(([id, name]) => (
+                  <SelectItem key={id} value={String(id)}>{name}</SelectItem>
+                ))}
+                {hasUnassigned && <SelectItem value="unassigned">Unassigned</SelectItem>}
               </SelectContent>
             </Select>
             <Button
@@ -159,7 +203,7 @@ export function SupplierDetailDialog({
               {ledgerLoading ? <Skeleton className="h-5 w-10" /> : <p className="font-semibold text-sm">{txCount}</p>}
             </div>
             <div className="rounded-lg border bg-muted/30 px-4 py-2.5">
-              <p className="text-xs text-muted-foreground mb-1">Balance</p>
+              <p className="text-xs text-muted-foreground mb-1">{destinationFilter === "all" ? "Balance" : "Destination Net"}</p>
               {ledgerLoading ? (
                 <Skeleton className="h-5 w-24" />
               ) : (
@@ -213,7 +257,7 @@ export function SupplierDetailDialog({
                 </TabsTrigger>
                 <TabsTrigger value="purchase-orders" data-testid="tab-purchase-orders">
                   <FileText className="h-3.5 w-3.5 mr-1.5" />
-                  Purchase Orders {purchaseOrders.length > 0 && `(${purchaseOrders.length})`}
+                  Purchase Orders {sortedPOs.length > 0 && `(${sortedPOs.length})`}
                 </TabsTrigger>
               </TabsList>
             </div>
@@ -236,19 +280,19 @@ export function SupplierDetailDialog({
             {ledgerLoading ? (
               <div className="border rounded-lg overflow-hidden">
                 <div className="bg-muted/40 px-4 py-2.5 border-b flex gap-6">
-                  {[80, 100, 80, 150, 80, 80, 80].map((w, i) => (
+                  {[80, 100, 120, 80, 150, 80, 80, 80].map((w, i) => (
                     <Skeleton key={i} className="h-3.5 rounded-sm" style={{ width: w }} />
                   ))}
                 </div>
                 {[1, 2, 3, 4, 5, 6].map((i) => (
                   <div key={i} className="px-4 py-3 border-b last:border-b-0 flex gap-6 items-center">
-                    {[80, 100, 80, 150, 80, 80, 80].map((w, j) => (
+                    {[80, 100, 120, 80, 150, 80, 80, 80].map((w, j) => (
                       <Skeleton key={j} className="h-3 rounded-sm" style={{ width: w }} />
                     ))}
                   </div>
                 ))}
               </div>
-            ) : unifiedLedger.length === 0 ? (
+            ) : filteredLedgerRows.length === 0 && !openingEntry ? (
               <div className="border rounded-lg bg-muted/20 flex flex-col items-center justify-center py-16 gap-3 text-center">
                 <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
                   <DollarSign className="w-5 h-5 text-muted-foreground" />
@@ -256,7 +300,7 @@ export function SupplierDetailDialog({
                 <div>
                   <p className="text-sm font-medium">No transactions</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    No transactions found{companyFilter !== "all" ? " for this company" : ""}
+                    No transactions found for the selected company, destination, or date
                   </p>
                 </div>
               </div>
@@ -273,17 +317,18 @@ export function SupplierDetailDialog({
                     <TableRow className="bg-muted/40 hover:bg-muted/40">
                       <TableHead className="h-9 text-xs font-semibold">Date</TableHead>
                       <TableHead className="h-9 text-xs font-semibold">Company</TableHead>
+                      <TableHead className="h-9 text-xs font-semibold">Destination</TableHead>
                       <TableHead className="h-9 text-xs font-semibold">Type</TableHead>
                       <TableHead className="h-9 text-xs font-semibold">Ref</TableHead>
                       <TableHead className="h-9 text-xs font-semibold text-right">Debit</TableHead>
                       <TableHead className="h-9 text-xs font-semibold text-right">Credit</TableHead>
-                      <TableHead className="h-9 text-xs font-semibold text-right">Balance</TableHead>
+                      <TableHead className="h-9 text-xs font-semibold text-right">{destinationFilter === "all" ? "Balance" : "Net"}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {displayedRows.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center py-10 text-sm text-muted-foreground">
+                        <TableCell colSpan={8} className="text-center py-10 text-sm text-muted-foreground">
                           {hidePayments && filteredLedgerRows.length > 0
                             ? "All transactions are payments — toggle off to show them."
                             : "No transactions in this period"}
@@ -301,6 +346,9 @@ export function SupplierDetailDialog({
                               <Badge variant="secondary" className="text-xs">
                                 {txn.companyName}
                               </Badge>
+                            </TableCell>
+                            <TableCell className="py-2.5">
+                              {txn.destinationCompanyName || "Unassigned"}
                             </TableCell>
                             <TableCell className="py-2.5">
                               <Badge
@@ -338,7 +386,7 @@ export function SupplierDetailDialog({
                               {txn.credit > 0 ? formatAmount(txn.credit) : "—"}
                             </TableCell>
                             <TableCell className="py-2.5 text-right font-mono font-semibold">
-                              {formatAmount(txn.balance)}
+                              {formatAmount(destinationFilter === "all" ? txn.balance : runningDestinationNet.get(txn) ?? 0)}
                             </TableCell>
                           </TableRow>
                         );
@@ -367,7 +415,7 @@ export function SupplierDetailDialog({
                   </div>
                 ))}
               </div>
-            ) : purchaseOrders.length === 0 ? (
+            ) : sortedPOs.length === 0 ? (
               <div className="border rounded-lg bg-muted/20 flex flex-col items-center justify-center py-16 gap-3 text-center">
                 <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
                   <FileText className="w-5 h-5 text-muted-foreground" />
@@ -375,7 +423,7 @@ export function SupplierDetailDialog({
                 <div>
                   <p className="text-sm font-medium">No purchase orders</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    No purchase orders found{companyFilter !== "all" ? " for this company" : ""}
+                    No purchase orders found for the selected company, destination, or date
                   </p>
                 </div>
               </div>
@@ -387,6 +435,7 @@ export function SupplierDetailDialog({
                       <TableHead className="h-9 text-xs font-semibold">Container</TableHead>
                       <TableHead className="h-9 text-xs font-semibold">Import Date</TableHead>
                       <TableHead className="h-9 text-xs font-semibold">Company</TableHead>
+                      <TableHead className="h-9 text-xs font-semibold">Destination</TableHead>
                       <TableHead className="h-9 text-xs font-semibold text-right">Total</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -418,6 +467,9 @@ export function SupplierDetailDialog({
                             {po.companyName}
                           </Badge>
                         </TableCell>
+                        <TableCell className="py-3 text-sm">
+                          {po.destinationCompanyName || "Unassigned"}
+                        </TableCell>
                         <TableCell className="py-3 text-right font-mono font-semibold">
                           {formatAmount(po.totalAmount)}
                         </TableCell>
@@ -427,7 +479,7 @@ export function SupplierDetailDialog({
                 </Table>
                 <div className="flex justify-end">
                   <div className="flex items-center gap-2 rounded-lg border bg-muted/30 px-4 py-2 text-sm">
-                    <span className="text-muted-foreground">Grand Total</span>
+                    <span className="text-muted-foreground">{sortedPOs.length} PO{sortedPOs.length === 1 ? "" : "s"} · Grand Total</span>
                     <span className="font-mono font-semibold">{formatAmount(grandTotal)}</span>
                   </div>
                 </div>
