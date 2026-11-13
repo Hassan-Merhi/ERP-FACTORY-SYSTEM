@@ -33,10 +33,21 @@ const h = vi.hoisted(() => {
     db,
     selectResults,
     executeResults,
-    order: { id: 91, companyId: 10, customerId: 8, invoiceNumber: "INV-000091",
-      status: "FINALIZED", previousStatus: "LOADING", loadingStartedAt: new Date(),
-      deletedAt: null, dispatchBatchId: null, proformaIdUsed: null,
-      grandTotal: "100.00", totalQtyBales: 2, containerNumber: "CONT-01" },
+    order: {
+      id: 91,
+      companyId: 10,
+      customerId: 8,
+      invoiceNumber: "INV-000091",
+      status: "FINALIZED",
+      previousStatus: "LOADING",
+      loadingStartedAt: new Date(),
+      deletedAt: null,
+      dispatchBatchId: null,
+      proformaIdUsed: null,
+      grandTotal: "100.00",
+      totalQtyBales: 2,
+      containerNumber: "CONT-01",
+    },
     lockOrder: vi.fn(),
     physicalDispatch: vi.fn(),
     postedTrip: vi.fn(),
@@ -50,13 +61,15 @@ const h = vi.hoisted(() => {
 
 vi.mock("../server/auth", () => ({
   requireAuth: (_req: any, _res: any, next: () => void) => next(),
-  requireRole: (...allowed: string[]) => (req: any, res: any, next: () => void) =>
-    allowed.includes(req.user?.role) ? next() : res.status(403).json({ message: "Forbidden" }),
+  requireRole:
+    (...allowed: string[]) =>
+    (req: any, res: any, next: () => void) =>
+      allowed.includes(req.user?.role) ? next() : res.status(403).json({ message: "Forbidden" }),
 }));
 vi.mock("../server/db", () => ({ db: h.db }));
 vi.mock("../server/lib/logger", () => ({ logger: { error: vi.fn() } }));
 vi.mock("../server/lib/httpHandlers", () => ({
-  getErrorMessage: (e: unknown) => e instanceof Error ? e.message : String(e),
+  getErrorMessage: (e: unknown) => (e instanceof Error ? e.message : String(e)),
 }));
 vi.mock("../server/routes/factory/_helpers", () => ({ recalculateOrderTotals: h.recalc }));
 vi.mock("../server/routes/factory/customer-orders/orderChargeLedger", () => ({
@@ -83,15 +96,24 @@ import { registerFinalizedLoadingReturnRoutes } from "../server/routes/factory/c
 type Handler = (req: any, res: any, next: () => void) => unknown;
 const routes = new Map<string, Handler[]>();
 const app: any = {
-  get: (path: string, ...handlers: Handler[]) => { routes.set("GET " + path, handlers); },
-  post: (path: string, ...handlers: Handler[]) => { routes.set("POST " + path, handlers); },
+  get: (path: string, ...handlers: Handler[]) => {
+    routes.set("GET " + path, handlers);
+  },
+  post: (path: string, ...handlers: Handler[]) => {
+    routes.set("POST " + path, handlers);
+  },
 };
 registerFinalizedLoadingReturnRoutes(app);
 
-async function apply(options: {
-  role?: string; baleIds?: number[]; reason?: string; confirmReturn?: boolean;
-  expectedTotal?: string;
-} = {}) {
+async function apply(
+  options: {
+    role?: string;
+    baleIds?: number[];
+    reason?: string;
+    confirmReturn?: boolean;
+    expectedTotal?: string;
+  } = {}
+) {
   const req: any = {
     params: {},
     query: {},
@@ -109,12 +131,20 @@ async function apply(options: {
   const res: any = {
     statusCode: 200,
     body: null,
-    status(status: number) { res.statusCode = status; return res; },
-    json(body: unknown) { res.body = body; return res; },
+    status(status: number) {
+      res.statusCode = status;
+      return res;
+    },
+    json(body: unknown) {
+      res.body = body;
+      return res;
+    },
   };
   for (const handler of routes.get("POST /api/factory/finalized-sale-returns/apply") ?? []) {
     let advanced = false;
-    await handler(req, res, () => { advanced = true; });
+    await handler(req, res, () => {
+      advanced = true;
+    });
     if (!advanced) break;
   }
   return { status: res.statusCode, body: res.body };
@@ -167,9 +197,7 @@ describe("Admin-only finalized loading sale returns (not Factory POS)", () => {
   });
 
   it("refuses already settled customer receivables instead of overwriting a payment", async () => {
-    h.selectResults.push([
-      { transactionType: "SALE", debitAmount: "100.00", balance: "80.00", creditAmount: "20.00" },
-    ]);
+    h.selectResults.push([{ transactionType: "SALE", debitAmount: "100.00", balance: "80.00", creditAmount: "20.00" }]);
     const response = await apply();
     expect(response.status).toBe(409);
     expect(h.db.delete).not.toHaveBeenCalled();
@@ -178,31 +206,45 @@ describe("Admin-only finalized loading sale returns (not Factory POS)", () => {
 
   it("returns a sold physical bale, recalculates receivable, records batch history and refreshes export", async () => {
     const saleRow = {
-      id: 140, orderId: 91, baleId: 5, baleReference: "B-05",
-      locationId: 4, articleCode: "WIP-01", baleName: "Wipers",
-      weight: "50.000", priceUsed: "20.00", scannedBy: "tester",
+      id: 140,
+      orderId: 91,
+      baleId: 5,
+      baleReference: "B-05",
+      locationId: 4,
+      articleCode: "WIP-01",
+      baleName: "Wipers",
+      weight: "50.000",
+      priceUsed: "20.00",
+      scannedBy: "tester",
     };
     const physical = {
-      id: 5, companyId: 10, status: "SOLD", erpLocationId: 4,
-      deletedAt: null, totalCost: "11.0000000",
+      id: 5,
+      companyId: 10,
+      status: "SOLD",
+      erpLocationId: 4,
+      deletedAt: null,
+      totalCost: "11.0000000",
     };
     h.selectResults.push(
       [{ transactionType: "SALE", debitAmount: "100.00", balance: "100.00", creditAmount: "0" }],
       [saleRow],
       [physical],
-      [{ ...h.order, grandTotal: "80.00", totalQtyBales: 1 }],
+      [{ ...h.order, grandTotal: "80.00", totalQtyBales: 1 }]
     );
     h.executeResults.push(
       { rows: [] }, // advisory lock
       { rows: [] }, // duplicate return history
       { rows: [] }, // bale linked to another order
-      { rows: [] }, // audit insert
+      { rows: [] } // audit insert
     );
     const response = await apply();
     expect(response.status).toBe(200);
     expect(response.body).toMatchObject({
-      invoiceNumber: "INV-000091", quantity: 1,
-      originalTotal: "100.00", revisedTotal: "80.00", customerCredit: "20.00",
+      invoiceNumber: "INV-000091",
+      quantity: 1,
+      originalTotal: "100.00",
+      revisedTotal: "80.00",
+      customerCredit: "20.00",
       snapshotUpdated: true,
     });
     expect(h.db.delete).toHaveBeenCalled();
