@@ -24,9 +24,7 @@ describe("Properties Stock/OTW workspace", () => {
       expect(canNavigateProperties(path, { role: "User" }, company("Developer"))).toBe(true);
       expect(canNavigateProperties(path, { role: "User" }, company("Owner"))).toBe(true);
       expect(canNavigateProperties(path, { role: "Developer" }, company("User"))).toBe(false);
-      expect(canNavigateProperties(path, { role: "Developer" }, { companyType: "erp", role: "Developer" })).toBe(
-        false
-      );
+      expect(canNavigateProperties(path, { role: "Developer" }, { companyType: "erp", role: "Developer" })).toBe(false);
     }
   });
 
@@ -63,7 +61,7 @@ describe("Properties Stock/OTW workspace", () => {
   it("keeps stock details, back navigation and receipt links inside Properties", () => {
     const query = source("client/src/pages/StockQuery.tsx");
     const detail = source("client/src/pages/StockItemDetail.tsx");
-    expect(query).toContain("selectedCompany?.companyType === \"properties\"");
+    expect(query).toContain('selectedCompany?.companyType === "properties"');
     expect(query).toContain("/properties/stock-query/");
     expect(detail).toContain('useRoute("/properties/stock-query/:id")');
     expect(detail).toContain('"/properties/stock?tab=query"');
