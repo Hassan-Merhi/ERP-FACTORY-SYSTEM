@@ -17,6 +17,7 @@ import { db } from "../../db";
 import { logger } from "../../lib/logger";
 import { cancelUnreceivedTrade } from "../../services/intercompany/phase5Cancel";
 import { daybookLinkedVoucherTrades, deletePristineLinkedTrade } from "../../services/intercompany/linkedTradePhysicalDelete";
+import { normalizeLegacyIntercompanyProfit } from "../../services/intercompany/legacyProfitNetting";
 import { receiveLinkedTrade } from "../../services/intercompany/phase5Receipt";
 import { requireReceivingPairPermission } from "../../services/intercompany/phase5ReceivingAccess";
 import {
@@ -125,7 +126,7 @@ async function lifecycleList(identity: EditIdentity) {
   return withTradeScope(identity, pairs, async () => {
     const tradeIds = trades.map((t) => t.id);
     const physicalIds = trades.map((t) => t.physicalContainerId);
-    const [imported, received, canceled, charges, physical, localLocations, localInventoryAccounts] = await Promise.all(
+    const [imported, received, canceled, charges, physical, localLocations, localInventoryAccounts, technicalEvents] = await Promise.all(
       [
         tradeIds.length
           ? db
@@ -171,6 +172,15 @@ async function lifecycleList(identity: EditIdentity) {
               eq(ledgerAccounts.active, true)
             )
           ),
+        trades.length
+          ? db.select({
+              eventType: intercompanyAuditEvents.eventType,
+              eventKey: intercompanyAuditEvents.eventKey,
+              payload: intercompanyAuditEvents.payload,
+            }).from(intercompanyAuditEvents).where(
+              inArray(intercompanyAuditEvents.relationshipId, [...new Set(trades.map((t) => t.relationshipId))])
+            )
+          : [],
       ]
     );
     return {
@@ -194,6 +204,14 @@ async function lifecycleList(identity: EditIdentity) {
             ? { id: r.id, locationId: r.locationId, date: r.postingDate, voucherId: r.receiptVoucherId }
             : null,
           canceled: c ? { id: c.id, date: c.postingDate, releasedCredit: c.releasedCredit } : null,
+          accountingNetted: technicalEvents.some((event) =>
+            (event.eventKey === "ic-technical-profit-normalized:" + trade.id &&
+              event.eventType === "intercompany-internal-profit-netted") ||
+            (event.eventType === "container-import-confirmed" &&
+              event.eventKey.startsWith("ic-container-import:") &&
+              event.eventKey.endsWith(":" + trade.id) &&
+              (event.payload as { technicalProfitNetting?: unknown } | null)?.technicalProfitNetting === true)
+          ),
           hasSharedInvoices: invoiceCharges.length > 0,
           pendingSharedAllocation: invoiceCharges.some((item) => Number(item.amount) > 0),
         };
@@ -304,6 +322,23 @@ export function registerIntercompanyPhase5Routes(app: Express) {
       return res.json(await deletePristineLinkedTrade(trade.tradeId, trade.version, actor(req)));
     } catch (error) {
       return fail(res, error, "delete-linked");
+    }
+  });
+  // Explicit audited neutralization of old internal at-cost Sales and COGS.
+  // No external supplier, intercompany balance, stock or cash change.
+  app.post("/api/intercompany-container-trading/lifecycle/:tradeId/normalize-internal-profit", requireAuth, async (req, res) => {
+    try {
+      const body = z.object({
+        expectedVersion: id,
+        postingDate: day,
+        confirmNoCashOrStockChange: z.literal(true),
+      }).strict().parse(req.body);
+      return res.json(await normalizeLegacyIntercompanyProfit({
+        tradeId: routeId.parse(req.params.tradeId),
+        ...body,
+      }, actor(req)));
+    } catch (error) {
+      return fail(res, error);
     }
   });
   // Delete the complete untouched company pair: no reversal voucher is posted.
