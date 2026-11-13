@@ -20,7 +20,7 @@
 One dynamic family declares a `namespace`, a `sourceKey` in the existing row, an explicit list of dimensions and a value type. The builder creates exactly one column for each enabled dimension. Data is not flattened or copied into a second full array.
 
 - **Locations** — alphabetical `Price - <Location Name>`, keyed by stable location ID. A missing per-location price can fall back **only** to the caller-supplied default price field. This is an explicit option, not automatic price calculation.
-- **Production months** — validated `YYYY-MM` IDs, chronological columns, `integer` counts and optional source arrays. Display-order sorting does not disturb the original source-array indices, so production totals cannot move into the wrong month.
+- **Production months** — validated `YYYY-MM` IDs, chronological columns, `integer` counts and optional source arrays. Display-order sorting does not disturb the original source-array indices. For array-backed matrices, missing positions fail instead of silently dropping a month's quantity; record-backed missing counts remain blank unless the caller supplies a value.
 - **Currencies** — sorted ISO-style three-letter codes, `Amount (EUR)`, `Amount (USD)`, etc. FX rate columns are optional, typed numeric cells with the explicit `#,##0.000000` display format. The engine never converts currencies itself.
 - **Custom attributes** — named/typed fields from the page's known metadata. Arbitrary keys do **not** become exposed spreadsheet columns.
 - **Conditional fields** — opt-in group insertion for summary/detailed modes, FX and other page flags. All fixed/dynamic columns are placed deterministically at explicit anchors.
