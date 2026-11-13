@@ -272,9 +272,12 @@ export function registerErpSupplierReturnRoutes(app: Express) {
       };
       if (!/^[a-zA-Z0-9._:-]{8,128}$/.test(body?.requestKey ?? ""))
         throw new ReturnError(400, "RETURN_IDEMPOTENCY_KEY_REQUIRED", "A valid unique request key is required");
+      const returnDay = String(body?.returnDate ?? "");
+      const parsedReturnDay = new Date(returnDay + "T00:00:00Z");
       if (
-        !/^\d{4}-\d{2}-\d{2}$/.test(body?.returnDate ?? "") ||
-        new Date(body.returnDate! + "T00:00:00Z").toISOString().slice(0, 10) !== body.returnDate
+        !/^\d{4}-\d{2}-\d{2}$/.test(returnDay) ||
+        Number.isNaN(parsedReturnDay.getTime()) ||
+        parsedReturnDay.toISOString().slice(0, 10) !== returnDay
       )
         throw new ReturnError(400, "RETURN_DATE_INVALID", "Return date must be a valid YYYY-MM-DD");
       if (!Array.isArray(body.lines) || body.lines.length === 0 || body.lines.length > 1000)
@@ -416,7 +419,7 @@ export function registerErpSupplierReturnRoutes(app: Express) {
               quantity: qty.toFixed(3),
               unitCost: currentCost.toFixed(7),
               fromLocationId: source.locationId,
-              occurredAt: new Date().toISOString(),
+              occurredAt: parsedReturnDay.toISOString(),
               source: {
                 sourceType: "erp-supplier-return",
                 sourceId: String(returnLine.id),
