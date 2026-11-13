@@ -71,6 +71,8 @@ export default function FactorySupplierReturns() {
   const [confirm,setConfirm] = useState(false);
   const [busy,setBusy] = useState(false);
   const [receipt,setReceipt] = useState<{id:number;totalQty?:string;replayed?:boolean}|null>(null);
+  const [selectedBatch,setSelectedBatch] = useState<number|null>(null);
+  const [detailRows,setDetailRows] = useState<Array<{id:number;articleCode:string;itemName:string;quantity:string;containerNumber:string;offloadId:number;supplier:string;supplierCreditUsd:string;inventoryReductionUsd:string;voucherNumber:string|null}>>([]);
   const history = useQuery<{rows:HistoryRow[]}>({
     queryKey:["/api/erp/supplier-returns/history",selectedCompany?.id],
     enabled:!!selectedCompany,
@@ -123,6 +125,13 @@ export default function FactorySupplierReturns() {
     } catch(e) {
       toast({title:"Mapping failed",description:(e as Error).message,variant:"destructive"});
     } finally {setBusy(false);}
+  }
+  async function openBatch(id:number){
+    if(selectedBatch===id){setSelectedBatch(null);return;}
+    try{
+      const detail=await (await apiRequest("GET",`/api/erp/supplier-returns/history/${id}`)).json() as {rows:typeof detailRows};
+      setDetailRows(detail.rows);setSelectedBatch(id);
+    }catch(e){toast({title:"History unavailable",description:(e as Error).message,variant:"destructive"});}
   }
   async function post(){
     if(!ready||!confirm||busy)return;
@@ -228,13 +237,29 @@ export default function FactorySupplierReturns() {
           <div className="overflow-x-auto"><table className="w-full text-sm">
             <thead className="bg-muted"><tr>{["Batch","Date","File / reference","By","Lines","Bales removed","Supplier credit","Inventory reduction"].map(x=><th key={x} className="p-2 text-left">{x}</th>)}</tr></thead>
             <tbody>{history.data?.rows?.map(r=><tr key={r.id} className="border-t">
-              <td className="p-2">#{r.id}</td><td className="p-2">{r.returnDate}</td>
+              <td className="p-2"><Button size="sm" variant="link" onClick={()=>void openBatch(r.id)}>#{r.id} {selectedBatch===r.id?"(hide)":"(view)"}</Button></td><td className="p-2">{r.returnDate}</td>
               <td className="p-2">{r.fileName||"Manual"}<div className="text-muted-foreground text-xs">{r.reason}</div></td>
               <td className="p-2">{r.createdBy}</td><td className="p-2">{r.lineCount}</td>
               <td className="p-2 font-mono">{r.totalQty}</td><td className="p-2 font-mono">{money(r.supplierCreditUsd)}</td>
               <td className="p-2 font-mono">{money(r.inventoryReductionUsd)}</td>
             </tr>)}</tbody>
           </table></div>
+        )}
+        {selectedBatch!==null&&(
+          <div className="border-t p-4 space-y-2">
+            <strong>Batch #{selectedBatch} — returned article breakdown</strong>
+            <div className="overflow-x-auto"><table className="w-full text-sm">
+              <thead className="bg-muted"><tr>{["Article code","Item name","Container","Original offload","Supplier","Qty removed","Supplier credit","Stock cost","Voucher"].map(x=><th key={x} className="p-2 text-left">{x}</th>)}</tr></thead>
+              <tbody>{detailRows.map(r=><tr key={r.id} className="border-t">
+                <td className="p-2 font-mono">{r.articleCode}</td><td className="p-2">{r.itemName}</td>
+                <td className="p-2">{r.containerNumber}</td><td className="p-2">#{r.offloadId}</td>
+                <td className="p-2">{r.supplier}</td><td className="p-2 font-mono">{r.quantity}</td>
+                <td className="p-2">{money(r.supplierCreditUsd)}</td>
+                <td className="p-2">{money(r.inventoryReductionUsd)}</td>
+                <td className="p-2">{r.voucherNumber}</td>
+              </tr>)}</tbody>
+            </table></div>
+          </div>
         )}
       </div>
     </div>
