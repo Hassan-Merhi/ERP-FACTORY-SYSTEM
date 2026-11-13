@@ -779,8 +779,14 @@ export async function postIntercompanyImport(args: {
           voucherDate: input.importDate,
           description: "At-cost goods transferred out - " + plan.containerNumber,
           lines: [
-            { ledgerAccountId: acct.cogs, debit: plan.landedTotal, narration: "Internal sale cost of goods sold" },
+            { ledgerAccountId: acct.cogs, debit: plan.landedTotal, narration: "Internal transfer cost" },
             { ledgerAccountId: acct.purchase, credit: plan.landedTotal, narration: "Release original purchase cost" },
+            // Same-voucher technical netting: the transfer is at cost and is
+            // NOT external revenue or a realized COGS expense for Properties.
+            // Leave just Dr intercompany balance / Cr original supplier in
+            // the source company's final ledger balances.
+            { ledgerAccountId: acct.sales, debit: plan.landedTotal, narration: "Eliminate internal at-cost sales" },
+            { ledgerAccountId: acct.cogs, credit: plan.landedTotal, narration: "Eliminate internal COGS" },
           ],
           source: { type: "ic-container-source-cost", id: trade.id },
           actor: { userId, reason: "Cost of goods sold on at-cost intercompany resale" },
@@ -826,6 +832,7 @@ export async function postIntercompanyImport(args: {
             originalSupplierVoucherIds: supplierVoucherIds,
             sourceSaleVoucherId: saleVoucher.voucher.id,
             sourceCostVoucherId: costVoucher.voucher.id,
+            technicalProfitNetting: true,
             destinationPoId: destPo.id,
             destinationVoucherId: destVoucher.voucher.id,
             destinationStockItemIds: items.map((item) => item.destItemId),
