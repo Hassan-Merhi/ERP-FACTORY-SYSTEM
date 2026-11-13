@@ -5,6 +5,8 @@ import { PageHeader } from "@/components/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import { useFactoryNavigationAccess } from "@/hooks/useFactoryNavigationAccess";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { getFinalizedSaleReturnCopy } from "@/i18n/factoryFinalizedSaleReturnTranslations";
 import ProductionComparison from "./ProductionComparison";
 import ProductComparisonCharts from "./productcomparison/ProductComparisonCharts";
 import FactoryFinalizedSaleReturns from "./FactoryFinalizedSaleReturns";
@@ -15,6 +17,8 @@ const ALL_TABS: readonly OthersTab[] = ["comparison", "product-comparison", "sal
 export default function FactoryOthers() {
   const { ready, access, isPrivileged, role } = useFactoryNavigationAccess();
   const canManageReturns = role === "Admin" || role === "Developer";
+  const { language } = useApplicationLanguage();
+  const returnCopy = getFinalizedSaleReturnCopy(language);
   const search = useSearch();
   const hidden = isPrivileged ? [] : (access?.hiddenCostFields ?? []);
   const visibleTabs = ALL_TABS.filter((tab) => tab === "sale-returns" ? canManageReturns :
@@ -62,7 +66,7 @@ export default function FactoryOthers() {
             )}
             {canManageReturns && (
               <TabsTrigger value="sale-returns" data-testid="tab-others-sale-returns">
-                <RotateCcw className="mr-1.5 h-4 w-4" /> Finalized Sale Returns
+                <RotateCcw className="mr-1.5 h-4 w-4" /> {returnCopy.tabLabel}
               </TabsTrigger>
             )}
           </TabsList>
