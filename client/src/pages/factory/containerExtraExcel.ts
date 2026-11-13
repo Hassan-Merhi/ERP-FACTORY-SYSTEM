@@ -1,4 +1,4 @@
-import { FILE_SIZE_LIMITS } from "@shared/fileSizePolicy";
+import { spreadsheetImportLimitBytes, sizeLimitLabel } from "@shared/fileSizePolicy";
 /**
  * XLSX-only import and a blank Excel template for loading-specific extra items.
  * No rows touch the original customer proforma.
@@ -20,9 +20,9 @@ function asNumber(value: unknown): number {
   return Number(String(value ?? "").trim().replace(/[$,]/g, ""));
 }
 
-export async function parseContainerExtraExcel(file: File): Promise<ContainerExtraImportRow[]> {
+export async function parseContainerExtraExcel(file: File, role?: string | null): Promise<ContainerExtraImportRow[]> {
   if (!/\.xlsx$/i.test(file.name)) throw new Error("Choose an .xlsx Excel workbook");
-  if (file.size > FILE_SIZE_LIMITS.spreadsheetImport) throw new Error("Workbook is too large (maximum 50 MB)");
+  if (file.size > spreadsheetImportLimitBytes(role)) throw new Error(`Workbook is too large (maximum ${sizeLimitLabel(spreadsheetImportLimitBytes(role))})`);
   const book = await XLSX.read(await file.arrayBuffer(), { type: "array" });
   const sheet = book.Sheets[book.SheetNames[0]];
   if (!sheet) throw new Error("Excel workbook has no worksheet");
