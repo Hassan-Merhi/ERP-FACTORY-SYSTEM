@@ -365,11 +365,24 @@ export function useStockItems() {
             : "",
         });
       }
-      const { utils, writeFile } = await import("@/lib/excelHelper");
-      const worksheet = utils.json_to_sheet(data);
-      const workbook = utils.book_new();
-      utils.book_append_sheet(workbook, worksheet, "Sales History");
-      await writeFile(workbook, "stock-items-sales-history.xlsx");
+      const { columnsFromOperationalRows, exportOperationalWorkbook } = await import(
+        "@/lib/operationalExcelExport"
+      );
+      await exportOperationalWorkbook({
+        title: "Stock Items — Sales History",
+        fileName: "stock-items-sales-history.xlsx",
+        companyName: selectedCompany?.name,
+        sheets: [{
+          name: "Sales History",
+          columns: columnsFromOperationalRows(data, {
+            orderedHeaders: [
+              "Item Code", "Item Name", "Sale #", "Voucher No.", "Date",
+              "Location", "Qty", "Rate", "Amount",
+            ],
+          }),
+          rows: data,
+        }],
+      });
     } catch {
       toast({ title: "Export failed", description: "Could not export sales history", variant: "destructive" });
     }
@@ -383,6 +396,9 @@ export function useStockItems() {
     }
     setExportingStockItems(true);
     try {
+      // Do not request or serialize hidden prices while the page-access
+      // response is still loading or this user's stock rate field is hidden.
+      const allowStockRates = myErpPages !== undefined && !hideStockRates;
       const [allItems, pricesRes, costDubaiRes, aliasesRes] = await Promise.all([
         loadStockItemsForExport({
           search: searchTerm,
@@ -390,66 +406,83 @@ export function useStockItems() {
           gradeId: selectedGradeFilter,
           categoryId: selectedCategoryFilter,
         }),
-        fetch("/api/stock-item-location-prices/all", { credentials: "include" }),
-        fetch("/api/stock-items/cost-dubai", { credentials: "include" }),
+        allowStockRates
+          ? fetch("/api/stock-item-location-prices/all", { credentials: "include" })
+          : Promise.resolve(null),
+        allowStockRates
+          ? fetch("/api/stock-items/cost-dubai", { credentials: "include" })
+          : Promise.resolve(null),
         fetch("/api/stock-items/all-code-aliases", { credentials: "include" }),
       ]);
-      if (!pricesRes.ok || !costDubaiRes.ok || !aliasesRes.ok) {
+      if (!aliasesRes.ok || (allowStockRates && (!pricesRes?.ok || !costDubaiRes?.ok))) {
         throw new Error("Failed to fetch stock item pricing or aliases");
       }
       if (allItems.length === 0) {
         toast({ title: "No stock items", description: "No items match the current filters." });
         return;
       }
-      const locationPrices: { stockItemId: number; locationId: number; locationName: string; sellingPrice: string }[] =
-        await pricesRes.json();
-      const costDubaiData: { stockItemId: number; costDubai: string }[] = await costDubaiRes.json();
+      const locationPrices: {
+        stockItemId: number;
+        locationId: number;
+        locationName: string;
+        sellingPrice: string;
+      }[] = pricesRes ? await pricesRes.json() : [];
+      const costDubaiData: { stockItemId: number; costDubai: string }[] =
+        costDubaiRes ? await costDubaiRes.json() : [];
       const aliasData: { stockItemId: number; aliasCode: string }[] = await aliasesRes.json();
 
       const costDubaiMap = new Map<number, string>();
-      for (const costDubai of costDubaiData) costDubaiMap.set(costDubai.stockItemId, costDubai.costDubai);
-
-      const priceMap = new Map<number, Map<string, string>>();
-      for (const locationPrice of locationPrices) {
-        if (!priceMap.has(locationPrice.stockItemId)) priceMap.set(locationPrice.stockItemId, new Map());
-        priceMap.get(locationPrice.stockItemId)!.set(locationPrice.locationName, locationPrice.sellingPrice);
-      }
-
-      const exportAliasMap = new Map<number, string[]>();
-      for (const alias of aliasData) {
-        if (!exportAliasMap.has(alias.stockItemId)) exportAliasMap.set(alias.stockItemId, []);
-        exportAliasMap.get(alias.stockItemId)!.push(alias.aliasCode);
-      }
-
-      const sortedLocations = locations.map((location) => location.name).sort();
-      const data = allItems.map((item) => {
-        const costDubai = costDubaiMap.get(item.id);
-        const defaultPrice = item.sellingPrice || "0";
-        const itemAliases = exportAliasMap.get(item.id) ?? [];
-        const row: Record<string, string> = {
-          Code: item.code,
-          Name: item.name,
-          Barcode: item.barcode || "",
-          "Alias Codes": itemAliases.join(", "),
-          UOM: item.uom,
-          "Stock Group": getStockGroupName(item.stockGroupId) ?? "— No Group —",
-          Grade: getGradeName(item.gradeId) || "",
-          Category: getCategoryName(item.categoryId) || "",
-          "Default Selling Price": formatAmount(defaultPrice),
-          "Cost Dubai": costDubai ? formatAmount(costDubai) : "",
-        };
-        for (const location of sortedLocations) {
-          const locationPrice = priceMap.get(item.id)?.get(location);
-          row[`Price - ${location}`] = formatAmount(locationPrice ?? defaultPrice);
+      for (const cost of costDubaiData) costDubaiMap.set(cost.stockItemId, cost.costDubai);
+      const priceMap = new Map<number, Record<string, string>>();
+      for (const price of locationPrices) {
+        let itemPrices = priceMap.get(price.stockItemId);
+        if (!itemPrices) {
+          itemPrices = {};
+          priceMap.set(price.stockItemId, itemPrices);
         }
-        row.Active = item.active ? "Yes" : "No";
-        return row;
+        itemPrices[String(price.locationId)] = price.sellingPrice;
+      }
+      const aliasMap = new Map<number, string[]>();
+      for (const alias of aliasData) {
+        if (!aliasMap.has(alias.stockItemId)) aliasMap.set(alias.stockItemId, []);
+        aliasMap.get(alias.stockItemId)!.push(alias.aliasCode);
+      }
+
+      const { buildStockItemReportColumns } = await import(
+        "@shared/universal-excel/reportSchemas"
+      );
+      const { exportOperationalWorkbook } = await import("@/lib/operationalExcelExport");
+      const data = allItems.map((item) => ({
+        code: item.code,
+        name: item.name,
+        barcode: item.barcode || "",
+        aliasCodes: (aliasMap.get(item.id) ?? []).join(", "),
+        uom: item.uom,
+        stockGroup: getStockGroupName(item.stockGroupId) ?? "— No Group —",
+        grade: getGradeName(item.gradeId) || "",
+        category: getCategoryName(item.categoryId) || "",
+        defaultSellingPrice: allowStockRates ? item.sellingPrice || "0" : null,
+        costDubai: allowStockRates ? costDubaiMap.get(item.id) ?? null : null,
+        pricesByLocation: allowStockRates ? priceMap.get(item.id) ?? {} : {},
+        active: item.active ? "Yes" : "No",
+      }));
+      await exportOperationalWorkbook({
+        title: "Stock Items",
+        fileName: "stock-items.xlsx",
+        companyName: selectedCompany?.name,
+        filters: [
+          { label: "Search", value: searchTerm || "All" },
+          { label: "Group", value: String(selectedGroupFilter ?? "All") },
+          { label: "Grade", value: String(selectedGradeFilter ?? "All") },
+          { label: "Category", value: String(selectedCategoryFilter ?? "All") },
+        ],
+        allowedColumnTags: allowStockRates ? ["stock-rates", "stock-cost"] : [],
+        sheets: [{
+          name: "Stock Items",
+          columns: buildStockItemReportColumns(locations),
+          rows: data,
+        }],
       });
-      const { utils, writeFile } = await import("@/lib/excelHelper");
-      const worksheet = utils.json_to_sheet(data);
-      const workbook = utils.book_new();
-      utils.book_append_sheet(workbook, worksheet, "Stock Items");
-      await writeFile(workbook, "stock-items.xlsx");
     } catch (error) {
       toast({
         title: "Export failed",
