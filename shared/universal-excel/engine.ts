@@ -9,6 +9,15 @@
  * depend on the first worksheet and absolute cell/header coordinates.
  */
 import ExcelJS from "exceljs";
+import {
+  applyUniversalExcelPrintLayout,
+  paintExcelRow,
+  resolveUniversalExcelAppearance,
+  styleUniversalExcelGroup,
+  styleUniversalExcelTotal,
+  type ResolvedUniversalExcelAppearance,
+  type UniversalExcelAppearance,
+} from "./design";
 
 export const UNIVERSAL_EXCEL_SCHEMA_VERSION = 1 as const;
 export type UniversalExcelMode = "report" | "import-template";
@@ -115,6 +124,8 @@ export interface UniversalExcelWorkbookSpec {
    * authorized and filtered at its API/data source.
    */
   allowedColumnTags?: readonly string[];
+  /** Report-only design; import templates and custom sheets retain layouts. */
+  appearance?: UniversalExcelAppearance;
 }
 
 export interface UniversalExcelSheetResult {
@@ -304,19 +315,39 @@ function fillRow(worksheet: ExcelJS.Worksheet, rowNumber: number, count: number,
   }
 }
 
-function styleHeader(ws: ExcelJS.Worksheet, rowNumber: number, columns: readonly UniversalExcelColumn[]): void {
+function styleHeader(
+  ws: ExcelJS.Worksheet,
+  rowNumber: number,
+  columns: readonly UniversalExcelColumn[],
+  design?: ResolvedUniversalExcelAppearance,
+): void {
   const row = ws.getRow(rowNumber);
-  row.height = 24;
+  row.height = design ? 28 : 24;
   for (let i = 0; i < columns.length; i += 1) {
     const cell = row.getCell(i + 1);
     cell.value = safeText(columns[i].header);
-    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: NAVY } };
-    cell.font = { bold: true, color: { argb: WHITE }, size: 10 };
-    cell.alignment = { vertical: "middle", wrapText: true };
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: design?.palette.primary ?? NAVY } };
+    cell.font = {
+      name: "Aptos",
+      bold: true,
+      color: { argb: design?.palette.onPrimary ?? WHITE },
+      size: 10,
+    };
+    cell.alignment = {
+      horizontal: columns[i].type === "integer" || columns[i].type === "decimal" ||
+        columns[i].type === "money" || columns[i].type === "percentage" ? "right" : "left",
+      vertical: "middle",
+      wrapText: true,
+    };
   }
 }
 
-function styleMetadata(ws: ExcelJS.Worksheet, spec: UniversalExcelWorkbookSpec, width: number): void {
+function styleMetadata(
+  ws: ExcelJS.Worksheet,
+  spec: UniversalExcelWorkbookSpec,
+  width: number,
+  design: ResolvedUniversalExcelAppearance,
+): void {
   const timestamp = spec.exportedAt ?? new Date();
   if (!Number.isFinite(timestamp.getTime())) throw new Error("Invalid export timestamp");
   const parts = [
@@ -327,15 +358,27 @@ function styleMetadata(ws: ExcelJS.Worksheet, spec: UniversalExcelWorkbookSpec, 
   const filters = (spec.filters ?? []).map(f => f.label + ": " + f.value).join(" | ");
   if (width > 1) ws.mergeCells(1, 1, 1, width);
   ws.getCell(1, 1).value = safeText(spec.title);
-  ws.getCell(1, 1).font = { bold: true, color: { argb: WHITE }, size: 15 };
-  fillRow(ws, 1, width, NAVY);
-  ws.getRow(1).height = 32;
+  ws.getCell(1, 1).font = {
+    name: "Aptos Display", bold: true, color: { argb: design.palette.onPrimary }, size: 16,
+  };
+  paintExcelRow(ws, 1, width, design.palette.primary);
+  ws.getRow(1).height = 34;
   if (width > 1) ws.mergeCells(2, 1, 2, width);
   ws.getCell(2, 1).value = safeText(parts.join(" | "));
   if (width > 1) ws.mergeCells(3, 1, 3, width);
   ws.getCell(3, 1).value = safeText(filters ? "Filters: " + filters : "Filters: All");
-  ws.getCell(2, 1).font = { size: 10, color: { argb: NAVY } };
-  ws.getCell(3, 1).font = { size: 9, color: { argb: NAVY }, italic: true };
+  ws.getCell(2, 1).font = { name: "Aptos", size: 10, color: { argb: design.palette.bodyText } };
+  ws.getCell(3, 1).font = { name: "Aptos", size: 9, color: { argb: design.palette.mutedText }, italic: true };
+  ws.getRow(2).height = 20;
+  ws.getRow(3).height = 19;
+  if (design.showBranding) {
+    if (width > 1) ws.mergeCells(4, 1, 4, width);
+    ws.getCell(4, 1).value = safeText(design.brandName);
+    ws.getCell(4, 1).font = {
+      name: "Aptos", size: 9, bold: true, color: { argb: design.palette.primary },
+    };
+    ws.getRow(4).height = 20;
+  }
 }
 
 function renderDataSheet(
@@ -345,6 +388,7 @@ function renderDataSheet(
   allowed: ReadonlySet<string>,
 ): UniversalExcelSheetResult {
   const cols = resolveColumns(sheet, allowed);
+  const design = spec.mode === "report" ? resolveUniversalExcelAppearance(spec.appearance) : undefined;
   const headerRow = sheet.headerRow ?? (spec.mode === "import-template" ? 1 : 5);
   if (!Number.isSafeInteger(headerRow) || headerRow < (spec.mode === "report" ? 5 : 1)) {
     throw new Error("Invalid header position for " + sheet.name);
@@ -356,7 +400,7 @@ function renderDataSheet(
     throw new Error("Preface rows overlap the import header in " + sheet.name);
   }
   const ws = workbook.addWorksheet(sheet.name);
-  if (spec.mode === "report") styleMetadata(ws, spec, cols.length);
+  if (design) styleMetadata(ws, spec, cols.length, design);
   for (let i = 0; i < (sheet.prefaceRows?.length ?? 0); i += 1) {
     const preface = sheet.prefaceRows![i];
     if (preface.length > cols.length) throw new Error("Preface width exceeds column count");
@@ -368,23 +412,46 @@ function renderDataSheet(
     const col = ws.getColumn(i + 1);
     col.width = cols[i].width ?? 18;
     col.numFmt = cols[i].numFmt ?? defaultNumFmt(cols[i].type, spec.dateFormat) ?? "General";
+    if (design) {
+      const numericColumn = ["integer", "decimal", "money", "percentage", "formula"].includes(cols[i].type ?? "");
+      col.alignment = {
+        vertical: "middle",
+        horizontal: numericColumn ? "right" : cols[i].type === "date" ? "center" : "left",
+      };
+    }
   }
-  styleHeader(ws, headerRow, cols);
+  styleHeader(ws, headerRow, cols, design);
   let next = headerRow + 1;
   let count = 0;
   let lastDataRow = headerRow;
-  const put = (record: UniversalExcelRecord, validateRequired = true) => {
+  let detailRowIndex = 0;
+  const detailCount = sheet.kind === "table"
+    ? sheet.rows.length
+    : sheet.groups.reduce((total, group) => total + group.rows.length, 0);
+  // Uniformly skip zebra fills on large reports; no partial styling and no
+  // millions of unnecessary per-cell style allocations.
+  const useAlternating = !!design?.alternateRows && detailCount <= design.maxAlternatingRows;
+  const put = (record: UniversalExcelRecord, validateRequired = true, isDetail = true) => {
     if (next > MAX_EXCEL_ROWS) throw new Error("Excel worksheet row limit exceeded: " + sheet.name);
     writeRow(ws, next, cols, record, validateRequired);
+    if (isDetail) {
+      if (useAlternating && (detailRowIndex % 2) === 1) {
+        paintExcelRow(ws, next, cols.length, design!.palette.alternating);
+      }
+      detailRowIndex += 1;
+    }
     lastDataRow = next++;
     count += 1;
   };
-  const footer = (record: UniversalExcelRecord) => {
-    put(record, false);
-    const footerRow = ws.getRow(next - 1);
-    footerRow.font = { bold: true, color: { argb: NAVY } };
-    // Footer styling is deliberately bounded to the handful of footer rows.
-    fillRow(ws, next - 1, cols.length, PALE);
+  const footer = (record: UniversalExcelRecord, kind: "subtotal" | "grand-total") => {
+    put(record, false, false);
+    if (design) {
+      styleUniversalExcelTotal(ws, next - 1, cols.length, design, kind);
+    } else {
+      const footerRow = ws.getRow(next - 1);
+      footerRow.font = { bold: true, color: { argb: NAVY } };
+      fillRow(ws, next - 1, cols.length, PALE);
+    }
   };
   if (sheet.kind === "table") {
     for (const record of sheet.rows) put(record);
@@ -395,13 +462,18 @@ function renderDataSheet(
       if (cols.length > 1) ws.mergeCells(rowNo, 1, rowNo, cols.length);
       const groupCell = ws.getRow(rowNo).getCell(1);
       groupCell.value = safeText(group.label);
-      groupCell.font = { bold: true, color: { argb: NAVY } };
-      groupCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: PALE } };
+      if (design) {
+        styleUniversalExcelGroup(ws, rowNo, cols.length, design);
+      } else {
+        groupCell.font = { bold: true, color: { argb: NAVY } };
+        groupCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: PALE } };
+      }
+      detailRowIndex = 0;
       for (const record of group.rows) put(record);
-      if (group.footer) footer(group.footer);
+      if (group.footer) footer(group.footer, "subtotal");
     }
   }
-  if (sheet.footer) footer(sheet.footer);
+  if (sheet.footer) footer(sheet.footer, "grand-total");
   const enableFilter = sheet.autoFilter ?? (spec.mode === "report" && sheet.kind === "table");
   if (enableFilter) {
     ws.autoFilter = {
@@ -411,6 +483,11 @@ function renderDataSheet(
   }
   if (sheet.freezeHeader ?? spec.mode === "report") {
     ws.views = [{ state: "frozen", xSplit: 0, ySplit: headerRow }];
+  }
+  if (design) {
+    applyUniversalExcelPrintLayout(ws, {
+      title: spec.title, headerRow, lastRow: next - 1, columnCount: cols.length, design,
+    });
   }
   return { name: sheet.name, kind: sheet.kind, headerRow, dataRows: count, columns: cols.map(c => c.key) };
 }
