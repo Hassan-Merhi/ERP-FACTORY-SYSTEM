@@ -24,7 +24,7 @@ import {
 const idsOf = (value: unknown): number[] => Array.isArray(value) &&
   value.every((v) => Number.isSafeInteger(v) && v > 0) ? value as number[] : [];
 
-function deletionVoucherIds(payload: unknown): number[] {
+export function deletionVoucherIds(payload: unknown): number[] {
   if (!payload || typeof payload !== "object") return [];
   const record = payload as Record<string, unknown>;
   const list = [
@@ -67,8 +67,8 @@ export async function daybookLinkedVoucherTrades(voucherIds: readonly number[], 
     const output: Record<number, { tradeId: number; version: number }> = {};
     for (const trade of trades) {
       if (trade.state !== "active") continue;
-      const event = events.find((row) => row.eventKey.endsWith(":" + trade.id) &&
-        row.eventKey.startsWith("ic-container-import:") &&
+      const event = events.find((row) => row.eventKey ===
+        "ic-container-import:" + row.eventKey.split(":")[1] + ":" + trade.id &&
         (row.payload as Record<string, unknown> | null)?.physicalContainerId === trade.physicalContainerId);
       if (!event) continue;
       for (const id of deletionVoucherIds(event.payload)) {
@@ -133,6 +133,8 @@ export async function deletePristineLinkedTrade(
         .where(and(eq(intercompanyAuditEvents.relationshipId, data.trade.relationshipId),
           eq(intercompanyAuditEvents.eventType, "container-import-confirmed")));
       const sourceAudit = audit.find((entry) =>
+        entry.eventKey.endsWith(":" + tradeId) &&
+        entry.eventKey.startsWith("ic-container-import:") &&
         (entry.payload as Record<string, unknown> | null)?.physicalContainerId === data.physical.id);
       const voucherIds = deletionVoucherIds(sourceAudit?.payload);
       const expectedVoucherIds = linkedPos.map((po) => po.voucherId);
