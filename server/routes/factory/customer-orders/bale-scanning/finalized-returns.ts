@@ -291,7 +291,7 @@ export function registerFinalizedLoadingReturnRoutes(app: Express): void {
         if (other.rows.length) fail("Bale is also assigned to a different loading");
         for (const a of assignments) {
           const b = byId.get(a.baleId);
-          if (!b) fail("Bale " + a.baleReference + " is missing");
+          if (!b) throw new ReturnBlocked("Bale " + a.baleReference + " is missing");
           if (b.deletedAt || !["SOLD", "IN_STOCK"].includes(b.status))
             fail("Bale " + a.baleReference + " has an incompatible stock status");
           if (b.erpLocationId !== a.locationId)
