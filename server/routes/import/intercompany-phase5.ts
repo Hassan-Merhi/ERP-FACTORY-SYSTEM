@@ -4,6 +4,7 @@ import { and, eq, inArray, isNull, or } from "drizzle-orm";
 import { z } from "zod";
 import {
   containers,
+  intercompanyAuditEvents,
   intercompanyDestinationReceipts,
   intercompanyImportBatchContainers,
   intercompanySharedChargeAllocations,
