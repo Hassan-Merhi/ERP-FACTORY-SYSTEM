@@ -1,6 +1,6 @@
 import { lazyRetry as lazy } from "@/lib/lazyRetry";
 import { Switch, Route, Redirect } from "wouter";
-import PropertiesRentalsHub from "@/pages/properties/PropertiesRentalsHub";
+const PropertiesRentalsHub = lazy(() => import("@/pages/properties/PropertiesRentalsHub"));
 import { useCompany } from "@/contexts/CompanyContext";
 import {
   canUsePropertiesCapability,
