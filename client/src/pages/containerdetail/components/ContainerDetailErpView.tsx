@@ -39,6 +39,7 @@ import { ContainerDetailPriceImportDialog } from "./ContainerDetailPriceImportDi
 import type { useContainerDetailModel } from "../useContainerDetailModel";
 import { compareItemNamesAZ } from "@/lib/itemNameSort";
 import PropertiesIntercompanyContainerWorkflow from "../PropertiesIntercompanyContainerWorkflow";
+import LinkedDestinationContainerEditor from "../LinkedDestinationContainerEditor";
 
 type Model = ReturnType<typeof useContainerDetailModel>;
 export function ContainerDetailErpView({ model }: { model: Model }) {
@@ -239,6 +240,7 @@ export function ContainerDetailErpView({ model }: { model: Model }) {
       </PageHeader>
 
       {isPropertiesContainer && <PropertiesIntercompanyContainerWorkflow containerId={container.id} />}
+      {!isPropertiesContainer && <LinkedDestinationContainerEditor containerId={container.id} />}
 
       {containerSale && (
         <Card className="border-green-500">
