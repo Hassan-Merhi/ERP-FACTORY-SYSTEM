@@ -77,6 +77,8 @@ export default function FactorySupplierReturns() {
   const copy = getSupplierReturnsCopy(language);
   const { toast } = useToast();
   const [sourceFile, setSourceFile] = useState("");
+  // Retry the same financial operation after a network error, never create a second posting.
+  const [requestKey, setRequestKey] = useState(() => crypto.randomUUID());
   const [rawRows, setRawRows] = useState<Array<{ code: string; quantity: string }>>([]);
   const [preview, setPreview] = useState<PreviewRow[]>([]);
   const [chosen, setChosen] = useState<Record<number, number>>({});
@@ -145,6 +147,7 @@ export default function FactorySupplierReturns() {
     setReceipt(null);
     setRawRows([]);
     setSourceFile(file.name);
+    setRequestKey(crypto.randomUUID());
     try {
       const wb = await read(await file.arrayBuffer());
       const sheet = wb.Sheets[wb.SheetNames[0]];
@@ -219,7 +222,6 @@ export default function FactorySupplierReturns() {
           );
       }
       const lines = [...totals].map(([offloadItemId, qty]) => ({ offloadItemId, quantity: qty.toFixed(3) }));
-      const requestKey = crypto.randomUUID();
       const response = (await (
         await apiRequest("POST", "/api/erp/supplier-returns/commit", {
           lines,
@@ -231,6 +233,7 @@ export default function FactorySupplierReturns() {
       ).json()) as { id: number; totalQty: string; replayed: boolean };
       setReceipt(response);
       setConfirm(false);
+      setRequestKey(crypto.randomUUID());
       await queryClient.invalidateQueries();
       toast({
         title: copy.success,
