@@ -1,3 +1,4 @@
+import { spreadsheetImportLimitBytes } from "@shared/fileSizePolicy";
 /**
  * factoryBalesRoutes: BalesReimport import endpoints.
  *
@@ -46,7 +47,7 @@ export function registerBalesReimportRoutes(app: Express) {
     requireRole("Admin", "Owner"),
     async (req: Request, res: Response) => {
       const multer = (await import("multer")).default;
-      const upload = multer({ storage: multer.memoryStorage() });
+      const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: spreadsheetImportLimitBytes(req.session?.currentRole), files: 1 } });
       upload.single("file")(req, res, async (err: string) => {
         if (err) return res.status(400).json({ message: "File upload error" });
         if (!req.file) return res.status(400).json({ message: "No file uploaded" });
@@ -543,7 +544,7 @@ export function registerBalesReimportRoutes(app: Express) {
   // POST /api/factory/bales/bulk-update-names — Upload Excel and update product_name in bulk
   app.post("/api/factory/bales/bulk-update-names", requireAuth, async (req: Request, res: Response) => {
     const multer = (await import("multer")).default;
-    const upload = multer({ storage: multer.memoryStorage() });
+    const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: spreadsheetImportLimitBytes(req.session?.currentRole), files: 1 } });
     upload.single("file")(req, res, async (err: string) => {
       if (err) return res.status(400).json({ message: "File upload error" });
       if (!req.file) return res.status(400).json({ message: "No file uploaded" });

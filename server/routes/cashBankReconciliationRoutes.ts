@@ -5,7 +5,7 @@ import Decimal from "decimal.js";
 import { z } from "zod";
 import { requireAuth, requireRole } from "../auth";
 import { db } from "../db";
-import { upload } from "./_helpers";
+import { spreadsheetUpload } from "./_helpers";
 import { getErrorMessage } from "../lib/httpHandlers";
 import {
   CashBankError,
@@ -92,7 +92,7 @@ export function registerCashBankReconciliationRoutes(app: Express): void {
     }
   });
   // Preview only parses and checks balances; it stores no documents.
-  app.post("/api/accounting/cash-bank/preview", ...gate, upload.single("file"), async (req: Request, res: Response) => {
+  app.post("/api/accounting/cash-bank/preview", ...gate, spreadsheetUpload.single("file"), async (req: Request, res: Response) => {
     try {
       const companyId = company(req),
         input = postImport.parse(req.body);
@@ -123,7 +123,7 @@ export function registerCashBankReconciliationRoutes(app: Express): void {
       return fail(res, e);
     }
   });
-  app.post("/api/accounting/cash-bank/import", ...gate, upload.single("file"), async (req: Request, res: Response) => {
+  app.post("/api/accounting/cash-bank/import", ...gate, spreadsheetUpload.single("file"), async (req: Request, res: Response) => {
     try {
       const companyId = company(req),
         input = postImport.parse(req.body);

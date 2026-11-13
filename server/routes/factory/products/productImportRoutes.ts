@@ -1,3 +1,4 @@
+import { spreadsheetImportLimitBytes } from "@shared/fileSizePolicy";
 /**
  * factoryProductsRoutes: FactoryProductImport endpoints.
  *
@@ -32,7 +33,7 @@ export function registerFactoryProductImportRoutes(app: Express) {
   app.post("/api/factory/bale-products/import-excel", requireAuth, async (req: Request, res: Response) => {
     try {
       const multer = (await import("multer")).default;
-      const upload = multer({ storage: multer.memoryStorage() });
+      const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: spreadsheetImportLimitBytes(req.session?.currentRole), files: 1 } });
 
       upload.single("file")(req, res, async (err) => {
         try {
@@ -237,7 +238,7 @@ export function registerFactoryProductImportRoutes(app: Express) {
   app.post("/api/factory/bales/validate-import", requireAuth, async (req: Request, res: Response) => {
     try {
       const multer = (await import("multer")).default;
-      const upload = multer({ storage: multer.memoryStorage() });
+      const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: spreadsheetImportLimitBytes(req.session?.currentRole), files: 1 } });
 
       upload.single("file")(req, res, async (err) => {
         try {
@@ -384,7 +385,7 @@ export function registerFactoryProductImportRoutes(app: Express) {
   app.post("/api/factory/bales/import-excel", requireAuth, adminOrOwner, async (req: Request, res: Response) => {
     try {
       const multer = (await import("multer")).default;
-      const upload = multer({ storage: multer.memoryStorage() });
+      const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: spreadsheetImportLimitBytes(req.session?.currentRole), files: 1 } });
 
       upload.single("file")(req, res, async (err) => {
         try {
