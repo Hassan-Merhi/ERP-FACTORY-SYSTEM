@@ -23,6 +23,7 @@ import {
   type EditIdentity,
   validateRequestKey,
   withTradeScope,
+  isNettedIntercompanyTradeTx,
 } from "./tradeSync";
 import { cents } from "./tradeRevisionMath";
 
@@ -203,6 +204,7 @@ export async function cancelUnreceivedTrade(input: CancelIntercompanyTradeInput,
       }
       const money = amount.toFixed(2),
         reason = input.reason.trim();
+      const netted = await isNettedIntercompanyTradeTx(tx, fresh.id);
       const sourceSale = await postErpVoucherTx(tx, {
         companyId: fresh.sourceCompanyId,
         voucherType: "Journal",
@@ -243,6 +245,22 @@ export async function cancelUnreceivedTrade(input: CancelIntercompanyTradeInput,
             credit: money,
             narration: "Reverse unsold internal cost recognition",
           },
+          // New imports eliminate technical Sales/COGS on creation.
+          // Undo those exact elimination legs on cancellation.
+          ...(netted
+            ? [
+                {
+                  ledgerAccountId: data.policy.sourceCostAccountId!,
+                  debit: money,
+                  narration: "Reopen purchased goods after cancellation",
+                },
+                {
+                  ledgerAccountId: data.policy.sourceSalesAccountId!,
+                  credit: money,
+                  narration: "Release eliminated internal sales on cancellation",
+                },
+              ]
+            : []),
         ],
       });
       const destination = await postErpVoucherTx(tx, {
