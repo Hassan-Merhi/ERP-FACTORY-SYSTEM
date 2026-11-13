@@ -64,7 +64,9 @@ const returnErrors = {
   },
 } as const;
 function returnMessage(req: Request, key: keyof typeof returnErrors): string {
-  const requested = String(req.headers["accept-language"] ?? "en").slice(0, 2).toLowerCase();
+  const requested = String(req.headers["accept-language"] ?? "en")
+    .slice(0, 2)
+    .toLowerCase();
   const language = requested === "ar" || requested === "fr" ? requested : "en";
   return returnErrors[key][language];
 }
