@@ -33,6 +33,8 @@ describe("linked intercompany container and Daybook deletion contract", () => {
     expect(service).toContain("db.transaction(async (tx)");
     expect(service).toContain("tx.delete(purchaseOrders)");
     expect(service).toContain("tx.delete(vouchers)");
+    expect(service).toContain("ic-technical-profit-normalized:");
+    expect(service).toContain("IC_DELETE_NETTING_EVIDENCE");
     expect(service).toContain("tx.delete(intercompanyTradeSourcePos)");
     expect(service).toContain("tx.delete(intercompanyTrades)");
     expect(service).not.toContain("reverseVoucherTx");
