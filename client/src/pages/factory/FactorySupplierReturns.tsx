@@ -237,7 +237,7 @@ export default function FactorySupplierReturns() {
           <div className="overflow-x-auto"><table className="w-full text-sm">
             <thead className="bg-muted"><tr>{["Batch","Date","File / reference","By","Lines","Bales removed","Supplier credit","Inventory reduction"].map(x=><th key={x} className="p-2 text-left">{x}</th>)}</tr></thead>
             <tbody>{history.data?.rows?.map(r=><tr key={r.id} className="border-t">
-              <td className="p-2"><Button size="sm" variant="link" onClick={()=>void openBatch(r.id)}>#{r.id} {selectedBatch===r.id?"(hide)":"(view)"}</Button></td><td className="p-2">{r.returnDate}</td>
+              <td className="p-2"><Button size="sm" variant="ghost" onClick={()=>void openBatch(r.id)}>#{r.id} {selectedBatch===r.id?"(hide)":"(view)"}</Button></td><td className="p-2">{r.returnDate}</td>
               <td className="p-2">{r.fileName||"Manual"}<div className="text-muted-foreground text-xs">{r.reason}</div></td>
               <td className="p-2">{r.createdBy}</td><td className="p-2">{r.lineCount}</td>
               <td className="p-2 font-mono">{r.totalQty}</td><td className="p-2 font-mono">{money(r.supplierCreditUsd)}</td>
