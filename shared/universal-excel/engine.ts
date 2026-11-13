@@ -314,14 +314,14 @@ function styleMetadata(ws: ExcelJS.Worksheet, spec: UniversalExcelWorkbookSpec, 
   const parts = [spec.companyName ? "Company: " + spec.companyName : "",
     "Exported: " + displayDate(timestamp, spec.dateFormat)].filter(Boolean);
   const filters = (spec.filters ?? []).map(f => f.label + ": " + f.value).join(" | ");
-  ws.mergeCells(1, 1, 1, width);
+  if (width > 1) ws.mergeCells(1, 1, 1, width);
   ws.getCell(1, 1).value = safeText(spec.title);
   ws.getCell(1, 1).font = { bold: true, color: { argb: WHITE }, size: 15 };
   fillRow(ws, 1, width, NAVY);
   ws.getRow(1).height = 32;
-  ws.mergeCells(2, 1, 2, width);
+  if (width > 1) ws.mergeCells(2, 1, 2, width);
   ws.getCell(2, 1).value = safeText(parts.join(" | "));
-  ws.mergeCells(3, 1, 3, width);
+  if (width > 1) ws.mergeCells(3, 1, 3, width);
   ws.getCell(3, 1).value = safeText(filters ? "Filters: " + filters : "Filters: All");
   ws.getCell(2, 1).font = { size: 10, color: { argb: NAVY } };
   ws.getCell(3, 1).font = { size: 9, color: { argb: NAVY }, italic: true };
