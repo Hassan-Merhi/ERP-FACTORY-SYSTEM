@@ -41,6 +41,29 @@ export const finalizedSaleReturnCopy = {
     blockedToast: "Return blocked",
     requestFailed: "Could not complete request",
     noArticle: "Uncoded",
+    importTitle: "Import Excel references",
+    importDescription:
+      "Upload an Excel or CSV file with one physical bale reference per row. The system matches each code to its original finalized loading invoice and shows a preview before any changes.",
+    importFile: "Excel (.xlsx) or CSV with Ref Code column",
+    importTemplate: "Download Excel template",
+    importMapping: "Matching bale references to finalized invoices…",
+    importReadFailed: "Excel import failed",
+    importMatches: "matched references",
+    importIssues: "issues",
+    importFixIssues:
+      "Nothing will be posted. Correct duplicate, missing, ambiguous or blocked references in the file, then import again.",
+    importStatus: "Match status",
+    importDetails: "Details",
+    importReviewInvoices: "Invoices identified automatically",
+    importCaution:
+      "Each invoice posts separately. If another invoice fails, successful returns stay posted. Re-import remaining references after checking the history.",
+    importConfirm:
+      "I confirm these exact bales have physically returned and approve changes to the selected original invoices, stock and accounting.",
+    importPosting: "Posting invoice returns…",
+    importApply: "Return all matched references",
+    importPosted: "Posted",
+    importPartial: "Some invoices failed",
+    importFailedInvoices: "failed invoices",
   },
   ar: {
     tabLabel: "مرتجعات البيع النهائي",
@@ -81,6 +104,27 @@ export const finalizedSaleReturnCopy = {
     blockedToast: "تعذر تسجيل المرتجع",
     requestFailed: "تعذر إكمال الطلب",
     noArticle: "بلا رمز",
+    importTitle: "استيراد مراجع البالات من إكسل",
+    importDescription:
+      "ارفع ملف Excel أو CSV يحتوي على مرجع بالة واحد في كل صف. يطابق النظام كل مرجع بالفاتورة النهائية الأصلية ويعرض المعاينة قبل أي تعديل.",
+    importFile: "ملف Excel أو CSV يحتوي على عمود Ref Code",
+    importTemplate: "تنزيل نموذج إكسل",
+    importMapping: "جارٍ مطابقة المراجع بالفواتير…",
+    importReadFailed: "تعذّر استيراد إكسل",
+    importMatches: "مراجع مطابقة",
+    importIssues: "مشكلات",
+    importFixIssues: "لن يُسجّل أي مرتجع. صحّح المراجع المكررة أو المفقودة أو الملتبسة أو المحظورة، ثم أعد الاستيراد.",
+    importStatus: "حالة المطابقة",
+    importDetails: "التفاصيل",
+    importReviewInvoices: "الفواتير التي حُددت تلقائياً",
+    importCaution:
+      "تُعالج كل فاتورة على حدة. إذا فشلت فاتورة، تبقى المرتجعات الناجحة مسجلة. أعد استيراد المراجع المتبقية بعد مراجعة السجل.",
+    importConfirm: "أؤكد إعادة هذه البالات فعلياً وأوافق على تعديل الفواتير الأصلية المحددة والمخزون والقيود.",
+    importPosting: "جارٍ تسجيل مرتجعات الفواتير…",
+    importApply: "إرجاع كل المراجع المطابقة",
+    importPosted: "تم التسجيل",
+    importPartial: "فشل تسجيل بعض الفواتير",
+    importFailedInvoices: "فواتير فاشلة",
   },
   fr: {
     tabLabel: "Retours de ventes finalisées",
@@ -122,6 +166,29 @@ export const finalizedSaleReturnCopy = {
     blockedToast: "Retour bloqué",
     requestFailed: "Opération impossible",
     noArticle: "Sans code",
+    importTitle: "Importer les références Excel",
+    importDescription:
+      "Importez un fichier Excel ou CSV contenant une référence de balle par ligne. Le système associe les codes à leurs factures de chargement finalisées avant toute modification.",
+    importFile: "Fichier Excel ou CSV avec colonne Ref Code",
+    importTemplate: "Télécharger le modèle Excel",
+    importMapping: "Recherche des factures d'origine…",
+    importReadFailed: "Échec de l'import Excel",
+    importMatches: "références trouvées",
+    importIssues: "problèmes",
+    importFixIssues:
+      "Aucun retour ne sera comptabilisé. Corrigez les références en double, absentes, ambiguës ou bloquées puis réimportez.",
+    importStatus: "État du rapprochement",
+    importDetails: "Détails",
+    importReviewInvoices: "Factures identifiées automatiquement",
+    importCaution:
+      "Chaque facture est traitée séparément. Un échec ultérieur n'annule pas les retours déjà enregistrés. Réimportez les références restantes après vérification.",
+    importConfirm:
+      "Je confirme le retour physique de ces balles et autorise la correction des factures d'origine, du stock et de la comptabilité.",
+    importPosting: "Enregistrement des retours…",
+    importApply: "Retourner toutes les références trouvées",
+    importPosted: "Enregistré",
+    importPartial: "Certaines factures ont échoué",
+    importFailedInvoices: "factures en échec",
   },
 } as const;
 
