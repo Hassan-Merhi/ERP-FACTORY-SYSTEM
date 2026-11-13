@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { getFinalizedSaleReturnCopy, finalizedSaleReturnCopy } from "@/i18n/factoryFinalizedSaleReturnTranslations";
 import { companyQueryKey } from "@/lib/companyQueryScope";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -26,7 +28,7 @@ async function read<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, { ...init, credentials: "include",
     headers: { "Content-Type": "application/json", ...init?.headers } });
   const value = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(value.message || "Could not complete request");
+  if (!response.ok) throw new Error(value.message || finalizedSaleReturnCopy.en.requestFailed);
   return value as T;
 }
 const fmt = (value: string | number) => Number(value || 0).toLocaleString("en-US",
@@ -34,6 +36,8 @@ const fmt = (value: string | number) => Number(value || 0).toLocaleString("en-US
 
 export default function FactoryFinalizedSaleReturns() {
   const { selectedCompany } = useCompany();
+  const { language } = useApplicationLanguage();
+  const copy = getFinalizedSaleReturnCopy(language);
   const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [orderId, setOrderId] = useState<number | null>(null);
@@ -66,14 +70,14 @@ export default function FactoryFinalizedSaleReturns() {
   const groups = useMemo(() => {
     const byArticle = new Map<string, { name: string; code: string; bales: Bale[] }>();
     for (const bale of detail?.bales ?? []) {
-      const code = bale.articleCode || "Uncoded";
+      const code = bale.articleCode || copy.noArticle;
       const name = bale.productName || code;
       const key = code + ":" + name;
       const group = byArticle.get(key) || { code, name, bales: [] };
       group.bales.push(bale); byArticle.set(key, group);
     }
     return [...byArticle.values()];
-  }, [detail?.bales]);
+  }, [detail?.bales, copy.noArticle]);
   const chosen = detail?.bales.filter(b => selected.includes(b.baleId)) ?? [];
   const priced = chosen.reduce((value, bale) => value + Number(bale.priceUsed || 0), 0);
 
@@ -89,9 +93,9 @@ export default function FactoryFinalizedSaleReturns() {
       queryClient.invalidateQueries({ queryKey: [api + "/orders/" + orderId] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/bales"] });
-      toast({ title: "Return posted", description: response.quantity + " bales removed from finalized invoice" });
+      toast({ title: copy.postedToast, description: response.quantity + " " + copy.postedToastDetail });
     },
-    onError: (e: Error) => toast({ title: "Return blocked", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: copy.blockedToast, description: e.message, variant: "destructive" }),
   });
   const toggleBale = (id: number, checked: boolean) =>
     setSelected(old => checked ? [...new Set([...old, id])] : old.filter(x => x !== id));
@@ -99,24 +103,22 @@ export default function FactoryFinalizedSaleReturns() {
   return (
     <div className="space-y-5" data-testid="finalized-sale-returns">
       <div>
-        <h2 className="text-lg font-semibold">Finalized Loading Sale Returns</h2>
-        <p className="text-sm text-muted-foreground">Return physical bales from regular finalized customer container loadings.
-          This changes the original invoice amount, customer receivable, COGS and available stock together.
-          It does not touch Factory POS or posted dispatch-trip invoices.</p>
+        <h2 className="text-lg font-semibold">{copy.title}</h2>
+        <p className="text-sm text-muted-foreground">{copy.subtitle}</p>
       </div>
       <div className="space-y-2">
-        <Label htmlFor="return-invoice-search">Search invoice / container / customer</Label>
+        <Label htmlFor="return-invoice-search">{copy.searchLabel}</Label>
         <Input id="return-invoice-search" value={search} onChange={e => setSearch(e.target.value)}
-          placeholder="Enter invoice, container number or customer" />
+          placeholder={copy.searchPlaceholder} />
         <div className="max-h-48 overflow-auto rounded border">
-          {invoices.length === 0 && <p className="p-3 text-sm text-muted-foreground">No finalized loading found.</p>}
+          {invoices.length === 0 && <p className="p-3 text-sm text-muted-foreground">{copy.noInvoices}</p>}
           {invoices.map(invoice => (
             <button key={invoice.id} type="button" onClick={() => {
               setOrderId(invoice.id); setSelected([]); setConfirmed(false); setResult(null);
             }} className={"flex w-full justify-between gap-2 border-b p-3 text-left text-sm hover:bg-muted " +
               (invoice.id === orderId ? "bg-muted font-semibold" : "")}>
-              <span>{invoice.invoiceNumber} · {invoice.containerNumber || "No container"} · {invoice.customerName || "Customer"}</span>
-              <span className="shrink-0">{invoice.quantity} bales · {fmt(invoice.grandTotal)}</span>
+              <span>{invoice.invoiceNumber} · {invoice.containerNumber || copy.noContainer} · {invoice.customerName || copy.customer}</span>
+              <span className="shrink-0">{invoice.quantity} {copy.bales} · {fmt(invoice.grandTotal)}</span>
             </button>
           ))}
         </div>
@@ -124,8 +126,8 @@ export default function FactoryFinalizedSaleReturns() {
 
       {detail && (
         <div className="space-y-4 rounded border p-4">
-          <h3 className="font-semibold">{detail.order.invoiceNumber} · {detail.order.containerNumber || "No container"}</h3>
-          <p className="text-sm">Current invoice total: {fmt(detail.order.grandTotal)} · {detail.order.totalQtyBales} bales</p>
+          <h3 className="font-semibold">{detail.order.invoiceNumber} · {detail.order.containerNumber || copy.noContainer}</h3>
+          <p className="text-sm">{copy.currentInvoice} {fmt(detail.order.grandTotal)} · {detail.order.totalQtyBales} {copy.bales}</p>
           {detail.blockedReason && <p className="font-semibold text-destructive">{detail.blockedReason}</p>}
           {groups.map(group => {
             const available = group.bales.filter(b => ["SOLD", "IN_STOCK"].includes(b.status));
@@ -136,8 +138,8 @@ export default function FactoryFinalizedSaleReturns() {
                   onCheckedChange={checked => setSelected(old => checked
                     ? [...new Set([...old, ...available.map(b => b.baleId)])]
                     : old.filter(id => !available.some(b => b.baleId === id)))} />
-                {group.name} · {group.code} · {group.bales.length} on invoice
-                <span className="ml-auto">{available.filter(b => selected.includes(b.baleId)).length} selected</span>
+                {group.name} · {group.code} · {group.bales.length} {copy.onInvoice}
+                <span className="ml-auto">{available.filter(b => selected.includes(b.baleId)).length} {copy.selected}</span>
               </label>
               {group.bales.map(bale => (
                 <label key={bale.baleId} className="flex cursor-pointer flex-wrap items-center gap-3 border-t p-2 text-sm">
@@ -147,40 +149,39 @@ export default function FactoryFinalizedSaleReturns() {
                   <strong>{bale.referenceNumber}</strong>
                   <span>{fmt(bale.priceUsed)} · {bale.weightKg} kg</span>
                   <span className="ml-auto text-muted-foreground">
-                    {bale.status === "IN_STOCK" ? "Already physically in stock" : bale.status}
+                    {bale.status === "IN_STOCK" ? copy.alreadyInStock : bale.status}
                   </span>
                 </label>
               ))}
             </div>;
           })}
-          <p className="text-sm"><strong>{chosen.length}</strong> bales selected · historic bale-price total {fmt(priced)}.
-            The posted invoice reduction is recalculated using the original per-bale or per-kg pricing.</p>
-          <Label htmlFor="return-sale-reason">Reason</Label>
+          <p className="text-sm"><strong>{chosen.length}</strong> {copy.selectedBales} · {copy.historicalPrice} {fmt(priced)}. {copy.priceNote}</p>
+          <Label htmlFor="return-sale-reason">{copy.reason}</Label>
           <Textarea id="return-sale-reason" rows={2} value={reason}
-            onChange={e => setReason(e.target.value)} placeholder="Why were these bales returned?" />
+            onChange={e => setReason(e.target.value)} placeholder={copy.reasonPlaceholder} />
           <label className="flex items-center gap-2 text-sm">
             <Checkbox checked={confirmed} onCheckedChange={v => setConfirmed(v === true)} />
-            These exact bales were physically returned; adjust the invoice, customer balance and journals.
+            {copy.physicalConfirm}
           </label>
           <Button onClick={() => mutation.mutate()} disabled={
             !!detail.blockedReason || chosen.length===0 || reason.trim().length<5 || !confirmed || mutation.isPending}>
-            {mutation.isPending ? "Applying return…" : "Return selected bales and adjust invoice"}
+            {mutation.isPending ? copy.posting : copy.apply}
           </Button>
           {result && <p className="text-sm" role="status">
-            Posted {result.quantity} returned bales · invoice reduced by {fmt(result.customerCredit)}.
+            {copy.posted} {result.quantity} {copy.returnedBales} · {copy.reducedBy} {fmt(result.customerCredit)}.
             {result.warning && <span className="block text-destructive">{result.warning}</span>}
           </p>}
         </div>
       )}
 
       <div className="space-y-2 border-t pt-4">
-        <h3 className="font-semibold">Return history</h3>
+        <h3 className="font-semibold">{copy.history}</h3>
         <div className="overflow-x-auto rounded border">
           <table className="w-full min-w-[780px] text-left text-sm">
             <thead><tr className="bg-muted/40">
-              <th className="p-2">Date / Invoice</th><th className="p-2">Name</th>
-              <th className="p-2">Article code</th><th className="p-2">Total qty removed</th>
-              <th className="p-2">Bale references</th><th className="p-2">User / Reason</th>
+              <th className="p-2">{copy.dateInvoice}</th><th className="p-2">{copy.name}</th>
+              <th className="p-2">{copy.articleCode}</th><th className="p-2">{copy.totalRemoved}</th>
+              <th className="p-2">{copy.references}</th><th className="p-2">{copy.userReason}</th>
             </tr></thead>
             <tbody className="divide-y">
               {history.map((row,index)=><tr key={row.returnBatch+row.articleCode+index}>
@@ -190,7 +191,7 @@ export default function FactoryFinalizedSaleReturns() {
                 <td className="p-2 font-semibold">{row.quantity}</td><td className="p-2">{row.baleReferences}</td>
                 <td className="p-2">{row.returnedBy}<div className="text-muted-foreground">{row.reason}</div></td>
               </tr>)}
-              {history.length === 0 && <tr><td className="p-3 text-muted-foreground" colSpan={6}>No returns recorded yet.</td></tr>}
+              {history.length === 0 && <tr><td className="p-3 text-muted-foreground" colSpan={6}>{copy.emptyHistory}</td></tr>}
             </tbody>
           </table>
         </div>
