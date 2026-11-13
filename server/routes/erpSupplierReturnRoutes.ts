@@ -18,7 +18,7 @@ import { postStockMovementTx } from "../services/inventory/stockMovementIntegrit
 import { assertActiveCompanyAccess } from "../security/companyAccessBoundary";
 
 const movementAdapter = createDatabaseStockMovementAdapter();
-const qtyPattern = /^\\d+(?:\\.\\d{1,3})?$/;
+const qtyPattern = /^\d+(?:\.\d{1,3})?$/;
 type Row = Record<string, unknown>;
 type Candidate = {
   offloadItemId: number;
@@ -223,7 +223,7 @@ export function registerErpSupplierReturnRoutes(app: Express) {
       };
       if (!/^[a-zA-Z0-9._:-]{8,128}$/.test(body?.requestKey ?? ""))
         throw new ReturnError(400, "RETURN_IDEMPOTENCY_KEY_REQUIRED", "A valid unique request key is required");
-      if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(body?.returnDate ?? "") ||
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(body?.returnDate ?? "") ||
           new Date(body.returnDate! + "T00:00:00Z").toISOString().slice(0, 10) !== body.returnDate)
         throw new ReturnError(400, "RETURN_DATE_INVALID", "Return date must be a valid YYYY-MM-DD");
       if (!Array.isArray(body.lines) || body.lines.length === 0 || body.lines.length > 1000)
