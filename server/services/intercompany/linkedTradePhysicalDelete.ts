@@ -136,9 +136,24 @@ export async function deletePristineLinkedTrade(
         entry.eventKey.endsWith(":" + tradeId) &&
         entry.eventKey.startsWith("ic-container-import:") &&
         (entry.payload as Record<string, unknown> | null)?.physicalContainerId === data.physical.id);
-      const voucherIds = deletionVoucherIds(sourceAudit?.payload);
+      const originalVoucherIds = deletionVoucherIds(sourceAudit?.payload);
+      // A historical account normalization is another original-trade-owned
+      // voucher and must be deleted in the same atomic PO cleanup.
+      const [normalization] = await tx
+        .select({ payload: intercompanyAuditEvents.payload })
+        .from(intercompanyAuditEvents)
+        .where(eq(intercompanyAuditEvents.eventKey, "ic-technical-profit-normalized:" + tradeId))
+        .limit(1);
+      const normalizationVoucherId = (normalization?.payload as { voucherId?: unknown } | null)?.voucherId;
+      if (normalization && (!Number.isSafeInteger(normalizationVoucherId) || Number(normalizationVoucherId) <= 0)) {
+        rejectEdit("Historical accounting normalization voucher evidence is invalid", "IC_DELETE_NETTING_EVIDENCE");
+      }
+      const voucherIds = [
+        ...originalVoucherIds,
+        ...(normalization ? [Number(normalizationVoucherId)] : []),
+      ];
       const expectedVoucherIds = linkedPos.map((po) => po.voucherId);
-      if (!sourceAudit || voucherIds.length !== data.source.length + 3 ||
+      if (!sourceAudit || originalVoucherIds.length !== data.source.length + 3 ||
           expectedVoucherIds.some((id) => id == null || !voucherIds.includes(id)) ||
           new Set(voucherIds).size !== voucherIds.length) {
         rejectEdit("Cannot verify every original voucher. Nothing was deleted.", "IC_DELETE_VOUCHER_EVIDENCE");
