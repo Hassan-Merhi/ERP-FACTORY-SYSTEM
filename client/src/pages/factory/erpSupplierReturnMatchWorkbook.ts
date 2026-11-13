@@ -31,7 +31,8 @@ export type ReturnMatchReportInput = {
 const excelText = (value: unknown): string => {
   const text = String(value ?? "");
   // Excel formula-safe strings: codes, names and imported references are user-owned.
-  return /^[\s\u0000-\u001f]*[=+\-@]/.test(text) ? "'" + text : text;
+  const firstVisibleChar = [...text].find((char) => char.charCodeAt(0) > 31 && !/\s/.test(char));
+  return ["=", "+", "-", "@"].includes(firstVisibleChar ?? "") ? "'" + text : text;
 };
 export function buildErpSupplierReturnMatchWorkbook(wb: ExcelJS.Workbook, data: ReturnMatchReportInput) {
   const columns = [
