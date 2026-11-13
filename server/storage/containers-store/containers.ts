@@ -1,7 +1,8 @@
-import { eq, and, asc, sql, ne } from "drizzle-orm";
+import { eq, and, asc, sql, ne, or } from "drizzle-orm";
 import { db } from "../../db";
 import * as schema from "@shared/schema";
 import type { Container, InsertContainer, PurchaseOrder } from "@shared/schema";
+import { getTableColumns } from "drizzle-orm";
 import { enrichContainerListOffloadingCost } from "../../services/containers/enrichContainerListOffloadingCost";
 
 // ---------------------------------------------------------------------------
@@ -18,9 +19,12 @@ export async function getAllContainers(companyId: number): Promise<Container[]> 
 
 export async function getActiveContainers(companyId: number): Promise<Array<Container & { offloadingCost: string }>> {
   const rows = await db
-    .select()
+    .select({
+      ...getTableColumns(schema.containers),
+      linkedParentCompanyName: sql<string | null>`(SELECT parent.name FROM intercompany_trades trade JOIN companies parent ON parent.id = trade.source_company_id WHERE trade.physical_container_id = ${schema.containers.id} AND trade.destination_company_id = ${companyId} AND trade.state = 'active' LIMIT 1)`,
+    })
     .from(schema.containers)
-    .where(and(eq(schema.containers.companyId, companyId), ne(schema.containers.status, "SOLD")))
+    .where(and(or(eq(schema.containers.companyId, companyId), sql`EXISTS (SELECT 1 FROM intercompany_trades trade WHERE trade.physical_container_id = ${schema.containers.id} AND trade.destination_company_id = ${companyId} AND trade.state = 'active')`), ne(schema.containers.status, "SOLD")))
     .orderBy(asc(schema.containers.containerNumber));
   return enrichContainerListOffloadingCost(rows, companyId);
 }
@@ -62,7 +66,7 @@ export async function getContainerByIdForCompany(id: number, companyId: number):
   const [container] = await db
     .select()
     .from(schema.containers)
-    .where(and(eq(schema.containers.id, id), eq(schema.containers.companyId, companyId)));
+    .where(and(eq(schema.containers.id, id), or(eq(schema.containers.companyId, companyId), sql`EXISTS (SELECT 1 FROM intercompany_trades trade WHERE trade.physical_container_id = ${schema.containers.id} AND trade.destination_company_id = ${companyId} AND trade.state = 'active')`)));
   return container;
 }
 
