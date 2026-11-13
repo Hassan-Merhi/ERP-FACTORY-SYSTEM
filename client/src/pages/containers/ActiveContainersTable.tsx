@@ -8,8 +8,8 @@ import type { Container } from "@shared/schema";
 import { getContainerOffloadingCost, getContainerTotalCost } from "./containerTotalCost";
 
 interface ActiveContainersTableProps {
-  containers: Container[];
-  allContainers: Container[];
+  containers: Array<Container & { linkedParentCompanyName?: string | null }>;
+  allContainers: Array<Container & { linkedParentCompanyName?: string | null }>;
   propertiesMode?: boolean;
   isLoading: boolean;
   hideContainerCosts: boolean;
@@ -157,9 +157,11 @@ export function ActiveContainersTable({
                     {container.status}
                   </Badge>
                 </div>
-                <p className="text-xs text-muted-foreground mt-0.5 wrap-break-word">
-                  {getSupplierName(container.supplierId)}
-                </p>
+                {container.linkedParentCompanyName ? (
+                  <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mt-0.5">Linked to parent company: {container.linkedParentCompanyName}</p>
+                ) : (
+                  <p className="text-xs text-muted-foreground mt-0.5 wrap-break-word">{getSupplierName(container.supplierId)}</p>
+                )}
               </div>
             </div>
             <div className="flex w-full flex-wrap items-center justify-between gap-2 sm:w-auto sm:shrink-0 sm:justify-end sm:gap-4">
