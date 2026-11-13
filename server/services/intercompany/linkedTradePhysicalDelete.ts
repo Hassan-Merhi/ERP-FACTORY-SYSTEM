@@ -67,8 +67,8 @@ export async function daybookLinkedVoucherTrades(voucherIds: readonly number[], 
     const output: Record<number, { tradeId: number; version: number }> = {};
     for (const trade of trades) {
       if (trade.state !== "active") continue;
-      const event = events.find((row) => row.eventKey ===
-        "ic-container-import:" + row.eventKey.split(":")[1] + ":" + trade.id &&
+      const event = events.find((row) => row.eventKey.startsWith("ic-container-import:") &&
+        row.eventKey.endsWith(":" + trade.id) &&
         (row.payload as Record<string, unknown> | null)?.physicalContainerId === trade.physicalContainerId);
       if (!event) continue;
       for (const id of deletionVoucherIds(event.payload)) {
