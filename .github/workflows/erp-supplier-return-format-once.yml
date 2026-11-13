@@ -1,0 +1,49 @@
+name: ERP Supplier Return One-Time Format
+on:
+  push:
+    branches:
+      - feature/erp-supplier-return-code-matching-review
+permissions:
+  contents: write
+jobs:
+  format-feature:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: feature/erp-supplier-return-code-matching-review
+          persist-credentials: true
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24.22.2"
+          cache: npm
+      - name: Normalize package registry
+        run: sed -i 's#http://package-firewall.replit.local/npm/#https://registry.npmjs.org/#g' package-lock.json
+      - name: Install locked dependencies
+        run: npm ci --no-audit --bin-links=true
+      - name: Format ERP Supplier Returns changes
+        run: |
+          node node_modules/prettier/bin/prettier.cjs --write \
+            server/routes/erpSupplierReturnRoutes.ts \
+            client/src/pages/factory/FactorySupplierReturns.tsx \
+            client/src/pages/factory/erpSupplierReturnMatchWorkbook.ts \
+            client/src/pages/factory/erpSupplierReturnMatchWorkbook.test.ts \
+            client/src/i18n/supplierReturnsTranslations.ts \
+            client/src/app/erpPageRegistry.ts \
+            client/src/routes/ErpRoutes.tsx \
+            shared/erpNavigationPolicy.ts \
+            client/src/components/sidebar-navigation-groups.test.tsx \
+            tests/erp-phase3-navigation-parity.test.ts
+      - name: Commit formatting
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add server/routes/erpSupplierReturnRoutes.ts client/src/pages/factory/FactorySupplierReturns.tsx client/src/pages/factory/erpSupplierReturnMatchWorkbook.ts client/src/pages/factory/erpSupplierReturnMatchWorkbook.test.ts client/src/i18n/supplierReturnsTranslations.ts client/src/app/erpPageRegistry.ts client/src/routes/ErpRoutes.tsx shared/erpNavigationPolicy.ts client/src/components/sidebar-navigation-groups.test.tsx tests/erp-phase3-navigation-parity.test.ts
+          if ! git diff --cached --quiet; then
+            git commit -m "Format ERP Supplier Returns review feature"
+            git push origin HEAD:feature/erp-supplier-return-code-matching-review
+          fi
