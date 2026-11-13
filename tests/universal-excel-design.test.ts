@@ -172,7 +172,8 @@ describe("Phase 3: Dakzo appearance defaults and sanitization", () => {
     expect(ws.getCell("A5").fill).toMatchObject({
       type: "pattern", fgColor: { argb: "FF207040" },
     });
-    expect(ws.getCell("A7").fill?.type === "pattern" && ws.getCell("A7").fill?.pattern === "solid").toBe(false);
+    const bodyFill = ws.getCell("A7").fill;
+    expect(bodyFill && "pattern" in bodyFill && bodyFill.pattern === "solid").toBeFalsy();
     expect(ws.pageSetup.printArea).toBeUndefined();
   });
 
