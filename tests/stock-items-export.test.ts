@@ -1,8 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import {
-  loadStockItemsForExport,
-  type StockItemsExportFilters,
-} from "../client/src/pages/stockitems/stockItemsExport";
+import { loadStockItemsForExport, type StockItemsExportFilters } from "../client/src/pages/stockitems/stockItemsExport";
 
 const noFilters: StockItemsExportFilters = { search: "", stockGroupId: null, gradeId: null, categoryId: null };
 
@@ -67,9 +64,7 @@ describe("Stock Items Excel export pagination", () => {
       }
       return pageResponse(page, 501, []);
     });
-    await expect(loadStockItemsForExport(noFilters, fetcher as unknown as typeof fetch)).rejects.toThrow(
-      "incomplete"
-    );
+    await expect(loadStockItemsForExport(noFilters, fetcher as unknown as typeof fetch)).rejects.toThrow("incomplete");
   });
 
   it("rejects duplicate item IDs across page boundaries", async () => {
@@ -80,9 +75,7 @@ describe("Stock Items Excel export pagination", () => {
       }
       return pageResponse(page, 501, [{ id: 500 }]);
     });
-    await expect(loadStockItemsForExport(noFilters, fetcher as unknown as typeof fetch)).rejects.toThrow(
-      "incomplete"
-    );
+    await expect(loadStockItemsForExport(noFilters, fetcher as unknown as typeof fetch)).rejects.toThrow("incomplete");
   });
 
   it("fails safely when any request fails", async () => {
