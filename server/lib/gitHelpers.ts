@@ -237,7 +237,7 @@ export async function fetchActiveContainers(
   const statusFilter = opts.includeOffloaded ? [...ACTIVE_STATUSES, ...INACTIVE_STATUSES] : [...ACTIVE_STATUSES];
 
   const conditions = [
-    sql`(${inArray(containers.companyId, companyIds)} OR EXISTS (SELECT 1 FROM intercompany_trades trade WHERE trade.physical_container_id = ${containers.id} AND trade.destination_company_id IN (${sql.join(companyIds.map((id) => sql`${id}`), sql`, `)}) AND trade.state = 'active'))`,
+    sql`(${inArray(containers.companyId, companyIds)} OR EXISTS (SELECT 1 FROM intercompany_trades trade WHERE trade.physical_container_id = ${containers.id} AND trade.source_company_id = ${containers.companyId} AND trade.destination_company_id IN (${sql.join(companyIds.map((id) => sql`${id}`), sql`, `)}) AND trade.state = 'active'))`,
     inArray(containers.status, statusFilter),
   ];
   if (opts.containerId) conditions.push(eq(containers.id, opts.containerId));
