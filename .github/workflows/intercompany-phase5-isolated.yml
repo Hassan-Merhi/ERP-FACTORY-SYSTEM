@@ -146,6 +146,7 @@ jobs:
             tests/intercompany-phase5-database-guards.test.ts \
             tests/intercompany-linked-delete-contract.test.ts \
             tests/intercompany-linked-physical-delete-postgres.test.ts \
+            tests/intercompany-accounts-simplification.test.ts \
             tests/intercompany-phase5-lifecycle-math.test.ts \
             tests/intercompany-phase5-mirrored-lines.test.ts
 
