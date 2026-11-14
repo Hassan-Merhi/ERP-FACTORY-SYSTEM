@@ -1,3 +1,4 @@
+import { styleSpecializedWorkbook } from "@shared/universal-excel/specializedWorkbookStyle";
 import { format } from "date-fns";
 import { ExcelJS, writeFile } from "@/lib/excelHelper";
 import type { Location, OrderItem } from "../stocktransferorder/types";
@@ -249,6 +250,10 @@ export async function exportStockTransferOrderWorkbook({
 
   const safeDestinationName = destName.replace(/[/\\?%*:|"<>]/g, "_");
   const fileName = `Truck_Trip_${safeDestinationName}_${format(transferDate, "yyyy-MM-dd")}.xlsx`;
+  styleSpecializedWorkbook(workbook, {
+    expectedSheetNames: ["Truck Trip"],
+    sheets: [{ name: "Truck Trip", purpose: "report" }],
+  });
   await writeFile(workbook, fileName);
 
   return { fileName, itemCount: orderItems.length };
