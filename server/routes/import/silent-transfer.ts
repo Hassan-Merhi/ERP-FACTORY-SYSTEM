@@ -13,7 +13,7 @@ import { logger } from "../../lib/logger";
 import { db } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth, requireNonPOS } from "../../auth";
-import { upload } from "../_helpers";
+import { spreadsheetUpload } from "../_helpers";
 import { inventory } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 import { allStockItemsOwned, ownLocationIds } from "../helpers/companyOwnership";
@@ -56,7 +56,7 @@ export function registerSilentTransferRoutes(app: Express) {
     "/api/inventory/silent-transfer/parse",
     requireAuth,
     requireNonPOS,
-    upload.single("file"),
+    spreadsheetUpload.single("file"),
     async (req, res) => {
       try {
         const companyId = req.session.currentCompanyId;

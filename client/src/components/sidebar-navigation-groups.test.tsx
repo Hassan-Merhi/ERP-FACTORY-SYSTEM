@@ -20,6 +20,7 @@ describe("sidebar navigation grouping", () => {
       ["Stock & Sales Report", "/stock-in-sales-report"],
       ["Market Price Analysis", "/item-market-analysis"],
       ["POS Item Replacement", "/pos-item-replacement"],
+      ["Supplier Returns", "/supplier-returns"],
     ];
     expect(others?.items.map(({ title, url }) => [title, url])).toEqual(expectedItems);
     for (const [, url] of expectedItems) {
