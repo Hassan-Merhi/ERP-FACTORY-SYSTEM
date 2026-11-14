@@ -11,11 +11,12 @@ const worker = read("client/public/sw.js").toString("utf8");
 
 assert.equal(manifest.id, "/"); // Preserve existing app identity for upgrades.
 assert.equal(manifest.start_url, "/");
-assert.equal(manifest.name, "HMD ERP");
+assert.equal(manifest.name, "Dakzo Systems");
+assert.equal(manifest.short_name, "Dakzo");
 const assets = [
-  ["dakzo-favicon-v1.png", 48],
-  ["dakzo-icon-192-v1.png", 192],
-  ["dakzo-icon-512-v1.png", 512],
+  ["dakzo-favicon-v2.png", 48],
+  ["dakzo-icon-192-v2.png", 192],
+  ["dakzo-icon-512-v2.png", 512],
 ];
 for (const [name, size] of assets) {
   const png = read("client/public/" + name);
@@ -23,16 +24,25 @@ for (const [name, size] of assets) {
   assert.equal(png.readUInt32BE(16), size, name + " width");
   assert.equal(png.readUInt32BE(20), size, name + " height");
   assert.ok(html.includes(name) || worker.includes(name), name + " referenced");
+  assert.equal(png[25], 3, name + " uses PNG palette");
 }
 for (const size of [192, 512]) {
   assert.ok(manifest.icons.some((icon) =>
-    icon.src === "/dakzo-icon-" + size + "-v1.png" &&
+    icon.src === "/dakzo-icon-" + size + "-v2.png" &&
     icon.sizes === size + "x" + size && icon.type === "image/png"
   ), size + " missing from manifest");
 }
 assert.ok(manifest.icons.some((icon) => icon.purpose === "maskable"));
-assert.ok(html.includes("/manifest.json?brand=dakzo-20261111"));
-assert.ok(worker.includes("/dakzo-favicon-v1.png"));
-assert.ok(worker.includes("/dakzo-icon-192-v1.png"));
-assert.ok(worker.includes("/dakzo-icon-512-v1.png"));
+assert.ok(html.includes("/manifest.json?brand=dakzo-20261114-v2"));
+assert.ok(html.includes('media="(prefers-color-scheme: dark)"'));
+assert.ok(html.includes('media="(prefers-color-scheme: light)"'));
+assert.ok(worker.includes("/dakzo-favicon-v2.png"));
+assert.ok(worker.includes("/dakzo-icon-192-v2.png"));
+assert.ok(worker.includes("/dakzo-icon-512-v2.png"));
+for (const theme of ["dark", "light"]) {
+  const svg = read(`client/public/dakzo-mark-${theme}-v2.svg`).toString("utf8");
+  assert.match(svg, /<svg/);
+  assert.match(svg, /viewBox="0 0 128 128"/);
+  assert.ok(worker.includes(`/dakzo-mark-${theme}-v2.svg`));
+}
 console.log("Dakzo PWA branding assets and manifest verified.");
