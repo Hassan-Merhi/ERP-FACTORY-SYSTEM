@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "HMD ERP",
-  "short_name": "HMD ERP",
+  "name": "Dakzo Systems",
+  "short_name": "Dakzo",
   "description": "ERP and POS system for warehouse and inventory management",
   "display": "standalone",
   "start_url": "/",
