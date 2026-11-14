@@ -47,8 +47,14 @@ function page(rows: PressingCondensedRow[], current: number, total: number): Pre
     byOperator: [{ userId: "p1", name: "Worker", totalBales: total, totalKg: String(total * 25) }],
   };
   return {
-    rows, total, summary, overview: summary,
-    page: current, limit: 250, mode: "condensed", asOf: cutoff,
+    rows,
+    total,
+    summary,
+    overview: summary,
+    page: current,
+    limit: 250,
+    mode: "condensed",
+    asOf: cutoff,
   };
 }
 
@@ -70,11 +76,12 @@ describe("Factory pressing report universal Excel export", () => {
       const pageNo = Number(url.searchParams.get("page"));
       return {
         ok: true,
-        json: async () => page(
-          Array.from({ length: pageNo === 1 ? 250 : 1 }, (_, i) => row(i)),
-          pageNo,
-          251
-        ),
+        json: async () =>
+          page(
+            Array.from({ length: pageNo === 1 ? 250 : 1 }, (_, i) => row(i)),
+            pageNo,
+            251
+          ),
       };
     });
     vi.stubGlobal("fetch", fetcher);
@@ -86,23 +93,27 @@ describe("Factory pressing report universal Excel export", () => {
     const spec = mocks.exportWorkbook.mock.calls[0][0];
     expect(spec.fileName).toBe("pressing-machines-condensed-2026-11-13_2026-11-13.xlsx");
     expect(spec.sheets[0].rows).toHaveLength(251);
-    expect(spec.sheets[0].columns.map((col: { key: string }) => col.key)).toEqual([
-      "articleCode", "weightKg", "bales",
-    ]);
+    expect(spec.sheets[0].columns.map((col: { key: string }) => col.key)).toEqual(["articleCode", "weightKg", "bales"]);
     expect(spec.sheets[0].rows[0]).toEqual({ articleCode: "001234", weightKg: 25, bales: 1 });
     expect(spec.sheets[0].footer).toEqual({ articleCode: "TOTAL ACTIVE", weightKg: 6275, bales: 251 });
   });
 
   it("fails without downloading if the server reports an incomplete page", async () => {
-    vi.stubGlobal("fetch", vi.fn(async (input: string) => ({
-      ok: true,
-      json: async () => page(
-        Array.from({ length: new URL(input, "http://localhost").searchParams.get("page") === "1" ? 250 : 0 },
-          (_, i) => row(i)),
-        Number(new URL(input, "http://localhost").searchParams.get("page")),
-        251
-      ),
-    })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string) => ({
+        ok: true,
+        json: async () =>
+          page(
+            Array.from(
+              { length: new URL(input, "http://localhost").searchParams.get("page") === "1" ? 250 : 0 },
+              (_, i) => row(i)
+            ),
+            Number(new URL(input, "http://localhost").searchParams.get("page")),
+            251
+          ),
+      }))
+    );
     await expect(exportPressingReport(filters, ["articleCode"])).rejects.toThrow(/changed during export/);
     expect(mocks.exportWorkbook).not.toHaveBeenCalled();
   });
