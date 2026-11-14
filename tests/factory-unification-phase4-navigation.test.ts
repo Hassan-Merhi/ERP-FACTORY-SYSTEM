@@ -36,7 +36,12 @@ describe("Factory Phase 4 navigation presentation contract", () => {
   });
   it("preserves worker hub hide keys with exact tab values", () => {
     expect(Object.keys(FACTORY_WORKERS_HUB_TABS)).toEqual([
-      "workers", "payroll", "attendance", "report", "advances", "bonuses",
+      "workers",
+      "payroll",
+      "attendance",
+      "report",
+      "advances",
+      "bonuses",
     ]);
     expect(FACTORY_WORKERS_HUB_TABS.attendance).toBe("hide_tab_workers_attendance");
   });
