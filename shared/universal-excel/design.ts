@@ -3,8 +3,8 @@
  *
  * Report-only styling; never apply these transformations to machine-readable
  * import templates, canonical invoice builders or custom worksheets.
- * Defaults are code-defined. A settings UI / persisted preferences belong to
- * Phase 9 and must not be inferred from this module.
+ * Defaults are code-defined; the Phase 9 settings service supplies validated,
+ * company-scoped overrides without changing import-template contracts.
  */
 import type ExcelJS from "exceljs";
 
@@ -19,6 +19,13 @@ export interface UniversalExcelAppearance {
   showBranding?: boolean;
   alternateRows?: boolean;
   printLayout?: boolean;
+  /** Embedded small PNG or JPEG for wide report metadata banners only. */
+  logoDataUrl?: string | null;
+  headerText?: string;
+  footerText?: string;
+  showCompanyName?: boolean;
+  showExportDate?: boolean;
+  dateFormat?: "dd/mm/yyyy" | "mm/dd/yyyy";
 }
 
 export interface UniversalExcelPalette {
@@ -37,6 +44,12 @@ export interface ResolvedUniversalExcelAppearance {
   showBranding: boolean;
   alternateRows: boolean;
   printLayout: boolean;
+  logoDataUrl: string | null;
+  headerText: string;
+  footerText: string;
+  showCompanyName: boolean;
+  showExportDate: boolean;
+  dateFormat: "dd/mm/yyyy" | "mm/dd/yyyy";
   palette: UniversalExcelPalette;
   /** Full-row zebra fills are disabled consistently on large exports. */
   maxAlternatingRows: number;
@@ -70,6 +83,12 @@ export const DEFAULT_UNIVERSAL_EXCEL_APPEARANCE: ResolvedUniversalExcelAppearanc
   showBranding: true,
   alternateRows: true,
   printLayout: true,
+  logoDataUrl: null,
+  headerText: "",
+  footerText: "",
+  showCompanyName: true,
+  showExportDate: true,
+  dateFormat: "dd/mm/yyyy",
   palette: DEFAULT_PALETTE,
   maxAlternatingRows: 3_000,
 };
@@ -94,6 +113,19 @@ export function resolveUniversalExcelAppearance(
   if (!brandName || brandName.length > 70 || Array.from(rawBrand).some((char) => char.charCodeAt(0) < 32)) {
     throw new Error("Invalid Excel brand name");
   }
+  const text = (raw: string | undefined, label: string): string => {
+    if (raw === undefined) return "";
+    if (raw.length > 90 || Array.from(raw).some(char => char.charCodeAt(0) < 32 || char === "&")) {
+      throw new Error("Invalid Excel " + label);
+    }
+    return raw.trim();
+  };
+  const logoDataUrl = options.logoDataUrl ?? null;
+  if (logoDataUrl !== null &&
+      (logoDataUrl.length > 185_000 ||
+       !/^data:image\\/(png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/.test(logoDataUrl))) {
+    throw new Error("Invalid Excel logo");
+  }
   const base = preset === "slate" ? SLATE_PALETTE : DEFAULT_PALETTE;
   let primary = base.primary;
   if (options.accentColor !== undefined) {
@@ -107,6 +139,12 @@ export function resolveUniversalExcelAppearance(
     showBranding: options.showBranding ?? true,
     alternateRows: options.alternateRows ?? true,
     printLayout: options.printLayout ?? true,
+    logoDataUrl,
+    headerText: text(options.headerText, "print header"),
+    footerText: text(options.footerText, "print footer"),
+    showCompanyName: options.showCompanyName ?? true,
+    showExportDate: options.showExportDate ?? true,
+    dateFormat: options.dateFormat ?? "dd/mm/yyyy",
     palette: {
       ...base,
       primary,
@@ -198,6 +236,9 @@ export function applyUniversalExcelPrintLayout(
   };
   const brand = args.design.showBranding ? safePrintText(args.design.brandName) : "";
   const title = safePrintText(args.title);
-  worksheet.headerFooter.oddHeader = (brand ? "&L" + brand : "") + "&C" + title;
-  worksheet.headerFooter.oddFooter = (brand ? "&L" + brand : "") + "&RPage &P of &N";
+  const headerText = args.design.headerText ? safePrintText(args.design.headerText) : title;
+  const footerText = args.design.footerText ? safePrintText(args.design.footerText) : "";
+  worksheet.headerFooter.oddHeader = (brand ? "&L" + brand : "") + "&C" + headerText;
+  worksheet.headerFooter.oddFooter = (footerText ? "&L" + footerText : brand ? "&L" + brand : "") +
+    "&RPage &P of &N";
 }
