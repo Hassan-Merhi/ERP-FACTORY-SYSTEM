@@ -289,7 +289,7 @@ export default function DailyScan() {
           { label: "Scanned", value: scanned.length + "/" + totalBales },
         ],
         sheets: [{
-          name: formatDisplay(selectedDate).replace(/\\/g, "-"),
+          name: formatDisplay(selectedDate).replaceAll("/", "-"),
           columns: [
             { key: "number", header: "#", type: "integer", width: 6 },
             { key: "reference", header: "Ref Code", width: 18 },
