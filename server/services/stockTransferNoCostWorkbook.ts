@@ -1,3 +1,4 @@
+import { styleSpecializedWorkbook } from "@shared/universal-excel/specializedWorkbookStyle";
 /** Shared cost-free Truck Trip Excel used by manual transfer sends and approved WhatsApp batches. */
 import ExcelJS from "exceljs";
 export function excelText(input: unknown, max = 180): string {
@@ -126,6 +127,9 @@ export async function createNoCostExcel(params: {
     }
     approved.pageSetup = { orientation: "portrait", fitToPage: true, fitToWidth: 1 };
   }
+  styleSpecializedWorkbook(book, {
+    sheets: book.worksheets.map(ws => ({ name: ws.name, purpose: "report" as const })),
+  });
   const bytes = await book.xlsx.writeBuffer();
   return Buffer.from(bytes);
 }
