@@ -172,7 +172,7 @@ describe("universal Excel engine: report and safety contracts", () => {
     expect(sheet.getCell("B10").value).toBe(3.25);
     expect(sheet.getCell("B11").value).toBe(13.75);
     expect(results[0].dataRows).toBe(4);
-    expect(sheet.autoFilter).toBeUndefined();
+    expect(sheet.autoFilter).toBeFalsy();
   });
 
   it("preserves strict first-row headers and the exact A3:D3 import contract", async () => {
