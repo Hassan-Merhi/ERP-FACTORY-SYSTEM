@@ -47,7 +47,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: "24.22.2"
+          node-version: "24.22.3"
       - name: Find last successful nightly source SHA
         env:
           GH_TOKEN: ${{ github.token }}
@@ -116,7 +116,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: "24.22.2"
+          node-version: "24.22.3"
           cache: npm
       - name: Generate unique throwaway credentials
         shell: bash
@@ -214,7 +214,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: "24.22.2"
+          node-version: "24.22.3"
       - name: Fail closed unless the protected publication environment is configured
         shell: bash
         run: |
