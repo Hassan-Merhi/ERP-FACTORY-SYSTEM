@@ -1,3 +1,4 @@
+import { buildUniversalExcelWorkbook } from "@shared/universal-excel/engine";
 /**
  * Cost Centers Phase 6: historical-USD analytical budgets and reporting.
  * Nothing here creates vouchers, changes stock value, or alters the GL.
@@ -608,39 +609,42 @@ async function exportReport(res: Response, scope: Scope, filters: Filters, forma
     return res.send(contents);
   }
   if (format === "xlsx") {
-    const book = new ExcelJS.Workbook();
-    book.creator = "ERP Cost Centers";
-    const sheet = book.addWorksheet("Cost Centers", { views: [{ state: "frozen", ySplit: 1 }] });
-    sheet.addRow(cols);
+    // The underlying scoped report controls company access and the 5,000-row
+    // ceiling above. Preserve original precision for 20,6 historical FX: values
+    // too large for faithful Excel doubles remain text, not rounded amounts.
     const numericColumns = new Set([
-      "expense",
-      "inventoryCost",
-      "budget",
-      "variance",
-      "unallocated",
-      "amountNative",
-      "amountUsd",
-      "entries",
-      "members",
+      "expense", "inventoryCost", "budget", "variance", "unallocated",
+      "amountNative", "amountUsd", "entries", "members",
     ]);
-    for (const line of rowData)
-      sheet.addRow(
-        line.map((value, index) => {
-          if (numericColumns.has(cols[index]) && /^[-+]?\d+(?:\.\d+)?$/.test(value)) {
-            const numberValue = Number(value);
-            // Excel stores approximately 15 significant digits; retain large
-            // 20,6 source values as exact text rather than corrupt historical FX.
-            if (Number.isFinite(numberValue) && Math.abs(numberValue) < 1e12) return numberValue;
+    const rows = rowData.map((line) => Object.fromEntries(
+      line.map((value, index) => {
+        if (numericColumns.has(cols[index]) && /^[-+]?\\d+(?:\\.\\d+)?$/.test(value)) {
+          const parsed = Number(value);
+          if (Number.isFinite(parsed) && Math.abs(parsed) < 1e12) {
+            return [cols[index], parsed];
           }
-          return safe(value);
-        })
-      );
-    sheet.getRow(1).font = { bold: true };
-    sheet.columns.forEach((column) => {
-      column.width = 22;
+        }
+        return [cols[index], value];
+      })
+    ));
+    const { workbook } = buildUniversalExcelWorkbook({
+      schemaVersion: 1,
+      mode: "report",
+      title: "Cost Center — " + view,
+      filters: [
+        { label: "Date from", value: filters.from },
+        { label: "Date to", value: filters.to },
+      ],
+      sheets: [{
+        kind: "table",
+        name: "Cost Centers",
+        columns: cols.map((key) => ({
+          key, header: key, type: "auto" as const, width: 22,
+        })),
+        rows,
+      }],
     });
-    sheet.autoFilter = { from: "A1", to: sheet.getRow(1).getCell(cols.length).address };
-    const buffer = await book.xlsx.writeBuffer();
+    const buffer = await workbook.xlsx.writeBuffer();
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.setHeader("Content-Disposition", 'attachment; filename="' + name + '.xlsx"');
     return res.end(Buffer.from(buffer));
