@@ -1,3 +1,4 @@
+import { styleFactoryOperationalWorkbook } from "@shared/universal-excel/factoryOperationalStyle";
 import type ExcelJS from "exceljs";
 import type { MixBatchRow } from "./MixBatchList";
 
@@ -494,5 +495,12 @@ export async function exportMixBatchCostAnalysis(
   dashboard.views = [{ state: "frozen", ySplit: 11 }];
 
   // High/low amounts remain visible with readable fixed USD and KG formats.
+  styleFactoryOperationalWorkbook(workbook, [
+    { name: "Daily Supplier Costs", headerRow: 4, titleRow: 1 },
+    { name: "Daily Totals", headerRow: 4, titleRow: 1 },
+    { name: "Monthly Average", headerRow: 4, titleRow: 1 },
+    { name: "Source Details", headerRow: 4, titleRow: 1 },
+    { name: "Mix Batch Details", headerRow: 4, titleRow: 1 },
+  ]);
   await writeFile(workbook, `Raw_Materials_Cost_Analysis_${allTime ? "All_Time" : month}.xlsx`);
 }
