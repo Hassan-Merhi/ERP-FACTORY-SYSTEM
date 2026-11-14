@@ -16,7 +16,7 @@ import {
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { locations } from "./common";
-import { baleRecodeSessions, customerOrders, customerProformas } from "./factoryBase";
+import { customerOrders, customerProformas } from "./factoryBase";
 import { isNonNegativeNumeric, isPositiveNumeric } from "../numericString";
 
 // This module owns the bilingual replacements for tables that persist Factory

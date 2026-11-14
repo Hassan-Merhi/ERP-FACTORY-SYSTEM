@@ -8,9 +8,7 @@ import {
   date,
   boolean,
   timestamp,
-  uniqueIndex,
   index,
-  jsonb,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";

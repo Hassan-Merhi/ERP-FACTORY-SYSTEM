@@ -23,8 +23,6 @@ import {
   boolean,
   uniqueIndex,
   date,
-  bigserial,
-  bigint,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { companies } from "../common";
