@@ -153,6 +153,8 @@ function directInvocationArgs(script, invokedBy, ciSources) {
     const tail = match[1]
       .replace(/\\\s*$/, "")
       .trim();
+    // GitHub Actions expands this Bash array at runtime; it is not a literal Node argument.
+    if (/^\$\{[A-Za-z_][A-Za-z0-9_]*\[@\]\}$/.test(tail)) return [];
     return tail ? tail.split(/\s+/).filter(Boolean) : [];
   }
   return [];
