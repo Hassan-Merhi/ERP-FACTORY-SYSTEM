@@ -1,3 +1,4 @@
+import { styleSpecializedWorkbook } from "@shared/universal-excel/specializedWorkbookStyle";
 /**
  * Print-ready Monthly Production Matrix export.
  * CSV is kept separately as a data-only format; colors and page orientation
@@ -272,6 +273,15 @@ export function buildMonthlyProductionExcelWorkbook(options: MonthlyProductionEx
       cell.font = { ...cell.font, underline: true };
     }
   }
+  styleSpecializedWorkbook(workbook, {
+    expectedSheetNames: ["Monthly Production", "Worker Breakdown", "Daily Summary", "Bale References"],
+    sheets: [
+      { name: "Monthly Production", purpose: "report", headerRow: 6 },
+      { name: "Worker Breakdown", purpose: "report", headerRow: 3 },
+      { name: "Daily Summary", purpose: "report", headerRow: 3 },
+      { name: "Bale References", purpose: "report", headerRow: 3 },
+    ],
+  });
   return workbook;
 }
 
