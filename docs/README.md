@@ -18,6 +18,13 @@ failure, so a correct document cannot quietly become undiscoverable.
 
 | Doc | What it covers |
 |---|---|
+
+| [phase-1-audit.md](universal-excel-export/phase-1-audit.md) | Export inventory and import dependency audit |
+| [phase-2-engine.md](universal-excel-export/phase-2-engine.md) | Shared workbook engine and compatibility contract |
+| [phase-3-design.md](universal-excel-export/phase-3-design.md) | Dakzo workbook appearance and print design |
+| [phase-4-smart-columns.md](universal-excel-export/phase-4-smart-columns.md) | Dynamic columns and typed values |
+| [phase-5-erp-operational.md](universal-excel-export/phase-5-erp-operational.md) | ERP operational export migration and permission safeguards |
+| [phase-6-factory-operational.md](universal-excel-export/phase-6-factory-operational.md) | Factory operational export migration and verification |
 | [permissions-control-center-plan.md](permissions-control-center-plan.md) | Permissions Control Center design, rollout sequence and security acceptance criteria |
 | [permissions-control-center-phase1.md](permissions-control-center-phase1.md) | Route inventory, candidate mappings and policy model |
 | [permissions-control-center-phase2.md](permissions-control-center-phase2.md) | Shadow policy API, migration and audit foundation |
