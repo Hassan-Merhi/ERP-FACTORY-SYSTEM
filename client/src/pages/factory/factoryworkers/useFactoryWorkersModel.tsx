@@ -4,7 +4,6 @@ import { useState, useMemo, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 
-import { ExcelJS, writeFile } from "@/lib/excelHelper";
 
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
@@ -620,113 +619,53 @@ export function useFactoryWorkersModel() {
       return;
     }
 
-    const wb = new ExcelJS.Workbook();
-    wb.creator = "Factory System";
-    const ws = wb.addWorksheet("Workers Salaries");
-
-    ws.columns = [
-      { key: "no", width: 6 },
-      { key: "code", width: 14 },
-      { key: "name", width: 30 },
-      { key: "position", width: 20 },
-      { key: "department", width: 18 },
-      { key: "salaryType", width: 14 },
-      { key: "salary", width: 16 },
-      { key: "dueToday", width: 16 },
-    ];
-
-    const headerRow = ws.addRow([
-      "#",
-      "Code",
-      "Name",
-      "Position",
-      "Department",
-      "Salary Type",
-      "Base Salary",
-      "Due Today",
-    ]);
-    headerRow.eachCell((cell) => {
-      cell.font = { bold: true, size: 11 };
-      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1E40AF" } };
-      cell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 11 };
-      cell.alignment = { vertical: "middle", horizontal: "center" };
-      cell.border = {
-        top: { style: "thin" },
-        bottom: { style: "thin" },
-        left: { style: "thin" },
-        right: { style: "thin" },
-      };
-    });
-    headerRow.height = 22;
-
-    let totalSalary = 0;
-    let totalDueToday = 0;
-    filteredWorkers.forEach((w, idx) => {
-      const salary = parseFloat(w.baseSalary || "0") || 0;
-      // Absent records (e.g., inactive workers) are blank, not misleading zeroes.
+    const rows = filteredWorkers.map((w, idx) => {
+      const salary = Number(w.baseSalary || 0) || 0;
       const net = exportAmountDue[w.id]?.net;
+      // Missing due-today evidence stays blank; never invent a zero payable.
       const dueToday = typeof net === "number" && Number.isFinite(net) ? Math.max(0, net) : null;
-      totalSalary += salary;
-      totalDueToday += dueToday ?? 0;
-      const row = ws.addRow([
-        idx + 1,
-        w.employeeCode || "",
-        w.fullName || "",
-        w.position || "",
-        w.department || "",
-        w.salaryType || "Monthly",
+      return {
+        no: idx + 1,
+        code: w.employeeCode || "",
+        name: w.fullName || "",
+        position: w.position || "",
+        department: w.department || "",
+        salaryType: w.salaryType || "Monthly",
         salary,
         dueToday,
-      ]);
-      for (const column of [7, 8]) {
-        row.getCell(column).numFmt = "#,##0.00";
-        row.getCell(column).alignment = { horizontal: "right" };
-      }
-      row.eachCell((cell) => {
-        cell.border = {
-          top: { style: "thin", color: { argb: "FFE5E7EB" } },
-          bottom: { style: "thin", color: { argb: "FFE5E7EB" } },
-          left: { style: "thin", color: { argb: "FFE5E7EB" } },
-          right: { style: "thin", color: { argb: "FFE5E7EB" } },
-        };
-      });
-      if (idx % 2 === 1) {
-        row.eachCell((cell) => {
-          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF8FAFC" } };
-        });
-      }
-    });
-
-    const totalRow = ws.addRow([
-      "",
-      "",
-      `Total Workers: ${filteredWorkers.length}`,
-      "",
-      "",
-      "TOTAL",
-      totalSalary,
-      totalDueToday,
-    ]);
-    totalRow.getCell(6).alignment = { horizontal: "right" };
-    for (const column of [7, 8]) {
-      totalRow.getCell(column).numFmt = "#,##0.00";
-      totalRow.getCell(column).alignment = { horizontal: "right" };
-    }
-    totalRow.eachCell((cell) => {
-      cell.font = { bold: true, size: 11 };
-      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1E3A5F" } };
-      cell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 11 };
-      cell.border = {
-        top: { style: "medium" },
-        bottom: { style: "medium" },
-        left: { style: "thin" },
-        right: { style: "thin" },
       };
     });
-    totalRow.height = 22;
+    const totalSalary = rows.reduce((amount, row) => amount + row.salary, 0);
+    const totalDueToday = rows.reduce((amount, row) => amount + (row.dueToday ?? 0), 0);
+    const { exportOperationalWorkbook } = await import("@/lib/operationalExcelExport");
+    try {
+      await exportOperationalWorkbook({
+        title: "Factory Workers — Salaries",
+        fileName: "workers-salaries-" + new Date().toLocaleDateString("en-CA") + ".xlsx",
+        sheets: [{
+          name: "Workers Salaries",
+          columns: [
+            { key: "no", header: "#", type: "integer", width: 6 },
+            { key: "code", header: "Code", width: 14 },
+            { key: "name", header: "Name", width: 30 },
+            { key: "position", header: "Position", width: 20 },
+            { key: "department", header: "Department", width: 18 },
+            { key: "salaryType", header: "Salary Type", width: 14 },
+            { key: "salary", header: "Base Salary", type: "money", width: 16 },
+            { key: "dueToday", header: "Due Today", type: "money", width: 16 },
+          ],
+          rows,
+          footer: {
+            no: null, code: "", name: "Total Workers: " + filteredWorkers.length,
+            position: "", department: "", salaryType: "TOTAL",
+            salary: totalSalary, dueToday: totalDueToday,
+          },
+        }],
+      });
+    } catch (error: unknown) {
+      toast({ title: "Export failed", description: getErrorMessage(error), variant: "destructive" });
+    }
 
-    const date = new Date().toLocaleDateString("en-CA");
-    await writeFile(wb, `workers-salaries-${date}.xlsx`);
   };
 
   const balance = endResult ? parseFloat(endResult.balance) : 0;
