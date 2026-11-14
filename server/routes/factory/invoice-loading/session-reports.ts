@@ -1,3 +1,4 @@
+import { styleSpecializedWorkbook } from "@shared/universal-excel/specializedWorkbookStyle";
 /**
  * factoryInvoiceLoadingRoutes: InvoiceLoadingSessionReport endpoints.
  *
@@ -213,6 +214,10 @@ export function registerInvoiceLoadingSessionReportRoutes(app: Express) {
           "xlsx"
         );
         // Build buffer BEFORE setting headers so a failed writeBuffer() can still return a JSON 500.
+        styleSpecializedWorkbook(wb, {
+          expectedSheetNames: ["Session"],
+          sheets: [{ name: "Session", purpose: "report" }],
+        });
         const xlsBuf2 = Buffer.from(await wb.xlsx.writeBuffer());
         res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         res.setHeader("Content-Disposition", contentDisposition(filename));
