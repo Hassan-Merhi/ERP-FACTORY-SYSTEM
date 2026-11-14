@@ -1,3 +1,4 @@
+import { styleUniversalFinancialWorkbook } from "@shared/universal-excel/financialWorkbookStyle";
 /**
  * supplierBrokerRoutes: SupplierBrokerStatement endpoints.
  *
@@ -237,6 +238,10 @@ export function registerSupplierBrokerStatementRoutes(app: Express) {
         { width: 18 },
       ];
 
+      styleUniversalFinancialWorkbook(wb, [
+        ...data.currencyLedgers.map(section => ({ name: section.currencyCode, titleRow: 1, headerRow: 3 })),
+        { name: "Summary", titleRow: 1, headerRow: 4 },
+      ]);
       const xlsBuffer = Buffer.from(await wb.xlsx.writeBuffer());
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
       res.setHeader(
