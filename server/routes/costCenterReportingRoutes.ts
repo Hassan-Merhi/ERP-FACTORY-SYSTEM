@@ -7,7 +7,6 @@ import { buildUniversalExcelWorkbook } from "@shared/universal-excel/engine";
 import type { Express, Request, Response } from "express";
 import type { PoolClient } from "pg";
 import PDFDocument from "pdfkit";
-import ExcelJS from "exceljs";
 import { pool } from "../db";
 import { logger } from "../lib/logger";
 import { requireAuth } from "../auth";
