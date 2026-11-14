@@ -156,6 +156,7 @@
     }
   ],
   "classification": {
+    "docs/archive/engineering/code-line-phase2-dead-code-re-audit-20261114.md": "record",
     "docs/engineering/code-file-line-policy-phase1.md": "reference",
     "docs/file-size-limits-20261113.md": "reference",
     "docs/database-phase9-production-rollout.md": "reference",
