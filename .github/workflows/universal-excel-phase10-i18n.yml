@@ -1,0 +1,51 @@
+name: Temporary Universal Excel Phase 10 Localization Audit
+
+on:
+  push:
+    branches:
+      - feature/universal-excel-export-system
+
+permissions:
+  contents: read
+
+concurrency:
+  group: universal-excel-phase10-i18n-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout feature and full main history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: feature/universal-excel-export-system
+          fetch-depth: 0
+      - name: Node 24
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 24.22.2
+      - name: Check real base-relative EN AR FR localization audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          node scripts/verify-i18n-audit-classifier.mjs
+          mkdir -p artifacts/i18n-audit
+          set +e
+          node scripts/run-i18n-pr-ratchet.mjs "$(git rev-parse origin/main)" artifacts/i18n-audit
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ]; then
+            node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const current=JSON.parse(fs.readFileSync('artifacts/i18n-audit/report.json','utf8'));
+          const base=JSON.parse(fs.readFileSync('artifacts/i18n-audit/base-report.json','utf8'));
+          const old=new Set((base.findings||[]).filter(x=>x.status==='actionable').map(x=>x.file+'|'+x.kind+'|'+x.text));
+          const fresh=(current.findings||[]).filter(x=>x.status==='actionable'&&!old.has(x.file+'|'+x.kind+'|'+x.text));
+          console.log('NEW ACTIONABLE LITERALS: '+fresh.length);
+          console.log(JSON.stringify(fresh.slice(0,150).map(x=>({file:x.file,line:x.line,text:x.text,module:x.module})),null,2));
+          NODE
+          fi
+          exit "$status"
