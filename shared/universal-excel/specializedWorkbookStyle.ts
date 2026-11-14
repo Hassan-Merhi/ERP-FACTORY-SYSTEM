@@ -100,8 +100,9 @@ export function styleSpecializedWorkbook(
         };
       }
     }
-    if (settings.printBrand !== false && design.showBranding && ws.state === "visible" && !ws.headerFooter.oddHeader) {
-      ws.headerFooter.oddHeader = "&L" + design.brandName.replaceAll("&", "");
+    if (settings.printBrand !== false && design.printLayout && design.showBranding && ws.state === "visible" && !ws.headerFooter.oddHeader) {
+      ws.headerFooter.oddHeader = "&L" + (design.headerText || design.brandName).replaceAll("&", "");
+      if (design.footerText && !ws.headerFooter.oddFooter) ws.headerFooter.oddFooter = "&L" + design.footerText;
     }
   }
 }
