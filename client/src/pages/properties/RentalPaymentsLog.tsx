@@ -67,7 +67,6 @@ export default function RentalPaymentsLog({ rentalModule, pageTitle, pageIcon, t
   const { toast } = useToast();
   const recordChanges = useExistingRecordChangeAccess();
   const appMode = useAppMode();
-  // ERP and Properties share the page-header contract; Factory keeps its hub strip.
   const isErp = appMode === "erp" || appMode === "properties";
   // Phones restack the payments table as cards in every mode.
   const { tableProps: cardTableProps } = useMobileCardTable();
@@ -179,6 +178,11 @@ export default function RentalPaymentsLog({ rentalModule, pageTitle, pageIcon, t
     }
   };
 
+  // One header contract for every module: the module prefix is carried by the app mode /
+  // Properties eyebrow, so the Properties hero and the shared PageHeader show the same copy.
+  const headerTitle = pageTitle.replace(/^(?:ERP|Factory|Properties)\s*[—-]\s*/, "");
+  const headerSubtitle = "All payment receipts recorded across all units, sorted by date.";
+
   if (isPropertiesPayments) {
     const amountDisplay = paymentsError
       ? "Unavailable"
@@ -209,6 +213,8 @@ export default function RentalPaymentsLog({ rentalModule, pageTitle, pageIcon, t
           />
         )}
         <PropertiesPaymentsPremium
+          title={headerTitle}
+          subtitle={headerSubtitle}
           payments={filtered}
           totalRecords={payments.length}
           isLoading={isLoading}
@@ -254,41 +260,18 @@ export default function RentalPaymentsLog({ rentalModule, pageTitle, pageIcon, t
       className={isErp || appMode === "factory" ? "space-y-4 sm:p-4" : "p-4 space-y-4"}
       data-testid={`page-${testIdPrefix}-payments-log`}
     >
-      {isErp ? (
-        <>
-          <PageHeader
-            title={pageTitle}
-            subtitle="All payment receipts recorded across all units, sorted by date."
-            icon={pageIcon ?? <ClipboardList className="h-5 w-5" />}
-          />
-          <DataTableToolbar
-            search={search}
-            onSearchChange={setSearch}
-            searchPlaceholder="Search tenant, unit, notes…"
-            searchTestId={`input-${testIdPrefix}-payments-search`}
-            className="mb-0"
-          />
-        </>
-      ) : (
-        <div className="flex items-center gap-3 flex-wrap justify-between">
-          <div className="flex items-center gap-3">
-            {pageIcon ?? <ClipboardList className="h-7 w-7 text-indigo-600" />}
-            <div>
-              <PageHeader
-                title={pageTitle}
-                subtitle="All payment receipts recorded across all units, sorted by date."
-              />
-            </div>
-          </div>
-          <DataTableToolbar
-            search={search}
-            onSearchChange={setSearch}
-            searchPlaceholder="Search tenant, unit, notes…"
-            searchTestId={`input-${testIdPrefix}-payments-search`}
-            className="mb-0"
-          />
-        </div>
-      )}
+      <PageHeader
+        title={headerTitle}
+        subtitle={headerSubtitle}
+        icon={pageIcon ?? <ClipboardList className="h-5 w-5" />}
+      />
+      <DataTableToolbar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search tenant, unit, notes…"
+        searchTestId={`input-${testIdPrefix}-payments-search`}
+        className="mb-0"
+      />
 
       {paymentsError && (
         <div className="rounded-md border border-destructive p-3 text-sm text-destructive" role="alert">

@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { lazyRetry as lazy } from "@/lib/lazyRetry";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Truck, PackageCheck } from "lucide-react";
+import { Truck } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
@@ -30,21 +30,12 @@ export default function TrackingHub() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden bg-background">
-      <div className="relative isolate mx-3 mt-2 shrink-0 overflow-hidden rounded-2xl border border-violet-200/70 bg-gradient-to-r from-violet-50 via-background to-indigo-50 px-4 py-3 shadow-sm dark:border-violet-500/25 dark:from-[#271744] dark:via-[#16192d] dark:to-[#101b30] sm:mx-4 sm:px-5 sm:py-4">
-        <div className="pointer-events-none absolute -right-10 -top-24 h-64 w-80 rounded-full bg-violet-400/15 blur-3xl dark:bg-violet-500/25" aria-hidden="true" />
-        <div className="relative flex items-center justify-between gap-3">
-          <div className="min-w-0 flex-1 [&_[data-testid=page-header]]:mb-0 [&_[data-testid=page-header]]:border-0 [&_[data-testid=page-header]]:pb-0">
-            <PageHeader
-              title="Tracking"
-              subtitle="Containers, shipments and offload tracking"
-              icon={<span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-lg shadow-violet-500/20"><Truck className="h-5 w-5" aria-hidden="true" /></span>}
-            />
-          </div>
-          <div className="hidden shrink-0 items-center gap-2 rounded-full border border-violet-200/80 bg-background/70 px-3 py-1.5 text-xs font-semibold text-violet-700 shadow-sm dark:border-violet-400/25 dark:bg-violet-400/10 dark:text-violet-200 lg:flex">
-            <PackageCheck className="h-4 w-4" aria-hidden="true" />
-            Logistics workspace
-          </div>
-        </div>
+      <div className="shrink-0 px-3 pt-2 sm:px-4">
+        <PageHeader
+          title="Tracking"
+          subtitle="Containers, shipments and offload tracking"
+          icon={<Truck className="h-5 w-5" aria-hidden="true" />}
+        />
       </div>
 
       <div className="flex-1 overflow-hidden flex flex-col pb-4 sm:px-4">
@@ -54,7 +45,10 @@ export default function TrackingHub() {
           className="flex flex-col flex-1 overflow-hidden"
         >
           <div className="erp-mobile-scroll-tabs mt-3 mb-2 shrink-0 px-3 pb-1 sm:px-0">
-            <TabsList className="h-auto w-max min-w-full gap-1 rounded-xl border border-border/70 bg-muted/55 p-1 shadow-sm sm:min-w-0 sm:w-fit [&>button]:rounded-lg [&>button]:px-4 [&>button]:py-2 [&>button]:text-xs [&>button]:font-semibold [&>button[data-state=active]]:bg-gradient-to-r [&>button[data-state=active]]:from-violet-600 [&>button[data-state=active]]:to-fuchsia-600 [&>button[data-state=active]]:text-white [&>button[data-state=active]]:shadow-md" aria-label="Tracking sections">
+            <TabsList
+              className="h-auto w-max min-w-full gap-1 rounded-xl border border-border/70 bg-muted/55 p-1 shadow-sm sm:min-w-0 sm:w-fit [&>button]:rounded-lg [&>button]:px-4 [&>button]:py-2 [&>button]:text-xs [&>button]:font-semibold [&>button[data-state=active]]:bg-gradient-to-r [&>button[data-state=active]]:from-violet-600 [&>button[data-state=active]]:to-fuchsia-600 [&>button[data-state=active]]:text-white [&>button[data-state=active]]:shadow-md"
+              aria-label="Tracking sections"
+            >
               <TabsTrigger value="containers-otw" data-testid="tab-tracking-containers-otw">
                 Containers OTW
               </TabsTrigger>

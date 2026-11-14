@@ -20,6 +20,7 @@ import {
   FileSpreadsheet,
   Upload,
 } from "lucide-react";
+import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -57,8 +58,13 @@ import { BalesHistoryDialog4 } from "./baleshistory/components/BalesHistoryDialo
 import { BalesHistoryDialog5 } from "./baleshistory/components/BalesHistoryDialog5";
 import { useToast } from "@/hooks/use-toast";
 import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
+import type { RouteComponentProps } from "wouter";
 
-export default function BalesHistory() {
+/** Routed standalone (receives route props) or embedded as a hub tab panel. */
+type EmbeddablePageProps = { embedded?: boolean } & Partial<RouteComponentProps>;
+
+/** `embedded`: rendered as the Bales hub "History" tab, whose PageHeader already titles the page. */
+export default function BalesHistory({ embedded = false }: EmbeddablePageProps) {
   const mhd = useFactoryMhdView();
   const model = useBalesHistoryModel();
   const { toast } = useToast();
@@ -151,6 +157,13 @@ export default function BalesHistory() {
 
   return (
     <div className="bales-history-modern">
+      {!embedded && (
+        <PageHeader
+          title="Bales"
+          subtitle="Stock history, status management and removal"
+          icon={<Package className="h-5 w-5" />}
+        />
+      )}
       <BalesHistoryOverview model={model} />
 
       {/* ── Main table card ── */}

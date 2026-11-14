@@ -15,7 +15,7 @@ import { getApiRequest } from "@/lib/factoryApi";
 import { useAppMode } from "@/contexts/AppModeContext";
 import type { FactoryCatalogLanguage } from "@shared/factoryBilingualContract";
 import { readFactoryCatalogLanguagePreference } from "@/lib/factoryCatalogPreference";
-import BaleProductsPage from "./BaleProducts";
+import { BaleProductsContent } from "./BaleProducts";
 
 type TranslationFilter = "all" | "complete" | "missing-product" | "missing-category";
 
@@ -70,10 +70,12 @@ function CatalogFetchBoundary({
   language,
   search,
   translationFilter,
+  embedded,
 }: {
   language: FactoryCatalogLanguage;
   search: string;
   translationFilter: TranslationFilter;
+  embedded: boolean;
 }) {
   const [ready, setReady] = useState(false);
   const fullCatalogRef = useRef<BilingualProduct[] | null>(null);
@@ -145,10 +147,10 @@ function CatalogFetchBoundary({
     queryClient.setQueryData(["/api/factory/bale-products"], filterCatalog(products, search, translationFilter));
   }, [search, translationFilter]);
 
-  return ready ? <BaleProductsPage /> : null;
+  return ready ? <BaleProductsContent embedded={embedded} /> : null;
 }
 
-export default function BaleProductsBilingual() {
+export default function BaleProductsBilingual({ embedded = false }: { embedded?: boolean }) {
   const [language, setLanguage] = useState<FactoryCatalogLanguage>(() =>
     readFactoryCatalogLanguagePreference(typeof window === "undefined" ? null : window.localStorage)
   );
@@ -283,6 +285,7 @@ export default function BaleProductsBilingual() {
         language={language}
         search={requestSearch}
         translationFilter={translationFilter}
+        embedded={embedded}
       />
       {isAdmin && recordChanges.allowed && <BaleProductArabicEditBridge />}
 

@@ -15,6 +15,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { ExportButton } from "@/components/export/ReportExportMenu";
 import { exportFileName } from "@/lib/exportFile";
@@ -248,29 +249,13 @@ export default function POSContainerDetail() {
       className="flex h-full min-h-0 flex-col gap-4 overflow-hidden p-3 sm:p-4 lg:p-5"
       data-testid="pos-container-detail-page"
     >
-      <div className="flex shrink-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex min-w-0 items-start gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setLocation("/pos-containers")}
-            aria-label="Back to containers"
-            data-testid="button-pos-container-back"
-          >
-            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-          </Button>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="truncate text-xl font-semibold tracking-tight sm:text-2xl">
-                Container {data.container.containerNumber}
-              </h1>
-              <Badge variant="outline">{data.container.status}</Badge>
-            </div>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Item quantities only — cost and freight stay hidden for POS users.
-            </p>
-          </div>
-        </div>
+      <PageHeader
+        title={`Container ${data.container.containerNumber}`}
+        meta={<Badge variant="outline">{data.container.status}</Badge>}
+        subtitle="Item quantities only — cost and freight stay hidden for POS users."
+        backTarget="/pos-containers"
+        backButtonTestId="button-pos-container-back"
+      >
         <ExportButton
           kind="excel"
           label="Export Excel (No Cost / No Freight)"
@@ -278,7 +263,7 @@ export default function POSContainerDetail() {
           onClick={exportNoCostNoFreight}
           data-testid="button-pos-container-no-cost-export"
         />
-      </div>
+      </PageHeader>
 
       <div className="grid shrink-0 grid-cols-2 gap-2 lg:grid-cols-4">
         <div className="rounded-xl border bg-card/60 p-3 shadow-xs">

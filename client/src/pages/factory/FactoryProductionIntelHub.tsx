@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BarChart3, Trash2, Beaker, Ship } from "lucide-react";
+import { PageHeader } from "@/components/PageHeader";
 import ProductionSummary from "@/pages/factory/ProductionSummary";
 import FactoryWaste from "@/pages/factory/FactoryWaste";
 import FactoryMixOptimizer from "@/pages/factory/FactoryMixOptimizer";
@@ -21,10 +22,15 @@ const HIDDEN_KEYS: Record<Section, string> = {
 
 export default function FactoryProductionIntelHub() {
   const { selectedCompany } = useCompany();
-  const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id), enabled: Boolean(selectedCompany?.id), staleTime: 5 * 60000 });
-  const hidden = myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
-    ? myAccess.hiddenCostFields
-    : Object.values(HIDDEN_KEYS);
+  const { data: myAccess } = useQuery<FactoryMyAccess>({
+    queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
+    staleTime: 5 * 60000,
+  });
+  const hidden =
+    myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
+      ? myAccess.hiddenCostFields
+      : Object.values(HIDDEN_KEYS);
   const sections: Section[] = SECTIONS.filter((section) => !hidden.includes(HIDDEN_KEYS[section]));
   const defaultSection: Section = sections[0] ?? "production-summary";
   const allowedSections: readonly Section[] = sections;
@@ -52,6 +58,10 @@ export default function FactoryProductionIntelHub() {
         onValueChange={(value) => setSection(value as Section)}
         className="flex flex-col h-full overflow-hidden"
       >
+        {/* Hub title: the sidebar label of /factory/intelligence/production-hub. */}
+        <div className="shrink-0 px-4 pt-4 [&>header]:mb-0 [&>header]:border-b-0 [&>header]:pb-0">
+          <PageHeader title="Production Intel" icon={<Beaker className="h-5 w-5" />} showBackButton={false} />
+        </div>
         <div className="erp-mobile-scroll-tabs border-b px-4 pt-3 pb-1 shrink-0">
           <TabsList className="w-max min-w-full sm:min-w-0 sm:w-fit" aria-label="Production intelligence sections">
             {sections.includes("production-summary") && (

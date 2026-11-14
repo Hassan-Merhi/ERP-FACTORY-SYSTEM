@@ -9,6 +9,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PageHeader } from "@/components/PageHeader";
 
 type Mod = "ERP" | "FACTORY" | "PROPERTIES";
 type Contract = {
@@ -199,14 +200,10 @@ export default function UnifiedRentalAccounting() {
   const totals = detail.data?.totals;
   return (
     <div className="p-3 sm:p-5 space-y-5" data-testid="unified-rental-accounting">
-      <div>
-        <h1 className="text-2xl font-semibold">Unified Rental Accounting</h1>
-        <p className="text-sm text-muted-foreground">
-          Tenant-side shops and shared leases show rent payable; landlord-side warehouses show rent receivable.
-          Contract-month ledger, payments, advance rent, deposits and property expenses. Financial vouchers remain
-          unchanged.
-        </p>
-      </div>
+      <PageHeader
+        title="Unified Rental Accounting"
+        subtitle="Tenant-side shops and shared leases show rent payable; landlord-side warehouses show rent receivable. Contract-month ledger, payments, advance rent, deposits and property expenses. Financial vouchers remain unchanged."
+      />
       <Card>
         <CardHeader>
           <CardTitle>Rental contract</CardTitle>

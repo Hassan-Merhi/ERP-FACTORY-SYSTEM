@@ -1,3 +1,4 @@
+import { PageHeader } from "@/components/PageHeader";
 import { getErrorDetails } from "@shared/errorUtils";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -256,10 +257,7 @@ export default function SpReports() {
 
   return (
     <div className="space-y-4 max-w-4xl">
-      <div>
-        <h1 className="text-xl font-semibold">Reports</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Profit & Loss and Sales Form export</p>
-      </div>
+      <PageHeader title="Reports" subtitle="Profit & Loss and Sales Form export" />
 
       <Tabs value={tab} onValueChange={(value) => setTab(value as ReportTab)}>
         <div className="erp-mobile-scroll-tabs pb-1">

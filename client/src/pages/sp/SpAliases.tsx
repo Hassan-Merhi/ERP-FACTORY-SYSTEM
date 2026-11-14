@@ -1,3 +1,4 @@
+import { PageHeader } from "@/components/PageHeader";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -67,12 +68,10 @@ export default function SpAliases() {
 
   return (
     <div className="space-y-6 max-w-2xl">
-      <div>
-        <h1 className="text-xl font-semibold">Article Aliases</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Map supplier article codes to internal stock items for accurate FIFO tracking
-        </p>
-      </div>
+      <PageHeader
+        title="Article Aliases"
+        subtitle="Map supplier article codes to internal stock items for accurate FIFO tracking"
+      />
 
       <Card>
         <CardHeader>

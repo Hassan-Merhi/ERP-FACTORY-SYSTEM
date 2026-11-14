@@ -1,6 +1,7 @@
 import { visibleTabInterval } from "@/lib/queryPolicies";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/PageHeader";
 import { MobileBarcodeScanner, type CameraScanFeedback } from "@/components/MobileBarcodeScanner";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { translateCameraScanMessage } from "@/i18n/mobileCameraScanTranslations";
@@ -315,30 +316,21 @@ export default function FactoryInvoiceLoadingScan() {
     <div
       className={`mx-auto flex min-h-full max-w-5xl flex-col space-y-4 sm:p-6 ${activeSessionId && currentSession ? `${FACTORY_MOBILE_ACTION_BAR_CLEARANCE} sm:pb-6` : ""}`}
     >
-      <div className="flex flex-wrap items-center gap-3">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => navigate(`/factory/sales/invoices/${invoiceId}`)}
-          data-testid="button-back"
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <div className="flex-1 min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-2xl font-bold" data-testid="text-invoice-title">
-              {inv.invoiceNumber || `Order #${inv.id}`}
-            </h1>
+      <PageHeader
+        title={<span data-testid="text-invoice-title">{inv.invoiceNumber || `Order #${inv.id}`}</span>}
+        backTarget={`/factory/sales/invoices/${invoiceId}`}
+        meta={
+          <>
             <Badge variant="default">Finalized</Badge>
             <Badge variant="outline" className="text-xs">
               Scan Loading
             </Badge>
-          </div>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {inv.customerName} · {inv.orderDate ? formatDisplayDate(inv.orderDate) : ""}
-          </p>
-        </div>
-      </div>
+            <span>
+              {inv.customerName} · {inv.orderDate ? formatDisplayDate(inv.orderDate) : ""}
+            </span>
+          </>
+        }
+      />
 
       <div className="grid grid-cols-2 gap-3">
         <Card>

@@ -319,7 +319,6 @@ export default function PropertyRentalPage({
     [units, selectedContractIds]
   );
 
-  // ERP and Properties render the shared page-header contract; Factory keeps its hub strip.
   const isErp = appMode === "erp" || appMode === "properties";
   const isFactoryShopTable = testIdPrefix === "factory-rental-shops";
   const isPhoneLayout = useErpPhoneLayout();
@@ -424,6 +423,12 @@ export default function PropertyRentalPage({
     </>
   );
 
+  // One header contract for every module: the module prefix ("ERP —", "Factory —", "Properties —")
+  // is already carried by the app mode / Properties eyebrow, so every branch shows the same title.
+  const headerTitle = pageTitle.replace(/^(?:ERP|Factory|Properties)\s*[—-]\s*/, "");
+  const headerSubtitle = "Click any unit to manage payments, modify rent, post guarantee, or end the contract.";
+  const headerActionsForWidth = phoneCards ? phoneHeaderActions : headerActions;
+
   return (
     <ApiBaseCtx.Provider value={apiBase}>
       <div
@@ -442,6 +447,8 @@ export default function PropertyRentalPage({
           />
         )}
         {isPropertiesRental ? (
+          // The Properties module keeps its hero design (docs/properties-unification-*.md) but
+          // renders the same title, subtitle and actions as the shared PageHeader below.
           <section
             className="properties-rentals-hero"
             aria-label={unitType === "SHOP" ? "Shop rentals overview" : "Warehouse rentals overview"}
@@ -453,37 +460,19 @@ export default function PropertyRentalPage({
               <div className="properties-rentals-hero-text">
                 <span className="properties-rentals-eyebrow">PROPERTIES</span>
                 <h1 className="properties-rentals-heading" data-testid="text-page-title">
-                  {pageTitle.replace(/^Properties\s*[—-]\s*/, "")}
+                  {headerTitle}
                 </h1>
-                <p className="properties-rentals-subheading">
-                  Manage {unitType === "SHOP" ? "shop" : "warehouse"} units, payments, rents, guarantees, and contracts
-                  in one place.
+                <p className="properties-rentals-subheading" data-testid="text-page-subtitle">
+                  {headerSubtitle}
                 </p>
               </div>
             </div>
-            <div className="properties-rentals-hero-actions">{phoneCards ? phoneHeaderActions : headerActions}</div>
+            <div className="properties-rentals-hero-actions">{headerActionsForWidth}</div>
           </section>
-        ) : isErp ? (
-          <PageHeader
-            title={pageTitle}
-            subtitle="Click any unit to manage payments, modify rent, post guarantee, or end the contract."
-            icon={pageIcon}
-          >
-            {phoneCards ? phoneHeaderActions : headerActions}
-          </PageHeader>
         ) : (
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-3">
-              {pageIcon}
-              <div>
-                <PageHeader
-                  title={pageTitle}
-                  subtitle="Click any unit to manage payments, modify rent, post guarantee, or end the contract."
-                />
-              </div>
-            </div>
-            <div className="flex items-center gap-2 flex-wrap">{phoneCards ? phoneHeaderActions : headerActions}</div>
-          </div>
+          <PageHeader title={headerTitle} subtitle={headerSubtitle} icon={pageIcon}>
+            {headerActionsForWidth}
+          </PageHeader>
         )}
 
         {isPropertiesRental && units.some((unit) => unit.isInternalLeaseProjection) && (

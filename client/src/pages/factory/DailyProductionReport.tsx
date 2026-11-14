@@ -50,28 +50,32 @@ export default function DailyProductionReport() {
   const warmMonthlyProduction = () => {
     void loadMonthlyProduction().catch(() => undefined);
     if (!selectedCompany?.id || !canOpen("/factory/monthly-production-matrix")) return;
-    void queryClient.prefetchQuery({
-      queryKey: companyQueryKey("/api/factory/monthly-production-matrix", selectedCompany.id),
-      staleTime: 60_000,
-      queryFn: async () => {
-        const res = await fetch("/api/factory/monthly-production-matrix", { credentials: "include" });
-        if (!res.ok) throw new Error("Unable to preload monthly production");
-        return res.json();
-      },
-    }).catch(() => undefined);
+    void queryClient
+      .prefetchQuery({
+        queryKey: companyQueryKey("/api/factory/monthly-production-matrix", selectedCompany.id),
+        staleTime: 60_000,
+        queryFn: async () => {
+          const res = await fetch("/api/factory/monthly-production-matrix", { credentials: "include" });
+          if (!res.ok) throw new Error("Unable to preload monthly production");
+          return res.json();
+        },
+      })
+      .catch(() => undefined);
   };
   const warmSheetsAndSacks = () => {
     void loadSheetsAndSacks().catch(() => undefined);
     if (!selectedCompany?.id || !canOpen("/factory/sheets-sacks")) return;
-    void queryClient.prefetchQuery({
-      queryKey: ["/api/factory/sheets-sacks"],
-      staleTime: 5 * 60_000,
-      queryFn: async () => {
-        const res = await fetch("/api/factory/sheets-sacks", { credentials: "include" });
-        if (!res.ok) throw new Error("Unable to preload sheets and sacks");
-        return res.json();
-      },
-    }).catch(() => undefined);
+    void queryClient
+      .prefetchQuery({
+        queryKey: ["/api/factory/sheets-sacks"],
+        staleTime: 5 * 60_000,
+        queryFn: async () => {
+          const res = await fetch("/api/factory/sheets-sacks", { credentials: "include" });
+          if (!res.ok) throw new Error("Unable to preload sheets and sacks");
+          return res.json();
+        },
+      })
+      .catch(() => undefined);
   };
   const hidden = isPrivileged ? [] : (access?.hiddenCostFields ?? []);
   const visibleTabs = OVERVIEW_TABS.filter((tab) => {
@@ -93,21 +97,45 @@ export default function DailyProductionReport() {
   if (!ready) return <div className="p-5 text-sm text-muted-foreground">Loading access...</div>;
 
   return (
-    <div className={`flex h-full min-w-0 flex-col overflow-hidden ${activeTab === "shipping" ? "shipping-overview-shell" : ""}`}>
-      <div className={activeTab === "shipping" ? "shipping-overview-header shrink-0 px-5 pt-5 pb-4" : "shrink-0 border-b px-4 pt-4 pb-3"}>
+    <div
+      className={`flex h-full min-w-0 flex-col overflow-hidden ${activeTab === "shipping" ? "shipping-overview-shell" : ""}`}
+    >
+      <div
+        className={
+          activeTab === "shipping"
+            ? "shipping-overview-header shrink-0 px-5 pt-5 pb-4"
+            : "shrink-0 border-b px-4 pt-4 pb-3"
+        }
+      >
         <PageHeader
           title="Overview"
           subtitle="Manufacturing overview — output metrics & bale lifecycle"
-          icon={activeTab === "shipping" ? <span className="shipping-overview-icon"><Ship className="h-5 w-5" /></span> : undefined}
+          icon={
+            activeTab === "shipping" ? (
+              <span className="shipping-overview-icon">
+                <Ship className="h-5 w-5" />
+              </span>
+            ) : undefined
+          }
         />
       </div>
 
       {visibleTabs.length === 0 ? (
         <div className="p-6 text-sm text-muted-foreground">No Overview tabs are available for this user.</div>
       ) : (
-        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as OverviewTab)} className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div className={`erp-mobile-scroll-tabs mx-4 mt-3 shrink-0 pb-1 ${activeTab === "shipping" ? "shipping-overview-tabs" : ""}`}>
-            <TabsList className="w-max min-w-full sm:min-w-0 sm:w-fit" aria-label="Factory overview" data-testid="tabs-production-analytics">
+        <Tabs
+          value={activeTab}
+          onValueChange={(value) => setActiveTab(value as OverviewTab)}
+          className="flex min-h-0 flex-1 flex-col overflow-hidden"
+        >
+          <div
+            className={`erp-mobile-scroll-tabs mx-4 mt-3 shrink-0 pb-1 ${activeTab === "shipping" ? "shipping-overview-tabs" : ""}`}
+          >
+            <TabsList
+              className="w-max min-w-full sm:min-w-0 sm:w-fit"
+              aria-label="Factory overview"
+              data-testid="tabs-production-analytics"
+            >
               {show("otw-tracking") && (
                 <TabsTrigger value="otw-tracking" data-testid="tab-otw-tracking">
                   <Truck className="mr-1.5 h-4 w-4" /> OTW Tracking
@@ -119,7 +147,13 @@ export default function DailyProductionReport() {
                 </TabsTrigger>
               )}
               {show("monthly-production") && (
-                <TabsTrigger value="monthly-production" data-testid="tab-monthly-production" onPointerEnter={warmMonthlyProduction} onFocus={warmMonthlyProduction} onPointerDown={warmMonthlyProduction}>
+                <TabsTrigger
+                  value="monthly-production"
+                  data-testid="tab-monthly-production"
+                  onPointerEnter={warmMonthlyProduction}
+                  onFocus={warmMonthlyProduction}
+                  onPointerDown={warmMonthlyProduction}
+                >
                   <BarChart3 className="mr-1.5 h-4 w-4" /> Monthly Production
                 </TabsTrigger>
               )}
@@ -129,7 +163,13 @@ export default function DailyProductionReport() {
                 </TabsTrigger>
               )}
               {show("sheets-sacks") && (
-                <TabsTrigger value="sheets-sacks" data-testid="tab-sheets-sacks" onPointerEnter={warmSheetsAndSacks} onFocus={warmSheetsAndSacks} onPointerDown={warmSheetsAndSacks}>
+                <TabsTrigger
+                  value="sheets-sacks"
+                  data-testid="tab-sheets-sacks"
+                  onPointerEnter={warmSheetsAndSacks}
+                  onFocus={warmSheetsAndSacks}
+                  onPointerDown={warmSheetsAndSacks}
+                >
                   <Layers className="mr-1.5 h-4 w-4" /> Sheets & Sacks
                 </TabsTrigger>
               )}
@@ -147,14 +187,22 @@ export default function DailyProductionReport() {
             </TabsContent>
           )}
           {show("production") && (
-            <TabsContent value="production" className="mt-0 flex flex-1 flex-col gap-4 overflow-y-auto p-4 data-[state=inactive]:hidden">
+            <TabsContent
+              value="production"
+              className="mt-0 flex flex-1 flex-col gap-4 overflow-y-auto p-4 data-[state=inactive]:hidden"
+            >
               <ProductionTabPanel report={report} />
             </TabsContent>
           )}
           {show("monthly-production") && (
-            <TabsContent value="monthly-production" className="mt-0 min-h-0 flex-1 overflow-y-auto p-4 data-[state=inactive]:hidden">
-              <Suspense fallback={<div className="p-4 text-sm text-muted-foreground">Loading monthly production...</div>}>
-                <FactoryMonthlyProductionMatrix />
+            <TabsContent
+              value="monthly-production"
+              className="mt-0 min-h-0 flex-1 overflow-y-auto p-4 data-[state=inactive]:hidden"
+            >
+              <Suspense
+                fallback={<div className="p-4 text-sm text-muted-foreground">Loading monthly production...</div>}
+              >
+                <FactoryMonthlyProductionMatrix embedded />
               </Suspense>
             </TabsContent>
           )}
@@ -164,14 +212,20 @@ export default function DailyProductionReport() {
             </TabsContent>
           )}
           {show("sheets-sacks") && (
-            <TabsContent value="sheets-sacks" className="mt-0 min-h-0 flex-1 overflow-y-auto p-4 data-[state=inactive]:hidden">
+            <TabsContent
+              value="sheets-sacks"
+              className="mt-0 min-h-0 flex-1 overflow-y-auto p-4 data-[state=inactive]:hidden"
+            >
               <Suspense fallback={<div className="p-4 text-sm text-muted-foreground">Loading sheets and sacks...</div>}>
-                <FactorySheetsAndSacks />
+                <FactorySheetsAndSacks embedded />
               </Suspense>
             </TabsContent>
           )}
           {show("sheets") && (
-            <TabsContent value="sheets" className="mt-0 flex min-h-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden">
+            <TabsContent
+              value="sheets"
+              className="mt-0 flex min-h-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden"
+            >
               <FactoryStatusBuilder />
             </TabsContent>
           )}

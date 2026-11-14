@@ -534,7 +534,8 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
           subtitle="Transfer stock between locations"
           icon={<ArrowRightLeft className="h-6 w-6" aria-hidden="true" />}
         />
-      ) : !isFactoryMode ? (
+      ) : (
+        // One header for ERP, Factory and Properties; the drafts link is ERP-only via showOptionalDrafts.
         <PageHeader title="Vouchers" subtitle="Create and manage payment, receipt, and journal entries">
           {showOptionalDrafts && (
             <Link
@@ -546,12 +547,6 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
             </Link>
           )}
         </PageHeader>
-      ) : (
-        <div className="flex items-start justify-between gap-3 pb-4 border-b">
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">Vouchers</h1>
-          </div>
-        </div>
       )}
 
       {!isPOS && (

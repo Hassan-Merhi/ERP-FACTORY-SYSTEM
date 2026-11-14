@@ -40,9 +40,14 @@ import { ComparisonPresetPicker } from "./productioncomparison/components/Compar
 import { PeriodOverviewCard } from "./productioncomparison/components/PeriodOverviewCard";
 import { SupplierDailyTrend } from "./productioncomparison/components/SupplierDailyTrend";
 import { buildWorkerSummaryByArticle, WorkerSummaryHover } from "./productioncomparison/components/WorkerSummaryHover";
+import type { RouteComponentProps } from "wouter";
+
+/** Routed standalone (receives route props) or embedded as a hub tab panel. */
+type EmbeddablePageProps = { embedded?: boolean } & Partial<RouteComponentProps>;
 // ── Date helpers ─────────────────────────────────────────────────────────────
 
-export default function ProductionComparison() {
+/** `embedded`: rendered as the Others hub "Comparison" tab, whose PageHeader already titles the page. */
+export default function ProductionComparison({ embedded = false }: EmbeddablePageProps) {
   const [preset, setPreset] = useState<Preset>("month");
 
   const [customA, setCustomA] = useState<[string, string]>([todayStr(), todayStr()]);
@@ -378,22 +383,20 @@ export default function ProductionComparison() {
   return (
     <div className="flex min-w-0 flex-col gap-4 p-3 sm:p-4 lg:p-5" data-testid="production-comparison-dashboard">
       {/* Header + preset buttons */}
-      <div className="relative overflow-hidden rounded-2xl border border-blue-500/20 bg-gradient-to-r from-blue-50 via-slate-50 to-indigo-50 p-4 dark:from-[hsl(var(--factory-hue)_51%_13%)] dark:via-[hsl(var(--factory-hue)_44%_12%)] dark:to-[hsl(var(--factory-hue)_41%_15%)] sm:p-5">
-        <div className="pointer-events-none absolute -right-10 -top-16 h-48 w-72 rounded-full bg-blue-400/10 blur-3xl" />
-        <div className="relative flex min-w-0 items-center gap-3 [&_[data-testid=page-header]]:mb-0 [&_[data-testid=page-header]]:w-full [&_[data-testid=page-header]]:border-none [&_[data-testid=page-header]]:pb-0">
-          <PageHeader
-            title="Production Comparison"
-            subtitle="Compare output, weight, cost and profit across selected periods"
-            icon={
-              <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-indigo-600 text-white shadow-md shadow-blue-500/20">
-                <BarChart3 className="h-6 w-6" />
-              </span>
-            }
-          >
-            <ComparisonPresetPicker preset={preset} onChange={setPreset} />
-          </PageHeader>
+      {embedded ? (
+        // Others hub "Comparison" tab: the hub PageHeader titles the page; keep the period picker only.
+        <div className="flex flex-wrap justify-end">
+          <ComparisonPresetPicker preset={preset} onChange={setPreset} />
         </div>
-      </div>
+      ) : (
+        <PageHeader
+          title="Production Comparison"
+          subtitle="Compare output, weight, cost and profit across selected periods"
+          icon={<BarChart3 className="h-5 w-5" />}
+        >
+          <ComparisonPresetPicker preset={preset} onChange={setPreset} />
+        </PageHeader>
+      )}
 
       {/* Custom date pickers */}
       {preset === "custom" && (

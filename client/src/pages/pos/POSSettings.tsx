@@ -2,6 +2,7 @@ import type { ClientErrorLike } from "@/lib/clientError";
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -72,10 +73,7 @@ export default function POSSettings() {
 
   return (
     <div className="max-w-md mx-auto space-y-6">
-      <div>
-        <h2 className="text-2xl font-semibold">Settings</h2>
-        <p className="text-muted-foreground text-sm mt-1">Manage your account settings.</p>
-      </div>
+      <PageHeader title="Settings" subtitle="Manage your account settings." />
 
       <Card>
         <CardHeader>

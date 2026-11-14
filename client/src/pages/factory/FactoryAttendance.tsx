@@ -355,30 +355,16 @@ export default function FactoryAttendance() {
   return (
     <div className="factory-tracking-modern factory-tracking-attendance factory-attendance-refresh">
       <div className="space-y-4">
-        <div className="attendance-hero flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-          <div className="min-w-0">
-            <div className="flex items-center gap-3">
-              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-primary/20 bg-primary/10 text-primary shadow-xs">
-                <CalendarDays className="h-5 w-5" />
-              </div>
-              <div className="min-w-0">
-                <h2 className="text-lg font-semibold tracking-tight">Workers Attendance</h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Record the day, review attendance at a glance, and send or export reports.
-                </p>
-              </div>
-            </div>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <Badge variant="outline" className="rounded-full bg-background/50 px-2.5 py-1 text-[11px] font-medium">
-                {formatDate(selectedDate)}
-              </Badge>
-              {selectedDate < attendanceToday() && (
-                <Badge variant="secondary" className="rounded-full">
-                  Earlier date — Admin approval required to save
-                </Badge>
-              )}
-            </div>
-          </div>
+        {/* Workers hub "Attendance" tab: the Payroll hub PageHeader titles the page; keep the date context only. */}
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="outline" className="rounded-full bg-background/50 px-2.5 py-1 text-[11px] font-medium">
+            {formatDate(selectedDate)}
+          </Badge>
+          {selectedDate < attendanceToday() && (
+            <Badge variant="secondary" className="rounded-full">
+              Earlier date — Admin approval required to save
+            </Badge>
+          )}
         </div>
 
         {mode === "perWorker" ? (

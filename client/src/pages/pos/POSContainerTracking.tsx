@@ -1,8 +1,21 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { CheckCircle2, Columns3, FileClock, FilterX, Loader2, MapPin, PackageSearch, Save, Search, Snowflake, Truck } from "lucide-react";
+import {
+  CheckCircle2,
+  Columns3,
+  FileClock,
+  FilterX,
+  Loader2,
+  MapPin,
+  PackageSearch,
+  Save,
+  Search,
+  Snowflake,
+  Truck,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -56,8 +69,18 @@ interface PosContainerTrackingResponse {
 }
 
 type ColumnKey =
-  | "container" | "supplier" | "status" | "eta" | "portDeparture" | "daysSinceDeparture"
-  | "truck" | "location" | "agent" | "transporter" | "docs" | "docsSent";
+  | "container"
+  | "supplier"
+  | "status"
+  | "eta"
+  | "portDeparture"
+  | "daysSinceDeparture"
+  | "truck"
+  | "location"
+  | "agent"
+  | "transporter"
+  | "docs"
+  | "docsSent";
 
 const COLUMN_PREF_KEY = "pos-container-tracking-visible-columns-v3";
 
@@ -120,7 +143,11 @@ function uniqueValues(rows: PosContainerRow[], selector: (row: PosContainerRow) 
 }
 
 function PortDepartureDateCell({
-  container, todayISO, mobile = false, draft, onDraftChange,
+  container,
+  todayISO,
+  mobile = false,
+  draft,
+  onDraftChange,
 }: {
   container: PosContainerRow;
   todayISO: string;
@@ -144,14 +171,15 @@ function PortDepartureDateCell({
       return body as { id: number; portDepartureDate: string | null };
     },
     onSuccess: (updated) => {
-      queryClient.setQueriesData<PosContainerTrackingResponse>(
-        { queryKey: ["/api/pos/containers-otw"] },
-        (cached) => cached ? {
-          ...cached,
-          containers: cached.containers.map((row) =>
-            row.id === updated.id ? { ...row, portDepartureDate: updated.portDepartureDate } : row
-          ),
-        } : cached
+      queryClient.setQueriesData<PosContainerTrackingResponse>({ queryKey: ["/api/pos/containers-otw"] }, (cached) =>
+        cached
+          ? {
+              ...cached,
+              containers: cached.containers.map((row) =>
+                row.id === updated.id ? { ...row, portDepartureDate: updated.portDepartureDate } : row
+              ),
+            }
+          : cached
       );
       void queryClient.invalidateQueries({ queryKey: ["/api/pos/containers-otw"] });
       toast({ title: "Departure date saved" });
@@ -205,8 +233,7 @@ export default function POSContainerTracking({ posUser }: { posUser?: PosUserCon
   useEffect(() => setPortDateDrafts({}), [posUser?.currentCompanyId]);
   const departureEditorProps = (container: PosContainerRow) => ({
     draft: portDateDrafts[container.id] ?? container.portDepartureDate ?? "",
-    onDraftChange: (value: string) =>
-      setPortDateDrafts((previous) => ({ ...previous, [container.id]: value })),
+    onDraftChange: (value: string) => setPortDateDrafts((previous) => ({ ...previous, [container.id]: value })),
   });
   useEffect(() => {
     const refreshToday = () => setTodayISO(getLocalTodayISO());
@@ -228,7 +255,9 @@ export default function POSContainerTracking({ posUser }: { posUser?: PosUserCon
       const valid = parsed.filter((key) => COLUMN_DEFS.some((column) => column.key === key));
       const newlyAdded = previous !== null ? (["portDeparture", "daysSinceDeparture"] as ColumnKey[]) : [];
       return new Set<ColumnKey>(
-        valid.length > 0 ? ["container", ...valid.filter((key) => key !== "container"), ...newlyAdded] : DEFAULT_VISIBLE_COLUMNS
+        valid.length > 0
+          ? ["container", ...valid.filter((key) => key !== "container"), ...newlyAdded]
+          : DEFAULT_VISIBLE_COLUMNS
       );
     } catch {
       return new Set(DEFAULT_VISIBLE_COLUMNS);
@@ -318,60 +347,69 @@ export default function POSContainerTracking({ posUser }: { posUser?: PosUserCon
       className="pos-containers-page flex h-full min-h-0 flex-col gap-3 overflow-hidden p-3 sm:p-4"
       data-testid="pos-container-tracking-page"
     >
-      <div className="pos-containers-heading flex shrink-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div className="pos-container-seasonal" aria-hidden="true"><Snowflake className="h-5 w-5" /><Snowflake className="mt-5 h-3 w-3" /></div>
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="pos-containers-heading-icon">
-              <PackageSearch className="h-5 w-5" aria-hidden="true" />
-            </div>
-            <div>
-              <h1 className="pos-containers-title">Containers OTW</h1>
-              <div className="mt-0.5 flex items-center gap-1.5 text-sm text-muted-foreground">
-                <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
-                <span>
-                  {data?.assignedLocation?.name
-                    ? `Only containers assigned to ${data.assignedLocation.name}`
-                    : "Only containers for your assigned location"}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="pos-containers-count text-sm text-muted-foreground" data-testid="text-pos-container-count">
-          {data ? (
-            <>
-              <Badge variant="secondary" data-pos-shown-badge="true">{visibleContainers.length} shown</Badge>
-              <span>{data.total} active</span>
-            </>
-          ) : null}
-        </div>
+      <div className="pos-container-seasonal" aria-hidden="true">
+        <Snowflake className="h-5 w-5" />
+        <Snowflake className="mt-5 h-3 w-3" />
       </div>
+      <PageHeader
+        title="Containers OTW"
+        icon={<PackageSearch className="h-5 w-5" aria-hidden="true" />}
+        meta={
+          <>
+            <span className="flex items-center gap-1.5">
+              <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>
+                {data?.assignedLocation?.name
+                  ? `Only containers assigned to ${data.assignedLocation.name}`
+                  : "Only containers for your assigned location"}
+              </span>
+            </span>
+            <span className="pos-containers-count" data-testid="text-pos-container-count">
+              {data ? (
+                <>
+                  <Badge variant="secondary" data-pos-shown-badge="true">
+                    {visibleContainers.length} shown
+                  </Badge>
+                  <span>{data.total} active</span>
+                </>
+              ) : null}
+            </span>
+          </>
+        }
+      />
 
       <div className="pos-container-kpis grid shrink-0 grid-cols-2 gap-2.5 lg:grid-cols-4">
         <div className="pos-container-kpi" data-kpi-tone="violet">
-          <span className="pos-container-kpi-icon"><PackageSearch className="h-5 w-5" aria-hidden="true" /></span>
+          <span className="pos-container-kpi-icon">
+            <PackageSearch className="h-5 w-5" aria-hidden="true" />
+          </span>
           <div className="min-w-0">
             <p className="pos-container-kpi-label">Active</p>
             <p className="pos-container-kpi-value">{isLoading ? "—" : summary.total}</p>
           </div>
         </div>
         <div className="pos-container-kpi" data-kpi-tone="orange">
-          <span className="pos-container-kpi-icon"><Truck className="h-5 w-5" aria-hidden="true" /></span>
+          <span className="pos-container-kpi-icon">
+            <Truck className="h-5 w-5" aria-hidden="true" />
+          </span>
           <div className="min-w-0">
             <p className="pos-container-kpi-label">Truck Assigned</p>
             <p className="pos-container-kpi-value">{isLoading ? "—" : summary.withTruck}</p>
           </div>
         </div>
         <div className="pos-container-kpi" data-kpi-tone="green">
-          <span className="pos-container-kpi-icon"><CheckCircle2 className="h-5 w-5" aria-hidden="true" /></span>
+          <span className="pos-container-kpi-icon">
+            <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
+          </span>
           <div className="min-w-0">
             <p className="pos-container-kpi-label">Docs Received</p>
             <p className="pos-container-kpi-value">{isLoading ? "—" : summary.docsReceived}</p>
           </div>
         </div>
         <div className="pos-container-kpi" data-kpi-tone="blue">
-          <span className="pos-container-kpi-icon"><FileClock className="h-5 w-5" aria-hidden="true" /></span>
+          <span className="pos-container-kpi-icon">
+            <FileClock className="h-5 w-5" aria-hidden="true" />
+          </span>
           <div className="min-w-0">
             <p className="pos-container-kpi-label">Docs To Send</p>
             <p className="pos-container-kpi-value">{isLoading ? "—" : summary.docsReadyNotSent}</p>
@@ -500,11 +538,14 @@ export default function POSContainerTracking({ posUser }: { posUser?: PosUserCon
         </div>
       </div>
 
-      <section className="min-h-0 flex-1 space-y-3 overflow-y-auto pb-4 md:hidden phone-land:block"
-        aria-label={dt("containersOnWay")} data-testid="pos-container-mobile-list">
-        {isLoading ? Array.from({ length: 4 }, (_, index) => (
-          <Skeleton key={index} className="h-32 w-full rounded-xl" />
-        )) : isError ? (
+      <section
+        className="min-h-0 flex-1 space-y-3 overflow-y-auto pb-4 md:hidden phone-land:block"
+        aria-label={dt("containersOnWay")}
+        data-testid="pos-container-mobile-list"
+      >
+        {isLoading ? (
+          Array.from({ length: 4 }, (_, index) => <Skeleton key={index} className="h-32 w-full rounded-xl" />)
+        ) : isError ? (
           <div role="alert" className="rounded-xl border p-5 text-sm text-destructive">
             {dt("cannotLoadContainers")} {error instanceof Error ? error.message : dt("pleaseRetry")}
           </div>
@@ -512,59 +553,112 @@ export default function POSContainerTracking({ posUser }: { posUser?: PosUserCon
           <p className="rounded-xl border bg-card p-6 text-center text-sm text-muted-foreground">
             {dt("noMatchingContainers")}
           </p>
-        ) : visibleContainers.map((container) => (
-          <article key={container.id} className="pos-container-mobile-card min-w-0 p-3"
-            data-testid={`pos-container-mobile-${container.id}`}>
-            <div className="flex min-w-0 items-start justify-between gap-2">
-              <div className="min-w-0 flex-1">
-                <button type="button" onClick={() => setLocation(`/pos-containers/${container.id}`)}
-                  className="min-h-11 break-all text-left font-mono text-base font-bold text-primary underline-offset-4 hover:underline"
-                  data-testid={`pos-container-mobile-open-${container.id}`}>
-                  {container.containerNumber}
-                </button>
-                {isColumnVisible("supplier") && (
-                  <p className="break-words text-xs text-muted-foreground">{supplierLabel(container)}</p>
+        ) : (
+          visibleContainers.map((container) => (
+            <article
+              key={container.id}
+              className="pos-container-mobile-card min-w-0 p-3"
+              data-testid={`pos-container-mobile-${container.id}`}
+            >
+              <div className="flex min-w-0 items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <button
+                    type="button"
+                    onClick={() => setLocation(`/pos-containers/${container.id}`)}
+                    className="min-h-11 break-all text-left font-mono text-base font-bold text-primary underline-offset-4 hover:underline"
+                    data-testid={`pos-container-mobile-open-${container.id}`}
+                  >
+                    {container.containerNumber}
+                  </button>
+                  {isColumnVisible("supplier") && (
+                    <p className="break-words text-xs text-muted-foreground">{supplierLabel(container)}</p>
+                  )}
+                </div>
+                {isColumnVisible("status") && (
+                  <Badge variant="outline" className="pos-container-status max-w-[45%] break-words text-right">
+                    {container.status}
+                  </Badge>
                 )}
               </div>
-              {isColumnVisible("status") && <Badge variant="outline" className="pos-container-status max-w-[45%] break-words text-right">{container.status}</Badge>}
-            </div>
-            <div className="mt-3 grid grid-cols-2 gap-2 rounded-lg bg-muted/30 p-2 text-xs">
-              {isColumnVisible("eta") && (
-                <div><span className="block text-muted-foreground">ETA</span>
-                  <strong>{container.eta ? formatDisplayDate(container.eta) : "—"}</strong></div>
-              )}
-              {isColumnVisible("daysSinceDeparture") && (
-                <div><span className="block text-muted-foreground">{dt("daysSincePort")}</span>
-                  <strong className="tabular-nums">{daysSincePortDeparture(container.portDepartureDate, todayISO) ?? "—"}</strong></div>
-              )}
-              {isColumnVisible("truck") && (
-                <div><span className="block text-muted-foreground">{dt("truck")}</span>
-                  <strong className="break-all">{container.numberPlate || "—"}</strong></div>
-              )}
-              {isColumnVisible("docs") && (
-                <div><span className="block text-muted-foreground">{dt("documents")}</span>
-                  <strong>{dt(container.docReceived ? "received" : "pending")}</strong></div>
-              )}
-            </div>
-            <details className="mt-3 rounded-lg border">
-              <summary className="min-h-11 cursor-pointer px-3 py-3 text-sm font-medium">
-                {dt("moreTrackingDetails")}
-              </summary>
-              <dl className="space-y-2 border-t p-3 text-xs">
-                {isColumnVisible("location") && <div><dt className="text-muted-foreground">{dt("location")}</dt><dd className="break-words font-medium">{container.trackingLocation || "—"}</dd></div>}
-                {isColumnVisible("transporter") && <div><dt className="text-muted-foreground">{dt("transporter")}</dt><dd className="break-words font-medium">{container.transporter || "—"}</dd></div>}
-                {isColumnVisible("agent") && <div><dt className="text-muted-foreground">{dt("agent")}</dt><dd className="break-words font-medium">{container.agent || "—"}</dd></div>}
-                {isColumnVisible("docsSent") && <div><dt className="text-muted-foreground">{dt("docsSent")}</dt><dd className="font-medium">{container.docsSentDate ? formatDisplayDate(container.docsSentDate) : container.docReceived ? dt("notSent") : "—"}</dd></div>}
-              </dl>
-            </details>
-            {isColumnVisible("portDeparture") && (
-              <div className="mt-3">
-                <p className="mb-1 text-xs font-medium text-muted-foreground">{dt("leftPort")}</p>
-                <PortDepartureDateCell container={container} todayISO={todayISO} mobile {...departureEditorProps(container)} />
+              <div className="mt-3 grid grid-cols-2 gap-2 rounded-lg bg-muted/30 p-2 text-xs">
+                {isColumnVisible("eta") && (
+                  <div>
+                    <span className="block text-muted-foreground">ETA</span>
+                    <strong>{container.eta ? formatDisplayDate(container.eta) : "—"}</strong>
+                  </div>
+                )}
+                {isColumnVisible("daysSinceDeparture") && (
+                  <div>
+                    <span className="block text-muted-foreground">{dt("daysSincePort")}</span>
+                    <strong className="tabular-nums">
+                      {daysSincePortDeparture(container.portDepartureDate, todayISO) ?? "—"}
+                    </strong>
+                  </div>
+                )}
+                {isColumnVisible("truck") && (
+                  <div>
+                    <span className="block text-muted-foreground">{dt("truck")}</span>
+                    <strong className="break-all">{container.numberPlate || "—"}</strong>
+                  </div>
+                )}
+                {isColumnVisible("docs") && (
+                  <div>
+                    <span className="block text-muted-foreground">{dt("documents")}</span>
+                    <strong>{dt(container.docReceived ? "received" : "pending")}</strong>
+                  </div>
+                )}
               </div>
-            )}
-          </article>
-        ))}
+              <details className="mt-3 rounded-lg border">
+                <summary className="min-h-11 cursor-pointer px-3 py-3 text-sm font-medium">
+                  {dt("moreTrackingDetails")}
+                </summary>
+                <dl className="space-y-2 border-t p-3 text-xs">
+                  {isColumnVisible("location") && (
+                    <div>
+                      <dt className="text-muted-foreground">{dt("location")}</dt>
+                      <dd className="break-words font-medium">{container.trackingLocation || "—"}</dd>
+                    </div>
+                  )}
+                  {isColumnVisible("transporter") && (
+                    <div>
+                      <dt className="text-muted-foreground">{dt("transporter")}</dt>
+                      <dd className="break-words font-medium">{container.transporter || "—"}</dd>
+                    </div>
+                  )}
+                  {isColumnVisible("agent") && (
+                    <div>
+                      <dt className="text-muted-foreground">{dt("agent")}</dt>
+                      <dd className="break-words font-medium">{container.agent || "—"}</dd>
+                    </div>
+                  )}
+                  {isColumnVisible("docsSent") && (
+                    <div>
+                      <dt className="text-muted-foreground">{dt("docsSent")}</dt>
+                      <dd className="font-medium">
+                        {container.docsSentDate
+                          ? formatDisplayDate(container.docsSentDate)
+                          : container.docReceived
+                            ? dt("notSent")
+                            : "—"}
+                      </dd>
+                    </div>
+                  )}
+                </dl>
+              </details>
+              {isColumnVisible("portDeparture") && (
+                <div className="mt-3">
+                  <p className="mb-1 text-xs font-medium text-muted-foreground">{dt("leftPort")}</p>
+                  <PortDepartureDateCell
+                    container={container}
+                    todayISO={todayISO}
+                    mobile
+                    {...departureEditorProps(container)}
+                  />
+                </div>
+              )}
+            </article>
+          ))
+        )}
       </section>
       <div
         className="pos-container-table hidden min-h-[320px] flex-1 overflow-auto md:block phone-land:hidden"
@@ -593,8 +687,12 @@ export default function POSContainerTracking({ posUser }: { posUser?: PosUserCon
                 {isColumnVisible("supplier") ? <TableHead className="whitespace-nowrap">Supplier</TableHead> : null}
                 {isColumnVisible("status") ? <TableHead className="whitespace-nowrap">Status</TableHead> : null}
                 {isColumnVisible("eta") ? <TableHead className="whitespace-nowrap">ETA</TableHead> : null}
-                {isColumnVisible("portDeparture") ? <TableHead className="whitespace-nowrap">Left Port</TableHead> : null}
-                {isColumnVisible("daysSinceDeparture") ? <TableHead className="whitespace-nowrap">Days Since</TableHead> : null}
+                {isColumnVisible("portDeparture") ? (
+                  <TableHead className="whitespace-nowrap">Left Port</TableHead>
+                ) : null}
+                {isColumnVisible("daysSinceDeparture") ? (
+                  <TableHead className="whitespace-nowrap">Days Since</TableHead>
+                ) : null}
                 {isColumnVisible("truck") ? <TableHead className="whitespace-nowrap">Truck #</TableHead> : null}
                 {isColumnVisible("location") ? <TableHead className="whitespace-nowrap">Location</TableHead> : null}
                 {isColumnVisible("agent") ? <TableHead className="whitespace-nowrap">Agent</TableHead> : null}
@@ -638,7 +736,9 @@ export default function POSContainerTracking({ posUser }: { posUser?: PosUserCon
                     ) : null}
                     {isColumnVisible("status") ? (
                       <TableCell className="whitespace-nowrap">
-                        <Badge variant="outline" className="pos-container-status">{container.status}</Badge>
+                        <Badge variant="outline" className="pos-container-status">
+                          {container.status}
+                        </Badge>
                       </TableCell>
                     ) : null}
                     {isColumnVisible("eta") ? (
@@ -648,11 +748,18 @@ export default function POSContainerTracking({ posUser }: { posUser?: PosUserCon
                     ) : null}
                     {isColumnVisible("portDeparture") ? (
                       <TableCell className="whitespace-nowrap">
-                        <PortDepartureDateCell container={container} todayISO={todayISO} {...departureEditorProps(container)} />
+                        <PortDepartureDateCell
+                          container={container}
+                          todayISO={todayISO}
+                          {...departureEditorProps(container)}
+                        />
                       </TableCell>
                     ) : null}
                     {isColumnVisible("daysSinceDeparture") ? (
-                      <TableCell className="whitespace-nowrap tabular-nums" data-testid={`days-since-port-departure-${container.id}`}>
+                      <TableCell
+                        className="whitespace-nowrap tabular-nums"
+                        data-testid={`days-since-port-departure-${container.id}`}
+                      >
                         {daysSincePortDeparture(container.portDepartureDate, todayISO) ?? "—"}
                       </TableCell>
                     ) : null}

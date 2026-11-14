@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PageHeader } from "@/components/PageHeader";
 
 type Kind = "bank" | "ledger";
 type Account = { accountKind: Kind; accountId: number; name: string };
@@ -255,17 +256,14 @@ export default function CashBankReconciliation() {
 
   return (
     <div className="space-y-5 p-3 sm:p-5" data-testid="cash-bank-reconciliation">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">Cash & Bank Reconciliation</h1>
-          <p className="text-sm text-muted-foreground">
-            ERP · Factory · Rentals — one accounting ledger, imported statement evidence and audited matches.
-          </p>
-        </div>
+      <PageHeader
+        title="Cash & Bank Reconciliation"
+        subtitle="ERP · Factory · Rentals — one accounting ledger, imported statement evidence and audited matches."
+      >
         <a className="rounded-md border px-3 py-2 text-sm" href={createPath}>
           Create voucher for an unrecorded bank fee or transfer
         </a>
-      </div>
+      </PageHeader>
       <Card>
         <CardHeader>
           <CardTitle>1. Choose cash or bank account</CardTitle>

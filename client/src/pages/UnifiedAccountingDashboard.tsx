@@ -11,6 +11,7 @@ import { exportFileName } from "@/lib/exportFile";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { UnifiedAccountingBudgetBridge } from "@/components/financial/UnifiedAccountingBudgetBridge";
+import { PageHeader } from "@/components/PageHeader";
 
 interface Line {
   kind: string;
@@ -300,13 +301,15 @@ export default function UnifiedAccountingDashboard() {
   };
   return (
     <div className="space-y-5 p-3 sm:p-5" data-testid="unified-accounting-dashboard">
-      <div>
-        <h1 className="text-2xl font-semibold">Unified Net Position & Accounting Dashboard</h1>
-        <p className="text-sm text-muted-foreground">
-          {selectedCompany?.name ?? "Selected company"} · One company · Posted historical USD accounting · Provisional,
-          not certified
-        </p>
-      </div>
+      <PageHeader
+        title="Unified Net Position & Accounting Dashboard"
+        meta={
+          <>
+            {selectedCompany?.name ?? "Selected company"} · One company · Posted historical USD accounting ·
+            Provisional, not certified
+          </>
+        }
+      />
       <Card>
         <CardContent className="pt-5 space-y-3">
           <div className="grid sm:grid-cols-4 gap-3 items-end">

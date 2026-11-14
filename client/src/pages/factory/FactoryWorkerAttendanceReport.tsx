@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ExportButton } from "@/components/export/ReportExportMenu";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/PageHeader";
-import { Loader2, CalendarDays, ChevronLeft, ChevronRight, Pencil, EyeOff, Eye } from "lucide-react";
+import { Loader2, ChevronLeft, ChevronRight, Pencil, EyeOff, Eye } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import {
@@ -334,17 +334,8 @@ export default function FactoryWorkerAttendanceReport() {
         dates={approvalDates}
       />
       {/* ── Header bar ─────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between flex-wrap gap-3 print:hidden">
-        <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-blue-400/30 bg-blue-500/10 text-blue-600 dark:text-blue-300">
-            <CalendarDays className="h-5 w-5" />
-          </span>
-          <div>
-            <h2 className="text-xl font-bold tracking-tight sm:text-2xl">Attendance Report</h2>
-            <p className="text-xs text-muted-foreground">Workforce attendance and salary overview</p>
-          </div>
-        </div>
-
+      {/* Workers hub "Report" tab: the Payroll hub PageHeader titles the page; keep the actions only. */}
+      <div className="flex items-center justify-end flex-wrap gap-3 print:hidden">
         <div className="flex items-center gap-2 flex-wrap">
           <ExportButton
             kind="print"

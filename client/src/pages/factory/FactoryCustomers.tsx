@@ -40,7 +40,6 @@ import {
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useSingleFlightAction } from "@/hooks/use-single-flight-action";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
-import { PageHeader } from "@/components/PageHeader";
 import { ErrorState } from "@/components/ui/page-state";
 import { DataTableToolbar } from "@/components/DataTableToolbar";
 import { PaginationBar } from "@/components/PaginationBar";
@@ -301,7 +300,6 @@ export default function FactoryCustomers() {
   if (isError) {
     return (
       <div className="flex flex-col h-full p-6 gap-4">
-        <PageHeader title="Customers" />
         <ErrorState
           title="Customers could not be loaded"
           description={error?.message || "Please try again."}
@@ -381,18 +379,9 @@ export default function FactoryCustomers() {
         </div>
       </div>
 
+      {/* Parties hub "Customers" tab: the hub PageHeader titles the page, so no second page title here. */}
       <div className="flex flex-col gap-3 border-b border-border/60 pb-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <span className="rounded-xl bg-blue-500/10 p-2.5 text-blue-600 dark:text-sky-400">
-            <Users className="h-6 w-6" />
-          </span>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight" data-testid="text-page-title">
-              Customers
-            </h1>
-            <p className="text-sm text-muted-foreground">{customers.length} total customers</p>
-          </div>
-        </div>
+        <p className="text-sm text-muted-foreground">{customers.length} total customers</p>
         <div className="flex items-center gap-2 flex-wrap">
           {zeroBalanceCount > 0 && (
             <Button

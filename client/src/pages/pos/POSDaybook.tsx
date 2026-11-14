@@ -29,6 +29,7 @@ import "@/styles/pos-daybook-modern.css";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Badge } from "@/components/ui/badge";
+import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { ExportButton } from "@/components/export/ReportExportMenu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -306,65 +307,55 @@ export default function POSDaybook() {
 
   return (
     <div className="pos-daybook mx-auto w-full min-w-0 max-w-[1560px] space-y-5 pb-8" data-pos-daybook="modern">
-      <section
-        className="pos-daybook-hero flex flex-col justify-between gap-4 sm:flex-row sm:items-center"
-        aria-label="Daybook heading"
+      <PageHeader
+        title="POS Daybook"
+        icon={<BookOpen className="h-6 w-6" aria-hidden="true" />}
+        meta={
+          <>
+            <span>{subtitle}</span>
+            {christmasSetting.data?.available === true && (
+              <span className="pos-daybook-seasonal-chip inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium">
+                <Snowflake className="h-3.5 w-3.5" aria-hidden="true" />
+                Christmas {christmasSetting.data.enabled ? "On" : "Off"}
+              </span>
+            )}
+          </>
+        }
       >
-        <div className="flex min-w-0 items-center gap-3">
-          <span className="pos-daybook-title-icon flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl">
-            <BookOpen className="h-6 w-6" aria-hidden="true" />
-          </span>
-          <div className="min-w-0">
-            <h1 className="text-xl font-bold tracking-tight sm:text-2xl" data-testid="text-page-title">
-              POS Daybook
-            </h1>
-            <p className="mt-0.5 text-sm text-muted-foreground" data-testid="text-page-subtitle">
-              {subtitle}
-            </p>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-1.5">
-          {christmasSetting.data?.available === true && (
-            <span className="pos-daybook-seasonal-chip mr-1 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-medium">
-              <Snowflake className="h-3.5 w-3.5" aria-hidden="true" />
-              Christmas {christmasSetting.data.enabled ? "On" : "Off"}
-            </span>
-          )}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="rounded-xl"
+          onClick={() => shiftDay(-1)}
+          aria-label="Previous day"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        <PeriodFilter
+          value={periodFilter}
+          onChange={(next) => setFilter("periodFilter", next)}
+          data-testid="pos-daybook-period-filter"
+        />
+        <Button variant="ghost" size="icon" className="rounded-xl" onClick={() => shiftDay(1)} aria-label="Next day">
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+        {(hasActiveFilters || transactionSearch.trim() || transactionKind !== "all") && (
           <Button
-            variant="ghost"
-            size="icon"
+            variant="outline"
+            size="sm"
             className="rounded-xl"
-            onClick={() => shiftDay(-1)}
-            aria-label="Previous day"
+            onClick={() => {
+              resetFilters();
+              setTransactionSearch("");
+              setTransactionKind("all");
+            }}
+            data-testid="button-reset-filters"
           >
-            <ChevronLeft className="h-4 w-4" />
+            <X className="mr-1 h-4 w-4" />
+            Reset
           </Button>
-          <PeriodFilter
-            value={periodFilter}
-            onChange={(next) => setFilter("periodFilter", next)}
-            data-testid="pos-daybook-period-filter"
-          />
-          <Button variant="ghost" size="icon" className="rounded-xl" onClick={() => shiftDay(1)} aria-label="Next day">
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-          {(hasActiveFilters || transactionSearch.trim() || transactionKind !== "all") && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="rounded-xl"
-              onClick={() => {
-                resetFilters();
-                setTransactionSearch("");
-                setTransactionKind("all");
-              }}
-              data-testid="button-reset-filters"
-            >
-              <X className="mr-1 h-4 w-4" />
-              Reset
-            </Button>
-          )}
-        </div>
-      </section>
+        )}
+      </PageHeader>
 
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Sales summary">
         <Stat

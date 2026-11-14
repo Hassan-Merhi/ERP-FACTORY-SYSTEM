@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { PageHeader } from "@/components/PageHeader";
 
 // Phase 15 never authorizes new GL posting; certification is separate.
 const UNIFIED_FINANCIAL_POSTING_CERTIFIED = false;
@@ -256,13 +257,11 @@ export default function FiscalCloseReview() {
   const yes = (x: boolean) => (x ? "Installed" : "Missing / disabled");
   return (
     <div className="space-y-5 p-3 sm:p-5" data-testid="fiscal-close-review">
-      <div>
-        <h1 className="text-2xl font-semibold">Fiscal Period Closing & Audit Review</h1>
-        <p className="text-sm text-muted-foreground">
-          {selectedCompany?.name ?? "Current company"} · Readiness, dual approval, financial audit controls and reviewed
-          close. This screen does not edit old vouchers.
-        </p>
-      </div>
+      <PageHeader
+        title="Fiscal Period Closing & Audit Review"
+        meta={selectedCompany?.name ?? "Current company"}
+        subtitle="Readiness, dual approval, financial audit controls and reviewed close. This screen does not edit old vouchers."
+      />
       <Card>
         <CardHeader>
           <CardTitle>Reviewed-close enforcement (Owner only)</CardTitle>
