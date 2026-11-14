@@ -1,4 +1,5 @@
 import { styleSpecializedWorkbook } from "@shared/universal-excel/specializedWorkbookStyle";
+import { loadCompanyExcelAppearance } from "./excelAppearanceSettings";
 /**
  * SP Sales Form Export — V2 (from-scratch ExcelJS, no template)
  *
@@ -98,6 +99,7 @@ export async function generateSpSalesFormExcelV2(params: SpSalesFormV2Params): P
   // This adds print branding to the visible report only, without restyling
   // entry cells or changing formula recalculation / sheet protection.
   styleSpecializedWorkbook(wb, {
+    appearance: await loadCompanyExcelAppearance(companyId),
     expectedSheetNames: ["Costing", "Sales", "ENTRY"],
     sheets: [
       { name: "Costing", purpose: "formula-support" },
