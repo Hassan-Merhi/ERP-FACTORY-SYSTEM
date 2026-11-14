@@ -10,7 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Users, Printer, DollarSign } from "lucide-react";
+import { Plus, Users, DollarSign } from "lucide-react";
+import { ExportButton } from "@/components/export/ReportExportMenu";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { drCrClass } from "@/lib/formatNumber";
@@ -355,16 +356,13 @@ export default function POSCustomers() {
                 </div>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
-                <Button
+                <ExportButton
+                  kind="print"
                   variant="outline"
                   size="sm"
                   onClick={() => handlePrint()}
-                  className="gap-2"
                   data-testid="button-print-statement"
-                >
-                  <Printer className="h-4 w-4" />
-                  Print
-                </Button>
+                />
               </div>
             </div>
           </DialogHeader>

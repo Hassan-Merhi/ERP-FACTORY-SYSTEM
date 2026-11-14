@@ -1,6 +1,7 @@
 import { useFactoryMhdView } from "@/hooks/use-factory-mhd-view";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { downloadBlob } from "@/lib/downloadBlob";
+import { exportFileName } from "@/lib/exportFile";
 import { getErrorDetails } from "@shared/errorUtils";
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -218,7 +219,7 @@ export default function FactoryPriceList() {
     const blob = new Blob([buffer as ArrayBuffer], {
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     });
-    downloadBlob(blob, `factory_price_list_${new Date().toLocaleDateString("en-CA")}.xlsx`);
+    downloadBlob(blob, exportFileName("factory price list", "xlsx"));
   };
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {

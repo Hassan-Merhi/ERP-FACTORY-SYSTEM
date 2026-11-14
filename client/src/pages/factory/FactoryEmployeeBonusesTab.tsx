@@ -6,7 +6,7 @@ import { useAdminOverride } from "@/hooks/use-admin-override";
 import { queryClient } from "@/lib/queryClient";
 import { useCompany } from "@/contexts/CompanyContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
-import { Plus, Trash2, Gift, Loader2, Columns3, Filter, Download, CalendarDays, UserRound, Search } from "lucide-react";
+import { Plus, Trash2, Gift, Loader2, Columns3, Filter, CalendarDays, UserRound, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -31,6 +31,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
+import { ExportButton } from "@/components/export/ReportExportMenu";
+import { downloadBlob } from "@/lib/downloadBlob";
+import { exportFileName } from "@/lib/exportFile";
 
 interface Employee {
   id: number;
@@ -158,14 +161,10 @@ export default function FactoryEmployeeBonusesTab() {
       ...shownBonuses.map((b) => [bonusName(b), bonusDate(b).slice(0, 10), b.amount, b.notes || ""]),
     ];
     const csv = "\uFEFF" + rows.map((row) => row.map(csvCell).join(",")).join("\r\n");
-    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = "Employee_Bonuses.csv";
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    URL.revokeObjectURL(url);
+    downloadBlob(
+      new Blob([csv], { type: "text/csv;charset=utf-8" }),
+      exportFileName("employee bonuses", "csv", { from: startDate || undefined, to: endDate || undefined })
+    );
   }
 
   const addMutation = useMutation({
@@ -294,16 +293,13 @@ export default function FactoryEmployeeBonusesTab() {
                 <Filter className="mr-2 h-4 w-4" />
                 Filters
               </Button>
-              <Button
-                variant="outline"
+              <ExportButton
+                kind="csv"
                 className="bg-background"
                 onClick={exportBonusesCsv}
                 disabled={isLoading || shownBonuses.length === 0}
                 data-testid="button-bonus-export"
-              >
-                <Download className="mr-2 h-4 w-4" />
-                Export
-              </Button>
+              />
               {recordChanges.canCreate("POST", "/api/factory/employee-bonuses") && (
                 <Button
                   onClick={() => setAddOpen(true)}

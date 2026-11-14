@@ -1,4 +1,6 @@
 import { downloadBlob } from "@/lib/downloadBlob";
+import { exportFileName } from "@/lib/exportFile";
+import { ExportButton } from "@/components/export/ReportExportMenu";
 import { searchAny } from "@shared/searchNormalization";
 import { useState, useMemo } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
@@ -8,17 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {} from "@/components/ui/command";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import {
-  AlertTriangle,
-  ChevronDown,
-  Package,
-  Scale,
-  BarChart3,
-  TrendingUp,
-  Coins,
-  Download,
-  Layers3,
-} from "lucide-react";
+import { AlertTriangle, ChevronDown, Package, Scale, BarChart3, TrendingUp, Coins, Layers3 } from "lucide-react";
 import React from "react";
 import { cn } from "@/lib/utils";
 import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
@@ -377,7 +369,10 @@ export default function ProductionComparison() {
       return '"' + safe.replace(/"/g, '""') + '"';
     };
     const csv = [header, ...rows].map((row) => row.map(escapeCell).join(",")).join("\r\n");
-    downloadBlob(new Blob([csv], { type: "text/csv;charset=utf-8" }), "production-supplier-comparison.csv");
+    downloadBlob(
+      new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" }),
+      exportFileName("production supplier comparison", "csv")
+    );
   }
 
   return (
@@ -648,16 +643,15 @@ export default function ProductionComparison() {
                     allLabel="All Suppliers"
                     className="w-44 shrink-0"
                   />
-                  <Button
+                  <ExportButton
+                    kind="csv"
                     variant="outline"
                     size="sm"
                     className="h-9 rounded-lg border-blue-500/30 bg-blue-600 text-white hover:bg-blue-700 hover:text-white dark:bg-blue-600 dark:hover:bg-blue-500"
                     onClick={exportSupplierCsv}
                     disabled={supplierSummary.length === 0}
                     data-testid="button-export-supplier-comparison"
-                  >
-                    <Download className="mr-1.5 h-4 w-4" /> Export CSV
-                  </Button>
+                  />
                 </div>
               </div>
 

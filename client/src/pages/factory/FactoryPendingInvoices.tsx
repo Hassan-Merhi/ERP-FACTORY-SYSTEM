@@ -13,6 +13,7 @@ import { ClipboardCheck, Eye, Package, Trash2, FileText, FileSpreadsheet, Contai
 import { Skeleton } from "@/components/ui/skeleton";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
 import { queryClient, keyStartsWith } from "@/lib/queryClient";
 import { PageHeader } from "@/components/PageHeader";
 import { ErrorState } from "@/components/ui/page-state";
@@ -48,9 +49,25 @@ export default function FactoryPendingInvoices() {
   const modeApiRequest = getApiRequest(appMode);
   const [statusFilter, setStatusFilter] = useState<string>("PENDING_VERIFIED");
   const { toast } = useToast();
+  const downloadExport = async (url: string, fileName: string) => {
+    try {
+      await downloadFromUrl(url, { fileName });
+    } catch (error) {
+      toast({
+        title: "Export failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
 
-  const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id), enabled: Boolean(selectedCompany?.id), staleTime: 5 * 60000 });
-  const isAdmin = myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true && myAccess.fullAccess === true;
+  const { data: myAccess } = useQuery<FactoryMyAccess>({
+    queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
+    staleTime: 5 * 60000,
+  });
+  const isAdmin =
+    myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true && myAccess.fullAccess === true;
 
   const {
     data: pendingOrders = [],
@@ -58,7 +75,10 @@ export default function FactoryPendingInvoices() {
     isError: pendingError,
     refetch: refetchPending,
   } = useQuery<CustomerOrder[]>({
-    queryKey: companyQueryKey("/api/factory/customer-orders?status=PENDING_VERIFICATION&profile=summary&pageSize=250", selectedCompany?.id),
+    queryKey: companyQueryKey(
+      "/api/factory/customer-orders?status=PENDING_VERIFICATION&profile=summary&pageSize=250",
+      selectedCompany?.id
+    ),
     enabled: Boolean(selectedCompany?.id),
   });
 
@@ -68,7 +88,10 @@ export default function FactoryPendingInvoices() {
     isError: verifiedError,
     refetch: refetchVerified,
   } = useQuery<CustomerOrder[]>({
-    queryKey: companyQueryKey("/api/factory/customer-orders?status=VERIFIED&profile=summary&pageSize=250", selectedCompany?.id),
+    queryKey: companyQueryKey(
+      "/api/factory/customer-orders?status=VERIFIED&profile=summary&pageSize=250",
+      selectedCompany?.id
+    ),
     enabled: Boolean(selectedCompany?.id),
   });
 
@@ -78,7 +101,10 @@ export default function FactoryPendingInvoices() {
     isError: finalizedError,
     refetch: refetchFinalized,
   } = useQuery<CustomerOrder[]>({
-    queryKey: companyQueryKey("/api/factory/customer-orders?status=FINALIZED&profile=summary&pageSize=250", selectedCompany?.id),
+    queryKey: companyQueryKey(
+      "/api/factory/customer-orders?status=FINALIZED&profile=summary&pageSize=250",
+      selectedCompany?.id
+    ),
     enabled: Boolean(selectedCompany?.id),
   });
 
@@ -276,8 +302,8 @@ export default function FactoryPendingInvoices() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          title="Download Invoice PDF"
-                          aria-label={`Download PDF for invoice ${order.invoiceNumber || order.id}`}
+                          title="Export PDF"
+                          aria-label={`Export PDF for invoice ${order.invoiceNumber || order.id}`}
                           onClick={() => window.open(`/api/factory/customer-orders/${order.id}/export-pdf`, "_blank")}
                           data-testid={`button-download-pdf-${order.id}`}
                         >
@@ -286,14 +312,14 @@ export default function FactoryPendingInvoices() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          title="Export to Excel"
-                          aria-label={`Export invoice ${order.invoiceNumber || order.id} to Excel`}
-                          onClick={() => {
-                            const a = document.createElement("a");
-                            a.href = `/api/factory/customer-orders/${order.id}/export/excel`;
-                            a.download = "";
-                            a.click();
-                          }}
+                          title="Export Excel"
+                          aria-label={`Export Excel for invoice ${order.invoiceNumber || order.id}`}
+                          onClick={() =>
+                            void downloadExport(
+                              `/api/factory/customer-orders/${order.id}/export/excel`,
+                              exportFileName(`invoice ${order.invoiceNumber || order.id}`, "xlsx")
+                            )
+                          }
                           data-testid={`button-export-order-${order.id}`}
                         >
                           <FileSpreadsheet className="h-4 w-4" />
@@ -302,14 +328,14 @@ export default function FactoryPendingInvoices() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            title="Loading Status + Bale Refs (Excel)"
-                            aria-label={`Export loading status for invoice ${order.invoiceNumber || order.id}`}
-                            onClick={() => {
-                              const a = document.createElement("a");
-                              a.href = `/api/factory/customer-orders/${order.id}/loading-status-export`;
-                              a.download = "";
-                              a.click();
-                            }}
+                            title="Export Excel (Loading Status + Bale Refs)"
+                            aria-label={`Export Excel (Loading Status) for invoice ${order.invoiceNumber || order.id}`}
+                            onClick={() =>
+                              void downloadExport(
+                                `/api/factory/customer-orders/${order.id}/loading-status-export`,
+                                exportFileName(`loading status ${order.invoiceNumber || order.id}`, "xlsx")
+                              )
+                            }
                             data-testid={`button-loading-status-${order.id}`}
                           >
                             <Container className="h-4 w-4" />

@@ -18,6 +18,7 @@ import { getApiRequest } from "@/lib/factoryApi";
 import { useFormDraft } from "@/hooks/useFormDraft";
 import { formatNumber } from "@/lib/formatNumber";
 import { utils, writeFile } from "@/lib/excelHelper";
+import { exportFileName } from "@/lib/exportFile";
 import type {
   Account,
   BankAccount,
@@ -629,7 +630,7 @@ export function useJournalFormModel({ voucherIdToEdit, isPOS }: JournalFormProps
       );
       const workbook = utils.book_new();
       utils.book_append_sheet(workbook, worksheet, "Journal Detailed");
-      const fileName = `Journal_Voucher_Detailed_${voucherDate}.xlsx`;
+      const fileName = exportFileName("journal voucher detailed", "xlsx", { date: voucherDate });
       await writeFile(workbook, fileName);
       toast({ title: "Export successful", description: `Downloaded ${fileName} with ${validEntries.length} entries.` });
       return;
@@ -653,7 +654,7 @@ export function useJournalFormModel({ voucherIdToEdit, isPOS }: JournalFormProps
     ]);
     const workbook = utils.book_new();
     utils.book_append_sheet(workbook, worksheet, "Journal Summary");
-    const fileName = `Journal_Voucher_Summary_${voucherDate}.xlsx`;
+    const fileName = exportFileName("journal voucher summary", "xlsx", { date: voucherDate });
     await writeFile(workbook, fileName);
     toast({ title: "Export successful", description: `Downloaded ${fileName}.` });
   };

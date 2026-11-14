@@ -18,7 +18,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/PageHeader";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Trash2, Plus, ArrowLeft, Printer, TruckIcon } from "lucide-react";
+import { Trash2, Plus, ArrowLeft, TruckIcon } from "lucide-react";
+import { ExportButton } from "@/components/export/ReportExportMenu";
 import { useReactToPrint } from "react-to-print";
 import { DeleteConfirmDialog } from "@/components/ConfirmationDialog";
 
@@ -350,9 +351,13 @@ function TransporterStatement({ transporterId, onBack }: { transporterId: number
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => handlePrint()} data-testid="button-print-statement">
-            <Printer className="h-4 w-4 mr-1" /> Print
-          </Button>
+          <ExportButton
+            kind="print"
+            variant="outline"
+            size="sm"
+            onClick={() => handlePrint()}
+            data-testid="button-print-statement"
+          />
           {recordChanges.allowed && (
             <>
               <Button

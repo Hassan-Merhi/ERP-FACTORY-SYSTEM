@@ -33,9 +33,7 @@ import {
   Wrench,
   RefreshCw,
   FileText,
-  Container,
   DollarSign,
-  FileDown,
   FileSpreadsheet,
   GitCompare,
   Hammer,
@@ -227,24 +225,24 @@ export default function FactoryPendingInvoiceVerify() {
                   <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">Export</DropdownMenuLabel>
                   <DropdownMenuItem onClick={handleExportExcel} data-testid="menu-export-excel">
                     <FileSpreadsheet className="h-4 w-4" />
-                    Download Excel
+                    Export Excel
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={handleExportExcelNoCharges} data-testid="menu-export-excel-no-charges">
                     <FileSpreadsheet className="h-4 w-4" />
-                    Download Excel (No Charges)
+                    Export Excel (No Charges)
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={handleExportPdf} data-testid="menu-export-pdf">
-                    <FileDown className="h-4 w-4" />
-                    Download PDF
+                    <FileText className="h-4 w-4" />
+                    Export PDF
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={handleExportPdfNoCharges} data-testid="menu-export-pdf-no-charges">
-                    <FileDown className="h-4 w-4" />
-                    Download PDF (No Charges)
+                    <FileText className="h-4 w-4" />
+                    Export PDF (No Charges)
                   </DropdownMenuItem>
                   {isAdminOrOwner && (
                     <DropdownMenuItem onClick={handleExportLoadingStatus} data-testid="menu-export-loading-status">
-                      <Container className="h-4 w-4" />
-                      Loading Status
+                      <FileSpreadsheet className="h-4 w-4" />
+                      Export Excel (Loading Status)
                     </DropdownMenuItem>
                   )}
 

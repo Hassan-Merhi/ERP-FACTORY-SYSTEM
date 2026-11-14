@@ -30,6 +30,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ExportButton } from "@/components/export/ReportExportMenu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PeriodFilter, type PeriodFilterValue, getDefaultPeriodValue } from "@/components/ui/period-filter";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -735,14 +736,12 @@ export default function POSDaybook() {
               <X className="mr-2 h-4 w-4" />
               Close
             </Button>
-            <Button
+            <ExportButton
+              kind="print"
               variant="outline"
               disabled={!voucherDetails}
               onClick={() => voucherDetails && setPrintVoucherId(voucherDetails.id)}
-            >
-              <Printer className="mr-2 h-4 w-4" />
-              Print
-            </Button>
+            />
             {recordChanges.allowed && (
               <Button
                 variant="outline"

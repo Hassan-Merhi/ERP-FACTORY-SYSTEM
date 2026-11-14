@@ -37,6 +37,8 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { drCrClass } from "@/lib/formatNumber";
+import { useToast } from "@/hooks/use-toast";
+import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
 import { shouldShowFactoryCustomerDestination } from "./customerDestinationVisibility";
 import "./propertiesLedger.css";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
@@ -131,6 +133,7 @@ export function AccountStatementView({
   const { formatTransactionAmount } = useCurrencyContext();
   const { selectedCompany } = useCompany();
   const { language } = useApplicationLanguage();
+  const { toast } = useToast();
   const queryClient = useQueryClient();
   const isFactorySupplierAccount = selectedAccount?.type === "factorySupplier";
   const [pdfLang, setPdfLang] = useState<"en" | "fr" | "ar">("en");
@@ -259,9 +262,25 @@ export function AccountStatementView({
   };
 
   const canExportExcel = ["ledger", "bank-account", "bank", "supplier", "employee"].includes(selectedAccount.type);
+  const downloadStatementExcel = async (url: string, subject: string) => {
+    try {
+      await downloadFromUrl(url, {
+        fileName: exportFileName(subject, "xlsx", { from: periodFilter?.fromDate, to: periodFilter?.toDate }),
+      });
+    } catch (error) {
+      toast({
+        title: "Export failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
   const exportExcel = () => {
     if (isEurTab && fxWalletId) {
-      window.open(fxEurStatementUrl(fxWalletId, periodFilter, ".xlsx"), "_blank");
+      void downloadStatementExcel(
+        fxEurStatementUrl(fxWalletId, periodFilter, ".xlsx"),
+        `account statement EUR ${selectedAccount.name}`
+      );
       return;
     }
     const typeMap: Record<string, string> = {
@@ -278,7 +297,10 @@ export function AccountStatementView({
     });
     if (periodFilter?.fromDate) params.set("startDate", periodFilter.fromDate);
     if (periodFilter?.toDate) params.set("endDate", periodFilter.toDate);
-    window.open(`/api/accounts/statement/export-excel?${params.toString()}`, "_blank");
+    void downloadStatementExcel(
+      `/api/accounts/statement/export-excel?${params.toString()}`,
+      `account statement ${selectedAccount.name}`
+    );
   };
   const sendWaStatement = () => {
     const month = periodFilter?.toDate ? periodFilter.toDate.substring(0, 7) : new Date().toISOString().substring(0, 7);
@@ -420,19 +442,19 @@ export function AccountStatementView({
                     testId: "button-export-excel",
                   },
                   {
-                    label: isEurTab ? "EUR PDF statement" : "PDF (English)",
+                    label: isEurTab ? "Export PDF (EUR)" : "Export PDF (English)",
                     icon: FileDown,
                     onSelect: () => openPdf("en"),
                     testId: "button-pdf-en",
                   },
                   !isEurTab && {
-                    label: "PDF (Français)",
+                    label: "Export PDF (Français)",
                     icon: FileDown,
                     onSelect: () => openPdf("fr"),
                     testId: "button-pdf-fr",
                   },
                   !isEurTab && {
-                    label: "PDF (العربية)",
+                    label: "Export PDF (العربية)",
                     icon: FileDown,
                     onSelect: () => openPdf("ar"),
                     testId: "button-pdf-ar",
@@ -584,6 +606,7 @@ export function AccountStatementView({
                     size="icon"
                     variant="ghost"
                     title={isEurTab ? "Export EUR Excel Statement" : "Export Excel Statement"}
+                    aria-label={isEurTab ? "Export Excel (EUR)" : "Export Excel"}
                     data-testid="button-export-excel"
                     onClick={exportExcel}
                   >
@@ -610,6 +633,7 @@ export function AccountStatementView({
                 size="icon"
                 variant="ghost"
                 title={isEurTab ? "Download EUR PDF Statement" : "Download PDF Statement"}
+                aria-label={isEurTab ? "Export PDF (EUR)" : "Export PDF"}
                 data-testid="button-pdf-download"
                 onClick={() => {
                   const url = buildPdfUrl();

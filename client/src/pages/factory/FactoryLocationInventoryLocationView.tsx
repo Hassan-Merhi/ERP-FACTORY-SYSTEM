@@ -2,13 +2,17 @@ import "./FactoryLocationInventoryRedesign.css";
 import { Button } from "@/components/ui/button";
 import { SearchField } from "@/components/ui/search-field";
 import { Skeleton } from "@/components/ui/skeleton";
-import { MapPin, FileSpreadsheet, Pencil, ChevronRight } from "lucide-react";
+import { MapPin, Pencil, ChevronRight } from "lucide-react";
 import { RenameLocationDialog } from "./factory-location-inventory/dialogs/RenameLocationDialog";
 import type { useFactoryLocationInventory } from "./FactoryLocationInventoryModel";
+import { ExportButton } from "@/components/export/ReportExportMenu";
+import { useToast } from "@/hooks/use-toast";
+import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
 
 type FactoryLocationInventoryModel = ReturnType<typeof useFactoryLocationInventory>;
 
 export function FactoryLocationInventoryLocationView({ inventory }: { inventory: FactoryLocationInventoryModel }) {
+  const { toast } = useToast();
   const {
     canChangeExistingRecords,
     filteredLocations,
@@ -36,21 +40,29 @@ export function FactoryLocationInventoryLocationView({ inventory }: { inventory:
           <p className="text-sm text-muted-foreground mt-1">Physical bales on ground by location</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <Button
-            variant="outline"
+          <ExportButton
             size="sm"
             className="inventory-export-button"
-            onClick={() => {
+            label="Export Excel (All Locations)"
+            onClick={async () => {
               const p = new URLSearchParams();
               if (hideAvgCost) p.set("includeCost", "0");
               if (hideSellingPrice) p.set("includeSellPrice", "0");
               const qs = p.toString();
-              window.open(`/api/factory/location-inventory/export/all${qs ? "?" + qs : ""}`, "_blank");
+              try {
+                await downloadFromUrl(`/api/factory/location-inventory/export/all${qs ? "?" + qs : ""}`, {
+                  fileName: exportFileName("location inventory all", "xlsx"),
+                });
+              } catch (error) {
+                toast({
+                  title: "Export failed",
+                  description: error instanceof Error ? error.message : "Please try again.",
+                  variant: "destructive",
+                });
+              }
             }}
             data-testid="button-export-all-locations"
-          >
-            <FileSpreadsheet className="h-4 w-4 mr-1.5" /> Export All (Excel)
-          </Button>
+          />
         </div>
       </div>
 

@@ -25,8 +25,6 @@ import {
   CheckCircle,
   XCircle,
   Trash2,
-  FileDown,
-  FileSpreadsheet,
   AlertTriangle,
   Package,
   Truck,
@@ -43,12 +41,27 @@ import {
   SessionBalesDialog,
 } from "./factoryinvoiceloadingscan/components/SessionDialogs";
 import { SessionHistoryCard } from "./factoryinvoiceloadingscan/components/SessionHistoryCard";
+import { ExportButton } from "@/components/export/ReportExportMenu";
+import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
 
 export default function FactoryInvoiceLoadingScan() {
   const [, navigate] = useLocation();
   const [, params] = useRoute("/factory/invoices/:id/loading-scan");
   const invoiceId = params?.id ? parseInt(params.id) : null;
   const { toast } = useToast();
+  const exportSessionExcel = async () => {
+    try {
+      await downloadFromUrl(`/api/factory/invoice-loading-sessions/${activeSessionId}/export/excel`, {
+        fileName: exportFileName(`loading session ${activeSessionId}`, "xlsx"),
+      });
+    } catch (error) {
+      toast({
+        title: "Export failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
   const { language } = useApplicationLanguage();
   const { formatDisplayDate } = useDateFormat();
   useEscapeToParent(`/factory/sales/invoices/${invoiceId}`);
@@ -574,7 +587,12 @@ export default function FactoryInvoiceLoadingScan() {
                 disabled={scanBaleMutation.isPending}
                 data-testid="input-scanner"
               />
-              <MobileBarcodeScanner onScan={(code) => scanBaleMutation.mutate(code)} feedback={cameraScanFeedback} disabled={!activeSessionId || scanBaleMutation.isPending} className="h-12 w-12 shrink-0" />
+              <MobileBarcodeScanner
+                onScan={(code) => scanBaleMutation.mutate(code)}
+                feedback={cameraScanFeedback}
+                disabled={!activeSessionId || scanBaleMutation.isPending}
+                className="h-12 w-12 shrink-0"
+              />
               <Button
                 type="submit"
                 size="default"
@@ -672,28 +690,21 @@ export default function FactoryInvoiceLoadingScan() {
                 </Button>
               </FactoryMobileActionBar>
               <div className="ml-auto flex items-center gap-2">
-                <Button
-                  variant="outline"
+                <ExportButton
                   size="sm"
-                  onClick={() =>
-                    window.open(`/api/factory/invoice-loading-sessions/${activeSessionId}/export/excel`, "_blank")
-                  }
+                  label="Export Excel (Session)"
+                  onClick={() => void exportSessionExcel()}
                   data-testid="button-export-session-excel"
-                >
-                  <FileSpreadsheet className="h-4 w-4 mr-1" />
-                  Session Excel
-                </Button>
-                <Button
-                  variant="outline"
+                />
+                <ExportButton
+                  kind="pdf"
                   size="sm"
+                  label="Export PDF (Session)"
                   onClick={() =>
                     window.open(`/api/factory/invoice-loading-sessions/${activeSessionId}/export/pdf`, "_blank")
                   }
                   data-testid="button-export-session-pdf"
-                >
-                  <FileDown className="h-4 w-4 mr-1" />
-                  Session PDF
-                </Button>
+                />
               </div>
             </div>
           </CardContent>

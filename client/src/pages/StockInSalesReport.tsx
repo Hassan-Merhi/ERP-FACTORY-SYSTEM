@@ -15,13 +15,7 @@ import {
 } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
-import {
-  ErpListTable,
-  ErpReportExportMenu,
-  ErpReportPrintFooter,
-  erpReportFileName,
-  exportErpReportCsv,
-} from "@/erp-core";
+import { ErpListTable, ErpReportExportMenu, ErpReportPrintFooter, exportErpReportCsv } from "@/erp-core";
 import { erpCompanyDataKey, erpReferenceKeys } from "@/erp-core/erpData";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -35,6 +29,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useToast } from "@/hooks/use-toast";
 import { ExcelJS, writeFile } from "@/lib/excelHelper";
+import { exportFileName } from "@/lib/exportFile";
 import { formatNumber } from "@/lib/formatNumber";
 
 import StockInSalesReportComparison from "./StockInSalesReportComparison";
@@ -360,7 +355,10 @@ function StockInSalesReportSummary() {
       ];
       rows.forEach((row) => sheet.addRow({ period: formatPeriodLabel(row), ...row }));
       sheet.getRow(1).font = { bold: true };
-      await writeFile(workbook, erpReportFileName("stock-in-sales-report", "xlsx", new Date(), "-"));
+      await writeFile(
+        workbook,
+        exportFileName("stock in sales report", "xlsx", { from: periodFilter.fromDate, to: periodFilter.toDate })
+      );
     } catch (exportError: unknown) {
       toast({
         title: "Export failed",
@@ -397,7 +395,10 @@ function StockInSalesReportSummary() {
     exportErpReportCsv({
       headers,
       rows: values,
-      fileName: erpReportFileName("stock-in-sales-report", "csv", new Date(), "-"),
+      fileName: exportFileName("stock in sales report", "csv", {
+        from: periodFilter.fromDate,
+        to: periodFilter.toDate,
+      }),
     });
   };
 
@@ -422,7 +423,7 @@ function StockInSalesReportSummary() {
           options={[
             { id: "stock-sales-excel", label: "Export Excel", kind: "excel", onSelect: exportExcel },
             { id: "stock-sales-csv", label: "Export CSV", kind: "csv", onSelect: exportCsv },
-            { id: "stock-sales-print", label: "Print / Save PDF", kind: "print", onSelect: () => window.print() },
+            { id: "stock-sales-print", label: "Print", kind: "print", onSelect: () => window.print() },
           ]}
         />
       </PageHeader>

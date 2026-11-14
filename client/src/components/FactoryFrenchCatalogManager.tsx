@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
+import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
 
 interface FrenchCatalogRow {
   id: number;
@@ -84,6 +85,20 @@ export function FactoryFrenchCatalogManager() {
   useEffect(() => {
     if (open) void loadRows();
   }, [loadRows, open, status]);
+
+  const downloadTemplate = async () => {
+    try {
+      await downloadFromUrl("/api/factory/french-catalog/template", {
+        fileName: exportFileName("french catalog template", "xlsx"),
+      });
+    } catch (error) {
+      toast({
+        title: "Export failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
 
   const startEdit = (row: FrenchCatalogRow) => {
     setEditing(row);
@@ -202,11 +217,7 @@ export function FactoryFrenchCatalogManager() {
             <option value="missing">Traduction manquante</option>
             <option value="complete">Traduction complète</option>
           </select>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => window.open("/api/factory/french-catalog/template", "_blank")}
-          >
+          <Button type="button" variant="outline" onClick={() => void downloadTemplate()}>
             <Download /> Modèle Excel
           </Button>
           <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium">

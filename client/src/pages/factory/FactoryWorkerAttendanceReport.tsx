@@ -3,9 +3,10 @@ import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAc
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { ExportButton } from "@/components/export/ReportExportMenu";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/PageHeader";
-import { Loader2, CalendarDays, Printer, ChevronLeft, ChevronRight, Pencil, EyeOff, Eye } from "lucide-react";
+import { Loader2, CalendarDays, ChevronLeft, ChevronRight, Pencil, EyeOff, Eye } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import {
@@ -345,16 +346,14 @@ export default function FactoryWorkerAttendanceReport() {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          <Button
+          <ExportButton
+            kind="print"
             variant="outline"
             size="default"
             onClick={() => window.print()}
             data-testid="button-print-report"
             className="gap-2 rounded-lg border border-blue-500 bg-blue-600 px-5 font-semibold text-white shadow-[0_5px_15px_hsl(var(--factory-hue)_83%_53%_/_0.25)] hover:bg-blue-700 hover:text-white dark:border-blue-400 dark:bg-blue-600 dark:hover:bg-blue-500 print:hidden"
-          >
-            <Printer className="h-4 w-4 mr-2" />
-            Print
-          </Button>
+          />
         </div>
       </div>
 

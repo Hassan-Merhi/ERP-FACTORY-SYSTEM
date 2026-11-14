@@ -13,8 +13,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { MessageCircle, Download, Copy, ExternalLink, Eye, Check, RefreshCw, Loader2 } from "lucide-react";
+import { MessageCircle, Copy, ExternalLink, Eye, Check, RefreshCw, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { ExportButton } from "@/components/export/ReportExportMenu";
+import { downloadBlob } from "@/lib/downloadBlob";
+import { exportFileName } from "@/lib/exportFile";
 import type { WaFileWithChecked, WhatsAppPreview } from "../types";
 import { LIST_KEY } from "../utils";
 
@@ -114,19 +117,10 @@ export function WhatsAppModal({
       }
       const disposition = res.headers.get("Content-Disposition") || "";
       const nameMatch = disposition.match(/filename="([^"]+)"/);
-      const filename = nameMatch ? nameMatch[1] : "shipping-package.zip";
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = blobUrl;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      // Revoking synchronously can race Chrome's download hand-off and produce a
-      // zero-byte file on some machines. Keep the object URL alive briefly.
-      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 30_000);
+      const filename = nameMatch ? nameMatch[1] : exportFileName("shipping package", "zip");
+      downloadBlob(blob, filename);
     } catch (err) {
-      toast({ title: "Download failed", description: getErrorDetails(err).message, variant: "destructive" });
+      toast({ title: "Export failed", description: getErrorDetails(err).message, variant: "destructive" });
     } finally {
       setIsZipDownloading(false);
     }
@@ -289,10 +283,13 @@ export function WhatsAppModal({
               </div>
 
               <div className="flex flex-wrap gap-2">
-                <Button onClick={handleDownloadZip} disabled={isZipDownloading} data-testid="button-download-zip">
-                  <Download className="h-3.5 w-3.5 mr-1" />
-                  {isZipDownloading ? "Building ZIP…" : "Download ZIP Package"}
-                </Button>
+                <ExportButton
+                  variant="default"
+                  label={isZipDownloading ? "Building ZIP…" : "Download ZIP Package"}
+                  onClick={handleDownloadZip}
+                  disabled={isZipDownloading}
+                  data-testid="button-download-zip"
+                />
                 <Button variant="outline" onClick={handleCopyMessage} data-testid="button-copy-message">
                   <Copy className="h-3.5 w-3.5 mr-1" /> Copy Message
                 </Button>

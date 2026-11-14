@@ -13,12 +13,14 @@ import { queryClient } from "@/lib/queryClient";
 import { readCostCenterApi, writeCostCenterApi, type CostCenter } from "@/api/costCentersApi";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { ExportButton } from "@/components/export/ReportExportMenu";
+import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectTrigger, SelectContent, SelectValue, SelectItem } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from "recharts";
-import { Download, RefreshCw, BarChart3 } from "lucide-react";
+import { RefreshCw, BarChart3 } from "lucide-react";
 
 type AmountRow = { expense: string; inventoryCost: string; budget: string; variance: string; entries?: number };
 type TotalRow = AmountRow & { unallocated: string; recognizedExpense: string; unallocatedApplicable: boolean };
@@ -211,7 +213,7 @@ export function CostCenterReports({ baseUrl, centers }: { baseUrl: string; cente
     setExporting(format);
     try {
       const base = baseUrl + (consolidated ? "/reports/consolidated/export" : "/reports/export");
-      const response = await fetch(
+      await downloadFromUrl(
         base +
           "?" +
           params +
@@ -219,21 +221,8 @@ export function CostCenterReports({ baseUrl, centers }: { baseUrl: string; cente
           format +
           "&view=" +
           (detail ? "activity" : view === "centers" ? "summary" : view),
-        { credentials: "include" }
+        { fileName: exportFileName("cost centers " + (detail ? "activity" : view), format, { from, to }) }
       );
-      if (!response.ok) {
-        const err = (await response.json().catch(() => null)) as { message?: string } | null;
-        throw new Error(err?.message || "Export unavailable");
-      }
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "cost-centers-" + (detail ? "activity" : view) + "-" + from + "-" + to + "." + format;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 3000);
     } catch (e) {
       toast({ title: "Export failed", description: message(e), variant: "destructive" });
     } finally {
@@ -458,16 +447,14 @@ export function CostCenterReports({ baseUrl, centers }: { baseUrl: string; cente
               </div>
               <div className="flex flex-wrap gap-1">
                 {(["csv", "xlsx", "pdf"] as const).map((format) => (
-                  <Button
+                  <ExportButton
                     key={format}
-                    variant="outline"
+                    kind={format === "xlsx" ? "excel" : format}
                     size="sm"
                     disabled={exporting !== null}
+                    busy={exporting === format}
                     onClick={() => void download(format, view === "activity")}
-                  >
-                    <Download className="w-3 h-3 mr-1" />
-                    {format.toUpperCase()}
-                  </Button>
+                  />
                 ))}
               </div>
             </div>

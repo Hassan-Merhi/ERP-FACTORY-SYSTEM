@@ -9,7 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Download, ExternalLink, FileCheck, List, Star } from "lucide-react";
+import { ExternalLink, FileCheck, List, Star } from "lucide-react";
+import { ExportButton } from "@/components/export/ReportExportMenu";
+import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
 import * as XLSX from "@/lib/excelHelper";
 import { PageHeader } from "@/components/PageHeader";
 
@@ -262,28 +264,44 @@ export default function ContainerVerification() {
     );
   };
 
-  const exportToExcel = () => {
+  const exportToExcel = async () => {
     if (!selectedSupplierId || !selectedProformaId) return;
     if (!navigator.onLine) {
       toast({ title: "Not available offline", description: "Exports require a connection" });
       return;
     }
-    window.open(
-      `/api/suppliers/${selectedSupplierId}/containers/${containerId}/verification-export.xlsx?proformaId=${selectedProformaId}`,
-      "_blank"
-    );
+    try {
+      await downloadFromUrl(
+        `/api/suppliers/${selectedSupplierId}/containers/${containerId}/verification-export.xlsx?proformaId=${selectedProformaId}`,
+        { fileName: exportFileName(`container verification ${containerId}`, "xlsx") }
+      );
+    } catch (error) {
+      toast({
+        title: "Export failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
-  const exportSummaryExcel = () => {
+  const exportSummaryExcel = async () => {
     if (!selectedSupplierId || !selectedProformaId) return;
     if (!navigator.onLine) {
       toast({ title: "Not available offline", description: "Exports require a connection" });
       return;
     }
-    window.open(
-      `/api/suppliers/${selectedSupplierId}/containers/${containerId}/verification-summary-export.xlsx?proformaId=${selectedProformaId}`,
-      "_blank"
-    );
+    try {
+      await downloadFromUrl(
+        `/api/suppliers/${selectedSupplierId}/containers/${containerId}/verification-summary-export.xlsx?proformaId=${selectedProformaId}`,
+        { fileName: exportFileName(`container verification summary ${containerId}`, "xlsx") }
+      );
+    } catch (error) {
+      toast({
+        title: "Export failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const requestAutoPopulate = () => {
@@ -422,11 +440,7 @@ export default function ContainerVerification() {
             <div>
               <label className="text-xs font-medium mb-1 block">Proforma</label>
               <div className="flex items-center gap-2">
-                <Select
-                  value={selectedProformaId}
-                  onValueChange={setSelectedProformaId}
-                  disabled={!selectedSupplierId}
-                >
+                <Select value={selectedProformaId} onValueChange={setSelectedProformaId} disabled={!selectedSupplierId}>
                   <SelectTrigger className="flex-1" data-testid="select-proforma">
                     <SelectValue placeholder={selectedSupplierId ? "Select proforma" : "Select a supplier first"} />
                   </SelectTrigger>
@@ -470,14 +484,12 @@ export default function ContainerVerification() {
               </Button>
               {verificationResult && (
                 <>
-                  <Button variant="outline" onClick={exportToExcel} data-testid="button-export-excel">
-                    <Download className="mr-1 h-4 w-4" />
-                    Excel
-                  </Button>
-                  <Button variant="outline" onClick={exportSummaryExcel} data-testid="button-export-summary-excel">
-                    <Download className="mr-1 h-4 w-4" />
-                    Summary
-                  </Button>
+                  <ExportButton onClick={() => void exportToExcel()} data-testid="button-export-excel" />
+                  <ExportButton
+                    label="Export Excel (Summary)"
+                    onClick={() => void exportSummaryExcel()}
+                    data-testid="button-export-summary-excel"
+                  />
                 </>
               )}
             </div>

@@ -16,10 +16,10 @@ import {
   CheckSquare,
   Square,
   AlertTriangle,
-  FileSpreadsheet,
   Tag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ExportButton } from "@/components/export/ReportExportMenu";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -798,10 +798,7 @@ export default function WipersReEntry() {
                   <Printer className="h-4 w-4 mr-2" />
                   Print All Formats
                 </Button>
-                <Button variant="outline" onClick={exportCsv} data-testid="button-export-csv">
-                  <FileSpreadsheet className="h-4 w-4 mr-2" />
-                  Export Excel
-                </Button>
+                <ExportButton kind="excel" variant="outline" onClick={exportCsv} data-testid="button-export-csv" />
               </div>
 
               {/* Preview of first few labels */}

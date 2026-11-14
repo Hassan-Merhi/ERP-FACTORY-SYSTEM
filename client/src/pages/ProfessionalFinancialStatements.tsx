@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ErpReportExportMenu, ErpReportPrintFooter, exportErpReportCsv } from "@/erp-core";
+import { exportFileName } from "@/lib/exportFile";
 
 interface Line {
   kind: string;
@@ -207,7 +208,7 @@ function exportedCsv(record: Package) {
   exportErpReportCsv({
     headers: [],
     rows,
-    fileName: `financial-statements-${record.companyId}-${record.asOfDate}.csv`,
+    fileName: exportFileName(`financial statements ${record.companyId}`, "csv", { date: record.asOfDate }),
   });
 }
 function SectionTable({ title, current, previous }: { title: string; current: Section; previous?: Section }) {
@@ -336,7 +337,7 @@ export default function ProfessionalFinancialStatements() {
                       if (pkg) exportedCsv(pkg);
                     },
                   },
-                  { id: "statements-print", label: "Print / Save PDF", kind: "print", onSelect: () => window.print() },
+                  { id: "statements-print", label: "Print", kind: "print", onSelect: () => window.print() },
                 ]}
               />
             </div>

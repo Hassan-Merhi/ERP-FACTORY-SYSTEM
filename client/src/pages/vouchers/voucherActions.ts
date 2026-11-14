@@ -1,5 +1,6 @@
 import { format } from "date-fns";
 import { utils, writeFile } from "@/lib/excelHelper";
+import { exportFileName } from "@/lib/exportFile";
 
 type VoucherExportEntry = {
   accountId: number;
@@ -55,7 +56,7 @@ export async function exportVoucherHelper({ formData, activeTab, toast, detailed
     const worksheet = utils.json_to_sheet(exportData);
     const workbook = utils.book_new();
     utils.book_append_sheet(workbook, worksheet, `${voucherType} Detailed`);
-    const fileName = `${voucherType}_Voucher_Detailed_${voucherDate}.xlsx`;
+    const fileName = exportFileName(`${voucherType} voucher detailed`, "xlsx", { date: voucherDate });
     await writeFile(workbook, fileName);
     toast({ title: "Export successful", description: `Downloaded ${fileName} with ${validEntries.length} entries.` });
   } else {
@@ -73,7 +74,7 @@ export async function exportVoucherHelper({ formData, activeTab, toast, detailed
     const worksheet = utils.json_to_sheet(exportData);
     const workbook = utils.book_new();
     utils.book_append_sheet(workbook, worksheet, `${voucherType} Summary`);
-    const fileName = `${voucherType}_Voucher_Summary_${voucherDate}.xlsx`;
+    const fileName = exportFileName(`${voucherType} voucher summary`, "xlsx", { date: voucherDate });
     await writeFile(workbook, fileName);
     toast({ title: "Export successful", description: `Downloaded ${fileName}.` });
   }

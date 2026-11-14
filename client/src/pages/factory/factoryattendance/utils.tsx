@@ -5,6 +5,7 @@
  */
 import * as XLSX from "@/lib/excelHelper";
 import type { AttendanceRecord, AttendanceStatus, PrintLang, ViewMode, WeekDay, WorkerRow } from "./types";
+import { exportFileName } from "@/lib/exportFile";
 
 export const STATUS_OPTIONS: AttendanceStatus[] = ["Present", "Absent", "Late", "Half Day", "Leave"];
 
@@ -439,8 +440,13 @@ export async function exportWeeklyExcel(
   );
   XLSX.utils.book_append_sheet(wb, inactiveSheet, lang === "ar" ? "غير نشط" : "Inactive Workers");
 
-  const weekRange = weekLabel(weekDays).replace(/[^a-z0-9]/gi, "-");
-  await XLSX.writeFile(wb, `attendance-${type}-${weekRange}.xlsx`);
+  await XLSX.writeFile(
+    wb,
+    exportFileName(`attendance ${type}`, "xlsx", {
+      from: weekDays[0]?.date,
+      to: weekDays[weekDays.length - 1]?.date,
+    })
+  );
 }
 
 export function buildRangeSheet(
@@ -525,7 +531,7 @@ export async function exportRangeExcel(
   XLSX.utils.book_append_sheet(wb, activeSheet, lang === "ar" ? "نشط" : "Active Workers");
   XLSX.utils.book_append_sheet(wb, inactiveSheet, lang === "ar" ? "غير نشط" : "Inactive Workers");
 
-  await XLSX.writeFile(wb, `attendance-range-${startDate}-to-${endDate}.xlsx`);
+  await XLSX.writeFile(wb, exportFileName("attendance range", "xlsx", { from: startDate, to: endDate }));
 }
 
 export function generateRangePrintHtml(

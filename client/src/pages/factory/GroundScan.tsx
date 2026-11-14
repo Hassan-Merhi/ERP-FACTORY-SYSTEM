@@ -1,18 +1,7 @@
 import { getErrorDetails } from "@shared/errorUtils";
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import {
-  ScanLine,
-  Trash2,
-  Download,
-  AlertCircle,
-  X,
-  Package,
-  Loader2,
-  MapPin,
-  Upload,
-  ServerCrash,
-} from "lucide-react";
+import { ScanLine, Trash2, AlertCircle, X, Package, Loader2, MapPin, Upload, ServerCrash } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
 import { Input } from "@/components/ui/input";
@@ -33,6 +22,8 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import * as XLSX from "@/lib/excelHelper";
+import { exportFileName } from "@/lib/exportFile";
+import { ExportButton } from "@/components/export/ReportExportMenu";
 import type { Cell, Row } from "exceljs";
 import { formatNumber } from "@/lib/formatNumber";
 import { visibleTabInterval } from "@/lib/queryPolicies";
@@ -610,7 +601,7 @@ export default function GroundScan() {
         ws3.views = [{ state: "frozen", xSplit: 0, ySplit: 4 }];
       }
 
-      await XLSX.writeFile(wb, `ground-verification-${dateStr}.xlsx`);
+      await XLSX.writeFile(wb, exportFileName("ground verification", "xlsx", { date: dateStr }));
     } catch (err) {
       toast({ title: "Export failed", description: getErrorDetails(err).message, variant: "destructive" });
     } finally {
@@ -727,16 +718,15 @@ export default function GroundScan() {
             {scanning ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <ScanLine className="mr-1.5 h-4 w-4" />}
             {scanning ? "Looking up..." : "Scan"}
           </Button>
-          <Button
+          <ExportButton
+            kind="excel"
             variant="outline"
+            busy={exporting}
             onClick={exportExcel}
             disabled={scannedBales.length === 0 || exporting}
             className="ground-scan-export"
             data-testid="button-ground-scan-export"
-          >
-            {exporting ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Download className="h-4 w-4 mr-1.5" />}
-            {exporting ? "Exporting..." : "Export Verification"}
-          </Button>
+          />
           {scannedBales.length > 0 && (
             <AlertDialog>
               <AlertDialogTrigger asChild>

@@ -7,14 +7,13 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { factoryRecordChangeAccess } from "./factoryRecordChangeAccess";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
-  FileDown,
   FileSpreadsheet,
+  FileText,
   ArrowLeft,
   Trash2,
   ClipboardCheck,
   CheckCircle,
   RefreshCw,
-  Container,
   Pencil,
   RotateCcw,
   Hammer,
@@ -317,24 +316,24 @@ export default function FactoryInvoiceDetail() {
               <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">Export</DropdownMenuLabel>
               <DropdownMenuItem onClick={handleExportExcel} data-testid="button-export-excel">
                 <FileSpreadsheet className="h-4 w-4" />
-                Download Excel
+                Export Excel
               </DropdownMenuItem>
               <DropdownMenuItem onClick={handleExportExcelNoCharges} data-testid="button-export-excel-no-charges">
                 <FileSpreadsheet className="h-4 w-4" />
-                Download Excel (No Charges)
+                Export Excel (No Charges)
               </DropdownMenuItem>
               <DropdownMenuItem onClick={handleExportPdf} data-testid="button-export-pdf">
-                <FileDown className="h-4 w-4" />
-                Download PDF
+                <FileText className="h-4 w-4" />
+                Export PDF
               </DropdownMenuItem>
               <DropdownMenuItem onClick={handleExportPdfNoCharges} data-testid="button-export-pdf-no-charges">
-                <FileDown className="h-4 w-4" />
-                Download PDF (No Charges)
+                <FileText className="h-4 w-4" />
+                Export PDF (No Charges)
               </DropdownMenuItem>
               {isAdmin && (
                 <DropdownMenuItem onClick={handleExportLoadingStatus} data-testid="button-export-loading-status">
-                  <Container className="h-4 w-4" />
-                  Loading Status
+                  <FileSpreadsheet className="h-4 w-4" />
+                  Export Excel (Loading Status)
                 </DropdownMenuItem>
               )}
 

@@ -28,6 +28,7 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -258,8 +259,18 @@ export default function FactoryPendingLoadings() {
     linkProformaMutation.mutate({ orderId: linkTarget.id, proformaId: selectedProformaId });
   };
 
-  const handleExport = (load: PendingLoad) => {
-    window.open(`/api/factory/customer-orders/${load.id}/pending-export`, "_blank");
+  const handleExport = async (load: PendingLoad) => {
+    try {
+      await downloadFromUrl(`/api/factory/customer-orders/${load.id}/pending-export`, {
+        fileName: exportFileName(`pending loading ${load.id}`, "xlsx"),
+      });
+    } catch (error) {
+      toast({
+        title: "Export failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const formatDate = (dateStr: string | null) => {
@@ -437,10 +448,10 @@ export default function FactoryPendingLoadings() {
             variant="outline"
             size="icon"
             className="rounded-xl border-border bg-card"
-            onClick={() => handleExport(load)}
+            onClick={() => void handleExport(load)}
             data-testid={"button-export-" + load.id}
-            title="Export to Excel"
-            aria-label={"Export loading " + load.id}
+            title="Export Excel"
+            aria-label={"Export Excel for loading " + load.id}
           >
             <Download className="h-4 w-4" />
           </Button>

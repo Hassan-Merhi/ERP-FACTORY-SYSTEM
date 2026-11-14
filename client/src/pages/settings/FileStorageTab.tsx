@@ -55,6 +55,7 @@ interface PreviewState {
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+import { downloadBlob } from "@/lib/downloadBlob";
 import { PreviewModal, FileIcon, formatSize, visibleName, getPreviewType } from "./FileStorageSections";
 import { FolderList } from "./FolderList";
 import { FileStorageDialogs } from "./FileStorageDialogs";
@@ -228,14 +229,7 @@ export function FileStorageTab() {
       const res = await fetch(`/api/files/${file.id}/download`, { credentials: "include" });
       if (!res.ok) throw new Error("Download failed");
       const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = visibleName(file);
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      downloadBlob(blob, visibleName(file));
     } catch {
       toast({ title: "Download failed", variant: "destructive" });
     }
@@ -481,6 +475,7 @@ export function FileStorageTab() {
                             className="h-7 w-7"
                             onClick={() => handleDownload(file)}
                             title="Download"
+                            aria-label="Download"
                             data-testid={`button-download-${file.id}`}
                           >
                             <Download className="h-3.5 w-3.5" />

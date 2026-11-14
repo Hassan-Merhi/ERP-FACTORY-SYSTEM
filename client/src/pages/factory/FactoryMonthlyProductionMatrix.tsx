@@ -25,18 +25,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { moveProductNearItem, moveProductToPosition } from "./monthlyProductionRowOrder";
 import { useToast } from "@/hooks/use-toast";
 import type { MonthlyProductionExportBale } from "./monthlyProductionWorkbookDrilldown";
-import {
-  ArrowDown,
-  ArrowUp,
-  ChevronDown,
-  Download,
-  GripVertical,
-  ListOrdered,
-  Plus,
-  RotateCcw,
-  Search,
-  X,
-} from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, GripVertical, ListOrdered, Plus, RotateCcw, Search, X } from "lucide-react";
+import { ExportButton } from "@/components/export/ReportExportMenu";
+import { exportFileName } from "@/lib/exportFile";
 
 type Product = { id: number; name: string; articleCode: string; categoryName: string };
 type MonthValue = { productId: number; month: string; quantity: number };
@@ -285,7 +276,10 @@ export default function FactoryMonthlyProductionMatrix() {
       ]),
     ];
     const csv = "\uFEFF" + rows.map((row) => row.map(csvCell).join(",")).join("\r\n");
-    downloadBlob(new Blob([csv], { type: "text/csv;charset=utf-8" }), "factory-monthly-production.csv");
+    downloadBlob(
+      new Blob([csv], { type: "text/csv;charset=utf-8" }),
+      exportFileName("factory monthly production", "csv")
+    );
   };
   const exportExcel = async () => {
     if (exportingExcel || months.length === 0 || !data) return;
@@ -362,7 +356,7 @@ export default function FactoryMonthlyProductionMatrix() {
       });
     } catch (error) {
       toast({
-        title: "Unable to export Excel",
+        title: "Export failed",
         description: error instanceof Error ? error.message : "Please try again.",
         variant: "destructive",
       });
@@ -382,24 +376,21 @@ export default function FactoryMonthlyProductionMatrix() {
           <Button variant="outline" size="sm" disabled={isFetching} onClick={() => void refetch()}>
             <RotateCcw className="mr-2 h-4 w-4" /> {t("monthlyProduction.refresh")}
           </Button>
-          <Button
-            variant="outline"
+          <ExportButton
             size="sm"
             disabled={!data || months.length === 0 || exportingExcel}
+            label={exportingExcel ? exportProgress || "Exporting…" : undefined}
             onClick={() => void exportExcel()}
             data-testid="export-monthly-production-excel"
-          >
-            <Download className="mr-2 h-4 w-4" /> {exportingExcel ? exportProgress || "Exporting…" : "Export Excel"}
-          </Button>
-          <Button
-            variant="outline"
+          />
+          <ExportButton
+            kind="csv"
             size="sm"
             disabled={!data || months.length === 0}
+            label={t("monthlyProduction.exportCsv")}
             onClick={exportCsv}
             data-testid="export-monthly-production-csv"
-          >
-            <Download className="mr-2 h-4 w-4" /> {t("monthlyProduction.exportCsv")}
-          </Button>
+          />
         </div>
       </div>
       <div className="rounded-xl border bg-card p-3 space-y-3">

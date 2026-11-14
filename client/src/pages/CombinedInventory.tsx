@@ -9,7 +9,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Layers, Search, ChevronRight, List, FolderOpen, Download, Loader2, RefreshCw } from "lucide-react";
+import { Layers, Search, ChevronRight, List, FolderOpen, Loader2, RefreshCw } from "lucide-react";
+import { ExportButton } from "@/components/export/ReportExportMenu";
+import { exportFileName } from "@/lib/exportFile";
 import { formatNumber } from "@/lib/formatNumber";
 import { PageHeader } from "@/components/PageHeader";
 
@@ -357,8 +359,8 @@ export default function CombinedInventory({ headerActions }: CombinedInventoryPr
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Combined Inventory");
     const filename = isDrillMode
-      ? `combined_inventory_${(drillGroup?.stockGroupName || "group").replace(/\s+/g, "_")}.xlsx`
-      : "combined_inventory.xlsx";
+      ? exportFileName(`combined inventory ${drillGroup?.stockGroupName || "group"}`, "xlsx")
+      : exportFileName("combined inventory", "xlsx");
     await XLSX.writeFile(wb, filename);
   };
 
@@ -422,10 +424,7 @@ export default function CombinedInventory({ headerActions }: CombinedInventoryPr
             <RefreshCw className={`h-3.5 w-3.5 mr-1.5${isFetchingInventory ? " animate-spin" : ""}`} />
             Refresh
           </Button>
-          <Button variant="outline" size="sm" onClick={handleExport} data-testid="button-export-excel">
-            <Download className="h-3.5 w-3.5 mr-1.5" />
-            Export Excel
-          </Button>
+          <ExportButton size="sm" onClick={handleExport} data-testid="button-export-excel" />
         </PageHeader>
       )}
 
@@ -505,12 +504,7 @@ export default function CombinedInventory({ headerActions }: CombinedInventoryPr
           <Checkbox checked={includeZero} onCheckedChange={(v) => setIncludeZero(!!v)} id="include-zero" />
           <span className="text-sm text-muted-foreground">Include zero stock</span>
         </label>
-        {isDrillMode && (
-          <Button variant="outline" size="sm" onClick={handleExport} data-testid="button-export-excel">
-            <Download className="h-3.5 w-3.5 mr-1.5" />
-            Export
-          </Button>
-        )}
+        {isDrillMode && <ExportButton size="sm" onClick={handleExport} data-testid="button-export-excel" />}
       </div>
 
       {/* Partial-load notice — only shown when total rows exceed the first page */}

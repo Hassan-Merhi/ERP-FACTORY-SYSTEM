@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Upload, Download, CheckCircle2, AlertCircle, Barcode, Package, Tag } from "lucide-react";
 import { utils, writeFile, read, ExcelJS } from "@/lib/excelHelper";
+import { downloadBlob } from "@/lib/downloadBlob";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { PageHeader } from "@/components/PageHeader";
@@ -323,12 +324,7 @@ function BarcodesTab() {
     ws.addRow({ itemCode: "ITEM002", barcode: "5000112637922" });
     const buf = await wb.xlsx.writeBuffer();
     const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "barcode_import_template.xlsx";
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadBlob(blob, "barcode_import_template.xlsx");
     toast({ title: "Template Downloaded", description: "Fill in Item Code and Barcode columns, then upload" });
   };
 

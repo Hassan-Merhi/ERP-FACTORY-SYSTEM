@@ -1,4 +1,6 @@
 import { downloadBlob } from "@/lib/downloadBlob";
+import { exportFileName } from "@/lib/exportFile";
+import { ExportButton } from "@/components/export/ReportExportMenu";
 import { TabsList, PillTabButton } from "@/components/ui/tabs";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { Suspense, useState, useMemo, useEffect } from "react";
@@ -40,8 +42,6 @@ import {
   PlusCircle,
   History,
   Columns3,
-  Download,
-  Printer,
   RefreshCw,
   Warehouse,
   Wallet,
@@ -241,7 +241,10 @@ export default function FactorySheetsAndSacks() {
       shown.map((column) => csvCell(column.label)).join(","),
       ...rows.map((item) => shown.map((column) => csvCell(column.value(item))).join(",")),
     ].join("\r\n");
-    downloadBlob(new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }), "sheets-sacks-stock.csv");
+    downloadBlob(
+      new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }),
+      exportFileName("sheets sacks stock", "csv")
+    );
   };
 
   const typeBadge = (type: string) => (
@@ -492,24 +495,22 @@ export default function FactorySheetsAndSacks() {
                     </Button>
                   </PopoverContent>
                 </Popover>
-                <Button
+                <ExportButton
+                  kind="csv"
                   variant="outline"
                   size="sm"
                   className="h-9 gap-1.5 rounded-xl"
                   onClick={exportStock}
                   disabled={!filtered.length}
                   title={selectedVisibleCount ? "Export selected rows" : "Export filtered rows"}
-                >
-                  <Download className="h-4 w-4" /> Export
-                </Button>
-                <Button
+                />
+                <ExportButton
+                  kind="print"
                   variant="outline"
                   size="sm"
                   className="h-9 gap-1.5 rounded-xl print:hidden"
                   onClick={() => window.print()}
-                >
-                  <Printer className="h-4 w-4" /> Print
-                </Button>
+                />
                 <Button
                   variant="outline"
                   size="icon"

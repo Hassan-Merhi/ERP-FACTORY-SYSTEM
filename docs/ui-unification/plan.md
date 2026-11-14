@@ -69,10 +69,10 @@ test suite and a production build pass.
 | # | Phase | What it delivers | Status |
 |---|---|---|---|
 | 0 | Audit and plan | This document and the archived audit | Done |
-| 1 | Shared foundations | `ReportExportMenu` for all company types, `exportFileName`, `downloadFromUrl`, `?tab` + `?section` fallback in `useHubQueryState`, shared quantity/weight format helper, bale/voucher status colour map | Not started |
+| 1 | Shared foundations | `ReportExportMenu` for all company types, `exportFileName`, `downloadFromUrl`, `?tab` + `?section` fallback in `useHubQueryState`, shared quantity/weight format helper, bale/voucher status colour map | In progress (export pieces done) |
 | 2 | Broken and misleading things | Wrong back links, missing Payments Log button, mislabelled export/print buttons, unconfirmed deletes, every `window.confirm`, wrong Shops wording, dead buttons, stale shortcuts and redirects | In progress |
 | 3 | Dead code | Unrouted pages, superseded versions, dead dialogs, unused `lazyPages` exports, unused primitives | Not started |
-| 4 | Export and print | Every existing export moved to the standard menu, labels, icon, filename and download helper; exports added to list/report pages that have none | Not started |
+| 4 | Export and print | Every existing export moved to the standard menu, labels, icon, filename and download helper; exports added to list/report pages that have none | In progress (existing exports migrated; missing exports not yet added) |
 | 5 | Headers, hubs and tabs | `PageHeader` everywhere, double titles removed, all hubs on default pill tabs with `?tab`, tab labels match page titles and sidebar labels | Not started |
 | 6 | Actions and wording | Create/save/delete/refresh labels and icons, toast titles, one confirm pattern replacing hand-built `AlertDialog` deletes | Not started |
 | 7 | Filters, tables and states | `SearchField`, `PeriodFilter`, shadcn `Select`, shared states and `PaginationBar` on every list page | Not started |
@@ -110,3 +110,13 @@ decided, the existing behaviour stays.
 |---|---|---|
 | 2026-11-13 | 0 | Audit completed and archived; plan written |
 | 2026-11-13 | 2 | All 14 native `window.confirm` calls replaced by `confirmAction`; confirmation added to four unconfirmed deletes (bale product image, label banner, loading priority, SP alias); Factory employee/worker back links fixed (`?section=`); Payments Log button added to Factory and ERP warehouse rentals; Shops tab no longer shows warehouse wording/icon; "Export CSV" (writes xlsx), two "Export PDF" (print dialog) and a duplicate "Save PDF" button corrected; full-page reload navigation replaced in Stock & Sales Report and Factory Settings; Merge Bale Products returns to Factory Settings; Alt+S opens Stock Allocation V5 |
+| 2026-11-14 | 1 | `components/export/ReportExportMenu` (`ReportExportMenu`, `ExportButton`), `lib/exportFile` (`exportFileName`, `downloadFromUrl`); `confirmAction` gained a `details` list so confirmation sentences stay translatable |
+| 2026-11-14 | 4 | Existing export/print controls migrated in ~110 files across every company type: ~85 buttons to `ExportButton`, 5 menus to `ReportExportMenu`, ~125 file names to `exportFileName`, ~33 `window.open`/anchor downloads to `downloadFromUrl` (failures now show a toast instead of downloading an error page), ~45 hand-built blob downloads to the shared helpers; labels that misstated the format corrected (Transporter Statement "Print / Export PDF" saves an image → "Export Image"; several "Print / Save PDF" that open the print dialog → "Print"; Mix Batches "Report" → "Export Excel") |
+
+### Follow-ups found during phase 4
+
+- `lib/containerExportEnhancements.ts` replaces `window.print` on `/containers/:id`, so that page's "Print" item saves a no-cost PDF first. Decide whether it should be labelled "Export PDF" or stop overriding print.
+- ProformaCard and the customer statement fall back to the print dialog for "Export PDF" when offline.
+- `usePosPriceListModel.exportToExcel` has no `catch`, so a failed export shows no message; payroll bulk-bonus print does nothing when pop-ups are blocked.
+- The Factory bilingual invoice menu lost its English / Arabic group headings (the language is now in each item's label).
+- Direct `exceljs` / `xlsx-js-style` imports remain in POS and the V5 allocation export (styling parity to be checked before moving them to `excelHelper`).

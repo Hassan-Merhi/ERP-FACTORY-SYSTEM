@@ -16,8 +16,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Truck, Edit, Download, ChevronDown, Printer } from "lucide-react";
+import { Truck, Edit, ChevronDown } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
+import { ReportExportMenu } from "@/components/export/ReportExportMenu";
+import { exportFileName } from "@/lib/exportFile";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -184,7 +186,7 @@ function SpContainerDetailView() {
 
   const exportInvoice = async (includeCosts: boolean) => {
     try {
-      const fileBase = "container_" + String(title).replace(/[^a-z0-9-]/gi, "_");
+      const fileSubject = "container " + String(title);
       if (includeCosts) {
         // Same columns and worksheet name used by ERP's Full Export.
         const items = (spc.lines ?? []).map((line) => ({
@@ -224,7 +226,7 @@ function SpContainerDetailView() {
           ]),
           "Summary"
         );
-        await writeFile(workbook, fileBase + ".xlsx");
+        await writeFile(workbook, exportFileName(fileSubject, "xlsx"));
       } else {
         // Same printable NO / hidden BARCODE / DESCRIPTION / Q'TY layout as ERP.
         const book = new ExcelJS.Workbook();
@@ -251,7 +253,7 @@ function SpContainerDetailView() {
         sheet.getRow(1).font = { bold: true, size: 13 };
         sheet.getRow(3).font = { bold: true };
         sheet.getColumn(4).numFmt = "#,##0.###";
-        await writeFile(book, fileBase + "_no_cost.xlsx");
+        await writeFile(book, exportFileName(fileSubject + " no cost", "xlsx"));
       }
       toast({ title: "Export successful", description: "Container data downloaded as Excel" });
     } catch (error) {
@@ -304,24 +306,33 @@ function SpContainerDetailView() {
             </DropdownMenuContent>
           </DropdownMenu>
         )}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="gap-2" data-testid="button-export-dropdown">
-              <Download className="h-4 w-4" /> Export <ChevronDown className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
-            <DropdownMenuItem onClick={() => void exportInvoice(true)} data-testid="button-export-excel">
-              <Download className="h-4 w-4 mr-2" /> Full Export
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => void exportInvoice(false)} data-testid="button-export-no-cost">
-              <Download className="h-4 w-4 mr-2" /> No Cost / Freight Export
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => window.print()} data-testid="button-export-pdf">
-              <Printer className="h-4 w-4 mr-2" /> Print
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <ReportExportMenu
+          align="start"
+          data-testid="button-export-dropdown"
+          options={[
+            {
+              id: "container-full",
+              label: "Export Excel (Full)",
+              kind: "excel",
+              testId: "button-export-excel",
+              onSelect: () => exportInvoice(true),
+            },
+            {
+              id: "container-no-cost",
+              label: "Export Excel (No Cost / Freight)",
+              kind: "excel",
+              testId: "button-export-no-cost",
+              onSelect: () => exportInvoice(false),
+            },
+            {
+              id: "container-print",
+              label: "Print",
+              kind: "print",
+              testId: "button-export-pdf",
+              onSelect: () => window.print(),
+            },
+          ]}
+        />
       </PageHeader>
 
       {/* Body */}

@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ClipboardList, FileDown, Lock, Play, RotateCcw, ScanLine, Undo2 } from "lucide-react";
+import { ClipboardList, Lock, Play, RotateCcw, ScanLine, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ExportButton } from "@/components/export/ReportExportMenu";
+import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
 import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -70,6 +72,23 @@ function lineStatusClass(status: RetailStockCountLineStatus): string {
 export default function RetailStockCount() {
   const { selectedCompany } = useCompany();
   const { toast } = useToast();
+  const [exportingCsv, setExportingCsv] = useState(false);
+  const exportStockCountCsv = async () => {
+    setExportingCsv(true);
+    try {
+      await downloadFromUrl(retailStockCountReportCsvUrl(locationId || undefined), {
+        fileName: exportFileName("stock count report", "csv"),
+      });
+    } catch (error) {
+      toast({
+        title: "Export failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setExportingCsv(false);
+    }
+  };
   const recordChanges = useExistingRecordChangeAccess();
   const canChangeCounts = recordChanges.allowed;
   const retailEnabled = selectedCompany?.companyType === "retail";
@@ -607,13 +626,13 @@ export default function RetailStockCount() {
           <Card>
             <CardHeader className="flex-row items-center justify-between space-y-0 pb-3">
               <CardTitle className="text-lg">History &amp; variance</CardTitle>
-              <a
-                className="inline-flex items-center gap-1 text-sm text-primary underline-offset-2 hover:underline"
-                href={retailStockCountReportCsvUrl(locationId || undefined)}
+              <ExportButton
+                kind="csv"
+                size="sm"
+                busy={exportingCsv}
+                onClick={exportStockCountCsv}
                 data-testid="stock-count-csv"
-              >
-                <FileDown className="h-4 w-4" /> Export CSV
-              </a>
+              />
             </CardHeader>
             <CardContent className="space-y-2">
               {report && (

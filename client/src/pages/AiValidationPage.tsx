@@ -7,17 +7,10 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import {
-  Upload,
-  FileSpreadsheet,
-  AlertTriangle,
-  CheckCircle2,
-  XCircle,
-  Lightbulb,
-  Download,
-  X,
-  BarChart3,
-} from "lucide-react";
+import { downloadBlob } from "@/lib/downloadBlob";
+import { exportFileName } from "@/lib/exportFile";
+import { ExportButton } from "@/components/export/ReportExportMenu";
+import { Upload, FileSpreadsheet, AlertTriangle, CheckCircle2, XCircle, Lightbulb, X, BarChart3 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -225,12 +218,7 @@ export default function AiValidationPage() {
     const blob = new Blob([bytes], {
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `validation_${result.validationType}_${Date.now()}.xlsx`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadBlob(blob, exportFileName(`validation ${result.validationType}`, "xlsx"));
   };
 
   // Build summary cards for the result
@@ -373,10 +361,13 @@ export default function AiValidationPage() {
                   )}
                 </div>
                 {result.cleanedExcel && (
-                  <Button size="sm" variant="outline" onClick={downloadCleaned} data-testid="button-download-cleaned">
-                    <Download className="w-4 h-4 mr-2" />
-                    Download Cleaned Excel
-                  </Button>
+                  <ExportButton
+                    kind="excel"
+                    label="Export Excel (Cleaned)"
+                    size="sm"
+                    onClick={downloadCleaned}
+                    data-testid="button-download-cleaned"
+                  />
                 )}
               </div>
 

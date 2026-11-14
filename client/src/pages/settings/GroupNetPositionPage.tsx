@@ -8,7 +8,6 @@ import {
   CalendarDays,
   ChevronDown,
   ChevronRight,
-  Download,
   Info,
   RefreshCw,
   Scale,
@@ -17,6 +16,9 @@ import { apiRequest } from "@/lib/queryClient";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ExportButton } from "@/components/export/ReportExportMenu";
+import { useToast } from "@/hooks/use-toast";
+import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -237,6 +239,8 @@ export function GroupNetPositionPage({ onBack }: { onBack: () => void }) {
   const { formatHistoricalBaseAmount } = useCurrencyContext();
   const [asOfDate, setAsOfDate] = useState(todayStr());
   const [refreshGeneration, setRefreshGeneration] = useState(0);
+  const [exporting, setExporting] = useState(false);
+  const { toast } = useToast();
 
   const formatAmount = (amount: number) => {
     if (amount < 0) return `-${formatHistoricalBaseAmount(Math.abs(amount))}`;
@@ -257,8 +261,21 @@ export function GroupNetPositionPage({ onBack }: { onBack: () => void }) {
     staleTime: 5 * 60 * 1000,
   });
 
-  const exportExcel = () => {
-    window.open(`/api/stats/group-net-position-excel?toDate=${encodeURIComponent(asOfDate)}`, "_blank");
+  const exportExcel = async () => {
+    setExporting(true);
+    try {
+      await downloadFromUrl(`/api/stats/group-net-position-excel?toDate=${encodeURIComponent(asOfDate)}`, {
+        fileName: exportFileName("group net position", "xlsx", { date: asOfDate }),
+      });
+    } catch (error) {
+      toast({
+        title: "Export failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setExporting(false);
+    }
   };
 
   return (
@@ -297,9 +314,7 @@ export function GroupNetPositionPage({ onBack }: { onBack: () => void }) {
           <Button variant="outline" onClick={() => setRefreshGeneration((value) => value + 1)} disabled={isFetching}>
             <RefreshCw className={`h-4 w-4 mr-2 ${isFetching ? "animate-spin" : ""}`} /> Refresh
           </Button>
-          <Button onClick={exportExcel} disabled={!data}>
-            <Download className="h-4 w-4 mr-2" /> Export Excel
-          </Button>
+          <ExportButton kind="excel" busy={exporting} onClick={exportExcel} disabled={!data} />
         </div>
       </div>
 

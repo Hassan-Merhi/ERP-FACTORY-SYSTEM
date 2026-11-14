@@ -7,7 +7,6 @@ import {
   Boxes,
   CalendarClock,
   CheckCircle2,
-  Download,
   FileClock,
   MapPin,
   Package,
@@ -17,6 +16,8 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ExportButton } from "@/components/export/ReportExportMenu";
+import { exportFileName } from "@/lib/exportFile";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -193,7 +194,7 @@ export default function POSContainerDetail() {
 
       const buffer = await wb.xlsx.writeBuffer();
       const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-      downloadBlob(blob, `container_${containerNumber}_no_cost.xlsx`);
+      downloadBlob(blob, exportFileName(`container ${containerNumber} no cost`, "xlsx"));
 
       toast({
         title: "No-cost export downloaded",
@@ -270,10 +271,13 @@ export default function POSContainerDetail() {
             </p>
           </div>
         </div>
-        <Button onClick={exportNoCostNoFreight} className="gap-2" data-testid="button-pos-container-no-cost-export">
-          <Download className="h-4 w-4" aria-hidden="true" />
-          No Cost / No Freight Export
-        </Button>
+        <ExportButton
+          kind="excel"
+          label="Export Excel (No Cost / No Freight)"
+          variant="default"
+          onClick={exportNoCostNoFreight}
+          data-testid="button-pos-container-no-cost-export"
+        />
       </div>
 
       <div className="grid shrink-0 grid-cols-2 gap-2 lg:grid-cols-4">

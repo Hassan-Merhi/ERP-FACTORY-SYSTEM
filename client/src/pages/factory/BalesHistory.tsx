@@ -10,7 +10,6 @@ import {
   Pencil,
   Check,
   X,
-  Download,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
@@ -56,10 +55,24 @@ import { BalesHistoryDialog2 } from "./baleshistory/components/BalesHistoryDialo
 import { BalesHistoryDialog3 } from "./baleshistory/components/BalesHistoryDialog3";
 import { BalesHistoryDialog4 } from "./baleshistory/components/BalesHistoryDialog4";
 import { BalesHistoryDialog5 } from "./baleshistory/components/BalesHistoryDialog5";
+import { useToast } from "@/hooks/use-toast";
+import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
 
 export default function BalesHistory() {
   const mhd = useFactoryMhdView();
   const model = useBalesHistoryModel();
+  const { toast } = useToast();
+  const downloadExport = async (url: string, fileName: string) => {
+    try {
+      await downloadFromUrl(url, { fileName });
+    } catch (error) {
+      toast({
+        title: "Export failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
   const {
     wrapAdminAction,
     AdminDialog,
@@ -219,12 +232,15 @@ export default function BalesHistory() {
               <DropdownMenuItem
                 onClick={() => {
                   const exportDate = dateFilter || new Date().toLocaleDateString("en-CA");
-                  window.open(`/api/factory/bales/export-full.xlsx?date=${exportDate}`, "_blank");
+                  void downloadExport(
+                    `/api/factory/bales/export-full.xlsx?date=${exportDate}`,
+                    exportFileName("bales", "xlsx", { date: exportDate })
+                  );
                 }}
                 data-testid="button-export-bales-full"
               >
                 <FileSpreadsheet className="h-4 w-4 mr-2" />
-                Export Bales ({dateFilter || "Today"})
+                Export Excel (Bales, {dateFilter || "Today"})
               </DropdownMenuItem>
               {canChangeExistingRecords && (
                 <DropdownMenuItem
@@ -238,11 +254,13 @@ export default function BalesHistory() {
               )}
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                onClick={() => window.open("/api/factory/bales/export-names.xlsx", "_blank")}
+                onClick={() =>
+                  void downloadExport("/api/factory/bales/export-names.xlsx", exportFileName("bale names", "xlsx"))
+                }
                 data-testid="button-export-bale-names"
               >
-                <Download className="h-4 w-4 mr-2" />
-                Export Names
+                <FileSpreadsheet className="h-4 w-4 mr-2" />
+                Export Excel (Names)
               </DropdownMenuItem>
               {canChangeExistingRecords && (
                 <DropdownMenuItem

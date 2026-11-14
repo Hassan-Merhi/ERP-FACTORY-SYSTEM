@@ -20,6 +20,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useToast } from "@/hooks/use-toast";
+import { exportFileName } from "@/lib/exportFile";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { getDefaultPeriodValue, type PeriodFilterValue } from "@/components/ui/period-filter";
 import type {
@@ -627,16 +628,11 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Price List");
 
-      const locationLabel = isAllMode ? "All_Locations" : (selectedLocation?.name.replace(/\s+/g, "_") ?? "Unknown");
-      const dateStr = new Date().toLocaleDateString("en-CA");
-      const filterPart = showUnpriced
-        ? "_unpriced"
-        : groupFilter !== "all"
-          ? `_${groupFilter.replace(/\s+/g, "_")}`
-          : "";
-      const searchPart = search.trim() ? `_search-${search.trim().replace(/\s+/g, "_")}` : "";
+      const locationLabel = isAllMode ? "all locations" : (selectedLocation?.name ?? "unknown");
+      const filterPart = showUnpriced ? " unpriced" : groupFilter !== "all" ? ` ${groupFilter}` : "";
+      const searchPart = search.trim() ? ` search ${search.trim()}` : "";
 
-      await XLSX.writeFile(wb, `price_list_${locationLabel}${filterPart}${searchPart}_${dateStr}.xlsx`);
+      await XLSX.writeFile(wb, exportFileName(`price list ${locationLabel}${filterPart}${searchPart}`, "xlsx"));
     } finally {
       setExporting(false);
     }

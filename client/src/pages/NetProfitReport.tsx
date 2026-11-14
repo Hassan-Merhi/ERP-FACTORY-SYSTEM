@@ -1,7 +1,6 @@
 import { ErpMobileFilters } from "@/components/ui/erp-mobile-filters";
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -10,9 +9,11 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/PageHeader";
+import { ExportButton } from "@/components/export/ReportExportMenu";
+import { useToast } from "@/hooks/use-toast";
+import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
 import { ErrorState } from "@/components/ui/page-state";
 import {
-  Download,
   ChevronDown,
   ChevronRight,
   ShoppingCart,
@@ -251,6 +252,8 @@ export default function NetProfitReport() {
   const [specificYear, setSpecificYear] = useState<number>(now.getFullYear());
   const [customFromDate, setCustomFromDate] = useState<string>("");
   const [customToDate, setCustomToDate] = useState<string>("");
+  const [isExporting, setIsExporting] = useState(false);
+  const { toast } = useToast();
 
   const { startDate, endDate } = useMemo(
     () => getDateRange(period, specificMonth, specificYear, customFromDate, customToDate),
@@ -296,7 +299,7 @@ export default function NetProfitReport() {
     },
   });
 
-  const handleExport = () => {
+  const handleExport = async () => {
     const p = new URLSearchParams();
     if (startDate) p.set("startDate", startDate);
     if (endDate) p.set("endDate", endDate);
@@ -304,7 +307,20 @@ export default function NetProfitReport() {
     if (isAdminOrDev && selectedCompanyId !== "current" && selectedCompanyId !== "") {
       p.set("companyId", selectedCompanyId);
     }
-    window.open(`/api/reports/net-profit-excel?${p.toString()}`, "_blank");
+    setIsExporting(true);
+    try {
+      await downloadFromUrl(`/api/reports/net-profit-excel?${p.toString()}`, {
+        fileName: exportFileName("net profit report", "xlsx", { from: startDate, to: endDate }),
+      });
+    } catch (error) {
+      toast({
+        title: "Export failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const lp = data?.leftPane;
@@ -334,10 +350,12 @@ export default function NetProfitReport() {
           icon={<BarChart3 className="h-5 w-5" />}
           meta={<span>Income, expenses, and net profit — {periodLabel}</span>}
         >
-          <Button onClick={handleExport} data-testid="button-export-excel" disabled={isLoading}>
-            <Download className="w-4 h-4 mr-2" />
-            Export
-          </Button>
+          <ExportButton
+            onClick={() => void handleExport()}
+            data-testid="button-export-excel"
+            disabled={isLoading}
+            busy={isExporting}
+          />
         </PageHeader>
         <ErpMobileFilters
           label="Net profit filters"

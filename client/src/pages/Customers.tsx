@@ -16,27 +16,25 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useState, useEffect } from "react";
 import { PageHeader } from "@/components/PageHeader";
-import { ErpListFilters, ErpListTable, ErpFormActions, ErpPendingButton, ErpRecordAction, useErpRecordChangeAccess as useExistingRecordChangeAccess } from "@/erp-core";
+import {
+  ErpListFilters,
+  ErpListTable,
+  ErpFormActions,
+  ErpPendingButton,
+  ErpRecordAction,
+  useErpRecordChangeAccess as useExistingRecordChangeAccess,
+} from "@/erp-core";
 import { erpCompanyDataKey, invalidateErpDataFamilies } from "@/erp-core/erpData";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { insertCustomerSchema, type Customer } from "@shared/schema";
 import { useForm } from "react-hook-form";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-  FormDescription,
-} from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { zodResolver } from "@/lib/form-resolver";
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { z } from "zod";
 import { usePaginatedFilterState } from "@/hooks/use-paginated-filter-state";
-
 
 const formSchema = insertCustomerSchema.extend({
   legalName: z.string().min(1, "Legal name is required"),
@@ -146,11 +144,7 @@ function CompanyCustomers() {
     },
     onSuccess: () => {
       toast({ title: "Success", description: "Customer created successfully" });
-      void invalidateErpDataFamilies(queryClient, [
-        "/api/customers",
-        "/api/accounts/all",
-        "/api/ledger-accounts",
-      ]);
+      void invalidateErpDataFamilies(queryClient, ["/api/customers", "/api/accounts/all", "/api/ledger-accounts"]);
       setIsCreateOpen(false);
       form.reset({
         companyId: selectedCompany?.id || 0,
@@ -172,11 +166,7 @@ function CompanyCustomers() {
     },
     onSuccess: () => {
       toast({ title: "Success", description: "Customer updated successfully" });
-      void invalidateErpDataFamilies(queryClient, [
-        "/api/customers",
-        "/api/accounts/all",
-        "/api/ledger-accounts",
-      ]);
+      void invalidateErpDataFamilies(queryClient, ["/api/customers", "/api/accounts/all", "/api/ledger-accounts"]);
       setIsEditOpen(false);
       setEditingCustomer(null);
       form.reset({
@@ -428,7 +418,12 @@ function CompanyCustomers() {
 
       {/* Table */}
       <div className="border rounded-xl overflow-hidden">
-        <ErpListTable pageKey="customers" companyId={selectedCompany?.id} mobileLayout="cards" scrollLabel="Customer accounts">
+        <ErpListTable
+          pageKey="customers"
+          companyId={selectedCompany?.id}
+          mobileLayout="cards"
+          scrollLabel="Customer accounts"
+        >
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
               <TableHead className="text-xs h-9 font-semibold">Customer</TableHead>
@@ -679,6 +674,7 @@ function CompanyCustomers() {
                                     variant="ghost"
                                     className="h-6 w-6"
                                     title="Print Invoice"
+                                    aria-label="Print"
                                     data-testid={`btn-print-invoice-${t.voucherId}`}
                                     onClick={() => window.open(`/api/pos/invoice/${t.voucherId}/pdf`, "_blank")}
                                   >
