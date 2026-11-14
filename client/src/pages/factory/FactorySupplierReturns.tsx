@@ -188,6 +188,7 @@ export default function FactorySupplierReturns() {
       buildErpSupplierReturnMatchWorkbook(wb, {
         supplierName: suppliers.data?.rows.find((x) => x.id === supplierId)?.name,
         fileName: sourceFile || undefined,
+        language,
         entries: combined.entries.flatMap((entry) => {
           const lines = entry.lines.map((line) => ({
             row: entry.row.row,
