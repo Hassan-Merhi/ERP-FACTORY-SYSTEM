@@ -309,13 +309,13 @@ export function ExcelAppearanceSettingsTab({ company }: Props) {
             >
               <strong>{copy.samplePreview}</strong>
               {draft.showBranding && draft.logoDataUrl && (
-                <img src={draft.logoDataUrl} alt="Excel logo preview" className="max-h-10 max-w-32 object-contain" />
+                <img src={draft.logoDataUrl} alt={copy.logoImage} className="max-h-10 max-w-32 object-contain" />
               )}
             </div>
             <div className="px-3 py-2 text-muted-foreground">
               {draft.showCompanyName && <span>{copy.companyLabel}: {company.name} · </span>}
               {draft.showExportDate && (
-                <span>{copy.dateLabel}: {draft.dateFormat === "dd/mm/yyyy" ? "14/11/2026" : "11/14/2026"}</span>
+                <span>{copy.dateLabel}: {new Date().toLocaleDateString(draft.dateFormat === "dd/mm/yyyy" ? "en-GB" : "en-US")}</span>
               )}
             </div>
             <div className="px-3 pb-2 font-semibold">{draft.showBranding ? draft.brandName : copy.sampleReport}</div>
@@ -352,7 +352,6 @@ export function ExcelAppearanceSettingsTab({ company }: Props) {
           </div>
           <p className="text-xs text-muted-foreground">
             {copy.previewDisclaimer}
-            strict templates and specialized invoices retain their own company-facing layout.
           </p>
         </CardContent>
       </Card>
