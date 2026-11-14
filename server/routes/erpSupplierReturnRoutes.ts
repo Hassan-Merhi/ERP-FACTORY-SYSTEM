@@ -271,15 +271,28 @@ export function registerErpSupplierReturnRoutes(app: Express) {
         await db.execute(sql`
         SELECT l.id,l.article_code AS "articleCode",l.item_name AS "itemName",
                l.quantity::text AS quantity,c.container_number AS "containerNumber",
-               l.offload_id AS "offloadId",s.legal_name AS supplier,
+               l.offload_id AS "offloadId",l.offload_item_id AS "offloadItemId",
+               l.source_purchase_rate::text AS "sourcePurchaseRate",
+               s.legal_name AS supplier,
                l.supplier_credit_usd::text AS "supplierCreditUsd",
                l.inventory_reduction_usd::text AS "inventoryReductionUsd",
-               v.voucher_number AS "voucherNumber",l.voucher_id AS "voucherId"
+               v.voucher_number AS "voucherNumber",l.voucher_id AS "voucherId",
+               COALESCE(mapping.input_rows, '[]'::json) AS "requestedRows"
           FROM erp_supplier_return_lines l
           JOIN erp_supplier_return_batches b ON b.id=l.batch_id AND b.company_id=${companyId}
           JOIN containers c ON c.id=l.container_id AND c.company_id=${companyId}
           JOIN suppliers s ON s.id=l.supplier_id
           LEFT JOIN vouchers v ON v.id=l.voucher_id
+          LEFT JOIN LATERAL (
+            SELECT json_agg(json_build_object(
+              'inputRow', ar.input_row,
+              'requestedArticleCode', ar.requested_article_code,
+              'requestedQuantity', ar.requested_quantity::text,
+              'allocatedQuantity', ar.allocated_quantity::text
+            ) ORDER BY ar.input_row) AS input_rows
+            FROM erp_supplier_return_allocation_rows ar
+            WHERE ar.company_id=${companyId} AND ar.batch_id=l.batch_id AND ar.return_line_id=l.id
+          ) mapping ON TRUE
          WHERE l.company_id=${companyId} AND l.batch_id=${batchId}
          ORDER BY l.id
       `)
@@ -469,6 +482,7 @@ export function registerErpSupplierReturnRoutes(app: Express) {
           totalSupplier = new Decimal(0),
           totalInventory = new Decimal(0);
         const postedFinancials: Array<{ quantity: string; financials: SupplierReturnFinancials }> = [];
+        const returnLineIds = new Map<number, number>();
         for (const { source, qty } of matched) {
           const [stock] = resultRows<{ quantity: string; total_value: string }>(
             await tx.execute(sql`
@@ -495,6 +509,7 @@ export function registerErpSupplierReturnRoutes(app: Express) {
           );
           if (!returnLine)
             throw new ReturnError(500, "RETURN_LINE_AUDIT_FAILED", "Could not record supplier return line");
+          returnLineIds.set(source.offloadItemId, returnLine.id);
           await postStockMovementTx(
             tx,
             {
@@ -581,13 +596,34 @@ export function registerErpSupplierReturnRoutes(app: Express) {
             UPDATE erp_supplier_return_lines
                SET supplier_credit_usd=${supplierCredit.toFixed(2)},
                    inventory_reduction_usd=${inventoryValue.toFixed(2)},
-                   voucher_id=${voucher.voucher.id}
+                   voucher_id=${voucher.voucher.id},
+                   source_purchase_rate=${new Decimal(source.unitPurchaseCost).toFixed(7)}
              WHERE id=${returnLine.id} AND company_id=${companyId}
           `);
           totalQty = totalQty.add(qty);
           totalSupplier = totalSupplier.add(supplierCredit);
           totalInventory = totalInventory.add(inventoryValue);
           postedFinancials.push({ quantity: qty.toFixed(3), financials });
+        }
+        // Preserve each original workbook-row allocation without multiplying the
+        // source-level financial postings when the same offload occurs in several rows.
+        if (body.requestedRows) {
+          for (let index = 0; index < body.requestedRows.length; index++) {
+            const requested = body.requestedRows[index];
+            for (const allocation of requested.allocations) {
+              const returnLineId = returnLineIds.get(allocation.offloadItemId);
+              if (!returnLineId)
+                throw new ReturnError(409, "RETURN_ALLOCATION_AUDIT_MISSING",
+                  "An allocated container has no committed source return line");
+              await tx.execute(sql`
+                INSERT INTO erp_supplier_return_allocation_rows
+                  (company_id,batch_id,return_line_id,input_row,requested_article_code,
+                   requested_quantity,allocated_quantity)
+                VALUES (${companyId},${batch.id},${returnLineId},${index + 2},
+                  ${requested.code.trim()},${requested.quantity},${allocation.quantity})
+              `);
+            }
+          }
         }
         const reconciled = reconcileSupplierReturnBatch(postedFinancials);
         if (!totalQty.eq(reconciled.totalQuantity) ||
