@@ -1,3 +1,4 @@
+import { styleUniversalFinancialWorkbook } from "@shared/universal-excel/financialWorkbookStyle";
 /**
  * Agent statement Excel export.
  *
@@ -54,6 +55,10 @@ export async function exportAgentStatementExcel(account: Account, rows: string[]
       "!cols": [{ wch: 25 }, { wch: 14 }, { wch: 15 }, { wch: 15 }, { wch: 18 }, { wch: 14 }, { wch: 30 }],
     },
     account.name.substring(0, 31).replace(/[\\/*?[\]:]/g, "_")
+  );
+  styleUniversalFinancialWorkbook(
+    wb,
+    wb.worksheets.map((ws) => ({ name: ws.name, headerRow: 1 }))
   );
   await writeFile(wb, `Agent_Statement_${account.name.replace(/[\\/*?[\]:]/g, "_").substring(0, 40)}.xlsx`);
 }

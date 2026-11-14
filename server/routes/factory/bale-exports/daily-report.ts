@@ -1,3 +1,4 @@
+import { buildUniversalExcelWorkbook, type UniversalExcelColumn } from "@shared/universal-excel/engine";
 /**
  * factoryBaleExportRoutes: FactoryDailyReport endpoints.
  *
@@ -100,67 +101,48 @@ export function registerFactoryDailyReportRoutes(app: Express) {
       const showCost = !factoryConfig?.hideAvgCost && !userHideAllCosts;
 
       if (format === "excel") {
-        const ExcelJS = (await import("exceljs")).default;
-        const workbook = new ExcelJS.Workbook();
-        const sheet = workbook.addWorksheet("Production Report");
-        const columns: Array<{ header: string; key: string; width: number }> = [
-          { header: "Date", key: "date", width: 14 },
-          { header: "Batch Code", key: "batchCode", width: 18 },
-          { header: "Batch Name", key: "batchName", width: 28 },
-          { header: "Operator", key: "operatorUser", width: 20 },
-          { header: "KG Used", key: "kgUsed", width: 14 },
+        const columns: UniversalExcelColumn[] = [
+          { key: "date", header: "Date", width: 14 },
+          { key: "batchCode", header: "Batch Code", width: 18 },
+          { key: "batchName", header: "Batch Name", width: 28 },
+          { key: "operatorUser", header: "Operator", width: 20 },
+          { key: "kgUsed", header: "KG Used", type: "decimal", width: 14, numFmt: "#,##0.000" },
         ];
-        if (showCost) columns.push({ header: "Cost / KG", key: "costPerKg", width: 14 });
-        columns.push({ header: "Notes", key: "notes", width: 32 });
-        sheet.columns = columns;
-
-        sheet.getRow(1).eachCell((cell) => {
-          cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
-          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF2563EB" } };
-        });
-
-        for (const usage of usages) {
-          const rowData: {
-            date: string;
-            batchCode: string;
-            batchName: string;
-            operatorUser: string;
-            kgUsed: number;
-            notes: string;
-            costPerKg?: number;
-          } = {
-            date: usage.usedDate,
-            batchCode: usage.batchCode,
-            batchName: usage.batchName || "",
-            operatorUser: usage.operatorUser || "",
-            kgUsed: toInventoryDecimal(usage.kgUsed).toNumber(),
-            notes: usage.notes || "",
-          };
-          if (showCost) rowData.costPerKg = toInventoryDecimal(usage.costPerKg).toNumber();
-          sheet.addRow(rowData);
+        if (showCost) {
+          columns.push({ key: "costPerKg", header: "Cost / KG", type: "money", width: 14 });
         }
-
-        const totalRowData: {
-          date: string;
-          batchCode: string;
-          batchName: string;
-          operatorUser: string;
-          kgUsed: number;
-          notes: string;
-          costPerKg?: string;
-        } = {
-          date: "TOTAL",
-          batchCode: "",
-          batchName: "",
-          operatorUser: "",
-          kgUsed: totalKgUsed.toNumber(),
-          notes: "",
-        };
-        if (showCost) totalRowData.costPerKg = "";
-        sheet.addRow(totalRowData).eachCell((cell) => {
-          cell.font = { bold: true };
+        columns.push({ key: "notes", header: "Notes", width: 32 });
+        const rows = usages.map((usage) => ({
+          date: usage.usedDate,
+          batchCode: usage.batchCode,
+          batchName: usage.batchName || "",
+          operatorUser: usage.operatorUser || "",
+          kgUsed: toInventoryDecimal(usage.kgUsed).toNumber(),
+          ...(showCost ? { costPerKg: toInventoryDecimal(usage.costPerKg).toNumber() } : {}),
+          notes: usage.notes || "",
+        }));
+        const { workbook } = buildUniversalExcelWorkbook({
+          schemaVersion: 1,
+          mode: "report",
+          title: "Factory Raw Production",
+          sheets: [
+            {
+              kind: "table",
+              name: "Production Report",
+              columns,
+              rows,
+              footer: {
+                date: "TOTAL",
+                batchCode: "",
+                batchName: "",
+                operatorUser: "",
+                kgUsed: totalKgUsed.toNumber(),
+                ...(showCost ? { costPerKg: null } : {}),
+                notes: "",
+              },
+            },
+          ],
         });
-
         const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
         res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         res.setHeader("Content-Disposition", `attachment; filename="raw-production-report-${filenameDate}.xlsx"`);

@@ -28,7 +28,8 @@ vi.mock("../server/services/export-excel/sheet-helpers", () => ({
 vi.mock("../server/services/export-excel/summary-sheet", () => ({
   addSummarySheet: (workbook: any, data: unknown) => {
     harness.summaryCalls.push(data);
-    workbook.addWorksheet("Summary");
+    // Mirror the real full-company archive contract: first sheet is SUMMARY.
+    workbook.addWorksheet("SUMMARY");
   },
 }));
 

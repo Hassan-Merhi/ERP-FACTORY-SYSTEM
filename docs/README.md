@@ -24,6 +24,17 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [erp-supplier-returns-phase6-excel-history.md](erp-supplier-returns-phase6-excel-history.md) | Export, history and controlled migration requirements |
 | Doc | What it covers |
 |---|---|
+
+| [phase-1-audit.md](universal-excel-export/phase-1-audit.md) | Export inventory and import dependency audit |
+| [phase-2-engine.md](universal-excel-export/phase-2-engine.md) | Shared workbook engine and compatibility contract |
+| [phase-3-design.md](universal-excel-export/phase-3-design.md) | Dakzo workbook appearance and print design |
+| [phase-4-smart-columns.md](universal-excel-export/phase-4-smart-columns.md) | Dynamic columns and typed values |
+| [phase-5-erp-operational.md](universal-excel-export/phase-5-erp-operational.md) | ERP operational export migration and permission safeguards |
+| [phase-6-factory-operational.md](universal-excel-export/phase-6-factory-operational.md) | Factory operational export migration and verification |
+| [phase-7-financial.md](universal-excel-export/phase-7-financial.md) | Financial workbook migration, DR/CR, FX and accounting integrity |
+| [phase-8-specialized.md](universal-excel-export/phase-8-specialized.md) | Specialized multi-sheet, formula-linked, import and large export contracts |
+| [phase-9-appearance.md](universal-excel-export/phase-9-appearance.md) | Per-company Admin/Developer styling, logos, previews, privacy and role checks |
+| [phase-10-release-certification.md](universal-excel-export/phase-10-release-certification.md) | Final integration evidence, CI/DB/i18n gates, rollout safety and approval criteria |
 | [permissions-control-center-plan.md](permissions-control-center-plan.md) | Permissions Control Center design, rollout sequence and security acceptance criteria |
 | [permissions-control-center-phase1.md](permissions-control-center-phase1.md) | Route inventory, candidate mappings and policy model |
 | [permissions-control-center-phase2.md](permissions-control-center-phase2.md) | Shadow policy API, migration and audit foundation |

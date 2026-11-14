@@ -310,6 +310,13 @@ describe("Cost centers lifecycle (migrations applied)", () => {
         const sheet = book.getWorksheet("Cost Centers")!;
         expect((sheet.getRow(1).values as unknown[]).slice(1)).toEqual(headers[view]);
         expect(sheet.rowCount).toBe(table.length);
+        // Numeric finance amounts must remain Excel numbers, not string values
+        // or metadata banners (the header is contractually fixed at row one).
+        const amountField = view === "activity" ? "amountUsd" : "expense";
+        const amountColumn = headers[view].indexOf(amountField);
+        if (amountColumn >= 0 && sheet.rowCount > 1) {
+          expect(typeof sheet.getRow(2).getCell(amountColumn + 1).value).toBe("number");
+        }
 
         const pdf = await binary(`${BASE}${path}?${REPORT_WINDOW}&format=pdf&view=${view}`);
         expect(pdf.status, `${path} ${view} pdf`).toBe(200);

@@ -1,7 +1,7 @@
-import * as XLSX from "@/lib/excelHelper";
+import { exportOperationalWorkbook } from "@/lib/operationalExcelExport";
 import type { CreatedBale } from "./types";
 
-/** Downloads the bales created in this re-entry session as an Excel sheet. */
+/** Export actual created bales, not a stock-import template. */
 export async function exportCreatedBalesWorkbook(createdBales: CreatedBale[], entryDate: string): Promise<void> {
   const rows = createdBales.map((b) => ({
     Reference: b.referenceNumber,
@@ -10,8 +10,22 @@ export async function exportCreatedBalesWorkbook(createdBales: CreatedBale[], en
     "Weight (kg)": b.weightKg,
     "Entry Date": b.stockEntryDate || entryDate,
   }));
-  const ws = XLSX.utils.json_to_sheet(rows);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "WipersReEntry");
-  await XLSX.writeFile(wb, `wipers-re-entry-${entryDate}.xlsx`);
+  await exportOperationalWorkbook({
+    title: "Factory Wipers Re-entry",
+    fileName: "wipers-re-entry-" + entryDate + ".xlsx",
+    filters: [{ label: "Entry date", value: entryDate }],
+    sheets: [
+      {
+        name: "WipersReEntry",
+        columns: [
+          { key: "Reference", header: "Reference", width: 22 },
+          { key: "Product", header: "Product", width: 34 },
+          { key: "Article Code", header: "Article Code", width: 20 },
+          { key: "Weight (kg)", header: "Weight (kg)", type: "decimal", width: 17, numFmt: "#,##0.000" },
+          { key: "Entry Date", header: "Entry Date", width: 17 },
+        ],
+        rows,
+      },
+    ],
+  });
 }

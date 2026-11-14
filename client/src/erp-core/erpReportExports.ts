@@ -12,16 +12,15 @@ export function erpReportFileName(
   label: string,
   extension: ErpReportFileExtension,
   date: Date = new Date(),
-  separator: "_" | "-" = "_",
+  separator: "_" | "-" = "_"
 ): string {
   // Strip control characters without a control-character regex (lint gate).
-  const safeCharacters = Array.from(label, (character) =>
-    character.charCodeAt(0) < 32 ? "_" : character,
-  ).join("");
-  const prefix = safeCharacters
-    .replace(/[\\/<>:"|?*]+/g, "_")
-    .replace(/[.\s]+$/g, "")
-    .trim() || "ERP_Report";
+  const safeCharacters = Array.from(label, (character) => (character.charCodeAt(0) < 32 ? "_" : character)).join("");
+  const prefix =
+    safeCharacters
+      .replace(/[\\/<>:"|?*]+/g, "_")
+      .replace(/[.\s]+$/g, "")
+      .trim() || "ERP_Report";
   return `${prefix}${separator}${format(date, "yyyy-MM-dd")}.${extension}`;
 }
 
@@ -30,11 +29,34 @@ export async function exportErpReportRowsExcel<Row extends object>({
   rows,
   sheetName,
   fileName,
+  universalDesign = false,
+  companyName,
 }: {
   rows: readonly Row[];
   sheetName: string;
   fileName: string;
+  /** Opt in per report; false keeps legacy first-row contracts unchanged. */
+  universalDesign?: boolean;
+  companyName?: string;
 }): Promise<void> {
+  if (universalDesign && rows.length > 0) {
+    const { columnsFromOperationalRows, exportOperationalWorkbook } = await import("@/lib/operationalExcelExport");
+    const records = rows as unknown as readonly Record<string, unknown>[];
+    await exportOperationalWorkbook({
+      title: sheetName,
+      companyName,
+      fileName,
+      sheets: [
+        {
+          name: sheetName,
+          columns: columnsFromOperationalRows(records),
+          rows: records,
+        },
+      ],
+    });
+    return;
+  }
+  // Legacy path remains the default (and handles empty exports).
   // ExcelJS is large; keep it out of the default ERP route bundles.
   const { utils, writeFile } = await import("@/lib/excelHelper");
   const wb = utils.book_new();
@@ -47,10 +69,7 @@ export async function exportErpReportRowsExcel<Row extends object>({
  * in the source data. Escape formula-leading *text* to prevent opening a
  * user-provided name or note as a spreadsheet formula.
  */
-export function buildErpReportCsv(
-  headers: readonly string[],
-  rows: readonly (readonly unknown[])[],
-): string {
+export function buildErpReportCsv(headers: readonly string[], rows: readonly (readonly unknown[])[]): string {
   const safeCell = (value: unknown): string => {
     const raw = value == null ? "" : String(value);
     const trimmed = raw.trim();

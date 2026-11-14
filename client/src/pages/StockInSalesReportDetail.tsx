@@ -13,7 +13,6 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useToast } from "@/hooks/use-toast";
-import { ExcelJS, writeFile } from "@/lib/excelHelper";
 import { formatNumber } from "@/lib/formatNumber";
 
 interface Metrics {
@@ -356,126 +355,131 @@ export default function StockInSalesReportDetail() {
   const exportExcel = async () => {
     setIsExporting(true);
     try {
-      const workbook = new ExcelJS.Workbook();
       const exportParams = new URLSearchParams(baseParams);
       exportParams.set("exportAll", "true");
-      const detailResponse = await fetch(`/api/reports/stock-in-sales/detail?${exportParams.toString()}`, {
+      const detailResponse = await fetch("/api/reports/stock-in-sales/detail?" + exportParams.toString(), {
         credentials: "include",
       });
       if (!detailResponse.ok) throw new Error("Failed to load export details");
-
       const exportData = (await detailResponse.json()) as DetailResponse;
-      const exportStockIn = groupStockInRows(exportData.stockIn.rows);
-      const exportSales = groupSalesRows(exportData.stockOut.rows);
-      const exportAdjustments = exportData.adjustments?.rows || [];
 
-      const summarySheet = workbook.addWorksheet("Summary");
-      summarySheet.columns = [
-        { header: "Metric", key: "metric", width: 28 },
-        { header: "Value", key: "value", width: 20 },
-      ];
-      [
-        ["Period", periodLabel],
-        ["Opening Stock Qty", exportData.summary.openingStockQty],
-        ["Opening Stock Value", exportData.summary.openingStockValue],
-        ["Stock In Qty", exportData.summary.stockInQty],
-        ["Stock In Value", exportData.summary.stockInValue],
-        ["Stock Adjustments Net Qty", exportData.summary.stockAdjustmentQty],
-        ["Total Available Qty", exportData.summary.totalAvailableQty],
-        ["Stock Out Qty", exportData.summary.stockOutQty],
-        ["Closing Stock Qty", exportData.summary.closingStockQty],
-        ["Closing Stock Value", exportData.summary.closingStockValue],
-        ["Total Sales", exportData.summary.totalSales],
-        ["Cost of Sales", exportData.summary.costOfSales],
-        ["Gross Profit", exportData.summary.costProfit],
-        ["Average Profit / Bale", exportData.summary.avgProfitPerBale],
-      ].forEach(([metric, value]) => summarySheet.addRow({ metric, value }));
-      summarySheet.getRow(1).font = { bold: true };
-
-      const stockInSheet = workbook.addWorksheet("Container Stock In");
-      stockInSheet.columns = [
-        { header: "Dates", key: "date", width: 18 },
-        { header: "Containers", key: "containers", width: 42 },
-        { header: "Locations", key: "locations", width: 36 },
-        { header: "Item", key: "item", width: 34 },
-        { header: "Qty", key: "qty", width: 14 },
-        { header: "Avg Rate", key: "rate", width: 16 },
-        { header: "Value", key: "value", width: 18 },
-      ];
-      exportStockIn.forEach((row) =>
-        stockInSheet.addRow({
-          date: row.dates.join(", "),
-          containers: row.containers.map((entry) => `${entry.name} (${formatNumber(entry.quantity, 0)})`).join(", "),
-          locations: row.locations.map((entry) => `${entry.name} (${formatNumber(entry.quantity, 0)})`).join(", "),
-          item: row.stockItemName,
-          qty: row.quantity,
-          rate: row.avgRate,
-          value: row.totalValue,
-        })
-      );
-      stockInSheet.getRow(1).font = { bold: true };
-
-      const adjustmentSheet = workbook.addWorksheet("Stock Adjustments");
-      adjustmentSheet.columns = [
-        { header: "Date", key: "date", width: 14 },
-        { header: "Voucher", key: "voucher", width: 18 },
-        { header: "Type", key: "type", width: 18 },
-        { header: "Direction", key: "direction", width: 14 },
-        { header: "Location", key: "location", width: 24 },
-        { header: "Item", key: "item", width: 34 },
-        { header: "Qty", key: "qty", width: 14 },
-        { header: "Rate", key: "rate", width: 16 },
-        { header: "Value", key: "value", width: 18 },
-      ];
-      exportAdjustments.forEach((row) =>
-        adjustmentSheet.addRow({
-          date: row.activityDate,
-          voucher: row.voucherNumber,
-          type: row.adjustmentType,
-          direction: row.direction === "In" ? "Stock In" : "Stock Out",
-          location: row.locationName,
-          item: row.stockItemName,
-          qty: row.quantity,
-          rate: row.unitRate,
-          value: row.totalValue,
-        })
-      );
-      adjustmentSheet.getRow(1).font = { bold: true };
-
-      const salesSheet = workbook.addWorksheet("Sales");
-      salesSheet.columns = [
-        { header: "Date", key: "date", width: 14 },
-        { header: "Locations", key: "locations", width: 36 },
-        { header: "Item", key: "item", width: 34 },
-        { header: "Qty", key: "qty", width: 14 },
-        { header: "Avg Rate", key: "rate", width: 16 },
-        { header: "Value", key: "value", width: 18 },
-        { header: "Profit / Bale", key: "profitPerBale", width: 18 },
-        { header: "Total Profit", key: "totalProfit", width: 18 },
-      ];
-      exportSales.forEach((row) =>
-        salesSheet.addRow({
-          date: row.activityDate,
-          locations: row.locations.map((entry) => `${entry.name} (${formatNumber(entry.quantity, 0)})`).join(", "),
-          item: row.stockItemName,
-          qty: row.quantity,
-          rate: row.avgRate,
-          value: row.totalValue,
-          profitPerBale: row.profitPerBale,
-          totalProfit: row.totalProfit,
-        })
-      );
-      salesSheet.getRow(1).font = { bold: true };
-
-      const safeLabel = periodLabel.replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/^-|-$/g, "");
-      await writeFile(workbook, `stock-flow-detail-${safeLabel || format(new Date(), "yyyy-MM-dd")}.xlsx`);
+      // Do not download a 20,000-row truncated "complete" workbook.
       if (exportData.stockIn.truncated || exportData.stockOut.truncated || exportData.adjustments?.truncated) {
-        toast({
-          title: "Export capped",
-          description: "At least one section reached the 20,000-row safety limit.",
-          variant: "destructive",
-        });
+        throw new Error("Stock flow detail exceeds the API export limit; the workbook would be incomplete");
       }
+      const stockIn = groupStockInRows(exportData.stockIn.rows);
+      const sales = groupSalesRows(exportData.stockOut.rows);
+      const adjustments = exportData.adjustments?.rows || [];
+      const summaryRows: Array<{ metric: string; value: string | number }> = [
+        { metric: "Period", value: periodLabel },
+        { metric: "Opening Stock Qty", value: exportData.summary.openingStockQty },
+        { metric: "Opening Stock Value", value: exportData.summary.openingStockValue },
+        { metric: "Stock In Qty", value: exportData.summary.stockInQty },
+        { metric: "Stock In Value", value: exportData.summary.stockInValue },
+        { metric: "Stock Adjustments Net Qty", value: exportData.summary.stockAdjustmentQty },
+        { metric: "Total Available Qty", value: exportData.summary.totalAvailableQty },
+        { metric: "Stock Out Qty", value: exportData.summary.stockOutQty },
+        { metric: "Closing Stock Qty", value: exportData.summary.closingStockQty },
+        { metric: "Closing Stock Value", value: exportData.summary.closingStockValue },
+        { metric: "Total Sales", value: exportData.summary.totalSales },
+        { metric: "Cost of Sales", value: exportData.summary.costOfSales },
+        { metric: "Gross Profit", value: exportData.summary.costProfit },
+        { metric: "Average Profit / Bale", value: exportData.summary.avgProfitPerBale },
+      ];
+      const stockInRows = stockIn.map((row) => ({
+        Dates: row.dates.join(", "),
+        Containers: row.containers.map((entry) => entry.name + " (" + formatNumber(entry.quantity, 0) + ")").join(", "),
+        Locations: row.locations.map((entry) => entry.name + " (" + formatNumber(entry.quantity, 0) + ")").join(", "),
+        Item: row.stockItemName,
+        Qty: row.quantity,
+        "Avg Rate": row.avgRate,
+        Value: row.totalValue,
+      }));
+      const adjustmentRows = adjustments.map((row) => ({
+        Date: row.activityDate,
+        Voucher: row.voucherNumber,
+        Type: row.adjustmentType,
+        Direction: row.direction === "In" ? "Stock In" : "Stock Out",
+        Location: row.locationName,
+        Item: row.stockItemName,
+        Qty: row.quantity,
+        Rate: row.unitRate,
+        Value: row.totalValue,
+      }));
+      const salesRows = sales.map((row) => ({
+        Date: row.activityDate,
+        Locations: row.locations.map((entry) => entry.name + " (" + formatNumber(entry.quantity, 0) + ")").join(", "),
+        Item: row.stockItemName,
+        Qty: row.quantity,
+        "Avg Rate": row.avgRate,
+        Value: row.totalValue,
+        "Profit / Bale": row.profitPerBale,
+        "Total Profit": row.totalProfit,
+      }));
+      const { columnsFromOperationalRows, exportOperationalWorkbook } = await import("@/lib/operationalExcelExport");
+      const money = {
+        "Avg Rate": "money" as const,
+        Rate: "money" as const,
+        Value: "money" as const,
+        "Profit / Bale": "money" as const,
+        "Total Profit": "money" as const,
+        Qty: "decimal" as const,
+      };
+      const safeLabel = periodLabel.replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/^-|-$/g, "");
+      await exportOperationalWorkbook({
+        title: "Stock Flow Details",
+        companyName: selectedCompany?.name,
+        currencyCode: "USD",
+        fileName: "stock-flow-detail-" + (safeLabel || format(new Date(), "yyyy-MM-dd")) + ".xlsx",
+        filters: [
+          { label: "Period", value: periodLabel },
+          { label: "Locations", value: locationIds || "All" },
+          { label: "Stock groups", value: stockGroupIds || "All" },
+          { label: "Search", value: search || "All" },
+        ],
+        sheets: [
+          {
+            name: "Summary",
+            rows: summaryRows,
+            columns: columnsFromOperationalRows(summaryRows, {
+              orderedHeaders: ["metric", "value"],
+            }),
+          },
+          {
+            name: "Container Stock In",
+            rows: stockInRows,
+            columns: columnsFromOperationalRows(stockInRows, {
+              orderedHeaders: ["Dates", "Containers", "Locations", "Item", "Qty", "Avg Rate", "Value"],
+              types: money,
+            }),
+          },
+          {
+            name: "Stock Adjustments",
+            rows: adjustmentRows,
+            columns: columnsFromOperationalRows(adjustmentRows, {
+              orderedHeaders: ["Date", "Voucher", "Type", "Direction", "Location", "Item", "Qty", "Rate", "Value"],
+              types: money,
+            }),
+          },
+          {
+            name: "Sales",
+            rows: salesRows,
+            columns: columnsFromOperationalRows(salesRows, {
+              orderedHeaders: [
+                "Date",
+                "Locations",
+                "Item",
+                "Qty",
+                "Avg Rate",
+                "Value",
+                "Profit / Bale",
+                "Total Profit",
+              ],
+              types: money,
+            }),
+          },
+        ],
+      });
     } catch (exportError: unknown) {
       toast({
         title: "Export failed",

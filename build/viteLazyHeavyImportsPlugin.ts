@@ -42,6 +42,10 @@ export function lazyHeavyImportsPlugin(): Plugin {
         normalizedId.endsWith(STOCK_IN_SALES_REPORT_SUFFIX) ||
         normalizedId.endsWith(STOCK_IN_SALES_DETAIL_SUFFIX)
       ) {
+        // Phase 5 migrated these exports to a click-time dynamic import.
+        // The legacy rewrite still applies to older code, but does not require
+        // a dead static import pattern once the page has been modernized.
+        if (!source.includes(EXCEL_HELPER_IMPORT)) return null;
         return { code: deferExcelHelper(source), map: null };
       }
       return null;

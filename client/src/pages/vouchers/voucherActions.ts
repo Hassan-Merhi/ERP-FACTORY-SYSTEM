@@ -1,5 +1,5 @@
 import { format } from "date-fns";
-import { utils, writeFile } from "@/lib/excelHelper";
+import { exportOperationalWorkbook } from "@/lib/operationalExcelExport";
 
 type VoucherExportEntry = {
   accountId: number;
@@ -48,15 +48,31 @@ export async function exportVoucherHelper({ formData, activeTab, toast, detailed
       "Pay From/Receive In": formData.paymentAccountName || "",
       Account: entry.accountName || "",
       "Account Type": entry.accountType || "",
-      Amount: parseFloat(entry.amount).toFixed(2),
+      Amount: parseFloat(entry.amount),
       Notes: formData.notes || "",
       Optional: formData.optional ? "Yes" : "No",
     }));
-    const worksheet = utils.json_to_sheet(exportData);
-    const workbook = utils.book_new();
-    utils.book_append_sheet(workbook, worksheet, `${voucherType} Detailed`);
     const fileName = `${voucherType}_Voucher_Detailed_${voucherDate}.xlsx`;
-    await writeFile(workbook, fileName);
+    await exportOperationalWorkbook({
+      title: voucherType + " Voucher — Detailed",
+      fileName,
+      sheets: [
+        {
+          name: voucherType + " Detailed",
+          columns: [
+            { key: "Voucher Type", header: "Voucher Type", width: 18 },
+            { key: "Date", header: "Date", width: 17 },
+            { key: "Pay From/Receive In", header: "Pay From/Receive In", width: 26 },
+            { key: "Account", header: "Account", width: 30 },
+            { key: "Account Type", header: "Account Type", width: 20 },
+            { key: "Amount", header: "Amount", type: "money", width: 18 },
+            { key: "Notes", header: "Notes", width: 40 },
+            { key: "Optional", header: "Optional", width: 12 },
+          ],
+          rows: exportData,
+        },
+      ],
+    });
     toast({ title: "Export successful", description: `Downloaded ${fileName} with ${validEntries.length} entries.` });
   } else {
     const exportData = [
@@ -64,17 +80,32 @@ export async function exportVoucherHelper({ formData, activeTab, toast, detailed
         "Voucher Type": voucherType,
         Date: voucherDate,
         "Pay From/Receive In": formData.paymentAccountName || "",
-        "Total Amount": total.toFixed(2),
+        "Total Amount": total,
         "Number of Entries": validEntries.length,
         Notes: formData.notes || "",
         Optional: formData.optional ? "Yes" : "No",
       },
     ];
-    const worksheet = utils.json_to_sheet(exportData);
-    const workbook = utils.book_new();
-    utils.book_append_sheet(workbook, worksheet, `${voucherType} Summary`);
     const fileName = `${voucherType}_Voucher_Summary_${voucherDate}.xlsx`;
-    await writeFile(workbook, fileName);
+    await exportOperationalWorkbook({
+      title: voucherType + " Voucher — Summary",
+      fileName,
+      sheets: [
+        {
+          name: voucherType + " Summary",
+          columns: [
+            { key: "Voucher Type", header: "Voucher Type", width: 18 },
+            { key: "Date", header: "Date", width: 17 },
+            { key: "Pay From/Receive In", header: "Pay From/Receive In", width: 26 },
+            { key: "Total Amount", header: "Total Amount", type: "money", width: 18 },
+            { key: "Number of Entries", header: "Number of Entries", type: "integer", width: 20 },
+            { key: "Notes", header: "Notes", width: 40 },
+            { key: "Optional", header: "Optional", width: 12 },
+          ],
+          rows: exportData,
+        },
+      ],
+    });
     toast({ title: "Export successful", description: `Downloaded ${fileName}.` });
   }
 }

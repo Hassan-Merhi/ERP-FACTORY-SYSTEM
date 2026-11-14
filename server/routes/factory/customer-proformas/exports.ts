@@ -1,3 +1,4 @@
+import { styleSpecializedWorkbook } from "@shared/universal-excel/specializedWorkbookStyle";
 import { toArrayBuffer } from "../../../lib/bufferCompatibility";
 /**
  * factoryCustomerProformaRoutes: FactoryCustomerProformaExport endpoints.
@@ -13,13 +14,7 @@ import { getExportPriceVisibility } from "../../../helpers/exportVisibility";
 import { buildSafeFilename, contentDisposition } from "../../../lib/contentDisposition";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
-import {
-  factoryBaleProducts,
-  customerProformas,
-  customerProformaLines,
-  customers,
-  companies,
-} from "@shared/schema";
+import { factoryBaleProducts, customerProformas, customerProformaLines, customers, companies } from "@shared/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import path from "path";
 import fs from "fs";
@@ -212,6 +207,10 @@ export function registerFactoryCustomerProformaExportRoutes(app: Express) {
       if (!hideSellingExcel) totRow.getCell(8).alignment = { horizontal: "right" };
 
       // Build buffer BEFORE setting headers so ExcelJS errors can still return a clean JSON 500.
+      styleSpecializedWorkbook(workbook, {
+        expectedSheetNames: ["Proforma Invoice"],
+        sheets: [{ name: "Proforma Invoice", purpose: "report" }],
+      });
       const xlsBuffer = Buffer.from(await workbook.xlsx.writeBuffer());
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
       res.setHeader("Content-Disposition", contentDisposition(buildSafeFilename(["proforma", proforma.name], "xlsx")));

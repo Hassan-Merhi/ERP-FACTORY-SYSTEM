@@ -1,3 +1,4 @@
+import { styleSpecializedWorkbook } from "@shared/universal-excel/specializedWorkbookStyle";
 import fs from "fs";
 import path from "path";
 import type { Pool } from "pg";
@@ -204,7 +205,12 @@ export async function buildCanonicalInvoiceExcel(
     [labels.destination, document.destination || "-"],
     [labels.status, document.status.replaceAll("_", " ")],
     ...(document.dispatchTrips?.length
-      ? [["Dispatch trips", document.dispatchTrips.map(t => "#" + String(t.dispatchNumber).padStart(3, "0")).join(", ")] as [string,string]]
+      ? [
+          [
+            "Dispatch trips",
+            document.dispatchTrips.map((t) => "#" + String(t.dispatchNumber).padStart(3, "0")).join(", "),
+          ] as [string, string],
+        ]
       : []),
   ];
   const valueColumn = COL;
@@ -408,6 +414,12 @@ export async function buildCanonicalInvoiceExcel(
   sheet.pageSetup.printTitlesRow = `${headerRow.number}:${headerRow.number}`;
   if (language === "ar") configureFactoryArabicWorksheet(sheet, language);
 
+  // Preserve canonical invoice source, localized headers, print totals and
+  // existing HMD logo. No accounting or order recalculations in this adapter.
+  styleSpecializedWorkbook(workbook, {
+    expectedSheetNames: [sheet.name],
+    sheets: [{ name: sheet.name, purpose: "report" }],
+  });
   const raw = await workbook.xlsx.writeBuffer();
   const buffer = Buffer.isBuffer(raw) ? Buffer.from(raw) : Buffer.from(raw as ArrayBuffer);
   if (buffer.length < 2 || buffer.subarray(0, 2).toString("ascii") !== "PK") {
@@ -503,7 +515,12 @@ export async function buildCanonicalInvoicePdf(
         [labels.destination, document.destination || "-"],
         [labels.status, document.status.replaceAll("_", " ")],
         ...(document.dispatchTrips?.length
-          ? [["Dispatch trips", document.dispatchTrips.map(t => "#" + String(t.dispatchNumber).padStart(3,"0")).join(", ")] as [string,string]]
+          ? [
+              [
+                "Dispatch trips",
+                document.dispatchTrips.map((t) => "#" + String(t.dispatchNumber).padStart(3, "0")).join(", "),
+              ] as [string, string],
+            ]
           : []),
       ];
       normalFont().fontSize(8).fillColor("#000000");

@@ -23,7 +23,6 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { formatNumber } from "@/lib/formatNumber";
 import { visibleTabInterval } from "@/lib/queryPolicies";
-import * as XLSX from "@/lib/excelHelper";
 
 function toLocalDateStr(d: Date): string {
   return d.toLocaleDateString("en-CA");
@@ -77,7 +76,8 @@ function StatusBadge({
     return <Badge className="daily-scan-status bg-amber-500 text-white border-0">Pending Loading</Badge>;
   if (s === "IN_STOCK") return <Badge className="daily-scan-status bg-green-600 text-white border-0">In Stock</Badge>;
   if (s === "SOLD") return <Badge className="daily-scan-status bg-red-600 text-white border-0">Sold</Badge>;
-  if (s === "RESERVED_FOR_ORDER") return <Badge className="daily-scan-status bg-blue-600 text-white border-0">Reserved</Badge>;
+  if (s === "RESERVED_FOR_ORDER")
+    return <Badge className="daily-scan-status bg-blue-600 text-white border-0">Reserved</Badge>;
   return <Badge variant="outline">{status || "—"}</Badge>;
 }
 
@@ -265,89 +265,66 @@ export default function DailyScan() {
       return;
     }
 
-    const { ExcelJS } = XLSX;
-    const wb = new ExcelJS.Workbook();
-    wb.creator = "HMD ERP";
-    wb.created = new Date();
-
-    // Excel sheet names cannot contain "/", so the dd/mm/yyyy display date made
-    // ExcelJS throw and the export never produced a file.
-    const ws = wb.addWorksheet(formatDisplay(selectedDate).replace(/\//g, "-"));
-
-    const NAVY = "FF1B2A4A";
-    const WHITE = "FFFFFFFF";
-    const LGRAY = "FFF5F7FA";
-    const GREEN = "FFD6F5D6";
-    const thinBorder = { style: "thin" as const, color: { argb: "FFD0D7E0" } };
-    const allBorders = { top: thinBorder, left: thinBorder, bottom: thinBorder, right: thinBorder };
-    const solidFill = (argb: string) => ({ type: "pattern" as const, pattern: "solid" as const, fgColor: { argb } });
-
-    ws.columns = [
-      { key: "num", width: 6 },
-      { key: "ref", width: 18 },
-      { key: "art", width: 16 },
-      { key: "name", width: 32 },
-      { key: "wt", width: 14 },
-      { key: "dateProd", width: 16 },
-      { key: "worker", width: 20 },
-      { key: "status", width: 12 },
-      { key: "time", width: 14 },
-    ];
-
-    const headers = [
-      "#",
-      "Ref Code",
-      "Article Code",
-      "Product Name",
-      "Weight (kg)",
-      "Date Produced",
-      "Worker",
-      "Status",
-      "Scanned At",
-    ];
-    const hRow = ws.addRow(headers);
-    hRow.eachCell((cell) => {
-      cell.fill = solidFill(NAVY);
-      cell.font = { bold: true, color: { argb: WHITE }, size: 11 };
-      cell.border = allBorders;
-      cell.alignment = { vertical: "middle", horizontal: "center" };
-    });
-    hRow.height = 22;
-
-    // All bales — scanned first, then unscanned
-    const ordered = [...scanned, ...unscanned];
-    ordered.forEach((b, i) => {
-      const scan = scannedRefMap.get(b.reference_number);
-      const isScanned = !!scan;
-      const row = ws.addRow([
-        i + 1,
-        b.reference_number,
-        b.article_code || "",
-        b.product_name || "",
-        b.weight_kg ? parseFloat(b.weight_kg) : "",
-        b.date_bale_produced || "",
-        b.worker_name || "",
-        isScanned ? "Scanned" : "Missing",
-        scan ? new Date(scan.scanned_at).toLocaleTimeString("en-GB") : "",
-      ]);
-      row.eachCell((cell) => {
-        cell.border = allBorders;
-        cell.fill = solidFill(isScanned ? GREEN : i % 2 === 0 ? WHITE : LGRAY);
-        cell.alignment = { vertical: "middle" };
+    try {
+      const { exportOperationalWorkbook } = await import("@/lib/operationalExcelExport");
+      // Use the same order visible in the scanner: scanned first, then missing.
+      const rows = [...scanned, ...unscanned].map((b, i) => {
+        const scan = scannedRefMap.get(b.reference_number);
+        return {
+          number: i + 1,
+          reference: b.reference_number,
+          article: b.article_code || "",
+          product: b.product_name || "",
+          weight: b.weight_kg ? Number(b.weight_kg) : null,
+          produced: b.date_bale_produced || "",
+          worker: b.worker_name || "",
+          status: scan ? "Scanned" : "Missing",
+          scannedAt: scan ? new Date(scan.scanned_at).toLocaleTimeString("en-GB") : "",
+        };
       });
-      row.getCell(1).alignment = { horizontal: "center", vertical: "middle" };
-      row.getCell(5).alignment = { horizontal: "right", vertical: "middle" };
-    });
-
-    const totalRow = ws.addRow(["", "TOTAL", "", "", totalKg, "", "", `${scanned.length}/${totalBales} scanned`, ""]);
-    totalRow.eachCell((cell, col) => {
-      cell.border = allBorders;
-      cell.font = { bold: true };
-      cell.fill = solidFill("FFE8F0F8");
-      if (col === 5) cell.alignment = { horizontal: "right", vertical: "middle" };
-    });
-
-    await XLSX.writeFile(wb, `daily-scan-${selectedDate}.xlsx`);
+      await exportOperationalWorkbook({
+        title: "Factory Daily Scan",
+        fileName: "daily-scan-" + selectedDate + ".xlsx",
+        filters: [
+          { label: "Production date", value: formatDisplay(selectedDate) },
+          { label: "Scanned", value: scanned.length + "/" + totalBales },
+        ],
+        sheets: [
+          {
+            name: formatDisplay(selectedDate).replaceAll("/", "-"),
+            columns: [
+              { key: "number", header: "#", type: "integer", width: 6 },
+              { key: "reference", header: "Ref Code", width: 18 },
+              { key: "article", header: "Article Code", width: 16 },
+              { key: "product", header: "Product Name", width: 32 },
+              { key: "weight", header: "Weight (kg)", type: "decimal", width: 14, numFmt: "#,##0.000" },
+              { key: "produced", header: "Date Produced", width: 16 },
+              { key: "worker", header: "Worker", width: 20 },
+              { key: "status", header: "Status", width: 12 },
+              { key: "scannedAt", header: "Scanned At", width: 14 },
+            ],
+            rows,
+            footer: {
+              number: null,
+              reference: "TOTAL",
+              article: "",
+              product: "",
+              weight: totalKg,
+              produced: "",
+              worker: "",
+              status: scanned.length + "/" + totalBales + " scanned",
+              scannedAt: "",
+            },
+          },
+        ],
+      });
+    } catch (error: unknown) {
+      toast({
+        title: "Export failed",
+        description: error instanceof Error ? error.message : "Could not prepare daily scan workbook",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -402,7 +379,13 @@ export default function DailyScan() {
               {scanned.length}/{totalBales} verified · {formatNumber(scannedKg)}/{formatNumber(totalKg)} kg
             </span>
           )}
-          <Button className="daily-scan-export" variant="outline" size="sm" onClick={handleExport} data-testid="button-daily-scan-export">
+          <Button
+            className="daily-scan-export"
+            variant="outline"
+            size="sm"
+            onClick={handleExport}
+            data-testid="button-daily-scan-export"
+          >
             <Download className="h-4 w-4 mr-1" />
             Export
           </Button>
@@ -422,7 +405,12 @@ export default function DailyScan() {
           disabled={scanning}
         />
         <MobileBarcodeScanner onScan={(code) => void handleScan(code)} disabled={scanning} />
-        <Button className="daily-scan-submit" onClick={() => void handleScan()} disabled={scanning || !scanInput.trim()} data-testid="button-daily-scan-submit">
+        <Button
+          className="daily-scan-submit"
+          onClick={() => void handleScan()}
+          disabled={scanning || !scanInput.trim()}
+          data-testid="button-daily-scan-submit"
+        >
           {scanning ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (

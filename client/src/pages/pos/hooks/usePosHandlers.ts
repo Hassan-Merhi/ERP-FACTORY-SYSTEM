@@ -13,6 +13,7 @@ import { makeFocusCell } from "../utils/posKeyboardHelpers";
 import { usePosRowCalculations } from "./usePosRowCalculations";
 import { usePosCheckout } from "./usePosCheckout";
 import { usePosInvoiceActions } from "./usePosInvoiceActions";
+import { canSeePosExcelFinancials } from "./posExcelPermissions";
 import { usePosKeyboardNavigation } from "./usePosKeyboardNavigation";
 
 interface PosHandlersParams {
@@ -162,6 +163,7 @@ export function usePosHandlers(params: PosHandlersParams) {
       activeLocation: params.activeLocation,
       apiInventory: params.apiInventory,
       toast: params.toast,
+      canSeeFinancials: canSeePosExcelFinancials(params.authUser ?? params.posUser),
     });
 
   const { makeHandleKeyDown } = usePosKeyboardNavigation({

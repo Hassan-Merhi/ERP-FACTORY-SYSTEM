@@ -1,3 +1,4 @@
+import { styleFactoryOperationalWorkbook } from "@shared/universal-excel/factoryOperationalStyle";
 import { useFactoryMhdView } from "@/hooks/use-factory-mhd-view";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { downloadBlob } from "@/lib/downloadBlob";
@@ -214,6 +215,9 @@ export default function FactoryPriceList() {
 
     ws.views = [{ state: "frozen", ySplit: 1 }];
 
+    // Import contract stays unchanged: headers remain at row 1 and editable
+    // price cells retain their visual cues.
+    styleFactoryOperationalWorkbook(wb, [{ name: "Price List", headerRow: 1 }]);
     const buffer = await wb.xlsx.writeBuffer();
     const blob = new Blob([buffer as ArrayBuffer], {
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

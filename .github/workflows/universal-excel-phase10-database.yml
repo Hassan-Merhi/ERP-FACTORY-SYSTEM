@@ -1,0 +1,105 @@
+name: Temporary Universal Excel Phase 10 Database Certification
+
+on:
+  push:
+    branches:
+      - feature/universal-excel-export-system
+
+permissions:
+  contents: read
+
+concurrency:
+  group: universal-excel-phase10-db-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  postgres-excel:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 50
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: heliumdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d heliumdb"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 8
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/heliumdb
+      PGSSLMODE: disable
+      NODE_ENV: test
+      SESSION_SECRET: phase10-universal-excel-local-only-secret
+      ENABLE_SCHEDULERS: "false"
+      CSRF_ENFORCE: "0"
+      PORT: "5000"
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - name: Checkout complete feature branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: feature/universal-excel-export-system
+          fetch-depth: 0
+      - name: Install Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 24.22.2
+      - name: Install locked dependencies
+        run: |
+          sed -i 's#http://package-firewall.replit.local/npm/#https://registry.npmjs.org/#g' package-lock.json
+          npm ci --no-audit --bin-links=true
+      - name: Create disposable PostgreSQL schema (not production)
+        run: node node_modules/drizzle-kit/bin.cjs push --force
+      - name: Test persisted appearance and tenant isolation in PostgreSQL
+        run: npx vitest run --maxWorkers=1 --no-file-parallelism tests/excel-appearance-persistence.database.test.ts
+      - name: Cost Center financial Excel report and unchanged voucher totals
+        run: npx vitest run --maxWorkers=1 --no-file-parallelism tests/cost-centers-lifecycle.test.ts
+      - name: SP Sales Form Excel V2 with hidden formulas
+        run: npx vitest run --maxWorkers=1 --no-file-parallelism tests/excel-export-v2.test.ts
+      - name: SP legacy sales form import-compatible Excel template
+        run: npx vitest run --maxWorkers=1 --no-file-parallelism tests/excel-export.test.ts
+      - name: POS and stock transfer true XLSX upload and import round trips
+        run: npx vitest run --maxWorkers=1 --no-file-parallelism tests/xlsx-import.test.ts
+
+  standalone-contracts:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout feature
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: feature/universal-excel-export-system
+      - name: Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 24.22.2
+      - name: Install
+        run: npm ci --no-audit --bin-links=true
+      - name: Check import templates, formula injection, accounting precision and render
+        run: >
+          npx vitest run
+          tests/universal-excel-engine.test.ts
+          tests/universal-excel-design.test.ts
+          tests/universal-excel-dynamic-columns.test.ts
+          tests/universal-excel-financial-style.test.ts
+          tests/universal-excel-factory-operational.test.ts
+          tests/universal-excel-specialized.test.ts
+          tests/universal-excel-appearance-settings.test.ts
+          tests/excel-appearance-routes.test.ts
+          tests/location-inventory-export-exact.test.ts
+          tests/export-excel-workbook-behavior.test.ts
+          tests/group-net-position-excel.test.ts
+          tests/net-profit-excel-sheets.test.ts
+      - name: Frontend Excel integrations
+        run: >
+          npx vitest run --config vitest.config.frontend.ts
+          tests/ui/universal-excel-appearance-client.test.ts
+          tests/ui/universal-excel-operational.test.ts
+          tests/ui/universal-excel-financial-adapters.test.ts
+          tests/ui/factory-pressing-universal-excel.test.ts
+          tests/ui/order-workbook-exports-behavior.test.ts

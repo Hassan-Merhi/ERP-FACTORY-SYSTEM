@@ -1,3 +1,4 @@
+import { styleFactoryOperationalWorkbook } from "@shared/universal-excel/factoryOperationalStyle";
 /**
  * Phase 7 ExcelJS dispatch reports. Uses the project's buffered Excel bridge
  * (never wb.xlsx.write(stream), which is unreliable in this deployment).
@@ -245,6 +246,10 @@ export function buildFactoryLoadingDispatchWorkbook(report: DispatchReport): Exc
       formattedDate(a.createdAt),
       JSON.stringify(a.details),
     ])
+  );
+  styleFactoryOperationalWorkbook(
+    wb,
+    wb.worksheets.map((worksheet) => ({ name: worksheet.name, headerRow: 1 }))
   );
   return wb;
 }

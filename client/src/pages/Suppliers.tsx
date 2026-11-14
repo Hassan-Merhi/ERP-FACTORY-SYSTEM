@@ -6,7 +6,16 @@ import { useDebounce } from "@/hooks/use-debounce";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import { PageHeader } from "@/components/PageHeader";
-import { ErpListFilters, ErpConfirmDialog, ErpRecordAction, erpReportFileName, exportErpReportRowsExcel, useErpCan as useCan, erpCanDenialMessage as canDenialMessage, useErpRecordChangeAccess as useExistingRecordChangeAccess } from "@/erp-core";
+import {
+  ErpListFilters,
+  ErpConfirmDialog,
+  ErpRecordAction,
+  erpReportFileName,
+  exportErpReportRowsExcel,
+  useErpCan as useCan,
+  erpCanDenialMessage as canDenialMessage,
+  useErpRecordChangeAccess as useExistingRecordChangeAccess,
+} from "@/erp-core";
 import { erpCompanyDataKey, invalidateErpDataFamilies } from "@/erp-core/erpData";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +23,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Edit, Eye, EyeOff, FileText, Search, Truck, Users, Container, DollarSign } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useCompany } from "@/contexts/CompanyContext";
-
 
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { suppliersApi } from "@/api/suppliersApi";
@@ -174,6 +182,8 @@ export default function Suppliers() {
       rows: supplierLedgerToExportRows(unifiedLedger),
       sheetName: "Supplier Ledger",
       fileName: erpReportFileName(`${selectedSupplier.legalName}_Ledger`, "xlsx"),
+      universalDesign: true,
+      companyName: selectedCompany?.name,
     });
   };
 
@@ -428,7 +438,11 @@ export default function Suppliers() {
         open={supplierToDelete !== null}
         onOpenChange={(open) => !open && setSupplierToDelete(null)}
         title="Delete Supplier"
-        description={<>Are you sure you want to delete <strong>{supplierToDelete?.name}</strong>? This action cannot be undone.</>}
+        description={
+          <>
+            Are you sure you want to delete <strong>{supplierToDelete?.name}</strong>? This action cannot be undone.
+          </>
+        }
         tone="destructive"
         confirmText="Delete"
         confirmButtonTestId="button-confirm-delete-supplier"

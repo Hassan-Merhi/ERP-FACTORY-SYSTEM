@@ -1,3 +1,4 @@
+import { styleUniversalFinancialWorkbook } from "@shared/universal-excel/financialWorkbookStyle";
 /**
  * rentalUnitsContractsRoutes: RentalStatementExport endpoints.
  *
@@ -244,6 +245,7 @@ export function registerRentalStatementExportRoutes(app: Express, ctx: RentalRou
       addPaymentSection("GUARANTEE / DEPOSIT ACTIVITY", guaranteePaymentsExport);
 
       const filename = buildSafeFilename(["Rental", unit.unitNumber, contract.tenantName], "xlsx");
+      styleUniversalFinancialWorkbook(wb, [{ name: "Statement", headerRow: hdr.number }]);
       const xlsBuffer = Buffer.from(await wb.xlsx.writeBuffer());
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
       res.setHeader("Content-Disposition", contentDisposition(filename));

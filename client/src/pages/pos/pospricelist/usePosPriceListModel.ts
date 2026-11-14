@@ -586,8 +586,6 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
     if (filteredItems.length === 0) return;
     setExporting(true);
     try {
-      const XLSX = await import("@/lib/excelHelper");
-
       const rows = filteredItems.map((item) => {
         const row: Record<string, unknown> = {
           Code: item.code || "",
@@ -623,10 +621,6 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
         return row;
       });
 
-      const ws = XLSX.utils.json_to_sheet(rows);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Price List");
-
       const locationLabel = isAllMode ? "All_Locations" : (selectedLocation?.name.replace(/\s+/g, "_") ?? "Unknown");
       const dateStr = new Date().toLocaleDateString("en-CA");
       const filterPart = showUnpriced
@@ -636,7 +630,36 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
           : "";
       const searchPart = search.trim() ? `_search-${search.trim().replace(/\s+/g, "_")}` : "";
 
-      await XLSX.writeFile(wb, `price_list_${locationLabel}${filterPart}${searchPart}_${dateStr}.xlsx`);
+      const { columnsFromOperationalRows, exportOperationalWorkbook } = await import("@/lib/operationalExcelExport");
+      const headers = [
+        "Code",
+        "Item Name",
+        "Group",
+        ...(showCostPrice ? ["Cost Price", "Cost + Offloading"] : []),
+        ...(isAllMode
+          ? ["Total Qty", ...masters.map((master) => master.name)]
+          : ["Highest Price Sold", "Lowest Price Sold", "Qty Sold", "Selling Price", "Qty in Stock"]),
+      ];
+      const types: Record<string, "auto" | "money" | "decimal"> = {};
+      for (const key of headers.slice(3)) types[key] = key.includes("Qty") ? "decimal" : "money";
+      // In All Locations mode these price lists are intentionally re-importable:
+      // the parser expects Code and location names in the first worksheet row.
+      await exportOperationalWorkbook({
+        title: "POS Price List",
+        fileName: "price_list_" + locationLabel + filterPart + searchPart + "_" + dateStr + ".xlsx",
+        mode: isAllMode ? "import-template" : "report",
+        filters: [{ label: "Location", value: isAllMode ? "All Locations" : (selectedLocation?.name ?? "Unknown") }],
+        sheets: [
+          {
+            name: "Price List",
+            rows,
+            columns: columnsFromOperationalRows(rows, {
+              orderedHeaders: headers,
+              types,
+            }),
+          },
+        ],
+      });
     } finally {
       setExporting(false);
     }

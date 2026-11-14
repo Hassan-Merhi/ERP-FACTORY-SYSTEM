@@ -1,3 +1,4 @@
+import { styleUniversalFinancialWorkbook } from "@shared/universal-excel/financialWorkbookStyle";
 import { toArrayBuffer } from "../../../lib/bufferCompatibility";
 /**
  * payrollCoreRoutes: PayrollPreview endpoints.
@@ -463,6 +464,7 @@ export function registerPayrollPreviewRoutes(app: Express) {
       ws.views = [{ state: "frozen", ySplit: hdr.number, activeCell: "A" + (hdr.number + 1) }];
 
       // ── Stream out ───────────────────────────────────────────────────────
+      styleUniversalFinancialWorkbook(wb, [{ name: "Payroll", headerRow: hdr.number }]);
       const buf = Buffer.from(await wb.xlsx.writeBuffer());
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
       res.setHeader("Content-Disposition", `attachment; filename="Payroll_${periodStart}_${periodEnd}.xlsx"`);

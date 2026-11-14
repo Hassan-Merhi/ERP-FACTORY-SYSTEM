@@ -1,3 +1,4 @@
+import { styleUniversalFinancialWorkbook } from "@shared/universal-excel/financialWorkbookStyle";
 /**
  * Generates a single Excel workbook covering ALL companies.
  * Structure:
@@ -272,5 +273,9 @@ export async function generateAllCompaniesNetPositionExcel(
     }
   }
 
+  styleUniversalFinancialWorkbook(
+    wb,
+    wb.worksheets.map((ws) => ({ name: ws.name }))
+  );
   return Buffer.from(await wb.xlsx.writeBuffer());
 }

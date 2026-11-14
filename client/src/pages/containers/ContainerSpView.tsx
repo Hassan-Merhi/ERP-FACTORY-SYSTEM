@@ -19,7 +19,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { utils, writeFile } from "@/lib/excelHelper";
+import {
+  columnsFromOperationalRows,
+  exportOperationalWorkbook,
+  type OperationalExcelSheet,
+} from "@/lib/operationalExcelExport";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { spContainerInvoiceChargeLines } from "@shared/spContainerInvoiceCharges";
 import type { Container, Supplier } from "@shared/schema";
@@ -225,8 +229,24 @@ export function ContainerSpView({
         "Total (USD)": c.totalUsd,
         Source: c._source === "sp" ? "Supplier Partner" : "ERP",
       }));
-      const book = utils.book_new();
-      utils.book_append_sheet(book, utils.json_to_sheet(summary), "Containers");
+      const outputSheets: OperationalExcelSheet[] = [
+        {
+          name: "Containers",
+          rows: summary,
+          columns: columnsFromOperationalRows(summary, {
+            orderedHeaders: [
+              "Container Number",
+              "Invoice / PO",
+              "Supplier",
+              "Status",
+              "Import / Invoice Date",
+              "Total (USD)",
+              "Source",
+            ],
+            types: { "Total (USD)": "money" },
+          }),
+        },
+      ];
       if (full) {
         const detailRows: Record<string, string | number>[] = [];
         for (const c of filtered) {
@@ -288,13 +308,31 @@ export function ContainerSpView({
             }
           }
         }
-        utils.book_append_sheet(
-          book,
-          utils.json_to_sheet(detailRows.length ? detailRows : [{ Message: "No line items" }]),
-          "Line Items"
-        );
+        const details = detailRows.length ? detailRows : [{ Message: "No line items" }];
+        outputSheets.push({
+          name: "Line Items",
+          rows: details,
+          columns: columnsFromOperationalRows(details, {
+            orderedHeaders: detailRows.length
+              ? ["Container", "Invoice", "Supplier", "Item Name", "Quantity", "Rate (USD)", "Total (USD)"]
+              : ["Message"],
+            types: {
+              Quantity: "decimal",
+              "Rate (USD)": "money",
+              "Total (USD)": "money",
+            },
+          }),
+        });
       }
-      await writeFile(book, full ? "containers_full_export.xlsx" : "containers.xlsx");
+      await exportOperationalWorkbook({
+        title: full ? "Containers — Full Details" : "Containers",
+        fileName: full ? "containers_full_export.xlsx" : "containers.xlsx",
+        filters: [
+          { label: "Search", value: searchTerm || "All" },
+          { label: "Status", value: statusFilter },
+        ],
+        sheets: outputSheets,
+      });
     } catch (error) {
       toast({
         title: "Export failed",

@@ -1,3 +1,4 @@
+import { styleSpecializedWorkbook } from "@shared/universal-excel/specializedWorkbookStyle";
 import type { MarketRow, ProfitDirectionFilter } from "./itemMarketAnalysisParts";
 
 type MarketStatus = MarketRow["marketStatus"];
@@ -396,5 +397,8 @@ export async function exportItemMarketAnalysisExcel(options: ItemMarketExportOpt
     "_to_" +
     (options.endDate || "all") +
     ".xlsx";
+  styleSpecializedWorkbook(workbook, {
+    sheets: workbook.worksheets.map((ws) => ({ name: ws.name, purpose: "report" as const })),
+  });
   await writeFile(workbook, filename);
 }

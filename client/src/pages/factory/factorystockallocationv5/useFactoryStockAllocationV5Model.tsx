@@ -463,8 +463,6 @@ export function useFactoryStockAllocationV5Model() {
 
   /* ── Excel export ────────────────────────────────────────────────────────── */
   async function handleExportExcel() {
-    const XLSX = (await import("xlsx-js-style")).default;
-
     // Export every matching article across pages, not just the visible grid.
     const exportParams = new URLSearchParams();
     if (hideZero) exportParams.set("hideZero", "true");
@@ -491,130 +489,80 @@ export function useFactoryStockAllocationV5Model() {
       return exportIncludeZero;
     });
 
-    // ── colour helpers ──────────────────────────────────────────────────────
-    const headerFill = { patternType: "solid", fgColor: { rgb: "1E293B" } };
-    const headerFont = { bold: true, color: { rgb: "F8FAFC" }, sz: 10 };
-    const positiveFill = { patternType: "solid", fgColor: { rgb: "DCFCE7" } };
-    const negativeFill = { patternType: "solid", fgColor: { rgb: "FEE2E2" } };
-    const neutralFill = { patternType: "solid", fgColor: { rgb: "F1F5F9" } };
-    const monoFont = { name: "Courier New", sz: 10 };
-    const border = {
-      top: { style: "thin", color: { rgb: "CBD5E1" } },
-      bottom: { style: "thin", color: { rgb: "CBD5E1" } },
-      left: { style: "thin", color: { rgb: "CBD5E1" } },
-      right: { style: "thin", color: { rgb: "CBD5E1" } },
+    const rows = filtered.map((r) => ({
+      articleCode: r.articleCode,
+      productName: r.productName,
+      stockAvailable: r.stockAvailable,
+      expectedToLoad: r.expectedToLoad,
+      totalLoaded: r.totalLoaded,
+      freeToPromise: r.freeToPromise,
+    }));
+    const totals = {
+      articleCode: "TOTALS",
+      productName: filtered.length + " products",
+      stockAvailable: filtered.reduce((s, r) => s + r.stockAvailable, 0),
+      expectedToLoad: filtered.reduce((s, r) => s + r.expectedToLoad, 0),
+      totalLoaded: filtered.reduce((s, r) => s + r.totalLoaded, 0),
+      freeToPromise: filtered.reduce((s, r) => s + r.freeToPromise, 0),
     };
-
-    function hCell(v: string) {
-      return {
-        v,
-        t: "s",
-        s: { fill: headerFill, font: headerFont, alignment: { horizontal: "center", vertical: "center" }, border },
-      };
-    }
-    function numCell(v: number, fill?: object, color?: string) {
-      return {
-        v,
-        t: "n",
-        s: {
-          font: { ...monoFont, ...(color ? { color: { rgb: color } } : {}) },
-          fill: fill ?? { patternType: "solid", fgColor: { rgb: "FFFFFF" } },
-          alignment: { horizontal: "right" },
-          border,
-        },
-      };
-    }
-    function txtCell(v: string, bold = false) {
-      return { v, t: "s", s: { font: { sz: 10, bold }, alignment: { horizontal: "left", wrapText: true }, border } };
-    }
-
-    const headerRow = [
-      hCell("Article Code"),
-      hCell("Product Name"),
-      hCell("Stock Available"),
-      hCell("Expected to Load"),
-      hCell("Total Loaded"),
-      hCell("Available Balance"),
-    ];
-
-    const dataRows = filtered.map((r) => {
-      const bal = r.freeToPromise;
-      const balFill = bal > 0 ? positiveFill : bal < 0 ? negativeFill : neutralFill;
-      const balColor = bal > 0 ? "15803D" : bal < 0 ? "DC2626" : "64748B";
-      return [
-        txtCell(r.articleCode, true),
-        txtCell(r.productName),
-        numCell(r.stockAvailable, { patternType: "solid", fgColor: { rgb: "FFFFFF" } }, "15803D"),
-        numCell(r.expectedToLoad, { patternType: "solid", fgColor: { rgb: "FFFFFF" } }, "D97706"),
-        numCell(r.totalLoaded, { patternType: "solid", fgColor: { rgb: "FFFFFF" } }, "2563EB"),
-        numCell(bal, balFill, balColor),
-      ];
-    });
-
-    // Totals row
-    const totalsBal = filtered.reduce((s, r) => s + r.freeToPromise, 0);
-    const totalsRow = [
-      {
-        v: "TOTALS",
-        t: "s",
-        s: {
-          font: { bold: true, sz: 10 },
-          fill: { patternType: "solid", fgColor: { rgb: "E2E8F0" } },
-          alignment: { horizontal: "left" },
-          border,
-        },
-      },
-      {
-        v: `${filtered.length} products`,
-        t: "s",
-        s: {
-          font: { sz: 10, color: { rgb: "64748B" } },
-          fill: { patternType: "solid", fgColor: { rgb: "E2E8F0" } },
-          alignment: { horizontal: "left" },
-          border,
-        },
-      },
-      numCell(
-        filtered.reduce((s, r) => s + r.stockAvailable, 0),
-        { patternType: "solid", fgColor: { rgb: "E2E8F0" } },
-        "15803D"
-      ),
-      numCell(
-        filtered.reduce((s, r) => s + r.expectedToLoad, 0),
-        { patternType: "solid", fgColor: { rgb: "E2E8F0" } },
-        "D97706"
-      ),
-      numCell(
-        filtered.reduce((s, r) => s + r.totalLoaded, 0),
-        { patternType: "solid", fgColor: { rgb: "E2E8F0" } },
-        "2563EB"
-      ),
-      numCell(
-        totalsBal,
-        { patternType: "solid", fgColor: { rgb: "E2E8F0" } },
-        totalsBal < 0 ? "DC2626" : totalsBal > 0 ? "15803D" : "64748B"
-      ),
-    ];
-
-    const wsData = [headerRow, ...dataRows, totalsRow];
-    const ws = XLSX.utils.aoa_to_sheet(wsData);
-
-    ws["!cols"] = [
-      { wch: 16 }, // Article Code
-      { wch: 36 }, // Product Name
-      { wch: 16 }, // Stock Available
-      { wch: 18 }, // Expected to Load
-      { wch: 14 }, // Total Loaded
-      { wch: 18 }, // Available Balance
-    ];
-    ws["!rows"] = [{ hpt: 22 }, ...dataRows.map(() => ({ hpt: 18 })), { hpt: 22 }];
-
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Stock Allocation");
-
     const now = new Date();
-    const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
-    XLSX.writeFile(wb, `stock_allocation_${stamp}.xlsx`);
+    const stamp =
+      String(now.getFullYear()) + String(now.getMonth() + 1).padStart(2, "0") + String(now.getDate()).padStart(2, "0");
+    try {
+      const { buildUniversalExcelWorkbook } = await import("@shared/universal-excel/engine");
+      const { writeFile } = await import("@/lib/excelHelper");
+      const { workbook } = buildUniversalExcelWorkbook({
+        schemaVersion: 1,
+        mode: "report",
+        title: "Factory Stock Allocation",
+        filters: [
+          { label: "Search", value: debouncedSearch.trim() || "All" },
+          { label: "Include positive", value: String(exportIncludePositive) },
+          { label: "Include negative", value: String(exportIncludeNegative) },
+          { label: "Include zero", value: String(exportIncludeZero) },
+          { label: "Include garbage/wipers", value: String(showGarbageWipers) },
+        ],
+        sheets: [
+          {
+            kind: "table",
+            name: "Stock Allocation",
+            columns: [
+              { key: "articleCode", header: "Article Code", width: 16 },
+              { key: "productName", header: "Product Name", width: 36 },
+              { key: "stockAvailable", header: "Stock Available", type: "decimal", width: 16 },
+              { key: "expectedToLoad", header: "Expected to Load", type: "decimal", width: 18 },
+              { key: "totalLoaded", header: "Total Loaded", type: "decimal", width: 14 },
+              { key: "freeToPromise", header: "Available Balance", type: "decimal", width: 18 },
+            ],
+            rows,
+            footer: totals,
+          },
+        ],
+      });
+      // Retain the legacy red/green meaning for available balance. Header,
+      // filters and export design come from the universal workbook builder.
+      const worksheet = workbook.getWorksheet("Stock Allocation")!;
+      rows.forEach((row, i) => {
+        const cell = worksheet.getRow(i + 6).getCell(6);
+        cell.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: row.freeToPromise > 0 ? "FFDCFCE7" : row.freeToPromise < 0 ? "FFFEE2E2" : "FFF1F5F9" },
+        };
+        cell.font = {
+          name: "Aptos",
+          color: { argb: row.freeToPromise > 0 ? "FF15803D" : row.freeToPromise < 0 ? "FFDC2626" : "FF64748B" },
+        };
+      });
+      await writeFile(workbook, "stock_allocation_" + stamp + ".xlsx");
+    } catch (error: unknown) {
+      toast({
+        title: "Export failed",
+        description: error instanceof Error ? error.message : "Could not export stock allocation",
+        variant: "destructive",
+      });
+      return;
+    }
     setExportDialogOpen(false);
   }
 
