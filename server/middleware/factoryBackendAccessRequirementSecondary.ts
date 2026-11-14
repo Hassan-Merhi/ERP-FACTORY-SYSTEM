@@ -1,7 +1,22 @@
 /** Factory API requirement rules: ordered second half, preserving first-match order. */
 import type { Request } from "express";
-import { anyOf, hasPrefix, isWrite, requirement, type FactoryApiAccessRequirement } from "./factoryBackendAccessBoundaryRules";
-import { PAYROLL_WORKERS, WORKERS_PAYROLL, WORKERS_ADVANCES, workerRequirement, employeeRequirement, attendanceRequirement, importRequirement, invoicingRequirement } from "./factoryBackendAccessRequirementHelpers";
+import {
+  anyOf,
+  hasPrefix,
+  isWrite,
+  requirement,
+  type FactoryApiAccessRequirement,
+} from "./factoryBackendAccessBoundaryRules";
+import {
+  PAYROLL_WORKERS,
+  WORKERS_PAYROLL,
+  WORKERS_ADVANCES,
+  workerRequirement,
+  employeeRequirement,
+  attendanceRequirement,
+  importRequirement,
+  invoicingRequirement,
+} from "./factoryBackendAccessRequirementHelpers";
 
 export function resolveSecondaryRequirement(req: Request, path: string): FactoryApiAccessRequirement | null {
   // Import page.

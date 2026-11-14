@@ -454,4 +454,10 @@ export const factorySheetsSacksLog = pgTable(
   ]
 );
 
-export { factoryRecalcUndoLog, factoryReplayConsumedTokens, factoryPhysicalBaleDeletions, factoryPriorityAutoAllocations, factoryPriorityScanHistory } from "./factoryRuntimeAuditTables";
+export {
+  factoryRecalcUndoLog,
+  factoryReplayConsumedTokens,
+  factoryPhysicalBaleDeletions,
+  factoryPriorityAutoAllocations,
+  factoryPriorityScanHistory,
+} from "./factoryRuntimeAuditTables";

@@ -1,5 +1,18 @@
 /** Factory historical replay, physical deletion and priority scan runtime tables. */
-import { pgTable, serial, text, timestamp, integer, varchar, jsonb, index, uniqueIndex, date, bigserial, bigint } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  serial,
+  text,
+  timestamp,
+  integer,
+  varchar,
+  jsonb,
+  index,
+  uniqueIndex,
+  date,
+  bigserial,
+  bigint,
+} from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 /** Raw-stock recalc and exact Historical Replay undo log (startup-schema/032). */

@@ -35,7 +35,6 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
   return resolvePrimaryRequirement(req, path) ?? resolveSecondaryRequirement(req, path);
 }
 
-
 function tabDeniedDecision(message: string): Exclude<FactoryAccessDecision, { allowed: true }> {
   return {
     allowed: false,

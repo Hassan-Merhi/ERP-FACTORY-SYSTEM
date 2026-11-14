@@ -1,6 +1,18 @@
 /** Immutable Phase 9 applied-events and Phase 10 operator log table definitions. */
 import { sql } from "drizzle-orm";
-import { bigint, bigserial, char, date, integer, pgTable, primaryKey, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import {
+  bigint,
+  bigserial,
+  char,
+  date,
+  integer,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  unique,
+  uuid,
+} from "drizzle-orm/pg-core";
 
 export const factoryEdgeAppliedEvents = pgTable(
   "factory_edge_applied_events",

@@ -1,7 +1,23 @@
 /** Factory API requirement rules: ordered first half, preserving first-match order. */
 import type { Request } from "express";
-import { anyOf, hasPrefix, isWrite, requirement, type FactoryApiAccessRequirement } from "./factoryBackendAccessBoundaryRules";
-import { PAYROLL_WORKERS, PAYROLL_EMPLOYEES, WORKERS_PAYROLL, WORKERS_REPORT, EMPLOYEES_PAYROLL, EMPLOYEES_ATTENDANCE, EMPLOYEES_ADVANCES, EMPLOYEES_BONUSES, attendanceRequirement } from "./factoryBackendAccessRequirementHelpers";
+import {
+  anyOf,
+  hasPrefix,
+  isWrite,
+  requirement,
+  type FactoryApiAccessRequirement,
+} from "./factoryBackendAccessBoundaryRules";
+import {
+  PAYROLL_WORKERS,
+  PAYROLL_EMPLOYEES,
+  WORKERS_PAYROLL,
+  WORKERS_REPORT,
+  EMPLOYEES_PAYROLL,
+  EMPLOYEES_ATTENDANCE,
+  EMPLOYEES_ADVANCES,
+  EMPLOYEES_BONUSES,
+  attendanceRequirement,
+} from "./factoryBackendAccessRequirementHelpers";
 
 export function resolvePrimaryRequirement(req: Request, path: string): FactoryApiAccessRequirement | null {
   // Attendance is an active-company exception in factoryRoutes.ts. Keep its

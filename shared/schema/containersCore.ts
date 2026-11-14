@@ -1,5 +1,18 @@
 /** Core container, tracking event and tracking check Drizzle tables. */
-import { pgTable, text, varchar, serial, integer, decimal, date, boolean, timestamp, uniqueIndex, index, jsonb } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  text,
+  varchar,
+  serial,
+  integer,
+  decimal,
+  date,
+  boolean,
+  timestamp,
+  uniqueIndex,
+  index,
+  jsonb,
+} from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { suppliers } from "./erp";
