@@ -73,7 +73,6 @@ import {
   FactoryKpis,
   FactoryLoadingsHub,
   FactoryLocationInventory,
-  FactoryLocationInventoryMockup,
   FactoryNetPositionDetails,
   FactoryOpeningBalanceEdit,
   FactoryPOS,
@@ -204,7 +203,8 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
       <Route path="/factory/bales-hub" component={FactoryBalesHub} />
       <Route path="/factory/reprint-labels" component={FactoryReprintLabels} />
       <Route path="/factory/location-inventory" component={FactoryLocationInventory} />
-      <Route path="/factory/location-inventory-mockup" component={FactoryLocationInventoryMockup} />
+      {/* Historical developer-only preview URL renders the live inventory instead of sample data. */}
+      <Route path="/factory/location-inventory-mockup" component={FactoryLocationInventory} />
       <Route
         path="/factory/bale-product-history/:productId/:locationId/:year/all"
         component={FactoryBaleProductAllMonths}
@@ -260,9 +260,15 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
       <Route path="/factory/sales/loading/pending">
         <Redirect replace to="/factory/sales/loadings?tab=pending" />
       </Route>
-      <Route path="/factory/sales/loading/dispatch/:orderId/:dispatchId/report" component={FactoryLoadingDispatchReport} />
+      <Route
+        path="/factory/sales/loading/dispatch/:orderId/:dispatchId/report"
+        component={FactoryLoadingDispatchReport}
+      />
       <Route path="/factory/sales/loading/dispatch/:orderId/report" component={FactoryLoadingDispatchReport} />
-      <Route path="/factory/sales/loading/dispatch/:orderId/:dispatchId/compare" component={FactoryLoadingDispatchCompare} />
+      <Route
+        path="/factory/sales/loading/dispatch/:orderId/:dispatchId/compare"
+        component={FactoryLoadingDispatchCompare}
+      />
       <Route path="/factory/sales/loading/dispatch/:orderId/compare" component={FactoryLoadingDispatchCompare} />
       <Route path="/factory/sales/loading/dispatch/:orderId/:dispatchId" component={FactoryLoadingDispatch} />
       <Route path="/factory/sales/loading/dispatch/:orderId" component={FactoryLoadingDispatch} />

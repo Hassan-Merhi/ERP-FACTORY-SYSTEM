@@ -241,12 +241,6 @@ const PAGES: PageCase[] = [
     factory: true,
   },
   {
-    name: "FactoryLocationInventoryMockup",
-    load: () => import("@/pages/factory/FactoryLocationInventoryMockup"),
-    landmark: "mockup-button-back",
-    factory: true,
-  },
-  {
     name: "FactoryPendingInvoices",
     load: () => import("@/pages/factory/FactoryPendingInvoices"),
     landmark: "filter-tabs",
