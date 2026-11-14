@@ -109,11 +109,7 @@ export function registerBalesExportRoutes(app: Express) {
       }
 
       styleFactoryOperationalWorkbook(workbook, [{ name: "Bales", headerRow: 1 }]);
-      styleFactoryOperationalWorkbook(workbook, [
-        { name: "Stock Register", headerRow: 1 },
-        { name: "Summary", headerRow: 1 },
-      ]);
-      const xlsBuffer = Buffer.from(await workbook.xlsx.writeBuffer());
+const xlsBuffer = Buffer.from(await workbook.xlsx.writeBuffer());
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
       res.setHeader("Content-Disposition", `attachment; filename="bales_export_${date}.xlsx"`);
       res.setHeader("Content-Length", xlsBuffer.byteLength);
@@ -266,7 +262,11 @@ export function registerBalesExportRoutes(app: Express) {
       summarySheet.getColumn("weight").numFmt = "#,##0.000";
 
       const dateSuffix = from && to ? `_${from}_to_${to}` : `_all`;
-      const xlsBuffer = Buffer.from(await workbook.xlsx.writeBuffer());
+      styleFactoryOperationalWorkbook(workbook, [
+        { name: "Stock Register", headerRow: 1 },
+        { name: "Summary", headerRow: 1 },
+      ]);
+            const xlsBuffer = Buffer.from(await workbook.xlsx.writeBuffer());
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
       res.setHeader("Content-Disposition", `attachment; filename="stock_register${dateSuffix}.xlsx"`);
       res.setHeader("Content-Length", xlsBuffer.byteLength);
