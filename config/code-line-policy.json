@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "purpose": "Phase 1 source-size ratchet: warning above 300 physical lines, hard cap above 500. Legacy oversized application paths are frozen at the measured count in the 2026-11-13 main commit. Any growth above their prior count is blocked.",
-  "referenceCommit": "d8c8e0b6cca1b0486cc689e1ff4763dd02b899ea",
+  "purpose": "Phase 1 source-size ratchet: warning above 300 physical lines, hard cap above 500. Legacy oversized application paths are frozen at the measured count in the main commit immediately preceding Phase 1 (2026-11-14); any later growth above those counts is blocked.",
+  "referenceCommit": "b5d5fea32ab435861ea77a38905eefdd42e64846",
   "warningAbove": 300,
   "hardCapAbove": 500,
   "extensions": [
