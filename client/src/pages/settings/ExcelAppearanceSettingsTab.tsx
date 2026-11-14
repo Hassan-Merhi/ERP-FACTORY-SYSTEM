@@ -9,6 +9,8 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { fetchExcelAppearance } from "@/lib/excelAppearanceClient";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { getExcelAppearanceCopy } from "@/i18n/excelAppearanceTranslations";
 import {
   DEFAULT_EXCEL_APPEARANCE_SETTINGS,
   excelAppearanceSettingsSchema,
@@ -24,6 +26,8 @@ const key = (id: number) => ["/api/excel-export/appearance", id];
 
 export function ExcelAppearanceSettingsTab({ company }: Props) {
   const { toast } = useToast();
+  const { language } = useApplicationLanguage();
+  const copy = getExcelAppearanceCopy(language);
   const [draft, setDraft] = useState<ExcelAppearanceSettings>({ ...DEFAULT_EXCEL_APPEARANCE_SETTINGS });
   const [previewing, setPreviewing] = useState(false);
   const { data, isPending, error } = useQuery({
@@ -47,18 +51,18 @@ export function ExcelAppearanceSettingsTab({ company }: Props) {
       });
       if (!response.ok) {
         const payload = await response.json().catch(() => null);
-        throw new Error(payload?.message || "Could not save company Excel settings");
+        throw new Error(payload?.message || copy.saveError);
       }
       return (await response.json()) as { appearance: ExcelAppearanceSettings };
     },
     onSuccess: (response) => {
       setDraft(response.appearance);
       void queryClient.invalidateQueries({ queryKey: ["/api/excel-export/appearance"] });
-      toast({ title: "Excel appearance saved", description: "New exports will use this company's settings." });
+      toast({ title: copy.saved, description: "New exports will use this company's settings." });
     },
     onError: (reason: Error) =>
       toast({
-        title: "Could not save Excel appearance",
+        title: copy.saveFailed,
         description: reason.message,
         variant: "destructive",
       }),
@@ -73,8 +77,8 @@ export function ExcelAppearanceSettingsTab({ company }: Props) {
     event.target.value = "";
     if (!["image/png", "image/jpeg"].includes(file.type) || file.size > MAX_LOGO_SIZE) {
       toast({
-        title: "Unsupported logo",
-        description: "Choose a PNG or JPG smaller than 135 KB. SVG and remote image links are not supported.",
+        title: copy.logoUnsupported,
+        description: copy.logoHint,
         variant: "destructive",
       });
       return;
@@ -85,10 +89,10 @@ export function ExcelAppearanceSettingsTab({ company }: Props) {
         const candidate = { ...draft, logoDataUrl: reader.result };
         const parsed = excelAppearanceSettingsSchema.safeParse(candidate);
         if (parsed.success) patch("logoDataUrl", reader.result);
-        else toast({ title: "Invalid logo", description: "Use a valid PNG or JPG image.", variant: "destructive" });
+        else toast({ title: copy.logoInvalid, description: copy.logoInvalidHint, variant: "destructive" });
       }
     };
-    reader.onerror = () => toast({ title: "Logo could not be read", variant: "destructive" });
+    reader.onerror = () => toast({ title: copy.logoReadFailed, variant: "destructive" });
     reader.readAsDataURL(file);
   };
 
@@ -101,7 +105,7 @@ export function ExcelAppearanceSettingsTab({ company }: Props) {
       await downloadUniversalExcelWorkbook(
         {
           schemaVersion: 1,
-          title: "Excel Appearance Preview",
+          title: copy.samplePreview,
           mode: "report",
           appearance: validated,
           companyName: company.name,
@@ -130,8 +134,8 @@ export function ExcelAppearanceSettingsTab({ company }: Props) {
       );
     } catch (reason: unknown) {
       toast({
-        title: "Preview failed",
-        description: reason instanceof Error ? reason.message : "Invalid appearance",
+        title: copy.previewFailed,
+        description: reason instanceof Error ? reason.message : copy.invalidAppearance,
         variant: "destructive",
       });
     } finally {
@@ -139,12 +143,12 @@ export function ExcelAppearanceSettingsTab({ company }: Props) {
     }
   };
 
-  if (!company) return <p className="text-sm text-muted-foreground">Select a company to manage Excel exports.</p>;
-  if (isPending) return <p className="text-sm text-muted-foreground">Loading Excel appearance…</p>;
+  if (!company) return <p className="text-sm text-muted-foreground">{copy.noCompany}</p>;
+  if (isPending) return <p className="text-sm text-muted-foreground">{copy.loading}</p>;
   if (error)
     return (
       <p role="alert" className="text-sm text-destructive">
-        Could not load Excel settings: {error.message}
+        {copy.loadError} {error.message}
       </p>
     );
 
@@ -155,11 +159,11 @@ export function ExcelAppearanceSettingsTab({ company }: Props) {
     >;
     label: string;
   }> = [
-    { key: "showBranding", label: "Show Dakzo branding" },
-    { key: "alternateRows", label: "Alternate report row colors" },
-    { key: "printLayout", label: "Include printable headers and footers" },
-    { key: "showCompanyName", label: "Show company name" },
-    { key: "showExportDate", label: "Show export date" },
+    { key: "showBranding", label: copy.showBranding },
+    { key: "alternateRows", label: copy.alternateRows },
+    { key: "printLayout", label: copy.printLayout },
+    { key: "showCompanyName", label: copy.showCompanyName },
+    { key: "showExportDate", label: copy.showExportDate },
   ];
 
   return (
@@ -167,20 +171,20 @@ export function ExcelAppearanceSettingsTab({ company }: Props) {
       <div>
         <h2 className="text-xl font-semibold flex items-center gap-2">
           <FileSpreadsheet className="h-5 w-5" />
-          Excel Export Appearance
+          {copy.title}
         </h2>
         <p className="text-sm text-muted-foreground">
-          Appearance for {company.name}. Applies to new report exports, not imported templates or historic files.
+          {copy.subtitlePrefix} {company.name}. {copy.subtitleSuffix}
         </p>
       </div>
       <Card>
         <CardHeader>
-          <CardTitle>Brand and colors</CardTitle>
-          <CardDescription>Per-company styling for report title rows and Excel print layouts.</CardDescription>
+          <CardTitle>{copy.brandAndColors}</CardTitle>
+          <CardDescription>{copy.brandDescription}</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="excel-brand-name">Brand name</Label>
+            <Label htmlFor="excel-brand-name">{copy.brandName}</Label>
             <Input
               id="excel-brand-name"
               maxLength={70}
@@ -189,7 +193,7 @@ export function ExcelAppearanceSettingsTab({ company }: Props) {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="excel-preset">Color preset</Label>
+            <Label htmlFor="excel-preset">{copy.colorPreset}</Label>
             <select
               id="excel-preset"
               className="w-full rounded-md border bg-background px-3 py-2"
@@ -203,12 +207,12 @@ export function ExcelAppearanceSettingsTab({ company }: Props) {
                 }));
               }}
             >
-              <option value="dakzo">Dakzo Navy</option>
-              <option value="slate">Slate</option>
+              <option value="dakzo">{copy.dakzoNavy}</option>
+              <option value="slate">{copy.slate}</option>
             </select>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="excel-accent">Accent color</Label>
+            <Label htmlFor="excel-accent">{copy.accentColor}</Label>
             <div className="flex items-center gap-3">
               <input
                 id="excel-accent"
@@ -218,7 +222,7 @@ export function ExcelAppearanceSettingsTab({ company }: Props) {
                 className="h-10 w-14 rounded cursor-pointer"
               />
               <Input
-                aria-label="Accent hex color"
+                aria-label={copy.hexColor}
                 value={draft.accentColor}
                 maxLength={7}
                 onChange={(e) => patch("accentColor", e.target.value)}
@@ -226,11 +230,11 @@ export function ExcelAppearanceSettingsTab({ company }: Props) {
             </div>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="excel-logo">Logo image (PNG/JPG, 135 KB max)</Label>
+            <Label htmlFor="excel-logo">{copy.logoImage}</Label>
             <Input id="excel-logo" type="file" accept="image/png,image/jpeg" onChange={uploadLogo} />
             {draft.logoDataUrl && (
               <Button size="sm" variant="outline" onClick={() => patch("logoDataUrl", null)}>
-                Remove logo
+                {copy.removeLogo}
               </Button>
             )}
           </div>
@@ -238,33 +242,33 @@ export function ExcelAppearanceSettingsTab({ company }: Props) {
       </Card>
       <Card>
         <CardHeader>
-          <CardTitle>Headers and display</CardTitle>
-          <CardDescription>These choices never modify accounting values, import headers or formulas.</CardDescription>
+          <CardTitle>{copy.headingsDisplay}</CardTitle>
+          <CardDescription>{copy.headingsDescription}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="excel-header">Print header text (optional)</Label>
+              <Label htmlFor="excel-header">{copy.printHeaderText}</Label>
               <Input
                 id="excel-header"
                 maxLength={90}
                 value={draft.headerText}
                 onChange={(e) => patch("headerText", e.target.value)}
-                placeholder="Report title by default"
+                placeholder={copy.printHeaderPlaceholder}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="excel-footer">Print footer text (optional)</Label>
+              <Label htmlFor="excel-footer">{copy.printFooterText}</Label>
               <Input
                 id="excel-footer"
                 maxLength={90}
                 value={draft.footerText}
                 onChange={(e) => patch("footerText", e.target.value)}
-                placeholder="Dakzo branding by default"
+                placeholder={copy.printFooterPlaceholder}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="excel-date-format">Excel date format</Label>
+              <Label htmlFor="excel-date-format">{copy.dateFormat}</Label>
               <select
                 id="excel-date-format"
                 className="w-full rounded-md border bg-background px-3 py-2"
@@ -292,7 +296,7 @@ export function ExcelAppearanceSettingsTab({ company }: Props) {
       </Card>
       <Card>
         <CardHeader>
-          <CardTitle>Live preview</CardTitle>
+          <CardTitle>{copy.livePreview}</CardTitle>
           <CardDescription>
             Shows colors, logo, header text and table styling. The sample XLSX verifies Excel rendering.
           </CardDescription>
@@ -303,7 +307,7 @@ export function ExcelAppearanceSettingsTab({ company }: Props) {
               className="p-3 flex justify-between items-center gap-2"
               style={{ backgroundColor: draft.accentColor, color: "#fff" }}
             >
-              <strong>Excel Appearance Preview</strong>
+              <strong>{copy.samplePreview}</strong>
               {draft.showBranding && draft.logoDataUrl && (
                 <img src={draft.logoDataUrl} alt="Excel logo preview" className="max-h-10 max-w-32 object-contain" />
               )}
@@ -314,7 +318,7 @@ export function ExcelAppearanceSettingsTab({ company }: Props) {
                 <span>Date: {draft.dateFormat === "dd/mm/yyyy" ? "14/11/2026" : "11/14/2026"}</span>
               )}
             </div>
-            <div className="px-3 pb-2 font-semibold">{draft.showBranding ? draft.brandName : "Report"}</div>
+            <div className="px-3 pb-2 font-semibold">{draft.showBranding ? draft.brandName : copy.sampleReport}</div>
             <div
               className="grid grid-cols-3 border-t px-3 py-2 font-semibold"
               style={{ backgroundColor: draft.accentColor, color: "#fff" }}
@@ -339,11 +343,11 @@ export function ExcelAppearanceSettingsTab({ company }: Props) {
             </Button>
             <Button variant="outline" onClick={() => setDraft({ ...DEFAULT_EXCEL_APPEARANCE_SETTINGS })}>
               <RotateCcw className="h-4 w-4 mr-2" />
-              Restore default draft
+              {copy.restore}
             </Button>
             <Button variant="outline" disabled={previewing} onClick={() => void downloadPreview()}>
               <Download className="h-4 w-4 mr-2" />
-              Download sample XLSX
+              {copy.download}
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
