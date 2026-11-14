@@ -1,6 +1,9 @@
 import Decimal from "decimal.js";
 
-export interface ReturnCommitLine { offloadItemId: number; quantity: string }
+export interface ReturnCommitLine {
+  offloadItemId: number;
+  quantity: string;
+}
 export interface ReturnCommitRow {
   code: string;
   quantity: string;
@@ -37,25 +40,30 @@ export function validateReturnCommitRows(
     const seen = new Set<number>();
     let assigned = new Decimal(0);
     for (const allocation of row.allocations) {
-      if (!Number.isSafeInteger(allocation.offloadItemId) || allocation.offloadItemId <= 0 ||
-          seen.has(allocation.offloadItemId)) throw new Error("Duplicate or invalid source in return row");
+      if (
+        !Number.isSafeInteger(allocation.offloadItemId) ||
+        allocation.offloadItemId <= 0 ||
+        seen.has(allocation.offloadItemId)
+      )
+        throw new Error("Duplicate or invalid source in return row");
       seen.add(allocation.offloadItemId);
       const qty = positiveQty(allocation.quantity);
       assigned = assigned.plus(qty);
-      sourceTotals.set(allocation.offloadItemId,
-        (sourceTotals.get(allocation.offloadItemId) ?? new Decimal(0)).plus(qty));
+      sourceTotals.set(
+        allocation.offloadItemId,
+        (sourceTotals.get(allocation.offloadItemId) ?? new Decimal(0)).plus(qty)
+      );
     }
     if (!assigned.eq(expected)) throw new Error(`Allocated quantity does not match request for ${row.code}`);
     total = total.plus(expected);
   }
   const posted = new Map<number, Decimal>();
   for (const line of lines) {
-    if (!Number.isSafeInteger(line.offloadItemId) || line.offloadItemId <= 0 ||
-      posted.has(line.offloadItemId)) throw new Error("Duplicate or invalid posting source");
+    if (!Number.isSafeInteger(line.offloadItemId) || line.offloadItemId <= 0 || posted.has(line.offloadItemId))
+      throw new Error("Duplicate or invalid posting source");
     posted.set(line.offloadItemId, positiveQty(line.quantity));
   }
-  if (sourceTotals.size !== posted.size ||
-    [...sourceTotals].some(([id, qty]) => !posted.get(id)?.eq(qty)))
+  if (sourceTotals.size !== posted.size || [...sourceTotals].some(([id, qty]) => !posted.get(id)?.eq(qty)))
     throw new Error("Posting lines differ from the checked allocation quantities");
   return { totalQty: total.toFixed(3), allocatedBySource: sourceTotals };
 }

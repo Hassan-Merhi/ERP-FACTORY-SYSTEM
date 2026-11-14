@@ -43,7 +43,7 @@ export function buildPostedSupplierReturnWorkbook(
   wb: ExcelJS.Workbook,
   receipt: SupplierReturnReceipt,
   sources: PostedSupplierReturnRow[],
-  language: ApplicationLanguage = "en",
+  language: ApplicationLanguage = "en"
 ) {
   const copy = getSupplierReturnPostedExportCopy(language);
   const source = wb.addWorksheet(copy.sourceSheet);
@@ -76,28 +76,35 @@ export function buildPostedSupplierReturnWorkbook(
     const supplier = new Decimal(item.supplierCreditUsd);
     const inventory = new Decimal(item.inventoryReductionUsd);
     if ((item.requestedRows?.length ?? 0) > 0) {
-      const mapped = (item.requestedRows ?? []).reduce(
-        (sum, row) => sum.plus(row.allocatedQuantity), new Decimal(0));
+      const mapped = (item.requestedRows ?? []).reduce((sum, row) => sum.plus(row.allocatedQuantity), new Decimal(0));
       if (!mapped.eq(qty)) throw new Error("Source return quantity differs from its recorded Excel row allocations");
     }
     totalQuantity = totalQuantity.plus(qty);
     totalSupplier = totalSupplier.plus(supplier);
     totalInventory = totalInventory.plus(inventory);
     source.addRow({
-      line: item.id, code: safeText(item.articleCode),
-      name: safeText(item.itemName), offloadItem: item.offloadItemId,
-      offload: item.offloadId, container: safeText(item.containerNumber),
-      supplier: safeText(item.supplier), quantity: qty.toNumber(),
+      line: item.id,
+      code: safeText(item.articleCode),
+      name: safeText(item.itemName),
+      offloadItem: item.offloadItemId,
+      offload: item.offloadId,
+      container: safeText(item.containerNumber),
+      supplier: safeText(item.supplier),
+      quantity: qty.toNumber(),
       purchase: item.sourcePurchaseRate == null ? "" : toNumber(item.sourcePurchaseRate),
       effective: qty.gt(0) ? inventory.div(qty).toDecimalPlaces(7).toNumber() : "",
-      credit: supplier.toNumber(), inventory: inventory.toNumber(),
+      credit: supplier.toNumber(),
+      inventory: inventory.toNumber(),
       variance: inventory.minus(supplier).toNumber(),
-      voucher: safeText(item.voucherNumber), voucherId: item.voucherId ?? "",
+      voucher: safeText(item.voucherNumber),
+      voucherId: item.voucherId ?? "",
     });
   }
   source.addRow({
-    code: copy.total, quantity: totalQuantity.toNumber(),
-    credit: totalSupplier.toNumber(), inventory: totalInventory.toNumber(),
+    code: copy.total,
+    quantity: totalQuantity.toNumber(),
+    credit: totalSupplier.toNumber(),
+    inventory: totalInventory.toNumber(),
     variance: totalInventory.minus(totalSupplier).toNumber(),
   }).font = { bold: true };
 
@@ -119,21 +126,24 @@ export function buildPostedSupplierReturnWorkbook(
       const existing = requested.get(allocation.inputRow);
       const assigned = new Decimal(allocation.allocatedQuantity);
       if (existing) {
-        if (!existing.quantity.eq(allocation.requestedQuantity) ||
-            existing.article !== allocation.requestedArticleCode)
+        if (!existing.quantity.eq(allocation.requestedQuantity) || existing.article !== allocation.requestedArticleCode)
           throw new Error("Posted input-row audit records do not agree");
         existing.allocated = existing.allocated.plus(assigned);
       } else {
         requested.set(allocation.inputRow, {
-          quantity: new Decimal(allocation.requestedQuantity), allocated: assigned,
+          quantity: new Decimal(allocation.requestedQuantity),
+          allocated: assigned,
           article: allocation.requestedArticleCode,
         });
       }
       allocations.addRow({
-        row: allocation.inputRow, code: safeText(allocation.requestedArticleCode),
+        row: allocation.inputRow,
+        code: safeText(allocation.requestedArticleCode),
         requested: toNumber(allocation.requestedQuantity),
-        container: safeText(item.containerNumber), offloadItem: item.offloadItemId,
-        allocated: assigned.toNumber(), returnLine: item.id,
+        container: safeText(item.containerNumber),
+        offloadItem: item.offloadItemId,
+        allocated: assigned.toNumber(),
+        returnLine: item.id,
       });
     }
   }
@@ -144,9 +154,11 @@ export function buildPostedSupplierReturnWorkbook(
   }
   if (requested.size === 0) allocations.addRow({ code: copy.legacy });
 
-  if (!totalQuantity.eq(receipt.totalQty) ||
-      !totalSupplier.eq(receipt.supplierCreditUsd) ||
-      !totalInventory.eq(receipt.inventoryReductionUsd)) {
+  if (
+    !totalQuantity.eq(receipt.totalQty) ||
+    !totalSupplier.eq(receipt.supplierCreditUsd) ||
+    !totalInventory.eq(receipt.inventoryReductionUsd)
+  ) {
     throw new Error("Posted return source lines do not reconcile with batch totals");
   }
 
