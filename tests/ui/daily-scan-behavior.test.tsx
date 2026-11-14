@@ -54,11 +54,12 @@ beforeEach(() => {
   (global as any).fetch = vi.fn(async (url: string) => ({
     ok: true,
     status: 200,
-    json: async () => (String(url).startsWith("/api/factory/daily-bale-scans")
-      ? [bale(1, true), bale(2, false)]
-      : String(url) === "/api/excel-export/appearance"
-        ? { appearance: DEFAULT_EXCEL_APPEARANCE_SETTINGS, companyName: "Factory" }
-        : []),
+    json: async () =>
+      String(url).startsWith("/api/factory/daily-bale-scans")
+        ? [bale(1, true), bale(2, false)]
+        : String(url) === "/api/excel-export/appearance"
+          ? { appearance: DEFAULT_EXCEL_APPEARANCE_SETTINGS, companyName: "Factory" }
+          : [],
   }));
 });
 
@@ -80,10 +81,7 @@ describe("Daily Scan", () => {
     // Address actual Excel row numbers rather than counting nonempty metadata rows.
     expect(ws.getRow(5).getCell(2).value).toBe("Ref Code");
     // Scanned bales are listed first, then the missing ones, then the total.
-    expect([6, 7].map((row) => [
-      ws.getRow(row).getCell(2).value,
-      ws.getRow(row).getCell(8).value,
-    ])).toEqual([
+    expect([6, 7].map((row) => [ws.getRow(row).getCell(2).value, ws.getRow(row).getCell(8).value])).toEqual([
       ["REF-1", "Scanned"],
       ["REF-2", "Missing"],
     ]);

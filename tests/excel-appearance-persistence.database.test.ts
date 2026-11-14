@@ -78,10 +78,12 @@ describe("Phase 10 real database Excel appearance isolation", () => {
 
   it("rejects malicious/invalid saved configuration before writing any row", async () => {
     const original = await loadCompanyExcelAppearance(companyA);
-    await expect(saveCompanyExcelAppearance(companyA, {
-      ...DEFAULT_EXCEL_APPEARANCE_SETTINGS,
-      logoDataUrl: "https://tracking.example/a.png",
-    })).rejects.toThrow();
+    await expect(
+      saveCompanyExcelAppearance(companyA, {
+        ...DEFAULT_EXCEL_APPEARANCE_SETTINGS,
+        logoDataUrl: "https://tracking.example/a.png",
+      })
+    ).rejects.toThrow();
     expect(await loadCompanyExcelAppearance(companyA)).toEqual(original);
   });
 

@@ -511,7 +511,8 @@ export const applicationFrenchTranslations = {
   "excelPhase10.005": "Échec de l’exportation du stock",
   "excelPhase10.006": "Impossible d’exporter le stock",
   "excelPhase10.007": "Sélectionnez une société avant l’exportation",
-  "excelPhase10.008": "Les détails des conteneurs en transit ne sont pas entièrement chargés ; actualisez avant d’exporter",
+  "excelPhase10.008":
+    "Les détails des conteneurs en transit ne sont pas entièrement chargés ; actualisez avant d’exporter",
   "excelPhase10.009": "Le chargement des articles est en cours ; réessayez après son achèvement",
   "excelPhase10.010": "Page d’exportation du stock",
   "excelPhase10.011": "L’export du stock a renvoyé des informations de pagination invalides",
@@ -525,7 +526,8 @@ export const applicationFrenchTranslations = {
   "excelPhase10.019": "Journal de l’usine — détaillé",
   "excelPhase10.020": "Impossible de charger les écritures du bon",
   "excelPhase10.021": "Aucune ligne détaillée disponible pour le journal du bon",
-  "excelPhase10.022": "Impossible de vérifier toutes les lignes des bons du journal. Actualisez et réessayez l’export détaillé.",
+  "excelPhase10.022":
+    "Impossible de vérifier toutes les lignes des bons du journal. Actualisez et réessayez l’export détaillé.",
   "excelPhase10.023": "Allocation du stock de l’usine",
   "excelPhase10.024": "Inclure les valeurs positives",
   "excelPhase10.025": "Inclure les valeurs négatives",

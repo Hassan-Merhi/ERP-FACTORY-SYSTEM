@@ -297,9 +297,7 @@ export function ExcelAppearanceSettingsTab({ company }: Props) {
       <Card>
         <CardHeader>
           <CardTitle>{copy.livePreview}</CardTitle>
-          <CardDescription>
-            {copy.previewDescription}
-          </CardDescription>
+          <CardDescription>{copy.previewDescription}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="rounded-md border overflow-hidden text-sm">
@@ -313,9 +311,16 @@ export function ExcelAppearanceSettingsTab({ company }: Props) {
               )}
             </div>
             <div className="px-3 py-2 text-muted-foreground">
-              {draft.showCompanyName && <span>{copy.companyLabel}: {company.name} · </span>}
+              {draft.showCompanyName && (
+                <span>
+                  {copy.companyLabel}: {company.name} ·{" "}
+                </span>
+              )}
               {draft.showExportDate && (
-                <span>{copy.dateLabel}: {new Date().toLocaleDateString(draft.dateFormat === "dd/mm/yyyy" ? "en-GB" : "en-US")}</span>
+                <span>
+                  {copy.dateLabel}:{" "}
+                  {new Date().toLocaleDateString(draft.dateFormat === "dd/mm/yyyy" ? "en-GB" : "en-US")}
+                </span>
               )}
             </div>
             <div className="px-3 pb-2 font-semibold">{draft.showBranding ? draft.brandName : copy.sampleReport}</div>
@@ -350,9 +355,7 @@ export function ExcelAppearanceSettingsTab({ company }: Props) {
               {copy.download}
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground">
-            {copy.previewDisclaimer}
-          </p>
+          <p className="text-xs text-muted-foreground">{copy.previewDisclaimer}</p>
         </CardContent>
       </Card>
     </div>
