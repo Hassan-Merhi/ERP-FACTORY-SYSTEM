@@ -133,7 +133,7 @@ export async function exportFactoryDaybookDetailed(
     { key: "Credit", header: "Credit", type: "money" as const, width: 15 },
   ];
   const sheets = Object.keys(dataByType).sort().map((type) => ({
-    name: type.substring(0, 31).replace(/[\\\\/*?[\\]:]/g, "_"),
+    name: type.substring(0, 31).replace(/[^a-z0-9 _-]/gi, "_"),
     columns: detailColumns,
     rows: dataByType[type],
   }));
