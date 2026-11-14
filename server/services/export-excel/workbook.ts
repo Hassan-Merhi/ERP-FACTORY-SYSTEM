@@ -1,3 +1,4 @@
+import { styleSpecializedWorkbook } from "@shared/universal-excel/specializedWorkbookStyle";
 import { toArrayBuffer } from "../../lib/bufferCompatibility";
 import ExcelJS from "exceljs";
 import { getErrorMessage } from "../../lib/httpHandlers";
@@ -215,6 +216,11 @@ export async function buildCompanyWorkbook(
   addSheet(wb, "Employee Txn Detail", data.employeeTxnDetail);
   addSheet(wb, "Location Stock Detail", data.locationStockDetail);
 
+  // Full-company archive is also a machine-readable import source. Style
+  // SUMMARY print metadata only; every raw sheet keeps row-1 headers intact.
+  styleSpecializedWorkbook(wb, {
+    sheets: [{ name: "SUMMARY", purpose: "report" }],
+  });
   const buf1 = Buffer.from(await wb.xlsx.writeBuffer());
   outputStream.write(buf1);
 }
@@ -847,6 +853,9 @@ export async function streamCompanyWorkbookDirect(
     totalRow.getCell(2).numFmt = "#,##0";
   }
 
+  styleSpecializedWorkbook(wb, {
+    sheets: [{ name: "SUMMARY", purpose: "report" }],
+  });
   const workbookBuffer = await wb.xlsx.writeBuffer();
   return Buffer.from(new Uint8Array(toArrayBuffer(new Uint8Array(workbookBuffer))));
 }
