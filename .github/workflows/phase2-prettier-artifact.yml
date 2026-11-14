@@ -1,0 +1,31 @@
+name: Temporary Phase 2 Prettier Artifact
+on:
+  push:
+    branches: [audit/loc-300-500-20261113]
+    paths: [.github/workflows/phase2-prettier-artifact.yml]
+permissions:
+  contents: read
+jobs:
+  format:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24.22.2"
+          cache: npm
+      - name: Install pinned tooling
+        run: npm ci --no-audit --bin-links=true
+      - name: Format only changed factory route declaration file
+        run: |
+          node node_modules/prettier/bin/prettier.cjs --write client/src/components/FactoryRoutes.tsx
+          git diff --check
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: phase2-prettier-factory-routes
+          path: client/src/components/FactoryRoutes.tsx
+          if-no-files-found: error
+          retention-days: 1
