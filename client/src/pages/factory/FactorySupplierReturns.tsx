@@ -601,7 +601,7 @@ export default function FactorySupplierReturns() {
                                 disabled={busy || !!receipt}
                                 onClick={() => removeAllocation(row.row, index)}
                                 aria-label={`${copy.removeAllocation} ${index + 1} ${copy.fromRow} ${row.row}`}>
-                                Remove
+                                {copy.remove}
                               </Button>
                             </div>
                             {candidate && (
