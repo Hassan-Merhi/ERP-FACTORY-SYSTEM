@@ -1,4 +1,5 @@
 import { styleSpecializedWorkbook } from "@shared/universal-excel/specializedWorkbookStyle";
+import { loadCompanyExcelAppearance } from "../../services/excelAppearanceSettings";
 import { parseId } from "../../lib/parseId";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
@@ -261,6 +262,7 @@ export function registerContainerDocumentsRoutes(app: Express) {
 
       // One sectioned worksheet per container: never insert global title rows.
       styleSpecializedWorkbook(workbook, {
+        appearance: await loadCompanyExcelAppearance(req.session.currentCompanyId),
         sheets: workbook.worksheets.map((ws) => ({ name: ws.name, purpose: "report" as const })),
       });
       const buffer = await writeWorkbook(workbook);
