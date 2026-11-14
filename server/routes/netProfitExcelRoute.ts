@@ -1,3 +1,4 @@
+import { styleUniversalFinancialWorkbook } from "@shared/universal-excel/financialWorkbookStyle";
 import type { Express } from "express";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { logger } from "../lib/logger";
@@ -283,6 +284,7 @@ export function registerNetProfitExcelRoute(app: Express) {
 
       const safeCompanyName = companyName.replace(/[^a-z0-9]/gi, "_");
       const safePeriod = periodLabel.replace(/[^a-z0-9]/gi, "_");
+      styleUniversalFinancialWorkbook(workbook, workbook.worksheets.map(ws => ({ name: ws.name })));
       const xlsBuffer = Buffer.from(await workbook.xlsx.writeBuffer());
       // Non-fatal audit write: must not corrupt the export response if it fails
       try {
