@@ -402,9 +402,9 @@ function styleMetadata(
   const timestamp = spec.exportedAt ?? new Date();
   if (!Number.isFinite(timestamp.getTime())) throw new Error("Invalid export timestamp");
   const parts = [
-    spec.companyName ? "Company: " + spec.companyName : "",
+    design.showCompanyName && spec.companyName ? "Company: " + spec.companyName : "",
     spec.currencyCode ? "Currency: " + spec.currencyCode : "",
-    "Exported: " + displayDate(timestamp, spec.dateFormat),
+    design.showExportDate ? "Exported: " + displayDate(timestamp, spec.dateFormat ?? design.dateFormat) : "",
   ].filter(Boolean);
   const filters = (spec.filters ?? []).map((f) => f.label + ": " + f.value).join(" | ");
   if (width > 1) ws.mergeCells(1, 1, 1, width);
@@ -457,7 +457,20 @@ function renderDataSheet(
     throw new Error("Preface rows overlap the import header in " + sheet.name);
   }
   const ws = workbook.addWorksheet(sheet.name);
-  if (design) styleMetadata(ws, spec, cols.length, design);
+  if (design) {
+    styleMetadata(ws, spec, cols.length, design);
+    // PNG/JPEG logos are rendered only in the fixed report metadata area.
+    // Import templates and the actual table header/data are never shifted.
+    if (design.showBranding && design.logoDataUrl && cols.length >= 5) {
+      const extension = design.logoDataUrl.startsWith("data:image/png;") ? "png" : "jpeg";
+      const imageId = workbook.addImage({ base64: design.logoDataUrl, extension });
+      ws.addImage(imageId, {
+        tl: { col: cols.length - 1.5, row: 1.15 },
+        ext: { width: 68, height: 34 },
+        editAs: "oneCell",
+      });
+    }
+  }
   for (let i = 0; i < (sheet.prefaceRows?.length ?? 0); i += 1) {
     const preface = sheet.prefaceRows![i];
     if (preface.length > cols.length) throw new Error("Preface width exceeds column count");
@@ -468,7 +481,7 @@ function renderDataSheet(
   for (let i = 0; i < cols.length; i += 1) {
     const col = ws.getColumn(i + 1);
     col.width = cols[i].width ?? 18;
-    col.numFmt = cols[i].numFmt ?? defaultNumFmt(cols[i].type, spec.dateFormat) ?? "General";
+    col.numFmt = cols[i].numFmt ?? defaultNumFmt(cols[i].type, spec.dateFormat ?? design?.dateFormat) ?? "General";
     if (design) {
       const numericColumn = ["integer", "decimal", "money", "percentage", "formula"].includes(cols[i].type ?? "");
       col.alignment = {
@@ -569,7 +582,7 @@ export function buildUniversalExcelWorkbook(spec: UniversalExcelWorkbookSpec): {
     throw new Error("Invalid universal Excel export specification");
   }
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "Dakzo Systems";
+  workbook.creator = spec.mode === "report" ? resolveUniversalExcelAppearance(spec.appearance).brandName : "Dakzo Systems";
   workbook.created = spec.exportedAt ?? new Date();
   const names = new Set<string>();
   const allowed = new Set(spec.allowedColumnTags ?? []);
