@@ -39,6 +39,7 @@
     "audit:query-risks:validate": "node scripts/validate-program6d-query-classifications.mjs",
     "audit:source-text-assertions": "node scripts/audit-source-text-assertions.mjs",
     "audit:god-files": "node scripts/audit-god-file-boundaries.mjs",
+    "audit:file-lines": "node scripts/audit-file-lines.mjs",
     "audit:type-escapes": "node scripts/audit-type-escapes.mjs",
     "audit:doc-index": "node scripts/audit-doc-index.mjs",
     "audit:write-routes": "node scripts/audit-write-route-coverage.mjs",
