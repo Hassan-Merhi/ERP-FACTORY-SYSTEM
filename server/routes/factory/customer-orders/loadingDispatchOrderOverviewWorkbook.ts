@@ -1,3 +1,4 @@
+import { styleFactoryOperationalWorkbook } from "@shared/universal-excel/factoryOperationalStyle";
 /**
  * Phase 9 — one Excel workbook with order summary, all trips, charges, PO
  * exports, signed invoice and explicitly bounded chronological audit history.
@@ -142,5 +143,8 @@ export function buildFactoryDispatchOrderDashboardWorkbook(
   sheet(wb,"Audit History",[
     "Source","Event ID","Trip ID","Event","Actor","UTC date","Reason","Original details JSON",
   ],aud);
+  styleFactoryOperationalWorkbook(wb, wb.worksheets.map(worksheet => ({
+    name: worksheet.name, headerRow: 1,
+  })));
   return wb;
 }
