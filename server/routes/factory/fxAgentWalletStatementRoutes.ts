@@ -1,3 +1,4 @@
+import { styleUniversalFinancialWorkbook } from "@shared/universal-excel/financialWorkbookStyle";
 /** Native EUR statements for Factory FX agents. Historical USD GL is not re-denominated. */
 import type { Express, Request, Response } from "express";
 import { sql } from "drizzle-orm";
@@ -224,6 +225,7 @@ async function xlsx(s: EurStatement): Promise<Buffer> {
     for (const col of [4, 5, 6]) sheet.getRow(n).getCell(col).numFmt = "#,##0.00####";
   }
   sheet.addRow(["Deleted EUR rows (if displayed) are audit-only, not spendable. Historical USD vouchers are excluded."]);
+  styleUniversalFinancialWorkbook(book, [{ name: "EUR Ledger", titleRow: 1, headerRow: 5 }]);
   return writeWorkbook(book);
 }
 
