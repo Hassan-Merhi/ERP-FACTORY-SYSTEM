@@ -41,6 +41,7 @@ type Candidate = {
   availableQty: string;
   unitPurchaseCost: string;
   unitLandedCost: string;
+  averageCost: string;
 };
 class ReturnError extends Error {
   constructor(
@@ -90,6 +91,7 @@ function mapCandidate(row: Row): Candidate {
     remainingQty: remaining.toFixed(3),
     availableQty: String(row.available_qty ?? "0"),
     unitPurchaseCost: String(row.purchase_rate ?? "0"),
+    averageCost: String(row.average_cost ?? "0"),
     unitLandedCost: original.gt(0) ? new Decimal(String(row.landed_total ?? "0")).div(original).toFixed(4) : "0",
   };
 }
@@ -102,6 +104,7 @@ async function candidates(executor: DatabaseOrTransaction, companyId: number, co
            coi.rate::text AS purchase_rate, coi.total_value::text AS landed_total,
            COALESCE(rt.returned, 0)::text AS returned_qty,
            COALESCE(i.quantity, 0)::text AS available_qty,
+           CASE WHEN i.quantity > 0 THEN (i.total_value / i.quantity)::text ELSE '0' END AS average_cost,
            sources.supplier_id, sources.supplier_name, sources.supplier_count,
            sources.currency, sources.currency_count
     FROM container_offload_items coi
