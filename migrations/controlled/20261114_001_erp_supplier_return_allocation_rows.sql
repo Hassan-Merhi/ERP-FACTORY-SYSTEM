@@ -1,4 +1,7 @@
 -- Immutable import-row-to-offload allocation evidence for ERP supplier returns.
+-- Snapshot actual purchase rate at posting; older batches remain nullable.
+ALTER TABLE erp_supplier_return_lines
+  ADD COLUMN IF NOT EXISTS source_purchase_rate NUMERIC(20,7);
 -- Requires the existing 20261113_001_erp_supplier_offload_returns.sql migration.
 -- A single requested Excel row may map to multiple original source offloads;
 -- multiple requested rows may also map to the same offload line.
