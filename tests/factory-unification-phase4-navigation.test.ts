@@ -19,6 +19,7 @@ describe("Factory Phase 4 navigation presentation contract", () => {
     expect(FACTORY_OTHERS_NAV_LINKS.map((item) => item.url)).toEqual([
       "/factory/others?tab=comparison",
       "/factory/others?tab=product-comparison",
+      "/factory/others?tab=sale-returns",
     ]);
     expect(FACTORY_OTHERS_NAV_LINKS.every((item) => item.accessKey === "factory/production-report")).toBe(true);
     for (const item of FACTORY_OTHERS_NAV_LINKS) {

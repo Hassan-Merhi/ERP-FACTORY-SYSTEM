@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "description": "Ordered snapshot of every registered Express route (method, path, guard chain) and middleware mount. Regenerate with UPDATE_ROUTE_MANIFEST=1 only when a route change is intended; during a file split the manifest must not change at all.",
-  "routeCount": 2438,
+  "routeCount": 2439,
   "middlewareMountCount": 142,
   "routes": [
     "POST /api/stock-transfer-order/wa-approval/webhook [stockTransferOrderWaWebhookHandler]",
@@ -732,7 +732,7 @@
     "GET /api/factory/workers/nationalities [requireAuth > <anonymous>]",
     "GET /api/factory/workers/document-counts [requireAuth > <anonymous>]",
     "GET /api/factory/workers/template.xlsx [requireAuth > <anonymous>]",
-    "POST /api/factory/workers/import-excel [requireAuth > multerMiddleware > <anonymous>]",
+    "POST /api/factory/workers/import-excel [requireAuth > <anonymous> > <anonymous>]",
     "POST /api/factory/workers/reassign-codes [requireAuth > <anonymous>]",
     "GET /api/factory/cash-accounts [requireAuth > <anonymous>]",
     "GET /api/factory/payrolls [requireAuth > <anonymous>]",
@@ -1871,6 +1871,7 @@
     "GET /api/containers/:id/offload-diagnostics [requireAuth > <anonymous> > <anonymous>]",
     "GET /api/admin/containers-for-diagnostics [requireAuth > <anonymous> > <anonymous>]",
     "POST /api/admin/backfill-postoffload-vouchers [requireAuth > <anonymous> > <anonymous>]",
+    "GET /api/erp/supplier-returns/suppliers [requireAuth > <anonymous> > <anonymous>]",
     "POST /api/erp/supplier-returns/preview [requireAuth > <anonymous> > <anonymous>]",
     "GET /api/erp/supplier-returns/history [requireAuth > <anonymous> > <anonymous>]",
     "GET /api/erp/supplier-returns/history/:batchId [requireAuth > <anonymous> > <anonymous>]",

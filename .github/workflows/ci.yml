@@ -493,6 +493,17 @@ jobs:
         if: always() && steps.runtime_migrations.outcome == 'success'
         run: |
           node --input-type=module -e "const { ensureCustomerOrderBaleScanAudit } = await import('./server/customerOrderBaleScanAuditBridge.mjs'); await ensureCustomerOrderBaleScanAudit();"
+      # Some tables exist only in reviewed controlled migrations and have no
+      # startup DDL (ERP supplier returns, 20261113_001). A deployed database
+      # gets them from `npm run db:migrations:apply`; apply the same files
+      # here so routes that read them are tested against that schema instead
+      # of failing on a missing relation.
+      - name: Apply controlled migrations to the test database
+        id: controlled_migrations
+        if: always() && steps.runtime_migrations.outcome == 'success'
+        env:
+          MIGRATION_CONFIRMATION: APPLY_CONTROLLED_MIGRATIONS
+        run: npm run db:migrations:apply
       - name: Backend tests and coverage thresholds
         id: backend_coverage
         if: always() && steps.runtime_migrations.outcome == 'success'
