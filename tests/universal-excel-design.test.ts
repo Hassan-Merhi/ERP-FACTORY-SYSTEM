@@ -262,7 +262,7 @@ describe("Phase 3: Dakzo appearance defaults and sanitization", () => {
     expect(ws.getCell("A2").value).toBe("00001");
     expect(ws.getCell("A4").value).toBeNull();
     expect(ws.pageSetup.printArea).toBeUndefined();
-    expect(ws.headerFooter.oddHeader || "").not.toContain("Dakzo");
+    expect(ws.headerFooter?.oddHeader || "").not.toContain("Dakzo");
   });
 
   it("does not restyle custom invoice forms, including existing print settings", () => {
