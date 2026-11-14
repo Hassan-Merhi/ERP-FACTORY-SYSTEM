@@ -12,6 +12,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { read, utils, writeFile } from "@/lib/excelHelper";
 import { buildErpSupplierReturnMatchWorkbook } from "./erpSupplierReturnMatchWorkbook";
 import { isValidSupplierReturnQuantity } from "./supplierReturnQuantityValidation";
+import { validateSupplierReturnAllocations, type EditableAllocation } from "./supplierReturnAllocationReview";
 
 interface Candidate {
   offloadItemId: number;
@@ -40,6 +41,9 @@ interface PreviewRow {
   quantity: string;
   status: string;
   suggestedOffloadItemId: number | null;
+  allocations?: EditableAllocation[];
+  allocatedQty?: string;
+  unallocatedQty?: string;
   candidates: Candidate[];
 }
 interface HistoryRow {
@@ -55,15 +59,6 @@ interface HistoryRow {
 }
 const money = (v: string | number) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(v));
-function isEligible(item: Candidate, qty: string) {
-  return (
-    item.supplierCount === 1 &&
-    item.currencyCount === 1 &&
-    item.currency === "USD" &&
-    new Decimal(item.remainingQty).gte(qty) &&
-    new Decimal(item.availableQty).gte(qty)
-  );
-}
 function excelCode(row: Record<string, unknown>, names: string[]) {
   const entry = Object.entries(row).find(([key]) =>
     names.includes(
@@ -95,7 +90,7 @@ export default function FactorySupplierReturns() {
   const [requestKey, setRequestKey] = useState(() => crypto.randomUUID());
   const [rawRows, setRawRows] = useState<Array<{ code: string; quantity: string }>>([]);
   const [preview, setPreview] = useState<PreviewRow[]>([]);
-  const [chosen, setChosen] = useState<Record<number, number>>({});
+  const [allocations, setAllocations] = useState<Record<number, EditableAllocation[]>>({});
   const [reason, setReason] = useState("");
   const [returnDate, setReturnDate] = useState(() => {
     const now = new Date();
@@ -131,7 +126,7 @@ export default function FactorySupplierReturns() {
     setPreviewSupplierId(null);
     setRawRows([]);
     setPreview([]);
-    setChosen({});
+    setAllocations({});
     setConfirm(false);
     setReceipt(null);
     setRequestKey(crypto.randomUUID());
@@ -143,57 +138,33 @@ export default function FactorySupplierReturns() {
     queryFn: async () => (await apiRequest("GET", "/api/erp/supplier-returns/history")).json(),
   });
 
-  const resolved = useMemo(
-    () =>
-      preview.map((row) => {
-        const selected = chosen[row.row] ?? row.suggestedOffloadItemId;
-        const candidate = row.candidates.find((c) => c.offloadItemId === selected);
-        return { row, candidate, selected, valid: !!candidate && isEligible(candidate, row.quantity) };
-      }),
-    [preview, chosen]
+  const combined = useMemo(
+    () => validateSupplierReturnAllocations(preview, allocations),
+    [preview, allocations]
   );
-  const combined = useMemo(() => {
-    const offloadQty = new Map<number, Decimal>();
-    const stockQty = new Map<string, Decimal>();
-    for (const entry of resolved) {
-      if (!entry.valid || !entry.candidate) continue;
-      const item = entry.candidate;
-      offloadQty.set(
-        item.offloadItemId,
-        (offloadQty.get(item.offloadItemId) ?? new Decimal(0)).add(entry.row.quantity)
-      );
-      const stockKey = item.locationId + ":" + item.stockItemId;
-      stockQty.set(stockKey, (stockQty.get(stockKey) ?? new Decimal(0)).add(entry.row.quantity));
-    }
-    const overOffloads = new Set<number>();
-    const overStock = new Set<string>();
-    for (const entry of resolved) {
-      if (!entry.candidate) continue;
-      const item = entry.candidate;
-      if (offloadQty.get(item.offloadItemId)?.gt(item.remainingQty)) overOffloads.add(item.offloadItemId);
-      const key = item.locationId + ":" + item.stockItemId;
-      if (stockQty.get(key)?.gt(item.availableQty)) overStock.add(key);
-    }
-    return {
-      overOffloads,
-      overStock,
-      valid: resolved.every(
-        (entry) =>
-          entry.valid &&
-          !!entry.candidate &&
-          !overOffloads.has(entry.candidate.offloadItemId) &&
-          !overStock.has(entry.candidate.locationId + ":" + entry.candidate.stockItemId)
-      ),
-    };
-  }, [resolved]);
-  const validEntry = (entry: (typeof resolved)[number]) =>
-    entry.valid &&
-    !!entry.candidate &&
-    !combined.overOffloads.has(entry.candidate.offloadItemId) &&
-    !combined.overStock.has(entry.candidate.locationId + ":" + entry.candidate.stockItemId);
   const ready = preview.length > 0 && previewSupplierId === supplierId && combined.valid;
-  const totalBales = resolved.reduce((s, x) => s.add(x.row.quantity), new Decimal(0)).toFixed(3);
-
+  const totalBales = preview.reduce((total, row) => total.plus(row.quantity), new Decimal(0)).toFixed(3);
+  function changeAllocation(row: number, index: number, change: Partial<EditableAllocation>) {
+    setAllocations((current) => ({
+      ...current,
+      [row]: (current[row] ?? []).map((line, at) => at === index ? { ...line, ...change } : line),
+    }));
+    setConfirm(false);
+  }
+  function addAllocation(row: number) {
+    setAllocations((current) => ({
+      ...current,
+      [row]: [...(current[row] ?? []), { offloadItemId: 0, quantity: "" }],
+    }));
+    setConfirm(false);
+  }
+  function removeAllocation(row: number, index: number) {
+    setAllocations((current) => ({
+      ...current,
+      [row]: (current[row] ?? []).filter((_, at) => at !== index),
+    }));
+    setConfirm(false);
+  }
   function addManual() {
     const code = manualCode.trim();
     const qty = manualQty.trim();
@@ -213,7 +184,7 @@ export default function FactorySupplierReturns() {
     setSourceFile("");
     setPreview([]);
     setPreviewSupplierId(null);
-    setChosen({});
+    setAllocations({});
     setReceipt(null);
     setConfirm(false);
     setRequestKey(crypto.randomUUID());
@@ -227,14 +198,26 @@ export default function FactorySupplierReturns() {
       buildErpSupplierReturnMatchWorkbook(wb, {
         supplierName: suppliers.data?.rows.find((x) => x.id === supplierId)?.name,
         fileName: sourceFile || undefined,
-        entries: resolved.map((entry) => ({
-          row: entry.row.row,
-          code: entry.row.code,
-          quantity: entry.row.quantity,
-          status: entry.valid && !validEntry(entry) ? "combined-quantity-exceeds-balance" : entry.row.status,
-          candidate: entry.candidate,
-          valid: validEntry(entry),
-        })),
+        entries: combined.entries.flatMap((entry) => {
+          const lines = entry.lines.map((line) => ({
+            row: entry.row.row,
+            code: preview.find((p) => p.row === entry.row.row)?.code ?? "",
+            quantity: line.allocation.quantity,
+            status: entry.valid && combined.valid ? "matched" : "review-allocation",
+            candidate: line.candidate,
+            valid: entry.valid && line.valid &&
+              !!line.candidate &&
+              !combined.overSources.has(line.candidate.offloadItemId) &&
+              !combined.overStock.has(line.candidate.locationId + ":" + line.candidate.stockItemId),
+          }));
+          return lines.length ? lines : [{
+            row: entry.row.row,
+            code: preview.find((p) => p.row === entry.row.row)?.code ?? "",
+            quantity: entry.row.quantity,
+            status: "unallocated",
+            valid: false,
+          }];
+        }),
       });
       await writeFile(wb, "ERP_Supplier_Return_Container_Matches.xlsx");
       toast({ title: copy.exported, description: copy.exportPreviewNote });
@@ -261,7 +244,7 @@ export default function FactorySupplierReturns() {
     if (!file) return;
     setPreview([]);
     setPreviewSupplierId(null);
-    setChosen({});
+    setAllocations({});
     setConfirm(false);
     setReceipt(null);
     setRawRows([]);
@@ -301,7 +284,11 @@ export default function FactorySupplierReturns() {
       ).json()) as { rows: PreviewRow[]; supplierId: number | null };
       setPreview(result.rows);
       setPreviewSupplierId(result.supplierId);
-      setChosen({});
+      setAllocations(Object.fromEntries(result.rows.map((row) => [
+        row.row, row.allocations ?? (row.suggestedOffloadItemId
+          ? [{ offloadItemId: row.suggestedOffloadItemId, quantity: row.quantity }]
+          : []),
+      ])));
       toast({
         title: copy.mappedTitle,
         description: copy.mappedBody,
@@ -332,14 +319,11 @@ export default function FactorySupplierReturns() {
     setBusy(true);
     try {
       const totals = new Map<number, Decimal>();
-      for (const entry of resolved) {
-        const itemId = entry.candidate!.offloadItemId;
-        totals.set(itemId, (totals.get(itemId) ?? new Decimal(0)).add(entry.row.quantity));
-      }
-      for (const [id, qty] of totals) {
-        const source = resolved.find((x) => x.candidate?.offloadItemId === id)!.candidate!;
-        if (qty.gt(source.remainingQty) || qty.gt(source.availableQty))
-          throw new Error([copy.combinedQtyInvalid, source.code].join(" "));
+      for (const entry of combined.entries) {
+        for (const { allocation } of entry.lines) {
+          totals.set(allocation.offloadItemId,
+            (totals.get(allocation.offloadItemId) ?? new Decimal(0)).plus(allocation.quantity));
+        }
       }
       const lines = [...totals].map(([offloadItemId, qty]) => ({ offloadItemId, quantity: qty.toFixed(3) }));
       const response = (await (
@@ -409,7 +393,7 @@ export default function FactorySupplierReturns() {
               onChange={(event) => {
                 setSupplierId(Number(event.target.value) || null);
                 setPreview([]);
-                setChosen({});
+                setAllocations({});
                 setPreviewSupplierId(null);
                 setConfirm(false);
                 setRequestKey(crypto.randomUUID());
@@ -460,7 +444,7 @@ export default function FactorySupplierReturns() {
                 onClick={() => {
                   setRawRows([]);
                   setPreview([]);
-                  setChosen({});
+                  setAllocations({});
                   setConfirm(false);
                   setSourceFile("");
                   setPreviewSupplierId(null);
@@ -493,7 +477,7 @@ export default function FactorySupplierReturns() {
         <div className="rounded-lg border overflow-hidden">
           <div className="px-4 py-3 border-b flex flex-wrap gap-3 justify-between">
             <strong>
-              {copy.mapping}: {resolved.filter(validEntry).length}/{preview.length} {copy.validRows}
+              {copy.mapping}: {combined.entries.filter((entry) => entry.valid).length}/{preview.length} {copy.validRows}
             </strong>
             <div className="flex flex-wrap items-center gap-3">
               <span className="text-sm">
@@ -534,65 +518,101 @@ export default function FactorySupplierReturns() {
                 </tr>
               </thead>
               <tbody>
-                {resolved.map((entry) => {
-                  const { row, candidate, selected } = entry;
-                  const valid = validEntry(entry);
-                  const candidates = row.candidates.filter(
-                    (x) => x.supplierCount === 1 && x.currencyCount === 1 && x.currency === "USD"
+                {combined.entries.map((entry) => {
+                  const row = preview.find((item) => item.row === entry.row.row)!;
+                  const first = entry.lines.find((line) => line.candidate)?.candidate;
+                  const overLimit = entry.lines.some(({ candidate }) => candidate &&
+                    (combined.overSources.has(candidate.offloadItemId) ||
+                     combined.overStock.has(candidate.locationId + ":" + candidate.stockItemId)));
+                  const valid = entry.valid && !overLimit;
+                  const sourceOptions = row.candidates.filter((x) =>
+                    x.supplierCount === 1 && x.supplierId !== null &&
+                    x.currencyCount === 1 && x.currency === "USD"
                   );
+                  const rowSupplier = entry.lines.find((line) => line.candidate)?.candidate?.supplierId;
                   return (
                     <tr key={row.row} className="border-t align-top">
                       <td className="p-2">{row.row}</td>
-                      <td className="p-2">
-                        <strong>{row.code}</strong>
-                        <div className="text-muted-foreground">{candidate?.name}</div>
+                      <td className="p-2"><strong>{row.code}</strong>
+                        <div className="text-muted-foreground">{first?.name}</div>
                       </td>
                       <td className="p-2 font-mono">{row.quantity}</td>
-                      <td className="p-2 min-w-52">
-                        <select
-                          aria-label={`Source container for row ${row.row}`}
-                          className="max-w-full rounded border bg-background px-2 py-1"
-                          value={selected ?? ""}
-                          onChange={(e) => {
-                            setChosen((s) => ({ ...s, [row.row]: Number(e.target.value) || 0 }));
-                            setConfirm(false);
-                          }}
-                        >
-                          <option value="">{copy.chooseSource}</option>
-                          {candidates.map((c) => (
-                            <option key={c.offloadItemId} value={c.offloadItemId}>
-                              {c.containerNumber} — {c.supplierName ?? copy.supplierUnknown} ({copy.available}{" "}
-                              {c.remainingQty})
-                            </option>
-                          ))}
-                        </select>
-                        {candidate && (
-                          <div className="text-muted-foreground text-xs mt-1">
-                            Offload #{candidate.offloadId} · {candidate.supplierName}
+                      <td className="p-2 min-w-80 space-y-2">
+                        {entry.lines.map(({ allocation, candidate }, index) => (
+                          <div key={index} className="rounded border p-2 space-y-1">
+                            <div className="flex flex-wrap gap-1 items-center">
+                              <select
+                                aria-label={`Container for row ${row.row} allocation ${index + 1}`}
+                                disabled={busy || !!receipt}
+                                className="flex-1 min-w-40 max-w-full rounded border bg-background px-2 py-1"
+                                value={allocation.offloadItemId || ""}
+                                onChange={(e) => changeAllocation(row.row, index, {
+                                  offloadItemId: Number(e.target.value) || 0,
+                                })}
+                              >
+                                <option value="">Choose container</option>
+                                {sourceOptions.filter((source) =>
+                                  (rowSupplier == null || source.supplierId === rowSupplier ||
+                                   source.offloadItemId === allocation.offloadItemId) &&
+                                  (!entry.lines.some((line, at) => at !== index &&
+                                    line.allocation.offloadItemId === source.offloadItemId) ||
+                                   source.offloadItemId === allocation.offloadItemId)
+                                ).map((source) => (
+                                  <option key={source.offloadItemId} value={source.offloadItemId}>
+                                    {source.containerNumber} (remaining {source.remainingQty})
+                                  </option>
+                                ))}
+                              </select>
+                              <Input
+                                aria-label={`Quantity for row ${row.row} allocation ${index + 1}`}
+                                className="w-24 font-mono"
+                                inputMode="decimal"
+                                value={allocation.quantity}
+                                disabled={busy || !!receipt}
+                                onChange={(e) => changeAllocation(row.row, index, { quantity: e.target.value })}
+                              />
+                              <Button type="button" size="sm" variant="ghost"
+                                disabled={busy || !!receipt}
+                                onClick={() => removeAllocation(row.row, index)}
+                                aria-label={`Remove allocation ${index + 1} from row ${row.row}`}>
+                                Remove
+                              </Button>
+                            </div>
+                            {candidate && (
+                              <div className="text-xs text-muted-foreground">
+                                Offload #{candidate.offloadId} · {candidate.supplierName} ·
+                                remaining {candidate.remainingQty} · stock {candidate.availableQty} ·
+                                purchase {money(candidate.unitPurchaseCost)} / landed {money(candidate.unitLandedCost)}
+                              </div>
+                            )}
                           </div>
-                        )}
+                        ))}
+                        <Button type="button" variant="outline" size="sm"
+                          disabled={busy || !!receipt || entry.lines.length >= sourceOptions.length}
+                          onClick={() => addAllocation(row.row)}>+ Add container</Button>
+                        <div className="text-xs font-mono">
+                          Allocated {entry.allocatedQty} / {row.quantity} ·
+                          Unallocated {entry.unallocatedQty}
+                        </div>
                       </td>
-                      <td className="p-2 font-mono">{candidate?.originalQty ?? "—"}</td>
-                      <td className="p-2 font-mono">{candidate?.returnedQty ?? "—"}</td>
-                      <td className="p-2 font-mono">{candidate?.remainingQty ?? "—"}</td>
-                      <td className="p-2 font-mono">{candidate?.availableQty ?? "—"}</td>
+                      <td className="p-2 font-mono">{first?.originalQty ?? "—"}</td>
+                      <td className="p-2 font-mono">{first?.returnedQty ?? "—"}</td>
+                      <td className="p-2 font-mono">{first?.remainingQty ?? "—"}</td>
+                      <td className="p-2 font-mono">{first?.availableQty ?? "—"}</td>
                       <td className="p-2 font-mono">
-                        {candidate ? `${money(candidate.unitPurchaseCost)} / ${money(candidate.unitLandedCost)}` : "—"}
+                        {first ? `${money(first.unitPurchaseCost)} / ${money(first.unitLandedCost)}` : "—"}
                       </td>
                       <td className="p-2">
                         {valid ? (
                           <span className="text-green-600 inline-flex gap-1 items-center">
-                            <CheckCircle2 className="h-4 w-4" />
-                            {copy.ready}
+                            <CheckCircle2 className="h-4 w-4" />{copy.ready}
                           </span>
                         ) : (
                           <span className="text-amber-600 inline-flex gap-1 items-center">
                             <AlertTriangle className="h-4 w-4" />
-                            {!row.candidates.length
-                              ? copy.notFound
-                              : !candidate
-                                ? copy.selectContainer
-                                : copy.reviewQty}
+                            {!row.candidates.length ? copy.notFound :
+                              overLimit ? copy.reviewQty :
+                              entry.lines.length === 0 ? copy.selectContainer : copy.reviewQty}
                           </span>
                         )}
                       </td>
