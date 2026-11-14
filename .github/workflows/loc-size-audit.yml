@@ -5,6 +5,7 @@ on:
       - audit/loc-300-500-20261113
     paths:
       - .github/workflows/loc-size-audit.yml
+  workflow_dispatch:
 jobs:
   audit:
     name: Count tracked source file lines
