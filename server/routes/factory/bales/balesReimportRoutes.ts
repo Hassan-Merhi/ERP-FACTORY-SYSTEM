@@ -1,3 +1,4 @@
+import { spreadsheetImportLimitBytes } from "@shared/fileSizePolicy";
 /**
  * factoryBalesRoutes: BalesReimport import endpoints.
  *
@@ -46,9 +47,15 @@ export function registerBalesReimportRoutes(app: Express) {
     requireRole("Admin", "Owner"),
     async (req: Request, res: Response) => {
       const multer = (await import("multer")).default;
-      const upload = multer({ storage: multer.memoryStorage() });
-      upload.single("file")(req, res, async (err: string) => {
-        if (err) return res.status(400).json({ message: "File upload error" });
+      const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: spreadsheetImportLimitBytes(req.session?.currentRole), files: 1 } });
+      upload.single("file")(req, res, async (err: unknown) => {
+        if (err) {
+          const tooLarge = typeof err === "object" && "code" in err && err.code === "LIMIT_FILE_SIZE";
+          return res.status(tooLarge ? 413 : 400).json({
+            code: tooLarge ? "UPLOAD_FILE_TOO_LARGE" : "UPLOAD_ERROR",
+            message: tooLarge ? "Excel file exceeds the 50 MB standard / 100 MB admin limit." : "File upload error",
+          });
+        }
         if (!req.file) return res.status(400).json({ message: "No file uploaded" });
 
         try {
@@ -543,9 +550,15 @@ export function registerBalesReimportRoutes(app: Express) {
   // POST /api/factory/bales/bulk-update-names — Upload Excel and update product_name in bulk
   app.post("/api/factory/bales/bulk-update-names", requireAuth, async (req: Request, res: Response) => {
     const multer = (await import("multer")).default;
-    const upload = multer({ storage: multer.memoryStorage() });
-    upload.single("file")(req, res, async (err: string) => {
-      if (err) return res.status(400).json({ message: "File upload error" });
+    const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: spreadsheetImportLimitBytes(req.session?.currentRole), files: 1 } });
+    upload.single("file")(req, res, async (err: unknown) => {
+      if (err) {
+          const tooLarge = typeof err === "object" && "code" in err && err.code === "LIMIT_FILE_SIZE";
+          return res.status(tooLarge ? 413 : 400).json({
+            code: tooLarge ? "UPLOAD_FILE_TOO_LARGE" : "UPLOAD_ERROR",
+            message: tooLarge ? "Excel file exceeds the 50 MB standard / 100 MB admin limit." : "File upload error",
+          });
+        }
       if (!req.file) return res.status(400).json({ message: "No file uploaded" });
 
       try {

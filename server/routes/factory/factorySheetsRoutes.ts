@@ -5,14 +5,14 @@ import { db } from "../../db";
 import { requireAuth } from "../../auth";
 import { factorySheets } from "@shared/schema";
 import { eq, and, asc } from "drizzle-orm";
-import multer from "multer";
+import { spreadsheetUpload } from "../helpers/uploadHelpers";
 import xlsxStyle from "xlsx-js-style";
 import type { WorkBook } from "xlsx-js-style";
 import { parseMoneyInput } from "../../lib/money";
 
 const { read: readExcel, utils: xlsxUtils, write: writeExcel } = xlsxStyle;
 
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = spreadsheetUpload;
 
 // ── STATUS sheet helpers ───────────────────────────────────────────────────────
 type CellVal = number | string | null;

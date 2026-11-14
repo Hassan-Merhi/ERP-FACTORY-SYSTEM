@@ -1,3 +1,4 @@
+import { generalUpload } from "../../helpers/uploadHelpers";
 /**
  * importExportRoutes: File endpoints.
  *
@@ -10,7 +11,6 @@ import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
-import { upload } from "../../_helpers";
 import { storedFiles, fileFolders } from "@shared/schema";
 import { eq, and, desc, asc } from "drizzle-orm";
 import { createHash, randomUUID } from "node:crypto";
@@ -125,7 +125,7 @@ export function registerFileRoutes(app: Express) {
     }
   });
 
-  app.post("/api/files/upload", requireAuth, upload.single("file"), async (req: import("express").Request, res) => {
+  app.post("/api/files/upload", requireAuth, generalUpload.single("file"), async (req: import("express").Request, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });

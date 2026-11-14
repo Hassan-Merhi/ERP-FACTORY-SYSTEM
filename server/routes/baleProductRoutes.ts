@@ -12,7 +12,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { db } from "../db";
 import { storage } from "../storage";
 import { requireAuth } from "../auth";
-import { upload } from "./_helpers";
+import { spreadsheetUpload } from "./_helpers";
 import { readExcel, sheetToJson } from "../excelHelper";
 import {
   baleProducts,
@@ -317,7 +317,7 @@ export function registerBaleProductRoutes(app: Express) {
     }
   });
 
-  app.post("/api/bale-products/import-excel", requireAuth, upload.single("file"), async (req, res) => {
+  app.post("/api/bale-products/import-excel", requireAuth, spreadsheetUpload.single("file"), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) {

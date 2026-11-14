@@ -11,9 +11,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { parsePosTransferImportFile } from "./posTransferExcelImport";
+import { useCompany } from "@/contexts/CompanyContext";
 import type { StockTransferFormModel } from "./useStockTransferFormModel";
 
 export function PosStockTransferImportDialog({ model }: { model: StockTransferFormModel }) {
+  const { selectedCompany } = useCompany();
   const [file, setFile] = useState<File | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -49,7 +51,8 @@ export function PosStockTransferImportDialog({ model }: { model: StockTransferFo
         model.stockItems,
         model.transferInventory,
         source.id,
-        source.name
+        source.name,
+        selectedCompany?.role
       );
       if (result.errors.length) {
         setErrors(result.errors);
