@@ -42,11 +42,33 @@ jobs:
           status=$?
           set -e
           if [ "$status" != 0 ]; then
-            echo "::error::Feature/main merge has conflicts; branch remains unchanged"
-            git diff --name-only --diff-filter=U
-            git status --short
+            # Manual 3-way review confirmed these two conflicts differ ONLY
+            # in Excel formula-injection escaping. Current main is safer:
+            # it strips leading Unicode whitespace and control characters.
+            # Preserve that security fix, while keeping the feature branch's
+            # universal export changes in every other file.
+            expected="$(printf '%s\\n' \\
+              client/src/pages/factory/erpSupplierReturnMatchWorkbook.ts \\
+              client/src/pages/factory/finalizedSaleReturnMatchWorkbook.ts)"
+            actual="$(git diff --name-only --diff-filter=U)"
+            if [ "$actual" != "$expected" ]; then
+              echo "::error::Unexpected merge conflict; branch unchanged"
+              printf '%s\\n' "$actual"
+              exit 1
+            fi
+            git checkout --theirs -- \\
+              client/src/pages/factory/erpSupplierReturnMatchWorkbook.ts \\
+              client/src/pages/factory/finalizedSaleReturnMatchWorkbook.ts
+            git add -- \\
+              client/src/pages/factory/erpSupplierReturnMatchWorkbook.ts \\
+              client/src/pages/factory/finalizedSaleReturnMatchWorkbook.ts
+            echo "Resolved the two reviewed formula-safety conflicts using current main"
+          fi
+          if [ -n "$(git diff --name-only --diff-filter=U)" ]; then
+            echo "::error::Conflicts remain; refusing to update branch"
             exit 1
           fi
+          git diff --check
           git commit -m "chore(excel): sync current main into Phase 10 branch"
           # Reject if another writer updated the feature branch mid-run.
           git push origin HEAD:feature/universal-excel-export-system
