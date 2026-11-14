@@ -205,7 +205,12 @@ export async function buildCanonicalInvoiceExcel(
     [labels.destination, document.destination || "-"],
     [labels.status, document.status.replaceAll("_", " ")],
     ...(document.dispatchTrips?.length
-      ? [["Dispatch trips", document.dispatchTrips.map(t => "#" + String(t.dispatchNumber).padStart(3, "0")).join(", ")] as [string,string]]
+      ? [
+          [
+            "Dispatch trips",
+            document.dispatchTrips.map((t) => "#" + String(t.dispatchNumber).padStart(3, "0")).join(", "),
+          ] as [string, string],
+        ]
       : []),
   ];
   const valueColumn = COL;
@@ -510,7 +515,12 @@ export async function buildCanonicalInvoicePdf(
         [labels.destination, document.destination || "-"],
         [labels.status, document.status.replaceAll("_", " ")],
         ...(document.dispatchTrips?.length
-          ? [["Dispatch trips", document.dispatchTrips.map(t => "#" + String(t.dispatchNumber).padStart(3,"0")).join(", ")] as [string,string]]
+          ? [
+              [
+                "Dispatch trips",
+                document.dispatchTrips.map((t) => "#" + String(t.dispatchNumber).padStart(3, "0")).join(", "),
+              ] as [string, string],
+            ]
           : []),
       ];
       normalFont().fontSize(8).fillColor("#000000");

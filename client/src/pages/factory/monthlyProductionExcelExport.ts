@@ -5,7 +5,12 @@ import { styleSpecializedWorkbook } from "@shared/universal-excel/specializedWor
  * require the XLSX format. This module is loaded only when Excel is requested.
  */
 import { ExcelJS, writeFile } from "@/lib/excelHelper";
-import { buildProductionDrilldownSheets, matrixPeriodKey, numericSheetLink, type MonthlyProductionExportBale } from "./monthlyProductionWorkbookDrilldown";
+import {
+  buildProductionDrilldownSheets,
+  matrixPeriodKey,
+  numericSheetLink,
+  type MonthlyProductionExportBale,
+} from "./monthlyProductionWorkbookDrilldown";
 
 export type MonthlyProductionExcelRow = {
   productId: number;
@@ -60,7 +65,6 @@ const background = (color: string): ExcelJS.Fill => ({
   pattern: "solid",
   fgColor: { argb: color },
 });
-
 
 /** Same highest/lowest logic as the on-screen Monthly Production Matrix. */
 export function productionMonthTone(values: number[], index: number): "highest" | "lowest" | "normal" {
@@ -130,8 +134,12 @@ export function buildMonthlyProductionExcelWorkbook(options: MonthlyProductionEx
 
   worksheet.mergeCells("A2:" + lastColumn + "2");
   const subtitleCell = worksheet.getCell("A2");
-  subtitleCell.value = "Produced bales by item and month  |  " + rows.length.toLocaleString() +
-    " items  |  " + months.length + " months" +
+  subtitleCell.value =
+    "Produced bales by item and month  |  " +
+    rows.length.toLocaleString() +
+    " items  |  " +
+    months.length +
+    " months" +
     (category ? "  |  Category: " + category : "") +
     (search.trim() ? "  |  Search: " + search.trim() : "");
   subtitleCell.font = { name: "Aptos", size: 10, color: { argb: PALETTE.subdued } };
@@ -140,7 +148,8 @@ export function buildMonthlyProductionExcelWorkbook(options: MonthlyProductionEx
 
   worksheet.mergeCells("A3:" + lastColumn + "3");
   const legendCell = worksheet.getCell("A3");
-  legendCell.value = "GREEN = highest month     |     RED = lowest month     |     CLICK COUNTS = explore worksheets inside this Excel file";
+  legendCell.value =
+    "GREEN = highest month     |     RED = lowest month     |     CLICK COUNTS = explore worksheets inside this Excel file";
   legendCell.font = { name: "Aptos", size: 9, italic: true, color: { argb: PALETTE.subdued } };
   legendCell.alignment = { vertical: "middle", indent: 1 };
   worksheet.getRow(3).height = 22;
@@ -148,7 +157,8 @@ export function buildMonthlyProductionExcelWorkbook(options: MonthlyProductionEx
   worksheet.mergeCells("A4:" + lastColumn + "4");
   worksheet.getRow(4).height = 12;
   worksheet.mergeCells("A5:" + lastColumn + "5");
-  worksheet.getCell("A5").value = "Offline interactive workbook: Matrix → Worker Breakdown → Daily Summary → Bale References. No ERP browser or connection needed.";
+  worksheet.getCell("A5").value =
+    "Offline interactive workbook: Matrix → Worker Breakdown → Daily Summary → Bale References. No ERP browser or connection needed.";
   worksheet.getCell("A5").font = { name: "Aptos", size: 9, color: { argb: PALETTE.subdued } };
   worksheet.getCell("A5").alignment = { vertical: "middle", indent: 1 };
   worksheet.getRow(5).height = 23;
@@ -213,8 +223,7 @@ export function buildMonthlyProductionExcelWorkbook(options: MonthlyProductionEx
   totalRow.height = 30;
   worksheet.mergeCells("A" + totalRowNumber + ":C" + totalRowNumber);
   totalRow.getCell(1).value = "TOTAL PRODUCED (BALES)";
-  const monthTotals = months.map((_, monthIndex) =>
-    rows.reduce((sum, row) => sum + row.values[monthIndex], 0));
+  const monthTotals = months.map((_, monthIndex) => rows.reduce((sum, row) => sum + row.values[monthIndex], 0));
   const grandTotal = monthTotals.reduce((sum, count) => sum + count, 0);
   monthTotals.concat(grandTotal).forEach((sum, index) => {
     const col = monthStartColumn + index;
@@ -247,7 +256,12 @@ export function buildMonthlyProductionExcelWorkbook(options: MonthlyProductionEx
   worksheet.pageSetup.printArea = "A1:" + lastColumn + totalRowNumber;
   worksheet.pageSetup.printTitlesRow = "1:" + headerRowNumber;
   worksheet.pageSetup.margins = {
-    left: 0.25, right: 0.25, top: 0.4, bottom: 0.45, header: 0.2, footer: 0.2,
+    left: 0.25,
+    right: 0.25,
+    top: 0.4,
+    bottom: 0.45,
+    header: 0.2,
+    footer: 0.2,
   };
   worksheet.headerFooter.oddFooter = "&LBusiness OS Factory&CPage &P of &N&RPrinted &D";
 

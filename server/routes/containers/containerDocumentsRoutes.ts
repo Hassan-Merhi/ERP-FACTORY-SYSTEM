@@ -261,7 +261,7 @@ export function registerContainerDocumentsRoutes(app: Express) {
 
       // One sectioned worksheet per container: never insert global title rows.
       styleSpecializedWorkbook(workbook, {
-        sheets: workbook.worksheets.map(ws => ({ name: ws.name, purpose: "report" as const })),
+        sheets: workbook.worksheets.map((ws) => ({ name: ws.name, purpose: "report" as const })),
       });
       const buffer = await writeWorkbook(workbook);
 

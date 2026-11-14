@@ -279,7 +279,7 @@ export function registerInvoiceLoadingReportRoutes(app: Express) {
         // Build buffer BEFORE setting headers so a failed writeBuffer() can still return a JSON 500.
         styleSpecializedWorkbook(wb, {
           expectedSheetNames: ["Summary", "Loaded Bales", "Remaining Bales"],
-          sheets: wb.worksheets.map(ws => ({ name: ws.name, purpose: "report" as const })),
+          sheets: wb.worksheets.map((ws) => ({ name: ws.name, purpose: "report" as const })),
         });
         const xlsBuf1 = Buffer.from(await wb.xlsx.writeBuffer());
         res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");

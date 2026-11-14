@@ -25,7 +25,9 @@ function buildThreeSheetSpForm() {
   entry.pageSetup.printTitlesRow = "1:3";
   entry.headerFooter.oddFooter = "&LSP Sheet&CPage &P";
   entry.dataValidations.add("B4", {
-    type: "list", allowBlank: false, formulae: ['"000001,000002"'],
+    type: "list",
+    allowBlank: false,
+    formulae: ['"000001,000002"'],
   });
   return wb;
 }
@@ -43,7 +45,7 @@ describe("Phase 8 specialized workbook adapter", () => {
       ],
     });
     expect(wb.creator).toBe("DAKZO SYSTEMS");
-    expect(wb.worksheets.map(s => s.name)).toEqual(["Costing", "Sales", "ENTRY"]);
+    expect(wb.worksheets.map((s) => s.name)).toEqual(["Costing", "Sales", "ENTRY"]);
     expect(wb.getWorksheet("Costing")!.state).toBe("hidden");
     expect(wb.getWorksheet("Sales")!.state).toBe("hidden");
     expect(wb.calcProperties.fullCalcOnLoad).toBe(true);
@@ -91,7 +93,8 @@ describe("Phase 8 specialized workbook adapter", () => {
     matrix.mergeCells("A1:E1");
     matrix.getRow(6).values = ["Product", "Code", "Category", "Nov 2026", "Total"];
     matrix.getCell("D7").value = {
-      formula: 'HYPERLINK("#\'Worker Breakdown\'!A5",8)', result: 8,
+      formula: "HYPERLINK(\"#'Worker Breakdown'!A5\",8)",
+      result: 8,
     };
     matrix.getCell("E7").value = 8;
     matrix.getCell("D8").value = 8;
@@ -100,7 +103,8 @@ describe("Phase 8 specialized workbook adapter", () => {
     const workers = wb.addWorksheet("Worker Breakdown");
     workers.getRow(3).values = ["Worker", "Bales", "Weight (kg)"];
     workers.getCell("B5").value = {
-      formula: 'HYPERLINK("#\'Daily Summary\'!A4",8)', result: 8,
+      formula: "HYPERLINK(\"#'Daily Summary'!A4\",8)",
+      result: 8,
     };
     const daily = wb.addWorksheet("Daily Summary");
     daily.getRow(3).values = ["Date", "Product", "Quantity"];
@@ -109,10 +113,8 @@ describe("Phase 8 specialized workbook adapter", () => {
     refs.getRow(4).values = ["000001234", "HMD100"];
     const before = matrix.getCell("D7").value;
     styleSpecializedWorkbook(wb, {
-      expectedSheetNames: [
-        "Monthly Production", "Worker Breakdown", "Daily Summary", "Bale References",
-      ],
-      sheets: wb.worksheets.map(sheet => ({ name: sheet.name, purpose: "report" as const })),
+      expectedSheetNames: ["Monthly Production", "Worker Breakdown", "Daily Summary", "Bale References"],
+      sheets: wb.worksheets.map((sheet) => ({ name: sheet.name, purpose: "report" as const })),
     });
     expect(matrix.getCell("D7").value).toEqual(before);
     expect(matrix.getCell("E7").value).toBe(8);
@@ -172,21 +174,31 @@ describe("Phase 8 specialized workbook adapter", () => {
   it("prevalidates missing/duplicate/unsafe sheet directives before mutating metadata", () => {
     const wb = buildThreeSheetSpForm();
     const creator = wb.creator;
-    expect(() => styleSpecializedWorkbook(wb, {
-      expectedSheetNames: ["ENTRY", "Costing", "Sales"],
-    })).toThrow(/sheet order changed/);
-    expect(() => styleSpecializedWorkbook(wb, {
-      sheets: [{ name: "None" }],
-    })).toThrow(/not found/);
-    expect(() => styleSpecializedWorkbook(wb, {
-      sheets: [{ name: "ENTRY" }, { name: "ENTRY" }],
-    })).toThrow(/Duplicate/);
-    expect(() => styleSpecializedWorkbook(wb, {
-      sheets: [{ name: "ENTRY", purpose: "import-template", printBrand: true }],
-    })).toThrow(/must not be restyled/);
-    expect(() => styleSpecializedWorkbook(wb, {
-      sheets: [{ name: "Costing", purpose: "formula-support", brandHeader: true, headerRow: 1 }],
-    })).toThrow(/Invalid specialized report header/);
+    expect(() =>
+      styleSpecializedWorkbook(wb, {
+        expectedSheetNames: ["ENTRY", "Costing", "Sales"],
+      })
+    ).toThrow(/sheet order changed/);
+    expect(() =>
+      styleSpecializedWorkbook(wb, {
+        sheets: [{ name: "None" }],
+      })
+    ).toThrow(/not found/);
+    expect(() =>
+      styleSpecializedWorkbook(wb, {
+        sheets: [{ name: "ENTRY" }, { name: "ENTRY" }],
+      })
+    ).toThrow(/Duplicate/);
+    expect(() =>
+      styleSpecializedWorkbook(wb, {
+        sheets: [{ name: "ENTRY", purpose: "import-template", printBrand: true }],
+      })
+    ).toThrow(/must not be restyled/);
+    expect(() =>
+      styleSpecializedWorkbook(wb, {
+        sheets: [{ name: "Costing", purpose: "formula-support", brandHeader: true, headerRow: 1 }],
+      })
+    ).toThrow(/Invalid specialized report header/);
     expect(wb.creator).toBe(creator);
     expect(wb.getWorksheet("ENTRY")!.headerFooter.oddHeader).toBeUndefined();
   });

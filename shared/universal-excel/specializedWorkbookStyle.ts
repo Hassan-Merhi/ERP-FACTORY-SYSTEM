@@ -12,10 +12,7 @@
  * positions and their surrounding print/layout properties.
  */
 import type ExcelJS from "exceljs";
-import {
-  resolveUniversalExcelAppearance,
-  type UniversalExcelAppearance,
-} from "./design";
+import { resolveUniversalExcelAppearance, type UniversalExcelAppearance } from "./design";
 
 export type SpecializedSheetPurpose = "report" | "import-template" | "formula-support";
 
@@ -43,9 +40,11 @@ export function styleSpecializedWorkbook(
 ): void {
   const design = resolveUniversalExcelAppearance(options.appearance);
   const existing = workbook.worksheets.map((sheet) => sheet.name);
-  if (options.expectedSheetNames !== undefined &&
-      (existing.length !== options.expectedSheetNames.length ||
-       existing.some((name, index) => name !== options.expectedSheetNames![index]))) {
+  if (
+    options.expectedSheetNames !== undefined &&
+    (existing.length !== options.expectedSheetNames.length ||
+      existing.some((name, index) => name !== options.expectedSheetNames![index]))
+  ) {
     throw new Error("Specialized workbook sheet order changed");
   }
   const seen = new Set<string>();
@@ -57,11 +56,13 @@ export function styleSpecializedWorkbook(
     const ws = workbook.getWorksheet(settings.name);
     if (!ws) throw new Error("Specialized workbook sheet not found: " + settings.name);
     if (settings.brandHeader) {
-      if (settings.purpose !== "report" ||
-          !Number.isSafeInteger(settings.headerRow) ||
-          (settings.headerRow ?? 0) < 1 ||
-          (settings.headerRow ?? 0) > ws.rowCount ||
-          ws.getRow(settings.headerRow!).cellCount === 0) {
+      if (
+        settings.purpose !== "report" ||
+        !Number.isSafeInteger(settings.headerRow) ||
+        (settings.headerRow ?? 0) < 1 ||
+        (settings.headerRow ?? 0) > ws.rowCount ||
+        ws.getRow(settings.headerRow!).cellCount === 0
+      ) {
         throw new Error("Invalid specialized report header position");
       }
     }
@@ -87,17 +88,19 @@ export function styleSpecializedWorkbook(
         const cell = row.getCell(col);
         if (cell.value === null || cell.value === undefined) continue;
         cell.font = {
-          ...cell.font, name: "Aptos", bold: true,
+          ...cell.font,
+          name: "Aptos",
+          bold: true,
           color: { argb: design.palette.onPrimary },
         };
         cell.fill = {
-          type: "pattern", pattern: "solid",
+          type: "pattern",
+          pattern: "solid",
           fgColor: { argb: design.palette.primary },
         };
       }
     }
-    if (settings.printBrand !== false && design.showBranding &&
-        ws.state === "visible" && !ws.headerFooter.oddHeader) {
+    if (settings.printBrand !== false && design.showBranding && ws.state === "visible" && !ws.headerFooter.oddHeader) {
       ws.headerFooter.oddHeader = "&L" + design.brandName.replaceAll("&", "");
     }
   }

@@ -398,7 +398,7 @@ export async function exportItemMarketAnalysisExcel(options: ItemMarketExportOpt
     (options.endDate || "all") +
     ".xlsx";
   styleSpecializedWorkbook(workbook, {
-    sheets: workbook.worksheets.map(ws => ({ name: ws.name, purpose: "report" as const })),
+    sheets: workbook.worksheets.map((ws) => ({ name: ws.name, purpose: "report" as const })),
   });
   await writeFile(workbook, filename);
 }

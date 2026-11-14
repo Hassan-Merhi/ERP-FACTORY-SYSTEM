@@ -115,8 +115,9 @@ export async function createNoCostExcel(params: {
     approved.columns = [{ width: 30 }, { width: 52 }];
     const heading = approved.addRow(["APPROVED STOCK TRANSFER ORDERS", "Batch Reference"]);
     heading.font = { bold: true, color: { argb: "FFFFFFFF" } };
-    heading.eachCell(cell => { cell.fill = { type: "pattern", pattern: "solid",
-      fgColor: { argb: "FF6B7A2C" } }; });
+    heading.eachCell((cell) => {
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF6B7A2C" } };
+    });
     approved.addRow(["Batch", excelText(params.batchReference)]);
     approved.addRow(["Destination", excelText(params.destinationName)]);
     approved.addRow(["Date", params.transferDate]);
@@ -128,9 +129,8 @@ export async function createNoCostExcel(params: {
     approved.pageSetup = { orientation: "portrait", fitToPage: true, fitToWidth: 1 };
   }
   styleSpecializedWorkbook(book, {
-    sheets: book.worksheets.map(ws => ({ name: ws.name, purpose: "report" as const })),
+    sheets: book.worksheets.map((ws) => ({ name: ws.name, purpose: "report" as const })),
   });
   const bytes = await book.xlsx.writeBuffer();
   return Buffer.from(bytes);
 }
-
