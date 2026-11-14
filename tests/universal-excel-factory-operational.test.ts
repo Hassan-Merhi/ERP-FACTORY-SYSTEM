@@ -83,12 +83,12 @@ describe("Factory operational style bridge", () => {
     const wb = new ExcelJS.Workbook();
     for (const name of ["Active Workers", "Inactive Workers"]) {
       const ws = wb.addWorksheet(name);
-      ws.mergeCells("A1:D1");
       ws.addRow(["Attendance Sheet"]);
-      ws.mergeCells("A2:D2");
       ws.addRow(["Monday to Saturday"]);
       ws.addRow(["#", "Worker Name", "Monday", "Notes"]);
       ws.addRow([1, "Worker A", "P", ""]);
+      ws.mergeCells("A1:D1");
+      ws.mergeCells("A2:D2");
     }
     styleFactoryOperationalWorkbook(wb, [
       { name: "Active Workers", titleRow: 1, headerRow: 3 },
