@@ -16,10 +16,14 @@ failure, so a correct document cannot quietly become undiscoverable.
 
 ## Start here
 
+| [file-size-limits-20261113.md](file-size-limits-20261113.md) | ERP file-upload and Excel-export size limits |
+| [erp-supplier-returns-multi-container-phases.md](erp-supplier-returns-multi-container-phases.md) | Multi-container ERP supplier returns scope, phases and acceptance criteria |
+| [erp-supplier-returns-phase1-audit.md](erp-supplier-returns-phase1-audit.md) | Existing return data flow and inventory cost boundaries |
+| [erp-supplier-returns-phase4-stock-integrity.md](erp-supplier-returns-phase4-stock-integrity.md) | Return stock deduction, rollback and audit-integrity contract |
+| [erp-supplier-returns-phase5-accounting.md](erp-supplier-returns-phase5-accounting.md) | Supplier credit, moving-average valuation and variance posting rules |
+| [erp-supplier-returns-phase6-excel-history.md](erp-supplier-returns-phase6-excel-history.md) | Export, history and controlled migration requirements |
 | Doc | What it covers |
 |---|---|
-| [engineering/code-file-line-policy-phase1.md](engineering/code-file-line-policy-phase1.md) | ERP + Factory 300-line warning, 500-line hard cap, frozen legacy baseline and CI rules |
-| [file-size-limits-20261113.md](file-size-limits-20261113.md) | ERP file-upload and Excel-export size limits by file type and user role |
 | [permissions-control-center-plan.md](permissions-control-center-plan.md) | Permissions Control Center design, rollout sequence and security acceptance criteria |
 | [permissions-control-center-phase1.md](permissions-control-center-phase1.md) | Route inventory, candidate mappings and policy model |
 | [permissions-control-center-phase2.md](permissions-control-center-phase2.md) | Shadow policy API, migration and audit foundation |
@@ -42,6 +46,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [architecture.md](architecture.md) | How the codebase fits together |
 | [core-concepts.md](core-concepts.md) | Companies, modes, tenancy, the vocabulary |
 | [contributing.md](contributing.md) | Project layout and how to work in it |
+| [engineering/code-file-line-policy-phase1.md](engineering/code-file-line-policy-phase1.md) | ERP + Factory 300-line warning and 500-line source-code cap |
 
 ## How the business logic works
 
