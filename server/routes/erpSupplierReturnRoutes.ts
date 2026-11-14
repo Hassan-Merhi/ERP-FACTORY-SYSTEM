@@ -455,7 +455,7 @@ export function registerErpSupplierReturnRoutes(app: Express) {
           const [rl, ri] = right.split(":").map(Number);
           return ll - rl || li - ri;
         });
-        for (const [key, needed] of orderedDemand) {
+        for (const [key] of orderedDemand) {
           const [locationId, stockItemId] = key.split(":").map(Number);
           const [stock] = resultRows<{ quantity: string; total_value: string }>(
             await tx.execute(sql`
