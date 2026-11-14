@@ -14,11 +14,14 @@ export type ReturnMatchCandidate = {
   availableQty: string;
   unitPurchaseCost: string;
   unitLandedCost: string;
+  averageCost?: string;
+  offloadItemId: number;
 };
 export type ReturnMatchEntry = {
   row: number;
   code: string;
   quantity: string;
+  requestedQuantity?: string;
   status: string;
   candidate?: ReturnMatchCandidate;
   valid: boolean;
@@ -51,16 +54,27 @@ export function buildErpSupplierReturnMatchWorkbook(wb: ExcelJS.Workbook, data: 
     { header: "Estimated Supplier Credit USD", key: "credit", width: 30 },
     { header: "Match Status", key: "status", width: 26 },
     { header: "Input Row", key: "inputRow", width: 16 },
+    { header: "Requested Qty (Row)", key: "requested", width: 22 },
+    { header: "Allocated Qty", key: "allocated", width: 18 },
+    { header: "Unallocated Qty (Row)", key: "unallocated", width: 23 },
+    { header: "Stock Average / Unit USD", key: "average", width: 27 },
+    { header: "Estimated Inventory Relief USD", key: "inventoryEstimate", width: 34 },
+    { header: "Estimated Variance USD", key: "varianceEstimate", width: 27 },
+    { header: "Offload Item ID", key: "offloadItem", width: 18 },
   ];
   const addSheet = (name: string, rows: ReturnMatchEntry[]) => {
     const sheet = wb.addWorksheet(name);
     sheet.columns = columns;
     sheet.getRow(1).font = { bold: true };
     sheet.views = [{ state: "frozen", ySplit: 1 }];
-    sheet.autoFilter = { from: "A1", to: "P1" };
+    sheet.autoFilter = { from: "A1", to: "W1" };
     for (const line of rows) {
       const item = line.candidate;
       const qty = line.valid ? new Decimal(line.quantity) : new Decimal(0);
+      const requestedQty = new Decimal(line.requestedQuantity ?? line.quantity);
+      const estInventory = item?.averageCost != null && line.valid
+        ? qty.mul(item.averageCost).toDecimalPlaces(2) : null;
+      const estCredit = item && line.valid ? qty.mul(item.unitPurchaseCost).toDecimalPlaces(2) : null;
       sheet.addRow({
         // ERP tracks bulk article quantities rather than unique physical bale references.
         // Use the real offload record identifier as the reference, never invent a bale number.
@@ -77,12 +91,55 @@ export function buildErpSupplierReturnMatchWorkbook(wb: ExcelJS.Workbook, data: 
         stock: item ? Number(item.availableQty) : "",
         purchase: item ? Number(item.unitPurchaseCost) : "",
         landed: item ? Number(item.unitLandedCost) : "",
-        credit: item && line.valid ? qty.mul(item.unitPurchaseCost).toDecimalPlaces(2).toNumber() : 0,
+        credit: estCredit?.toNumber() ?? 0,
         status: line.valid ? "matched" : line.status,
         inputRow: line.row,
+        requested: requestedQty.toNumber(),
+        allocated: qty.toNumber(),
+        unallocated: "", // See row summary: a request may span several containers.
+        average: item?.averageCost == null ? "" : Number(item.averageCost),
+        inventoryEstimate: estInventory?.toNumber() ?? "",
+        varianceEstimate: estInventory && estCredit ? estInventory.minus(estCredit).toNumber() : "",
+        offloadItem: item?.offloadItemId ?? "",
       });
     }
   };
+
+  const requests = wb.addWorksheet("Input Row Allocations");
+  requests.columns = [
+    { header: "Excel Row", key: "row", width: 16 },
+    { header: "Requested Article", key: "code", width: 26 },
+    { header: "Requested Qty", key: "requested", width: 19 },
+    { header: "Allocated Qty", key: "allocated", width: 19 },
+    { header: "Unallocated Qty", key: "unallocated", width: 22 },
+    { header: "Status", key: "status", width: 24 },
+  ];
+  requests.getRow(1).font = { bold: true };
+  requests.views = [{ state: "frozen", ySplit: 1 }];
+  const inputRows = new Map<number, { code: string; requested: Decimal; allocated: Decimal; status: string }>();
+  for (const entry of data.entries) {
+    const existing = inputRows.get(entry.row);
+    const requested = new Decimal(entry.requestedQuantity ?? entry.quantity);
+    const allocated = entry.valid ? new Decimal(entry.quantity) : new Decimal(0);
+    if (existing) {
+      existing.allocated = existing.allocated.plus(allocated);
+      if (!entry.valid) existing.status = "review";
+    } else {
+      inputRows.set(entry.row, {
+        code: excelText(entry.code),
+        requested, allocated, status: entry.valid ? "matched" : "review",
+      });
+    }
+  }
+  for (const [row, item] of [...inputRows].sort(([a], [b]) => a - b)) {
+    const remaining = Decimal.max(item.requested.minus(item.allocated), 0);
+    requests.addRow({
+      row, code: item.code, requested: item.requested.toNumber(),
+      allocated: item.allocated.toNumber(), unallocated: remaining.toNumber(),
+      status: item.status === "matched" && remaining.eq(0) &&
+        item.allocated.eq(item.requested) ? "matched" : "review",
+    });
+  }
 
   const matched = data.entries.filter((row) => row.valid);
   const review = data.entries.filter((row) => !row.valid);
@@ -97,8 +154,8 @@ export function buildErpSupplierReturnMatchWorkbook(wb: ExcelJS.Workbook, data: 
   summary.getColumn(5).width = 28;
   summary.addRow(["Supplier filter", excelText(data.supplierName || "All suppliers")]);
   summary.addRow(["Input file", excelText(data.fileName || "Manual article entry")]);
-  summary.addRow(["Matched rows", matched.length]);
-  summary.addRow(["Unmatched / blocked rows", review.length]);
+  summary.addRow(["Matched input rows", new Set(matched.map((row) => row.row)).size]);
+  summary.addRow(["Unmatched / blocked input rows", new Set(review.map((row) => row.row)).size]);
   summary.addRow(["IMPORTANT", "PREVIEW ONLY: no inventory, vouchers or supplier balances changed"]);
   summary.addRow(["NOTE", "Credit is an estimate. Live stock/cost and supplier are rechecked when posting."]);
   summary.addRow([]);
