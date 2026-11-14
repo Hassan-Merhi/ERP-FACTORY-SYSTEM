@@ -36,7 +36,7 @@ or import that only it needed.
 
 - **Retire**: delete the page, its lazy export in `client/src/lazyPages.ts`, its
   `offlinePrep.ts` preload, its exclusive components and hooks, and the page-mount test cases
-  that render it. Keep a `<Redirect>` for old URLs.
+  that render it. Keep the URL working with a `<Redirect>`, or when a route registry requires a real page rather than a redirect, mount the live successor page under the legacy URL with the same access guard.
 - **Hide**: if the feature may return, say "Hide …" in the commit message and leave a comment
   at the route or tab that hid it. The cleanup kept hidden features (container planner,
   remove-from-stock tab) and deleted retired ones; the commit wording is how it told them
@@ -63,6 +63,25 @@ or import that only it needed.
   that are not used should not be generated into `client/src/components/ui/`.
 - Records of finished work go to `docs/archive/` and are classified in
   `config/doc-index.json` (`npm run audit:doc-index`).
+
+## Lazy route export audit (November 2026)
+
+`npm run audit:ux-consistency` checks that direct lazy-page exports have a
+consumer in the ERP, POS, Factory or Properties route table, except documented
+test-pinned compatibility exports. The separate lazy-module inventory floor
+was changed from 200 to 180 after retirement of 28 unused lazy declarations:
+the inventory decreased to 190 without deleting functional pages.
+
+A reported unreferenced lazy export is a review candidate, not permission to
+delete the underlying component. That component can still be used by a hub,
+offline preload, or source-pinned test. `FactoryWorkersHub` remains as an
+intentional test-pinned compatibility export.
+
+Backend routes need separate scrutiny: the unmounted
+`server/routes/stats/statsNetProfitResilience.ts` is test-only and preserved
+by the October backend audit. Repeated Express signatures can also be
+intentional middleware chains. Never remove accounting, costing, audit, or
+legacy route files merely because a production importer is absent.
 
 ## Finding dead code
 
