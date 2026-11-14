@@ -47,21 +47,16 @@ jobs:
             # it strips leading Unicode whitespace and control characters.
             # Preserve that security fix, while keeping the feature branch's
             # universal export changes in every other file.
-            expected="$(printf '%s\\n' \\
-              client/src/pages/factory/erpSupplierReturnMatchWorkbook.ts \\
-              client/src/pages/factory/finalizedSaleReturnMatchWorkbook.ts)"
             actual="$(git diff --name-only --diff-filter=U)"
-            if [ "$actual" != "$expected" ]; then
+            if [ "$(git diff --name-only --diff-filter=U | wc -l)" -ne 2 ] ||
+               ! git diff --name-only --diff-filter=U | grep -Fxq "client/src/pages/factory/erpSupplierReturnMatchWorkbook.ts" ||
+               ! git diff --name-only --diff-filter=U | grep -Fxq "client/src/pages/factory/finalizedSaleReturnMatchWorkbook.ts"; then
               echo "::error::Unexpected merge conflict; branch unchanged"
-              printf '%s\\n' "$actual"
+              git diff --name-only --diff-filter=U
               exit 1
             fi
-            git checkout --theirs -- \\
-              client/src/pages/factory/erpSupplierReturnMatchWorkbook.ts \\
-              client/src/pages/factory/finalizedSaleReturnMatchWorkbook.ts
-            git add -- \\
-              client/src/pages/factory/erpSupplierReturnMatchWorkbook.ts \\
-              client/src/pages/factory/finalizedSaleReturnMatchWorkbook.ts
+            git checkout --theirs -- client/src/pages/factory/erpSupplierReturnMatchWorkbook.ts client/src/pages/factory/finalizedSaleReturnMatchWorkbook.ts
+            git add -- client/src/pages/factory/erpSupplierReturnMatchWorkbook.ts client/src/pages/factory/finalizedSaleReturnMatchWorkbook.ts
             echo "Resolved the two reviewed formula-safety conflicts using current main"
           fi
           if [ -n "$(git diff --name-only --diff-filter=U)" ]; then
