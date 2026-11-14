@@ -25,6 +25,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [phase-4-smart-columns.md](universal-excel-export/phase-4-smart-columns.md) | Dynamic columns and typed values |
 | [phase-5-erp-operational.md](universal-excel-export/phase-5-erp-operational.md) | ERP operational export migration and permission safeguards |
 | [phase-6-factory-operational.md](universal-excel-export/phase-6-factory-operational.md) | Factory operational export migration and verification |
+| [phase-7-financial.md](universal-excel-export/phase-7-financial.md) | Financial workbook migration, DR/CR, FX and accounting integrity |
 | [permissions-control-center-plan.md](permissions-control-center-plan.md) | Permissions Control Center design, rollout sequence and security acceptance criteria |
 | [permissions-control-center-phase1.md](permissions-control-center-phase1.md) | Route inventory, candidate mappings and policy model |
 | [permissions-control-center-phase2.md](permissions-control-center-phase2.md) | Shadow policy API, migration and audit foundation |
