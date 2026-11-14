@@ -1,3 +1,4 @@
+import { styleFactoryOperationalWorkbook } from "@shared/universal-excel/factoryOperationalStyle";
 /**
  * factoryBalesRoutes: BalesExport endpoints.
  *
@@ -107,6 +108,11 @@ export function registerBalesExportRoutes(app: Express) {
         sheet.addRow(baleRowData);
       }
 
+      styleFactoryOperationalWorkbook(workbook, [{ name: "Bales", headerRow: 1 }]);
+      styleFactoryOperationalWorkbook(workbook, [
+        { name: "Stock Register", headerRow: 1 },
+        { name: "Summary", headerRow: 1 },
+      ]);
       const xlsBuffer = Buffer.from(await workbook.xlsx.writeBuffer());
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
       res.setHeader("Content-Disposition", `attachment; filename="bales_export_${date}.xlsx"`);
