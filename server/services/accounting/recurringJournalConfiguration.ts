@@ -1,5 +1,5 @@
 /** Recurring journal configuration/read operations, with original database semantics. */
-import { and, asc, eq, lte } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { accountingPostingRequests, recurringJournals, voucherEntries, vouchers, type RecurringJournal } from "@shared/schema";
 import { db } from "../../db";
 import { sumMoney } from "../../lib/money";
