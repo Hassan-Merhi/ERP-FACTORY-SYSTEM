@@ -426,7 +426,6 @@ export async function requirePasswordConfirmation(req: Request, res: Response, n
   }
 }
 
-
 export {
   blockErpTesterSettings,
   blockViewOnlyWrites,

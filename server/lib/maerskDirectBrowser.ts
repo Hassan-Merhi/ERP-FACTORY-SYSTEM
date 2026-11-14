@@ -30,7 +30,7 @@ function getChromiumPath(): string | null {
   return null;
 }
 
-export export function isMaerskDirectScraperAvailable(): boolean {
+export function isMaerskDirectScraperAvailable(): boolean {
   try {
     _require.resolve("puppeteer-extra");
     _require.resolve("puppeteer-extra-plugin-stealth");

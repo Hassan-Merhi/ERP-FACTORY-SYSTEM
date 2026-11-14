@@ -37,7 +37,6 @@ import { deepScanForEta, extractFromJson, formatEtaDate } from "./maerskDirectPa
 export { isMaerskDirectScraperAvailable } from "./maerskDirectBrowser";
 export { deepScanForEta, extractFromJson, formatEtaDate } from "./maerskDirectParsing";
 
-
 const SCRAPER_TIMEOUT_MS = 90_000;
 const NAV_TIMEOUT_MS = 30_000;
 const API_WAIT_MS = 20_000;
