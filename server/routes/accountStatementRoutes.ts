@@ -1,3 +1,4 @@
+import { styleUniversalFinancialWorkbook } from "@shared/universal-excel/financialWorkbookStyle";
 import { toArrayBuffer } from "../lib/bufferCompatibility";
 /**
  * Account statement & detail routes.
@@ -780,6 +781,10 @@ export function registerAccountStatementRoutes(app: Express) {
       sheet.headerFooter.oddFooter = "&LAccount Statement&CPage &P of &N&R&D";
 
       const safeAccName = accountName.replace(/[^\w\s.()-]/g, "_").replace(/\s+/g, "_");
+      styleUniversalFinancialWorkbook(workbook, [
+        { name: "Statement" },
+        { name: "Currency Detail", headerRow: 7 },
+      ]);
       const buf = Buffer.from(await workbook.xlsx.writeBuffer());
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
       res.setHeader("Content-Disposition", `attachment; filename="${safeAccName}_Statement.xlsx"`);
