@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import { logger } from "./lib/logger";
+import { logDenied } from "./authDenialLog";
 import { db } from "./db";
 import { userLocations } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
@@ -8,21 +8,7 @@ import { enforceRuntimeSession } from "./services/security/sessionEnforcementAda
 import { hydrateActiveCredentialVersion } from "./services/security/credentialVersionService";
 import { CompanyIsolationError, assertRequestCompanyMatchesSession } from "./services/security/companyIsolationPolicy";
 import { decideExplicitCompanyScope } from "./services/security/companyRequestScopePolicy";
-import { isErpTesterForbiddenApiPath } from "@shared/erpTestCompanyAccess";
-import { isViewOnlyWriteBlocked } from "./services/security/viewOnlyWritePolicy";
-import { isCreateOnlyWriteBlocked } from "./services/security/createOnlyWritePolicy";
 import { canReadAccountMigrationSource } from "./services/security/accountMigrationRequestPolicy";
-
-const EXPECTED_ANONYMOUS_SESSION_REASONS = new Set(["SESSION_REQUIRED", "SESSION_USER_REQUIRED"]);
-
-// Session expiry is a normal lifecycle event (browser left open, user idle, etc.).
-// Log at WARN so operators can distinguish routine expiry from real security incidents.
-const SESSION_EXPIRY_REASONS = new Set([
-  "SESSION_IDLE_EXPIRED",
-  "SESSION_ABSOLUTE_EXPIRED",
-  "SESSION_TIMESTAMPS_INVALID",
-  "SESSION_COMPANY_REQUIRED",
-]);
 
 const OWNER_PROTECTED_DELETE_PREFIXES = [
   "/api/accounts",
@@ -46,41 +32,6 @@ function isOwnerProtectedDeleteRequest(method: string, path: string): boolean {
   );
 
   return isVoucherDelete || isAccountDelete;
-}
-
-function logDenied(params: {
-  userId?: string | null;
-  username?: string | null;
-  role?: string | null;
-  companyId?: number | null;
-  method: string;
-  path: string;
-  reason: string;
-}) {
-  const payload = JSON.stringify({
-    event: "access_denied",
-    ts: new Date().toISOString(),
-    userId: params.userId ?? null,
-    role: params.role ?? null,
-    companyId: params.companyId ?? null,
-    method: params.method,
-    path: params.path,
-    reason: params.reason,
-  });
-
-  const isExpectedAnonymousRequest = !params.userId && EXPECTED_ANONYMOUS_SESSION_REASONS.has(params.reason);
-
-  if (isExpectedAnonymousRequest) {
-    logger.info(payload);
-    return;
-  }
-
-  if (SESSION_EXPIRY_REASONS.has(params.reason)) {
-    logger.warn(payload);
-    return;
-  }
-
-  logger.error(payload);
 }
 
 function rejectInvalidSession(
@@ -475,81 +426,10 @@ export async function requirePasswordConfirmation(req: Request, res: Response, n
   }
 }
 
-/**
- * Sandbox testers can post ordinary ERP test data, but must never reach
- * configuration, maintenance, user management, or non-ERP APIs.
- * This is a server enforcement boundary, not only a hidden Settings link.
- */
-export function blockErpTesterSettings(req: Request, res: Response, next: NextFunction) {
-  if (req.session?.currentRole !== "ERP Tester" || !req.path.startsWith("/api/")) return next();
-  if (isErpTesterForbiddenApiPath(req.path)) {
-    return res
-      .status(403)
-      .json({ message: "ERP Tester accounts cannot access system settings or user administration" });
-  }
-  return next();
-}
 
-export function blockViewOnlyWrites(req: Request, res: Response, next: NextFunction) {
-  const role = req.session?.currentRole;
-  if (isViewOnlyWriteBlocked(role, req.method, req.path)) {
-    logDenied({
-      userId: req.session.userId ?? null,
-      username: req.session.username ?? null,
-      role,
-      companyId: req.session.currentCompanyId ?? null,
-      method: req.method,
-      path: req.path,
-      reason: "View Only role attempted a write operation",
-    });
-    return res.status(403).json({ message: "View Only accounts cannot make changes" });
-  }
-  next();
-}
-
-/**
- * Create Only protection is additive to the existing global View Only guard.
- * The new role is not yet selectable. Unknown business writes are denied
- * before they can reach routes, including bulk actions and direct API calls.
- */
-export function blockUnverifiedCreateOnlyWrites(req: Request, res: Response, next: NextFunction) {
-  const role = req.session?.currentRole;
-  if (isCreateOnlyWriteBlocked(role, req.method, req.path)) {
-    logDenied({
-      userId: req.session.userId ?? null,
-      username: req.session.username ?? null,
-      role,
-      companyId: req.session.currentCompanyId ?? null,
-      method: req.method,
-      path: req.path,
-      reason: "Create Only attempted an unverified business write",
-    });
-    return res.status(403).json({
-      code: "BUSINESS_ACTION_NOT_VERIFIED",
-      message: "This action is not available to Create Only users.",
-    });
-  }
-  next();
-}
-
-export function requireNonPOS(req: Request, res: Response, next: NextFunction) {
-  if (!req.user || !req.user.role) {
-    return res.status(401).json({ message: "Unauthorized" });
-  }
-
-  const isPOS = req.user.role === "POS";
-  if (isPOS) {
-    logDenied({
-      userId: req.session.userId ?? null,
-      username: req.session.username ?? null,
-      role: req.user.role,
-      companyId: req.session.currentCompanyId ?? null,
-      method: req.method,
-      path: req.path,
-      reason: "POS role attempted access to non-POS route",
-    });
-    return res.status(403).json({ message: "Access denied: This resource is not available for POS users" });
-  }
-
-  next();
-}
+export {
+  blockErpTesterSettings,
+  blockViewOnlyWrites,
+  blockUnverifiedCreateOnlyWrites,
+  requireNonPOS,
+} from "./authWriteGuards";
