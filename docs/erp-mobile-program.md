@@ -359,7 +359,7 @@ section.
 - **Edit Voucher.** Daybook and All Daybook share `voucherEditPath`, so Edit opens the same
   editor from both (All Daybook used to land on the Daybook list via an ignored `voucherId`
   parameter). The editor itself is the voucher form covered by R3. Daybook's
-  `VoucherEditDialog` is never opened by the page; it is unchanged.
+  The old never-opened `VoucherEditDialog` was removed in the 2026-11 UI unification.
 - **Edits & Activity** (Daybook tab, and the Settings activity section that reuses it). Phones
   get the shared filter model (search visible, action/module/date filters in the filter sheet)
   and day-grouped activity cards (record, time, user, module, action, concise detail); tapping

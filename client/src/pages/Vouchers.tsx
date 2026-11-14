@@ -9,7 +9,6 @@ import { useZmwVoucherRate } from "@/hooks/useZmwVoucherRate";
 import { useReactToPrint } from "react-to-print";
 import { Link, useLocation } from "wouter";
 import { useCompany } from "@/contexts/CompanyContext";
-import { VoucherEditDialog } from "@/components/VoucherEditDialog";
 import type { Account } from "@/components/AccountSidebar";
 import { PaymentVoucherTab } from "@/components/vouchers/PaymentVoucherTab";
 import { ReceiptVoucherTab } from "@/components/vouchers/ReceiptVoucherTab";
@@ -124,7 +123,6 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
   const voucherIdToEdit = editParam ? parseInt(editParam) : null;
 
   const [editVoucherId, setEditVoucherId] = useState<number | null>(null);
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [accountPickersNeeded, setAccountPickersNeeded] = useState(() => !!voucherIdToEdit);
 
   const isFactoryMode = appMode === "factory";
@@ -222,7 +220,6 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
       isRetailManualVoucherTypeHidden(voucherToEdit.voucherType)
     ) {
       setEditVoucherId(null);
-      setEditDialogOpen(false);
       setLocation(`/voucher-detail/${voucherIdToEdit}`);
     }
   }, [isRetailCompany, voucherIdToEdit, voucherToEdit, setLocation]);
@@ -763,15 +760,6 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
           )}
         </div>
       </div>
-
-      <VoucherEditDialog
-        voucherId={editVoucherId}
-        open={editDialogOpen && !(isRetailCompany && isRetailManualVoucherTypeHidden(voucherToEdit?.voucherType))}
-        onOpenChange={(open) => {
-          setEditDialogOpen(open);
-          if (!open) setEditVoucherId(null);
-        }}
-      />
 
       <CreateAccountModal
         open={showCreateAccountModal}

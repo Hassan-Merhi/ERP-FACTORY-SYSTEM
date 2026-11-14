@@ -36,7 +36,6 @@ vi.mock("@/contexts/DateFormatContext", async () => (await import("./pageMocks")
 import { useVoucherQueries } from "@/pages/vouchers/useVoucherQueries";
 import { useJournalFormModel } from "@/pages/vouchers/journalform/useJournalFormModel";
 import { useVoucherEditQueries } from "@/pages/voucher-edit/useVoucherEditQueries";
-import { VoucherEditDialog } from "@/components/VoucherEditDialog";
 
 function mount(useHook: () => unknown) {
   function Harness() {
@@ -88,11 +87,6 @@ describe("voucher account selectors request the voucher-picker ledger profile", 
 
   it("voucher edit page queries", () => {
     mount(() => useVoucherEditQueries({ id: "12", selectedCompanyId: 1 }));
-    expectVoucherPickerProfile();
-  });
-
-  it("voucher edit dialog", () => {
-    render(createElement(VoucherEditDialog, { voucherId: 12, open: true, onOpenChange: vi.fn() }));
     expectVoucherPickerProfile();
   });
 });

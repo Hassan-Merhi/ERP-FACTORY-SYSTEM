@@ -36,7 +36,7 @@ Entry: Retail company > Retail Inventory > **Supplier Stock Import**.
 - `client/src/pages/retail/RetailSupplierImportDialog.tsx` — template, company-scoped
   supplier and location fields, Excel/CSV file parsing and preview UI.
 - `client/src/pages/retail/RetailInventory.tsx` — entry button and dialog integration.
-- `client/src/pages/retail/RetailImportDialog.tsx` — legacy-import warning.
+- `client/src/pages/retail/RetailImportDialog.tsx` — legacy-import warning (removed 2026-11: it had no importer).
 
 No CI, tests, merge, rebase, or deployment were run as part of this Phase 1 handoff.
 
