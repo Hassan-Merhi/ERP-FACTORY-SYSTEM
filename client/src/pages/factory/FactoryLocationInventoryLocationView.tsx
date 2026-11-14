@@ -2,13 +2,18 @@ import "./FactoryLocationInventoryRedesign.css";
 import { Button } from "@/components/ui/button";
 import { SearchField } from "@/components/ui/search-field";
 import { Skeleton } from "@/components/ui/skeleton";
-import { MapPin, FileSpreadsheet, Pencil, ChevronRight } from "lucide-react";
+import { MapPin, Pencil, ChevronRight } from "lucide-react";
+import { PageHeader } from "@/components/PageHeader";
 import { RenameLocationDialog } from "./factory-location-inventory/dialogs/RenameLocationDialog";
 import type { useFactoryLocationInventory } from "./FactoryLocationInventoryModel";
+import { ExportButton } from "@/components/export/ReportExportMenu";
+import { useToast } from "@/hooks/use-toast";
+import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
 
 type FactoryLocationInventoryModel = ReturnType<typeof useFactoryLocationInventory>;
 
 export function FactoryLocationInventoryLocationView({ inventory }: { inventory: FactoryLocationInventoryModel }) {
+  const { toast } = useToast();
   const {
     canChangeExistingRecords,
     filteredLocations,
@@ -30,29 +35,31 @@ export function FactoryLocationInventoryLocationView({ inventory }: { inventory:
   return (
     <div className="factory-location-inventory inventory-location-view p-4 md:p-6 w-full space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-        <div>
-          <h1 className="inventory-page-heading text-2xl md:text-3xl font-bold tracking-tight">Location Inventory</h1>
-          <p className="text-sm text-muted-foreground mt-1">Physical bales on ground by location</p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <Button
-            variant="outline"
-            size="sm"
-            className="inventory-export-button"
-            onClick={() => {
-              const p = new URLSearchParams();
-              if (hideAvgCost) p.set("includeCost", "0");
-              if (hideSellingPrice) p.set("includeSellPrice", "0");
-              const qs = p.toString();
-              window.open(`/api/factory/location-inventory/export/all${qs ? "?" + qs : ""}`, "_blank");
-            }}
-            data-testid="button-export-all-locations"
-          >
-            <FileSpreadsheet className="h-4 w-4 mr-1.5" /> Export All (Excel)
-          </Button>
-        </div>
-      </div>
+      <PageHeader title="Location Inventory" subtitle="Physical bales on ground by location">
+        <ExportButton
+          size="sm"
+          className="inventory-export-button"
+          label="Export Excel (All Locations)"
+          onClick={async () => {
+            const p = new URLSearchParams();
+            if (hideAvgCost) p.set("includeCost", "0");
+            if (hideSellingPrice) p.set("includeSellPrice", "0");
+            const qs = p.toString();
+            try {
+              await downloadFromUrl(`/api/factory/location-inventory/export/all${qs ? "?" + qs : ""}`, {
+                fileName: exportFileName("location inventory all", "xlsx"),
+              });
+            } catch (error) {
+              toast({
+                title: "Export failed",
+                description: error instanceof Error ? error.message : "Please try again.",
+                variant: "destructive",
+              });
+            }
+          }}
+          data-testid="button-export-all-locations"
+        />
+      </PageHeader>
 
       {/* Location selector */}
       <div className="inventory-location-shell rounded-2xl border bg-card/30 overflow-hidden">

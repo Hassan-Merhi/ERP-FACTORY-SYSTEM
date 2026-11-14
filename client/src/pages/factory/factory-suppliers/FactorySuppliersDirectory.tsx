@@ -4,7 +4,6 @@ import {
   Calendar,
   Boxes,
   Search,
-  Truck,
   UsersRound,
   Wallet,
   ChevronRight,
@@ -50,19 +49,10 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
       className="relative isolate space-y-5 rounded-3xl border border-slate-200/80 bg-gradient-to-br from-slate-50 via-white to-blue-50/50 p-4 shadow-sm sm:p-6 dark:border-[hsl(var(--factory-hue)_50%_22%)] dark:from-[hsl(var(--factory-hue)_73%_10%)] dark:via-[hsl(var(--factory-hue)_64%_10%)] dark:to-[hsl(var(--factory-hue)_70%_8%)] dark:shadow-[0_18px_48px_rgba(0,0,0,0.22)]"
     >
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex items-center gap-3.5">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-blue-400/25 bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-[0_8px_24px_hsl(var(--factory-hue)_83%_53%_/_0.20)]">
-            <Truck className="h-5 w-5" aria-hidden="true" />
-          </div>
-          <div className="min-w-0">
-            <h2 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl dark:text-white">
-              Brokers &amp; Suppliers
-            </h2>
-            <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-300">
-              {model.brokerCount} brokers · {model.standaloneCount} standalone
-            </p>
-          </div>
-        </div>
+        {/* Parties hub "Suppliers" tab: the hub PageHeader titles the page, so no second page title here. */}
+        <p className="text-sm text-slate-500 dark:text-slate-300">
+          {model.brokerCount} brokers · {model.standaloneCount} standalone
+        </p>
         <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
           <div className="relative min-w-0 flex-1 lg:w-72">
             <Search

@@ -7,6 +7,8 @@ import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAc
 import { factoryApiRequest } from "@/lib/factoryApi";
 import type { ContainerWithSupplier } from "../types";
 import { containerCost, num } from "../utils";
+import { downloadBlob } from "@/lib/downloadBlob";
+import { exportFileName } from "@/lib/exportFile";
 
 function parseCsvLine(line: string): string[] {
   const output: string[] = [];
@@ -112,13 +114,10 @@ export function useOtwCsvTools(filtered: ContainerWithSupplier[], otwContainers:
     }
 
     const csv = rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `containers-otw-${new Date().toISOString().slice(0, 10)}.csv`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    downloadBlob(
+      new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" }),
+      exportFileName("containers otw", "csv")
+    );
   }
 
   async function handleImportFile(event: ChangeEvent<HTMLInputElement>) {

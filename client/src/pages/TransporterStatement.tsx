@@ -9,12 +9,13 @@ import { useDateFormat } from "@/contexts/DateFormatContext";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import { ExportButton } from "@/components/export/ReportExportMenu";
 import { ErpMobileFilters } from "@/components/ui/erp-mobile-filters";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TrendingDown, TrendingUp, Minus, RefreshCw, Printer, MessageCircle } from "lucide-react";
+import { TrendingDown, TrendingUp, Minus, RefreshCw, MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 import type { StatementResponse, StatementRow, Transporter } from "./transporterstatement/types";
@@ -502,15 +503,13 @@ export default function TransporterStatement({ embedded }: { embedded?: boolean 
                     {waSending ? "Sending…" : "Send WhatsApp"}
                   </Button>
                 )}
-                <Button
-                  variant="outline"
+                <ExportButton
+                  label="Export Image"
+                  busy={pdfExporting}
                   onClick={handleExportPDF}
-                  disabled={pdfExporting || !statement}
+                  disabled={!statement}
                   data-testid="btn-print"
-                >
-                  <Printer className={cn("h-4 w-4 mr-2", pdfExporting && "animate-spin")} />
-                  {pdfExporting ? "Exporting…" : "Print / Export PDF"}
-                </Button>
+                />
               </>
             )}
             {selectedAccountId && statement && !isTester && !isViewer && (

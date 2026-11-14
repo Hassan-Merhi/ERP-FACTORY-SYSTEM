@@ -69,7 +69,7 @@ describe("Daily Scan", () => {
     const [y, m, d] = date.split("-");
     const ws = exported.workbook!.worksheets[0];
     expect(ws.name).toBe(`${d}-${m}-${y}`);
-    expect(exported.fileName).toBe(`daily-scan-${date}.xlsx`);
+    expect(exported.fileName).toBe(`daily-scan_${date}.xlsx`);
 
     const rows: unknown[][] = [];
     ws.eachRow((row) => rows.push((row.values as unknown[]).slice(1)));

@@ -12,7 +12,10 @@ export interface AllocationSource {
   remainingQty: string;
   availableQty: string;
 }
-export interface EditableAllocation { offloadItemId: number; quantity: string }
+export interface EditableAllocation {
+  offloadItemId: number;
+  quantity: string;
+}
 export interface EditableReturnRow<T extends AllocationSource> {
   row: number;
   quantity: string;
@@ -27,7 +30,7 @@ export interface AllocationReview<T extends AllocationSource> {
 }
 export function validateSupplierReturnAllocations<T extends AllocationSource>(
   rows: EditableReturnRow<T>[],
-  allocations: Record<number, EditableAllocation[]>,
+  allocations: Record<number, EditableAllocation[]>
 ): { entries: AllocationReview<T>[]; valid: boolean; overSources: Set<number>; overStock: Set<string> } {
   const sourceDemand = new Map<number, Decimal>();
   const stockDemand = new Map<string, Decimal>();
@@ -41,8 +44,12 @@ export function validateSupplierReturnAllocations<T extends AllocationSource>(
     const lines = selected.map((allocation) => {
       const candidate = row.candidates.find((c) => c.offloadItemId === allocation.offloadItemId);
       const qtyValid = isValidSupplierReturnQuantity(allocation.quantity);
-      const eligible = !!candidate && candidate.supplierCount === 1 &&
-        candidate.supplierId !== null && candidate.currencyCount === 1 && candidate.currency === "USD";
+      const eligible =
+        !!candidate &&
+        candidate.supplierCount === 1 &&
+        candidate.supplierId !== null &&
+        candidate.currencyCount === 1 &&
+        candidate.currency === "USD";
       const valid = !!candidate && eligible && qtyValid && !seen.has(allocation.offloadItemId);
       seen.add(allocation.offloadItemId);
       if (eligible && candidate?.supplierId !== null) suppliers.add(candidate!.supplierId!);
@@ -50,7 +57,10 @@ export function validateSupplierReturnAllocations<T extends AllocationSource>(
       if (valid && candidate) {
         const qty = new Decimal(allocation.quantity);
         const key = `${candidate.locationId}:${candidate.stockItemId}`;
-        sourceDemand.set(candidate.offloadItemId, (sourceDemand.get(candidate.offloadItemId) ?? new Decimal(0)).plus(qty));
+        sourceDemand.set(
+          candidate.offloadItemId,
+          (sourceDemand.get(candidate.offloadItemId) ?? new Decimal(0)).plus(qty)
+        );
         stockDemand.set(key, (stockDemand.get(key) ?? new Decimal(0)).plus(qty));
         const priorSource = sourceCapacity.get(candidate.offloadItemId);
         const priorStock = stockCapacity.get(key);
@@ -63,19 +73,30 @@ export function validateSupplierReturnAllocations<T extends AllocationSource>(
     });
     const requested = new Decimal(row.quantity);
     return {
-      row, lines, allocatedQty: allocated.toFixed(3),
+      row,
+      lines,
+      allocatedQty: allocated.toFixed(3),
       unallocatedQty: Decimal.max(requested.minus(allocated), 0).toFixed(3),
-      valid: lines.length > 0 && lines.every((line) => line.valid) &&
-        suppliers.size === 1 && allocated.eq(requested),
+      valid: lines.length > 0 && lines.every((line) => line.valid) && suppliers.size === 1 && allocated.eq(requested),
     };
   });
-  const overSources = new Set([...sourceDemand].filter(([id, qty]) => qty.gt(sourceCapacity.get(id) ?? 0)).map(([id]) => id));
-  const overStock = new Set([...stockDemand].filter(([key, qty]) => qty.gt(stockCapacity.get(key) ?? 0)).map(([key]) => key));
-  const valid = entries.length > 0 && entries.every((entry) =>
-    entry.valid && entry.lines.every(({ candidate }) =>
-      candidate && !overSources.has(candidate.offloadItemId) &&
-      !overStock.has(`${candidate.locationId}:${candidate.stockItemId}`)
-    )
+  const overSources = new Set(
+    [...sourceDemand].filter(([id, qty]) => qty.gt(sourceCapacity.get(id) ?? 0)).map(([id]) => id)
   );
+  const overStock = new Set(
+    [...stockDemand].filter(([key, qty]) => qty.gt(stockCapacity.get(key) ?? 0)).map(([key]) => key)
+  );
+  const valid =
+    entries.length > 0 &&
+    entries.every(
+      (entry) =>
+        entry.valid &&
+        entry.lines.every(
+          ({ candidate }) =>
+            candidate &&
+            !overSources.has(candidate.offloadItemId) &&
+            !overStock.has(`${candidate.locationId}:${candidate.stockItemId}`)
+        )
+    );
   return { entries, valid, overSources, overStock };
 }

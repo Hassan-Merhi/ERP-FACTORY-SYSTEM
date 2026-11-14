@@ -11,7 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search, FileText, X, Download, FileSpreadsheet, Plus, Check } from "lucide-react";
+import { Search, FileText, X, Plus, Check } from "lucide-react";
+import { ExportButton } from "@/components/export/ReportExportMenu";
 
 export function FinalizeProformaDialog({
   bulkCreateMutation,
@@ -305,12 +306,8 @@ export function FinalizeProformaDialog({
               </p>
             </div>
             <div className="flex items-center justify-center gap-3">
-              <Button variant="outline" onClick={handleExportExcel} data-testid="button-export-excel">
-                <FileSpreadsheet className="h-4 w-4 mr-1" /> Export Excel
-              </Button>
-              <Button variant="outline" onClick={handleExportPdf} data-testid="button-export-pdf">
-                <Download className="h-4 w-4 mr-1" /> Export PDF
-              </Button>
+              <ExportButton onClick={handleExportExcel} data-testid="button-export-excel" />
+              <ExportButton kind="pdf" onClick={handleExportPdf} data-testid="button-export-pdf" />
             </div>
             <div className="flex justify-center pt-2">
               <Button onClick={handleCloseFinalizeDialog} data-testid="button-done-proforma">

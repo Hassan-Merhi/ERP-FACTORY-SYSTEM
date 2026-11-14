@@ -109,7 +109,8 @@ describe("Factory unified blue theme", () => {
     const theme = readFileSync(factoryTheme, "utf8");
     const targets = readFileSync(join(factoryStyles, "productiontargets/productionTargetsPremium.css"), "utf8");
 
-    expect(container).toContain("factory-container-stripes");
+    // The container-loading page now uses the shared PageHeader instead of the striped hero.
+    expect(container).toContain("<PageHeader");
     expect(container).not.toMatch(/#[\da-fA-F]{6}\b/);
     expect(financial).toContain('color="var(--factory-color-500)"');
     expect(pressing).toContain("shadow-[0_12px_30px_-22px_hsl(var(--factory-hue)_");

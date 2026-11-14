@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCompany } from "@/contexts/CompanyContext";
 import { apiRequest } from "@/lib/queryClient";
+import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
 import {
   type ImportedPriceRow,
   type ImportPreview,
@@ -32,15 +33,6 @@ function parsedPositiveOrNull(value: string | undefined): number | null {
   if (value === undefined || value.trim() === "") return null;
   const number = Number(value);
   return Number.isFinite(number) && number > 0 ? number : null;
-}
-
-function downloadBlob(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  anchor.click();
-  URL.revokeObjectURL(url);
 }
 
 export function useSupplierProfitCheckSafeModel() {
@@ -290,20 +282,20 @@ export function useSupplierProfitCheckSafeModel() {
         effectiveSellPrice: effectiveSellPrice(row, base.manualAvgPrices, base.sellPriceSource),
         extraCostPerBale: derived.extraCostPerBale,
       }));
-      const response = await fetch("/api/supplier-profit-check/export-internal", {
+      await downloadFromUrl("/api/supplier-profit-check/export-internal", {
         method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+        body: {
           rows: exportRows,
           supplierName: selectedSupplier?.legalName || selectedSupplier?.legal_name || "",
           fromDate: base.periodFilter.fromDate,
           toDate: base.periodFilter.toDate,
           proformaRef: base.savedProforma?.reference || "",
+        },
+        fileName: exportFileName(`profit analysis ${base.savedProforma?.reference ?? ""}`, "xlsx", {
+          from: base.periodFilter.fromDate,
+          to: base.periodFilter.toDate,
         }),
       });
-      if (!response.ok) throw new Error("Export failed");
-      downloadBlob(await response.blob(), `profit-analysis-${base.savedProforma?.reference || "export"}.xlsx`);
     } catch (error) {
       base.toast({
         title: "Export failed",

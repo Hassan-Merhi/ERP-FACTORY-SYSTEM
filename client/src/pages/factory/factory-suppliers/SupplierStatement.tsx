@@ -7,7 +7,6 @@ import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
-  ArrowLeft,
   ArrowRightLeft,
   BookOpen,
   Building2,
@@ -22,6 +21,7 @@ import {
   Users,
   Package,
 } from "lucide-react";
+import { PageHeader } from "@/components/PageHeader";
 import { StatementResponse, SupplierWithBalance, type StatementDisplayRow } from "./factorySupplierTypes";
 import { LinkedSupplierExposure } from "./LinkedSupplierExposure";
 import type { useFactorySuppliersModel } from "./useFactorySuppliersModel";
@@ -214,68 +214,57 @@ export function SupplierStatement({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3 flex-wrap">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => {
-            setStatementSupplierId(null);
-            if (statementReturnToParent) {
-              setStatementReturnToParent(false);
-            }
-          }}
-          data-testid="button-back-suppliers"
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-2xl font-bold tracking-tight" data-testid="text-statement-supplier-name">
-              {statementData.supplier.name}
-            </h1>
-            {statementData.supplier.parentId ? (
-              <>
-                <Badge variant="outline" className="text-xs">
-                  <Link2 className="h-3 w-3 mr-1" />
-                  Linked Supplier
-                </Badge>
-                {onRenameSupplier && (
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    title="Rename supplier"
-                    data-testid="button-rename-linked-supplier"
-                    onClick={() => {
-                      setRenameDraft(statementData.supplier.name);
-                      setShowRename(true);
-                    }}
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                )}
-                {onDeleteSupplier && (
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    title="Delete supplier"
-                    data-testid="button-delete-linked-supplier"
-                    onClick={() => setShowDeleteConfirm(true)}
-                  >
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
-                )}
-              </>
-            ) : statementData?.supplier &&
-              !statementData.supplier.parentId &&
-              subAccountsByParent[statementData.supplier.id]?.length ? (
-              <Badge variant="secondary" className="text-xs">
-                <Building2 className="h-3 w-3 mr-1" />
-                Broker
-              </Badge>
-            ) : null}
-          </div>
-          <p className="text-muted-foreground text-sm">Settlement Statement</p>
-        </div>
+      <PageHeader
+        title={<span data-testid="text-statement-supplier-name">{statementData.supplier.name}</span>}
+        subtitle="Settlement Statement"
+        onBack={() => {
+          setStatementSupplierId(null);
+          if (statementReturnToParent) {
+            setStatementReturnToParent(false);
+          }
+        }}
+        backButtonTestId="button-back-suppliers"
+        meta={
+          statementData.supplier.parentId ? (
+            <Badge variant="outline" className="text-xs">
+              <Link2 className="h-3 w-3 mr-1" />
+              Linked Supplier
+            </Badge>
+          ) : statementData?.supplier &&
+            !statementData.supplier.parentId &&
+            subAccountsByParent[statementData.supplier.id]?.length ? (
+            <Badge variant="secondary" className="text-xs">
+              <Building2 className="h-3 w-3 mr-1" />
+              Broker
+            </Badge>
+          ) : undefined
+        }
+      >
+        {statementData.supplier.parentId && onRenameSupplier && (
+          <Button
+            size="icon"
+            variant="ghost"
+            title="Rename supplier"
+            data-testid="button-rename-linked-supplier"
+            onClick={() => {
+              setRenameDraft(statementData.supplier.name);
+              setShowRename(true);
+            }}
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+        )}
+        {statementData.supplier.parentId && onDeleteSupplier && (
+          <Button
+            size="icon"
+            variant="ghost"
+            title="Delete supplier"
+            data-testid="button-delete-linked-supplier"
+            onClick={() => setShowDeleteConfirm(true)}
+          >
+            <Trash2 className="h-4 w-4 text-destructive" />
+          </Button>
+        )}
         {!isBrokerStatement && (
           <label
             className="flex items-center gap-2 cursor-pointer select-none"
@@ -289,7 +278,7 @@ export function SupplierStatement({
             <span className="text-xs font-normal text-muted-foreground">Include OTW containers</span>
           </label>
         )}
-      </div>
+      </PageHeader>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
         {!isBrokerStatement && (

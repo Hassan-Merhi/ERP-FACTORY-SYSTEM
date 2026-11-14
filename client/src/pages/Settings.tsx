@@ -213,11 +213,9 @@ export default function Settings() {
 
   return (
     <div className="flex flex-col sm:h-full">
-      {appMode === "erp" && (
-        <div className="shrink-0 sm:px-6 sm:pt-4">
-          <PageHeader title="Settings" meta={activeSectionLabel ? <span>{activeSectionLabel}</span> : undefined} />
-        </div>
-      )}
+      <div className="shrink-0 sm:px-6 sm:pt-4">
+        <PageHeader title="Settings" meta={activeSectionLabel ? <span>{activeSectionLabel}</span> : undefined} />
+      </div>
       <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
         <div className="sm:hidden border-b pb-3 flex items-center gap-2">
           <Select value={activeSection} onValueChange={openSection}>

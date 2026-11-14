@@ -1,3 +1,4 @@
+import { PageHeader } from "@/components/PageHeader";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { releaseDebtEnglish } from "@/i18n/finalCloseoutTranslations";
 import { useState } from "react";
@@ -121,12 +122,10 @@ export default function SpOverview() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-6" data-testid="sp-overview">
-      <div>
-        <h1 className="text-2xl font-semibold">Supplier Partner</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Daily Supplier Partner work, reporting, stock setup, aliases, and account configuration.
-        </p>
-      </div>
+      <PageHeader
+        title="Supplier Partner"
+        subtitle="Daily Supplier Partner work, reporting, stock setup, aliases, and account configuration."
+      />
 
       <section className="space-y-3" aria-labelledby="sp-daily-work-heading">
         <div>

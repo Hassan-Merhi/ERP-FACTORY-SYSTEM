@@ -97,7 +97,7 @@ const PAGES: PageCase[] = [
     sweep: true,
   },
   { name: "SalesToolsHub", load: () => import("@/pages/SalesToolsHub"), landmark: "tab-transfers", sweep: true },
-  { name: "Settings", load: () => import("@/pages/Settings"), landmark: "text-users-title", sweep: true },
+  { name: "Settings", load: () => import("@/pages/Settings"), landmark: "button-add-user", sweep: true },
   {
     name: "SmartStockTransferOrderPage",
     load: () => import("@/pages/SmartStockTransferOrderPage"),
@@ -291,7 +291,7 @@ const PAGES: PageCase[] = [
   {
     name: "PropertiesSettings",
     load: () => import("@/pages/properties/PropertiesSettings"),
-    landmark: "text-users-title",
+    landmark: "button-add-user",
     sweep: true,
   },
   {

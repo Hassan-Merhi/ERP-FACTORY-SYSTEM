@@ -9,7 +9,8 @@
  *
  * Extracted from WasteDispatchOptimized.tsx during the god-file split.
  */
-import { Loader2, Printer, Trash2 } from "lucide-react";
+import { Loader2, Trash2 } from "lucide-react";
+import { ExportButton } from "@/components/export/ReportExportMenu";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -193,13 +194,13 @@ export function PrintDispatchDialog({
           <Button variant="outline" onClick={onClose}>
             Close
           </Button>
-          <Button
+          <ExportButton
+            kind="print"
+            variant="default"
             onClick={() => {
               if (printData) printDispatchDocument(printData.dispatch, printData.bales);
             }}
-          >
-            <Printer className="mr-2 h-4 w-4" /> Print
-          </Button>
+          />
         </DialogFooter>
       </DialogContent>
     </Dialog>

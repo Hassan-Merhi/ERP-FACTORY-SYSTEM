@@ -1,4 +1,6 @@
 import type ExcelJS from "exceljs";
+import { downloadBlob } from "@/lib/downloadBlob";
+import { exportFileName } from "@/lib/exportFile";
 
 export interface WeeklyBonusPaymentExportRow {
   reviewId: number | string;
@@ -251,15 +253,5 @@ export async function exportWeeklyBonusPaymentsExcel(
   const blob = new Blob([buffer], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
-  const url = URL.createObjectURL(blob);
-  try {
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "Weekly_Production_Bonuses_" + start + "_to_" + end + ".xlsx";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-  } finally {
-    window.setTimeout(() => URL.revokeObjectURL(url), 1500);
-  }
+  downloadBlob(blob, exportFileName("weekly production bonuses", "xlsx", { from: start, to: end }));
 }

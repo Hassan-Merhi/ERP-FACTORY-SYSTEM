@@ -8,6 +8,7 @@ import {
   type AccountingToolboxMode,
   type AccountingToolCategory,
 } from "@/lib/accountingToolboxNavigation";
+import { PageHeader } from "@/components/PageHeader";
 
 const groups: Array<{ title: AccountingToolCategory; icon: typeof ClipboardList }> = [
   { title: "Reconciliation", icon: ClipboardList },
@@ -26,14 +27,10 @@ export default function AccountingToolbox() {
   const links = [...getAccountingToolLinks(mode), ...getDeveloperMaintenanceLinks(mode)];
   return (
     <main className="container mx-auto max-w-6xl space-y-6 p-4 md:p-6" data-testid="accounting-toolbox">
-      <header className="space-y-2">
-        <h1 className="text-2xl font-semibold">Accounting Toolbox</h1>
-        <p className="text-sm text-muted-foreground">
-          Developer reconciliation, financial reporting, and release review tools. These links open the existing pages;
-          no records or calculations are changed here. Some maintenance destinations can modify records if actions are
-          explicitly submitted.
-        </p>
-      </header>
+      <PageHeader
+        title="Accounting Toolbox"
+        subtitle="Developer reconciliation, financial reporting, and release review tools. These links open the existing pages; no records or calculations are changed here. Some maintenance destinations can modify records if actions are explicitly submitted."
+      />
       <div className="grid gap-4 lg:grid-cols-2">
         {groups.map(({ title, icon: Icon }) => (
           <Card key={title}>

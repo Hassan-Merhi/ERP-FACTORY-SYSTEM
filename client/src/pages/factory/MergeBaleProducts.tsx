@@ -98,7 +98,7 @@ export default function MergeBaleProducts() {
     <div className="max-w-3xl mx-auto p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => navigate("/settings")} data-testid="button-back">
+        <Button variant="ghost" size="icon" onClick={() => navigate("/factory/settings")} data-testid="button-back">
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div>
@@ -135,7 +135,7 @@ export default function MergeBaleProducts() {
             <Button onClick={reset} data-testid="button-merge-again">
               Merge More Products
             </Button>
-            <Button variant="outline" onClick={() => navigate("/settings")} data-testid="button-merge-done">
+            <Button variant="outline" onClick={() => navigate("/factory/settings")} data-testid="button-merge-done">
               Back to Settings
             </Button>
           </div>
@@ -334,7 +334,7 @@ export default function MergeBaleProducts() {
           )}
 
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => navigate("/settings")} data-testid="button-merge-cancel">
+            <Button variant="outline" onClick={() => navigate("/factory/settings")} data-testid="button-merge-cancel">
               Cancel
             </Button>
             <Button disabled={!canProceed} onClick={() => setStep("confirm")} data-testid="button-merge-next">

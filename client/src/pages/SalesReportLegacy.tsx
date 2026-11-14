@@ -437,8 +437,14 @@ export default function SalesReport() {
           disabled={groupedData.length === 0}
           data-testid="button-export-dropdown"
           options={[
-            { id: "sales-excel", testId: "menu-export-excel", label: "Export Excel", kind: "excel", onSelect: handleExportExcel },
-            { id: "sales-print", testId: "menu-export-pdf", label: "Print / Save PDF", kind: "print", onSelect: handleExportPDF },
+            {
+              id: "sales-excel",
+              testId: "menu-export-excel",
+              label: "Export Excel",
+              kind: "excel",
+              onSelect: handleExportExcel,
+            },
+            { id: "sales-print", testId: "menu-export-pdf", label: "Print", kind: "print", onSelect: handleExportPDF },
           ]}
         />
       </PageHeader>

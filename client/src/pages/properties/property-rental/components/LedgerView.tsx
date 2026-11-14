@@ -11,7 +11,9 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Printer, Download, CalendarDays, Wrench, RotateCcw } from "lucide-react";
+import { CalendarDays, Wrench, RotateCcw } from "lucide-react";
+import { ExportButton } from "@/components/export/ReportExportMenu";
+import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
 import { format } from "date-fns";
 import type { Contract, LedgerRow, Payment } from "../types";
 import { MONTH_NAMES, billingDayLabel, fmtMoney, fmtMoneyCurrency } from "../utils";
@@ -47,6 +49,7 @@ function LedgerView({
   const paymentCards = useMobileCardTable();
   const scheduledCards = useMobileCardTable();
   const { toast } = useToast();
+  const [exportingExcel, setExportingExcel] = useState(false);
   const [draftNote, setDraftNote] = useState(contract.statementNote ?? "");
   const noteChanged = draftNote !== (contract.statementNote ?? "");
 
@@ -251,8 +254,21 @@ function LedgerView({
     setTimeout(() => w.print(), 300);
   };
 
-  const handleExcel = () => {
-    window.open(`${apiBase}/units/${unitId}/statement/export`, "_blank");
+  const handleExcel = async () => {
+    setExportingExcel(true);
+    try {
+      await downloadFromUrl(`${apiBase}/units/${unitId}/statement/export`, {
+        fileName: exportFileName(`rental statement ${contract.tenantName}`, "xlsx"),
+      });
+    } catch (error) {
+      toast({
+        title: "Export failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setExportingExcel(false);
+    }
   };
 
   return (
@@ -299,14 +315,14 @@ function LedgerView({
               {fixAllocation.isPending ? "Fixing..." : "Fix Allocation"}
             </Button>
           )}
-          <Button variant="outline" size="sm" onClick={handleExcel} data-testid="button-export-excel">
-            <Download className="h-4 w-4 mr-1" />
-            Excel
-          </Button>
-          <Button variant="outline" size="sm" onClick={handlePrint} data-testid="button-print-statement">
-            <Printer className="h-4 w-4 mr-1" />
-            Print / PDF
-          </Button>
+          <ExportButton
+            kind="excel"
+            size="sm"
+            busy={exportingExcel}
+            onClick={handleExcel}
+            data-testid="button-export-excel"
+          />
+          <ExportButton kind="print" size="sm" onClick={handlePrint} data-testid="button-print-statement" />
         </div>
       </div>
       <div className="border rounded-md overflow-hidden">

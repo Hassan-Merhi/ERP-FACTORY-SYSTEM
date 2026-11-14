@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { POImportDraft, POImportResult, PODraftLine } from "./chatWidgetTypes";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useToast } from "@/hooks/use-toast";
+import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
 
 export function POImportDraftCard({
   draft,
@@ -25,6 +27,22 @@ export function POImportDraftCard({
 }) {
   const [, setLocation] = useLocation();
   const { selectedCompany } = useCompany();
+  const { toast } = useToast();
+  const downloadVerification = async (proformaId: number | string, reference: string) => {
+    if (!result) return;
+    try {
+      await downloadFromUrl(
+        `/api/suppliers/${result.supplierId}/containers/${result.containerId}/verification-export.xlsx?proformaId=${proformaId}`,
+        { fileName: exportFileName(`container verification ${result.containerNumber} ${reference}`, "xlsx") }
+      );
+    } catch (error) {
+      toast({
+        title: "Export failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
   // A USD-base / ZMW-display company must confirm the invoice currency; the
   // parsed draft defaults to USD and must never silently book Kwacha as dollars.
   const requiresCurrencyConfirmation = selectedCompany?.displayCurrency?.toUpperCase() === "ZMW";
@@ -147,41 +165,32 @@ export function POImportDraftCard({
             <div className="mt-3 border-t pt-3">
               <p className="text-[11px] font-semibold text-muted-foreground mb-1.5">Download Verification Excel</p>
               {result.availableProformas.length === 1 ? (
-                <a
-                  href={`/api/suppliers/${result.supplierId}/containers/${result.containerId}/verification-export.xlsx?proformaId=${result.availableProformas[0].id}`}
-                  target="_blank"
-                  rel="noreferrer"
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs w-full"
+                  data-testid="button-download-verification-excel"
+                  onClick={() =>
+                    void downloadVerification(result.availableProformas[0].id, result.availableProformas[0].reference)
+                  }
                 >
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7 text-xs w-full"
-                    data-testid="button-download-verification-excel"
-                  >
-                    <Download className="h-3 w-3 mr-1.5" />
-                    {result.availableProformas[0].reference}
-                  </Button>
-                </a>
+                  <Download className="h-3 w-3 mr-1.5" />
+                  {result.availableProformas[0].reference}
+                </Button>
               ) : (
                 <div className="space-y-1">
                   {result.availableProformas.map((p) => (
-                    <a
+                    <Button
                       key={p.id}
-                      href={`/api/suppliers/${result.supplierId}/containers/${result.containerId}/verification-export.xlsx?proformaId=${p.id}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="block"
+                      variant="outline"
+                      size="sm"
+                      className="w-full h-7 text-xs justify-start"
+                      data-testid={`button-download-proforma-${p.id}`}
+                      onClick={() => void downloadVerification(p.id, p.reference)}
                     >
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="w-full h-7 text-xs justify-start"
-                        data-testid={`button-download-proforma-${p.id}`}
-                      >
-                        <Download className="h-3 w-3 mr-1.5 shrink-0" />
-                        {p.reference}
-                      </Button>
-                    </a>
+                      <Download className="h-3 w-3 mr-1.5 shrink-0" />
+                      {p.reference}
+                    </Button>
                   ))}
                 </div>
               )}

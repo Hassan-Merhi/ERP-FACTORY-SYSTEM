@@ -16,7 +16,6 @@ import { PageHeader } from "@/components/PageHeader";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   Trash2,
-  Printer,
   Search,
   ChevronDown,
   ChevronRight,
@@ -38,6 +37,7 @@ import type {
 } from "./wastedispatch/types";
 import { fmt, fmtKg, today } from "./wastedispatch/utils";
 import { WasteDispatchDialogs } from "./wastedispatch/components/WasteDispatchDialogs";
+import { ExportButton } from "@/components/export/ReportExportMenu";
 export default function WasteDispatch() {
   const { selectedCompany } = useCompany();
   const { toast } = useToast();
@@ -202,8 +202,14 @@ export default function WasteDispatch() {
 
   const handleHistoryPrint = (d: WasteDispatchHistoryEntry) => {
     const dispatchBales = d.bales || [];
-    const totalW = dispatchBales.reduce((s: number, b: WasteDispatchHistoryBale) => s + parseFloat(String(b.weightKg || 0)), 0);
-    const totalC = dispatchBales.reduce((s: number, b: WasteDispatchHistoryBale) => s + parseFloat(String(b.totalCost || 0)), 0);
+    const totalW = dispatchBales.reduce(
+      (s: number, b: WasteDispatchHistoryBale) => s + parseFloat(String(b.weightKg || 0)),
+      0
+    );
+    const totalC = dispatchBales.reduce(
+      (s: number, b: WasteDispatchHistoryBale) => s + parseFloat(String(b.totalCost || 0)),
+      0
+    );
     const baleRows = dispatchBales
       .map(
         (b: WasteDispatchHistoryBale) =>
@@ -646,11 +652,14 @@ export default function WasteDispatch() {
                           <span className="text-muted-foreground">
                             {d.totalBales} bale{d.totalBales !== 1 ? "s" : ""}
                           </span>
-                          <span className="text-muted-foreground">{fmtKg(parseFloat(String(d.totalWeightKg || "0")))} kg</span>
+                          <span className="text-muted-foreground">
+                            {fmtKg(parseFloat(String(d.totalWeightKg || "0")))} kg
+                          </span>
                           <Badge variant="outline" className="text-destructive border-destructive/30 text-xs">
                             {fmt(parseFloat(String(d.totalCostWrittenOff || "0")))}
                           </Badge>
-                          <Button
+                          <ExportButton
+                            kind="print"
                             size="sm"
                             variant="ghost"
                             className="gap-1 h-6 px-2 text-xs"
@@ -659,10 +668,7 @@ export default function WasteDispatch() {
                               handleHistoryPrint(d);
                             }}
                             data-testid={`button-reprint-${d.id}`}
-                          >
-                            <Printer className="w-3 h-3" />
-                            Print
-                          </Button>
+                          />
                           <Button
                             size="sm"
                             variant="ghost"
@@ -713,12 +719,20 @@ export default function WasteDispatch() {
                                   </td>
                                   <td className="pt-1.5 text-right">
                                     {fmtKg(
-                                      dispatchBales.reduce((s: number, b: WasteDispatchHistoryBale) => s + parseFloat(String(b.weightKg || 0)), 0)
+                                      dispatchBales.reduce(
+                                        (s: number, b: WasteDispatchHistoryBale) =>
+                                          s + parseFloat(String(b.weightKg || 0)),
+                                        0
+                                      )
                                     )}
                                   </td>
                                   <td className="pt-1.5 text-right text-destructive">
                                     {fmt(
-                                      dispatchBales.reduce((s: number, b: WasteDispatchHistoryBale) => s + parseFloat(String(b.totalCost || 0)), 0)
+                                      dispatchBales.reduce(
+                                        (s: number, b: WasteDispatchHistoryBale) =>
+                                          s + parseFloat(String(b.totalCost || 0)),
+                                        0
+                                      )
                                     )}
                                   </td>
                                 </tr>

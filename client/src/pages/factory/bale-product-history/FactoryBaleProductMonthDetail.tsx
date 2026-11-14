@@ -2,7 +2,8 @@ import { searchAny } from "@shared/searchNormalization";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useParams, useLocation } from "wouter";
-import { ArrowLeft, Package, Search, Pencil } from "lucide-react";
+import { Package, Search, Pencil } from "lucide-react";
+import { PageHeader } from "@/components/PageHeader";
 import { Input } from "@/components/ui/input";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { Button } from "@/components/ui/button";
@@ -44,13 +45,23 @@ export function FactoryBaleProductMonthDetail() {
     queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
     enabled: Boolean(selectedCompany?.id),
   });
-  const accessReady = Boolean(selectedCompany?.id && myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true);
-  const hiddenCost = accessReady && myAccess?.hideAllCosts !== true
-    ? (myAccess?.hiddenCostFields ?? [])
-    : ["bale_history_cost_per_kg", "bale_history_total_cost"];
+  const accessReady = Boolean(
+    selectedCompany?.id && myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
+  );
+  const hiddenCost =
+    accessReady && myAccess?.hideAllCosts !== true
+      ? (myAccess?.hiddenCostFields ?? [])
+      : ["bale_history_cost_per_kg", "bale_history_total_cost"];
 
   const { data: responseData, isLoading } = useQuery<BaleDetailResponse>({
-    queryKey: companyQueryKey("/api/factory/bale-product-history", selectedCompany?.id, productId, locationId, year, month),
+    queryKey: companyQueryKey(
+      "/api/factory/bale-product-history",
+      selectedCompany?.id,
+      productId,
+      locationId,
+      year,
+      month
+    ),
     queryFn: async () => {
       const response = await fetch(`/api/factory/bale-product-history/${productId}/${locationId}/${year}/${month}`, {
         credentials: "include",
@@ -58,7 +69,12 @@ export function FactoryBaleProductMonthDetail() {
       if (!response.ok) throw new Error("Failed to fetch");
       return response.json();
     },
-    enabled: Boolean(selectedCompany?.id) && parseInt(productId) > 0 && parseInt(locationId) > 0 && parseInt(year) > 0 && parseInt(month) > 0,
+    enabled:
+      Boolean(selectedCompany?.id) &&
+      parseInt(productId) > 0 &&
+      parseInt(locationId) > 0 &&
+      parseInt(year) > 0 &&
+      parseInt(month) > 0,
   });
 
   const data = responseData?.bales;
@@ -103,9 +119,18 @@ export function FactoryBaleProductMonthDetail() {
 
   const handleWeightSuccess = () => {
     queryClient.invalidateQueries({
-      queryKey: companyQueryKey("/api/factory/bale-product-history", selectedCompany?.id, productId, locationId, year, month),
+      queryKey: companyQueryKey(
+        "/api/factory/bale-product-history",
+        selectedCompany?.id,
+        productId,
+        locationId,
+        year,
+        month
+      ),
     });
-    queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/bale-product-history", selectedCompany?.id, productId, locationId, year) });
+    queryClient.invalidateQueries({
+      queryKey: companyQueryKey("/api/factory/bale-product-history", selectedCompany?.id, productId, locationId, year),
+    });
   };
 
   if (isLoading) {
@@ -125,21 +150,16 @@ export function FactoryBaleProductMonthDetail() {
         onSuccess={handleWeightSuccess}
       />
 
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate(backPath)} data-testid="button-back">
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div className="min-w-0">
-            <h1 className="text-lg sm:text-2xl font-bold" data-testid="text-page-title">
-              Bale Details — {monthName} {year}
-            </h1>
-            <p className="text-sm text-muted-foreground" data-testid="text-bale-count">
-              <Package className="inline h-4 w-4 mr-1" />
-              {data?.length || 0} bale(s)
-            </p>
-          </div>
-        </div>
+      <PageHeader
+        title={`Bale Details — ${monthName} ${year}`}
+        backTarget={backPath}
+        meta={
+          <span data-testid="text-bale-count">
+            <Package className="inline h-4 w-4 mr-1" />
+            {data?.length || 0} bale(s)
+          </span>
+        }
+      >
         <Button
           variant="outline"
           size="sm"
@@ -149,7 +169,7 @@ export function FactoryBaleProductMonthDetail() {
         >
           Show All Months
         </Button>
-      </div>
+      </PageHeader>
 
       <Card>
         <CardHeader className="pb-2">

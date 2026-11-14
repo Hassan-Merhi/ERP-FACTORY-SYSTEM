@@ -57,17 +57,9 @@ export default function FactoryPayrollHub() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="relative shrink-0 overflow-hidden border-b border-blue-500/15 bg-gradient-to-br from-blue-500/10 via-background to-background dark:border-slate-700/70 dark:from-[hsl(var(--factory-hue)_55%_15%)] dark:via-[hsl(var(--factory-hue)_53%_10%)] dark:to-background">
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute -right-20 -top-32 h-72 w-[50rem] rounded-full bg-blue-500/10 blur-3xl dark:bg-blue-600/20"
-        />
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute right-0 top-12 h-px w-1/2 -rotate-12 bg-gradient-to-l from-blue-400/40 via-blue-400/10 to-transparent"
-        />
-        {/* Shared page-header grammar (accent bar, icon, subtitle) like the ERP and Properties pages. */}
-        <div className="relative z-10 px-4 pt-5 sm:px-6 sm:pt-6 [&>header]:mb-0 [&>header]:border-b-0 [&>header]:pb-4 [&_[data-testid=text-page-title]]:font-bold [&_[data-testid=text-page-title]]:tracking-tight [&_[data-testid=text-page-title]>span:first-child]:rounded-xl [&_[data-testid=text-page-title]>span:first-child]:border [&_[data-testid=text-page-title]>span:first-child]:border-blue-400/30 [&_[data-testid=text-page-title]>span:first-child]:bg-blue-500/15 [&_[data-testid=text-page-title]>span:first-child]:p-3 [&_[data-testid=text-page-title]>span:first-child]:text-blue-500 dark:[&_[data-testid=text-page-title]>span:first-child]:text-sky-300">
+      <div className="shrink-0 border-b border-border/70 bg-background">
+        {/* Shared PageHeader, laid out like the other Factory hubs (no hand-built gradient banner). */}
+        <div className="px-4 pt-4 sm:px-6 [&>header]:mb-0 [&>header]:border-b-0 [&>header]:pb-3">
           <PageHeader
             title="Payroll & Benefits"
             subtitle={tr("hubDescription")}
@@ -76,7 +68,7 @@ export default function FactoryPayrollHub() {
           />
         </div>
 
-        <div className="erp-mobile-scroll-tabs relative z-10 px-4 pb-4 sm:px-6 sm:pb-5">
+        <div className="erp-mobile-scroll-tabs px-4 pb-3 sm:px-6">
           <TabsList
             className="w-max min-w-full gap-1.5 rounded-2xl border-blue-500/15 bg-background/70 p-1.5 shadow-lg shadow-blue-950/5 backdrop-blur-md dark:border-slate-600/60 dark:bg-slate-900/70 sm:min-w-0 sm:w-fit"
             aria-label="Factory sections"

@@ -6,6 +6,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { useToast } from "@/hooks/use-toast";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { apiRequest } from "@/lib/queryClient";
+import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
 import type { AnalysisRow, ColKey, ColVisibility, ComputedRow, LocationGroup, OtwContainer } from "./types";
 import { ALL_COLUMNS, DEFAULT_COL_VISIBILITY, STATUS_OPTIONS, STORAGE_KEY_COLS, loadColVisibility } from "./utils";
 
@@ -622,18 +623,9 @@ export function useSupplierProfitCheckModel() {
       setShowConfirmModal(false);
       toast({ title: "Proforma saved", description: `Reference: ${data.reference}` });
       try {
-        const exportResponse = await fetch(`/api/supplier-profit-check/proforma/${data.id}/export-supplier`, {
-          credentials: "include",
+        await downloadFromUrl(`/api/supplier-profit-check/proforma/${data.id}/export-supplier`, {
+          fileName: exportFileName(`proforma ${data.reference}`, "xlsx"),
         });
-        if (exportResponse.ok) {
-          const blob = await exportResponse.blob();
-          const url = URL.createObjectURL(blob);
-          const anchor = document.createElement("a");
-          anchor.href = url;
-          anchor.download = `proforma-${data.reference}.xlsx`;
-          anchor.click();
-          URL.revokeObjectURL(url);
-        }
       } catch {
         /* manual download remains available */
       }
@@ -647,17 +639,9 @@ export function useSupplierProfitCheckModel() {
   const handleExportSupplier = useCallback(async () => {
     if (!savedProforma) return;
     try {
-      const response = await fetch(`/api/supplier-profit-check/proforma/${savedProforma.id}/export-supplier`, {
-        credentials: "include",
+      await downloadFromUrl(`/api/supplier-profit-check/proforma/${savedProforma.id}/export-supplier`, {
+        fileName: exportFileName(`proforma ${savedProforma.reference}`, "xlsx"),
       });
-      if (!response.ok) throw new Error("Export failed");
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = `proforma-${savedProforma.reference}.xlsx`;
-      anchor.click();
-      URL.revokeObjectURL(url);
     } catch (error: unknown) {
       toast({ title: "Export failed", description: errorMessage(error, "Export failed"), variant: "destructive" });
     }
@@ -666,26 +650,20 @@ export function useSupplierProfitCheckModel() {
   const handleExportInternal = useCallback(async () => {
     try {
       const exportRows = itemsWithQty.map((row) => ({ ...row, qty: Number(qtyMap[row.stockItemId]) || 0 }));
-      const response = await fetch("/api/supplier-profit-check/export-internal", {
+      await downloadFromUrl("/api/supplier-profit-check/export-internal", {
         method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+        body: {
           rows: exportRows,
           supplierName: selectedSupplier?.legalName || selectedSupplier?.legal_name || "",
           fromDate: periodFilter.fromDate,
           toDate: periodFilter.toDate,
           proformaRef: savedProforma?.reference || "",
+        },
+        fileName: exportFileName(`profit analysis ${savedProforma?.reference ?? ""}`, "xlsx", {
+          from: periodFilter.fromDate,
+          to: periodFilter.toDate,
         }),
       });
-      if (!response.ok) throw new Error("Export failed");
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = `profit-analysis-${savedProforma?.reference || "export"}.xlsx`;
-      anchor.click();
-      URL.revokeObjectURL(url);
     } catch (error: unknown) {
       toast({ title: "Export failed", description: errorMessage(error, "Export failed"), variant: "destructive" });
     }

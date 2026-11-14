@@ -1,6 +1,5 @@
 import {
   Warehouse,
-  Download,
   List,
   Eye,
   Printer,
@@ -14,6 +13,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ReportExportMenu } from "@/components/export/ReportExportMenu";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -116,7 +116,13 @@ export function StockGroupsView({
   const groupExportMenu = (g: StockGroupSummary) => (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-7 w-7" data-testid={`button-export-group-${g.groupId}`}>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
+          aria-label="Export PDF"
+          data-testid={`button-export-group-${g.groupId}`}
+        >
           <Printer className="h-3.5 w-3.5" />
         </Button>
       </DropdownMenuTrigger>
@@ -209,20 +215,20 @@ export function StockGroupsView({
                 testId: "button-show-zero",
               },
               {
-                label: "Export to Excel",
+                label: "Export Excel",
                 icon: FileSpreadsheet,
                 onSelect: handleExportInventory,
                 separated: true,
                 testId: "menu-export-excel",
               },
               canViewCost && {
-                label: "Export to PDF (with cost)",
+                label: "Export PDF (with cost)",
                 icon: Printer,
                 onSelect: () => handlePrintWithOption(true),
                 testId: "menu-export-pdf-cost",
               },
               {
-                label: "Export to PDF (without cost)",
+                label: "Export PDF (without cost)",
                 icon: Printer,
                 onSelect: () => handlePrintWithOption(false),
                 testId: "menu-export-pdf-nocost",
@@ -399,31 +405,39 @@ export function StockGroupsView({
 
       {/* Action buttons */}
       <div className="flex flex-wrap items-center gap-2">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-10 gap-2 rounded-xl border-violet-200/80 bg-background/80 px-4 shadow-sm dark:border-violet-500/25"
-              data-testid="button-export-dropdown"
-            >
-              <Download className="h-4 w-4" /> Export <ChevronDown className="h-3 w-3" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
-            <DropdownMenuItem onClick={handleExportInventory} data-testid="menu-export-excel">
-              <FileSpreadsheet className="h-4 w-4 mr-2" /> Export to Excel
-            </DropdownMenuItem>
-            {canViewCost && (
-              <DropdownMenuItem onClick={() => handlePrintWithOption(true)} data-testid="menu-export-pdf-cost">
-                <Printer className="h-4 w-4 mr-2" /> Export to PDF (with cost)
-              </DropdownMenuItem>
-            )}
-            <DropdownMenuItem onClick={() => handlePrintWithOption(false)} data-testid="menu-export-pdf-nocost">
-              <Printer className="h-4 w-4 mr-2" /> Export to PDF (without cost)
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <ReportExportMenu
+          size="sm"
+          align="start"
+          className="h-10 gap-2 rounded-xl border-violet-200/80 bg-background/80 px-4 shadow-sm dark:border-violet-500/25"
+          data-testid="button-export-dropdown"
+          options={[
+            {
+              id: "excel",
+              label: "Export Excel",
+              kind: "excel",
+              onSelect: handleExportInventory,
+              testId: "menu-export-excel",
+            },
+            ...(canViewCost
+              ? [
+                  {
+                    id: "pdf-cost",
+                    label: "Export PDF (with cost)",
+                    kind: "pdf" as const,
+                    onSelect: () => handlePrintWithOption(true),
+                    testId: "menu-export-pdf-cost",
+                  },
+                ]
+              : []),
+            {
+              id: "pdf-nocost",
+              label: "Export PDF (without cost)",
+              kind: "pdf",
+              onSelect: () => handlePrintWithOption(false),
+              testId: "menu-export-pdf-nocost",
+            },
+          ]}
+        />
 
         <Button
           variant="outline"

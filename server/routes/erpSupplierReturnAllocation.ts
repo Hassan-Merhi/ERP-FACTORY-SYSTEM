@@ -41,7 +41,7 @@ const stockKey = (item: ReturnAllocationCandidate) => `${item.locationId}:${item
  * Candidate order comes from the caller (normally newest offload first).
  */
 export function allocateSupplierReturnRows<T extends ReturnAllocationCandidate>(
-  rows: ReturnAllocationInput<T>[],
+  rows: ReturnAllocationInput<T>[]
 ): ReturnAllocationResult<T>[] {
   const sourceRemaining = new Map<number, Decimal>();
   const stockRemaining = new Map<string, Decimal>();
@@ -61,24 +61,28 @@ export function allocateSupplierReturnRows<T extends ReturnAllocationCandidate>(
   return rows.map((row) => {
     const needed = new Decimal(row.quantity);
     const none = (status: ReturnAllocationResult<T>["status"]): ReturnAllocationResult<T> => ({
-      status, allocations: [], allocatedQty: "0.000",
-      unallocatedQty: needed.toFixed(3), suggestedOffloadItemId: null,
+      status,
+      allocations: [],
+      allocatedQty: "0.000",
+      unallocatedQty: needed.toFixed(3),
+      suggestedOffloadItemId: null,
     });
     if (!row.candidates.length) return none("not-found");
     const selectedId = row.offloadItemId || null;
-    if (selectedId && !row.candidates.some((c) => c.offloadItemId === selectedId))
-      return none("invalid-selection");
+    if (selectedId && !row.candidates.some((c) => c.offloadItemId === selectedId)) return none("invalid-selection");
 
-    const eligible = row.candidates.filter((c) =>
-      (!selectedId || c.offloadItemId === selectedId) &&
-      c.supplierId !== null && c.supplierCount === 1 &&
-      c.currencyCount === 1 && c.currency === "USD"
+    const eligible = row.candidates.filter(
+      (c) =>
+        (!selectedId || c.offloadItemId === selectedId) &&
+        c.supplierId !== null &&
+        c.supplierCount === 1 &&
+        c.currencyCount === 1 &&
+        c.currency === "USD"
     );
     if (!eligible.length) return none("insufficient-or-unsupported");
 
     // Never silently mix supplier credits across different suppliers for one row.
-    if (!selectedId && new Set(eligible.map((c) => c.supplierId)).size > 1)
-      return none("needs-selection");
+    if (!selectedId && new Set(eligible.map((c) => c.supplierId)).size > 1) return none("needs-selection");
 
     const allocations: ReturnAllocation<T>[] = [];
     let remaining = needed;

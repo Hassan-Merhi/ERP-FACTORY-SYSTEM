@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
 import { PageHeader } from "@/components/PageHeader";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -90,6 +91,17 @@ export default function NetProfitDetails() {
     move: accountOrder.move,
   };
   const { toast } = useToast();
+  const downloadExcel = async (url: string, fileName: string) => {
+    try {
+      await downloadFromUrl(url, { fileName });
+    } catch (error) {
+      toast({
+        title: "Export failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
   const [fromDate, setFromDate] = useState<string>("");
   const [toDate, setToDate] = useState<string>("");
   const [fxHistorySide, setFxHistorySide] = useState<"gain" | "loss" | null>(null);
@@ -297,11 +309,11 @@ export default function NetProfitDetails() {
               data-testid="button-export-excel"
               onClick={() => {
                 const url = toDate ? `/api/stats/net-position-excel?toDate=${toDate}` : "/api/stats/net-position-excel";
-                window.open(url, "_blank");
+                void downloadExcel(url, exportFileName("net position", "xlsx", toDate ? { date: toDate } : {}));
               }}
             >
               <Download className="h-4 w-4 mr-2 shrink-0" />
-              Export (full)
+              Export Excel (Full)
             </DropdownMenuItem>
             <DropdownMenuItem
               data-testid="button-export-monthly-excel"
@@ -315,11 +327,14 @@ export default function NetProfitDetails() {
                     return d.toLocaleDateString("en-CA");
                   })();
                 const end = toDate || today;
-                window.open(`/api/reports/net-position-monthly-excel?startDate=${start}&endDate=${end}`, "_blank");
+                void downloadExcel(
+                  `/api/reports/net-position-monthly-excel?startDate=${start}&endDate=${end}`,
+                  exportFileName("net position monthly", "xlsx", { from: start, to: end })
+                );
               }}
             >
               <Download className="h-4 w-4 mr-2 shrink-0" />
-              Monthly Excel
+              Export Excel (Monthly)
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
@@ -553,12 +568,20 @@ export default function NetProfitDetails() {
       {fxHistorySide && data && (
         <FxHistoryDialog
           open={true}
-          onOpenChange={(open) => { if (!open) setFxHistorySide(null); }}
+          onOpenChange={(open) => {
+            if (!open) setFxHistorySide(null);
+          }}
           side={fxHistorySide}
-          amount={(fxHistorySide === "gain" ? data.forUs.accounts : data.onUs.accounts)
-            .find((a) => a.code === (fxHistorySide === "gain" ? "FX_UNREALIZED_GAIN" : "FX_UNREALIZED_LOSS"))?.value ?? 0}
-          sources={(fxHistorySide === "gain" ? data.forUs.accounts : data.onUs.accounts)
-            .find((a) => a.code === (fxHistorySide === "gain" ? "FX_UNREALIZED_GAIN" : "FX_UNREALIZED_LOSS"))?.breakdown}
+          amount={
+            (fxHistorySide === "gain" ? data.forUs.accounts : data.onUs.accounts).find(
+              (a) => a.code === (fxHistorySide === "gain" ? "FX_UNREALIZED_GAIN" : "FX_UNREALIZED_LOSS")
+            )?.value ?? 0
+          }
+          sources={
+            (fxHistorySide === "gain" ? data.forUs.accounts : data.onUs.accounts).find(
+              (a) => a.code === (fxHistorySide === "gain" ? "FX_UNREALIZED_GAIN" : "FX_UNREALIZED_LOSS")
+            )?.breakdown
+          }
           scope="erp"
           companyId={selectedCompany?.id}
         />

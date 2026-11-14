@@ -1,3 +1,4 @@
+import { PageHeader } from "@/components/PageHeader";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -7,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Loader2, Link2, Trash2, Plus, Info } from "lucide-react";
+import { confirmAction } from "@/components/ConfirmHost";
 
 interface SpAlias {
   id: number;
@@ -66,12 +68,10 @@ export default function SpAliases() {
 
   return (
     <div className="space-y-6 max-w-2xl">
-      <div>
-        <h1 className="text-xl font-semibold">Article Aliases</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Map supplier article codes to internal stock items for accurate FIFO tracking
-        </p>
-      </div>
+      <PageHeader
+        title="Article Aliases"
+        subtitle="Map supplier article codes to internal stock items for accurate FIFO tracking"
+      />
 
       <Card>
         <CardHeader>
@@ -187,7 +187,14 @@ export default function SpAliases() {
                           type="button"
                           variant="ghost"
                           size="icon"
-                          onClick={() => deleteMutation.mutate(a.id)}
+                          onClick={async () => {
+                            const confirmed = await confirmAction({
+                              title: "Delete this alias?",
+                              confirmText: "Delete",
+                              tone: "destructive",
+                            });
+                            if (confirmed) deleteMutation.mutate(a.id);
+                          }}
                           disabled={deleteMutation.isPending}
                           data-testid={`button-sp-delete-alias-${a.id}`}
                         >

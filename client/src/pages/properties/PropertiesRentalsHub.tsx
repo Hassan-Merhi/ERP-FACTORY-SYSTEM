@@ -1,9 +1,13 @@
-import { Building2, ClipboardList, ArrowLeftRight } from "lucide-react";
+import { Building2, ClipboardList, ArrowLeftRight, Store } from "lucide-react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import type { AuthMe } from "@shared/apiTypes";
 import { useCompany } from "@/contexts/CompanyContext";
-import { canUsePropertiesCapability, PROPERTIES_RENTAL_TABS, type PropertiesRentalTab } from "@/properties/config/propertiesNavigation";
+import {
+  canUsePropertiesCapability,
+  PROPERTIES_RENTAL_TABS,
+  type PropertiesRentalTab,
+} from "@/properties/config/propertiesNavigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import PropertiesRentalWarehouses from "./PropertiesRentalWarehouses";
@@ -40,13 +44,16 @@ export default function PropertiesRentalsHub() {
       )}
       <Tabs value={tab} onValueChange={(value) => setTab(value as PropertiesRentalTab)}>
         <div className="erp-mobile-scroll-tabs pb-1">
-          <TabsList className="properties-rentals-tabs w-max min-w-full sm:min-w-0 sm:w-fit" aria-label="Rental sections">
+          <TabsList
+            className="properties-rentals-tabs w-max min-w-full sm:min-w-0 sm:w-fit"
+            aria-label="Rental sections"
+          >
             <TabsTrigger value="warehouses" data-testid="tab-properties-rentals-warehouses">
               <Building2 className="mr-2 h-4 w-4" />
               Warehouses
             </TabsTrigger>
             <TabsTrigger value="shops" data-testid="tab-properties-rentals-shops">
-              <Building2 className="mr-2 h-4 w-4" />
+              <Store className="mr-2 h-4 w-4" />
               Shops
             </TabsTrigger>
             <TabsTrigger value="payments" data-testid="tab-properties-rentals-payments">

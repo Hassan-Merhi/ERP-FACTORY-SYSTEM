@@ -18,6 +18,7 @@ import { getApiRequest } from "@/lib/factoryApi";
 import { useFormDraft } from "@/hooks/useFormDraft";
 import { formatNumber } from "@/lib/formatNumber";
 import { utils, writeFile } from "@/lib/excelHelper";
+import { exportFileName } from "@/lib/exportFile";
 import type {
   Account,
   BankAccount,
@@ -33,6 +34,7 @@ import type {
   Supplier,
 } from "./types";
 import { journalFormSchema } from "./utils";
+import { confirmAction } from "@/components/ConfirmHost";
 
 function isOfflineQueued(error: unknown): boolean {
   return error instanceof Error && error.name === "OfflineQueued";
@@ -511,7 +513,12 @@ export function useJournalFormModel({ voucherIdToEdit, isPOS }: JournalFormProps
         // Phase 22 (B), D6: a Golden Coast owner withdrawal is posted as its
         // template only when the user confirms it (OK); Cancel posts it as entered.
         if ((error as { code?: unknown } | null)?.code !== "GC_OWNER_WITHDRAWAL_TEMPLATE_CONFIRM") throw error;
-        const useTemplate = window.confirm(errorMessage(error, ""));
+        const useTemplate = await confirmAction({
+          title: "Post as owner withdrawal template?",
+          description: errorMessage(error, ""),
+          confirmText: "Use template",
+          cancelText: "Post as entered",
+        });
         const confirmed = { ...payload, goldenCoastOwnerWithdrawalTemplate: useTemplate };
         return (await modeApiRequest("POST", "/api/vouchers/journal", confirmed)).json();
       }
@@ -623,7 +630,7 @@ export function useJournalFormModel({ voucherIdToEdit, isPOS }: JournalFormProps
       );
       const workbook = utils.book_new();
       utils.book_append_sheet(workbook, worksheet, "Journal Detailed");
-      const fileName = `Journal_Voucher_Detailed_${voucherDate}.xlsx`;
+      const fileName = exportFileName("journal voucher detailed", "xlsx", { date: voucherDate });
       await writeFile(workbook, fileName);
       toast({ title: "Export successful", description: `Downloaded ${fileName} with ${validEntries.length} entries.` });
       return;
@@ -647,7 +654,7 @@ export function useJournalFormModel({ voucherIdToEdit, isPOS }: JournalFormProps
     ]);
     const workbook = utils.book_new();
     utils.book_append_sheet(workbook, worksheet, "Journal Summary");
-    const fileName = `Journal_Voucher_Summary_${voucherDate}.xlsx`;
+    const fileName = exportFileName("journal voucher summary", "xlsx", { date: voucherDate });
     await writeFile(workbook, fileName);
     toast({ title: "Export successful", description: `Downloaded ${fileName}.` });
   };

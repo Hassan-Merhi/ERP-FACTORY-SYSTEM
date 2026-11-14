@@ -8,6 +8,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { useQuery } from "@tanstack/react-query";
 import Decimal from "decimal.js";
+import { confirmAction } from "@/components/ConfirmHost";
 import { format } from "date-fns";
 import type { CombinedAccount } from "@/components/AccountAutocomplete";
 import type { VoucherFormData } from "@/pages/vouchers/voucherTypes";
@@ -238,7 +239,7 @@ export function useVoucherFxWalletPayment({
   }
 
   /** Asks the user to confirm the wallet payment; false when it must not be posted. */
-  function confirmWalletPayment(validEntries: VoucherFormData["entries"], toast: Toast): boolean {
+  async function confirmWalletPayment(validEntries: VoucherFormData["entries"], toast: Toast): Promise<boolean> {
     if (!selectedFxWallet) return false;
     const rate = Number(fxPaymentRate);
     const amount = Number(validEntries[0]?.amount || 0);
@@ -263,36 +264,29 @@ export function useVoucherFxWalletPayment({
       return false;
     }
     const paymentDetails = directEur
-      ? "Supplier receives: EUR " +
-        amount.toFixed(2) +
-        "\\n" +
-        "Agent EUR deducted: EUR " +
-        amount.toFixed(2) +
-        "\\n" +
-        "No currency exchange or rate entry is needed."
-      : "USD recipient receives: " +
-        amount.toFixed(2) +
-        "\\n" +
-        "Agreed USD/EUR rate: " +
-        fxPaymentRate +
-        "\\n" +
-        "EUR deducted (approx.): " +
-        eurAmount.toFixed(6) +
-        "\\n" +
-        "FX gain/loss is booked automatically.";
-    if (
-      !window.confirm(
-        "Post Payment Voucher?\\n" +
-          "From: " +
-          selectedFxWallet.wallet.accountName +
-          "\\n" +
-          "To: " +
-          validEntries[0].accountName +
-          "\\n" +
-          paymentDetails
-      )
-    )
-      return false;
+      ? [
+          { label: "Supplier receives (EUR)", value: amount.toFixed(2) },
+          { label: "Agent EUR deducted", value: amount.toFixed(2) },
+        ]
+      : [
+          { label: "USD recipient receives", value: amount.toFixed(2) },
+          { label: "Agreed USD/EUR rate", value: fxPaymentRate },
+          { label: "EUR deducted (approx.)", value: eurAmount.toFixed(6) },
+        ];
+    const confirmed = await confirmAction({
+      title: "Post Payment Voucher?",
+      description: directEur
+        ? "No currency exchange or rate entry is needed."
+        : "FX gain/loss is booked automatically.",
+      details: [
+        { label: "From", value: selectedFxWallet.wallet.accountName },
+        { label: "To", value: validEntries[0].accountName },
+        ...paymentDetails,
+      ],
+      confirmText: "Post Payment",
+      tone: "warning",
+    });
+    if (!confirmed) return false;
     return true;
   }
 

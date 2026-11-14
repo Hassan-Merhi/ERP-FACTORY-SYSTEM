@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PageHeader } from "@/components/PageHeader";
 
 type Row = {
   kind: string;
@@ -197,13 +198,10 @@ export default function HistoricalAccounting() {
   ];
   return (
     <div className="space-y-5 p-3 sm:p-5" data-testid="historical-accounting">
-      <div>
-        <h1 className="text-2xl font-semibold">Historical Accounting & As-of Dates</h1>
-        <p className="text-sm text-muted-foreground">
-          Retrospective company ledger at the selected business date. Distinguishes posted ledger evidence from changes
-          recorded afterward and source data whose former state cannot be reconstructed.
-        </p>
-      </div>
+      <PageHeader
+        title="Historical Accounting & As-of Dates"
+        subtitle="Retrospective company ledger at the selected business date. Distinguishes posted ledger evidence from changes recorded afterward and source data whose former state cannot be reconstructed."
+      />
       <Card>
         <CardHeader>
           <CardTitle>As-of financial period</CardTitle>

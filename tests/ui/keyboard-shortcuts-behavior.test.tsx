@@ -66,7 +66,7 @@ describe("factory quick navigation", () => {
     ["o", "/factory/intelligence/dashboard"],
     ["d", "/factory/daybook"],
     ["a", "/factory/accounts"],
-    ["s", "/factory/stock-allocation"],
+    ["s", "/factory/stock-allocation-v5"],
     ["r", "/factory/raw-materials"],
     ["b", "/factory/bales-hub"],
     ["i", "/factory/invoicing"],

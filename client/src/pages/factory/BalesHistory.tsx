@@ -10,7 +10,6 @@ import {
   Pencil,
   Check,
   X,
-  Download,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
@@ -21,6 +20,7 @@ import {
   FileSpreadsheet,
   Upload,
 } from "lucide-react";
+import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -56,10 +56,29 @@ import { BalesHistoryDialog2 } from "./baleshistory/components/BalesHistoryDialo
 import { BalesHistoryDialog3 } from "./baleshistory/components/BalesHistoryDialog3";
 import { BalesHistoryDialog4 } from "./baleshistory/components/BalesHistoryDialog4";
 import { BalesHistoryDialog5 } from "./baleshistory/components/BalesHistoryDialog5";
+import { useToast } from "@/hooks/use-toast";
+import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
+import type { RouteComponentProps } from "wouter";
 
-export default function BalesHistory() {
+/** Routed standalone (receives route props) or embedded as a hub tab panel. */
+type EmbeddablePageProps = { embedded?: boolean } & Partial<RouteComponentProps>;
+
+/** `embedded`: rendered as the Bales hub "History" tab, whose PageHeader already titles the page. */
+export default function BalesHistory({ embedded = false }: EmbeddablePageProps) {
   const mhd = useFactoryMhdView();
   const model = useBalesHistoryModel();
+  const { toast } = useToast();
+  const downloadExport = async (url: string, fileName: string) => {
+    try {
+      await downloadFromUrl(url, { fileName });
+    } catch (error) {
+      toast({
+        title: "Export failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
   const {
     wrapAdminAction,
     AdminDialog,
@@ -138,6 +157,13 @@ export default function BalesHistory() {
 
   return (
     <div className="bales-history-modern">
+      {!embedded && (
+        <PageHeader
+          title="Bales"
+          subtitle="Stock history, status management and removal"
+          icon={<Package className="h-5 w-5" />}
+        />
+      )}
       <BalesHistoryOverview model={model} />
 
       {/* ── Main table card ── */}
@@ -219,12 +245,15 @@ export default function BalesHistory() {
               <DropdownMenuItem
                 onClick={() => {
                   const exportDate = dateFilter || new Date().toLocaleDateString("en-CA");
-                  window.open(`/api/factory/bales/export-full.xlsx?date=${exportDate}`, "_blank");
+                  void downloadExport(
+                    `/api/factory/bales/export-full.xlsx?date=${exportDate}`,
+                    exportFileName("bales", "xlsx", { date: exportDate })
+                  );
                 }}
                 data-testid="button-export-bales-full"
               >
                 <FileSpreadsheet className="h-4 w-4 mr-2" />
-                Export Bales ({dateFilter || "Today"})
+                Export Excel (Bales, {dateFilter || "Today"})
               </DropdownMenuItem>
               {canChangeExistingRecords && (
                 <DropdownMenuItem
@@ -238,11 +267,13 @@ export default function BalesHistory() {
               )}
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                onClick={() => window.open("/api/factory/bales/export-names.xlsx", "_blank")}
+                onClick={() =>
+                  void downloadExport("/api/factory/bales/export-names.xlsx", exportFileName("bale names", "xlsx"))
+                }
                 data-testid="button-export-bale-names"
               >
-                <Download className="h-4 w-4 mr-2" />
-                Export Names
+                <FileSpreadsheet className="h-4 w-4 mr-2" />
+                Export Excel (Names)
               </DropdownMenuItem>
               {canChangeExistingRecords && (
                 <DropdownMenuItem

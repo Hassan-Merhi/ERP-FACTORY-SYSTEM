@@ -25,7 +25,6 @@ import {
   Scale,
   SlidersHorizontal,
   Columns3,
-  Download,
   RefreshCw,
   ChevronDown,
 } from "lucide-react";
@@ -41,7 +40,6 @@ import {
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useSingleFlightAction } from "@/hooks/use-single-flight-action";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
-import { PageHeader } from "@/components/PageHeader";
 import { ErrorState } from "@/components/ui/page-state";
 import { DataTableToolbar } from "@/components/DataTableToolbar";
 import { PaginationBar } from "@/components/PaginationBar";
@@ -52,6 +50,8 @@ import { companyQueryKey } from "@/lib/companyQueryScope";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { FactoryCustomerFormDialogs } from "./factorycustomers/FactoryCustomerFormDialogs";
 import type { Customer } from "./factorycustomers/types";
+import { ExportButton } from "@/components/export/ReportExportMenu";
+import { exportFileName } from "@/lib/exportFile";
 
 export default function FactoryCustomers() {
   const { toast } = useToast();
@@ -281,7 +281,10 @@ export default function FactoryCustomers() {
       ]),
     ];
     const csv = rows.map((row) => row.map(csvCell).join(",")).join("\r\n");
-    downloadBlob(new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }), "factory-customers.csv");
+    downloadBlob(
+      new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }),
+      exportFileName("factory customers", "csv")
+    );
   };
 
   if (isLoading) {
@@ -297,7 +300,6 @@ export default function FactoryCustomers() {
   if (isError) {
     return (
       <div className="flex flex-col h-full p-6 gap-4">
-        <PageHeader title="Customers" />
         <ErrorState
           title="Customers could not be loaded"
           description={error?.message || "Please try again."}
@@ -377,18 +379,9 @@ export default function FactoryCustomers() {
         </div>
       </div>
 
+      {/* Parties hub "Customers" tab: the hub PageHeader titles the page, so no second page title here. */}
       <div className="flex flex-col gap-3 border-b border-border/60 pb-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <span className="rounded-xl bg-blue-500/10 p-2.5 text-blue-600 dark:text-sky-400">
-            <Users className="h-6 w-6" />
-          </span>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight" data-testid="text-page-title">
-              Customers
-            </h1>
-            <p className="text-sm text-muted-foreground">{customers.length} total customers</p>
-          </div>
-        </div>
+        <p className="text-sm text-muted-foreground">{customers.length} total customers</p>
         <div className="flex items-center gap-2 flex-wrap">
           {zeroBalanceCount > 0 && (
             <Button
@@ -501,15 +494,13 @@ export default function FactoryCustomers() {
                 </DropdownMenuCheckboxItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button
-              variant="outline"
+            <ExportButton
+              kind="csv"
               size="sm"
-              className="h-9 gap-2 rounded-xl"
+              className="h-9 rounded-xl"
               onClick={exportVisibleCustomers}
               data-testid="button-export-customers"
-            >
-              <Download className="h-4 w-4" /> Export
-            </Button>
+            />
             <Button
               variant="outline"
               size="icon"

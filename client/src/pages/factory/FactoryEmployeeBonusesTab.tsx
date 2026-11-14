@@ -6,7 +6,7 @@ import { useAdminOverride } from "@/hooks/use-admin-override";
 import { queryClient } from "@/lib/queryClient";
 import { useCompany } from "@/contexts/CompanyContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
-import { Plus, Trash2, Gift, Loader2, Columns3, Filter, Download, CalendarDays, UserRound, Search } from "lucide-react";
+import { Plus, Trash2, Gift, Loader2, Columns3, Filter, CalendarDays, UserRound, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -31,6 +31,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
+import { ExportButton } from "@/components/export/ReportExportMenu";
+import { downloadBlob } from "@/lib/downloadBlob";
+import { exportFileName } from "@/lib/exportFile";
 
 interface Employee {
   id: number;
@@ -158,14 +161,10 @@ export default function FactoryEmployeeBonusesTab() {
       ...shownBonuses.map((b) => [bonusName(b), bonusDate(b).slice(0, 10), b.amount, b.notes || ""]),
     ];
     const csv = "\uFEFF" + rows.map((row) => row.map(csvCell).join(",")).join("\r\n");
-    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = "Employee_Bonuses.csv";
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    URL.revokeObjectURL(url);
+    downloadBlob(
+      new Blob([csv], { type: "text/csv;charset=utf-8" }),
+      exportFileName("employee bonuses", "csv", { from: startDate || undefined, to: endDate || undefined })
+    );
   }
 
   const addMutation = useMutation({
@@ -222,16 +221,8 @@ export default function FactoryEmployeeBonusesTab() {
   return (
     <div className="space-y-5">
       <section className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-emerald-200/60 bg-gradient-to-r from-emerald-50 via-teal-50/60 to-background px-4 py-4 dark:border-emerald-900/60 dark:from-emerald-950/60 dark:via-teal-950/30 dark:to-card sm:px-5">
-          <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-sm">
-              <Gift className="h-5 w-5" />
-            </span>
-            <div>
-              <h2 className="text-base font-semibold tracking-tight sm:text-lg">Employee Bonuses</h2>
-              <p className="text-xs text-muted-foreground">Employee history, names and recorded bonus dates</p>
-            </div>
-          </div>
+        {/* Employees hub "Bonuses" tab: the Payroll hub PageHeader titles the page; keep the record count only. */}
+        <div className="flex flex-wrap items-center justify-end gap-3 border-b border-border/70 px-4 py-3 sm:px-5">
           <span className="rounded-full border border-emerald-200 bg-background/80 px-3 py-1 text-xs font-medium text-emerald-700 dark:border-emerald-800 dark:text-emerald-300">
             {isLoading ? "Loading bonuses" : shownBonuses.length + " records"}
           </span>
@@ -294,16 +285,13 @@ export default function FactoryEmployeeBonusesTab() {
                 <Filter className="mr-2 h-4 w-4" />
                 Filters
               </Button>
-              <Button
-                variant="outline"
+              <ExportButton
+                kind="csv"
                 className="bg-background"
                 onClick={exportBonusesCsv}
                 disabled={isLoading || shownBonuses.length === 0}
                 data-testid="button-bonus-export"
-              >
-                <Download className="mr-2 h-4 w-4" />
-                Export
-              </Button>
+              />
               {recordChanges.canCreate("POST", "/api/factory/employee-bonuses") && (
                 <Button
                   onClick={() => setAddOpen(true)}

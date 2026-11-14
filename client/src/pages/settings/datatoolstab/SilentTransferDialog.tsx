@@ -15,6 +15,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { formatNumber } from "@/lib/formatNumber";
 import { getErrorDetails } from "@shared/errorUtils";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { downloadFromUrl } from "@/lib/exportFile";
+import { useToast } from "@/hooks/use-toast";
 import { AlertTriangle, CheckCircle2, Download, Loader2 } from "lucide-react";
 import type { useDataToolsModel } from "./useDataToolsModel";
 
@@ -52,6 +54,21 @@ export function SilentTransferDialog({ model }: Props) {
     silentAppliedCount,
     setSilentAppliedCount,
   } = model;
+
+  const { toast } = useToast();
+  const downloadTemplate = async () => {
+    try {
+      await downloadFromUrl("/api/inventory/silent-transfer/template", {
+        fileName: "silent_transfer_template.xlsx",
+      });
+    } catch (error) {
+      toast({
+        title: "Template download failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
 
   return (
     <Dialog
@@ -111,7 +128,7 @@ export function SilentTransferDialog({ model }: Props) {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => window.open("/api/inventory/silent-transfer/template", "_blank")}
+                  onClick={downloadTemplate}
                   data-testid="button-silent-transfer-template"
                 >
                   <Download className="h-4 w-4 mr-1" />

@@ -22,7 +22,9 @@ function renderActions(input: { canImport: boolean; canExport: boolean }) {
 describe("Factory Arabic translation actions", () => {
   it("shows import and export actions when both operational permissions are allowed", () => {
     renderActions({ canImport: true, canExport: true });
-    expect(screen.getByTestId("button-export-arabic-template")).toHaveTextContent("Export Arabic Names Template");
+    expect(screen.getByTestId("button-export-arabic-template")).toHaveTextContent(
+      "Export Excel (Arabic Names Template)"
+    );
     expect(screen.getByTestId("button-import-arabic-names")).toHaveTextContent("Import Arabic Names");
   });
 

@@ -14,12 +14,14 @@ import { AutomaticPriorityPrintingCard } from "./AutomaticPriorityPrintingCard";
 import { RecalculateBaleCostsCard } from "./components/RecalculateBaleCostsCard";
 import { DeveloperChristmasModePanel } from "@/pages/settings/DeveloperChristmasModePanel";
 import type { useFactorySettingsModel } from "./useFactorySettingsModel";
+import { useLocation } from "wouter";
 
 type Props = {
   model: ReturnType<typeof useFactorySettingsModel>;
 };
 
 export function FactorySettingsView({ model }: Props) {
+  const [, navigate] = useLocation();
   const {
     settings,
     isLoading,
@@ -281,7 +283,7 @@ export function FactorySettingsView({ model }: Props) {
         <CardContent className="pt-0">
           <Button
             variant="outline"
-            onClick={() => (window.location.href = "/factory/label-banners")}
+            onClick={() => navigate("/factory/label-banners")}
             data-testid="button-open-label-banners"
           >
             <Images className="h-4 w-4 mr-2" />
@@ -305,7 +307,7 @@ export function FactorySettingsView({ model }: Props) {
         <CardContent className="pt-0">
           <Button
             variant="outline"
-            onClick={() => (window.location.href = "/factory/bale-product-images")}
+            onClick={() => navigate("/factory/bale-product-images")}
             data-testid="button-open-product-images"
           >
             <Images className="h-4 w-4 mr-2" />

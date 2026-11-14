@@ -1,9 +1,9 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useParams, useLocation } from "wouter";
-import { ArrowLeft, Package, Pencil } from "lucide-react";
+import { Package, Pencil } from "lucide-react";
+import { PageHeader } from "@/components/PageHeader";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -123,21 +123,17 @@ export function FactoryBaleProductAllMonths() {
         onSuccess={handleWeightSuccess}
       />
 
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate(backPath)} data-testid="button-back">
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
-        <div>
-          <h1 className="text-lg sm:text-2xl font-bold" data-testid="text-page-title">
-            All Bale Details — {year}
-          </h1>
-          <p className="text-sm text-muted-foreground" data-testid="text-bale-count">
+      <PageHeader
+        title={`All Bale Details — ${year}`}
+        backTarget={backPath}
+        meta={
+          <span data-testid="text-bale-count">
             <Package className="inline h-4 w-4 mr-1" />
             {filteredData.length}
             {statusFilter !== "all" ? ` of ${data?.length || 0}` : ""} bale(s)
-          </p>
-        </div>
-      </div>
+          </span>
+        }
+      />
 
       <Card>
         <CardHeader className="pb-2">

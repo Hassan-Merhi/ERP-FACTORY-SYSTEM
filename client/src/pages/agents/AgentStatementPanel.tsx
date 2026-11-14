@@ -6,9 +6,23 @@
  * calculations, printed statement values, actions, and test ids are preserved.
  */
 import { useMemo, useRef } from "react";
-import { TrendingUp, TrendingDown, X, FileDown, Printer, ArrowRightLeft, ArrowLeft, Store, Layers3, ArrowDownRight, ArrowUpRight, Flag } from "lucide-react";
+import {
+  TrendingUp,
+  TrendingDown,
+  X,
+  FileDown,
+  Printer,
+  ArrowRightLeft,
+  ArrowLeft,
+  Store,
+  Layers3,
+  ArrowDownRight,
+  ArrowUpRight,
+  Flag,
+} from "lucide-react";
 import { ErpMobileActionsMenu } from "@/components/ui/erp-mobile-records";
 import { Button } from "@/components/ui/button";
+import { ExportButton } from "@/components/export/ReportExportMenu";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -94,7 +108,14 @@ export function AgentStatementPanel({
   const closingSide = balanceSideLabel(closingBalance, selectedAccount.type);
 
   return (
-    <div className={phone ? "min-w-0 space-y-4" : "relative isolate min-h-full min-w-0 space-y-6 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-blue-400/20 dark:bg-[#07152b] lg:p-6 max-md:rounded-none max-md:border-0 max-md:p-3"} data-testid="agent-statement-panel">
+    <div
+      className={
+        phone
+          ? "min-w-0 space-y-4"
+          : "relative isolate min-h-full min-w-0 space-y-6 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-blue-400/20 dark:bg-[#07152b] lg:p-6 max-md:rounded-none max-md:border-0 max-md:p-3"
+      }
+      data-testid="agent-statement-panel"
+    >
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         {phone && (
@@ -136,15 +157,22 @@ export function AgentStatementPanel({
               ) : (
                 <TrendingUp className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
               )}
-              <span className={`font-mono text-lg font-extrabold tabular-nums ${drCrClass(fxWallet ? (Number(fxWallet.state.eur) >= 0 ? "Dr" : "Cr") : selectedAccount.balanceSide)}`} data-testid="text-agent-balance">
+              <span
+                className={`font-mono text-lg font-extrabold tabular-nums ${drCrClass(fxWallet ? (Number(fxWallet.state.eur) >= 0 ? "Dr" : "Cr") : selectedAccount.balanceSide)}`}
+                data-testid="text-agent-balance"
+              >
                 {fxWallet
                   ? `EUR ${Number(fxWallet.state.eur).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                   : formatAmount(Math.abs(selectedAccount.balance))}
               </span>
-              <span className={`text-xs font-semibold ${drCrClass(fxWallet ? (Number(fxWallet.state.eur) >= 0 ? "Dr" : "Cr") : selectedAccount.balanceSide)}`}>
+              <span
+                className={`text-xs font-semibold ${drCrClass(fxWallet ? (Number(fxWallet.state.eur) >= 0 ? "Dr" : "Cr") : selectedAccount.balanceSide)}`}
+              >
                 {fxWallet ? (Number(fxWallet.state.eur) >= 0 ? "Dr" : "Cr") : (selectedAccount.balanceSide ?? "")}
               </span>
-              <span className="text-xs font-medium text-slate-500 dark:text-slate-400">{fxWallet ? "native EUR balance" : "current balance"}</span>
+              <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                {fxWallet ? "native EUR balance" : "current balance"}
+              </span>
             </div>
           </div>
         </div>
@@ -171,26 +199,19 @@ export function AgentStatementPanel({
           />
         ) : (
           <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
+            <ExportButton
               size="sm"
               onClick={onExportExcel}
               disabled={transactionsLoading || vouchersWithBalance.length === 0}
               data-testid="button-export-excel"
-            >
-              <FileDown className="mr-1.5 h-4 w-4 text-emerald-500" />
-              Excel
-            </Button>
-            <Button
-              variant="outline"
+            />
+            <ExportButton
+              kind="print"
               size="sm"
               onClick={() => handlePrint()}
               disabled={transactionsLoading}
               data-testid="button-print"
-            >
-              <Printer className="mr-1.5 h-4 w-4" />
-              Print
-            </Button>
+            />
             <Button
               variant="ghost"
               size="icon"
@@ -205,7 +226,10 @@ export function AgentStatementPanel({
       </div>
 
       {fxWallet && (
-        <div className="space-y-1 rounded-xl border border-sky-200 bg-sky-50/70 p-4 dark:border-sky-500/30 dark:bg-sky-950/30" data-testid="agent-native-fx-wallet">
+        <div
+          className="space-y-1 rounded-xl border border-sky-200 bg-sky-50/70 p-4 dark:border-sky-500/30 dark:bg-sky-950/30"
+          data-testid="agent-native-fx-wallet"
+        >
           <p className="text-sm font-semibold">FX Agent Native Balance</p>
           <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm font-mono tabular-nums">
             <span>
@@ -289,7 +313,9 @@ export function AgentStatementPanel({
         >
           <div className="flex items-center justify-between gap-2">
             <p className={`text-xs font-bold uppercase tracking-wider ${drCrClass(closingSide)}`}>Closing</p>
-            <span className={`rounded-xl p-2 ${closingSide.toLowerCase() === "cr" ? "bg-red-100 dark:bg-red-950" : "bg-green-100 dark:bg-green-950"} ${drCrClass(closingSide)}`}>
+            <span
+              className={`rounded-xl p-2 ${closingSide.toLowerCase() === "cr" ? "bg-red-100 dark:bg-red-950" : "bg-green-100 dark:bg-green-950"} ${drCrClass(closingSide)}`}
+            >
               <Flag className="h-4 w-4" aria-hidden="true" />
             </span>
           </div>
@@ -368,7 +394,10 @@ export function AgentStatementPanel({
               ) : (
                 <>
                   {/* Opening Balance row */}
-                  <TableRow className="bg-slate-50/90 hover:bg-slate-50/90 dark:bg-[#10243e] dark:hover:bg-[#10243e]" data-testid="row-opening-balance">
+                  <TableRow
+                    className="bg-slate-50/90 hover:bg-slate-50/90 dark:bg-[#10243e] dark:hover:bg-[#10243e]"
+                    data-testid="row-opening-balance"
+                  >
                     <TableCell
                       className="py-3 text-xs font-bold text-muted-foreground uppercase tracking-wider"
                       colSpan={3}
@@ -472,7 +501,10 @@ export function AgentStatementPanel({
 
                   {/* Closing Balance row */}
                   {vouchersWithBalance.length > 0 && (
-                    <TableRow className="border-t-2 border-blue-200 bg-blue-50/75 hover:bg-blue-50/75 dark:border-blue-400/40 dark:bg-[#142b4d] dark:hover:bg-[#142b4d]" data-testid="row-closing-balance">
+                    <TableRow
+                      className="border-t-2 border-blue-200 bg-blue-50/75 hover:bg-blue-50/75 dark:border-blue-400/40 dark:bg-[#142b4d] dark:hover:bg-[#142b4d]"
+                      data-testid="row-closing-balance"
+                    >
                       <TableCell
                         colSpan={3}
                         className="py-3 text-xs font-bold text-muted-foreground uppercase tracking-wider"

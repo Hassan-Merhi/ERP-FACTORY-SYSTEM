@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import type { FactoryBaleProductImage } from "@shared/schema";
 import { PageHeader } from "@/components/PageHeader";
 import { productMatchesSearch } from "@shared/factoryProductSearch";
+import { confirmAction } from "@/components/ConfirmHost";
 
 interface BaleProduct {
   id: number;
@@ -260,7 +261,15 @@ export default function BaleProductImages() {
                             size="icon"
                             variant="destructive"
                             className="opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 touch:opacity-100"
-                            onClick={() => deleteMutation.mutate(img.id)}
+                            onClick={async () => {
+                              const confirmed = await confirmAction({
+                                title: "Delete this image?",
+                                description: img.fileName ?? undefined,
+                                confirmText: "Delete",
+                                tone: "destructive",
+                              });
+                              if (confirmed) deleteMutation.mutate(img.id);
+                            }}
                             disabled={deleteMutation.isPending}
                             aria-label={`Delete ${img.fileName ?? "product image"}`}
                             data-testid={`button-delete-image-${img.id}`}

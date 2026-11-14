@@ -42,7 +42,7 @@ export function ContainerToolbar({
         <DropdownMenuContent align="start">
           <DropdownMenuItem onClick={onExportExcel} data-testid="button-export-excel">
             <Download className="h-4 w-4 mr-2" />
-            Export
+            Export Excel
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={onExportAllFull} data-testid="button-export-all-full">

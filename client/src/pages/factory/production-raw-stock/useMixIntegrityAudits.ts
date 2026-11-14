@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
 
 export interface MixHistoricalAuditPreview {
   generatedAt: string;
@@ -249,24 +250,13 @@ export function useMixIntegrityAudits({
   const handleDownloadHistoricalAudit = async (level: "batches" | "sources") => {
     setAuditExportLevel(level);
     try {
-      const res = await fetch("/api/factory/mix-batches?profile=historical-audit&format=csv&level=" + level, {
-        credentials: "same-origin",
-        cache: "no-store",
+      await downloadFromUrl("/api/factory/mix-batches?profile=historical-audit&format=csv&level=" + level, {
+        fileName: exportFileName("factory mix historical " + level + " audit", "csv"),
       });
-      if (!res.ok) throw new Error("Historical audit export could not be generated.");
-      const blob = await res.blob();
-      const href = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = href;
-      link.download = "factory-mix-historical-" + level + "-audit.csv";
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(href);
     } catch (error) {
       toast({
-        title: "Audit export failed",
-        description: error instanceof Error ? error.message : "Please retry.",
+        title: "Export failed",
+        description: error instanceof Error ? error.message : "Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -301,24 +291,13 @@ export function useMixIntegrityAudits({
   const handleDownloadProvenanceAudit = async (section: "stock" | "ownership" | "adjustments") => {
     setProvenanceExport(section);
     try {
-      const res = await fetch("/api/factory/mix-batches?profile=raw-provenance-audit&format=csv&section=" + section, {
-        credentials: "same-origin",
-        cache: "no-store",
+      await downloadFromUrl("/api/factory/mix-batches?profile=raw-provenance-audit&format=csv&section=" + section, {
+        fileName: exportFileName("factory mix " + section + " audit", "csv"),
       });
-      if (!res.ok) throw new Error("Could not generate raw-material audit export.");
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = "factory-mix-" + section + "-audit.csv";
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
     } catch (error) {
       toast({
         title: "Export failed",
-        description: error instanceof Error ? error.message : "Please retry.",
+        description: error instanceof Error ? error.message : "Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -353,24 +332,13 @@ export function useMixIntegrityAudits({
   const handleExportDownstreamAudit = async () => {
     setIsExportingDownstream(true);
     try {
-      const response = await fetch("/api/factory/mix-batches?profile=downstream-audit&format=csv", {
-        credentials: "same-origin",
-        cache: "no-store",
+      await downloadFromUrl("/api/factory/mix-batches?profile=downstream-audit&format=csv", {
+        fileName: exportFileName("factory mix downstream audit", "csv"),
       });
-      if (!response.ok) throw new Error("Could not generate the downstream reconciliation export.");
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = "factory-mix-downstream-audit.csv";
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
     } catch (error) {
       toast({
         title: "Export failed",
-        description: error instanceof Error ? error.message : "Please retry.",
+        description: error instanceof Error ? error.message : "Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -405,24 +373,13 @@ export function useMixIntegrityAudits({
   const handleExportLifecycleAudit = async () => {
     setIsExportingLifecycle(true);
     try {
-      const response = await fetch("/api/factory/mix-batches?profile=lifecycle-audit&format=csv", {
-        credentials: "same-origin",
-        cache: "no-store",
+      await downloadFromUrl("/api/factory/mix-batches?profile=lifecycle-audit&format=csv", {
+        fileName: exportFileName("factory mix lifecycle audit", "csv"),
       });
-      if (!response.ok) throw new Error("Cannot generate the mix lifecycle CSV.");
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = "factory-mix-lifecycle-audit.csv";
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      URL.revokeObjectURL(url);
     } catch (error) {
       toast({
-        title: "Lifecycle export failed",
-        description: error instanceof Error ? error.message : "Please retry.",
+        title: "Export failed",
+        description: error instanceof Error ? error.message : "Please try again.",
         variant: "destructive",
       });
     } finally {

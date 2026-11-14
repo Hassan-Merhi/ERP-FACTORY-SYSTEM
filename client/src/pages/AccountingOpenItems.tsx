@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { PageHeader } from "@/components/PageHeader";
 
 type Domain = "customer" | "supplier" | "factory_supplier" | "rentals";
 interface Allocation {
@@ -170,12 +171,10 @@ export default function AccountingOpenItems() {
 
   return (
     <div className="space-y-4 p-3 sm:p-5" data-testid="page-accounting-open-items">
-      <div>
-        <h1 className="text-2xl font-semibold">Open-item reconciliation</h1>
-        <p className="text-sm text-muted-foreground">
-          Match payments to posted charges; accounting entries, currencies and balances remain unchanged.
-        </p>
-      </div>
+      <PageHeader
+        title="Open-item reconciliation"
+        subtitle="Match payments to posted charges; accounting entries, currencies and balances remain unchanged."
+      />
       <Card>
         <CardContent className="grid gap-3 pt-5 sm:grid-cols-4">
           <div className="space-y-1">

@@ -1,4 +1,5 @@
 import type ExcelJS from "exceljs";
+import { exportFileName } from "@/lib/exportFile";
 
 // prettier-ignore
 (() => {
@@ -458,8 +459,7 @@ async function exportNoCostPdf(containerId: string): Promise<void> {
     didDrawPage: drawDocumentHeader,
   });
 
-  const safeContainerNumber = (number || containerId).replace(/[^a-zA-Z0-9_-]+/g, "_");
-  document.save(`container_${safeContainerNumber}_no_cost.pdf`);
+  document.save(exportFileName(`container ${number || containerId} no cost`, "pdf"));
 }
 
 const nativePrint = window.print.bind(window);

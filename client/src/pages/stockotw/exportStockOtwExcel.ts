@@ -2,6 +2,7 @@
  * Stock On The Way Excel export, extracted from StockOTW.tsx.
  */
 import { ExcelJS, writeFile } from "@/lib/excelHelper";
+import { exportFileName } from "@/lib/exportFile";
 import type { GroupedStockItem } from "@/lib/stockOtwWirePayload";
 
 export interface StockOtwExcelExportInput {
@@ -203,6 +204,5 @@ export async function exportStockOtwExcel({
   // Freeze rows above the header
   ws.views = [{ state: "frozen", xSplit: 0, ySplit: HDR_ROW }];
 
-  const date = new Date().toISOString().slice(0, 10);
-  await writeFile(wb, `Stock-OTW-${date}.xlsx`);
+  await writeFile(wb, exportFileName("stock OTW", "xlsx"));
 }

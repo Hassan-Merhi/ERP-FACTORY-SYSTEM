@@ -2,6 +2,7 @@ import { useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { format } from "date-fns";
 import { useLocation } from "wouter";
 import { readFile, utils, writeFile } from "@/lib/excelHelper";
+import { exportFileName } from "@/lib/exportFile";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { ImportPreviewRow, Location, LocationSummaryResponse, OrderItem } from "../stocktransferorder/types";
@@ -313,7 +314,7 @@ export function useStockTransferOrderWorkflows({
 
     worksheet.getColumn(1).width = 36;
     worksheet.getColumn(2).width = 12;
-    await writeFile(workbook, "transfer_order_preview.xlsx");
+    await writeFile(workbook, exportFileName("transfer order preview", "xlsx"));
   };
 
   const exportPreviewPDF = async () => {
@@ -339,7 +340,7 @@ export function useStockTransferOrderWorkflows({
         2: { cellWidth: 20, halign: "right" },
       },
     });
-    document.save("transfer_order_preview.pdf");
+    document.save(exportFileName("transfer order preview", "pdf"));
   };
 
   const handleSaveAsRevision = async () => {

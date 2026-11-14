@@ -22,7 +22,6 @@ import {
   Zap,
   Eye,
   AlertTriangle,
-  ArrowLeft,
   TrendingUp,
   Weight,
   DollarSign,
@@ -30,6 +29,7 @@ import {
   ChevronDown,
   ListFilter,
 } from "lucide-react";
+import { PageHeader } from "@/components/PageHeader";
 import type { SortField } from "./factorylocationinventory/types";
 import { StatCard } from "./factorylocationinventory/components/StatCard";
 import { InventoryTableColumns } from "./factorylocationinventory/components/InventoryTableColumns";
@@ -160,83 +160,66 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
       className={`factory-location-inventory inventory-product-view p-4 md:p-6 w-full space-y-5 ${proformaMode && selections.size > 0 ? "pb-24" : ""}`}
     >
       {/* Header */}
-      <div className="inventory-detail-header flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-        <div className="flex items-center gap-3">
+      <PageHeader
+        title={selectedLocation.name}
+        onBack={handleBackToLocations}
+        backButtonTestId="breadcrumb-locations"
+        meta={
+          <>
+            <Badge variant="outline" className="text-xs font-medium no-default-active-elevate">
+              <MapPin className="h-3 w-3 mr-1" />
+              Location Inventory
+            </Badge>
+            <span className="text-xs text-muted-foreground" data-testid="text-subtitle">
+              Physical bales · IN_STOCK
+            </span>
+          </>
+        }
+      >
+        {canChangeExistingRecords && (
           <Button
             variant="ghost"
             size="icon"
-            onClick={handleBackToLocations}
-            data-testid="breadcrumb-locations"
-            title="Back to locations"
+            onClick={(e) => openRenameDialog(selectedLocation, e)}
+            data-testid="button-rename-selected-location"
+            title="Rename location"
           >
-            <ArrowLeft className="h-5 w-5" />
+            <Pencil className="h-4 w-4" />
           </Button>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1
-                className="inventory-detail-title text-xl md:text-2xl font-bold tracking-tight"
-                data-testid="text-page-title"
-              >
-                {selectedLocation.name}
-              </h1>
-              {canChangeExistingRecords && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={(e) => openRenameDialog(selectedLocation, e)}
-                  data-testid="button-rename-selected-location"
-                  title="Rename location"
-                >
-                  <Pencil className="h-4 w-4" />
-                </Button>
-              )}
-            </div>
-            <div className="flex items-center gap-1.5 mt-1">
-              <Badge variant="outline" className="text-xs font-medium no-default-active-elevate">
-                <MapPin className="h-3 w-3 mr-1" />
-                Location Inventory
-              </Badge>
-              <span className="text-xs text-muted-foreground" data-testid="text-subtitle">
-                Physical bales · IN_STOCK
-              </span>
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          {(proformaMode || canCreateProforma) && (
-            <Button
-              variant={proformaMode ? "destructive" : "outline"}
-              size="sm"
-              onClick={toggleProformaMode}
-              data-testid="button-toggle-proforma-mode"
-            >
-              <ClipboardList className="h-4 w-4 mr-1.5" />
-              {proformaMode ? "Exit Proforma" : "Proforma Mode"}
-            </Button>
-          )}
-          <Button variant="outline" size="icon" onClick={() => handlePrint()} data-testid="button-print" title="Print">
-            <Printer className="h-4 w-4" />
-          </Button>
+        )}
+        {(proformaMode || canCreateProforma) && (
           <Button
-            variant="outline"
-            size="icon"
-            onClick={() => {
-              const p = new URLSearchParams();
-              if (hideAvgCost) p.set("includeCost", "0");
-              if (hideSellingPrice) p.set("includeSellPrice", "0");
-              const qs = p.toString();
-              window.open(
-                `/api/factory/location-inventory/${selectedLocation.id}/export/excel${qs ? "?" + qs : ""}`,
-                "_blank"
-              );
-            }}
-            data-testid="button-export-location-excel"
-            title="Export Excel"
+            variant={proformaMode ? "destructive" : "outline"}
+            size="sm"
+            onClick={toggleProformaMode}
+            data-testid="button-toggle-proforma-mode"
           >
-            <FileSpreadsheet className="h-4 w-4" />
+            <ClipboardList className="h-4 w-4 mr-1.5" />
+            {proformaMode ? "Exit Proforma" : "Proforma Mode"}
           </Button>
-        </div>
-      </div>
+        )}
+        <Button variant="outline" size="icon" onClick={() => handlePrint()} data-testid="button-print" title="Print">
+          <Printer className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={() => {
+            const p = new URLSearchParams();
+            if (hideAvgCost) p.set("includeCost", "0");
+            if (hideSellingPrice) p.set("includeSellPrice", "0");
+            const qs = p.toString();
+            window.open(
+              `/api/factory/location-inventory/${selectedLocation.id}/export/excel${qs ? "?" + qs : ""}`,
+              "_blank"
+            );
+          }}
+          data-testid="button-export-location-excel"
+          title="Export Excel"
+        >
+          <FileSpreadsheet className="h-4 w-4" />
+        </Button>
+      </PageHeader>
 
       {/* KPI cards: each stock quantity shows the combined total and both categories. */}
       {!inventoryLoading && (

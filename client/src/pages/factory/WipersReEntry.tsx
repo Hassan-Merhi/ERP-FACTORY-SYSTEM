@@ -16,10 +16,10 @@ import {
   CheckSquare,
   Square,
   AlertTriangle,
-  FileSpreadsheet,
   Tag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ExportButton } from "@/components/export/ReportExportMenu";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -66,7 +66,9 @@ export default function WipersReEntry() {
     enabled: Boolean(selectedCompany?.id),
     staleTime: 5 * 60000,
   });
-  const accessReady = Boolean(selectedCompany?.id && myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true);
+  const accessReady = Boolean(
+    selectedCompany?.id && myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
+  );
   const hiddenTabs = accessReady ? (myAccess?.hiddenCostFields ?? []) : [];
   const showRelabeling = accessReady && !hiddenTabs.includes("hide_tab_relabeling_main");
   const showWipersReEntry = accessReady && !hiddenTabs.includes("hide_tab_relabeling_wipers");
@@ -86,16 +88,26 @@ export default function WipersReEntry() {
   const [pendingLabels, setPendingLabels] = useState<LabelData[] | null>(null);
   const scanRef = useRef<HTMLInputElement>(null);
   const { data: baleProducts, isLoading: productsLoading } = useQuery<FactoryBaleProduct[]>({
-    queryKey: companyQueryKey("/api/factory/bale-products?profile=picker", selectedCompany?.id), enabled: Boolean(selectedCompany?.id),
+    queryKey: companyQueryKey("/api/factory/bale-products?profile=picker", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
   });
-  const { data: locations } = useQuery<Location[]>({ queryKey: companyQueryKey("/api/locations", selectedCompany?.id), enabled: Boolean(selectedCompany?.id) });
-  const { data: categories = [] } = useQuery<FactoryCategory[]>({ queryKey: companyQueryKey("/api/factory/categories", selectedCompany?.id), enabled: Boolean(selectedCompany?.id) });
+  const { data: locations } = useQuery<Location[]>({
+    queryKey: companyQueryKey("/api/locations", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
+  });
+  const { data: categories = [] } = useQuery<FactoryCategory[]>({
+    queryKey: companyQueryKey("/api/factory/categories", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
+  });
   interface WorkerOption {
     id: number;
     fullName?: string;
     name?: string;
   }
-  const { data: workers = [] } = useQuery<WorkerOption[]>({ queryKey: companyQueryKey("/api/factory/workers?profile=picker", selectedCompany?.id), enabled: Boolean(selectedCompany?.id) });
+  const { data: workers = [] } = useQuery<WorkerOption[]>({
+    queryKey: companyQueryKey("/api/factory/workers?profile=picker", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
+  });
   interface BaleListRow {
     bale: FactoryBale;
     product: FactoryBaleProduct;
@@ -429,11 +441,17 @@ export default function WipersReEntry() {
                 onKeyDown={handleKeyDown}
                 data-testid="input-product-search"
               />
-              <MobileBarcodeScanner onScan={(code) => {
-                const match = wiperProducts.find((product) => productMatchesSearch(product, code));
-                if (match) addToCart(match);
-                else { setSearchInput(code); setSearchError(`Unknown product: ${code}`); }
-              }} className="mt-2" />
+              <MobileBarcodeScanner
+                onScan={(code) => {
+                  const match = wiperProducts.find((product) => productMatchesSearch(product, code));
+                  if (match) addToCart(match);
+                  else {
+                    setSearchInput(code);
+                    setSearchError(`Unknown product: ${code}`);
+                  }
+                }}
+                className="mt-2"
+              />
               {searchError && <p className="text-xs text-destructive mt-1">{searchError}</p>}
               {showDropdown && filteredProducts.length > 0 && (
                 <div className="absolute z-50 left-0 right-0 mt-1 bg-popover border rounded-md shadow-md max-h-60 overflow-y-auto">
@@ -780,10 +798,7 @@ export default function WipersReEntry() {
                   <Printer className="h-4 w-4 mr-2" />
                   Print All Formats
                 </Button>
-                <Button variant="outline" onClick={exportCsv} data-testid="button-export-csv">
-                  <FileSpreadsheet className="h-4 w-4 mr-2" />
-                  Export CSV
-                </Button>
+                <ExportButton kind="excel" variant="outline" onClick={exportCsv} data-testid="button-export-csv" />
               </div>
 
               {/* Preview of first few labels */}

@@ -13,6 +13,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { readFinalizedReturnImport } from "./finalizedSaleReturnImportFile";
 import { buildFinalizedReturnMatchWorkbook } from "./finalizedSaleReturnMatchWorkbook";
+import { ExportButton } from "@/components/export/ReportExportMenu";
+import { exportFileName } from "@/lib/exportFile";
 
 type PreviewRow = {
   reference: string;
@@ -182,8 +184,10 @@ export default function FinalizedSaleReturnImport() {
         uploadedFile: fileName,
         rows: preview.rows,
       });
-      const safeCustomer = preview.customerName.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 50);
-      await writeFile(workbook, "Finalized_Return_Matches_" + (safeCustomer || customerId) + ".xlsx");
+      await writeFile(
+        workbook,
+        exportFileName(`finalized return matches ${preview.customerName.slice(0, 50) || customerId}`, "xlsx")
+      );
       toast({ title: copy.importExportReady, description: copy.importExportExplanation });
     } catch (error) {
       toast({
@@ -337,9 +341,13 @@ export default function FinalizedSaleReturnImport() {
               {preview.customerName} · {fileName} · {preview.matched} {copy.importMatches} · {preview.issues}{" "}
               {copy.importIssues}
             </p>
-            <Button type="button" variant="outline" onClick={downloadPreview} disabled={exporting || posting}>
-              {exporting ? copy.importExporting : copy.importExportPreview}
-            </Button>
+            <ExportButton
+              kind="excel"
+              variant="outline"
+              label={exporting ? copy.importExporting : copy.importExportPreview}
+              onClick={downloadPreview}
+              disabled={exporting || posting}
+            />
           </div>
           <p className="text-xs text-muted-foreground">{copy.importExportExplanation}</p>
           {preview.issues > 0 && (

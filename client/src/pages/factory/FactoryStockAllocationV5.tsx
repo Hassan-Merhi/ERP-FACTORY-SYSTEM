@@ -23,6 +23,7 @@ import {
   Scale,
   MoreHorizontal,
 } from "lucide-react";
+import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -85,79 +86,70 @@ export default function FactoryStockAllocationV5() {
   return (
     <div className="flex min-w-0 flex-col pb-6" data-testid="factory-stock-allocation-v5-page">
       <section className="px-3 pb-3 pt-5 sm:px-5">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-violet-500/30 bg-violet-500/15 text-violet-500">
-              <Package className="h-6 w-6" />
-            </div>
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Stock Allocation</h1>
-                {totals && totals.shortageCount > 0 && (
-                  <Badge variant="destructive" className="gap-1 text-xs">
-                    <AlertTriangle className="h-3 w-3" />
-                    {totals.shortageCount} shortages
-                  </Badge>
-                )}
-              </div>
-              <p className="mt-0.5 text-xs text-muted-foreground sm:text-sm">
-                Monitor product stock, expected loading and available balances.
-              </p>
-            </div>
-          </div>
-          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-            <Button
-              size="icon"
-              variant="outline"
-              className="h-9 w-9 rounded-lg"
-              onClick={handleRefresh}
-              disabled={query.isFetching}
-              aria-label="Refresh stock allocation"
-              data-testid="button-v5-refresh"
-            >
-              {refreshFlash ? (
-                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-              ) : (
-                <RefreshCw className={cn("h-4 w-4", query.isFetching && "animate-spin")} />
-              )}
-            </Button>
+        <PageHeader
+          title="Stock Allocation"
+          icon={<Package className="h-5 w-5" />}
+          subtitle="Monitor product stock, expected loading and available balances."
+          meta={
+            totals && totals.shortageCount > 0 ? (
+              <Badge variant="destructive" className="gap-1 text-xs">
+                <AlertTriangle className="h-3 w-3" />
+                {totals.shortageCount} shortages
+              </Badge>
+            ) : undefined
+          }
+        >
+          <Button
+            size="icon"
+            variant="outline"
+            className="h-9 w-9 rounded-lg"
+            onClick={handleRefresh}
+            disabled={query.isFetching}
+            aria-label="Refresh stock allocation"
+            data-testid="button-v5-refresh"
+          >
+            {refreshFlash ? (
+              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+            ) : (
+              <RefreshCw className={cn("h-4 w-4", query.isFetching && "animate-spin")} />
+            )}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9 gap-1.5 rounded-lg"
+            onClick={() => setExportDialogOpen(true)}
+            disabled={rows.length === 0}
+            data-testid="button-v5-export-excel"
+          >
+            <FileDown className="h-4 w-4" />
+            Export
+          </Button>
+          {recordChanges.allowed && (
             <Button
               variant="outline"
               size="sm"
               className="h-9 gap-1.5 rounded-lg"
-              onClick={() => setExportDialogOpen(true)}
-              disabled={rows.length === 0}
-              data-testid="button-v5-export-excel"
+              onClick={() => setRestoreDialogOpen(true)}
+              data-testid="button-v5-restore-cancelled"
             >
-              <FileDown className="h-4 w-4" />
-              Export
+              <RotateCcw className="h-4 w-4" />
+              Restore Cancelled
             </Button>
-            {recordChanges.allowed && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-9 gap-1.5 rounded-lg"
-                onClick={() => setRestoreDialogOpen(true)}
-                data-testid="button-v5-restore-cancelled"
-              >
-                <RotateCcw className="h-4 w-4" />
-                Restore Cancelled
-              </Button>
-            )}
-            {!recordChanges.isCreateOnly && (
-              <Button
-                size="sm"
-                className="h-9 gap-1.5 rounded-lg bg-violet-600 text-white shadow-md shadow-violet-500/20 hover:bg-violet-700"
-                onClick={() => setLocation("/factory/stock-allocation-v5/proformas/new")}
-                data-testid="button-v5-open-create-proforma"
-              >
-                <Plus className="h-4 w-4" />
-                Create Proforma
-              </Button>
-            )}
-          </div>
-        </div>
-        <div className="mt-5 grid grid-cols-2 gap-2.5 lg:grid-cols-3 xl:grid-cols-5">
+          )}
+          {!recordChanges.isCreateOnly && (
+            <Button
+              size="sm"
+              className="h-9 gap-1.5 rounded-lg bg-violet-600 text-white shadow-md shadow-violet-500/20 hover:bg-violet-700"
+              onClick={() => setLocation("/factory/stock-allocation-v5/proformas/new")}
+              data-testid="button-v5-open-create-proforma"
+            >
+              <Plus className="h-4 w-4" />
+              Create Proforma
+            </Button>
+          )}
+        </PageHeader>
+        <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-3 xl:grid-cols-5">
           <div className="flex min-w-0 items-center gap-3 rounded-xl border border-violet-500/25 bg-violet-500/[0.08] p-3.5 shadow-sm">
             <div className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-violet-500/20 text-violet-500 sm:flex">
               <Package className="h-5 w-5" />

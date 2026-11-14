@@ -34,6 +34,9 @@ export type PaymentsPeriod = "all" | "30days" | "month" | "year";
 type Option = { value: string; label: string };
 
 type Props = {
+  /** Same title/subtitle as the shared PageHeader branch of RentalPaymentsLog. */
+  title: string;
+  subtitle: string;
   payments: PaymentRow[];
   totalRecords: number;
   isLoading: boolean;
@@ -122,6 +125,8 @@ function WarehouseArtwork() {
 }
 
 export function PropertiesPaymentsPremium({
+  title,
+  subtitle,
   payments,
   totalRecords,
   isLoading,
@@ -156,8 +161,8 @@ export function PropertiesPaymentsPremium({
           </div>
           <div>
             <span className="properties-payments-eyebrow">PROPERTIES</span>
-            <h1>Payments Log</h1>
-            <p>All payment receipts recorded across your units, sorted by date.</p>
+            <h1 data-testid="text-page-title">{title}</h1>
+            <p data-testid="text-page-subtitle">{subtitle}</p>
           </div>
         </div>
       </header>

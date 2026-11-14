@@ -1,7 +1,7 @@
 import { formatMoneyDisplay } from "@/lib/moneyDisplay";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { format, parseISO } from "date-fns";
+import { parseISO } from "date-fns";
 import { PackageMinus, PackagePlus, RefreshCw, TrendingDown } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
@@ -14,6 +14,7 @@ import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useToast } from "@/hooks/use-toast";
 import { ExcelJS, writeFile } from "@/lib/excelHelper";
+import { exportFileName } from "@/lib/exportFile";
 import { formatNumber } from "@/lib/formatNumber";
 
 interface Metrics {
@@ -467,8 +468,7 @@ export default function StockInSalesReportDetail() {
       );
       salesSheet.getRow(1).font = { bold: true };
 
-      const safeLabel = periodLabel.replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/^-|-$/g, "");
-      await writeFile(workbook, `stock-flow-detail-${safeLabel || format(new Date(), "yyyy-MM-dd")}.xlsx`);
+      await writeFile(workbook, exportFileName("stock flow detail", "xlsx", { from: startDate, to: endDate }));
       if (exportData.stockIn.truncated || exportData.stockOut.truncated || exportData.adjustments?.truncated) {
         toast({
           title: "Export capped",
@@ -518,7 +518,7 @@ export default function StockInSalesReportDetail() {
           disabled={isLoading}
           options={[
             { id: "stock-flow-excel", label: "Export Excel", kind: "excel", onSelect: exportExcel },
-            { id: "stock-flow-print", label: "Print / Save PDF", kind: "print", onSelect: () => window.print() },
+            { id: "stock-flow-print", label: "Print", kind: "print", onSelect: () => window.print() },
           ]}
         />
       </PageHeader>

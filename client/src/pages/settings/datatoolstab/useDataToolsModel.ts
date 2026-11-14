@@ -6,6 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { getApiRequest } from "@/lib/factoryApi";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { read, readFile, utils, writeFile } from "@/lib/excelHelper";
+import { exportFileName } from "@/lib/exportFile";
 import type { SilentImportRow } from "./types";
 
 /** One parsed line from /api/inventory/silent-transfer/parse. */
@@ -400,7 +401,9 @@ export function useDataToolsModel() {
           const change = parseFloat(String(row["Qty Change"] ?? row.Change ?? "0")) || 0;
           const rate = parseFloat(String(row.Rate ?? "0")) || 0;
 
-          let matched = code ? allStockItems.find((item) => item.code?.toLowerCase() === code.toLowerCase()) : undefined;
+          let matched = code
+            ? allStockItems.find((item) => item.code?.toLowerCase() === code.toLowerCase())
+            : undefined;
           if (!matched && name) {
             matched = allStockItems.find((item) => item.name.toLowerCase() === name.toLowerCase());
           }
@@ -456,7 +459,7 @@ export function useDataToolsModel() {
     }
     worksheet.getColumn(1).width = 36;
     worksheet.getColumn(2).width = 12;
-    await writeFile(workbook, "silent_adjustment_preview.xlsx");
+    await writeFile(workbook, exportFileName("silent adjustment preview", "xlsx"));
   };
 
   const exportSilentPDF = async () => {
@@ -482,7 +485,7 @@ export function useDataToolsModel() {
       headStyles: { fillColor: [30, 30, 30] },
       columnStyles: { 0: { cellWidth: 12 }, 2: { cellWidth: 22, halign: "right" } },
     });
-    document.save("silent_adjustment_preview.pdf");
+    document.save(exportFileName("silent adjustment preview", "pdf"));
   };
 
   const applySilentImport = async () => {
@@ -525,7 +528,11 @@ export function useDataToolsModel() {
       queryClient.invalidateQueries({ queryKey: ["/api/inventory-by-location"] });
       queryClient.invalidateQueries({ queryKey: ["/api/location-summary"] });
     } catch (error: unknown) {
-      toast({ title: "Error", description: error instanceof Error ? error.message : String(error), variant: "destructive" });
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : String(error),
+        variant: "destructive",
+      });
     } finally {
       setSilentProdApplying(false);
     }

@@ -1,4 +1,5 @@
 import * as XLSX from "@/lib/excelHelper";
+import { exportFileName } from "@/lib/exportFile";
 
 import type { BaleDetail, GroupRow } from "./types";
 import { buildWorkerMatrix } from "./utils";
@@ -80,7 +81,7 @@ export function createStockEntryHistoryReports({
 
     XLSX.utils.book_append_sheet(wb, ws3, "Worker Matrix");
 
-    await XLSX.writeFile(wb, `stock-entry-history-${fromDate}-to-${toDate}.xlsx`);
+    await XLSX.writeFile(wb, exportFileName("stock entry history", "xlsx", { from: fromDate, to: toDate }));
   }
 
   async function handlePrintMatrix() {

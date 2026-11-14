@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/PageHeader";
 import { Loader2, Upload, RotateCcw, ImageIcon, CheckCircle, Plus, Pencil, Trash2, X, Check } from "lucide-react";
+import { confirmAction } from "@/components/ConfirmHost";
 
 interface ColorRow {
   id: number;
@@ -275,7 +276,14 @@ export default function LabelBannersSettings() {
                               size="icon"
                               variant="ghost"
                               className="h-7 w-7 text-destructive"
-                              onClick={() => deleteMutation.mutate(c.slug)}
+                              onClick={async () => {
+                                const confirmed = await confirmAction({
+                                  title: "Delete this label banner?",
+                                  confirmText: "Delete",
+                                  tone: "destructive",
+                                });
+                                if (confirmed) deleteMutation.mutate(c.slug);
+                              }}
                               disabled={deleteMutation.isPending}
                               data-testid={`button-delete-${c.slug}`}
                             >

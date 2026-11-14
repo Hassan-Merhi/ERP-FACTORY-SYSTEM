@@ -6,6 +6,7 @@ import { getErrorDetails } from "@shared/errorUtils";
  */
 import * as XLSX from "@/lib/excelHelper";
 import type { ApplyItem, ParsedRow } from "./types";
+import { downloadBlob } from "@/lib/downloadBlob";
 
 export const POSSIBLE_COLUMNS = [
   "current_reference_code",
@@ -75,13 +76,7 @@ export function downloadCsv(items: ApplyItem[], filename: string) {
   const rows = items.map((r) =>
     [r.oldRef, r.newRef, `"${r.productName}"`, r.articleCode, r.weightKg, "SUCCESS"].join(",")
   );
-  const blob = new Blob([[header, ...rows].join("\n")], { type: "text/csv" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadBlob(new Blob(["\uFEFF" + [header, ...rows].join("\n")], { type: "text/csv;charset=utf-8" }), filename);
 }
 
 export async function downloadExcelTemplate() {

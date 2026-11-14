@@ -5,6 +5,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 
 import { ExcelJS, writeFile } from "@/lib/excelHelper";
+import { exportFileName } from "@/lib/exportFile";
 
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
@@ -725,8 +726,7 @@ export function useFactoryWorkersModel() {
     });
     totalRow.height = 22;
 
-    const date = new Date().toLocaleDateString("en-CA");
-    await writeFile(wb, `workers-salaries-${date}.xlsx`);
+    await writeFile(wb, exportFileName("workers salaries", "xlsx"));
   };
 
   const balance = endResult ? parseFloat(endResult.balance) : 0;

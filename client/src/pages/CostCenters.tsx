@@ -21,6 +21,7 @@ import { CostCenterAutomationRules } from "@/components/financial/CostCenterAuto
 import { CostCenterReports } from "@/components/financial/CostCenterReports";
 import { CostCenterReleaseReadiness } from "@/components/financial/CostCenterReleaseReadiness";
 import { CostCenterHistorical } from "@/components/financial/CostCenterHistorical";
+import { confirmAction } from "@/components/ConfirmHost";
 
 type Form = { code: string; name: string; description: string; parentId: string };
 const emptyForm: Form = { code: "", name: "", description: "", parentId: "root" };
@@ -147,11 +148,15 @@ export default function CostCenters() {
     setForm(center ? detailsFrom(center) : emptyForm);
     setDialogOpen(true);
   }
-  function handleArchive(center: CostCenter) {
-    if (
-      !window.confirm("Archive " + center.name + "? Existing allocations will remain available in historical reports.")
-    )
-      return;
+  async function handleArchive(center: CostCenter) {
+    const confirmed = await confirmAction({
+      title: "Archive this cost center?",
+      description: "Existing allocations will remain available in historical reports.",
+      details: [{ label: "Cost center", value: center.name }],
+      confirmText: "Archive",
+      tone: "warning",
+    });
+    if (!confirmed) return;
     archive.mutate(center.id);
   }
   return (

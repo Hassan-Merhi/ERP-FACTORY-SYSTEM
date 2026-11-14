@@ -124,7 +124,9 @@ export function PosShell({
           {selectedCompany?.id && <DailyRateModal companyId={selectedCompany.id} />}
           <Sidebar data-pos-sidebar="modern">
             <SidebarHeader data-pos-sidebar-header>
-              <div className="pos-shell-wordmark"><DakzoBrand /></div>
+              <div className="pos-shell-wordmark">
+                <DakzoBrand />
+              </div>
               <SeasonalBrandAccent />
               <div className="flex items-center gap-2">
                 <Button
