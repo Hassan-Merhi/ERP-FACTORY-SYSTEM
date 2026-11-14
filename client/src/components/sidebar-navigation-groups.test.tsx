@@ -49,7 +49,7 @@ describe("sidebar navigation grouping", () => {
     expect(groupFor(FACTORY_NAV_SECTIONS, "/factory/monthly-production-matrix")).toBeUndefined();
   });
 
-  it("places comparison links, Stock Query and Tickets in the final Others section", () => {
+  it("places comparison links, Finalized Sale Returns, Stock Query and Tickets in the final Others section", () => {
     const others = FACTORY_NAV_SECTIONS.at(-1);
     expect(others?.label).toBe("Others");
     expect(others?.items.map((item) => item.title)).toEqual([

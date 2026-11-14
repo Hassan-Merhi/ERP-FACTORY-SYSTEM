@@ -6,7 +6,7 @@
       "workspace": "erp",
       "companyCode": "PHASE9-ERP",
       "requiredRole": "Developer",
-      "staticRoutes": 101,
+      "staticRoutes": 102,
       "parameterizedRoutes": 19
     },
     {

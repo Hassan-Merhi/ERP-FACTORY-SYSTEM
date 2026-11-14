@@ -1,0 +1,80 @@
+name: Mobile Shell
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "android/**"
+      - "ios/**"
+      - "capacitor.config.ts"
+      - "client/.env.capacitor"
+      - "client/index.html"
+      - "client/src/main.tsx"
+      - "client/src/app/**"
+      - "client/src/lib/**"
+      - "client/src/pages/Login.tsx"
+      - "server/middleware/capacitorCors.ts"
+      - "vite.config.ts"
+      - "package-lock.json"
+      - "tests/e2e/mobile-shell/**"
+      - ".github/workflows/mobile-shell.yml"
+  push:
+    branches: [main]
+    paths:
+      - "android/**"
+      - "ios/**"
+      - "capacitor.config.ts"
+      - "client/.env.capacitor"
+      - "client/**"
+      - "server/middleware/capacitorCors.ts"
+      - "vite.config.ts"
+      - "package-lock.json"
+      - "tests/e2e/mobile-shell/**"
+      - ".github/workflows/mobile-shell.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-shell-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mobile-shell:
+    name: Run the native bundle at the WebView origin
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        with:
+          egress-policy: audit
+
+      - name: Check out exact commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Install Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24.22.2"
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Install headless Chromium
+        run: |
+          set -euo pipefail
+          node_modules/.bin/puppeteer browsers install chrome-headless-shell
+          chrome_path="$(find "$HOME/.cache/puppeteer/chrome-headless-shell" -type f -name chrome-headless-shell | head -1)"
+          test -n "$chrome_path"
+          echo "MOBILE_SHELL_CHROME_PATH=$chrome_path" >> "$GITHUB_ENV"
+
+      # Builds with --mode capacitor, serves the bundle at https://localhost and
+      # a stand-in API behind the server's real capacitorCors middleware. Every
+      # other host is unresolvable, so no request leaves the runner.
+      - name: Build the native bundle and sign in from the WebView origin
+        run: node --import tsx tests/e2e/mobile-shell/run.mjs

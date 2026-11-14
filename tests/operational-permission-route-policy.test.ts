@@ -47,6 +47,8 @@ const REVIEWED_UNGUARDED_ROUTES: Record<string, string> = {
     "Stock Transfer Order WhatsApp Phase 6 delivery reconciliation: an Admin/Owner/Developer-only record of provider and chat evidence for an already approved batch's Excel delivery, with a capped manual retry. It posts no voucher and moves no stock; the route enforces the role and the active company itself. Recorded on 2026-11-11 so main can certify.",
   "GET /api/factory/customer-orders/:id/loading-dispatches/order-overview/trips/:dispatchId/invoice.xlsx":
     "Per-trip Factory invoice workbook (#3100): a read-only, company-scoped REPEATABLE READ download of one posted trip's own invoice lines, gated by requireAuth and the Factory invoicing loadings tab access (factory/invoicing) like its order-overview JSON siblings. Recorded on 2026-11-11 so main can certify; it has no dedicated export permission today, which the owner should confirm is intended.",
+  "POST /api/factory/finalized-sale-returns/import-preview":
+    "Finalized sale return reference match preview (#3197, #3198): an Admin/Developer-only, company-scoped lookup of the bale references in an uploaded sheet against one customer's finalized sales. It only reads; the write is the separate /apply route. Recorded on 2026-11-13 so main can certify; it has no dedicated import permission today, which the owner should confirm is intended.",
 };
 
 const MUTATION = new Set(["POST", "PUT", "PATCH", "DELETE"]);
