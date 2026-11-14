@@ -71,6 +71,11 @@ export function buildPostedSupplierReturnWorkbook(
     const qty = new Decimal(item.quantity);
     const supplier = new Decimal(item.supplierCreditUsd);
     const inventory = new Decimal(item.inventoryReductionUsd);
+    if ((item.requestedRows?.length ?? 0) > 0) {
+      const mapped = (item.requestedRows ?? []).reduce(
+        (sum, row) => sum.plus(row.allocatedQuantity), new Decimal(0));
+      if (!mapped.eq(qty)) throw new Error("Source return quantity differs from its recorded Excel row allocations");
+    }
     totalQuantity = totalQuantity.plus(qty);
     totalSupplier = totalSupplier.plus(supplier);
     totalInventory = totalInventory.plus(inventory);
