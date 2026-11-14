@@ -11,22 +11,33 @@ import type { UniversalExcelWorkbookSpec, UniversalExcelSheetResult } from "../.
 import { buildUniversalExcelWorkbook } from "../../shared/universal-excel/engine";
 import { validateUniversalExcelFilename } from "../../shared/universal-excel/filename";
 import { writeWorkbook, writeWorkbookToResponse } from "../excelHelper";
+import { loadCompanyExcelAppearance } from "./excelAppearanceSettings";
 
 export async function sendUniversalExcelWorkbook(
   response: ServerResponse,
   filename: string,
-  spec: UniversalExcelWorkbookSpec
+  spec: UniversalExcelWorkbookSpec,
+  companyId?: number
 ): Promise<UniversalExcelSheetResult[]> {
   const safeName = validateUniversalExcelFilename(filename);
-  const { workbook, results } = buildUniversalExcelWorkbook(spec);
+  const appearance = companyId && spec.mode === "report" && !spec.appearance
+    ? await loadCompanyExcelAppearance(companyId) : null;
+  const { workbook, results } = buildUniversalExcelWorkbook(
+    appearance ? { ...spec, appearance, dateFormat: spec.dateFormat ?? appearance.dateFormat } : spec
+  );
   await writeWorkbookToResponse(workbook, response, safeName);
   return results;
 }
 
 /** For workflows that explicitly require XLSX bytes (e.g., attachments). */
 export async function buildUniversalExcelAttachment(
-  spec: UniversalExcelWorkbookSpec
+  spec: UniversalExcelWorkbookSpec,
+  companyId?: number
 ): Promise<{ buffer: Buffer; results: UniversalExcelSheetResult[] }> {
-  const { workbook, results } = buildUniversalExcelWorkbook(spec);
+  const appearance = companyId && spec.mode === "report" && !spec.appearance
+    ? await loadCompanyExcelAppearance(companyId) : null;
+  const { workbook, results } = buildUniversalExcelWorkbook(
+    appearance ? { ...spec, appearance, dateFormat: spec.dateFormat ?? appearance.dateFormat } : spec
+  );
   return { buffer: await writeWorkbook(workbook), results };
 }
