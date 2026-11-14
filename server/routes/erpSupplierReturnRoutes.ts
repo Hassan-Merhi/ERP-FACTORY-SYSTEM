@@ -16,6 +16,7 @@ import { postFactoryVoucherTx } from "../services/factory/factoryVoucherPosting"
 import { createDatabaseStockMovementAdapter } from "../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../services/inventory/stockMovementIntegrityService";
 import { assertActiveCompanyAccess } from "../security/companyAccessBoundary";
+import { allocateSupplierReturnRows } from "./erpSupplierReturnAllocation";
 
 const movementAdapter = createDatabaseStockMovementAdapter();
 const qtyPattern = /^\d+(?:\.\d{1,3})?$/;
@@ -204,48 +205,41 @@ export function registerErpSupplierReturnRoutes(app: Express) {
       }
       if (!Array.isArray(rows) || rows.length < 1 || rows.length > 1000)
         throw new ReturnError(400, "RETURN_ROWS_INVALID", "Upload between 1 and 1000 rows");
-      const preview = [];
+      // Resolve the full workbook first, then allocate in input order. A source
+      // and its shared location/item inventory can be consumed by earlier rows.
+      const requested = [];
       for (let index = 0; index < rows.length; index++) {
         const row = rows[index] as { code?: unknown; quantity?: unknown; offloadItemId?: unknown };
         const code = String(row?.code ?? "").trim();
         if (!code || code.length > 50)
           throw new ReturnError(
-            400,
-            "RETURN_CODE_INVALID",
+            400, "RETURN_CODE_INVALID",
             `Row ${index + 2}: article code is required (max 50 characters)`
           );
         const qty = quantity(row?.quantity);
+        const selected = row?.offloadItemId == null || row.offloadItemId === ""
+          ? null : Number(row.offloadItemId);
+        if (selected !== null && (!Number.isSafeInteger(selected) || selected <= 0))
+          throw new ReturnError(400, "RETURN_SOURCE_INVALID", `Row ${index + 2}: invalid offload item`);
         const possible = (await candidates(db, companyId, code)).filter(
           (candidate) => supplierId === null || candidate.supplierId === supplierId
         );
-        const selected = Number(row?.offloadItemId);
-        const matching = selected ? possible.filter((item) => item.offloadItemId === selected) : possible;
-        const eligible = matching.filter(
-          (item) =>
-            new Decimal(item.remainingQty).gte(qty) &&
-            new Decimal(item.availableQty).gte(qty) &&
-            item.supplierCount === 1 &&
-            item.currencyCount === 1 &&
-            item.currency === "USD"
-        );
-        const status = !possible.length
-          ? "not-found"
-          : selected && !matching.length
-            ? "invalid-selection"
-            : !eligible.length
-              ? "insufficient-or-unsupported"
-              : eligible.length === 1
-                ? "matched"
-                : "needs-selection";
-        preview.push({
-          row: index + 2,
-          code,
-          quantity: qty.toFixed(3),
-          status,
-          suggestedOffloadItemId: status === "matched" ? eligible[0].offloadItemId : null,
-          candidates: possible,
-        });
+        requested.push({ row: index + 2, code, quantity: qty.toFixed(3), offloadItemId: selected, candidates: possible });
       }
+      const allocations = allocateSupplierReturnRows(requested);
+      const preview = requested.map((row, index) => ({
+        row: row.row,
+        code: row.code,
+        quantity: row.quantity,
+        status: allocations[index].status,
+        suggestedOffloadItemId: allocations[index].suggestedOffloadItemId,
+        allocations: allocations[index].allocations.map(({ offloadItemId, quantity }) => ({
+          offloadItemId, quantity,
+        })),
+        allocatedQty: allocations[index].allocatedQty,
+        unallocatedQty: allocations[index].unallocatedQty,
+        candidates: row.candidates,
+      }));
       res.json({ rows: preview, supplierId, ready: preview.every((r) => r.status === "matched") });
     } catch (error) {
       const err = error as ReturnError;
