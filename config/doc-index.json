@@ -156,6 +156,7 @@
     }
   ],
   "classification": {
+    "docs/engineering/code-file-line-policy-phase1.md": "reference",
     "docs/database-phase9-production-rollout.md": "reference",
     "docs/database-phase8-migration-testing.md": "reference",
     "docs/database-phase7-disaster-recovery.md": "reference",
