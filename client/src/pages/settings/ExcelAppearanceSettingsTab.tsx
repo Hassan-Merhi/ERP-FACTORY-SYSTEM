@@ -61,7 +61,7 @@ export function ExcelAppearanceSettingsTab({ company }: Props) {
     }),
   });
 
-  const patch = <K extends keyof ExcelAppearanceSettings>(field: K, value: ExcelAppearanceSettings[K]) => {
+  const patch = <K extends keyof ExcelAppearanceSettings,>(field: K, value: ExcelAppearanceSettings[K]) => {
     setDraft((current) => ({ ...current, [field]: value }));
   };
   const uploadLogo = (event: ChangeEvent<HTMLInputElement>) => {
