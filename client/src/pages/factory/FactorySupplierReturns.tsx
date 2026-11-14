@@ -11,6 +11,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { read, utils, writeFile } from "@/lib/excelHelper";
 import { buildErpSupplierReturnMatchWorkbook } from "./erpSupplierReturnMatchWorkbook";
+import { buildPostedSupplierReturnWorkbook, type PostedSupplierReturnRow } from "./erpSupplierReturnPostedWorkbook";
 import { isValidSupplierReturnQuantity } from "./supplierReturnQuantityValidation";
 import { validateSupplierReturnAllocations, type EditableAllocation } from "./supplierReturnAllocationReview";
 
@@ -82,6 +83,7 @@ export default function FactorySupplierReturns() {
   const [supplierId, setSupplierId] = useState<number | null>(null);
   const [previewSupplierId, setPreviewSupplierId] = useState<number | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [exportingBatch, setExportingBatch] = useState<number | null>(null);
   const suppliers = useQuery<{ rows: Array<{ id: number; name: string }> }>({
     queryKey: ["/api/erp/supplier-returns/suppliers", selectedCompany?.id],
     enabled: !!selectedCompany,
@@ -105,20 +107,7 @@ export default function FactorySupplierReturns() {
   const [busy, setBusy] = useState(false);
   const [receipt, setReceipt] = useState<{ id: number; totalQty?: string; replayed?: boolean } | null>(null);
   const [selectedBatch, setSelectedBatch] = useState<number | null>(null);
-  const [detailRows, setDetailRows] = useState<
-    Array<{
-      id: number;
-      articleCode: string;
-      itemName: string;
-      quantity: string;
-      containerNumber: string;
-      offloadId: number;
-      supplier: string;
-      supplierCreditUsd: string;
-      inventoryReductionUsd: string;
-      voucherNumber: string | null;
-    }>
-  >([]);
+  const [detailRows, setDetailRows] = useState<PostedSupplierReturnRow[]>([]);
   useEffect(() => {
     setSourceFile("");
     setManualCode("");
@@ -204,6 +193,7 @@ export default function FactorySupplierReturns() {
             row: entry.row.row,
             code: preview.find((p) => p.row === entry.row.row)?.code ?? "",
             quantity: line.allocation.quantity,
+            requestedQuantity: entry.row.quantity,
             status: entry.valid && combined.valid ? "matched" : "review-allocation",
             candidate: line.candidate,
             valid: entry.valid && combined.valid && line.valid &&
@@ -215,6 +205,7 @@ export default function FactorySupplierReturns() {
             row: entry.row.row,
             code: preview.find((p) => p.row === entry.row.row)?.code ?? "",
             quantity: entry.row.quantity,
+            requestedQuantity: entry.row.quantity,
             status: "unallocated",
             valid: false,
           }];
@@ -313,6 +304,31 @@ export default function FactorySupplierReturns() {
       setSelectedBatch(id);
     } catch (e) {
       toast({ title: copy.historyFailed, description: (e as Error).message, variant: "destructive" });
+    }
+  }
+  async function exportPostedBatch(batch: HistoryRow) {
+    if (exportingBatch !== null || busy) return;
+    setExportingBatch(batch.id);
+    try {
+      const details = (await (
+        await apiRequest("GET", `/api/erp/supplier-returns/history/${batch.id}`)
+      ).json()) as { rows: PostedSupplierReturnRow[] };
+      const wb = utils.book_new();
+      buildPostedSupplierReturnWorkbook(wb, {
+        id: batch.id,
+        returnDate: batch.returnDate,
+        fileName: batch.fileName,
+        reason: batch.reason,
+        totalQty: batch.totalQty,
+        supplierCreditUsd: batch.supplierCreditUsd,
+        inventoryReductionUsd: batch.inventoryReductionUsd,
+      }, details.rows);
+      await writeFile(wb, `ERP_Supplier_Return_Batch_${batch.id}.xlsx`);
+      toast({ title: copy.exported });
+    } catch (e) {
+      toast({ title: copy.exportFailed, description: (e as Error).message, variant: "destructive" });
+    } finally {
+      setExportingBatch(null);
     }
   }
   async function post() {
@@ -681,6 +697,7 @@ export default function FactorySupplierReturns() {
                     copy.balesRemoved,
                     copy.supplierCredit,
                     copy.inventoryReduction,
+                    copy.exportPreview,
                   ].map((x) => (
                     <th key={x} className="p-2 text-left">
                       {x}
@@ -706,6 +723,14 @@ export default function FactorySupplierReturns() {
                     <td className="p-2 font-mono">{r.totalQty}</td>
                     <td className="p-2 font-mono">{money(r.supplierCreditUsd)}</td>
                     <td className="p-2 font-mono">{money(r.inventoryReductionUsd)}</td>
+                    <td className="p-2">
+                      <Button variant="outline" size="sm"
+                        disabled={busy || exportingBatch !== null}
+                        onClick={() => void exportPostedBatch(r)}>
+                        <Download className="h-4 w-4 mr-1" />
+                        {exportingBatch === r.id ? copy.exporting : "Posted Excel"}
+                      </Button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -731,6 +756,10 @@ export default function FactorySupplierReturns() {
                       copy.supplierCredit,
                       copy.stockCost,
                       copy.voucher,
+                      "Excel rows",
+                      "Purchase / Bale",
+                      "Inventory / Bale",
+                      "Variance",
                     ].map((x) => (
                       <th key={x} className="p-2 text-left">
                         {x}
@@ -750,6 +779,21 @@ export default function FactorySupplierReturns() {
                       <td className="p-2">{money(r.supplierCreditUsd)}</td>
                       <td className="p-2">{money(r.inventoryReductionUsd)}</td>
                       <td className="p-2">{r.voucherNumber}</td>
+                      <td className="p-2 text-xs">
+                        {r.requestedRows?.map((a) =>
+                          `#${a.inputRow}: ${a.allocatedQuantity}/${a.requestedQuantity}`
+                        ).join(", ") || "—"}
+                      </td>
+                      <td className="p-2 font-mono">
+                        {r.sourcePurchaseRate == null ? "—" : money(r.sourcePurchaseRate)}
+                      </td>
+                      <td className="p-2 font-mono">
+                        {new Decimal(r.quantity).gt(0)
+                          ? money(new Decimal(r.inventoryReductionUsd).div(r.quantity).toFixed(7)) : "—"}
+                      </td>
+                      <td className="p-2 font-mono">
+                        {money(new Decimal(r.inventoryReductionUsd).minus(r.supplierCreditUsd).toFixed(2))}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
