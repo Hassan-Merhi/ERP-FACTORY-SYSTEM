@@ -16,6 +16,12 @@ failure, so a correct document cannot quietly become undiscoverable.
 
 ## Start here
 
+| [file-size-limits-20261113.md](file-size-limits-20261113.md) | Repository file length warning and hard cap |
+| [erp-supplier-returns-multi-container-phases.md](erp-supplier-returns-multi-container-phases.md) | Multi-container ERP supplier returns scope, phases and acceptance criteria |
+| [erp-supplier-returns-phase1-audit.md](erp-supplier-returns-phase1-audit.md) | Existing return data flow and inventory cost boundaries |
+| [erp-supplier-returns-phase4-stock-integrity.md](erp-supplier-returns-phase4-stock-integrity.md) | Return stock deduction, rollback and audit-integrity contract |
+| [erp-supplier-returns-phase5-accounting.md](erp-supplier-returns-phase5-accounting.md) | Supplier credit, moving-average valuation and variance posting rules |
+| [erp-supplier-returns-phase6-excel-history.md](erp-supplier-returns-phase6-excel-history.md) | Export, history and controlled migration requirements |
 | Doc | What it covers |
 |---|---|
 
@@ -50,6 +56,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [architecture.md](architecture.md) | How the codebase fits together |
 | [core-concepts.md](core-concepts.md) | Companies, modes, tenancy, the vocabulary |
 | [contributing.md](contributing.md) | Project layout and how to work in it |
+| [file-size-limits-20261113.md](file-size-limits-20261113.md) | Current source file size warning and hard cap policy |
 
 ## How the business logic works
 
