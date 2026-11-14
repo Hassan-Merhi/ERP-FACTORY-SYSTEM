@@ -3,7 +3,7 @@
 **Branch:** `feature/universal-excel-export-system`
 **PR:** [#3204](https://github.com/Hassan-Merhi/ERP-FACTORY-SYSTEM/pull/3204) (draft; no merge).
 **Scope:** Factory-only operational Excel exports, including inventory, production, pressing, attendance and dispatch.
-**Status:** Source migration committed. Full CI, i18n and permission verification are release gates.
+**Status:** Phase 6 source migration complete. Branch-only TypeScript, core/frontend Excel tests, formatting, lint, build and documentation index passed on validation run 43567714498. Full PR CI, trilingual audit, permissions/manual Excel roundtrips and integration with current main remain release gates.
 
 ## Full universal engine migrations
 
@@ -52,3 +52,16 @@ npm run build
 Manual acceptance: pressing export >250 rows + asOf consistency; date-filtered Factory Bales and Stock Register, cost hidden vs authorized; both inventory route modes; worker due-today snapshot; negative available allocation; attendance Arabic/English results and range; dispatch trip with wrong/missing/duplicate scans; bonus totals and historical sources.
 
 **No TablePlus SQL, database migration, merge to main or Render deployment was required or performed for Phase 6.** Existing PR/CI findings from earlier phases, particularly localization and stale main, must still be resolved before production.
+
+### Phase 6 observed validation — 2026-11-14
+
+GitHub Actions temporary branch validator [run 43567714498](https://github.com/Hassan-Merhi/ERP-FACTORY-SYSTEM/actions/runs/43567714498) completed **successfully** with the following seven steps:
+1. `npm run check`: passed.
+2. Core Excel Vitest: **51 tests passed**, including six new Factory formatting tests.
+3. Focused ERP/Factory frontend Vitest: **11 tests passed**, including Factory pressing multi-page/asOf snapshot checks.
+4. Changed-source Prettier validation: passed.
+5. `npm run lint`: passed.
+6. `npm run build`: passed.
+7. `npm run audit:doc-index`: passed after phases 1–6 were linked from `docs/README.md`.
+
+The temporary write-enabled branch validator was deleted after successful verification; it is not a persistent CI or deployment workflow. These results verify branch code and focused contracts, **not** live data, financial posting invariants, all full-suite tests, production rollout or PR merge readiness. The previous PR's untranslated-string ratchet and main divergence still require separate reconciliation before a release.
