@@ -3,7 +3,7 @@ import Decimal from "decimal.js";
 import type { MonetaryFxValuationRow } from "./monetaryFxValuationService";
 
 /** Display rounding tolerance between a report row and the valuation's book figure. */
-const BOOK_MATCH_TOLERANCE = "0.03";
+export const BOOK_MATCH_TOLERANCE = "0.03";
 
 /**
  * A report row may present the same posted lines on either book basis: the
