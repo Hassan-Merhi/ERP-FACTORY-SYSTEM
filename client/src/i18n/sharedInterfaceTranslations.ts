@@ -200,23 +200,55 @@ export const sharedInterfaceTranslations: SharedEntry[] = [
   { en: "Print Results", ar: "طباعة النتائج", fr: "Imprimer les résultats" },
   // Shared export labels (UI unification)
   { en: "Export Excel (Full)", ar: "تصدير Excel (كامل)", fr: "Exporter vers Excel (complet)" },
-  { en: "Export Excel (No Cost / Freight)", ar: "تصدير Excel (بدون تكلفة / شحن)", fr: "Exporter vers Excel (sans coût / fret)" },
+  {
+    en: "Export Excel (No Cost / Freight)",
+    ar: "تصدير Excel (بدون تكلفة / شحن)",
+    fr: "Exporter vers Excel (sans coût / fret)",
+  },
   { en: "Export PDF (Français)", ar: "تصدير PDF (الفرنسية)", fr: "Exporter en PDF (français)" },
   { en: "Export PDF (العربية)", ar: "تصدير PDF (العربية)", fr: "Exporter en PDF (arabe)" },
-  { en: "Export Excel (English Loading List)", ar: "تصدير Excel (قائمة تحميل بالإنجليزية)", fr: "Exporter vers Excel (liste de chargement en anglais)" },
+  {
+    en: "Export Excel (English Loading List)",
+    ar: "تصدير Excel (قائمة تحميل بالإنجليزية)",
+    fr: "Exporter vers Excel (liste de chargement en anglais)",
+  },
   { en: "Export Excel (English)", ar: "تصدير Excel (الإنجليزية)", fr: "Exporter vers Excel (anglais)" },
   { en: "Export Excel (فاتورة عربية)", ar: "تصدير Excel (فاتورة عربية)", fr: "Exporter vers Excel (facture en arabe)" },
-  { en: "Export Excel (قائمة تحميل عربية)", ar: "تصدير Excel (قائمة تحميل عربية)", fr: "Exporter vers Excel (liste de chargement en arabe)" },
-  { en: "Export PDF (English — No Charges)", ar: "تصدير PDF (الإنجليزية — بدون رسوم)", fr: "Exporter en PDF (anglais — sans frais)" },
+  {
+    en: "Export Excel (قائمة تحميل عربية)",
+    ar: "تصدير Excel (قائمة تحميل عربية)",
+    fr: "Exporter vers Excel (liste de chargement en arabe)",
+  },
+  {
+    en: "Export PDF (English — No Charges)",
+    ar: "تصدير PDF (الإنجليزية — بدون رسوم)",
+    fr: "Exporter en PDF (anglais — sans frais)",
+  },
   { en: "Export PDF (English)", ar: "تصدير PDF (الإنجليزية)", fr: "Exporter en PDF (anglais)" },
-  { en: "Export PDF (عربي — بدون رسوم)", ar: "تصدير PDF (عربي — بدون رسوم)", fr: "Exporter en PDF (arabe — sans frais)" },
+  {
+    en: "Export PDF (عربي — بدون رسوم)",
+    ar: "تصدير PDF (عربي — بدون رسوم)",
+    fr: "Exporter en PDF (arabe — sans frais)",
+  },
   { en: "Export PDF (فاتورة عربية)", ar: "تصدير PDF (فاتورة عربية)", fr: "Exporter en PDF (facture en arabe)" },
-  { en: "Export Excel (Loading Status + Bale Refs)", ar: "تصدير Excel (حالة التحميل + مراجع البالات)", fr: "Exporter vers Excel (état de chargement + réf. balles)" },
+  {
+    en: "Export Excel (Loading Status + Bale Refs)",
+    ar: "تصدير Excel (حالة التحميل + مراجع البالات)",
+    fr: "Exporter vers Excel (état de chargement + réf. balles)",
+  },
   { en: "Export Excel (Session)", ar: "تصدير Excel (الجلسة)", fr: "Exporter vers Excel (session)" },
   { en: "Export PDF (Session)", ar: "تصدير PDF (الجلسة)", fr: "Exporter en PDF (session)" },
   { en: "Template download failed", ar: "فشل تنزيل النموذج", fr: "Échec du téléchargement du modèle" },
-  { en: "Export Excel (System Sales Form)", ar: "تصدير Excel (نموذج مبيعات النظام)", fr: "Exporter vers Excel (formulaire de ventes système)" },
-  { en: "Export Excel (Template Form)", ar: "تصدير Excel (نموذج القالب)", fr: "Exporter vers Excel (formulaire modèle)" },
+  {
+    en: "Export Excel (System Sales Form)",
+    ar: "تصدير Excel (نموذج مبيعات النظام)",
+    fr: "Exporter vers Excel (formulaire de ventes système)",
+  },
+  {
+    en: "Export Excel (Template Form)",
+    ar: "تصدير Excel (نموذج القالب)",
+    fr: "Exporter vers Excel (formulaire modèle)",
+  },
   // Shared confirmation dialogs (UI unification)
   { en: "Disable this mapping?", ar: "تعطيل هذا الربط؟", fr: "Désactiver ce mappage ?" },
   {

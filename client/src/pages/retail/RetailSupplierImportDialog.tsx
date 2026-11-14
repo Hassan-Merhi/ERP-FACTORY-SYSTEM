@@ -434,7 +434,9 @@ export function RetailSupplierImportDialog({
       return;
     }
     if (file.size > spreadsheetImportLimitBytes(selectedCompany?.role)) {
-      setFileError(`Spreadsheet must be ${sizeLimitLabel(spreadsheetImportLimitBytes(selectedCompany?.role))} or smaller`);
+      setFileError(
+        `Spreadsheet must be ${sizeLimitLabel(spreadsheetImportLimitBytes(selectedCompany?.role))} or smaller`
+      );
       return;
     }
     setBusy(true);
