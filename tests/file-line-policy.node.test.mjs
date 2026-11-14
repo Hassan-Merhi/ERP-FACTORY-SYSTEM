@@ -4,7 +4,7 @@ import { classifySourceFile, countPhysicalLines, evaluateApplicationFile } from 
 
 const policy = {
   extensions: [".ts", ".tsx", ".js", ".jsx", ".mjs", ".mts", ".cjs", ".css", ".scss"],
-  applicationRoots: ["client/src/", "server/", "shared/", "desktop/", "build/"]
+  applicationRoots: ["client/src/", "server/", "shared/", "desktop/", "build/"],
 };
 
 describe("physical file line counts", () => {
@@ -20,7 +20,14 @@ describe("physical file line counts", () => {
 
 describe("classification and narrow exemptions", () => {
   it("tracks ERP, Factory, shared, desktop and build sources, including CSS", () => {
-    for (const file of ["client/src/pages/factory/Loading.tsx", "server/routes/pos.ts", "shared/schema/core.ts", "desktop/main.mjs", "build/plugin.ts", "client/src/index.css"]) {
+    for (const file of [
+      "client/src/pages/factory/Loading.tsx",
+      "server/routes/pos.ts",
+      "shared/schema/core.ts",
+      "desktop/main.mjs",
+      "build/plugin.ts",
+      "client/src/index.css",
+    ]) {
       assert.equal(classifySourceFile(file, policy), "application");
     }
   });
