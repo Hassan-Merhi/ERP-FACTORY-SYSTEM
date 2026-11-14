@@ -1,5 +1,7 @@
 import Decimal from "decimal.js";
 import type ExcelJS from "exceljs";
+import { getSupplierReturnPostedExportCopy } from "@/i18n/supplierReturnPostedExportTranslations";
+import type { ApplicationLanguage } from "@shared/applicationLanguageContract";
 
 export interface PostedSupplierReturnRow {
   id: number;
@@ -41,24 +43,26 @@ export function buildPostedSupplierReturnWorkbook(
   wb: ExcelJS.Workbook,
   receipt: SupplierReturnReceipt,
   sources: PostedSupplierReturnRow[],
+  language: ApplicationLanguage = "en",
 ) {
-  const source = wb.addWorksheet("Posted Source Lines");
+  const copy = getSupplierReturnPostedExportCopy(language);
+  const source = wb.addWorksheet(copy.sourceSheet);
   source.columns = [
-    { header: "Return Line ID", key: "line", width: 18 },
-    { header: "Article Code", key: "code", width: 24 },
-    { header: "Item Name", key: "name", width: 38 },
-    { header: "Offload Item ID", key: "offloadItem", width: 19 },
-    { header: "Offload ID", key: "offload", width: 16 },
-    { header: "Container", key: "container", width: 28 },
-    { header: "Supplier", key: "supplier", width: 32 },
-    { header: "Posted Quantity", key: "quantity", width: 19 },
-    { header: "Purchase Rate USD", key: "purchase", width: 23 },
-    { header: "Effective Inventory Cost / Bale USD", key: "effective", width: 38 },
-    { header: "Supplier Debit USD", key: "credit", width: 25 },
-    { header: "Inventory Credit USD", key: "inventory", width: 26 },
-    { header: "Signed Variance USD", key: "variance", width: 26 },
-    { header: "Voucher Number", key: "voucher", width: 32 },
-    { header: "Voucher ID", key: "voucherId", width: 18 },
+    { header: copy.lineId, key: "line", width: 18 },
+    { header: copy.article, key: "code", width: 24 },
+    { header: copy.item, key: "name", width: 38 },
+    { header: copy.offloadItem, key: "offloadItem", width: 19 },
+    { header: copy.offload, key: "offload", width: 16 },
+    { header: copy.container, key: "container", width: 28 },
+    { header: copy.supplier, key: "supplier", width: 32 },
+    { header: copy.quantity, key: "quantity", width: 19 },
+    { header: copy.purchase, key: "purchase", width: 23 },
+    { header: copy.effective, key: "effective", width: 38 },
+    { header: copy.credit, key: "credit", width: 25 },
+    { header: copy.inventory, key: "inventory", width: 26 },
+    { header: copy.variance, key: "variance", width: 26 },
+    { header: copy.voucher, key: "voucher", width: 32 },
+    { header: copy.voucherId, key: "voucherId", width: 18 },
   ];
   source.getRow(1).font = { bold: true };
   source.views = [{ state: "frozen", ySplit: 1 }];
@@ -92,20 +96,20 @@ export function buildPostedSupplierReturnWorkbook(
     });
   }
   source.addRow({
-    code: "TOTAL", quantity: totalQuantity.toNumber(),
+    code: copy.total, quantity: totalQuantity.toNumber(),
     credit: totalSupplier.toNumber(), inventory: totalInventory.toNumber(),
     variance: totalInventory.minus(totalSupplier).toNumber(),
   }).font = { bold: true };
 
-  const allocations = wb.addWorksheet("Original Input Allocations");
+  const allocations = wb.addWorksheet(copy.allocationsSheet);
   allocations.columns = [
-    { header: "Input Row", key: "row", width: 16 },
-    { header: "Requested Article", key: "code", width: 25 },
-    { header: "Original Requested Qty", key: "requested", width: 25 },
-    { header: "Source Container", key: "container", width: 29 },
-    { header: "Offload Item ID", key: "offloadItem", width: 19 },
-    { header: "Allocated Qty", key: "allocated", width: 19 },
-    { header: "Source Return Line ID", key: "returnLine", width: 25 },
+    { header: copy.inputRow, key: "row", width: 16 },
+    { header: copy.requestedArticle, key: "code", width: 25 },
+    { header: copy.requestedQty, key: "requested", width: 25 },
+    { header: copy.sourceContainer, key: "container", width: 29 },
+    { header: copy.offloadItem, key: "offloadItem", width: 19 },
+    { header: copy.allocatedQty, key: "allocated", width: 19 },
+    { header: copy.returnLineId, key: "returnLine", width: 25 },
   ];
   allocations.getRow(1).font = { bold: true };
   allocations.views = [{ state: "frozen", ySplit: 1 }];
@@ -138,7 +142,7 @@ export function buildPostedSupplierReturnWorkbook(
       throw new Error(`Posted allocation audit differs from original requested quantity at input row ${row}`);
     }
   }
-  if (requested.size === 0) allocations.addRow({ code: "Legacy return: input-row allocations were not recorded" });
+  if (requested.size === 0) allocations.addRow({ code: copy.legacy });
 
   if (!totalQuantity.eq(receipt.totalQty) ||
       !totalSupplier.eq(receipt.supplierCreditUsd) ||
@@ -146,19 +150,19 @@ export function buildPostedSupplierReturnWorkbook(
     throw new Error("Posted return source lines do not reconcile with batch totals");
   }
 
-  const summary = wb.addWorksheet("Posted Summary");
+  const summary = wb.addWorksheet(copy.summarySheet);
   summary.columns = [
-    { header: "Field", key: "label", width: 34 },
-    { header: "Value", key: "value", width: 44 },
+    { header: copy.field, key: "label", width: 34 },
+    { header: copy.value, key: "value", width: 44 },
   ];
-  summary.addRow({ label: "Return batch", value: receipt.id });
-  summary.addRow({ label: "Return date", value: safeText(receipt.returnDate) });
-  summary.addRow({ label: "Source file", value: safeText(receipt.fileName || "Manual") });
-  summary.addRow({ label: "Reason", value: safeText(receipt.reason) });
-  summary.addRow({ label: "Posted source lines", value: sources.length });
-  summary.addRow({ label: "Quantity removed", value: totalQuantity.toNumber() });
+  summary.addRow({ label: copy.batch, value: receipt.id });
+  summary.addRow({ label: copy.returnDate, value: safeText(receipt.returnDate) });
+  summary.addRow({ label: copy.file, value: safeText(receipt.fileName || copy.manual) });
+  summary.addRow({ label: copy.reason, value: safeText(receipt.reason) });
+  summary.addRow({ label: copy.sourceLines, value: sources.length });
+  summary.addRow({ label: copy.removed, value: totalQuantity.toNumber() });
   summary.addRow({ label: "Supplier debit USD", value: totalSupplier.toNumber() });
   summary.addRow({ label: "Inventory credit USD", value: totalInventory.toNumber() });
   summary.addRow({ label: "Signed variance USD", value: totalInventory.minus(totalSupplier).toNumber() });
-  summary.addRow({ label: "Note", value: "Posted amounts are exact audited ledger amounts, not preview estimates" });
+  summary.addRow({ label: copy.note, value: copy.exactNote });
 }
