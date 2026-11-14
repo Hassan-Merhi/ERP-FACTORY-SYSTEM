@@ -6,6 +6,7 @@
  * import it from here rather than keeping a copy of its own.
  */
 import multer from "multer";
+import { sizeLimitLabel, spreadsheetImportLimitBytes } from "@shared/fileSizePolicy";
 import path from "path";
 import { db } from "../../db";
 import {
@@ -58,18 +59,34 @@ export const ALLOWED_EXCEL_MIME = [
 ];
 export const ALLOWED_EXCEL_EXT = [".xlsx", ".xls"];
 
-export const gitUpload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
-  fileFilter: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    if (ALLOWED_EXCEL_MIME.includes(file.mimetype) && ALLOWED_EXCEL_EXT.includes(ext)) {
-      cb(null, true);
-    } else {
-      cb(new Error("Only Excel files (.xlsx, .xls) are allowed"));
-    }
+export const gitUpload = {
+  single(fieldName: string) {
+    return (req: import("express").Request, res: import("express").Response, next: import("express").NextFunction) => {
+      const maxBytes = spreadsheetImportLimitBytes(req.session?.currentRole);
+      multer({
+        storage: multer.memoryStorage(),
+        limits: { fileSize: maxBytes, files: 1 },
+        fileFilter: (_req, file, cb) => {
+          const ext = path.extname(file.originalname).toLowerCase();
+          if (ALLOWED_EXCEL_MIME.includes(file.mimetype) && ALLOWED_EXCEL_EXT.includes(ext)) {
+            cb(null, true);
+          } else {
+            cb(new Error("Only Excel files (.xlsx, .xls) are allowed"));
+          }
+        },
+      }).single(fieldName)(req, res, (err) => {
+        if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
+          res.status(413).json({
+            code: "UPLOAD_FILE_TOO_LARGE",
+            message: `File exceeds the ${sizeLimitLabel(maxBytes)} Excel import limit.`,
+          });
+          return;
+        }
+        next(err);
+      });
+    };
   },
-});
+};
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

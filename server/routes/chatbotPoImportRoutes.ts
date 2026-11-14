@@ -15,7 +15,8 @@ import { eq, and, desc } from "drizzle-orm";
 import { db } from "../db";
 import { storage } from "../storage";
 import { requireAuth, requireNonPOS } from "../auth";
-import { upload } from "./_helpers";
+import { spreadsheetUpload } from "./_helpers";
+import { generalUploadLimitBytes, sizeLimitLabel } from "@shared/fileSizePolicy";
 import { extractPOFromText, clearERPContextCache } from "../chatService";
 import { readExcel, sheetToJson } from "../excelHelper";
 import { requireAIActionPermission, logAIAction } from "../lib/aiActionPermission";
@@ -36,7 +37,7 @@ function sumLineTotals(lines: Array<{ lineTotal: string }>): Decimal {
 
 export function registerChatbotPoImportRoutes(app: Express) {
   // ── PO File Parse (AI-powered) ────────────────────────────────────
-  app.post("/api/chatbot/parse-po-file", requireAuth, upload.single("file"), async (req, res) => {
+  app.post("/api/chatbot/parse-po-file", requireAuth, spreadsheetUpload.single("file"), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -46,6 +47,18 @@ export function registerChatbotPoImportRoutes(app: Express) {
       if (denied) return res.status(denied.code).json({ message: denied.message });
 
       const fileExt = (req.file.originalname || "").toLowerCase().split(".").pop();
+      // This mixed AI endpoint accepts PDFs as well as spreadsheets. Keep the
+      // stricter document/image policy even though the multipart parser permits
+      // the role-aware Excel limit.
+      if (!["xlsx", "xls", "csv", "ods"].includes(fileExt ?? "")) {
+        const documentLimit = generalUploadLimitBytes(req.file.originalname, req.file.mimetype);
+        if (req.file.size > documentLimit) {
+          return res.status(413).json({
+            code: "UPLOAD_FILE_TOO_LARGE",
+            message: `File exceeds the ${sizeLimitLabel(documentLimit)} limit for this file type.`,
+          });
+        }
+      }
       const allSuppliers = await supplierService.list(companyId, "", true);
       const allStockItems = await storage.getAllStockItems(companyId);
 

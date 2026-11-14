@@ -15,7 +15,8 @@ import { invalidateExchangeRateReadModels } from "@/lib/invalidateExchangeRateRe
 import { RefreshCw, TrendingUp, Clock } from "lucide-react";
 import { format } from "date-fns";
 import { authenticatedUserQueryOptions } from "@/contracts/sessionQueryContracts";
-import { canEditExchangeRates } from "@/lib/exchangeRateEditors";
+import { canSetDailyExchangeRate } from "@/lib/exchangeRateEditors";
+import { queryClient } from "@/lib/queryClient";
 
 const rateFormSchema = z.object({
   rate: companyRateValueSchema,
@@ -74,9 +75,10 @@ function markDoneToday(companyId: number, date: string): void {
 export function DailyRateModal({ companyId }: DailyRateModalProps) {
   const { toast } = useToast();
   const [isOpen, setIsOpen] = useState(false);
-  // Only a user who may save a rate (Admin/Owner/Developer, wave 14) is prompted for it.
+  // Every writing user is prompted until someone sets today's rate; the first
+  // save applies to the whole company and closes the prompt for everyone.
   const { data: currentUser } = useQuery(authenticatedUserQueryOptions());
-  const canEditRate = canEditExchangeRates(currentUser?.role);
+  const canEditRate = canSetDailyExchangeRate(currentUser?.role, currentUser?.posViewOnly);
 
   const form = useForm<RateFormData>({
     resolver: zodResolver(rateFormSchema),
@@ -177,11 +179,17 @@ export function DailyRateModal({ companyId }: DailyRateModalProps) {
     onSuccess: async ({ savedCompanyId, savedDate }) => {
       // Only mark today's date after an acknowledged successful server save.
       markDoneToday(savedCompanyId, savedDate);
-      toast({ title: "Today's exchange rate has been set", description: "Current USD valuation views are refreshing." });
+      toast({
+        title: "Today's exchange rate has been set",
+        description: "Current USD valuation views are refreshing.",
+      });
       setIsOpen(false);
       await invalidateExchangeRateReadModels(savedCompanyId);
     },
     onError: (error: ClientErrorLike) => {
+      // Another user set (or is setting) today's rate: reload the shared state
+      // so this prompt closes instead of asking again.
+      void queryClient.invalidateQueries({ queryKey: ["/api/exchange-rates/check-today", companyId] });
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
       toast({ title: "Error", description: error.message, variant: "destructive" });
     },

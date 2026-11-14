@@ -244,7 +244,7 @@ export function registerGitImportRoutes(app: Express) {
       gitUpload.single("file")(req, res, (err) => {
         if (!err) return next();
         if (err.code === "LIMIT_FILE_SIZE") {
-          return res.status(413).json({ message: "File too large. Maximum allowed size is 10 MB." });
+          return res.status(413).json({ code: "UPLOAD_FILE_TOO_LARGE", message: "Excel file exceeds the size limit for your role (50 MB standard; 100 MB Admin/Owner/Developer)." });
         }
         return res.status(400).json({ message: err.message || "Invalid file upload." });
       });

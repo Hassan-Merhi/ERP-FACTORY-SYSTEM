@@ -9,7 +9,7 @@ import { getErrorMessage } from "../../../lib/httpHandlers";
 import { db } from "../../../db";
 import { storage } from "../../../storage";
 import { requireAuth, requireNonPOS } from "../../../auth";
-import { upload, logAudit } from "../../_helpers";
+import { spreadsheetUpload, logAudit } from "../../_helpers";
 import { stockItems, stockItemCodeAliases, insertStockItemSchema, stockGrades, stockCategories } from "@shared/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { readExcel, sheetToJson } from "../../../excelHelper";
@@ -269,7 +269,7 @@ export function registerStockItemImportRoutes(app: Express) {
     "/api/stock-items/import-grade-category-template",
     requireAuth,
     requireNonPOS,
-    upload.single("file"),
+    spreadsheetUpload.single("file"),
     async (req: import("express").Request, res) => {
       try {
         const companyId = req.session.currentCompanyId;

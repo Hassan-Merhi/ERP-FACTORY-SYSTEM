@@ -13,7 +13,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { db } from "../db";
 import { storage } from "../storage";
 import { requireAuth } from "../auth";
-import { upload } from "./_helpers";
+import { spreadsheetUpload } from "./_helpers";
 import { adjustInventory } from "../inventoryHelper";
 import { createDatabaseStockMovementAdapter } from "../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../services/inventory/stockMovementIntegrityService";
@@ -63,7 +63,7 @@ export function registerCreditSalesImportRoutes(app: Express) {
   // ============= Credit Sales Import Endpoints =============
 
   // Credit Sales Import - Parse and Preview Excel (same as POS but for credit sales)
-  app.post("/api/credit-sales-import/parse", requireAuth, upload.single("file"), async (req, res) => {
+  app.post("/api/credit-sales-import/parse", requireAuth, spreadsheetUpload.single("file"), async (req, res) => {
     try {
       if (!req.session.currentCompanyId) {
         return res.status(400).json({ message: "No company selected" });
