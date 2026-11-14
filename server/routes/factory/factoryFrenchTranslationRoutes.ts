@@ -1,6 +1,6 @@
 import type { Express, Request } from "express";
 import ExcelJS from "exceljs";
-import multer from "multer";
+import { spreadsheetUpload } from "../helpers/uploadHelpers";
 import { sql } from "drizzle-orm";
 import { requireAuth } from "../../auth";
 import { db } from "../../db";
@@ -8,7 +8,7 @@ import { contentDisposition } from "../../lib/contentDisposition";
 import { getErrorMessage } from "../../lib/httpHandlers";
 
 const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024, files: 1 } });
+const upload = spreadsheetUpload;
 
 function factoryCompanyId(req: Request): number | null {
   const value = Number(req.session?.factoryCompanyId);

@@ -1,5 +1,6 @@
 import type { Express, NextFunction, Request, Response } from "express";
 import multer from "multer";
+import { sizeLimitLabel, spreadsheetImportLimitBytes } from "@shared/fileSizePolicy";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { factoryBaleProducts, factoryCategories } from "@shared/schema";
 import { parseFactoryArabicImportMode } from "@shared/factoryBilingualContract";
@@ -24,24 +25,25 @@ import {
 } from "../../services/factoryArabicTranslationWorkbook";
 
 const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 const MAX_PREVIEW_RESPONSE_ROWS = 200;
 const AUDIT_BRANCH_SIZE = 100;
 
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: MAX_FILE_SIZE_BYTES, files: 1 },
-  fileFilter: (_req, file, callback) => {
-    const validExtension = file.originalname.toLowerCase().endsWith(".xlsx");
-    const validMime = !file.mimetype || file.mimetype === XLSX_MIME || file.mimetype === "application/octet-stream";
-    if (!validExtension || !validMime) {
-      callback(new Error("Only .xlsx files are supported"));
-      return;
-    }
-    callback(null, true);
-  },
-});
-const receiveArabicWorkbook = upload.single("file");
+function receiveArabicWorkbook(req: Request, res: Response, next: NextFunction): void {
+  const maxBytes = spreadsheetImportLimitBytes(req.session?.currentRole);
+  multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: maxBytes, files: 1 },
+    fileFilter: (_req, file, callback) => {
+      const validExtension = file.originalname.toLowerCase().endsWith(".xlsx");
+      const validMime = !file.mimetype || file.mimetype === XLSX_MIME || file.mimetype === "application/octet-stream";
+      if (!validExtension || !validMime) {
+        callback(new Error("Only .xlsx files are supported"));
+        return;
+      }
+      callback(null, true);
+    },
+  }).single("file")(req, res, next);
+}
 
 class TranslationRouteError extends Error {
   constructor(
@@ -60,11 +62,11 @@ function uploadArabicWorkbook(req: Request, res: Response, next: NextFunction): 
       next();
       return;
     }
-    const message =
-      error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE"
-        ? "Workbook exceeds the 10 MB upload limit"
-        : getErrorMessage(error);
-    res.status(400).json({ message });
+    const tooLarge = error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE";
+    const message = tooLarge
+      ? `Workbook exceeds the ${sizeLimitLabel(spreadsheetImportLimitBytes(req.session?.currentRole))} upload limit`
+      : getErrorMessage(error);
+    res.status(tooLarge ? 413 : 400).json({ code: tooLarge ? "UPLOAD_FILE_TOO_LARGE" : "INVALID_UPLOAD", message });
   });
 }
 

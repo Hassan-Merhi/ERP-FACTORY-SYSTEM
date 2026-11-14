@@ -4,6 +4,8 @@
  * Extracted verbatim from the former single-file factoryWorkerRoutes.ts.
  */
 import multer from "multer";
+import type { NextFunction, Request, Response } from "express";
+import { FILE_SIZE_LIMITS, sizeLimitLabel, spreadsheetImportLimitBytes } from "@shared/fileSizePolicy";
 import path from "path";
 import fs from "fs";
 
@@ -47,8 +49,7 @@ export function resolveWorkerUploadPath(filePath: string): string {
   return resolved;
 }
 
-export const workerUpload = multer({
-  storage: multer.diskStorage({
+const workerStorage = multer.diskStorage({
     destination: (req, file, cb) => {
       const dir = WORKER_UPLOAD_DIR;
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -58,8 +59,34 @@ export const workerUpload = multer({
       const ext = path.extname(file.originalname);
       cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
     },
-  }),
 });
+
+export const workerUpload = multer({
+  storage: workerStorage,
+  limits: { fileSize: FILE_SIZE_LIMITS.image, files: 1 },
+});
+
+/** Excel worker imports remain on disk, with a session-scoped 50 / 100 MB limit. */
+export const workerSpreadsheetUpload = {
+  single(fieldName: string) {
+    return (req: Request, res: Response, next: NextFunction) => {
+      const maxBytes = spreadsheetImportLimitBytes(req.session?.currentRole);
+      multer({
+        storage: workerStorage,
+        limits: { fileSize: maxBytes, files: 1 },
+      }).single(fieldName)(req, res, (error) => {
+        if (error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE") {
+          res.status(413).json({
+            code: "UPLOAD_FILE_TOO_LARGE",
+            message: `Excel file exceeds the ${sizeLimitLabel(maxBytes)} import limit.`,
+          });
+          return;
+        }
+        next(error);
+      });
+    };
+  },
+};
 
 export function computeMonthlyPay(salary: number, startStr: string, endStr: string): number {
   const start = new Date(startStr + "T00:00:00");

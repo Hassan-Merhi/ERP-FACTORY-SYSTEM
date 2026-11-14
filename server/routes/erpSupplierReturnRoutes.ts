@@ -169,10 +169,39 @@ async function readHistory(companyId: number) {
 }
 export function registerErpSupplierReturnRoutes(app: Express) {
   const guards = [requireAuth, requireRole("Admin", "Developer")] as const;
+  // Only suppliers linked to this company's already-offloaded ERP containers appear.
+  app.get("/api/erp/supplier-returns/suppliers", ...guards, async (req, res) => {
+    try {
+      const { activeCompanyId: companyId } = await assertActiveCompanyAccess(req);
+      const rows = resultRows<{ id: number; name: string }>(
+        await db.execute(sql`
+          SELECT DISTINCT s.id, s.legal_name AS name
+            FROM suppliers s
+            JOIN purchase_orders po ON po.supplier_id=s.id AND po.company_id=${companyId}
+            JOIN containers c ON c.id=po.container_id AND c.company_id=${companyId}
+            JOIN container_offloads co ON co.container_id=c.id
+           WHERE c.status='OFFLOADED' AND co.optional=FALSE
+           ORDER BY name, s.id
+        `)
+      );
+      res.json({ rows });
+    } catch (error) {
+      const err = error as ReturnError;
+      res.status(err.status || 500).json({ message: err.message || "Supplier lookup failed" });
+    }
+  });
   app.post("/api/erp/supplier-returns/preview", ...guards, async (req, res) => {
     try {
       const { activeCompanyId: companyId } = await assertActiveCompanyAccess(req);
-      const rows = (req.body as { rows?: unknown })?.rows;
+      const { rows, supplierId: suppliedSupplierId } =
+        (req.body as {
+          rows?: unknown;
+          supplierId?: unknown;
+        }) || {};
+      const supplierId = suppliedSupplierId == null ? null : Number(suppliedSupplierId);
+      if (supplierId !== null && (!Number.isSafeInteger(supplierId) || supplierId <= 0)) {
+        throw new ReturnError(400, "RETURN_SUPPLIER_INVALID", "Choose a valid supplier");
+      }
       if (!Array.isArray(rows) || rows.length < 1 || rows.length > 1000)
         throw new ReturnError(400, "RETURN_ROWS_INVALID", "Upload between 1 and 1000 rows");
       const preview = [];
@@ -186,7 +215,9 @@ export function registerErpSupplierReturnRoutes(app: Express) {
             `Row ${index + 2}: article code is required (max 50 characters)`
           );
         const qty = quantity(row?.quantity);
-        const possible = await candidates(db, companyId, code);
+        const possible = (await candidates(db, companyId, code)).filter(
+          (candidate) => supplierId === null || candidate.supplierId === supplierId
+        );
         const selected = Number(row?.offloadItemId);
         const matching = selected ? possible.filter((item) => item.offloadItemId === selected) : possible;
         const eligible = matching.filter(
@@ -215,7 +246,7 @@ export function registerErpSupplierReturnRoutes(app: Express) {
           candidates: possible,
         });
       }
-      res.json({ rows: preview, ready: preview.every((r) => r.status === "matched") });
+      res.json({ rows: preview, supplierId, ready: preview.every((r) => r.status === "matched") });
     } catch (error) {
       const err = error as ReturnError;
       res
@@ -265,11 +296,14 @@ export function registerErpSupplierReturnRoutes(app: Express) {
       const { activeCompanyId: companyId } = await assertActiveCompanyAccess(req);
       const body = req.body as {
         requestKey?: string;
+        supplierId?: number | null;
         returnDate?: string;
         reason?: string;
         fileName?: string;
         lines?: Array<{ offloadItemId?: number; quantity?: string }>;
       };
+      if (body?.supplierId != null && (!Number.isSafeInteger(body.supplierId) || body.supplierId <= 0))
+        throw new ReturnError(400, "RETURN_SUPPLIER_INVALID", "Choose a valid supplier");
       if (!/^[a-zA-Z0-9._:-]{8,128}$/.test(body?.requestKey ?? ""))
         throw new ReturnError(400, "RETURN_IDEMPOTENCY_KEY_REQUIRED", "A valid unique request key is required");
       const returnDay = String(body?.returnDate ?? "");
@@ -328,6 +362,12 @@ export function registerErpSupplierReturnRoutes(app: Express) {
               409,
               "RETURN_SUPPLIER_OR_CURRENCY_AMBIGUOUS",
               `Container ${source.containerNumber} has an ambiguous supplier or non-USD PO; manual review required`
+            );
+          if (body.supplierId != null && source.supplierId !== body.supplierId)
+            throw new ReturnError(
+              409,
+              "RETURN_SUPPLIER_MISMATCH",
+              `Source container ${source.containerNumber} does not belong to the selected supplier`
             );
           if (new Decimal(source.remainingQty).lt(line.qty))
             throw new ReturnError(

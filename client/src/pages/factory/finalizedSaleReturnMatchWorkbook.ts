@@ -20,7 +20,7 @@ export type FinalizedReturnMatchExport = {
 // Also prevent uploaded/user-owned text from being interpreted as spreadsheet formulas.
 const spreadsheetText = (text: string | null | undefined) => {
   const value = String(text ?? "");
-  return /^\s*[=+@-]/.test(value) ? "'" + value : value;
+  return /^[\s\p{Cc}]*[=+\-@]/u.test(value) ? "'" + value : value;
 };
 
 export function buildFinalizedReturnMatchWorkbook(workbook: ExcelJS.Workbook, input: FinalizedReturnMatchExport): void {

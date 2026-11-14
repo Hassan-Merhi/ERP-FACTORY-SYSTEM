@@ -15,7 +15,7 @@ import XLSX from "xlsx-js-style";
 import ExcelJS from "exceljs";
 import { factoryWorkers } from "@shared/schema";
 
-import { getFactoryCompanyId, resolveWorkerUploadPath, workerUpload, writeDaybookEntry } from "./_helpers";
+import { getFactoryCompanyId, resolveWorkerUploadPath, workerSpreadsheetUpload, writeDaybookEntry } from "./_helpers";
 import { toMoney } from "../../lib/money";
 
 export function registerFactoryWorkerImportExportRoutes(app: Express, requireAuth: AuthMiddleware, db: AppDb) {
@@ -183,7 +183,7 @@ export function registerFactoryWorkerImportExportRoutes(app: Express, requireAut
   app.post(
     "/api/factory/workers/import-excel",
     requireAuth,
-    workerUpload.single("file"),
+    workerSpreadsheetUpload.single("file"),
     async (req: Request, res: Response) => {
       try {
         // Always use the session's current company; never trust client-provided companyId

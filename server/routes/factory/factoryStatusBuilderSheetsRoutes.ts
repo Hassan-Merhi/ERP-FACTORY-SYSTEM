@@ -7,13 +7,13 @@ import { requireAuth } from "../../auth";
 import { isRecord } from "@shared/typeGuards";
 import { statusBuilderSheets } from "@shared/schema";
 import { eq, and, asc } from "drizzle-orm";
-import multer from "multer";
+import { spreadsheetUpload } from "../helpers/uploadHelpers";
 import xlsxStyle from "xlsx-js-style";
 import type { WorkBook } from "xlsx-js-style";
 
 const { read: readExcel, utils: xlsxUtils, write: writeExcel } = xlsxStyle;
 
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = spreadsheetUpload;
 
 type CellVal = number | string | null;
 type SRow = { id?: string; label: string; cells: unknown[] };
