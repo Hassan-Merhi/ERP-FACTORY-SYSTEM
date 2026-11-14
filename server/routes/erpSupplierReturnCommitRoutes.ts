@@ -13,7 +13,11 @@ import { createDatabaseStockMovementAdapter } from "../services/inventory/databa
 import { postStockMovementTx } from "../services/inventory/stockMovementIntegrityService";
 import { assertActiveCompanyAccess } from "../security/companyAccessBoundary";
 import { validateReturnCommitRows, type ReturnCommitRow } from "./erpSupplierReturnCommitValidation";
-import { calculateSupplierReturnFinancials, reconcileSupplierReturnBatch, type SupplierReturnFinancials } from "./erpSupplierReturnFinancials";
+import {
+  calculateSupplierReturnFinancials,
+  reconcileSupplierReturnBatch,
+  type SupplierReturnFinancials,
+} from "./erpSupplierReturnFinancials";
 import { byId, candidates, quantity, ReturnError, type Candidate, type Row } from "./erpSupplierReturnCandidates";
 
 const movementAdapter = createDatabaseStockMovementAdapter();
