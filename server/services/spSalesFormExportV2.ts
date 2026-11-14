@@ -1,3 +1,4 @@
+import { styleSpecializedWorkbook } from "@shared/universal-excel/specializedWorkbookStyle";
 /**
  * SP Sales Form Export — V2 (from-scratch ExcelJS, no template)
  *
@@ -93,6 +94,17 @@ export async function generateSpSalesFormExcelV2(params: SpSalesFormV2Params): P
     throw new Error(`Excel formula errors detected in export: ${detail}`);
   }
 
+  // Preserve protected ENTRY positions and hidden Costing/Sales formula sheets.
+  // This adds print branding to the visible report only, without restyling
+  // entry cells or changing formula recalculation / sheet protection.
+  styleSpecializedWorkbook(wb, {
+    expectedSheetNames: ["Costing", "Sales", "ENTRY"],
+    sheets: [
+      { name: "Costing", purpose: "formula-support" },
+      { name: "Sales", purpose: "formula-support" },
+      { name: "ENTRY", purpose: "report" },
+    ],
+  });
   const buf = await wb.xlsx.writeBuffer();
   logger.info(`[spSalesFormExportV2] done bufferSize=${buf.byteLength}`);
   return Buffer.from(buf);
