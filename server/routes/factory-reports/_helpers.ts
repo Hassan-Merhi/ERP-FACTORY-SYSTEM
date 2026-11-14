@@ -1,3 +1,4 @@
+import { styleUniversalFinancialWorkbook } from "@shared/universal-excel/financialWorkbookStyle";
 import { toArrayBuffer } from "../../lib/bufferCompatibility";
 /**
  * Shared state and helpers for the factoryReportRoutes routes.
@@ -84,6 +85,7 @@ export async function generateEmptyExcel(
   sheet.addRow([]);
   sheet.addRow(["No data found for the selected period and filters."]);
 
+  styleUniversalFinancialWorkbook(workbook, [{ name: "Summary" }]);
   const xlsBuffer = Buffer.from(await workbook.xlsx.writeBuffer());
   res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
   res.setHeader("Content-Disposition", `attachment; filename="supplier_usage_report_${startDate}_${endDate}.xlsx"`);
@@ -513,6 +515,7 @@ export async function generateExcel(
     col.width = Math.min(maxLen + 4, 40);
   });
 
+  styleUniversalFinancialWorkbook(workbook, workbook.worksheets.map(ws => ({ name: ws.name })));
   const xlsBuffer2 = Buffer.from(await workbook.xlsx.writeBuffer());
   res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
   res.setHeader("Content-Disposition", `attachment; filename="supplier_usage_report_${startDate}_${endDate}.xlsx"`);
