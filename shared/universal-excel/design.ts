@@ -123,7 +123,7 @@ export function resolveUniversalExcelAppearance(
   const logoDataUrl = options.logoDataUrl ?? null;
   if (logoDataUrl !== null &&
       (logoDataUrl.length > 185_000 ||
-       !/^data:image\\/(png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/.test(logoDataUrl))) {
+       !/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/.test(logoDataUrl))) {
     throw new Error("Invalid Excel logo");
   }
   const base = preset === "slate" ? SLATE_PALETTE : DEFAULT_PALETTE;
