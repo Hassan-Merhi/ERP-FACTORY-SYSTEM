@@ -1,4 +1,3 @@
-import * as XLSX from "@/lib/excelHelper";
 import { PRESSING_TIME_ZONE } from "@shared/pressingTimeZone";
 import {
   PRESSING_COLUMN_LABELS, type PressingReportColumn, type PressingReportFilters,
@@ -168,52 +167,50 @@ export async function exportPressingReport(
   if (all.length !== first.total) throw new Error(
     "Pressing records changed during export; refresh and try again."
   );
-  const wb = XLSX.utils.book_new();
-  const ws = wb.addWorksheet(filters.mode === "condensed" ? "Daily Summary" : "Detailed History");
-  const safeColumnCount = Math.max(1, columns.length);
-  ws.mergeCells(1, 1, 1, safeColumnCount);
-  ws.getCell(1, 1).value = "PRESSING MACHINES — " + filters.mode.toUpperCase() + " HISTORY";
-  ws.getCell(1, 1).font = { bold: true, size: 15, color: { argb: "FFFFFFFF" } };
-  ws.getCell(1, 1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF182638" } };
-  ws.getRow(1).height = 28;
-  ws.mergeCells(2, 1, 2, safeColumnCount);
-  ws.getCell(2, 1).value = "Period (Beirut): " +
-    (filters.from ? filters.from + (filters.fromTime ? " " + filters.fromTime : "") : "All time") +
-    " to " + (filters.to ? filters.to + (filters.toTime ? " " + filters.toTime : "") : "All time") +
-    " | As of " + pressingDisplayDateTime(first.asOf);
-  ws.mergeCells(3, 1, 3, safeColumnCount);
-  ws.getCell(3, 1).value = "Accepted bales: " + first.summary.totalBales +
-    " | Accepted KG: " + first.summary.totalKg + " | Voided: " + first.summary.voidedBales;
-  const head = ws.addRow(columns.map(key => PRESSING_COLUMN_LABELS[key]));
-  head.eachCell(cell => {
-    cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
-    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF27394E" } };
-    cell.border = { bottom: { style: "medium" }, top: { style: "medium" },
-      left: { style: "medium" }, right: { style: "medium" } };
-  });
-  for (const [index, item] of all.entries()) {
-    const row = ws.addRow(columns.map(key => excelSafe(pressingCell(item, key))));
-    row.eachCell(cell => {
-      cell.border = { bottom: { style: "thin" }, top: { style: "thin" },
-        left: { style: "thin" }, right: { style: "thin" } };
-      if (index % 2) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF0F3F6" } };
-    });
-  }
-  const totalRow = ws.addRow(columns.map(key => key === "weightKg"
-    ? Number(first.summary.totalKg)
-    : key === "bales" ? first.summary.totalBales : key === columns[0] ? "TOTAL ACTIVE" : ""));
-  totalRow.eachCell(cell => {
-    cell.font = { bold: true };
-    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFDCE4ED" } };
-    cell.border = { top: { style: "medium" }, bottom: { style: "medium" } };
-  });
-  ws.columns.forEach((column, index) => {
-    column.width = Math.min(40, Math.max(14, (PRESSING_COLUMN_LABELS[columns[index]] || "").length + 5));
-  });
-  ws.views = [{ state: "frozen", ySplit: 4 }];
-  if (all.length) ws.autoFilter = { from: { row: 4, column: 1 },
-    to: { row: 4 + all.length, column: safeColumnCount } };
+  if (columns.length === 0) throw new Error("Select at least one pressing report column");
+  const { exportOperationalWorkbook } = await import("@/lib/operationalExcelExport");
+  const rows = all.map((item) => Object.fromEntries(
+    columns.map((key) => [key, pressingCell(item, key)])
+  ));
+  const footer = Object.fromEntries(
+    columns.map((key) => [
+      key,
+      key === "weightKg"
+        ? Number(first.summary.totalKg)
+        : key === "bales"
+          ? first.summary.totalBales
+          : key === columns[0]
+            ? "TOTAL ACTIVE"
+            : "",
+    ])
+  );
   const stamp = (filters.from || "all-time") + "_" + (filters.to || "all-time");
   onProgress?.("Preparing Excel workbook");
-  await XLSX.writeFile(wb, "pressing-machines-" + filters.mode + "-" + stamp + ".xlsx");
+  await exportOperationalWorkbook({
+    title: filters.mode === "condensed" ? "Pressing Machines — Daily Summary" : "Pressing Machines — Detailed History",
+    fileName: "pressing-machines-" + filters.mode + "-" + stamp + ".xlsx",
+    filters: [
+      { label: "Period (Beirut)", value:
+        (filters.from ? filters.from + (filters.fromTime ? " " + filters.fromTime : "") : "All time") +
+        " to " +
+        (filters.to ? filters.to + (filters.toTime ? " " + filters.toTime : "") : "All time") },
+      { label: "As of", value: pressingDisplayDateTime(first.asOf) },
+      { label: "Accepted bales", value: String(first.summary.totalBales) },
+      { label: "Voided bales", value: String(first.summary.voidedBales) },
+      { label: "Accepted KG", value: first.summary.totalKg },
+    ],
+    sheets: [{
+      name: filters.mode === "condensed" ? "Daily Summary" : "Detailed History",
+      columns: columns.map((key) => ({
+        key,
+        header: PRESSING_COLUMN_LABELS[key],
+        type: key === "weightKg" || key === "secondsSincePrevious"
+          ? "decimal" as const
+          : key === "bales" ? "integer" as const : "auto" as const,
+        width: Math.min(40, Math.max(14, (PRESSING_COLUMN_LABELS[key] || "").length + 5)),
+      })),
+      rows,
+      footer,
+    }],
+  });
 }
