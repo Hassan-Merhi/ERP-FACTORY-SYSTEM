@@ -1,5 +1,7 @@
 import Decimal from "decimal.js";
 import type ExcelJS from "exceljs";
+import { getSupplierReturnPostedExportCopy } from "@/i18n/supplierReturnPostedExportTranslations";
+import type { ApplicationLanguage } from "@shared/applicationLanguageContract";
 
 export type ReturnMatchCandidate = {
   offloadItemId: number;
@@ -29,6 +31,7 @@ export type ReturnMatchReportInput = {
   supplierName?: string | null;
   fileName?: string;
   entries: ReturnMatchEntry[];
+  language?: ApplicationLanguage;
 };
 const excelText = (value: unknown): string => {
   const text = String(value ?? "");
@@ -36,6 +39,7 @@ const excelText = (value: unknown): string => {
   return /^[\s\p{Cc}]*[=+\-@]/u.test(text) ? "'" + text : text;
 };
 export function buildErpSupplierReturnMatchWorkbook(wb: ExcelJS.Workbook, data: ReturnMatchReportInput) {
+  const copy = getSupplierReturnPostedExportCopy(data.language ?? "en");
   const columns = [
     { header: "Ref Number", key: "ref", width: 22 },
     { header: "Article Number", key: "article", width: 24 },
@@ -53,13 +57,13 @@ export function buildErpSupplierReturnMatchWorkbook(wb: ExcelJS.Workbook, data: 
     { header: "Estimated Supplier Credit USD", key: "credit", width: 30 },
     { header: "Match Status", key: "status", width: 26 },
     { header: "Input Row", key: "inputRow", width: 16 },
-    { header: "Requested Qty (Row)", key: "requested", width: 22 },
-    { header: "Allocated Qty", key: "allocated", width: 18 },
-    { header: "Unallocated Qty (Row)", key: "unallocated", width: 23 },
-    { header: "Stock Average / Unit USD", key: "average", width: 27 },
-    { header: "Estimated Inventory Relief USD", key: "inventoryEstimate", width: 34 },
-    { header: "Estimated Variance USD", key: "varianceEstimate", width: 27 },
-    { header: "Offload Item ID", key: "offloadItem", width: 18 },
+    { header: copy.requestedRowQty, key: "requested", width: 22 },
+    { header: copy.allocatedQty, key: "allocated", width: 18 },
+    { header: copy.unallocatedRowQty, key: "unallocated", width: 23 },
+    { header: copy.averageUnit, key: "average", width: 27 },
+    { header: copy.estimatedInventory, key: "inventoryEstimate", width: 34 },
+    { header: copy.estimatedVariance, key: "varianceEstimate", width: 27 },
+    { header: copy.offloadItem, key: "offloadItem", width: 18 },
   ];
   const addSheet = (name: string, rows: ReturnMatchEntry[]) => {
     const sheet = wb.addWorksheet(name);
@@ -104,14 +108,14 @@ export function buildErpSupplierReturnMatchWorkbook(wb: ExcelJS.Workbook, data: 
     }
   };
 
-  const requests = wb.addWorksheet("Input Row Allocations");
+  const requests = wb.addWorksheet(copy.inputAllocations);
   requests.columns = [
-    { header: "Excel Row", key: "row", width: 16 },
-    { header: "Requested Article", key: "code", width: 26 },
-    { header: "Requested Qty", key: "requested", width: 19 },
-    { header: "Allocated Qty", key: "allocated", width: 19 },
-    { header: "Unallocated Qty", key: "unallocated", width: 22 },
-    { header: "Status", key: "status", width: 24 },
+    { header: copy.excelRow, key: "row", width: 16 },
+    { header: copy.requestedArticle, key: "code", width: 26 },
+    { header: copy.requested, key: "requested", width: 19 },
+    { header: copy.allocatedQty, key: "allocated", width: 19 },
+    { header: copy.unallocated, key: "unallocated", width: 22 },
+    { header: copy.status, key: "status", width: 24 },
   ];
   requests.getRow(1).font = { bold: true };
   requests.views = [{ state: "frozen", ySplit: 1 }];
