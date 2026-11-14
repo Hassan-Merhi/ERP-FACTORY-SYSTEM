@@ -76,16 +76,19 @@ describe("Daily Scan", () => {
     expect(ws.name).toBe(`${d}-${m}-${y}`);
     expect(exported.fileName).toBe(`daily-scan-${date}.xlsx`);
 
-    const rows: unknown[][] = [];
-    ws.eachRow((row) => rows.push((row.values as unknown[]).slice(1)));
-    expect(rows[4][1]).toBe("Ref Code");
+    // Universal report metadata occupies rows 1–4; the table begins at row 5.
+    // Address actual Excel row numbers rather than counting nonempty metadata rows.
+    expect(ws.getRow(5).getCell(2).value).toBe("Ref Code");
     // Scanned bales are listed first, then the missing ones, then the total.
-    expect(rows.slice(5, 7).map((r) => [r[1], r[7]])).toEqual([
+    expect([6, 7].map((row) => [
+      ws.getRow(row).getCell(2).value,
+      ws.getRow(row).getCell(8).value,
+    ])).toEqual([
       ["REF-1", "Scanned"],
       ["REF-2", "Missing"],
     ]);
-    expect(rows[7][4]).toBe(101);
-    expect(rows[7][7]).toBe("1/2 scanned");
+    expect(ws.getRow(8).getCell(5).value).toBe(101);
+    expect(ws.getRow(8).getCell(8).value).toBe("1/2 scanned");
   });
 
   it("keeps in-stock bales above sold, pending, deleted, and dispatched bales", async () => {
