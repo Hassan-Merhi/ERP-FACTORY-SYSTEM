@@ -55,6 +55,7 @@ describe("sidebar navigation grouping", () => {
     expect(others?.items.map((item) => item.title)).toEqual([
       "Comparison",
       "Product Comparison",
+      "Finalized Sale Returns",
       "Stock Query",
       "Ticket Management",
     ]);

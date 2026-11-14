@@ -9,3 +9,12 @@ export const EXCHANGE_RATE_EDITOR_ROLES: readonly string[] = ["Admin", "Owner", 
 export function canEditExchangeRates(role: string | null | undefined): boolean {
   return !!role && EXCHANGE_RATE_EDITOR_ROLES.includes(role);
 }
+
+/**
+ * Who is prompted for, and may set, TODAY's company rate. The first user to
+ * set it sets it for the whole company; only the editor roles above can change
+ * it afterwards. View Only / Create Only and view-only POS users never save a rate.
+ */
+export function canSetDailyExchangeRate(role: string | null | undefined, posViewOnly?: boolean | null): boolean {
+  return !!role && role !== "View Only" && role !== "Create Only" && !posViewOnly;
+}
