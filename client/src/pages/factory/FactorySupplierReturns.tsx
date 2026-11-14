@@ -207,6 +207,7 @@ export default function FactorySupplierReturns() {
             quantity: entry.row.quantity,
             requestedQuantity: entry.row.quantity,
             status: "unallocated",
+            candidate: undefined,
             valid: false,
           }];
         }),
