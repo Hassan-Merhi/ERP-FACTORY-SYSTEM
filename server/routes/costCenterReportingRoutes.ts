@@ -1,4 +1,5 @@
 import { buildUniversalExcelWorkbook } from "@shared/universal-excel/engine";
+import { styleUniversalFinancialWorkbook } from "@shared/universal-excel/financialWorkbookStyle";
 /**
  * Cost Centers Phase 6: historical-USD analytical budgets and reporting.
  * Nothing here creates vouchers, changes stock value, or alters the GL.
@@ -625,7 +626,7 @@ async function exportReport(res: Response, scope: Scope, filters: Filters, forma
     const rows = rowData.map((line) =>
       Object.fromEntries(
         line.map((value, index) => {
-          if (numericColumns.has(cols[index]) && /^[-+]?\\d+(?:\\.\\d+)?$/.test(value)) {
+          if (numericColumns.has(cols[index]) && /^[-+]?\d+(?:\.\d+)?$/.test(value)) {
             const parsed = Number(value);
             if (Number.isFinite(parsed) && Math.abs(parsed) < 1e12) {
               return [cols[index], parsed];
@@ -637,7 +638,7 @@ async function exportReport(res: Response, scope: Scope, filters: Filters, forma
     );
     const { workbook } = buildUniversalExcelWorkbook({
       schemaVersion: 1,
-      mode: "report",
+      mode: "import-template",
       title: "Cost Center — " + view,
       filters: [
         { label: "Date from", value: filters.from },
@@ -647,6 +648,9 @@ async function exportReport(res: Response, scope: Scope, filters: Filters, forma
         {
           kind: "table",
           name: "Cost Centers",
+          headerRow: 1,
+          freezeHeader: true,
+          autoFilter: true,
           columns: cols.map((key) => ({
             key,
             header: key,
@@ -657,6 +661,9 @@ async function exportReport(res: Response, scope: Scope, filters: Filters, forma
         },
       ],
     });
+    // Row 1 is part of the legacy CSV/XLSX round-trip contract. Apply shared
+    // branding to its EXISTING header and print area without inserting rows.
+    styleUniversalFinancialWorkbook(workbook, [{ name: "Cost Centers", headerRow: 1 }]);
     const buffer = await workbook.xlsx.writeBuffer();
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.setHeader("Content-Disposition", 'attachment; filename="' + name + '.xlsx"');
