@@ -210,6 +210,9 @@ export async function generateGroupNetPositionExcel(snapshot: GroupNetPositionSn
   const used = new Set(workbook.worksheets.map((sheet) => sheet.name));
   for (const company of snapshot.companies) addCompanyDetailSheet(workbook, company, used);
 
-  styleUniversalFinancialWorkbook(workbook, workbook.worksheets.map(ws => ({ name: ws.name })));
+  styleUniversalFinancialWorkbook(
+    workbook,
+    workbook.worksheets.map((ws) => ({ name: ws.name }))
+  );
   return Buffer.from(await workbook.xlsx.writeBuffer());
 }

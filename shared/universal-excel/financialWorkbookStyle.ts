@@ -50,9 +50,12 @@ export function styleUniversalFinancialWorkbook(
       }
     }
     if (layout.titleRow !== undefined) {
-      if (!Number.isSafeInteger(layout.titleRow) || layout.titleRow < 1 ||
-          layout.titleRow > ws.rowCount ||
-          (layout.headerRow !== undefined && layout.titleRow === layout.headerRow)) {
+      if (
+        !Number.isSafeInteger(layout.titleRow) ||
+        layout.titleRow < 1 ||
+        layout.titleRow > ws.rowCount ||
+        (layout.headerRow !== undefined && layout.titleRow === layout.headerRow)
+      ) {
         throw new Error("Invalid financial worksheet title position");
       }
       const cell = ws.getRow(layout.titleRow).getCell(1);

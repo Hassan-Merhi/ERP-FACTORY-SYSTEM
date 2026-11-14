@@ -36,7 +36,10 @@ function applyHeader(cell: ExcelJS.Cell) {
 }
 
 function sendWorkbook(res: Response, workbook: ExcelJS.Workbook, filename: string) {
-  styleUniversalFinancialWorkbook(workbook, workbook.worksheets.map(ws => ({ name: ws.name })));
+  styleUniversalFinancialWorkbook(
+    workbook,
+    workbook.worksheets.map((ws) => ({ name: ws.name }))
+  );
   return workbook.xlsx.writeBuffer().then((raw) => {
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);

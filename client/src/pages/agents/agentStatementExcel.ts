@@ -56,6 +56,9 @@ export async function exportAgentStatementExcel(account: Account, rows: string[]
     },
     account.name.substring(0, 31).replace(/[\\/*?[\]:]/g, "_")
   );
-  styleUniversalFinancialWorkbook(wb, wb.worksheets.map(ws => ({ name: ws.name, headerRow: 1 })));
+  styleUniversalFinancialWorkbook(
+    wb,
+    wb.worksheets.map((ws) => ({ name: ws.name, headerRow: 1 }))
+  );
   await writeFile(wb, `Agent_Statement_${account.name.replace(/[\\/*?[\]:]/g, "_").substring(0, 40)}.xlsx`);
 }

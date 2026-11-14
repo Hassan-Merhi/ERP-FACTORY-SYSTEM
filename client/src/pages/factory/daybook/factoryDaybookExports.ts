@@ -37,20 +37,22 @@ export async function exportFactoryDaybookSummary(
   await exportOperationalWorkbook({
     title: "Factory Daybook",
     fileName,
-    sheets: [{
-      name: "Factory Daybook",
-      columns: [
-        { key: "Date", header: "Date", width: 12 },
-        { key: "Type", header: "Type", width: 22 },
-        { key: "Description", header: "Description", width: 40 },
-        { key: "Currency", header: "Currency", width: 10 },
-        { key: "Amount", header: "Amount", type: "money", width: 15 },
-        { key: "FX Rate", header: "FX Rate", type: "decimal", width: 12, numFmt: "0.000000" },
-        { key: "Amount (USD)", header: "Amount (USD)", type: "money", width: 17 },
-        { key: "Optional", header: "Optional", width: 10 },
-      ],
-      rows: exportData,
-    }],
+    sheets: [
+      {
+        name: "Factory Daybook",
+        columns: [
+          { key: "Date", header: "Date", width: 12 },
+          { key: "Type", header: "Type", width: 22 },
+          { key: "Description", header: "Description", width: 40 },
+          { key: "Currency", header: "Currency", width: 10 },
+          { key: "Amount", header: "Amount", type: "money", width: 15 },
+          { key: "FX Rate", header: "FX Rate", type: "decimal", width: 12, numFmt: "0.000000" },
+          { key: "Amount (USD)", header: "Amount (USD)", type: "money", width: 17 },
+          { key: "Optional", header: "Optional", width: 10 },
+        ],
+        rows: exportData,
+      },
+    ],
   });
   return { fileName, rowCount: entries.length };
 }
@@ -100,7 +102,9 @@ export async function exportFactoryDaybookDetailed(
         const raw: unknown = await res.json();
         const value = Array.isArray(raw)
           ? raw
-          : raw && typeof raw === "object" && "entries" in raw ? raw.entries : null;
+          : raw && typeof raw === "object" && "entries" in raw
+            ? raw.entries
+            : null;
         if (!Array.isArray(value) || value.length === 0) {
           throw new Error("Voucher journal has no available detail lines");
         }
@@ -138,11 +142,13 @@ export async function exportFactoryDaybookDetailed(
     { key: "Debit", header: "Debit", type: "money" as const, width: 15 },
     { key: "Credit", header: "Credit", type: "money" as const, width: 15 },
   ];
-  const sheets = Object.keys(dataByType).sort().map((type) => ({
-    name: type.substring(0, 31).replace(/[^a-z0-9 _-]/gi, "_"),
-    columns: detailColumns,
-    rows: dataByType[type],
-  }));
+  const sheets = Object.keys(dataByType)
+    .sort()
+    .map((type) => ({
+      name: type.substring(0, 31).replace(/[^a-z0-9 _-]/gi, "_"),
+      columns: detailColumns,
+      rows: dataByType[type],
+    }));
   const fileName = `FactoryDaybook_Detailed_${format(new Date(), "yyyy-MM-dd")}.xlsx`;
   await exportOperationalWorkbook({
     title: "Factory Daybook — Detailed",

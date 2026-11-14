@@ -284,7 +284,10 @@ export function registerNetProfitExcelRoute(app: Express) {
 
       const safeCompanyName = companyName.replace(/[^a-z0-9]/gi, "_");
       const safePeriod = periodLabel.replace(/[^a-z0-9]/gi, "_");
-      styleUniversalFinancialWorkbook(workbook, workbook.worksheets.map(ws => ({ name: ws.name })));
+      styleUniversalFinancialWorkbook(
+        workbook,
+        workbook.worksheets.map((ws) => ({ name: ws.name }))
+      );
       const xlsBuffer = Buffer.from(await workbook.xlsx.writeBuffer());
       // Non-fatal audit write: must not corrupt the export response if it fails
       try {

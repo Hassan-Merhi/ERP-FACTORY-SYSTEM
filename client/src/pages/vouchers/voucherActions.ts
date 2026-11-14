@@ -56,20 +56,22 @@ export async function exportVoucherHelper({ formData, activeTab, toast, detailed
     await exportOperationalWorkbook({
       title: voucherType + " Voucher — Detailed",
       fileName,
-      sheets: [{
-        name: voucherType + " Detailed",
-        columns: [
-          { key: "Voucher Type", header: "Voucher Type", width: 18 },
-          { key: "Date", header: "Date", width: 17 },
-          { key: "Pay From/Receive In", header: "Pay From/Receive In", width: 26 },
-          { key: "Account", header: "Account", width: 30 },
-          { key: "Account Type", header: "Account Type", width: 20 },
-          { key: "Amount", header: "Amount", type: "money", width: 18 },
-          { key: "Notes", header: "Notes", width: 40 },
-          { key: "Optional", header: "Optional", width: 12 },
-        ],
-        rows: exportData,
-      }],
+      sheets: [
+        {
+          name: voucherType + " Detailed",
+          columns: [
+            { key: "Voucher Type", header: "Voucher Type", width: 18 },
+            { key: "Date", header: "Date", width: 17 },
+            { key: "Pay From/Receive In", header: "Pay From/Receive In", width: 26 },
+            { key: "Account", header: "Account", width: 30 },
+            { key: "Account Type", header: "Account Type", width: 20 },
+            { key: "Amount", header: "Amount", type: "money", width: 18 },
+            { key: "Notes", header: "Notes", width: 40 },
+            { key: "Optional", header: "Optional", width: 12 },
+          ],
+          rows: exportData,
+        },
+      ],
     });
     toast({ title: "Export successful", description: `Downloaded ${fileName} with ${validEntries.length} entries.` });
   } else {
@@ -88,19 +90,21 @@ export async function exportVoucherHelper({ formData, activeTab, toast, detailed
     await exportOperationalWorkbook({
       title: voucherType + " Voucher — Summary",
       fileName,
-      sheets: [{
-        name: voucherType + " Summary",
-        columns: [
-          { key: "Voucher Type", header: "Voucher Type", width: 18 },
-          { key: "Date", header: "Date", width: 17 },
-          { key: "Pay From/Receive In", header: "Pay From/Receive In", width: 26 },
-          { key: "Total Amount", header: "Total Amount", type: "money", width: 18 },
-          { key: "Number of Entries", header: "Number of Entries", type: "integer", width: 20 },
-          { key: "Notes", header: "Notes", width: 40 },
-          { key: "Optional", header: "Optional", width: 12 },
-        ],
-        rows: exportData,
-      }],
+      sheets: [
+        {
+          name: voucherType + " Summary",
+          columns: [
+            { key: "Voucher Type", header: "Voucher Type", width: 18 },
+            { key: "Date", header: "Date", width: 17 },
+            { key: "Pay From/Receive In", header: "Pay From/Receive In", width: 26 },
+            { key: "Total Amount", header: "Total Amount", type: "money", width: 18 },
+            { key: "Number of Entries", header: "Number of Entries", type: "integer", width: 20 },
+            { key: "Notes", header: "Notes", width: 40 },
+            { key: "Optional", header: "Optional", width: 12 },
+          ],
+          rows: exportData,
+        },
+      ],
     });
     toast({ title: "Export successful", description: `Downloaded ${fileName}.` });
   }

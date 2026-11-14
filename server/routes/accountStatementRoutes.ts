@@ -164,7 +164,9 @@ export function registerAccountStatementRoutes(app: Express) {
           ? await projectCustomerStatementLines(companyId, customerOwnerId, [], endDate, null)
           : null;
         return res.json({
-          balance: toMoney(party?.opening).minus(held?.heldBefore ?? 0).toNumber(),
+          balance: toMoney(party?.opening)
+            .minus(held?.heldBefore ?? 0)
+            .toNumber(),
           notInLedgerBefore: endDate ? notInLedger.prePeriodTotal : "0.00",
         });
       }
@@ -479,10 +481,8 @@ export function registerAccountStatementRoutes(app: Express) {
         // Employee Excel must foot to the on-screen employee ledger. The
         // balance engine and statement use posted debit/credit amounts, not
         // a separate FX projection that can restate the exported closing.
-        const drExact =
-          accountType === "employee" ? toMoney(r.debitAmount) : toMoney(projected.historicalBaseDebit);
-        const crExact =
-          accountType === "employee" ? toMoney(r.creditAmount) : toMoney(projected.historicalBaseCredit);
+        const drExact = accountType === "employee" ? toMoney(r.debitAmount) : toMoney(projected.historicalBaseDebit);
+        const crExact = accountType === "employee" ? toMoney(r.creditAmount) : toMoney(projected.historicalBaseCredit);
         runExact = runExact.plus(drExact).minus(crExact);
         totalDrExact = totalDrExact.plus(drExact);
         totalCrExact = totalCrExact.plus(crExact);

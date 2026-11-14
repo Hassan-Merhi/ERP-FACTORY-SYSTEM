@@ -612,20 +612,29 @@ async function exportReport(res: Response, scope: Scope, filters: Filters, forma
     // ceiling above. Preserve original precision for 20,6 historical FX: values
     // too large for faithful Excel doubles remain text, not rounded amounts.
     const numericColumns = new Set([
-      "expense", "inventoryCost", "budget", "variance", "unallocated",
-      "amountNative", "amountUsd", "entries", "members",
+      "expense",
+      "inventoryCost",
+      "budget",
+      "variance",
+      "unallocated",
+      "amountNative",
+      "amountUsd",
+      "entries",
+      "members",
     ]);
-    const rows = rowData.map((line) => Object.fromEntries(
-      line.map((value, index) => {
-        if (numericColumns.has(cols[index]) && /^[-+]?\\d+(?:\\.\\d+)?$/.test(value)) {
-          const parsed = Number(value);
-          if (Number.isFinite(parsed) && Math.abs(parsed) < 1e12) {
-            return [cols[index], parsed];
+    const rows = rowData.map((line) =>
+      Object.fromEntries(
+        line.map((value, index) => {
+          if (numericColumns.has(cols[index]) && /^[-+]?\\d+(?:\\.\\d+)?$/.test(value)) {
+            const parsed = Number(value);
+            if (Number.isFinite(parsed) && Math.abs(parsed) < 1e12) {
+              return [cols[index], parsed];
+            }
           }
-        }
-        return [cols[index], value];
-      })
-    ));
+          return [cols[index], value];
+        })
+      )
+    );
     const { workbook } = buildUniversalExcelWorkbook({
       schemaVersion: 1,
       mode: "report",
@@ -634,14 +643,19 @@ async function exportReport(res: Response, scope: Scope, filters: Filters, forma
         { label: "Date from", value: filters.from },
         { label: "Date to", value: filters.to },
       ],
-      sheets: [{
-        kind: "table",
-        name: "Cost Centers",
-        columns: cols.map((key) => ({
-          key, header: key, type: "auto" as const, width: 22,
-        })),
-        rows,
-      }],
+      sheets: [
+        {
+          kind: "table",
+          name: "Cost Centers",
+          columns: cols.map((key) => ({
+            key,
+            header: key,
+            type: "auto" as const,
+            width: 22,
+          })),
+          rows,
+        },
+      ],
     });
     const buffer = await workbook.xlsx.writeBuffer();
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");

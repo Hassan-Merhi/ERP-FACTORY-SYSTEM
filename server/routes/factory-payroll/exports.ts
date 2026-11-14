@@ -430,9 +430,9 @@ export function registerFactoryPayrollExportRoutes(app: Express, requireAuth: Re
       });
 
       styleUniversalFinancialWorkbook(workbook, [
-          { name: "Payroll Summary", headerRow: headerRow.number },
-          { name: "Worker Details", headerRow: detailsHeaderRow.number },
-        ]);
+        { name: "Payroll Summary", headerRow: headerRow.number },
+        { name: "Worker Details", headerRow: detailsHeaderRow.number },
+      ]);
       const xlsBuffer = Buffer.from(await workbook.xlsx.writeBuffer());
       await auditExport(req, companyId, "Excel", startDate, endDate);
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");

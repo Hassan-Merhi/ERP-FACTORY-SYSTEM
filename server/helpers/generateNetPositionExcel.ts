@@ -622,7 +622,10 @@ export async function generateNetPositionExcel(
     ws.getColumn(4).width = 18;
   }
 
-  styleUniversalFinancialWorkbook(wb, wb.worksheets.map(ws => ({ name: ws.name })));
+  styleUniversalFinancialWorkbook(
+    wb,
+    wb.worksheets.map((ws) => ({ name: ws.name }))
+  );
   const rawBuf = await wb.xlsx.writeBuffer();
   const buf = Buffer.isBuffer(rawBuf) ? rawBuf : Buffer.from(rawBuf);
   if (dest) {

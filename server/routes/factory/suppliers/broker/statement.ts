@@ -239,7 +239,7 @@ export function registerSupplierBrokerStatementRoutes(app: Express) {
       ];
 
       styleUniversalFinancialWorkbook(wb, [
-        ...data.currencyLedgers.map(section => ({ name: section.currencyCode, titleRow: 1, headerRow: 3 })),
+        ...data.currencyLedgers.map((section) => ({ name: section.currencyCode, titleRow: 1, headerRow: 3 })),
         { name: "Summary", titleRow: 1, headerRow: 4 },
       ]);
       const xlsBuffer = Buffer.from(await wb.xlsx.writeBuffer());

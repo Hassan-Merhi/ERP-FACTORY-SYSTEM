@@ -43,7 +43,8 @@ export function registerFactoryCustomerStatementExcelRoutes(app: Express) {
       const dateToXlsx = ((req.query.dateTo as string) || "").trim();
       const destFilterXlsx = ((req.query.destination as string) || "").trim().toLowerCase();
       const statement = await buildFactoryCustomerStatement(companyId, customerId, {
-        from: dateFromXlsx || undefined, to: dateToXlsx || undefined,
+        from: dateFromXlsx || undefined,
+        to: dateToXlsx || undefined,
       });
       const allRowsXlsx = statement.rows.map((row) => ({
         transactionDate: row.transactionDate,

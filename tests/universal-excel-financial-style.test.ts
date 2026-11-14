@@ -51,8 +51,7 @@ describe("Phase 7 financial workbook presentation", () => {
     expect(ws.views).toEqual([{ state: "frozen", ySplit: 1 }]);
     const reopened = new ExcelJS.Workbook();
     await reopened.xlsx.load(Buffer.from(await wb.xlsx.writeBuffer()));
-    expect(reopened.getWorksheet("Statement")!.getCell("E5").value)
-      .toEqual({ formula: "E2-D3+C4", result: 9.5 });
+    expect(reopened.getWorksheet("Statement")!.getCell("E5").value).toEqual({ formula: "E2-D3+C4", result: 9.5 });
     expect(reopened.getWorksheet("Statement")!.getCell("E3").value).toBe(-140.5);
     expect(reopened.getWorksheet("Currency Detail")!.getCell("C8").value).toBe(133.333333);
     expect(reopened.getWorksheet("Currency Detail")!.getCell("B2").value).toBe("1.123456");
@@ -62,7 +61,9 @@ describe("Phase 7 financial workbook presentation", () => {
     const wb = ledger();
     const ws = wb.getWorksheet("Statement")!;
     ws.getCell("D3").fill = {
-      type: "pattern", pattern: "solid", fgColor: { argb: "FFFFE1E1" },
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFFFE1E1" },
     };
     const before = {
       rowCount: ws.rowCount,
@@ -70,17 +71,15 @@ describe("Phase 7 financial workbook presentation", () => {
       merges: [...ws.model.merges],
       values: [ws.getCell("C4").value, ws.getCell("D3").value, ws.getCell("E3").value],
     };
-    styleUniversalFinancialWorkbook(wb, [
-      { name: "Statement", headerRow: 1 },
-      { name: "Currency Detail" },
-    ]);
+    styleUniversalFinancialWorkbook(wb, [{ name: "Statement", headerRow: 1 }, { name: "Currency Detail" }]);
     expect(ws.rowCount).toBe(before.rowCount);
     expect(ws.model.merges).toEqual(before.merges);
     expect(ws.getColumn(5).numFmt).toBe(before.balanceFormat);
-    expect([ws.getCell("C4").value, ws.getCell("D3").value, ws.getCell("E3").value])
-      .toEqual(before.values);
+    expect([ws.getCell("C4").value, ws.getCell("D3").value, ws.getCell("E3").value]).toEqual(before.values);
     expect(ws.getCell("D3").fill).toEqual({
-      type: "pattern", pattern: "solid", fgColor: { argb: "FFFFE1E1" },
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFFFE1E1" },
     });
   });
 
@@ -96,7 +95,7 @@ describe("Phase 7 financial workbook presentation", () => {
       { name: "USD", headerRow: 1 },
       { name: "EUR", headerRow: 1 },
     ]);
-    expect(wb.worksheets.map(ws => ws.name)).toEqual(["USD", "EUR"]);
+    expect(wb.worksheets.map((ws) => ws.name)).toEqual(["USD", "EUR"]);
     expect(usd.getCell("C2").value).toBe(-90);
     expect(eur.getCell("C2").value).toBe(30.75);
     expect(usd.headerFooter.oddHeader).toContain("DAKZO SYSTEMS");
@@ -105,28 +104,37 @@ describe("Phase 7 financial workbook presentation", () => {
   it("fails on unsafe layout specifications rather than silently changing financial sheets", () => {
     const wb = ledger();
     expect(() => styleUniversalFinancialWorkbook(wb, [{ name: "Missing" }])).toThrow(/not found/);
-    expect(() => styleUniversalFinancialWorkbook(wb, [{ name: "Statement", headerRow: 99 }]))
-      .toThrow(/header position/);
-    expect(() => styleUniversalFinancialWorkbook(wb, [
-      { name: "Statement" }, { name: "Statement" },
-    ])).toThrow(/Duplicate/);
+    expect(() => styleUniversalFinancialWorkbook(wb, [{ name: "Statement", headerRow: 99 }])).toThrow(
+      /header position/
+    );
+    expect(() => styleUniversalFinancialWorkbook(wb, [{ name: "Statement" }, { name: "Statement" }])).toThrow(
+      /Duplicate/
+    );
   });
 
   it("keeps read-only cost-center numeric amounts and textual high-precision FX columns", () => {
     const { workbook } = buildUniversalExcelWorkbook({
-      schemaVersion: 1, mode: "report", title: "Cost Center",
-      sheets: [{
-        name: "Cost Centers", kind: "table",
-        columns: [
-          { key: "account", header: "Account" },
-          { key: "expense", header: "Expense", type: "auto" },
-          { key: "native", header: "Native", type: "auto" },
-        ],
-        rows: [{
-          account: "Current Expense", expense: -431.25,
-          native: "1234567890123.123456",
-        }],
-      }],
+      schemaVersion: 1,
+      mode: "report",
+      title: "Cost Center",
+      sheets: [
+        {
+          name: "Cost Centers",
+          kind: "table",
+          columns: [
+            { key: "account", header: "Account" },
+            { key: "expense", header: "Expense", type: "auto" },
+            { key: "native", header: "Native", type: "auto" },
+          ],
+          rows: [
+            {
+              account: "Current Expense",
+              expense: -431.25,
+              native: "1234567890123.123456",
+            },
+          ],
+        },
+      ],
     });
     const ws = workbook.getWorksheet("Cost Centers")!;
     expect(ws.getCell("B6").value).toBe(-431.25);
