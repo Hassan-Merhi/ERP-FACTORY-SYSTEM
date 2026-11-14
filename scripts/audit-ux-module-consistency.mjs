@@ -208,17 +208,3 @@ console.log(
     2,
   ),
 );
-
-
-// TEMPORARY PHASE3 FORMAT DIAGNOSTIC — remove before merging.
-{
-  const prettier = await import("prettier");
-  const target = "client/src/components/FactoryRoutes.tsx";
-  const actual = await read(target);
-  const options = (await prettier.resolveConfig(target)) ?? {};
-  const formatted = await prettier.format(actual, { ...options, filepath: target });
-  console.log("PHASE3_FORMAT_MATCH=" + (actual === formatted));
-  for (let i = 0; i < formatted.length; i += 3000) {
-    console.log("PHASE3_FORMAT_CHUNK=" + JSON.stringify({ offset: i, chunk: formatted.slice(i, i + 3000) }));
-  }
-}
