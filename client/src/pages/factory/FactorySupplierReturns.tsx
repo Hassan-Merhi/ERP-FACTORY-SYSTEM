@@ -330,6 +330,14 @@ export default function FactorySupplierReturns() {
       const response = (await (
         await apiRequest("POST", "/api/erp/supplier-returns/commit", {
           lines,
+          requestedRows: combined.entries.map((entry) => ({
+            code: preview.find((row) => row.row === entry.row.row)?.code ?? "",
+            quantity: entry.row.quantity,
+            allocations: entry.lines.map(({ allocation }) => ({
+              offloadItemId: allocation.offloadItemId,
+              quantity: allocation.quantity,
+            })),
+          })),
           supplierId,
           requestKey,
           returnDate,
