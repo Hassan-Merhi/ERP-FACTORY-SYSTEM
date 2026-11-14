@@ -45,6 +45,8 @@ import { PosSetupHub } from "./settings/PosSetupHub";
 import { FileStorageAndExport } from "./settings/FileStorageAndExport";
 import { ExportCenter } from "./settings/ExportCenter";
 import { ExcelAppearanceSettingsTab } from "./settings/ExcelAppearanceSettingsTab";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { getExcelAppearanceCopy } from "@/i18n/excelAppearanceTranslations";
 import { UsersPermissionsHub } from "./settings/UsersPermissionsHub";
 import { SupplierTrackingDefaultsTab } from "./settings/SupplierTrackingDefaultsTab";
 import { RecurringJournalsTab } from "./settings/RecurringJournalsTab";
@@ -83,6 +85,8 @@ interface SettingsSidebarItem {
 
 export default function Settings() {
   const { toast } = useToast();
+  const { language } = useApplicationLanguage();
+  const excelAppearanceCopy = getExcelAppearanceCopy(language);
   const [, navigate] = useLocation();
   const companyContext = useCompany();
   const selectedCompany = companyContext?.selectedCompany ?? null;
@@ -164,7 +168,7 @@ export default function Settings() {
         { key: "edit-log", label: "Edit Log", icon: History },
         { key: "files-export", label: "Files & Export", icon: Upload },
         { key: "export-center", label: "Export Center", icon: Zap },
-        { key: "excel-appearance", label: "Excel Export Appearance", icon: FileSpreadsheet, adminOnly: true },
+        { key: "excel-appearance", label: excelAppearanceCopy.title, icon: FileSpreadsheet, adminOnly: true },
       ],
     },
     {
