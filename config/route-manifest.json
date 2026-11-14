@@ -1132,7 +1132,7 @@
     "GET /api/exchange-rates/check-today [requireAuth > <anonymous>]",
     "GET /api/exchange-rates [requireAuth > <anonymous>]",
     "GET /api/exchange-rates/latest [requireAuth > <anonymous>]",
-    "POST /api/exchange-rates [requireAuth > <anonymous> > <anonymous>]",
+    "POST /api/exchange-rates [requireAuth > <anonymous>]",
     "POST /api/auth/passkey/register/options [requireAuth > <anonymous>]",
     "POST /api/auth/passkey/register/verify [requireAuth > <anonymous>]",
     "POST /api/auth/passkey/authenticate/options [<anonymous>]",

@@ -4,7 +4,7 @@ import { logger } from "../lib/logger";
 import Papa from "papaparse";
 import { db } from "../db";
 import { requireAuth } from "../auth";
-import { upload } from "./_helpers";
+import { spreadsheetUpload } from "./_helpers";
 import { readExcel, sheetToJson, createWorkbook, jsonToSheet, writeWorkbook } from "../excelHelper";
 import { stockItems, stockItemCodeAliases } from "@shared/schema";
 import { eq, and, isNull } from "drizzle-orm";
@@ -410,7 +410,7 @@ function notImplemented(validationType: string, file1Name: string): ValidationRe
 // ─── Route registration ───────────────────────────────────────────────────────
 
 export function registerAiValidationRoutes(app: Express) {
-  const fileFields = upload.fields([
+  const fileFields = spreadsheetUpload.fields([
     { name: "file1", maxCount: 1 },
     { name: "file2", maxCount: 1 },
   ]);

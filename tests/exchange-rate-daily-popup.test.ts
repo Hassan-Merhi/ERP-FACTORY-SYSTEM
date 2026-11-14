@@ -225,6 +225,58 @@ describe("Exchange rate is a shared company-wide record, not per-user", () => {
     expect(["600.000000", "610.000000"]).toContain(parseFloat(todaysRows[0].rate).toFixed(6));
   });
 
+  it("a POS user's rate for today applies to the whole company: the Admin is not asked again", async () => {
+    await cleanupExchangeRates([ctx.companyId]);
+    // The session caches the role: re-select the company after changing it.
+    const roleOfB = async (role: string) => {
+      await db.update(schema.userCompanyRoles).set({ role }).where(eq(schema.userCompanyRoles.userId, userBId));
+      await agentB.post("/api/auth/set-company").send({ companyId: ctx.companyId });
+    };
+    await roleOfB("POS");
+    try {
+      const today = (await agentB.get(`/api/exchange-rates/check-today?companyId=${ctx.companyId}`)).body.today;
+      const rate = (value: string, effectiveDate = today) =>
+        agentB.post("/api/exchange-rates").send({ fromCurrency: "USD", toCurrency: "CFA", rate: value, effectiveDate });
+
+      // A view-only POS account cannot set the shared rate.
+      const viewOnly = (posViewOnly: boolean) =>
+        roleOfB("POS").then(() =>
+          db.update(schema.userCompanyRoles).set({ posViewOnly }).where(eq(schema.userCompanyRoles.userId, userBId))
+        );
+      await viewOnly(true);
+      await agentB.post("/api/auth/set-company").send({ companyId: ctx.companyId });
+      expect((await rate("595", today)).status).toBe(403);
+      await viewOnly(false);
+      await agentB.post("/api/auth/set-company").send({ companyId: ctx.companyId });
+
+      // Past dates stay with Admin/Owner/Developer.
+      expect((await rate("590", "2020-01-01")).status).toBe(403);
+      expect((await rate("595", today)).status).toBe(200);
+
+      const admin = await agentA.get(`/api/exchange-rates/check-today?companyId=${ctx.companyId}`);
+      expect(admin.body.hasRate).toBe(true);
+      expect(parseFloat(admin.body.latestRate.rate)).toBeCloseTo(595, 4);
+
+      // The first rate of the day stands; a POS user cannot replace it, an Admin can.
+      const replaced = await rate("700", today);
+      expect(replaced.status).toBe(409);
+      expect(replaced.body.code).toBe("EXCHANGE_RATE_ALREADY_SET");
+      expect((await rate("595", today)).status).toBe(200);
+      const corrected = await agentA
+        .post("/api/exchange-rates")
+        .send({ fromCurrency: "USD", toCurrency: "CFA", rate: "596", effectiveDate: today });
+      expect(corrected.status).toBe(200);
+      const rows = await pool.query(`SELECT rate::text FROM exchange_rates WHERE company_id = $1`, [ctx.companyId]);
+      expect(rows.rows).toEqual([{ rate: "596.000000" }]);
+    } finally {
+      await db
+        .update(schema.userCompanyRoles)
+        .set({ posViewOnly: false })
+        .where(eq(schema.userCompanyRoles.userId, userBId));
+      await roleOfB("Admin");
+    }
+  });
+
   it("the DB rejects a manual duplicate insert for the same (company, date, pair)", async () => {
     await cleanupExchangeRates([ctx.companyId]);
     const checkRes = await agentA.get(`/api/exchange-rates/check-today?companyId=${ctx.companyId}`);

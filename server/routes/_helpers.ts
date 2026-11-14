@@ -5,7 +5,7 @@
 // process.env.MASTER_PASSWORD into its module-level constants.
 import "./helpers/masterPasswordPolicy";
 
-export { upload } from "./helpers/uploadHelpers";
+export { upload, spreadsheetUpload, generalUpload } from "./helpers/uploadHelpers";
 
 export { hashPassword, isLegacySHA256Hash, verifyPassword, verifyPasswordBcryptOnly } from "./helpers/passwordHelpers";
 
