@@ -56,11 +56,13 @@ vi.mock("../server/lib/logger", () => ({
 vi.mock("../server/auth", () => ({
   requireAuth: (_req: unknown, _res: unknown, next: () => void) => next(),
 }));
-vi.mock("../server/routes/_helpers", () => ({
-  upload: {
+vi.mock("../server/routes/_helpers", () => {
+  const passThrough = {
+    single: () => (_req: unknown, _res: unknown, next: () => void) => next(),
     fields: () => (_req: unknown, _res: unknown, next: () => void) => next(),
-  },
-}));
+  };
+  return { upload: passThrough, spreadsheetUpload: passThrough, generalUpload: passThrough };
+});
 vi.mock("../server/excelHelper", () => ({
   readExcel: vi.fn(async () => ({ SheetNames: [], Sheets: {} })),
   sheetToJson: vi.fn(() => []),

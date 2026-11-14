@@ -30,7 +30,10 @@ const harness = vi.hoisted(() => {
 vi.mock("../server/db", () => ({ db: harness.db }));
 vi.mock("../server/storage", () => ({ storage: harness.storage }));
 vi.mock("../server/auth", () => ({ requireAuth: (_req: any, _res: any, next: any) => next() }));
-vi.mock("../server/routes/_helpers", () => ({ upload: { single: () => (_req: any, _res: any, next: any) => next() } }));
+vi.mock("../server/routes/_helpers", () => {
+  const passThrough = { single: () => (_req: any, _res: any, next: any) => next() };
+  return { upload: passThrough, spreadsheetUpload: passThrough, generalUpload: passThrough };
+});
 vi.mock("../server/excelHelper", () => ({ readExcel: vi.fn(), sheetToJson: vi.fn() }));
 vi.mock("../server/lib/logger", () => ({ logger: { error: vi.fn() } }));
 vi.mock("../server/lib/httpHandlers", () => ({ getErrorMessage: (error: any) => error?.message || String(error) }));
