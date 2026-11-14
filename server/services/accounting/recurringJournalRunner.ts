@@ -4,7 +4,6 @@ import {
   factoryDaybookEntries,
   factorySettings,
   recurringJournals,
-  vouchers,
   type RecurringJournal,
   type RecurringJournalEntryTemplate,
 } from "@shared/schema";
