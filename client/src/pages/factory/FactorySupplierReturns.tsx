@@ -196,7 +196,7 @@ export default function FactorySupplierReturns() {
             requestedQuantity: entry.row.quantity,
             status: entry.valid && combined.valid ? "matched" : "review-allocation",
             candidate: line.candidate,
-            valid: entry.valid && combined.valid && line.valid &&
+            valid: entry.valid && line.valid &&
               !!line.candidate &&
               !combined.overSources.has(line.candidate.offloadItemId) &&
               !combined.overStock.has(line.candidate.locationId + ":" + line.candidate.stockItemId),
