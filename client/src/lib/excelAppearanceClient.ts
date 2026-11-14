@@ -23,8 +23,7 @@ export async function fetchExcelAppearance(): Promise<ExcelAppearanceResponse> {
     throw new Error("Invalid company Excel appearance response");
   }
   const appearance = excelAppearanceSettingsSchema.parse(raw.appearance);
-  const name = "companyName" in raw && typeof raw.companyName === "string"
-    ? raw.companyName : "";
+  const name = "companyName" in raw && typeof raw.companyName === "string" ? raw.companyName : "";
   return { appearance, companyName: name };
 }
 

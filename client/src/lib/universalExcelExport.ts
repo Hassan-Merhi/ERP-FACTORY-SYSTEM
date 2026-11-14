@@ -13,8 +13,7 @@ export async function downloadUniversalExcelWorkbook(
   const safeName = validateUniversalExcelFilename(fileName);
   // Saved branding is applied to reports only; strict import templates retain
   // their current first-row/absolute-cell contracts and need no settings call.
-  const saved = spec.mode === "report" && !spec.appearance
-    ? await fetchExcelAppearance() : null;
+  const saved = spec.mode === "report" && !spec.appearance ? await fetchExcelAppearance() : null;
   const resolvedSpec: UniversalExcelWorkbookSpec = saved
     ? {
         ...spec,

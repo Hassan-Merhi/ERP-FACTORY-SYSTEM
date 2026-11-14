@@ -19,11 +19,14 @@ function fileSpec(mode: "report" | "import-template" = "report") {
     schemaVersion: 1 as const,
     title: "Stock",
     mode,
-    sheets: [{
-      kind: "table" as const, name: "Stock",
-      columns: [{ key: "code", header: "Code" }],
-      rows: [{ code: "000123" }],
-    }],
+    sheets: [
+      {
+        kind: "table" as const,
+        name: "Stock",
+        columns: [{ key: "code", header: "Code" }],
+        rows: [{ code: "000123" }],
+      },
+    ],
   };
 }
 
@@ -67,16 +70,22 @@ describe("Phase 9 company appearance fetch", () => {
     vi.stubGlobal("fetch", fetcher);
     mocks.build.mockReturnValue({ workbook: {}, results: [] });
     const { downloadUniversalExcelWorkbook } = await import("../../client/src/lib/universalExcelExport");
-    await downloadUniversalExcelWorkbook({
-      ...fileSpec(),
-      appearance: { ...DEFAULT_EXCEL_APPEARANCE_SETTINGS, accentColor: "#AABBCC" },
-    }, "sample.xlsx");
+    await downloadUniversalExcelWorkbook(
+      {
+        ...fileSpec(),
+        appearance: { ...DEFAULT_EXCEL_APPEARANCE_SETTINGS, accentColor: "#AABBCC" },
+      },
+      "sample.xlsx"
+    );
     expect(fetcher).not.toHaveBeenCalled();
     expect(mocks.build.mock.calls[0][0].appearance.accentColor).toBe("#AABBCC");
   });
 
   it("fails instead of silently exporting a previous company's appearance on API error", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 403 })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: false, status: 403 }))
+    );
     await expect(fetchExcelAppearance()).rejects.toThrow(/403/);
     const { downloadUniversalExcelWorkbook } = await import("../../client/src/lib/universalExcelExport");
     await expect(downloadUniversalExcelWorkbook(fileSpec(), "stock.xlsx")).rejects.toThrow(/403/);

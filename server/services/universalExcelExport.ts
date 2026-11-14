@@ -20,8 +20,8 @@ export async function sendUniversalExcelWorkbook(
   companyId?: number
 ): Promise<UniversalExcelSheetResult[]> {
   const safeName = validateUniversalExcelFilename(filename);
-  const appearance = companyId && spec.mode === "report" && !spec.appearance
-    ? await loadCompanyExcelAppearance(companyId) : null;
+  const appearance =
+    companyId && spec.mode === "report" && !spec.appearance ? await loadCompanyExcelAppearance(companyId) : null;
   const { workbook, results } = buildUniversalExcelWorkbook(
     appearance ? { ...spec, appearance, dateFormat: spec.dateFormat ?? appearance.dateFormat } : spec
   );
@@ -34,8 +34,8 @@ export async function buildUniversalExcelAttachment(
   spec: UniversalExcelWorkbookSpec,
   companyId?: number
 ): Promise<{ buffer: Buffer; results: UniversalExcelSheetResult[] }> {
-  const appearance = companyId && spec.mode === "report" && !spec.appearance
-    ? await loadCompanyExcelAppearance(companyId) : null;
+  const appearance =
+    companyId && spec.mode === "report" && !spec.appearance ? await loadCompanyExcelAppearance(companyId) : null;
   const { workbook, results } = buildUniversalExcelWorkbook(
     appearance ? { ...spec, appearance, dateFormat: spec.dateFormat ?? appearance.dateFormat } : spec
   );

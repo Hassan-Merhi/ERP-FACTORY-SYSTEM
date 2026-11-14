@@ -32,16 +32,16 @@ export async function loadCompanyExcelAppearance(companyId: number): Promise<Exc
   return parseSavedExcelAppearance(row?.value);
 }
 
-export async function saveCompanyExcelAppearance(
-  companyId: number,
-  raw: unknown
-): Promise<ExcelAppearanceSettings> {
+export async function saveCompanyExcelAppearance(companyId: number, raw: unknown): Promise<ExcelAppearanceSettings> {
   const validated = validateExcelAppearance(raw);
   const key = excelAppearanceSettingKey(companyId);
   const value = JSON.stringify(validated);
-  await db.insert(systemSettings).values({ key, value }).onConflictDoUpdate({
-    target: systemSettings.key,
-    set: { value, updatedAt: new Date() },
-  });
+  await db
+    .insert(systemSettings)
+    .values({ key, value })
+    .onConflictDoUpdate({
+      target: systemSettings.key,
+      set: { value, updatedAt: new Date() },
+    });
   return validated;
 }

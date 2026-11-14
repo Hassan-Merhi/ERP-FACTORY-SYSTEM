@@ -582,7 +582,8 @@ export function buildUniversalExcelWorkbook(spec: UniversalExcelWorkbookSpec): {
     throw new Error("Invalid universal Excel export specification");
   }
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = spec.mode === "report" ? resolveUniversalExcelAppearance(spec.appearance).brandName : "Dakzo Systems";
+  workbook.creator =
+    spec.mode === "report" ? resolveUniversalExcelAppearance(spec.appearance).brandName : "Dakzo Systems";
   workbook.created = spec.exportedAt ?? new Date();
   const names = new Set<string>();
   const allowed = new Set(spec.allowedColumnTags ?? []);

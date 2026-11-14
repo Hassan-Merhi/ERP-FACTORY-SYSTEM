@@ -10,7 +10,8 @@ import { buildUniversalExcelWorkbook } from "../shared/universal-excel/engine";
 import { styleSpecializedWorkbook } from "../shared/universal-excel/specializedWorkbookStyle";
 import { resolveUniversalExcelAppearance } from "../shared/universal-excel/design";
 
-const tinyPng = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL/nwAAAABJRU5ErkJggg==";
+const tinyPng =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL/nwAAAABJRU5ErkJggg==";
 
 function report(appearance = DEFAULT_EXCEL_APPEARANCE_SETTINGS) {
   return buildUniversalExcelWorkbook({
@@ -20,17 +21,20 @@ function report(appearance = DEFAULT_EXCEL_APPEARANCE_SETTINGS) {
     mode: "report",
     appearance,
     exportedAt: new Date("2026-11-14T12:00:00Z"),
-    sheets: [{
-      kind: "table", name: "Sales",
-      columns: [
-        { key: "code", header: "Article Code" },
-        { key: "qty", header: "Quantity", type: "integer" },
-        { key: "price", header: "Unit Price", type: "money" },
-        { key: "currency", header: "Currency" },
-        { key: "total", header: "Total", type: "money" },
-      ],
-      rows: [{ code: "000045", qty: 2, price: 19.5, currency: "USD", total: 39 }],
-    }],
+    sheets: [
+      {
+        kind: "table",
+        name: "Sales",
+        columns: [
+          { key: "code", header: "Article Code" },
+          { key: "qty", header: "Quantity", type: "integer" },
+          { key: "price", header: "Unit Price", type: "money" },
+          { key: "currency", header: "Currency" },
+          { key: "total", header: "Total", type: "money" },
+        ],
+        rows: [{ code: "000045", qty: 2, price: 19.5, currency: "USD", total: 39 }],
+      },
+    ],
   }).workbook;
 }
 
@@ -54,7 +58,8 @@ describe("Phase 9 company-scoped Excel appearance contract", () => {
 
   it("rejects javascript URLs, fake images, oversized image strings and Excel print injection", () => {
     const replace = (part: Record<string, unknown>) => ({
-      ...DEFAULT_EXCEL_APPEARANCE_SETTINGS, ...part,
+      ...DEFAULT_EXCEL_APPEARANCE_SETTINGS,
+      ...part,
     });
     const invalid = [
       { logoDataUrl: "https://example.com/tracker.png" },
@@ -109,13 +114,21 @@ describe("Phase 9 company-scoped Excel appearance contract", () => {
 
   it("keeps strict import templates completely untouched, even when appearance is supplied", () => {
     const { workbook } = buildUniversalExcelWorkbook({
-      schemaVersion: 1, title: "Customer Import", mode: "import-template",
+      schemaVersion: 1,
+      title: "Customer Import",
+      mode: "import-template",
       appearance: { ...DEFAULT_EXCEL_APPEARANCE_SETTINGS, logoDataUrl: tinyPng },
-      sheets: [{
-        kind: "table", name: "Price List",
-        columns: [{ key: "code", header: "article_code" }, { key: "price", header: "price", type: "money" }],
-        rows: [{ code: "000999", price: 13.5 }],
-      }],
+      sheets: [
+        {
+          kind: "table",
+          name: "Price List",
+          columns: [
+            { key: "code", header: "article_code" },
+            { key: "price", header: "price", type: "money" },
+          ],
+          rows: [{ code: "000999", price: 13.5 }],
+        },
+      ],
     });
     const sheet = workbook.getWorksheet("Price List")!;
     expect(sheet.getCell("A1").value).toBe("article_code");
@@ -134,7 +147,11 @@ describe("Phase 9 company-scoped Excel appearance contract", () => {
     ws.headerFooter.oddFooter = "&RPage &P";
     styleSpecializedWorkbook(wb, {
       sheets: [{ name: "Truck Trip" }],
-      appearance: { ...DEFAULT_EXCEL_APPEARANCE_SETTINGS, headerText: "Should not replace", footerText: "Not replaced" },
+      appearance: {
+        ...DEFAULT_EXCEL_APPEARANCE_SETTINGS,
+        headerText: "Should not replace",
+        footerText: "Not replaced",
+      },
     });
     expect(ws.headerFooter.oddHeader).toBe("&LExisting invoice header");
     expect(ws.headerFooter.oddFooter).toBe("&RPage &P");

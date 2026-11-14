@@ -115,15 +115,16 @@ export function resolveUniversalExcelAppearance(
   }
   const text = (raw: string | undefined, label: string): string => {
     if (raw === undefined) return "";
-    if (raw.length > 90 || Array.from(raw).some(char => char.charCodeAt(0) < 32 || char === "&")) {
+    if (raw.length > 90 || Array.from(raw).some((char) => char.charCodeAt(0) < 32 || char === "&")) {
       throw new Error("Invalid Excel " + label);
     }
     return raw.trim();
   };
   const logoDataUrl = options.logoDataUrl ?? null;
-  if (logoDataUrl !== null &&
-      (logoDataUrl.length > 185_000 ||
-       !/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/.test(logoDataUrl))) {
+  if (
+    logoDataUrl !== null &&
+    (logoDataUrl.length > 185_000 || !/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/.test(logoDataUrl))
+  ) {
     throw new Error("Invalid Excel logo");
   }
   const base = preset === "slate" ? SLATE_PALETTE : DEFAULT_PALETTE;
@@ -239,6 +240,5 @@ export function applyUniversalExcelPrintLayout(
   const headerText = args.design.headerText ? safePrintText(args.design.headerText) : title;
   const footerText = args.design.footerText ? safePrintText(args.design.footerText) : "";
   worksheet.headerFooter.oddHeader = (brand ? "&L" + brand : "") + "&C" + headerText;
-  worksheet.headerFooter.oddFooter = (footerText ? "&L" + footerText : brand ? "&L" + brand : "") +
-    "&RPage &P of &N";
+  worksheet.headerFooter.oddFooter = (footerText ? "&L" + footerText : brand ? "&L" + brand : "") + "&RPage &P of &N";
 }

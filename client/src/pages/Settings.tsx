@@ -199,7 +199,10 @@ export default function Settings() {
 
   const allowedItems = (items: SettingsSidebarItem[]) =>
     items.filter(
-      (item) => (!item.devOnly || currentUser?.role === "Developer") && (!item.adminOnly || canManageSessions) && (item.key !== "excel-appearance" || canManageExcelAppearance)
+      (item) =>
+        (!item.devOnly || currentUser?.role === "Developer") &&
+        (!item.adminOnly || canManageSessions) &&
+        (item.key !== "excel-appearance" || canManageExcelAppearance)
     );
   const canManageTrackingDefaults = ["Admin", "Owner", "Developer"].includes(currentUser?.role ?? "");
 
