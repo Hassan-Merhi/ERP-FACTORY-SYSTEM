@@ -29,6 +29,7 @@ import {
   Images,
   Clock,
   Snowflake,
+  FileSpreadsheet,
 } from "lucide-react";
 
 import { FxRatesCard } from "./settings/FxRatesCard";
@@ -43,6 +44,7 @@ import { DataToolsTab } from "./settings/DataToolsTab";
 import { PosSetupHub } from "./settings/PosSetupHub";
 import { FileStorageAndExport } from "./settings/FileStorageAndExport";
 import { ExportCenter } from "./settings/ExportCenter";
+import { ExcelAppearanceSettingsTab } from "./settings/ExcelAppearanceSettingsTab";
 import { UsersPermissionsHub } from "./settings/UsersPermissionsHub";
 import { SupplierTrackingDefaultsTab } from "./settings/SupplierTrackingDefaultsTab";
 import { RecurringJournalsTab } from "./settings/RecurringJournalsTab";
@@ -95,7 +97,7 @@ export default function Settings() {
     queryKey: ["/api/companies"],
   });
 
-  const { data: currentUser } = useQuery<{ role?: string; id: string }>({
+  const { data: currentUser } = useQuery<{ role?: string; currentRole?: string; id: string }>({
     queryKey: ["/api/auth/me"],
   });
 
@@ -119,6 +121,8 @@ export default function Settings() {
   const canManageCompanyTimezone = ["Admin", "Owner", "Developer"].includes(currentUser?.role ?? "");
   const canManageSessions = ["Admin", "Owner", "Developer"].includes(currentUser?.role ?? "");
   const canManageChristmasMode = currentUser?.role === "Developer";
+  const effectiveRole = currentUser?.currentRole ?? selectedCompany?.role ?? currentUser?.role ?? "";
+  const canManageExcelAppearance = effectiveRole === "Admin" || effectiveRole === "Developer";
 
   const sidebarGroups = [
     {
@@ -160,6 +164,7 @@ export default function Settings() {
         { key: "edit-log", label: "Edit Log", icon: History },
         { key: "files-export", label: "Files & Export", icon: Upload },
         { key: "export-center", label: "Export Center", icon: Zap },
+        { key: "excel-appearance", label: "Excel Export Appearance", icon: FileSpreadsheet, adminOnly: true },
       ],
     },
     {
@@ -194,7 +199,7 @@ export default function Settings() {
 
   const allowedItems = (items: SettingsSidebarItem[]) =>
     items.filter(
-      (item) => (!item.devOnly || currentUser?.role === "Developer") && (!item.adminOnly || canManageSessions)
+      (item) => (!item.devOnly || currentUser?.role === "Developer") && (!item.adminOnly || canManageSessions) && (item.key !== "excel-appearance" || canManageExcelAppearance)
     );
   const canManageTrackingDefaults = ["Admin", "Owner", "Developer"].includes(currentUser?.role ?? "");
 
@@ -360,6 +365,9 @@ export default function Settings() {
           )}
           {activeSection === "files-export" && <FileStorageAndExport />}
           {activeSection === "export-center" && <ExportCenter />}
+          {activeSection === "excel-appearance" && canManageExcelAppearance && (
+            <ExcelAppearanceSettingsTab company={selectedCompany} />
+          )}
           {activeSection === "preferences" && (
             <PreferencesTab
               dateFormat={dateFormat}
