@@ -1,3 +1,4 @@
+import { styleSpecializedWorkbook } from "@shared/universal-excel/specializedWorkbookStyle";
 import { parseId } from "../../lib/parseId";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
@@ -258,6 +259,10 @@ export function registerContainerDocumentsRoutes(app: Express) {
         aoaToSheet(workbook, sheetData, sheetName);
       }
 
+      // One sectioned worksheet per container: never insert global title rows.
+      styleSpecializedWorkbook(workbook, {
+        sheets: workbook.worksheets.map(ws => ({ name: ws.name, purpose: "report" as const })),
+      });
       const buffer = await writeWorkbook(workbook);
 
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
