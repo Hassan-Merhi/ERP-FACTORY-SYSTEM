@@ -1,4 +1,6 @@
 import { styleSpecializedWorkbook } from "@shared/universal-excel/specializedWorkbookStyle";
+import type { UniversalExcelAppearance } from "@shared/universal-excel/design";
+import { optionalSpecializedExcelAppearance } from "@/lib/excelAppearanceClient";
 /**
  * Print-ready Monthly Production Matrix export.
  * CSV is kept separately as a data-only format; colors and page orientation
@@ -27,6 +29,7 @@ export type MonthlyProductionExcelOptions = {
   category: string;
   search: string;
   bales: MonthlyProductionExportBale[];
+  appearance?: UniversalExcelAppearance;
 };
 
 const PALETTE = {
@@ -288,6 +291,7 @@ export function buildMonthlyProductionExcelWorkbook(options: MonthlyProductionEx
     }
   }
   styleSpecializedWorkbook(workbook, {
+    appearance: options.appearance,
     expectedSheetNames: ["Monthly Production", "Worker Breakdown", "Daily Summary", "Bale References"],
     sheets: [
       { name: "Monthly Production", purpose: "report", headerRow: 6 },
@@ -300,7 +304,8 @@ export function buildMonthlyProductionExcelWorkbook(options: MonthlyProductionEx
 }
 
 export async function exportMonthlyProductionExcel(options: MonthlyProductionExcelOptions): Promise<void> {
-  const workbook = buildMonthlyProductionExcelWorkbook(options);
+  const appearance = await optionalSpecializedExcelAppearance();
+  const workbook = buildMonthlyProductionExcelWorkbook({ ...options, appearance });
   const fileName = "factory-monthly-production-" + new Date().toISOString().slice(0, 10) + ".xlsx";
   await writeFile(workbook, fileName);
 }
