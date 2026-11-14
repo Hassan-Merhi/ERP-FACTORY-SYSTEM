@@ -23,6 +23,7 @@ import { SidebarHeader, SidebarFooter } from "@/components/ui/sidebar";
 import { useConnectivity } from "@/contexts/ConnectivityContext";
 import { reconcilePinnedOrder } from "./pinnedOrder";
 import { SeasonalBrandAccent } from "@/components/SeasonalBrandAccent";
+import { DakzoBrand } from "@/components/DakzoBrand";
 
 /**
  * A navigation glyph. Every call site passes a lucide-react icon, which is a
@@ -412,6 +413,7 @@ export function ModuleHeader({ icon: Icon, label, tagline, accent }: ModuleHeade
       }}
     >
       <SeasonalBrandAccent />
+      <DakzoBrand compact className="relative mb-2 text-sidebar-foreground" />
       {/* subtle radial glow behind the icon */}
       <div
         className="absolute -top-4 -left-4 h-20 w-20 rounded-full pointer-events-none"

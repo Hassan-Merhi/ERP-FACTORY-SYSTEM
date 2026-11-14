@@ -36,6 +36,7 @@ import { usePosNavigationItems } from "./usePosNavigationItems";
 import { canUseAdminSearch, type ShellUser } from "./shellUser";
 import "@/styles/pos-sidebar-modern.css";
 import { SeasonalBrandAccent } from "@/components/SeasonalBrandAccent";
+import { DakzoBrand } from "@/components/DakzoBrand";
 import { useChristmasMode } from "@/hooks/useChristmasMode";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
@@ -123,10 +124,7 @@ export function PosShell({
           {selectedCompany?.id && <DailyRateModal companyId={selectedCompany.id} />}
           <Sidebar data-pos-sidebar="modern">
             <SidebarHeader data-pos-sidebar-header>
-              <div className="pos-shell-wordmark" aria-label="Dakzo Systems">
-                <span className="pos-shell-wordmark-mark" aria-hidden="true" />
-                <span>Dakzo Systems</span>
-              </div>
+              <div className="pos-shell-wordmark"><DakzoBrand /></div>
               <SeasonalBrandAccent />
               <div className="flex items-center gap-2">
                 <Button
