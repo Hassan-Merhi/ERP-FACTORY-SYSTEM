@@ -356,7 +356,7 @@ export function registerFactoryCustomerStatementExcelRoutes(app: Express) {
       }
 
       // Build buffer BEFORE setting headers so ExcelJS errors can still return a clean JSON 500.
-      styleUniversalFinancialWorkbook(workbook, [{ name: "Statement" }]);
+      styleUniversalFinancialWorkbook(workbook, [{ name: "Statement", headerRow: hdrRow.number }]);
       const xlsBuffer = Buffer.from(await workbook.xlsx.writeBuffer());
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
       res.setHeader(
