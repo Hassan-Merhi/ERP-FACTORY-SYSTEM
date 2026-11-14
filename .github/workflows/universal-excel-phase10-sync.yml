@@ -1,0 +1,52 @@
+name: Temporary Universal Excel Phase 10 Main Sync
+
+on:
+  push:
+    branches:
+      - feature/universal-excel-export-system
+
+permissions:
+  contents: write
+
+concurrency:
+  group: universal-excel-phase10-sync-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  synchronize:
+    if: "!startsWith(github.event.head_commit.message, 'chore(excel): sync current main')"
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout feature head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: feature/universal-excel-export-system
+          persist-credentials: true
+          fetch-depth: 0
+      - name: Git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      - name: Merge current main into feature only (fail closed on conflicts)
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          if git merge-base --is-ancestor origin/main HEAD; then
+            echo "Feature already contains current main"
+            exit 0
+          fi
+          set +e
+          git merge --no-commit --no-ff origin/main
+          status=$?
+          set -e
+          if [ "$status" != 0 ]; then
+            echo "::error::Feature/main merge has conflicts; branch remains unchanged"
+            git diff --name-only --diff-filter=U
+            git status --short
+            exit 1
+          fi
+          git commit -m "chore(excel): sync current main into Phase 10 branch"
+          # Reject if another writer updated the feature branch mid-run.
+          git push origin HEAD:feature/universal-excel-export-system
