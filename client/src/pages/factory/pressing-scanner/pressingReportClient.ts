@@ -139,11 +139,6 @@ export function pressingCell(
     case "lastScanAt": return detailed ? "" : pressingDisplayDateTime(row.lastScanAt, row.timezoneName);
   }
 }
-// Excel formula injection protection for product and operator names.
-function excelSafe(value: string | number): string | number {
-  if (typeof value === "string" && /^[=+\-@\t\r]/.test(value)) return "'" + value;
-  return value;
-}
 export const PRESSING_EXPORT_LIMIT = 30000;
 export async function exportPressingReport(
   filters: PressingReportFilters, columns: PressingReportColumn[],
