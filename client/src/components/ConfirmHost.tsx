@@ -24,6 +24,12 @@ export interface ConfirmActionOptions {
   tone?: ConfirmDialogTone;
   /** The user must type this phrase exactly before confirming. */
   requirePhrase?: string;
+  /**
+   * Record data shown under the description (amounts, names, counts). Keep
+   * `title` and `description` fixed sentences so they can be translated, and
+   * put the values that change here.
+   */
+  details?: ReadonlyArray<{ label: string; value: string | number }>;
 }
 
 export interface PromptTextOptions {
@@ -106,7 +112,21 @@ export function ConfirmHost() {
         requirePhrase={options.requirePhrase}
         onConfirm={() => finish(true)}
         data-testid="dialog-confirm-action"
-      />
+      >
+        {options.details && options.details.length > 0 ? (
+          <dl
+            className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 rounded-md border bg-muted/40 p-3 text-sm"
+            data-testid="confirm-action-details"
+          >
+            {options.details.map((detail) => (
+              <div key={detail.label} className="contents">
+                <dt className="text-muted-foreground">{detail.label}</dt>
+                <dd className="font-medium tabular-nums wrap-break-word">{detail.value}</dd>
+              </div>
+            ))}
+          </dl>
+        ) : null}
+      </ConfirmDialog>
     );
   }
 

@@ -286,9 +286,8 @@ export function FactoryFxAgentWalletCard({
                               await confirmAction({
                                 title: "Reset this unused FX wallet?",
                                 description:
-                                  "It will be reset to the current posted ledger balance USD " +
-                                  fmt(active.ledgerBookUsd) +
-                                  ". Its activation date will become today. Existing vouchers are unchanged.",
+                                  "It will be reset to the current posted ledger balance. Its activation date will become today. Existing vouchers are unchanged.",
+                                details: [{ label: "Ledger balance (USD)", value: fmt(active.ledgerBookUsd) }],
                                 confirmText: "Reset wallet",
                                 tone: "warning",
                               })
@@ -512,11 +511,11 @@ export function FactoryFxAgentWalletCard({
                                 await confirmAction({
                                   title: "Reverse this conversion?",
                                   description:
-                                    "USD " +
-                                    fmt(item.usdAmount) +
-                                    " will be restored by deducting exactly EUR " +
-                                    fmt(item.eurAmount) +
-                                    ". Original entries will remain in the audit trail.",
+                                    "The USD amount will be restored by deducting exactly the EUR amount. Original entries will remain in the audit trail.",
+                                  details: [
+                                    { label: "USD restored", value: fmt(item.usdAmount) },
+                                    { label: "EUR deducted", value: fmt(item.eurAmount) },
+                                  ],
                                   confirmText: "Reverse",
                                   tone: "destructive",
                                 })

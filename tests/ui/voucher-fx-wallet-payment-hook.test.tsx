@@ -158,7 +158,7 @@ describe("useVoucherFxWalletPayment", () => {
     expect(confirmAction).toHaveBeenCalledWith(
       expect.objectContaining({
         title: "Post Payment Voucher?",
-        description: expect.stringContaining("From: Access Cash"),
+        details: expect.arrayContaining([{ label: "From", value: "Access Cash" }]),
       })
     );
   });

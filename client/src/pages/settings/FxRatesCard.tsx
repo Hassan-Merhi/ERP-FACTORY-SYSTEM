@@ -127,7 +127,12 @@ export function FxRatesCard() {
                         variant="ghost"
                         onClick={async () => {
                           const confirmed = await confirmAction({
-                            title: `Remove ${r.currencyCode} rate ${parseFloat(r.rateToUsd).toFixed(4)} dated ${r.effectiveDate}?`,
+                            title: "Remove this exchange rate?",
+                            details: [
+                              { label: "Currency", value: r.currencyCode },
+                              { label: "Rate to USD", value: parseFloat(r.rateToUsd).toFixed(4) },
+                              { label: "Effective date", value: r.effectiveDate },
+                            ],
                             description:
                               "Historical document rates will be preserved, but new FX calculations may use a different rate.",
                             confirmText: "Remove",

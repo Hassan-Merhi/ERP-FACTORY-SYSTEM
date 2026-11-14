@@ -302,8 +302,12 @@ export function RetailSupplierImportDialog({
       if (!readyForPosting || !catalogPreview)
         throw new Error("Resolve all import validation errors before confirming");
       const confirmed = await confirmAction({
-        title: `Receive ${summary.totalUnits} items from ${knownSupplier?.legalName || knownSupplier?.name || "supplier"}?`,
+        title: "Receive these items from the supplier?",
         description: "This posts the inventory and supplier credit voucher.",
+        details: [
+          { label: "Items", value: summary.totalUnits },
+          { label: "Supplier", value: knownSupplier?.legalName || knownSupplier?.name || "—" },
+        ],
         confirmText: "Receive and post",
         tone: "warning",
       });

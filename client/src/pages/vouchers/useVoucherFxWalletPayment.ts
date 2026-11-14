@@ -264,33 +264,25 @@ export function useVoucherFxWalletPayment({
       return false;
     }
     const paymentDetails = directEur
-      ? "Supplier receives: EUR " +
-        amount.toFixed(2) +
-        "\n" +
-        "Agent EUR deducted: EUR " +
-        amount.toFixed(2) +
-        "\n" +
-        "No currency exchange or rate entry is needed."
-      : "USD recipient receives: " +
-        amount.toFixed(2) +
-        "\n" +
-        "Agreed USD/EUR rate: " +
-        fxPaymentRate +
-        "\n" +
-        "EUR deducted (approx.): " +
-        eurAmount.toFixed(6) +
-        "\n" +
-        "FX gain/loss is booked automatically.";
+      ? [
+          { label: "Supplier receives (EUR)", value: amount.toFixed(2) },
+          { label: "Agent EUR deducted", value: amount.toFixed(2) },
+        ]
+      : [
+          { label: "USD recipient receives", value: amount.toFixed(2) },
+          { label: "Agreed USD/EUR rate", value: fxPaymentRate },
+          { label: "EUR deducted (approx.)", value: eurAmount.toFixed(6) },
+        ];
     const confirmed = await confirmAction({
       title: "Post Payment Voucher?",
-      description:
-        "From: " +
-        selectedFxWallet.wallet.accountName +
-        "\n" +
-        "To: " +
-        validEntries[0].accountName +
-        "\n" +
-        paymentDetails,
+      description: directEur
+        ? "No currency exchange or rate entry is needed."
+        : "FX gain/loss is booked automatically.",
+      details: [
+        { label: "From", value: selectedFxWallet.wallet.accountName },
+        { label: "To", value: validEntries[0].accountName },
+        ...paymentDetails,
+      ],
       confirmText: "Post Payment",
       tone: "warning",
     });

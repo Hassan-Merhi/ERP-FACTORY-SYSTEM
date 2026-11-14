@@ -150,8 +150,9 @@ export default function CostCenters() {
   }
   async function handleArchive(center: CostCenter) {
     const confirmed = await confirmAction({
-      title: "Archive " + center.name + "?",
+      title: "Archive this cost center?",
       description: "Existing allocations will remain available in historical reports.",
+      details: [{ label: "Cost center", value: center.name }],
       confirmText: "Archive",
       tone: "warning",
     });

@@ -64,8 +64,9 @@ export function OffloadChargeRepairCard() {
     if (!drift || drift.length === 0) return;
     const containers = new Set(drift.map((row) => row.offloadId)).size;
     const confirmed = await confirmAction({
-      title: `Re-price ${containers} container(s)?`,
+      title: "Re-price these containers?",
       description: "Their charges will be matched to their vouchers. This updates inventory costs.",
+      details: [{ label: "Containers", value: containers }],
       confirmText: "Re-price",
       tone: "warning",
     });
