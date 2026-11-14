@@ -495,7 +495,7 @@ export function registerStatsNetPositionRoutes(app: Express) {
       const dateTag = getClientDate(req);
       styleUniversalFinancialWorkbook(
         wb,
-        wb.worksheets.map((ws) => ({ name: ws.name }))
+        wb.worksheets?.map((ws) => ({ name: ws.name })) ?? []
       );
       const xlsBuffer = Buffer.from(await wb.xlsx.writeBuffer());
       // Non-fatal: audit write must not block the Excel download
