@@ -58,7 +58,7 @@ export function ExcelAppearanceSettingsTab({ company }: Props) {
     onSuccess: (response) => {
       setDraft(response.appearance);
       void queryClient.invalidateQueries({ queryKey: ["/api/excel-export/appearance"] });
-      toast({ title: copy.saved, description: "New exports will use this company's settings." });
+      toast({ title: copy.saved, description: copy.savedDescription });
     },
     onError: (reason: Error) =>
       toast({
@@ -298,7 +298,7 @@ export function ExcelAppearanceSettingsTab({ company }: Props) {
         <CardHeader>
           <CardTitle>{copy.livePreview}</CardTitle>
           <CardDescription>
-            Shows colors, logo, header text and table styling. The sample XLSX verifies Excel rendering.
+            {copy.previewDescription}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -313,9 +313,9 @@ export function ExcelAppearanceSettingsTab({ company }: Props) {
               )}
             </div>
             <div className="px-3 py-2 text-muted-foreground">
-              {draft.showCompanyName && <span>Company: {company.name} · </span>}
+              {draft.showCompanyName && <span>{copy.companyLabel}: {company.name} · </span>}
               {draft.showExportDate && (
-                <span>Date: {draft.dateFormat === "dd/mm/yyyy" ? "14/11/2026" : "11/14/2026"}</span>
+                <span>{copy.dateLabel}: {draft.dateFormat === "dd/mm/yyyy" ? "14/11/2026" : "11/14/2026"}</span>
               )}
             </div>
             <div className="px-3 pb-2 font-semibold">{draft.showBranding ? draft.brandName : copy.sampleReport}</div>
@@ -323,9 +323,9 @@ export function ExcelAppearanceSettingsTab({ company }: Props) {
               className="grid grid-cols-3 border-t px-3 py-2 font-semibold"
               style={{ backgroundColor: draft.accentColor, color: "#fff" }}
             >
-              <span>Article Code</span>
-              <span>Qty</span>
-              <span>Total</span>
+              <span>{copy.sampleArticle}</span>
+              <span>{copy.sampleQuantity}</span>
+              <span>{copy.sampleTotal}</span>
             </div>
             <div
               className="grid grid-cols-3 px-3 py-2"
@@ -339,7 +339,7 @@ export function ExcelAppearanceSettingsTab({ company }: Props) {
           <div className="flex flex-wrap gap-2">
             <Button disabled={save.isPending} onClick={() => save.mutate(draft)}>
               <Save className="h-4 w-4 mr-2" />
-              Save settings
+              {copy.save}
             </Button>
             <Button variant="outline" onClick={() => setDraft({ ...DEFAULT_EXCEL_APPEARANCE_SETTINGS })}>
               <RotateCcw className="h-4 w-4 mr-2" />
@@ -351,7 +351,7 @@ export function ExcelAppearanceSettingsTab({ company }: Props) {
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            Sample preview does not save settings. Logos appear inside regular reports with at least five columns;
+            {copy.previewDisclaimer}
             strict templates and specialized invoices retain their own company-facing layout.
           </p>
         </CardContent>
