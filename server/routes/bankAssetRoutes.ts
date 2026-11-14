@@ -5,7 +5,7 @@ import { createHash } from "crypto";
 import { db, pool } from "../db";
 import { storage } from "../storage";
 import { requireAuth, requireRole } from "../auth";
-import { upload, logAudit } from "./_helpers";
+import { spreadsheetUpload, logAudit } from "./_helpers";
 import { registerBankAccountRoutes } from "./bankAccountRoutes";
 import { fixedAssets, insertFixedAssetSchema } from "@shared/schema";
 import { eq, and, sql, isNull } from "drizzle-orm";
@@ -199,7 +199,7 @@ export function registerBankAssetRoutes(app: Express) {
   });
 
   // PO Import - Parse and Preview Excel
-  app.post("/api/po-import/parse", requireAuth, upload.single("file"), async (req, res) => {
+  app.post("/api/po-import/parse", requireAuth, spreadsheetUpload.single("file"), async (req, res) => {
     try {
       if (!req.session.currentCompanyId) {
         return res.status(400).json({ message: "No company selected" });

@@ -12,7 +12,7 @@ import { and, eq, desc } from "drizzle-orm";
 import { db } from "../db";
 import { storage } from "../storage";
 import { requireAuth, requireNonPOS } from "../auth";
-import { upload } from "./_helpers";
+import { spreadsheetUpload } from "./_helpers";
 import { readExcel, sheetToJson, createWorkbook, jsonToSheet, writeWorkbook } from "../excelHelper";
 import { getClientDate } from "../lib/dateUtils";
 import { sendTransferWhatsApp } from "../helpers/sendTransferWhatsApp";
@@ -53,7 +53,7 @@ export function registerStockTransferImportRoutes(app: Express) {
   // ============= Stock Transfer Import Endpoints =============
 
   // Stock Transfer Import - Parse and Preview Excel
-  app.post("/api/stock-transfer-import/parse", requireAuth, upload.single("file"), async (req, res) => {
+  app.post("/api/stock-transfer-import/parse", requireAuth, spreadsheetUpload.single("file"), async (req, res) => {
     try {
       if (!req.session.currentCompanyId) {
         return res.status(400).json({ message: "No company selected" });
@@ -476,7 +476,7 @@ export function registerStockTransferImportRoutes(app: Express) {
     "/api/stock-transfer-import/parse-multi-source",
     requireAuth,
     requireNonPOS,
-    upload.single("file"),
+    spreadsheetUpload.single("file"),
     async (req, res) => {
       try {
         if (!req.session.currentCompanyId) {

@@ -8,7 +8,7 @@
 import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { storage } from "../storage";
-import { requireAuth, requireRole } from "../auth";
+import { requireAuth } from "../auth";
 import { getCompanyBusinessDate } from "../lib/dateUtils";
 import { insertExchangeRateSchema } from "@shared/schema";
 import { normalizeAccountingCurrencyAlias } from "@shared/currencyCatalog";
@@ -16,6 +16,10 @@ import { companyRateValueSchema, companyRateDateSchema } from "@shared/companyRa
 import { saveCompanyExchangeRate } from "../services/accounting/exchangeRateWrites";
 import { invalidateCompanyFxRateCaches } from "../services/accounting/invalidateCompanyFxRateCaches";
 import { MonetaryFxError } from "../services/accounting/monetaryFxRates";
+import { isExistingRecordReadOnlyRole } from "@shared/createOnlyRolePolicy";
+
+/** Roles that may save a rate for any date and replace an existing one. */
+const RATE_EDITOR_ROLES = ["Admin", "Owner", "Developer"];
 
 type CompanyCurrencyPair = { fromCurrency: string; toCurrency: string };
 
@@ -165,11 +169,19 @@ export function registerExchangeRateRoutes(app: Express) {
     }
   });
 
-  // Admin/Owner/Developer only (requireRole includes Developer), with an
-  // atomic audited save. The server chooses the active company; the caller
-  // cannot inject a rate into a different company or an unconfigured pair.
-  app.post("/api/exchange-rates", requireAuth, requireRole("Admin", "Owner"), async (req, res) => {
+  // Atomic audited save. Admin/Owner/Developer may save any date and replace a
+  // rate. Every other writing role (POS, Manager, ...) may set TODAY's rate
+  // once: the first user to set it sets it for the whole company, so nobody
+  // else is prompted again that day. View Only / Create Only and view-only POS users never save.
+  // The server chooses the active company; the caller cannot inject a rate
+  // into a different company or an unconfigured pair.
+  app.post("/api/exchange-rates", requireAuth, async (req, res) => {
     try {
+      const role = req.user?.role;
+      if (!role || isExistingRecordReadOnlyRole(role) || req.session.posViewOnly) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      const isRateEditor = RATE_EDITOR_ROLES.includes(role);
       const companyId = activeRateCompanyId(req, res);
       if (companyId === null) return;
       const company = await storage.getCompanyById(companyId);
@@ -199,16 +211,19 @@ export function registerExchangeRateRoutes(app: Express) {
       // Daily popup submissions must be dated TODAY in the company's own
       // timezone, even if the popup remained open past midnight. The
       // historical rate settings form may intentionally save another date.
-      if (req.body?.daily === true) {
-        const settings = await storage.getCompanySettings(companyId);
-        const businessDate = getCompanyBusinessDate(settings?.timezone);
-        if (parsed.data.effectiveDate !== businessDate) {
-          return res.status(409).json({
-            code: "EXCHANGE_RATE_BUSINESS_DATE_CHANGED",
-            message: "The company's business date changed. Reload the daily rate prompt before saving.",
-            today: businessDate,
-          });
-        }
+      const settings = await storage.getCompanySettings(companyId);
+      const businessDate = getCompanyBusinessDate(settings?.timezone);
+      if (req.body?.daily === true && parsed.data.effectiveDate !== businessDate) {
+        return res.status(409).json({
+          code: "EXCHANGE_RATE_BUSINESS_DATE_CHANGED",
+          message: "The company's business date changed. Reload the daily rate prompt before saving.",
+          today: businessDate,
+        });
+      }
+      // A non-editor only ever sets today's rate; past/future dates and
+      // corrections stay with Admin/Owner/Developer.
+      if (!isRateEditor && parsed.data.effectiveDate !== businessDate) {
+        return res.status(403).json({ message: "Forbidden" });
       }
       const fromCurrency = requestedFrom;
       const toCurrency = requestedTo;
@@ -221,7 +236,8 @@ export function registerExchangeRateRoutes(app: Express) {
 
       const rate = await saveCompanyExchangeRate(
         { userId: req.session.userId!, username: req.session.username || "unknown", companyId },
-        { fromCurrency, toCurrency, rate: parsed.data.rate, effectiveDate: parsed.data.effectiveDate }
+        { fromCurrency, toCurrency, rate: parsed.data.rate, effectiveDate: parsed.data.effectiveDate },
+        { createOnly: !isRateEditor }
       );
       // This runs AFTER the audited rate transaction commits: no invalidation
       // on validation failures or rolled-back writes. All consumers (Settings,

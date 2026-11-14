@@ -155,7 +155,7 @@ export default function FinalizedSaleReturnImport() {
     setConfirmed(false);
     setOutcomes({});
     try {
-      const references = await readFinalizedReturnImport(file);
+      const references = await readFinalizedReturnImport(file, selectedCompany?.role);
       const mapped = await postJson<Preview>(endpoint + "/import-preview", { references, customerId });
       if (mapped.customerId !== customerId) throw new Error(copy.importCustomerRequired);
       setPreview(mapped);

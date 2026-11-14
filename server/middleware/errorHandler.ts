@@ -8,6 +8,7 @@
  */
 import type { Express, Request, Response, NextFunction } from "express";
 import { logger } from "../lib/logger";
+import multer from "multer";
 import { closedPeriodErrorResponse } from "../services/accounting/closedPeriodGuard";
 
 export function registerErrorHandler(app: Express): void {
@@ -18,6 +19,10 @@ export function registerErrorHandler(app: Express): void {
       status?: number;
       statusCode?: number;
     };
+    if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
+      return res.status(413).json({ code: "UPLOAD_FILE_TOO_LARGE", message: "File exceeds the allowed upload limit." });
+    }
+
     // DB unavailable errors — return 503 immediately instead of a generic 500.
     const isPoolTimeout =
       error?.cause?.message?.includes("timeout exceeded when trying to connect") ||
