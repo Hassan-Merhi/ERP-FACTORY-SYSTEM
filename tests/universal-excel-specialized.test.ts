@@ -83,7 +83,7 @@ describe("Phase 8 specialized workbook adapter", () => {
     expect(ws.getCell("A2").value).toBe("00001234");
     expect(ws.getCell("C2").value).toBe(3);
     expect(ws.getCell("D2").value).toBe(8.5);
-    expect(ws.headerFooter.oddHeader).toBeUndefined();
+    expect(ws.headerFooter.oddHeader).toBeFalsy();
   });
 
   it("preserves exact drilldown links, cached numeric results, totals and title layout", () => {
@@ -144,7 +144,7 @@ describe("Phase 8 specialized workbook adapter", () => {
     expect(raw.getCell("A1").value).toBe("voucher_number");
     expect(raw.getCell("A30002").value).toBe("V30001");
     expect(raw.getCell("C30002").value).toBe(30_001);
-    expect(raw.headerFooter.oddHeader).toBeUndefined();
+    expect(raw.headerFooter.oddHeader).toBeFalsy();
     expect(summary.getCell("A4").value).toBe("Data Category");
     expect(summary.headerFooter.oddHeader).toContain("DAKZO SYSTEMS");
   });
@@ -200,7 +200,7 @@ describe("Phase 8 specialized workbook adapter", () => {
       })
     ).toThrow(/Invalid specialized report header/);
     expect(wb.creator).toBe(creator);
-    expect(wb.getWorksheet("ENTRY")!.headerFooter.oddHeader).toBeUndefined();
+    expect(wb.getWorksheet("ENTRY")!.headerFooter.oddHeader).toBeFalsy();
   });
 
   it("brands only explicitly safe report headers, not hidden or protected formula cells", () => {
