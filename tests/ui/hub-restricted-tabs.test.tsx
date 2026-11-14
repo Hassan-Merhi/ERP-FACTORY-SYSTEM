@@ -84,6 +84,12 @@ describe("hub tabs restricted by ERP page access", () => {
     expect(screen.getByTestId("link-inventory-stock-hub")).toHaveAttribute("href", "/stock?tab=otw");
   });
 
+  it("links Inventory to Stock Query when stock search is allowed without Stock Items", () => {
+    window.history.replaceState({}, "", "/inventory?tab=on-the-way");
+    render(<InventoryHub access={access(["stock_query", "stock_otw"])} />);
+    expect(screen.getByTestId("link-inventory-stock-hub")).toHaveAttribute("href", "/stock?tab=query");
+  });
+
   it("shows the restricted state when no InventoryHub tab is permitted", () => {
     window.history.replaceState({}, "", "/inventory");
     render(<InventoryHub access={access(["accounts"])} />);
