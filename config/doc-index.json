@@ -156,6 +156,11 @@
     }
   ],
   "classification": {
+    "docs/erp-supplier-returns-multi-container-phases.md": "reference",
+    "docs/erp-supplier-returns-phase1-audit.md": "reference",
+    "docs/erp-supplier-returns-phase4-stock-integrity.md": "reference",
+    "docs/erp-supplier-returns-phase5-accounting.md": "reference",
+    "docs/erp-supplier-returns-phase6-excel-history.md": "reference",
     "docs/file-size-limits-20261113.md": "reference",
     "docs/database-phase9-production-rollout.md": "reference",
     "docs/database-phase8-migration-testing.md": "reference",
