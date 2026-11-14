@@ -18,13 +18,9 @@ export type FinalizedReturnMatchExport = {
 
 // Explicit strings prevent leading zeros in reference/article codes from being lost.
 // Also prevent uploaded/user-owned text from being interpreted as spreadsheet formulas.
-// Leading whitespace and control characters (U+0000 to U+001F) are skipped before looking for the
-// formula character, because a spreadsheet skips them too.
-const isSkippedBeforeFormula = (character: string) => /\s/.test(character) || character.charCodeAt(0) <= 0x1f;
 const spreadsheetText = (text: string | null | undefined) => {
   const value = String(text ?? "");
-  const first = [...value].find((character) => !isSkippedBeforeFormula(character));
-  return first !== undefined && "=+-@".includes(first) ? "'" + value : value;
+  return /^[\s\p{Cc}]*[=+\-@]/u.test(value) ? "'" + value : value;
 };
 
 export function buildFinalizedReturnMatchWorkbook(workbook: ExcelJS.Workbook, input: FinalizedReturnMatchExport): void {
