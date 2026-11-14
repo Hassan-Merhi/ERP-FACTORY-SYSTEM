@@ -27,3 +27,13 @@ export async function fetchExcelAppearance(): Promise<ExcelAppearanceResponse> {
     ? raw.companyName : "";
   return { appearance, companyName: name };
 }
+
+/** Optional enhancement for older customized print workbooks. If the settings
+ * endpoint is unreachable, the original export is still usable unchanged. */
+export async function optionalSpecializedExcelAppearance(): Promise<ExcelAppearanceSettings | undefined> {
+  try {
+    return (await fetchExcelAppearance()).appearance;
+  } catch {
+    return undefined;
+  }
+}
