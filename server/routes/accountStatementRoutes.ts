@@ -782,7 +782,7 @@ export function registerAccountStatementRoutes(app: Express) {
 
       const safeAccName = accountName.replace(/[^\w\s.()-]/g, "_").replace(/\s+/g, "_");
       styleUniversalFinancialWorkbook(workbook, [
-        { name: "Statement" },
+        { name: "Statement", headerRow: hdr.number },
         { name: "Currency Detail", headerRow: 7 },
       ]);
       const buf = Buffer.from(await workbook.xlsx.writeBuffer());
