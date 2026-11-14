@@ -9,7 +9,10 @@ import { useMutation } from "@tanstack/react-query";
 import { format } from "date-fns";
 import type { UseFormReturn } from "react-hook-form";
 import type { ClientErrorLike } from "@/lib/clientError";
-import { queryClient, invalidateContainerLandedCostQueries } from "@/lib/queryClient";
+import { apiRequestPrivileged, queryClient, invalidateContainerLandedCostQueries } from "@/lib/queryClient";
+import { attachAccountingRequestIdentity, releaseAccountingRequestIdentity } from "@/lib/accountingRequestIdentity";
+import { invalidateApiFamily } from "@/lib/frontendDataArchitecture";
+import type { IntercompanyVoucherMirror } from "./useNormalIntercompanyVoucher";
 import { resolveWhatsAppPrompt, type WhatsAppPromptState } from "@/lib/whatsapp-prompt";
 import type { getApiRequest } from "@/lib/factoryApi";
 import type { useToast } from "@/hooks/use-toast";
@@ -18,6 +21,7 @@ import type { VoucherFormData } from "@/pages/vouchers/voucherTypes";
 
 type FxWalletPayment = ReturnType<typeof useVoucherFxWalletPayment>;
 type WalletPaymentContext = Parameters<FxWalletPayment["postWalletPayment"]>[1];
+type VoucherSubmission = VoucherFormData & { intercompanyMirror?: IntercompanyVoucherMirror };
 
 export function useVoucherSaveMutation({
   activeTab,
@@ -61,7 +65,7 @@ export function useVoucherSaveMutation({
   discardPaymentDraft: () => void;
 }) {
   return useMutation({
-    mutationFn: async (formData: VoucherFormData) => {
+    mutationFn: async (formData: VoucherSubmission) => {
       if (isWalletPayment) {
         return postWalletPayment(formData, { selectedCurrency, voucherEffectiveDate, modeApiRequest });
       }
@@ -84,6 +88,21 @@ export function useVoucherSaveMutation({
         exchangeRate: paymentPostingRate ? paymentPostingRate.toString() : undefined,
         effectiveDate: voucherEffectiveDate || null,
       };
+      if (formData.intercompanyMirror) {
+        if (isEditMode)
+          throw new Error("Paired vouchers must be reversed together; they cannot be edited individually.");
+        // Do not queue the two-company bank/cash movement offline. Preserve a
+        // stable request identity across an uncertain network outcome, and let
+        // the server's existing paired-payment idempotency reject duplicates.
+        const endpoint = "/api/vouchers/payment-receipt";
+        const mirroredPayload = attachAccountingRequestIdentity("POST", endpoint, {
+          ...payload,
+          intercompanyMirror: formData.intercompanyMirror,
+        });
+        const res = await apiRequestPrivileged("POST", endpoint, mirroredPayload);
+        releaseAccountingRequestIdentity("POST", endpoint, mirroredPayload, true);
+        return await res.json();
+      }
       if (isEditMode) {
         const res = await modeApiRequest("PATCH", `/api/vouchers/${voucherIdToEdit}/payment-receipt`, payload);
         return await res.json();
@@ -94,10 +113,27 @@ export function useVoucherSaveMutation({
     },
     onSuccess: async (data) => {
       const isEditMode = !!voucherIdToEdit;
+      const mirrored = (data as { intercompanyMirrored?: boolean; paymentId?: number }).intercompanyMirrored === true;
       toast({
-        title: "Success",
-        description: `${activeTab === "payment" ? "Payment" : "Receipt"} voucher ${isEditMode ? "updated" : "created"} successfully`,
+        title: mirrored ? "Intercompany vouchers posted together" : "Success",
+        description: mirrored
+          ? "Both the linked company Receipt and Payment were committed; no second standalone voucher was created."
+          : `${activeTab === "payment" ? "Payment" : "Receipt"} voucher ${isEditMode ? "updated" : "created"} successfully`,
       });
+      if (mirrored) {
+        for (const family of [
+          "/api/vouchers",
+          "/api/accounts",
+          "/api/bank-accounts",
+          "/api/ledger-accounts",
+          "/api/suppliers",
+          "/api/daybook",
+          "/api/net-position",
+          "/api/intercompany-container-trading/payments",
+        ]) {
+          void invalidateApiFamily(queryClient, family);
+        }
+      }
       const waPrompt = resolveWhatsAppPrompt(data);
       if (waPrompt) setWaPendingPrompt(waPrompt);
       discardPaymentDraft();

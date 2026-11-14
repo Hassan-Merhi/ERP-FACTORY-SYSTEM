@@ -10,6 +10,7 @@ import { registerVoucherPaymentRoutes } from "./vouchers/voucherPaymentRoutes";
 import { guardFxWalletPaymentSource } from "./vouchers/fxAgentPaymentSourceGuard";
 import { registerCentralGenericVoucherCreateRoute } from "./vouchers/centralGenericVoucherCreateRoute";
 import { registerCentralPaymentReceiptCreateRoute } from "./vouchers/centralPaymentReceiptCreateRoute";
+import { registerNormalIntercompanyVoucherRoutes } from "./vouchers/normalIntercompanyVoucherRoutes";
 import { registerVoucherExactReversalRoute } from "./vouchers/voucherExactReversalRoute";
 import { registerVoucherReverseRoute } from "./vouchers/voucherReverseRoute";
 import { registerCentralPaymentReceiptLifecycleRoutes } from "./vouchers/centralPaymentReceiptLifecycleRoute";
@@ -118,6 +119,9 @@ export function registerVoucherRoutes(app: Express) {
 
   // Protect FX native balances before central and legacy Payment creators.
   app.use("/api/vouchers/payment-receipt", guardFxWalletPaymentSource);
+  // Exact linked intercompany accounts must NEVER fall through to a lone
+  // Payment/Receipt voucher. The matcher routes both legs atomically.
+  registerNormalIntercompanyVoucherRoutes(app);
   registerCentralPaymentReceiptCreateRoute(app);
   registerVoucherExactReversalRoute(app);
   registerVoucherReverseRoute(app);

@@ -291,6 +291,8 @@ END $$`,
   `UPDATE property_payments SET payment_group_id = 'PG-LEGACY-' || voucher_id::text WHERE payment_group_id IS NULL AND voucher_id IS NOT NULL`,
   // ── Starred proforma for container verification comparison ──
   `ALTER TABLE supplier_proformas ADD COLUMN IF NOT EXISTS is_starred boolean NOT NULL DEFAULT false`,
+  `ALTER TABLE supplier_proformas ADD COLUMN IF NOT EXISTS destination_company_id integer REFERENCES companies(id)`,
+  `CREATE INDEX IF NOT EXISTS supplier_proformas_destination_idx ON supplier_proformas (company_id, supplier_id, destination_company_id)`,
   // ── Effective Date for factory transactions ──
   `ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS effective_date date`,
   `ALTER TABLE factory_daybook_entries ADD COLUMN IF NOT EXISTS effective_date date`,

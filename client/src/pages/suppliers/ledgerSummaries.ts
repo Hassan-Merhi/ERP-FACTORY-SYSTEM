@@ -13,6 +13,16 @@ import { isPaymentRow, type SupplierLedgerRow, type SupplierPurchaseOrder } from
 
 export type SupplierDateFilter = "all" | "today" | "yesterday" | "this_month" | "this_year";
 
+/** Stable destination predicate shared by the detail table and its Excel export. */
+export function matchesSupplierDestination(destinationCompanyId: number | null | undefined, filter: string): boolean {
+  return (
+    filter === "all" ||
+    (filter === "unassigned"
+      ? destinationCompanyId == null
+      : /^\d+$/.test(filter) && destinationCompanyId === Number(filter))
+  );
+}
+
 export interface SupplierLedgerKpis {
   txCount: number;
   totalPurchases: number;
@@ -25,31 +35,31 @@ export interface SupplierLedgerKpis {
  * selected date window. Matches the original page behavior: rows without a
  * date never match any concrete window.
  */
-export function filterLedgerRowsByDate(rows: SupplierLedgerRow[], dateFilter: SupplierDateFilter): SupplierLedgerRow[] {
-  if (dateFilter === "all") return rows;
-
-  const todayStr = format(new Date(), "yyyy-MM-dd");
-  const yesterdayStr = format(new Date(Date.now() - 86400000), "yyyy-MM-dd");
+function matchesSupplierDate(date: string | null, dateFilter: SupplierDateFilter): boolean {
+  if (dateFilter === "all") return true;
+  if (!date) return false;
   const now = new Date();
+  const value = new Date(date);
+  if (Number.isNaN(value.getTime())) return false;
+  if (dateFilter === "today") return format(value, "yyyy-MM-dd") === format(now, "yyyy-MM-dd");
+  if (dateFilter === "yesterday")
+    return format(value, "yyyy-MM-dd") === format(new Date(Date.now() - 86400000), "yyyy-MM-dd");
+  if (dateFilter === "this_month")
+    return value.getFullYear() === now.getFullYear() && value.getMonth() === now.getMonth();
+  return value.getFullYear() === now.getFullYear();
+}
 
-  if (dateFilter === "today") {
-    return rows.filter((t) => t.date && format(new Date(t.date), "yyyy-MM-dd") === todayStr);
-  }
-  if (dateFilter === "yesterday") {
-    return rows.filter((t) => t.date && format(new Date(t.date), "yyyy-MM-dd") === yesterdayStr);
-  }
-  if (dateFilter === "this_month") {
-    return rows.filter((t) => {
-      if (!t.date) return false;
-      const d = new Date(t.date);
-      return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
-    });
-  }
-  // "this_year"
-  return rows.filter((t) => {
-    if (!t.date) return false;
-    return new Date(t.date).getFullYear() === now.getFullYear();
-  });
+export function filterLedgerRowsByDate(rows: SupplierLedgerRow[], dateFilter: SupplierDateFilter): SupplierLedgerRow[] {
+  return dateFilter === "all" ? rows : rows.filter((row) => matchesSupplierDate(row.date, dateFilter));
+}
+
+export function filterPurchaseOrdersByDate(
+  orders: SupplierPurchaseOrder[],
+  dateFilter: SupplierDateFilter
+): SupplierPurchaseOrder[] {
+  return dateFilter === "all"
+    ? orders
+    : orders.filter((po) => matchesSupplierDate(po.importDate ?? po.createdAt, dateFilter));
 }
 
 /** KPI cards in the supplier detail dialog header. */
@@ -101,6 +111,7 @@ export function voucherTabForType(voucherType: string): string | undefined {
 export interface SupplierLedgerExportRow {
   Date: string;
   Company: string;
+  Destination: string;
   "Doc Number": string;
   Type: string;
   Description: string;
@@ -118,6 +129,7 @@ export function supplierLedgerToExportRows(ledger: SupplierLedgerRow[]): Supplie
   return ledger.map((txn) => ({
     Date: txn.date ? format(new Date(txn.date), "yyyy-MM-dd") : "",
     Company: txn.companyName,
+    Destination: txn.destinationCompanyName || "Unassigned",
     "Doc Number": txn.docNumber,
     Type: txn.voucherType,
     Description: txn.description,

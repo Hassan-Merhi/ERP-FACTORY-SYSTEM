@@ -51,6 +51,9 @@ import { useAccountBalance } from "@/pages/vouchers/useAccountBalance";
 import { useVoucherHydration } from "@/pages/vouchers/useVoucherHydration";
 import { PaymentDraftAndRateBar } from "@/pages/vouchers/PaymentDraftAndRateBar";
 import { buildVoucherSidebarGroups } from "@/pages/vouchers/voucherSidebarGroups";
+import { canOpenIntercompanyVoucherTransfer } from "@/pages/vouchers/intercompanyTransferPolicy";
+import { useNormalIntercompanyVoucher } from "@/pages/vouchers/useNormalIntercompanyVoucher";
+
 import type { VoucherSidebarGroup } from "@/pages/vouchers/voucherSidebarGroups";
 import { exportVoucherHelper } from "@/pages/vouchers/voucherActions";
 import { voucherFormSchema } from "@/pages/vouchers/voucherTypes";
@@ -95,6 +98,11 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
   const isFactoryCompany = selectedCompany?.companyType === "factory";
   const isRetailCompany = selectedCompany?.companyType === "retail";
   const isPropertiesCompany = selectedCompany?.companyType === "properties";
+  const canUseIntercompanyVouchers = canOpenIntercompanyVoucherTransfer(
+    selectedCompany,
+    Boolean(posUser),
+    Boolean(new URLSearchParams(window.location.search).get("edit"))
+  );
   const [isAutoCreating, setIsAutoCreating] = useState(false);
   const {
     formatHistoricalBaseAmount: formatAmount,
@@ -156,10 +164,10 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
   const fallbackVoucherTab = visibleVoucherTabs[0] ?? null;
   const canShowVoucherTab = (tab: VoucherTab) =>
     isPOS || (!isFactoryMode && !isRetailCompany) || visibleVoucherTabs.includes(tab);
-  const allowedVoucherTabs = (isFactoryMode || isRetailCompany) && !isPOS ? visibleVoucherTabs : ALL_VOUCHER_TABS;
+  const effectiveVoucherTabs = (isFactoryMode || isRetailCompany) && !isPOS ? visibleVoucherTabs : ALL_VOUCHER_TABS;
   const [activeTab, setActiveTab] = useHubQueryState<VoucherTab>({
     key: "tab",
-    allowedValues: allowedVoucherTabs,
+    allowedValues: effectiveVoucherTabs,
     knownValues: ALL_VOUCHER_TABS,
     defaultValue: fallbackVoucherTab ?? "payment",
   });
@@ -283,7 +291,7 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
   }, [voucherIdToEdit, voucherToEdit]);
 
   const paymentDraftMode = isFactoryMode ? "factory" : "erp";
-  const paymentDraftType = activeTab === "payment" ? "voucher-payment" : "voucher-receipt";
+  const paymentDraftType = activeTab === "receipt" ? "voucher-receipt" : "voucher-payment";
   const {
     hasDraft: hasPaymentDraft,
     draftAge: paymentDraftAge,
@@ -294,14 +302,14 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
     entityType: paymentDraftType,
     mode: paymentDraftMode,
     companyId: selectedCompany?.id ?? null,
-    enabled: !voucherIdToEdit,
+    enabled: !voucherIdToEdit && (activeTab === "payment" || activeTab === "receipt"),
   });
 
   const allFormValues = form.watch();
   useEffect(() => {
-    if (voucherIdToEdit) return;
+    if (voucherIdToEdit || (activeTab !== "payment" && activeTab !== "receipt")) return;
     schedulePaymentSave(allFormValues);
-  }, [allFormValues, schedulePaymentSave, voucherIdToEdit]);
+  }, [activeTab, allFormValues, schedulePaymentSave, voucherIdToEdit]);
 
   const { hydratedVoucherIdRef } = useVoucherHydration({
     voucherToEdit,
@@ -334,6 +342,17 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
   const paymentAccountType = form.watch("paymentAccountType");
   const paymentAccountId = form.watch("paymentAccountId");
   const paymentAccountName = form.watch("paymentAccountName");
+  // Normal Payment/Receipt detects only verified intercompany account IDs.
+  // Any paired posting uses the existing atomic, two-company service.
+  const normalIntercompany = useNormalIntercompanyVoucher({
+    companyId: selectedCompany?.id ?? 0,
+    enabled:
+      canUseIntercompanyVouchers && !isPOS && !voucherIdToEdit && (activeTab === "payment" || activeTab === "receipt"),
+    voucherType: activeTab === "receipt" ? "Receipt" : "Payment",
+    paymentAccountType,
+    paymentAccountId,
+    entries,
+  });
 
   const { filteredSidebarAccounts, selectedAccount } = useSidebarSync({
     sidebarAccounts,
@@ -523,8 +542,31 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
       });
       return;
     }
+    let intercompanyMirror;
+    try {
+      intercompanyMirror = normalIntercompany.buildMirror();
+    } catch (error) {
+      toast({
+        title: "Verify linked company transfer",
+        description: error instanceof Error ? error.message : "Verify the actual bank/cash accounts.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (intercompanyMirror && isWalletPayment) {
+      toast({
+        title: "Choose a normal bank/cash account",
+        description: "FX wallet settlement cannot also post a paired intercompany cash transfer.",
+        variant: "destructive",
+      });
+      return;
+    }
     if (isWalletPayment && !confirmWalletPayment(validEntries, toast)) return;
-    saveMutation.mutate({ ...data, entries: validEntries });
+    saveMutation.mutate({
+      ...data,
+      entries: validEntries,
+      ...(intercompanyMirror ? { intercompanyMirror } : {}),
+    });
   };
 
   return (
@@ -613,6 +655,7 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
           )}
           {!isPOS && canShowVoucherTab("payment") && activeTab === "payment" && (
             <div className="space-y-4">
+              {normalIntercompany.details}
               <PaymentDraftAndRateBar
                 draftAge={hasPaymentDraft && !voucherIdToEdit ? paymentDraftAge : null}
                 draftLabel="Unsaved payment draft found"
@@ -677,6 +720,7 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
 
           {!isPOS && canShowVoucherTab("receipt") && activeTab === "receipt" && (
             <div className="space-y-4">
+              {normalIntercompany.details}
               <PaymentDraftAndRateBar
                 draftAge={hasPaymentDraft && !voucherIdToEdit ? paymentDraftAge : null}
                 draftLabel="Unsaved receipt draft found"

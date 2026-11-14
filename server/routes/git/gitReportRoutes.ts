@@ -178,10 +178,17 @@ export function registerGitReportRoutes(app: Express) {
 
       const includeOffloaded = req.query.includeOffloaded === "true";
 
-      const [raw, nameMap] = await Promise.all([
+      const [raw, scopeNameMap] = await Promise.all([
         fetchActiveContainers(companyIds, { includeOffloaded }),
         loadCompanyNames(companyIds),
       ]);
+      // Linked physical containers retain the source owner ID while appearing in
+      // the destination scope; resolve both names for accurate tracking labels.
+      const ownerIds = [...new Set(raw.map((row) => row.companyId))].filter(
+        (id) => Number.isInteger(id) && !(id in scopeNameMap)
+      );
+      const ownerNameMap = ownerIds.length > 0 ? await loadCompanyNames(ownerIds) : {};
+      const nameMap = { ...scopeNameMap, ...ownerNameMap };
 
       let enriched = enrichContainers(raw, nameMap);
 
@@ -314,10 +321,17 @@ export function registerGitReportRoutes(app: Express) {
         );
         if ("error" in scope) return res.status(scope.status).json({ message: scope.error, code: scope.code });
         const companyIds = scope.mode === "all" ? scope.companyIds : [scope.companyId];
-        const [rows, nameMap] = await Promise.all([
+        const [rows, scopeNameMap] = await Promise.all([
           fetchActiveContainers(companyIds, { includeOffloaded: true, containerId }),
           loadCompanyNames(companyIds),
         ]);
+        // A linked container retains its parent's companyId even when requested
+        // through a destination company; preserve the parent name in the detail.
+        const ownerIds = [...new Set(rows.map((row) => row.companyId))].filter(
+          (id) => Number.isInteger(id) && !(id in scopeNameMap)
+        );
+        const ownerNameMap = ownerIds.length > 0 ? await loadCompanyNames(ownerIds) : {};
+        const nameMap = { ...scopeNameMap, ...ownerNameMap };
         const container = enrichContainers(rows, nameMap)[0];
         if (!container) return res.status(404).json({ message: "Container not found" });
         res.setHeader("Cache-Control", "private, max-age=15, stale-while-revalidate=15");

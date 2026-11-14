@@ -1,8 +1,14 @@
 import { lazyRetry as lazy } from "@/lib/lazyRetry";
 import { Switch, Route, Redirect } from "wouter";
-import PropertiesRentalsHub from "@/pages/properties/PropertiesRentalsHub";
+const PropertiesRentalsHub = lazy(() => import("@/pages/properties/PropertiesRentalsHub"));
+// Keep the Properties PO route isolated from the large shared ERP/SPA import bundle.
+const PropertiesPOImport = lazy(() => import("@/pages/poimport/PropertiesIntercompanyPOImport"));
 import { useCompany } from "@/contexts/CompanyContext";
-import { canUsePropertiesCapability, PROPERTIES_LEGACY_RENTAL_REDIRECTS } from "@/properties/config/propertiesNavigation";
+import {
+  canUsePropertiesCapability,
+  PROPERTIES_LEGACY_RENTAL_REDIRECTS,
+} from "@/properties/config/propertiesNavigation";
+import { legacyPropertiesIntercompanyDestination } from "@/pages/intercompany/intercompanyLegacyNavigation";
 import { AccountingToolbox } from "@/lazyPages";
 
 const PropertiesHelpTraining = lazy(() =>
@@ -43,6 +49,19 @@ import {
   PropertiesVoucherDetail,
   PropertiesVoucherEdit,
   PropertiesVouchers,
+  TrackingHub,
+  ContainersPage,
+  ContainerDetailPage,
+  ContainerVerification,
+  Suppliers,
+  StockHub,
+  StockItemDetail,
+  ImportStockItems,
+  EditSupplier,
+  SupplierProformas,
+  PurchaseOrderEdit,
+  OffloadDetail,
+  AccountingCreate,
 } from "@/lazyPages";
 
 interface PropertiesRoutesProps {
@@ -58,6 +77,7 @@ export function PropertiesRoutes({ user }: PropertiesRoutesProps) {
   const isAdmin = canUsePropertiesCapability("admin", user, selectedCompany);
   const isDeveloper = canUsePropertiesCapability("developer", user, selectedCompany);
   const canOpenPersonalSettings = canUsePropertiesCapability("personal", user, selectedCompany);
+  const canTrade = canUsePropertiesCapability("trading", user, selectedCompany);
 
   return (
     <Switch>
@@ -84,6 +104,50 @@ export function PropertiesRoutes({ user }: PropertiesRoutesProps) {
       <Route path="/properties/agents" component={Agents} />
       <Route path="/properties/daybook" component={PropertiesDaybook} />
 
+      {/* Phase 1: expose existing company-scoped logistics and supplier screens in Properties. */}
+      {canTrade && <Route path="/properties/po-import" component={PropertiesPOImport} />}
+      <Route path="/properties/tracking" component={TrackingHub} />
+      <Route path="/properties/containers/:containerId/verification" component={ContainerVerification} />
+      <Route path="/properties/containers/:id" component={ContainerDetailPage} />
+      <Route path="/properties/containers" component={ContainersPage} />
+      {/* Reuse company-scoped Stock Items, Query, Offload Search and OTW.
+          Keep all management and import routes inside Properties mode. */}
+      {canTrade && <Route path="/properties/stock-query/:id" component={StockItemDetail} />}
+      {canTrade && <Route path="/properties/import-stock-items" component={ImportStockItems} />}
+      {canTrade && <Route path="/properties/stock">{() => <StockHub />}</Route>}
+      <Route path="/properties/offloads/:id" component={OffloadDetail} />
+      <Route path="/properties/suppliers/:supplierId/proformas" component={SupplierProformas} />
+      <Route path="/properties/suppliers/:id/edit" component={EditSupplier} />
+      <Route path="/properties/suppliers" component={Suppliers} />
+      <Route path="/properties/purchase-orders/:id/edit" component={PurchaseOrderEdit} />
+      <Route path="/properties/master-data" component={AccountingCreate} />
+
+      {canTrade && (
+        <Route path="/properties/container-trading">{() => <Redirect replace to="/properties/po-import" />}</Route>
+      )}
+      {/* Phase 7: preserve bookmarked URLs without rendering duplicate editors. */}
+      {canTrade && (
+        <Route path="/properties/linked-trades">
+          {() => (
+            <Redirect replace to={legacyPropertiesIntercompanyDestination("linked-trades", window.location.search)} />
+          )}
+        </Route>
+      )}
+      {canTrade && (
+        <Route path="/properties/intercompany-payments">
+          {() => <Redirect replace to={legacyPropertiesIntercompanyDestination("intercompany-payments")} />}
+        </Route>
+      )}
+      {canTrade && (
+        <Route path="/properties/intercompany-lifecycle">
+          {() => (
+            <Redirect
+              replace
+              to={legacyPropertiesIntercompanyDestination("intercompany-lifecycle", window.location.search)}
+            />
+          )}
+        </Route>
+      )}
       <Route path="/properties/rentals" component={PropertiesRentalsHub} />
       {Object.entries(PROPERTIES_LEGACY_RENTAL_REDIRECTS).map(([from, to]) => (
         <Route key={from} path={from}>

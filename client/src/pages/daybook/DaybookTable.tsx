@@ -38,6 +38,7 @@ interface DaybookTableProps {
   handleDelete: (v: Voucher) => void;
   canEdit: (v: Voucher) => boolean;
   canDelete: () => boolean;
+  linkedVoucherIds: ReadonlySet<number>;
   daybookRowLimit: number;
   setDaybookRowLimit: (n: number | ((prev: number) => number)) => void;
   DAYBOOK_PAGE_SIZE: number;
@@ -74,6 +75,7 @@ export function DaybookTable({
   handleDelete,
   canEdit: canEditVoucher,
   canDelete: canDeleteVoucher,
+  linkedVoucherIds,
   setDaybookRowLimit,
   DAYBOOK_PAGE_SIZE,
   navigate,
@@ -153,7 +155,11 @@ export function DaybookTable({
       });
 
     return (
-      <ErpListTable pageKey="daybook-condensed" scrollLabel="Condensed daybook" wrapperClassName="max-h-[calc(100dvh-220px)]">
+      <ErpListTable
+        pageKey="daybook-condensed"
+        scrollLabel="Condensed daybook"
+        wrapperClassName="max-h-[calc(100dvh-220px)]"
+      >
         <TableHeader className="sticky top-0 z-20 bg-muted [&_th]:bg-muted [&_th]:text-foreground/90">
           <TableRow>
             <TableHead className="sticky left-0 bg-muted z-10 pl-4">
@@ -569,7 +575,7 @@ export function DaybookTable({
                     <EyeOff className="w-4 h-4 text-muted-foreground" />
                   )}
                 </Button>
-                {canDelete() && !voucherLocked && (
+                {canDelete() && (!voucherLocked || linkedVoucherIds.has(voucher.id)) && (
                   <Button
                     variant="ghost"
                     size="icon"
@@ -830,7 +836,7 @@ export function DaybookTable({
                     <Edit className="w-3.5 h-3.5" />
                   </Button>
                 ) : null}
-                {canDelete() && !voucherLocked && (
+                {canDelete() && (!voucherLocked || linkedVoucherIds.has(voucher.id)) && (
                   <Button
                     variant="ghost"
                     size="icon"
@@ -880,7 +886,11 @@ export function DaybookTable({
 
       {/* ── Desktop table (hidden below sm) ── */}
       <div className="hidden sm:block">
-        <ErpListTable pageKey="daybook-detailed" scrollLabel="Detailed daybook" wrapperClassName="max-h-[calc(100dvh-220px)]">
+        <ErpListTable
+          pageKey="daybook-detailed"
+          scrollLabel="Detailed daybook"
+          wrapperClassName="max-h-[calc(100dvh-220px)]"
+        >
           <TableHeader className="sticky top-0 z-20 bg-muted [&_th]:bg-muted [&_th]:text-foreground/90">
             <TableRow>
               <TableHead className="sticky left-0 bg-muted z-10">Date &amp; Time</TableHead>

@@ -1,0 +1,118 @@
+import type { ApplicationLanguage } from "@shared/applicationLanguageContract";
+
+const en = {
+  tab: "Intercompany Transfer",
+  supplierExplanation:
+    "Normal supplier payments stay in this company. A confirmed Properties-to-ERP cash or bank transfer must use the separate Intercompany Transfer voucher type.",
+  openTransfer: "Intercompany Transfer",
+  transferExplanation:
+    "Select the involved Properties and ERP companies, their actual receiving and paying cash or bank accounts, date, currency, historical FX rate, transfer reference and proof. This posts one linked receipt and payment atomically; it is not a second supplier payment.",
+  supplierPayment: "Normal Supplier Payment",
+  transferVoucher: "Paired transfer vouchers",
+  transferSafety:
+    "Only confirm money that actually moved on both sides. The same transfer reference cannot be posted twice for a company pair. A remaining amount not assigned to a purchase order stays as unapplied credit, not another cash movement.",
+  currentVoucher: "Voucher in this company",
+  sourceReceipt: "Properties receipt",
+  destinationPayment: "ERP payment",
+  viewVoucher: "View voucher",
+  voucherHistory: "Posted vouchers",
+  voucherUnavailable: "No matching voucher in this company",
+  linkedDetected: "Linked intercompany account detected",
+  linkedPaymentInfo:
+    "This Payment automatically creates the matching Properties Receipt. No standalone voucher will be posted.",
+  linkedReceiptInfo:
+    "This Receipt automatically creates the matching ERP Payment. No standalone voucher will be posted.",
+  linkedCounterpart: "Linked company's actual bank/cash account",
+  linkedSelectCash: "Choose actual bank/cash account",
+  linkedReference: "Actual transfer reference",
+  linkedEvidence: "Proof that both sides moved money",
+  linkedReason: "Transfer reason",
+  linkedAllocation: "Optional allocations to linked purchase orders",
+  linkedCredit: "Unallocated amounts remain credit with the linked company pair.",
+  linkedDue: "Due",
+  linkedConfirm: "I confirm the actual payment and receipt in both companies, without a duplicate cash movement.",
+  linkedChecking: "Checking the linked company account…",
+  linkedValidation: "Verify linked company transfer",
+  linkedValidationFallback: "Verify both companies' cash/bank accounts.",
+  linkedSuccess: "Both company vouchers posted together",
+  linkedSuccessInfo: "The linked Payment and Receipt were committed atomically without another standalone voucher.",
+} as const;
+type Labels = { [K in keyof typeof en]: string };
+const translations: Record<ApplicationLanguage, Labels> = {
+  en,
+  fr: {
+    tab: "Virement intersociétés",
+    supplierExplanation:
+      "Les paiements normaux aux fournisseurs restent dans cette société. Un transfert bancaire ou en espèces confirmé entre Propriétés et ERP doit utiliser le type Virement intersociétés.",
+    openTransfer: "Virement intersociétés",
+    transferExplanation:
+      "Choisissez les sociétés Propriétés et ERP, les comptes réels d'encaissement et de paiement, la date, la devise, le taux historique, la référence et les justificatifs. Le reçu et le paiement sont comptabilisés ensemble, sans second paiement fournisseur.",
+    supplierPayment: "Paiement fournisseur normal",
+    transferVoucher: "Pièces de virement liées",
+    transferSafety:
+      "Confirmez uniquement les fonds effectivement transférés des deux côtés. Une référence ne peut pas être enregistrée deux fois pour la même paire. Le solde non affecté à un bon de commande reste un crédit disponible et non un nouveau mouvement bancaire.",
+    currentVoucher: "Pièce de cette société",
+    sourceReceipt: "Encaissement Propriétés",
+    destinationPayment: "Paiement ERP",
+    viewVoucher: "Ouvrir la pièce",
+    voucherHistory: "Pièces comptabilisées",
+    voucherUnavailable: "Aucune pièce correspondante dans cette société",
+    linkedDetected: "Compte intersociétés lié détecté",
+    linkedPaymentInfo:
+      "Ce paiement crée automatiquement l'encaissement correspondant dans Propriétés, sans pièce autonome.",
+    linkedReceiptInfo: "Cet encaissement crée automatiquement le paiement correspondant dans ERP, sans pièce autonome.",
+    linkedCounterpart: "Compte réel banque/caisse de la société liée",
+    linkedSelectCash: "Choisir le compte banque/caisse",
+    linkedReference: "Référence du transfert réel",
+    linkedEvidence: "Preuve des mouvements d'argent des deux côtés",
+    linkedReason: "Motif du transfert",
+    linkedAllocation: "Affectations facultatives aux bons de commande liés",
+    linkedCredit: "Les montants non affectés restent des crédits pour la même paire de sociétés.",
+    linkedDue: "À payer",
+    linkedConfirm: "Je confirme le paiement et l'encaissement réels dans les deux sociétés, sans doublon.",
+    linkedChecking: "Vérification du compte de la société liée…",
+    linkedValidation: "Vérifier le transfert intersociétés",
+    linkedValidationFallback: "Vérifiez les comptes bancaires et de caisse des deux sociétés.",
+    linkedSuccess: "Les deux pièces intersociétés ont été enregistrées",
+    linkedSuccessInfo: "Le paiement et l'encaissement ont été enregistrés ensemble sans doublon.",
+  },
+  ar: {
+    tab: "تحويل بين الشركات",
+    supplierExplanation:
+      "دفعات الموردين العادية تبقى ضمن الشركة نفسها. التحويل الفعلي المؤكد بين العقارات وERP يجب تسجيله في نوع تحويل بين الشركات.",
+    openTransfer: "تحويل بين الشركات",
+    transferExplanation:
+      "اختر شركة العقارات وشركة ERP، وحسابي الاستلام والدفع الفعليين، والتاريخ والعملة وسعر الصرف التاريخي ومرجع التحويل والإثبات. يسجل النظام إيصالاً ودفعة مرتبطين في عملية واحدة دون تكرار دفع المورد.",
+    supplierPayment: "دفع مورّد عادي",
+    transferVoucher: "سندات التحويل المرتبطة",
+    transferSafety:
+      "أكد فقط الأموال التي انتقلت فعلياً من الطرفين. لا يمكن تسجيل المرجع نفسه مرتين للشركتين. المبلغ غير المخصص لأمر شراء يبقى رصيداً دائناً غير مطبق وليس حركة نقدية جديدة.",
+    currentVoucher: "سند هذه الشركة",
+    sourceReceipt: "إيصال العقارات",
+    destinationPayment: "دفعة ERP",
+    viewVoucher: "عرض السند",
+    voucherHistory: "السندات المسجلة",
+    voucherUnavailable: "لا يوجد سند مناسب في هذه الشركة",
+    linkedDetected: "تم التعرف على حساب مرتبط بين الشركات",
+    linkedPaymentInfo: "ستنشئ دفعة ERP إيصالاً مطابقاً في العقارات تلقائياً دون سند إضافي.",
+    linkedReceiptInfo: "سينشئ إيصال العقارات دفعة مطابقة في ERP تلقائياً دون سند إضافي.",
+    linkedCounterpart: "حساب البنك أو الصندوق الفعلي للشركة المرتبطة",
+    linkedSelectCash: "اختر حساب البنك أو الصندوق",
+    linkedReference: "مرجع التحويل الفعلي",
+    linkedEvidence: "إثبات انتقال الأموال في الشركتين",
+    linkedReason: "سبب التحويل",
+    linkedAllocation: "تخصيص اختياري لأوامر الشراء المرتبطة",
+    linkedCredit: "تبقى المبالغ غير المخصصة رصيداً دائناً بين الشركتين.",
+    linkedDue: "المستحق",
+    linkedConfirm: "أؤكد حصول الدفع والقبض فعلياً في الشركتين دون تسجيل حركة نقدية مكررة.",
+    linkedChecking: "جارٍ التحقق من الحساب المرتبط…",
+    linkedValidation: "تحقق من التحويل بين الشركات",
+    linkedValidationFallback: "تحقق من الحسابات البنكية والنقدية في الشركتين.",
+    linkedSuccess: "تم تسجيل السندين المرتبطين معاً",
+    linkedSuccessInfo: "تم تسجيل الدفع والإيصال معاً دون تكرار أي سند.",
+  },
+};
+export function intercompanyVoucherText(language: ApplicationLanguage): Labels {
+  return translations[language] ?? en;
+}
+export const INTERCOMPANY_VOUCHER_EN = en;

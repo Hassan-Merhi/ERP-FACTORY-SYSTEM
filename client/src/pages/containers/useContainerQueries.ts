@@ -27,8 +27,24 @@ export function useContainerQueries(
     _allowedRoles.includes(currentUser?.currentRole ?? "") || _allowedRoles.includes(currentUser?.role ?? "");
   const isDeveloper = currentUser?.role === "Developer";
 
-  const { data: rawContainers = [], isLoading } = useQuery<Container[]>({
+  const {
+    data: rawContainers = [],
+    isLoading,
+    error: containersError,
+    refetch: refetchContainers,
+  } = useQuery<Container[]>({
     queryKey: ["/api/containers/active", selectedCompany?.id],
+    queryFn: async () => {
+      const response = await fetch("/api/containers/active", { credentials: "include" });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.message || "Unable to load container list");
+      }
+      const data: unknown = await response.json();
+      if (!Array.isArray(data)) throw new Error("Container API returned an invalid list");
+      return data as Container[];
+    },
+    staleTime: 0,
     enabled: !!selectedCompany?.id,
   });
   const allContainers = rawContainers
@@ -80,6 +96,8 @@ export function useContainerQueries(
     suppliers,
     freightStatusMap,
     isLoading,
+    containersError,
+    refetchContainers,
     isSoldLoading,
     spContainersLoading,
     hideContainerCosts,

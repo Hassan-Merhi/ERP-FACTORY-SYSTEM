@@ -1,7 +1,7 @@
 import React from "react";
 import { Link } from "wouter";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { EnrichedContainerRow, OtwColId, fmtDate } from "./gitContainerTypes";
+import { EnrichedContainerRow, OtwColId, fmtDate, canEditTrackedContainer } from "./gitContainerTypes";
 import {
   EtaCell,
   InlineTextCell,
@@ -20,13 +20,22 @@ interface ContainerTableProps {
   colVis: Record<OtwColId, boolean>;
   sessionCompanyId: number | null;
   readOnly?: boolean;
+  propertiesMode?: boolean;
   onOpenDrawer: (c: EnrichedContainerRow) => void;
   printRef: React.RefObject<HTMLDivElement | null>;
 }
 
 const TRACKING_ROW_HEIGHT = 40;
 
-export function ContainerTable({ containers, colVis, sessionCompanyId, readOnly = false, onOpenDrawer, printRef }: ContainerTableProps) {
+export function ContainerTable({
+  containers,
+  colVis,
+  sessionCompanyId,
+  readOnly = false,
+  propertiesMode = false,
+  onOpenDrawer,
+  printRef,
+}: ContainerTableProps) {
   const isPhone = useErpPhoneLayout();
   const virtualRows = useBoundedTableRows({
     rowCount: containers.length,
@@ -76,12 +85,8 @@ export function ContainerTable({ containers, colVis, sessionCompanyId, readOnly 
                 )}
                 {colVis.truckNo && <TableHead className="w-[100px] font-bold h-9 text-white">Truck #</TableHead>}
                 {colVis.location && <TableHead className="w-[110px] font-bold h-9 text-white">Location</TableHead>}
-                {colVis.borderDate && (
-                  <TableHead className="w-[100px] font-bold h-9 text-white">Border Date</TableHead>
-                )}
-                {colVis.maxOffload && (
-                  <TableHead className="w-[100px] font-bold h-9 text-white">Max Offload</TableHead>
-                )}
+                {colVis.borderDate && <TableHead className="w-[100px] font-bold h-9 text-white">Border Date</TableHead>}
+                {colVis.maxOffload && <TableHead className="w-[100px] font-bold h-9 text-white">Max Offload</TableHead>}
                 {colVis.delayed && (
                   <TableHead className="w-[70px] font-bold text-center h-9 text-white">Delayed</TableHead>
                 )}
@@ -122,7 +127,7 @@ export function ContainerTable({ containers, colVis, sessionCompanyId, readOnly 
                   {visibleContainers.map((c, visibleIndex) => {
                     const idx = virtualRows.startIndex + visibleIndex;
                     const freight = parseFloat(c.poFreight ?? "0");
-                    const canEditRow = !readOnly && (sessionCompanyId === null || c.companyId === sessionCompanyId);
+                    const canEditRow = canEditTrackedContainer(c, sessionCompanyId, readOnly);
 
                     const transUpper = (c.transporter ?? "").toUpperCase();
                     const transDays = transUpper.includes("FARHAT") || transUpper.includes("CONTINENTAL") ? 11 : 14;
@@ -149,7 +154,7 @@ export function ContainerTable({ containers, colVis, sessionCompanyId, readOnly 
                         </TableCell>
                         <TableCell className="font-mono font-bold text-[11px] h-10">
                           <Link
-                            href={gitContainerDetailPath(c.id)}
+                            href={gitContainerDetailPath(c.id, propertiesMode)}
                             className="text-foreground hover:text-primary hover:underline underline-offset-2 transition-colors"
                             onClick={(event) => event.stopPropagation()}
                             data-testid={`link-container-${c.id}`}

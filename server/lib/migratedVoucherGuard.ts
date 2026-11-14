@@ -46,6 +46,18 @@ export const GOLDEN_COAST_PROGRAMME_VOUCHER_MESSAGE =
   "Correct it by reversing and re-posting through the originating workflow.";
 
 /**
+ * Paired intercompany money and trade vouchers are owned by the coordinating
+ * workflow. A standalone edit, delete or reversal would leave its other
+ * company leg and allocation evidence unbalanced.
+ */
+export const INTERCOMPANY_PAIRED_VOUCHER_LOCK_MESSAGE =
+  "This intercompany voucher is linked to another company. Use the linked intercompany workflow to reverse both sides together; individual edits, deletions and reversals are forbidden.";
+
+export function isIntercompanyPairedVoucher(voucher: { sourceModule?: string | null }): boolean {
+  return voucher?.sourceModule === "INTERCOMPANY_CONTAINER";
+}
+
+/**
  * Single check for every voucher mutation route: returns the reason a voucher
  * may not be changed, or null when it is editable. Callers must use this rather
  * than testing one protection in isolation, so a new protected class reaches
@@ -58,5 +70,6 @@ export function voucherMutationBlockReason(voucher: {
   if (!voucher) return null;
   if (isReadonlyMigratedVoucher(voucher)) return READONLY_MIGRATED_VOUCHER_MESSAGE;
   if (isGoldenCoastProgrammeVoucher(voucher)) return GOLDEN_COAST_PROGRAMME_VOUCHER_MESSAGE;
+  if (isIntercompanyPairedVoucher(voucher)) return INTERCOMPANY_PAIRED_VOUCHER_LOCK_MESSAGE;
   return null;
 }

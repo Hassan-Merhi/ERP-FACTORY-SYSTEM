@@ -5,7 +5,7 @@ import { getErpRouteFeatureKeys, isErpDeveloperOnlyRoute } from "@shared/erpRout
 describe("ERP access catalog compatibility", () => {
   it("keeps the existing dashboard, stock and supplier feature relationships", () => {
     expect(getErpRouteFeatureKeys("/financial-overview")).toContain("dashboard");
-    expect(getErpRouteFeatureKeys("/stock")).toEqual(["stock_items", "stock_query"]);
+    expect(getErpRouteFeatureKeys("/stock")).toEqual(["stock_items", "stock_query", "stock_otw"]);
     expect(getErpRouteFeatureKeys("/parties")).toEqual(["suppliers", "customers"]);
   });
 

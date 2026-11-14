@@ -26,7 +26,11 @@ export default function AccountingCreate() {
   // Create Only may open only the forms the server accepts (supplier, stock
   // item); every other master-data create stays hidden for that role.
   const { isCreateOnly } = useExistingRecordChangeAccess();
-  const [chosenEntity, setSelectedEntity] = useState<EntityType>("location");
+  const [chosenEntity, setSelectedEntity] = useState<EntityType>(() =>
+    typeof window !== "undefined" && new URLSearchParams(window.location.search).get("entity") === "supplier"
+      ? "supplier"
+      : "location"
+  );
   const selectedEntity: EntityType = isCreateOnly && !isCreateOnlyEntity(chosenEntity) ? "supplier" : chosenEntity;
   const config = entityConfig[selectedEntity];
 

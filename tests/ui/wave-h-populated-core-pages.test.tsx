@@ -299,7 +299,7 @@ describe("Wave H populated core-page behavior", () => {
           ],
         ],
         [
-          ["/api/suppliers/1/purchase-orders", 1],
+          ["/api/suppliers/1/purchase-orders?includeAccessibleCompanies=1", 1],
           [
             {
               id: 501,

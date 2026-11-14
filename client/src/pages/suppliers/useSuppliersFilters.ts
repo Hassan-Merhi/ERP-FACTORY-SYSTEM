@@ -9,16 +9,16 @@ interface SuppliersFilters extends Record<string, unknown> {
   hidePayments: boolean;
 }
 
-export function useSuppliersFilters(companyId: number | undefined) {
+export function useSuppliersFilters(companyId: number | undefined, isProperties = false) {
   const state = usePaginatedFilterState<SuppliersFilters>({
     createInitialFilters: () => ({
       companyFilter: "all",
-      hideZeroBalance: true,
+      hideZeroBalance: !isProperties,
       searchTerm: "",
       dateFilter: "all",
       hidePayments: false,
     }),
-    storageKey: companyId ? `erp-suppliers-filters-v1:${companyId}` : undefined,
+    storageKey: companyId ? `${isProperties ? "properties" : "erp"}-suppliers-filters-v1:${companyId}` : undefined,
   });
 
   return {

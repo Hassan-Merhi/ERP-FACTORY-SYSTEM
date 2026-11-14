@@ -325,10 +325,12 @@ export default function ContainerVerification() {
   // Prefers the starred proforma; falls back to the most recent if none is starred.
   useEffect(() => {
     if (!autoCompare || !selectedSupplierId || proformas.length === 0 || selectedProformaId) return;
-    const starred = proformas.find((p) => p.isStarred);
-    const pick = starred ?? proformas[proformas.length - 1];
+    const destinationId = containerData?.container?.companyId;
+    const eligible = proformas.filter((p) => (p.destinationCompanyId ?? p.companyId) === destinationId);
+    const starred = eligible.find((p) => p.isStarred);
+    const pick = starred ?? eligible[eligible.length - 1];
     if (pick) setSelectedProformaId(String(pick.id));
-  }, [autoCompare, selectedSupplierId, proformas, selectedProformaId]);
+  }, [autoCompare, selectedSupplierId, proformas, selectedProformaId, containerData]);
 
   // Auto-generate only after the current container details have been refreshed.
   useEffect(() => {
@@ -422,11 +424,7 @@ export default function ContainerVerification() {
             <div>
               <label className="text-xs font-medium mb-1 block">Proforma</label>
               <div className="flex items-center gap-2">
-                <Select
-                  value={selectedProformaId}
-                  onValueChange={setSelectedProformaId}
-                  disabled={!selectedSupplierId}
-                >
+                <Select value={selectedProformaId} onValueChange={setSelectedProformaId} disabled={!selectedSupplierId}>
                   <SelectTrigger className="flex-1" data-testid="select-proforma">
                     <SelectValue placeholder={selectedSupplierId ? "Select proforma" : "Select a supplier first"} />
                   </SelectTrigger>

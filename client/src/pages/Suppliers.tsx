@@ -6,15 +6,25 @@ import { useDebounce } from "@/hooks/use-debounce";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import { PageHeader } from "@/components/PageHeader";
-import { ErpListFilters, ErpConfirmDialog, ErpRecordAction, erpReportFileName, exportErpReportRowsExcel, useErpCan as useCan, erpCanDenialMessage as canDenialMessage, useErpRecordChangeAccess as useExistingRecordChangeAccess } from "@/erp-core";
+import {
+  ErpListFilters,
+  ErpConfirmDialog,
+  ErpRecordAction,
+  erpReportFileName,
+  exportErpReportRowsExcel,
+  useErpCan as useCan,
+  erpCanDenialMessage as canDenialMessage,
+  useErpRecordChangeAccess as useExistingRecordChangeAccess,
+} from "@/erp-core";
 import { erpCompanyDataKey, invalidateErpDataFamilies } from "@/erp-core/erpData";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Edit, Eye, EyeOff, FileText, Search, Truck, Users, Container, DollarSign } from "lucide-react";
+import { Edit, Eye, EyeOff, FileText, Search, Truck, Users, Container, DollarSign, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useCompany } from "@/contexts/CompanyContext";
-
+import { useApplicationLanguageCode } from "@/contexts/ApplicationLanguageContext";
+import { intercompanyTradingSetupText } from "@/i18n/intercompanyTradingSetupTranslations";
 
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { suppliersApi } from "@/api/suppliersApi";
@@ -23,17 +33,26 @@ import { useSuppliersFilters } from "./suppliers/useSuppliersFilters";
 import type { Company } from "@/contexts/CompanyContext";
 import type { SupplierLedgerRow, SupplierPurchaseOrder, SupplierWithStats } from "./suppliers/supplierDisplay";
 import { getAvatarColor, getInitials } from "./suppliers/supplierDisplay";
-import { supplierLedgerToExportRows, voucherTabForType, type SupplierDateFilter } from "./suppliers/ledgerSummaries";
+import {
+  filterLedgerRowsByDate,
+  matchesSupplierDestination,
+  supplierLedgerToExportRows,
+  voucherTabForType,
+  type SupplierDateFilter,
+} from "./suppliers/ledgerSummaries";
 import { SupplierDetailDialog, type SupplierDetailTab } from "./suppliers/SupplierDetailDialog";
 
 export default function Suppliers() {
   const [selectedSupplier, setSelectedSupplier] = useState<SupplierWithStats | null>(null);
   const [dialogTab, setDialogTab] = useState<SupplierDetailTab>("transactions");
+  const [destinationFilter, setDestinationFilter] = useState("all");
   const [supplierToDelete, setSupplierToDelete] = useState<{ id: number; name: string } | null>(null);
 
   useEscapeBack(selectedSupplier ? () => setSelectedSupplier(null) : null);
 
   const { selectedCompany, selectCompany } = useCompany();
+  const isProperties = selectedCompany?.companyType === "properties";
+  const tradingCopy = intercompanyTradingSetupText(useApplicationLanguageCode());
   const { formatAmount: legacyFormatAmount, formatHistoricalBaseAmount } = useCurrencyContext();
   // Keep lightweight page-test providers and older embedded consumers working
   // while production uses the historical-base formatter.
@@ -48,7 +67,7 @@ export default function Suppliers() {
     setCompanyFilter,
     setDateFilter,
     setHidePayments,
-  } = useSuppliersFilters(selectedCompany?.id);
+  } = useSuppliersFilters(selectedCompany?.id, isProperties);
   const debouncedSearch = useDebounce(searchTerm, 300);
   const mayDeleteSupplier = useCan("erp.suppliers", "delete", { legacyAllowed: selectedCompany?.role !== "POS" });
   const mayExportSupplier = useCan("erp.suppliers", "export", { legacyAllowed: true, featureKey: "exp_excel" });
@@ -72,6 +91,13 @@ export default function Suppliers() {
     },
   });
 
+  // Keep Properties supplier drilldowns in the Properties shell. When an
+  // authorized cross-company row is opened, use that company's shell.
+  const partyPath = (companyId: number | null | undefined, path: string) => {
+    const company = companies.find((entry) => entry.id === companyId);
+    return (company?.companyType === "properties" || (!company && isProperties) ? "/properties" : "") + path;
+  };
+
   const handleTransactionClick = async (txn: SupplierLedgerRow) => {
     const targetCompany = companies.find((c) => c.id === txn.companyId);
     if (targetCompany && (!selectedCompany || selectedCompany.id !== txn.companyId)) {
@@ -81,9 +107,9 @@ export default function Suppliers() {
     setSelectedSupplier(null);
     const tabName = voucherTabForType(txn.voucherType);
     if (tabName) {
-      navigate(`/vouchers?edit=${txn.voucherId}&tab=${tabName}`);
+      navigate(partyPath(txn.companyId, `/vouchers?edit=${txn.voucherId}&tab=${tabName}`));
     } else {
-      navigate(`/voucher-detail/${txn.voucherId}`);
+      navigate(partyPath(txn.companyId, `/voucher-detail/${txn.voucherId}`));
     }
   };
 
@@ -109,7 +135,7 @@ export default function Suppliers() {
   const purchaseOrdersUrl =
     companyFilter !== "all"
       ? `/api/suppliers/${selectedSupplier?.id}/purchase-orders?companyId=${companyFilter}`
-      : `/api/suppliers/${selectedSupplier?.id}/purchase-orders`;
+      : `/api/suppliers/${selectedSupplier?.id}/purchase-orders?includeAccessibleCompanies=1`;
 
   const { data: purchaseOrders = [], isLoading: posLoading } = useQuery<SupplierPurchaseOrder[]>({
     queryKey: erpCompanyDataKey(purchaseOrdersUrl, selectedCompany?.id),
@@ -128,6 +154,7 @@ export default function Suppliers() {
   const handleSupplierClick = (supplier: SupplierWithStats) => {
     setSelectedSupplier(supplier);
     setCompanyFilter("all");
+    setDestinationFilter("all");
     setDialogTab("transactions");
     setDateFilter("all");
   };
@@ -135,6 +162,7 @@ export default function Suppliers() {
   const handleCloseDialog = () => {
     setSelectedSupplier(null);
     setCompanyFilter("all");
+    setDestinationFilter("all");
     setDialogTab("transactions");
     setDateFilter("all");
   };
@@ -146,7 +174,7 @@ export default function Suppliers() {
       selectCompany(targetCompany);
     }
     setSelectedSupplier(null);
-    navigate(`/purchase-orders/${po.id}/edit`);
+    navigate(partyPath(po.companyId, `/purchase-orders/${po.id}/edit`));
   };
 
   const handleContainerClick = async (po: { companyId: number | null; containerId?: number | null }) => {
@@ -157,7 +185,7 @@ export default function Suppliers() {
       selectCompany(targetCompany);
     }
     setSelectedSupplier(null);
-    navigate(`/containers/${po.containerId}`);
+    navigate(partyPath(po.companyId, `/containers/${po.containerId}`));
   };
 
   const handleExportToExcel = async () => {
@@ -170,8 +198,20 @@ export default function Suppliers() {
       });
       return;
     }
+    const exportRows = filterLedgerRowsByDate(
+      unifiedLedger.filter(
+        (row) =>
+          matchesSupplierDestination(row.destinationCompanyId, destinationFilter) &&
+          (destinationFilter === "all" || row.type !== "opening")
+      ),
+      dateFilter
+    );
+    if (!exportRows.length) {
+      toast({ title: "No transactions to export", description: "Change the destination or date filter." });
+      return;
+    }
     await exportErpReportRowsExcel({
-      rows: supplierLedgerToExportRows(unifiedLedger),
+      rows: supplierLedgerToExportRows(exportRows),
       sheetName: "Supplier Ledger",
       fileName: erpReportFileName(`${selectedSupplier.legalName}_Ledger`, "xlsx"),
     });
@@ -183,7 +223,18 @@ export default function Suppliers() {
         title="Suppliers"
         subtitle="Manage supplier accounts and track container shipments"
         showBackButton={false}
-      />
+      >
+        {isProperties && ["Owner", "Developer", "Admin", "Create Only"].includes(selectedCompany?.role || "") && (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => navigate("/properties/master-data?entity=supplier")}
+            data-testid="button-properties-add-supplier"
+          >
+            <Plus className="h-4 w-4 mr-2" /> {tradingCopy.addSupplier}
+          </Button>
+        )}
+      </PageHeader>
 
       {/* Stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -278,7 +329,11 @@ export default function Suppliers() {
           </div>
           <div>
             <p className="text-sm font-medium">No suppliers found</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Create suppliers in the Master Data page</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {isProperties
+                ? "Use Add Supplier above to create your first supplier"
+                : "Create suppliers in the Master Data page"}
+            </p>
           </div>
         </div>
       ) : sortedSuppliers.length === 0 ? (
@@ -371,7 +426,7 @@ export default function Suppliers() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={() => navigate(`/suppliers/${supplier.id}/proformas`)}
+                  onClick={() => navigate(`${isProperties ? "/properties" : ""}/suppliers/${supplier.id}/proformas`)}
                   data-testid={`button-proformas-supplier-${supplier.id}`}
                   title="Proformas"
                 >
@@ -381,7 +436,8 @@ export default function Suppliers() {
                   variant="ghost"
                   size="icon"
                   onClick={() => {
-                    if (recordChanges.allowed) navigate(`/suppliers/${supplier.id}/edit`);
+                    if (recordChanges.allowed)
+                      navigate(`${isProperties ? "/properties" : ""}/suppliers/${supplier.id}/edit`);
                   }}
                   permitted={recordChanges.allowed}
                   deniedReason={recordChanges.reason}
@@ -404,6 +460,8 @@ export default function Suppliers() {
         formatAmount={formatAmount}
         companyFilter={companyFilter}
         onCompanyFilterChange={setCompanyFilter}
+        destinationFilter={destinationFilter}
+        onDestinationFilterChange={setDestinationFilter}
         dateFilter={dateFilter}
         onDateFilterChange={(v: SupplierDateFilter) => setDateFilter(v)}
         hidePayments={hidePayments}
@@ -428,7 +486,11 @@ export default function Suppliers() {
         open={supplierToDelete !== null}
         onOpenChange={(open) => !open && setSupplierToDelete(null)}
         title="Delete Supplier"
-        description={<>Are you sure you want to delete <strong>{supplierToDelete?.name}</strong>? This action cannot be undone.</>}
+        description={
+          <>
+            Are you sure you want to delete <strong>{supplierToDelete?.name}</strong>? This action cannot be undone.
+          </>
+        }
         tone="destructive"
         confirmText="Delete"
         confirmButtonTestId="button-confirm-delete-supplier"

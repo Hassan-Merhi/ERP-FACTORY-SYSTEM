@@ -368,6 +368,23 @@ export async function deletePurchaseOrder(
   await db.transaction(async (tx) => {
     const [po] = await tx.select().from(schema.purchaseOrders).where(eq(schema.purchaseOrders.id, id)).limit(1);
     if (!po) throw new Error("Purchase order not found");
+    // Linked POs must be removed as a verified pair, never by the generic
+    // single-company delete path.
+    const [linkedDestination] = await tx
+      .select({ id: schema.intercompanyTrades.id })
+      .from(schema.intercompanyTrades)
+      .where(eq(schema.intercompanyTrades.destinationPoId, id))
+      .limit(1);
+    const [linkedSource] = await tx
+      .select({ id: schema.intercompanyTradeSourcePos.id })
+      .from(schema.intercompanyTradeSourcePos)
+      .where(eq(schema.intercompanyTradeSourcePos.sourcePoId, id))
+      .limit(1);
+    if (linkedDestination || linkedSource) {
+      throw new Error(
+        "This PO is linked to another company. Delete the full linked trade from Intercompany Receiving & Cancellation."
+      );
+    }
 
     const containerId = po.containerId;
     const poItemsTotal = toMoney(po.itemsTotal);

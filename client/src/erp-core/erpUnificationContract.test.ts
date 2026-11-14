@@ -39,7 +39,7 @@ describe("ERP unification final regression contracts", () => {
     const reports = source("client/src/pages/ProfessionalFinancialStatements.tsx");
     expect(vouchers).toContain("invalidateErpDataFamilies");
     expect(suppliers).toContain("mayExportSupplier.allowed");
-    expect(suppliers).toContain("supplierLedgerToExportRows(unifiedLedger)");
+    expect(suppliers).toContain("supplierLedgerToExportRows(exportRows)");
     expect(reports).toContain("PROVISIONAL FINANCIAL STATEMENTS — NOT CERTIFIED");
   });
 

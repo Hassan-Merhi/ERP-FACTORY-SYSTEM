@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams, useSearch } from "wouter";
 import { useBackToParent } from "@/hooks/use-back-to-parent";
+import { useCompany } from "@/contexts/CompanyContext";
 import { useEscapeToParent } from "@/hooks/use-escape-to-parent";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,6 +12,7 @@ import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, Table
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -39,6 +41,7 @@ interface Proforma {
   reference: string;
   notes: string | null;
   isStarred: boolean;
+  destinationCompanyId: number | null;
   createdAt: string;
   updatedAt: string;
   lines?: ProformaLine[];
@@ -61,13 +64,25 @@ export default function SupplierProformas() {
   const searchString = useSearch();
   const requestedProformaId = new URLSearchParams(searchString).get("proformaId");
   const fileInputRef = useRef<HTMLInputElement>(null);
-  useEscapeToParent("/suppliers");
+  const { selectedCompany } = useCompany();
+  useEscapeToParent(selectedCompany?.companyType === "properties" ? "/properties/suppliers" : "/suppliers");
 
   const [selectedProformaId, setSelectedProformaId] = useState<number | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<(() => void) | null>(null);
   const [createRef, setCreateRef] = useState("");
   const [createNotes, setCreateNotes] = useState("");
+  const [createDestinationId, setCreateDestinationId] = useState("");
+  const [filterDestinationId, setFilterDestinationId] = useState("all");
+  const { data: companies = [] } = useQuery<{ id: number; name: string; parentCompanyId?: number | null }[]>({
+    queryKey: ["/api/companies"],
+  });
+  const ownerCompanyId = selectedCompany?.id;
+  const destinations = companies.filter(
+    (company) => company.id === ownerCompanyId || company.parentCompanyId === ownerCompanyId
+  );
+  const destinationLabel = (id: number | null) =>
+    companies.find((company) => company.id === (id ?? ownerCompanyId))?.name ?? `Company #${id ?? ownerCompanyId}`;
   const [addingLine, setAddingLine] = useState(false);
   const [newLine, setNewLine] = useState({
     barcode: "",
@@ -121,7 +136,7 @@ export default function SupplierProformas() {
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: { reference: string; notes: string }) => {
+    mutationFn: async (data: { reference: string; notes: string; destinationCompanyId: number }) => {
       const res = await apiRequest("POST", `/api/suppliers/${supplierId}/proformas`, data);
       return res.json();
     },
@@ -130,6 +145,7 @@ export default function SupplierProformas() {
       setShowCreateDialog(false);
       setCreateRef("");
       setCreateNotes("");
+      setCreateDestinationId("");
       setSelectedProformaId(p.id);
       toast({ title: "Proforma created" });
     },
@@ -381,88 +397,115 @@ export default function SupplierProformas() {
               {(!proformas || proformas.length === 0) && (
                 <p className="text-sm text-muted-foreground">No proformas yet. Create one to get started.</p>
               )}
-              {proformas?.map((p) => (
-                <div
-                  key={p.id}
-                  className={`flex items-center justify-between gap-2 p-2 rounded-md cursor-pointer ${selectedProformaId === p.id ? "bg-accent" : "hover-elevate"}`}
-                  onClick={() => setSelectedProformaId(p.id)}
-                  data-testid={`row-proforma-${p.id}`}
-                >
-                  <div className="min-w-0 flex-1" onClick={(e) => renamingId === p.id && e.stopPropagation()}>
-                    {renamingId === p.id ? (
-                      <Input
-                        ref={renameInputRef}
-                        value={renameValue}
-                        onChange={(e) => setRenameValue(e.target.value)}
-                        onBlur={() => commitRename(p.id)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            commitRename(p.id);
-                          }
-                          if (e.key === "Escape") {
-                            e.stopPropagation();
-                            setRenamingId(null);
-                          }
+              <div className="mb-3">
+                <Select value={filterDestinationId} onValueChange={setFilterDestinationId}>
+                  <SelectTrigger data-testid="filter-proforma-company">
+                    <SelectValue placeholder="Destination company" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All destinations</SelectItem>
+                    {destinations.map((company) => (
+                      <SelectItem key={company.id} value={String(company.id)}>
+                        {company.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {proformas
+                ?.filter(
+                  (p) =>
+                    filterDestinationId === "all" ||
+                    String(p.destinationCompanyId ?? ownerCompanyId) === filterDestinationId
+                )
+                .sort(
+                  (a, b) =>
+                    (a.destinationCompanyId ?? ownerCompanyId ?? 0) - (b.destinationCompanyId ?? ownerCompanyId ?? 0)
+                )
+                .map((p) => (
+                  <div
+                    key={p.id}
+                    className={`flex items-center justify-between gap-2 p-2 rounded-md cursor-pointer ${selectedProformaId === p.id ? "bg-accent" : "hover-elevate"}`}
+                    onClick={() => setSelectedProformaId(p.id)}
+                    data-testid={`row-proforma-${p.id}`}
+                  >
+                    <div className="min-w-0 flex-1" onClick={(e) => renamingId === p.id && e.stopPropagation()}>
+                      {renamingId === p.id ? (
+                        <Input
+                          ref={renameInputRef}
+                          value={renameValue}
+                          onChange={(e) => setRenameValue(e.target.value)}
+                          onBlur={() => commitRename(p.id)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              commitRename(p.id);
+                            }
+                            if (e.key === "Escape") {
+                              e.stopPropagation();
+                              setRenamingId(null);
+                            }
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          className="h-7 text-sm px-2 py-0"
+                          data-testid={`input-rename-proforma-${p.id}`}
+                        />
+                      ) : (
+                        <>
+                          <div className="flex items-center gap-1.5">
+                            {p.isStarred && <Star className="h-3 w-3 shrink-0 fill-amber-400 text-amber-400" />}
+                            <span className="text-sm font-medium truncate">{p.reference}</span>
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {destinationLabel(p.destinationCompanyId)} · {format(new Date(p.createdAt), "MMM d, yyyy")}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                    {recordChanges.allowed && renamingId !== p.id && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => startRename(e, p)}
+                        data-testid={`button-rename-proforma-${p.id}`}
+                        title="Rename"
+                      >
+                        <Pencil className="h-3 w-3 text-muted-foreground" />
+                      </Button>
+                    )}
+                    {recordChanges.allowed && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          starMutation.mutate(p.id);
                         }}
-                        onClick={(e) => e.stopPropagation()}
-                        className="h-7 text-sm px-2 py-0"
-                        data-testid={`input-rename-proforma-${p.id}`}
-                      />
-                    ) : (
-                      <>
-                        <div className="flex items-center gap-1.5">
-                          {p.isStarred && <Star className="h-3 w-3 shrink-0 fill-amber-400 text-amber-400" />}
-                          <span className="text-sm font-medium truncate">{p.reference}</span>
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {format(new Date(p.createdAt), "MMM d, yyyy")}
-                        </div>
-                      </>
+                        data-testid={`button-star-proforma-${p.id}`}
+                        title={
+                          p.isStarred ? "Remove default for this destination" : "Use as default for this destination"
+                        }
+                      >
+                        <Star
+                          className={`h-3.5 w-3.5 ${p.isStarred ? "fill-amber-400 text-amber-400" : "text-muted-foreground"}`}
+                        />
+                      </Button>
+                    )}
+                    {recordChanges.allowed && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPendingDelete(() => () => deleteMutation.mutate(p.id));
+                        }}
+                        data-testid={`button-delete-proforma-${p.id}`}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
                     )}
                   </div>
-                  {recordChanges.allowed && renamingId !== p.id && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={(e) => startRename(e, p)}
-                      data-testid={`button-rename-proforma-${p.id}`}
-                      title="Rename"
-                    >
-                      <Pencil className="h-3 w-3 text-muted-foreground" />
-                    </Button>
-                  )}
-                  {recordChanges.allowed && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        starMutation.mutate(p.id);
-                      }}
-                      data-testid={`button-star-proforma-${p.id}`}
-                      title={p.isStarred ? "Unstar (remove as default)" : "Star (use for auto-comparison)"}
-                    >
-                      <Star
-                        className={`h-3.5 w-3.5 ${p.isStarred ? "fill-amber-400 text-amber-400" : "text-muted-foreground"}`}
-                      />
-                    </Button>
-                  )}
-                  {recordChanges.allowed && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setPendingDelete(() => () => deleteMutation.mutate(p.id));
-                      }}
-                      data-testid={`button-delete-proforma-${p.id}`}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  )}
-                </div>
-              ))}
+                ))}
             </CardContent>
           </Card>
         </div>
@@ -755,13 +798,39 @@ export default function SupplierProformas() {
                 data-testid="input-proforma-notes"
               />
             </div>
+            <div>
+              <label className="text-sm font-medium mb-1 block">Destination company *</label>
+              <Select
+                value={createDestinationId || String(ownerCompanyId ?? "")}
+                onValueChange={setCreateDestinationId}
+              >
+                <SelectTrigger data-testid="select-proforma-destination">
+                  <SelectValue placeholder="Select destination" />
+                </SelectTrigger>
+                <SelectContent>
+                  {destinations.map((company) => (
+                    <SelectItem key={company.id} value={String(company.id)}>
+                      {company.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="flex items-center justify-end gap-2">
               <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
                 Cancel
               </Button>
               <Button
-                onClick={() => createMutation.mutate({ reference: createRef, notes: createNotes })}
-                disabled={!createRef.trim() || createMutation.isPending}
+                onClick={() =>
+                  createMutation.mutate({
+                    reference: createRef,
+                    notes: createNotes,
+                    destinationCompanyId: Number(createDestinationId || ownerCompanyId),
+                  })
+                }
+                disabled={
+                  !createRef.trim() || !Number(createDestinationId || ownerCompanyId) || createMutation.isPending
+                }
                 data-testid="button-confirm-create"
               >
                 Create

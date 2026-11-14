@@ -1,10 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const h = vi.hoisted(() => {
-  const state = { rows: [] as Array<Record<string, unknown>> };
+  const state = {
+    rows: [] as Array<Record<string, unknown>>,
+    // Results served before `rows`: the route looks up the selected customer first.
+    queue: [] as Array<Array<Record<string, unknown>>>,
+  };
   return {
     state,
-    execute: vi.fn(async () => ({ rows: state.rows })),
+    execute: vi.fn(async () => ({ rows: state.queue.length ? state.queue.shift()! : state.rows })),
   };
 });
 vi.mock("../server/auth", () => ({
@@ -25,15 +29,25 @@ import { registerFinalizedReturnImportPreview } from "../server/routes/factory/c
 type Handler = (req: any, res: any, next: () => void) => unknown;
 let handlers: Handler[] = [];
 const app: any = {
+  // The module also registers the customer picker and order lookup GET routes.
+  get: () => undefined,
   post: (path: string, ...next: Handler[]) => {
     if (path === "/api/factory/finalized-sale-returns/import-preview") handlers = next;
   },
 };
 registerFinalizedReturnImportPreview(app);
 
-async function request(references: unknown, options?: { role?: string; companyId?: number | null }) {
+const CUSTOMER = { id: 7, legalName: "Customer One" };
+
+async function request(
+  references: unknown,
+  options?: { role?: string; companyId?: number | null; customerId?: unknown; customerRows?: unknown[] }
+) {
+  const customerId = options && "customerId" in options ? options.customerId : CUSTOMER.id;
+  h.state.queue = [(options?.customerRows ?? [CUSTOMER]) as Array<Record<string, unknown>>];
   const req = {
-    body: { references },
+    body: { references, customerId },
+    headers: {},
     session: { factoryCompanyId: options?.companyId === undefined ? 10 : options.companyId },
     user: { role: options?.role ?? "Admin" },
   };
@@ -92,12 +106,27 @@ describe("Finalized loading return Excel reference preview", () => {
     expect(h.execute).not.toHaveBeenCalled();
   });
 
-  it("rejects malformed imports and missing Factory company", async () => {
+  it("rejects a missing Factory company or customer before reading anything", async () => {
+    expect((await request(["HMD1"], { companyId: null })).status).toBe(400);
+    expect((await request(["HMD1"], { customerId: undefined })).status).toBe(400);
+    expect((await request(["HMD1"], { customerId: "7" })).status).toBe(400);
+    expect((await request(["HMD1"], { customerId: 0 })).status).toBe(400);
+    expect(h.execute).not.toHaveBeenCalled();
+  });
+
+  it("answers 404 for a customer outside the active Factory company", async () => {
+    const result = await request(["HMD1"], { customerRows: [] });
+    expect(result.status).toBe(404);
+    expect(result.body).toEqual({ message: "Selected customer not found in this Factory company" });
+    expect(h.execute).toHaveBeenCalledOnce();
+  });
+
+  it("rejects malformed imports without looking up bales", async () => {
     expect((await request([])).status).toBe(400);
     expect((await request([""])).status).toBe(400);
     expect((await request(Array(1001).fill("HMD1"))).status).toBe(400);
-    expect((await request(["HMD1"], { companyId: null })).status).toBe(400);
-    expect(h.execute).not.toHaveBeenCalled();
+    // Only the customer lookup ran for each request; the bale query never did.
+    expect(h.execute).toHaveBeenCalledTimes(3);
   });
 
   it("maps a unique bale to its exact invoice without writing changes", async () => {
@@ -119,7 +148,9 @@ describe("Finalized loading return Excel reference preview", () => {
         },
       ],
     });
-    expect(h.execute).toHaveBeenCalledOnce();
+    expect(result.body).toMatchObject({ customerId: 7, customerName: "Customer One" });
+    // One customer lookup and one bale lookup; nothing is written.
+    expect(h.execute).toHaveBeenCalledTimes(2);
   });
 
   it("flags repeated references even with case/spacing differences", async () => {

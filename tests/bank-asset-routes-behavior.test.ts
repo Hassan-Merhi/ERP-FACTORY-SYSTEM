@@ -78,10 +78,15 @@ vi.mock("../server/auth", () => ({
   // Wave 18 (B): bank PUT and DELETE are Admin/Owner (route-level requireRole).
   requireRole: () => (_req: any, _res: any, next: any) => next(),
 }));
-vi.mock("../server/routes/_helpers", () => ({
-  upload: { single: () => (_req: any, _res: any, next: any) => next() },
-  logAudit: harness.logAudit,
-}));
+vi.mock("../server/routes/_helpers", () => {
+  const passThrough = { single: () => (_req: any, _res: any, next: any) => next() };
+  return {
+    upload: passThrough,
+    spreadsheetUpload: passThrough,
+    generalUpload: passThrough,
+    logAudit: harness.logAudit,
+  };
+});
 vi.mock("../server/excelHelper", () => ({ readExcel: vi.fn(), sheetToJson: vi.fn() }));
 vi.mock("../server/lib/httpHandlers", () => ({
   getErrorMessage: (error: any) => error?.message || String(error),

@@ -11,9 +11,10 @@ import {
   userCompanyRoles,
   type InsertContainer,
 } from "@shared/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, or, sql } from "drizzle-orm";
 import { getEtaTrackingSummary } from "../../services/jsonCargoTrackingService";
 import { parseMoneyInput } from "../../lib/money";
+import { isExistingRecordReadOnlyRole } from "@shared/createOnlyRolePolicy";
 
 export function registerContainerTrackingRoutes(app: Express) {
   app.patch("/api/containers/:id/tracking", requireAuth, requireNonPOS, async (req, res) => {
@@ -29,6 +30,9 @@ export function registerContainerTrackingRoutes(app: Express) {
       });
       if (!req.session.currentCompanyId) {
         return res.status(400).json({ message: "No company selected" });
+      }
+      if (isExistingRecordReadOnlyRole(req.session.currentRole ?? req.user?.role)) {
+        return res.status(403).json({ message: "This role cannot edit existing containers" });
       }
       const id = parseId(req.params.id);
       if (id === null) return res.status(400).json({ message: "Invalid id" });
@@ -123,7 +127,24 @@ export function registerContainerTrackingRoutes(app: Express) {
           .limit(1);
 
         if (!roleRow) {
-          return res.status(404).json({ message: "Container not found" });
+          // One physical record is shared by active intercompany trades. A user
+          // selected into the destination company can edit the same tracking
+          // fields; the parent immediately sees the update on that record.
+          const [linkedDestination] = await db
+            .execute(
+              sql`
+            SELECT 1 FROM intercompany_trades trade
+            WHERE trade.physical_container_id = ${id}
+              AND trade.destination_company_id = ${req.session.currentCompanyId!}
+              AND trade.source_company_id = ${existing.companyId}
+              AND trade.state = 'active'
+            LIMIT 1
+          `
+            )
+            .then((result) => result.rows);
+          if (!linkedDestination) {
+            return res.status(404).json({ message: "Container not found" });
+          }
         }
       }
 
@@ -164,6 +185,9 @@ export function registerContainerTrackingRoutes(app: Express) {
       if (!req.session.currentCompanyId) {
         return res.status(400).json({ message: "No company selected" });
       }
+      if (isExistingRecordReadOnlyRole(req.session.currentRole ?? req.user?.role)) {
+        return res.status(403).json({ message: "This role cannot edit existing containers" });
+      }
 
       const { rows } = req.body;
       if (!Array.isArray(rows) || rows.length === 0) {
@@ -189,18 +213,34 @@ export function registerContainerTrackingRoutes(app: Express) {
             continue;
           }
 
-          // Find container by number
-          const [container] = await db
+          // Resolve local or actively linked parent physical container. Tracking
+          // edits are written once to that shared row (no mirrored copies).
+          const selectedCompanyId = req.session.currentCompanyId!;
+          const candidates = await db
             .select()
             .from(containers)
             .where(
               and(
                 eq(containers.containerNumber, containerNumber),
-                eq(containers.companyId, req.session.currentCompanyId!)
+                or(
+                  eq(containers.companyId, selectedCompanyId),
+                  sql`EXISTS (
+                    SELECT 1 FROM intercompany_trades trade
+                    WHERE trade.physical_container_id = ${containers.id}
+                      AND trade.source_company_id = ${containers.companyId}
+                      AND trade.destination_company_id = ${selectedCompanyId}
+                      AND trade.state = 'active'
+                  )`
+                )
               )
-            )
-            .limit(1);
-
+            );
+          const owned = candidates.filter((item) => item.companyId === selectedCompanyId);
+          const matches = owned.length ? owned : candidates;
+          if (matches.length > 1) {
+            errors.push(`Ambiguous container number: ${containerNumber}. Use a unique number.`);
+            continue;
+          }
+          const container = matches[0];
           if (!container) {
             notFound++;
             errors.push(`Container not found: ${containerNumber}`);
