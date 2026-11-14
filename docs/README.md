@@ -18,6 +18,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 
 | Doc | What it covers |
 |---|---|
+| [engineering/code-file-line-policy-phase1.md](engineering/code-file-line-policy-phase1.md) | ERP + Factory 300-line warning, 500-line hard cap, frozen legacy baseline and CI rules |
 | [permissions-control-center-plan.md](permissions-control-center-plan.md) | Permissions Control Center design, rollout sequence and security acceptance criteria |
 | [permissions-control-center-phase1.md](permissions-control-center-phase1.md) | Route inventory, candidate mappings and policy model |
 | [permissions-control-center-phase2.md](permissions-control-center-phase2.md) | Shadow policy API, migration and audit foundation |
