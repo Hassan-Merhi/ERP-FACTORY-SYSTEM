@@ -323,7 +323,7 @@ export default function FactorySupplierReturns() {
         totalQty: batch.totalQty,
         supplierCreditUsd: batch.supplierCreditUsd,
         inventoryReductionUsd: batch.inventoryReductionUsd,
-      }, details.rows);
+      }, details.rows, language);
       await writeFile(wb, `ERP_Supplier_Return_Batch_${batch.id}.xlsx`);
       toast({ title: copy.exported });
     } catch (e) {
