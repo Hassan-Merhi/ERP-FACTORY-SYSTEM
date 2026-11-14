@@ -179,7 +179,7 @@ export async function planReadinessResolutionTx(
   tx: DbTransaction,
   companyId: number
 ): Promise<ReadinessResolutionPlan> {
-  const date = todayUtc();
+  const date = new Date().toISOString().slice(0, 10);
   const orphanRows = await rows<RawRow & { shared: boolean }>(
     tx,
     sql`
