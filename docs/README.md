@@ -16,7 +16,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 
 ## Start here
 
-| [file-size-limits-20261113.md](file-size-limits-20261113.md) | Repository file length warning and hard cap |
+| [file-size-limits-20261113.md](file-size-limits-20261113.md) | ERP file-upload and Excel-export size limits |
 | [erp-supplier-returns-multi-container-phases.md](erp-supplier-returns-multi-container-phases.md) | Multi-container ERP supplier returns scope, phases and acceptance criteria |
 | [erp-supplier-returns-phase1-audit.md](erp-supplier-returns-phase1-audit.md) | Existing return data flow and inventory cost boundaries |
 | [erp-supplier-returns-phase4-stock-integrity.md](erp-supplier-returns-phase4-stock-integrity.md) | Return stock deduction, rollback and audit-integrity contract |
@@ -46,7 +46,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [architecture.md](architecture.md) | How the codebase fits together |
 | [core-concepts.md](core-concepts.md) | Companies, modes, tenancy, the vocabulary |
 | [contributing.md](contributing.md) | Project layout and how to work in it |
-| [file-size-limits-20261113.md](file-size-limits-20261113.md) | Current source file size warning and hard cap policy |
+| [engineering/code-file-line-policy-phase1.md](engineering/code-file-line-policy-phase1.md) | ERP + Factory 300-line warning and 500-line source-code cap |
 
 ## How the business logic works
 

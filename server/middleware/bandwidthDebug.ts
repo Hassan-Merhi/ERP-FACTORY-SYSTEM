@@ -1,17 +1,27 @@
 import type { Request, Response, NextFunction } from "express";
+import {
+  DEFAULT_API_WINDOW_BUDGET_MB,
+  DEFAULT_STATIC_WINDOW_BUDGET_MB,
+  DEFAULT_ENDPOINT_WINDOW_BUDGET_MB,
+  getBandwidthBudgetConfig,
+  positiveNumber,
+  normalizePath,
+  isApiPath,
+  isStaticAsset,
+  isDocumentOrExportPath,
+  getLargeResponseThresholdBytes,
+  classifyCacheOutcome,
+  isSuspectedLoop,
+  requestCompanyContext,
+  requestPageContext,
+  type BandwidthBudgetConfig,
+} from "./bandwidthDebugHelpers";
 import { recordOperationalEvent } from "../lib/operationalEvents";
 import { getRequestPerformanceMetrics, runWithRequestPerformanceContext } from "../lib/requestPerformanceContext";
 
-const DEFAULT_THRESHOLD_BYTES = 500 * 1024;
-const DEFAULT_STATIC_THRESHOLD_BYTES = 2 * 1024 * 1024;
-const DEFAULT_DOCUMENT_THRESHOLD_BYTES = 10 * 1024 * 1024;
 const DEFAULT_REPORT_INTERVAL_MS = 5 * 60 * 1000;
 const DEFAULT_LOG_TOP_N = 3;
 const MAX_LOG_TOP_N = 5;
-const DEFAULT_API_WINDOW_BUDGET_MB = 50;
-const DEFAULT_STATIC_WINDOW_BUDGET_MB = 20;
-const DEFAULT_ENDPOINT_WINDOW_BUDGET_MB = 20;
-
 type EndpointAggregate = {
   method: string;
   path: string;
@@ -58,12 +68,6 @@ type EndpointDiagnosticRow = {
   pageContexts: string[];
 };
 
-type BandwidthBudgetConfig = {
-  apiWindowBytes: number;
-  staticWindowBytes: number;
-  endpointWindowBytes: number;
-};
-
 type BandwidthBudgetViolation = {
   code: string;
   message: string;
@@ -106,120 +110,6 @@ let latestDiagnosticSnapshot: BandwidthDiagnosticSnapshot = {
   ranked: [],
   staticAssets: [],
 };
-
-function positiveNumber(value: string | undefined, fallback: number): number {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
-
-function megabytesToBytes(value: string | undefined, fallbackMb: number): number {
-  return Math.round(positiveNumber(value, fallbackMb) * 1024 * 1024);
-}
-
-function kilobytesToBytes(value: string | undefined, fallbackBytes: number): number {
-  return Math.round(positiveNumber(value, fallbackBytes / 1024) * 1024);
-}
-
-function getBandwidthBudgetConfig(): BandwidthBudgetConfig {
-  return {
-    apiWindowBytes: megabytesToBytes(process.env.BANDWIDTH_DEBUG_API_WINDOW_BUDGET_MB, DEFAULT_API_WINDOW_BUDGET_MB),
-    staticWindowBytes: megabytesToBytes(
-      process.env.BANDWIDTH_DEBUG_STATIC_WINDOW_BUDGET_MB,
-      DEFAULT_STATIC_WINDOW_BUDGET_MB
-    ),
-    endpointWindowBytes: megabytesToBytes(
-      process.env.BANDWIDTH_DEBUG_ENDPOINT_WINDOW_BUDGET_MB,
-      DEFAULT_ENDPOINT_WINDOW_BUDGET_MB
-    ),
-  };
-}
-
-function normalizePath(req: Request): string {
-  const routePath = req.route?.path;
-  if (typeof routePath === "string") {
-    const baseUrl = req.baseUrl || "";
-    if (routePath.startsWith("/api/")) return routePath;
-    if (baseUrl && (routePath === baseUrl || routePath.startsWith(`${baseUrl}/`))) return routePath;
-    return `${baseUrl}${routePath}` || "/";
-  }
-
-  return req.path
-    .split("/")
-    .map((segment) => {
-      if (/^\d+$/.test(segment)) return ":id";
-      if (/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(segment)) return ":id";
-      return segment;
-    })
-    .join("/");
-}
-
-/** Returns true only for API endpoints included in the API bandwidth ranking. */
-function isApiPath(path: string): boolean {
-  return path === "/api" || path.startsWith("/api/");
-}
-
-/**
- * Returns true for Vite/webpack hashed static assets such as
- * /assets/index-DdXDEvCM.js or /assets/main-B4tkL4ok.css.
- */
-function isStaticAsset(path: string): boolean {
-  return /^\/assets\/[^/]+-[A-Za-z0-9_-]{6,}\.(js|css|woff2?|ttf|png|jpe?g|webp|gif|svg|ico)$/i.test(path);
-}
-
-function isDocumentOrExportPath(path: string): boolean {
-  return /(?:whatsapp|green-api|pdf|receipt|print|export|download|excel|xlsx|csv|send-invoice-pdf-backend|send-stock-pdf-backend)/i.test(
-    path
-  );
-}
-
-function getLargeResponseThresholdBytes(path: string): number {
-  if (isStaticAsset(path)) {
-    return kilobytesToBytes(process.env.BANDWIDTH_DEBUG_STATIC_THRESHOLD_KB, DEFAULT_STATIC_THRESHOLD_BYTES);
-  }
-  if (isDocumentOrExportPath(path)) {
-    return kilobytesToBytes(process.env.BANDWIDTH_DEBUG_DOCUMENT_THRESHOLD_KB, DEFAULT_DOCUMENT_THRESHOLD_BYTES);
-  }
-  return kilobytesToBytes(process.env.BANDWIDTH_DEBUG_THRESHOLD_KB, DEFAULT_THRESHOLD_BYTES);
-}
-
-type CacheOutcome = "hit" | "miss" | "revalidated" | "unknown";
-
-function classifyCacheOutcome(statusCode: number, cacheHeader: unknown): CacheOutcome {
-  if (statusCode === 304) return "revalidated";
-  const value = String(cacheHeader || "")
-    .trim()
-    .toUpperCase();
-  if (value === "HIT" || value === "COALESCED") return "hit";
-  if (value === "MISS" || value === "BYPASS") return "miss";
-  return "unknown";
-}
-
-function isSuspectedLoop(requestCount: number, windowMs: number): boolean {
-  const threshold = Math.max(10, Math.ceil(windowMs / 30_000));
-  return requestCount >= threshold;
-}
-
-function requestCompanyContext(req: Request): string | null {
-  const session = (
-    req as Request & {
-      session?: { currentCompanyId?: unknown; factoryCompanyId?: unknown };
-    }
-  ).session;
-  const companyId = session?.factoryCompanyId ?? session?.currentCompanyId;
-  return companyId == null ? null : String(companyId);
-}
-
-function requestPageContext(req: Request): string | null {
-  const explicit = req.get("x-erp-page");
-  if (explicit) return explicit.slice(0, 160);
-  const referer = req.get("referer");
-  if (!referer) return null;
-  try {
-    return new URL(referer, "http://erp.local").pathname.slice(0, 160);
-  } catch {
-    return null;
-  }
-}
 
 function formatRow(aggregate: EndpointAggregate, windowMs: number): EndpointDiagnosticRow {
   const count = Math.max(aggregate.requestCount, 1);

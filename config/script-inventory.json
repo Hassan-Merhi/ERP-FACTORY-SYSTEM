@@ -3,6 +3,7 @@
   "description": "Inventory for scripts/verify-*.mjs and scripts/audit-*.mjs. 'wired' means an automatic GitHub Actions or CircleCI invocation; 'manual' means an explicit package command or workflow_dispatch-only workflow; 'chained' means reached through another maintained script/test, including the manual verification dispatcher; and 'orphan' means there is no maintained entry point. Orphan verification scripts are not allowed. Automatic wired scripts must pass unless their environment dependency is declared. knownFailing is allowed only for manual checks, and stale exceptions fail.",
   "orphanCeiling": 0,
   "environmentDependent": {
+    "audit-file-lines.mjs": "Requires a Git worktree with the frozen baseline commit and history; the dedicated code-file-line-policy workflow checks out full Git history and runs this blocking gate. CI repository audits consume a source-only archive without .git.",
     "verify-database-phase9-release.mjs": "Requires --commit=<sha> and release evidence; refuses to run without them.",
     "verify-restore-target.mjs": "Validates a restore target database URL supplied by the caller.",
     "verify-server-bundle.mjs": "Reads dist/ — requires npm run build.",

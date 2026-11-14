@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { resolveFactoryPage } from "@shared/factoryAccessRegistry";
+import { FACTORY_ACCESS_REGISTRY, resolveFactoryPage } from "@shared/factoryAccessRegistry";
 
 /**
  * Keeps docs/factory-navigation-registry.md, the live Factory route table and the Factory
@@ -13,7 +13,6 @@ function source(path: string): string {
 
 const routesSource = source("client/src/components/FactoryRoutes.tsx");
 const registryDoc = source("docs/factory-navigation-registry.md");
-const accessRegistry = source("shared/factoryAccessRegistry.ts");
 
 const routePaths = Array.from(routesSource.matchAll(/path="([^"]+)"/g), (match) => match[1]);
 const redirectPaths = new Set(
@@ -49,7 +48,7 @@ describe("Factory route registry", () => {
   });
 
   it("routes every sidebar/access-registry destination to a real page", () => {
-    const urls = Array.from(new Set(Array.from(accessRegistry.matchAll(/"(factory\/[^"?]+)"/g), (m) => `/${m[1]}`)));
+    const urls = Array.from(new Set(FACTORY_ACCESS_REGISTRY.map((page) => page.route)));
     expect(urls.length).toBeGreaterThan(20);
     for (const url of urls) {
       const route = routeFor(url);
