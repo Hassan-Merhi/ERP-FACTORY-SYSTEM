@@ -5,6 +5,7 @@ import {
   type PressingDetailRow, type PressingCondensedRow,
 } from "./pressingReportClient";
 import * as XLSX from "@/lib/excelHelper";
+import { DEFAULT_EXCEL_APPEARANCE_SETTINGS } from "@shared/universal-excel/appearanceSettings";
 
 vi.mock("@/lib/excelHelper", () => {
   const sheet = {
@@ -120,10 +121,15 @@ describe("pressing history client", () => {
   });
 
   it("exports a true workbook with the selected filtered records", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({
-      rows: [detailed], total: 1, summary: { totalBales: 1, totalKg: "45.125", voidedBales: 0 },
-      page: 1, limit: 250, mode: "detailed", asOf: "2026-10-27T09:00:00.000Z",
-    }) })));
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => ({ ok: true, json: async () =>
+      String(url) === "/api/excel-export/appearance"
+        ? { appearance: DEFAULT_EXCEL_APPEARANCE_SETTINGS, companyName: "Factory" }
+        : {
+            rows: [detailed], total: 1, summary: { totalBales: 1, totalKg: "45.125", voidedBales: 0 },
+            page: 1, limit: 250, mode: "detailed", asOf: "2026-10-27T09:00:00.000Z",
+          },
+    })));
+
     await exportPressingReport({
       from: "2026-10-27", to: "2026-10-27",
       mode: "detailed", status: "active", page: 1, limit: 100,
