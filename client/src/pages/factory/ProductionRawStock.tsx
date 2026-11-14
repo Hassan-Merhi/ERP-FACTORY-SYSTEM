@@ -267,43 +267,45 @@ export default function ProductionRawStock() {
         subtitle="Raw stock inventory and daily mix batch management"
         icon={<FlaskConical className="h-5 w-5" />}
       >
-        <Button
-          variant="outline"
-          onClick={() => setFixedPlannerOpen(true)}
-          className="h-11 gap-2 rounded-xl border-blue-300/60 bg-card/80 px-3 text-xs font-semibold shadow-sm transition-colors hover:border-blue-500/50 hover:bg-blue-500/5 dark:border-blue-400/25 sm:h-10"
-          data-testid="button-fixed-production-planner"
-        >
-          <Calculator className="h-4 w-4" /> {translateFixedProductionPlanner("title", language)}
-        </Button>
-        {!recordChanges.isCreateOnly && (
-          <Button
-            onClick={() => setCreateMixBatchOpen(true)}
-            className="h-11 gap-2 rounded-xl bg-blue-600 px-3 text-xs font-bold text-white shadow-sm shadow-blue-500/20 transition-all hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-md dark:bg-blue-500 dark:text-white dark:hover:bg-blue-400 sm:h-10"
-            data-testid="button-create-mix-batch"
-          >
-            <Layers className="h-4 w-4" /> <span className="hidden sm:inline">New Mix Batch</span>
-            <span className="sm:hidden">New Batch</span>
-          </Button>
-        )}
-        {recordChanges.allowed && (
-          <Button
-            onClick={() => setOffloadDialogOpen(true)}
-            className="h-11 gap-2 rounded-xl bg-emerald-600 px-3 text-xs font-bold text-white shadow-sm shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700 hover:shadow-md dark:bg-emerald-500 dark:text-emerald-950 dark:hover:bg-emerald-400 sm:h-10"
-            data-testid="button-offload-container"
-          >
-            <ArrowDown className="h-4 w-4" /> Offload Container
-          </Button>
-        )}
-        {recordChanges.allowed && (
+        <div className="grid w-full grid-cols-1 gap-2 min-[360px]:grid-cols-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:justify-end">
           <Button
             variant="outline"
-            onClick={() => setCategoriesDialogOpen(true)}
-            className="h-11 gap-2 rounded-xl border-amber-500/40 bg-amber-500/5 px-3 text-xs font-bold text-amber-700 shadow-sm transition-all hover:-translate-y-0.5 hover:border-amber-500/70 hover:bg-amber-500/10 hover:shadow-md dark:text-amber-300 min-[360px]:col-span-2 sm:h-10 sm:w-auto"
-            data-testid="button-manage-categories"
+            onClick={() => setFixedPlannerOpen(true)}
+            className="h-11 gap-2 rounded-xl border-blue-300/60 bg-card/80 px-3 text-xs font-semibold shadow-sm transition-colors hover:border-blue-500/50 hover:bg-blue-500/5 dark:border-blue-400/25 sm:h-10"
+            data-testid="button-fixed-production-planner"
           >
-            <Tag className="h-4 w-4" /> Categories
+            <Calculator className="h-4 w-4" /> {translateFixedProductionPlanner("title", language)}
           </Button>
-        )}
+          {!recordChanges.isCreateOnly && (
+            <Button
+              onClick={() => setCreateMixBatchOpen(true)}
+              className="h-11 gap-2 rounded-xl bg-blue-600 px-3 text-xs font-bold text-white shadow-sm shadow-blue-500/20 transition-all hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-md dark:bg-blue-500 dark:text-white dark:hover:bg-blue-400 sm:h-10"
+              data-testid="button-create-mix-batch"
+            >
+              <Layers className="h-4 w-4" /> <span className="hidden sm:inline">New Mix Batch</span>
+              <span className="sm:hidden">New Batch</span>
+            </Button>
+          )}
+          {recordChanges.allowed && (
+            <Button
+              onClick={() => setOffloadDialogOpen(true)}
+              className="h-11 gap-2 rounded-xl bg-emerald-600 px-3 text-xs font-bold text-white shadow-sm shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700 hover:shadow-md dark:bg-emerald-500 dark:text-emerald-950 dark:hover:bg-emerald-400 sm:h-10"
+              data-testid="button-offload-container"
+            >
+              <ArrowDown className="h-4 w-4" /> Offload Container
+            </Button>
+          )}
+          {recordChanges.allowed && (
+            <Button
+              variant="outline"
+              onClick={() => setCategoriesDialogOpen(true)}
+              className="h-11 gap-2 rounded-xl border-amber-500/40 bg-amber-500/5 px-3 text-xs font-bold text-amber-700 shadow-sm transition-all hover:-translate-y-0.5 hover:border-amber-500/70 hover:bg-amber-500/10 hover:shadow-md dark:text-amber-300 min-[360px]:col-span-2 sm:h-10 sm:w-auto"
+              data-testid="button-manage-categories"
+            >
+              <Tag className="h-4 w-4" /> Categories
+            </Button>
+          )}
+        </div>
       </PageHeader>
 
       <KpiCards {...kpiData} />
