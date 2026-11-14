@@ -18,6 +18,7 @@ import { postStockMovementTx } from "../services/inventory/stockMovementIntegrit
 import { assertActiveCompanyAccess } from "../security/companyAccessBoundary";
 import { allocateSupplierReturnRows } from "./erpSupplierReturnAllocation";
 import { validateReturnCommitRows, type ReturnCommitRow } from "./erpSupplierReturnCommitValidation";
+import { calculateSupplierReturnFinancials, reconcileSupplierReturnBatch, type SupplierReturnFinancials } from "./erpSupplierReturnFinancials";
 
 const movementAdapter = createDatabaseStockMovementAdapter();
 const qtyPattern = /^\d+(?:\.\d{1,3})?$/;
@@ -467,6 +468,7 @@ export function registerErpSupplierReturnRoutes(app: Express) {
         let totalQty = new Decimal(0),
           totalSupplier = new Decimal(0),
           totalInventory = new Decimal(0);
+        const postedFinancials: Array<{ quantity: string; financials: SupplierReturnFinancials }> = [];
         for (const { source, qty } of matched) {
           const [stock] = resultRows<{ quantity: string; total_value: string }>(
             await tx.execute(sql`
@@ -521,23 +523,28 @@ export function registerErpSupplierReturnRoutes(app: Express) {
             "Supplier Return",
             returnLine.id
           );
-          // The canonical movement is audit evidence; adjustInventory is the
-          // only quantity/value write. Require its exact persisted delta.
-          if (!new Decimal(moved.previousQuantity).minus(moved.newQuantity).eq(qty) ||
-              new Decimal(moved.previousTotalValue).minus(moved.newTotalValue)
-                .toFixed(2) !== new Decimal(moved.valueDelta).negated().toFixed(2)) {
-            throw new ReturnError(409, "RETURN_STOCK_DELTA_MISMATCH",
-              `Inventory movement mismatch for ${source.code}`);
+          // The canonical issue is the audit record, but only adjustInventory
+          // changes the actual stock row. Its persisted 2dp value delta is the
+          // single source for the credit to the inventory control account.
+          let financials: SupplierReturnFinancials;
+          try {
+            financials = calculateSupplierReturnFinancials({
+              quantity: qty.toFixed(3),
+              purchaseRate: source.unitPurchaseCost,
+              inventoryValueDelta: moved.valueDelta,
+              previousQuantity: moved.previousQuantity,
+              newQuantity: moved.newQuantity,
+              previousTotalValue: moved.previousTotalValue,
+              newTotalValue: moved.newTotalValue,
+            });
+          } catch (error) {
+            throw new ReturnError(409, "RETURN_FINANCIAL_RECONCILIATION_FAILED",
+              `Cannot reconcile return for ${source.code}: ${(error as Error).message}`);
           }
-          const inventoryValue = new Decimal(moved.valueDelta).negated().toDecimalPlaces(2);
-          if (inventoryValue.isNegative())
-            throw new ReturnError(
-              409,
-              "RETURN_STOCK_VALUE_INVALID",
-              "Stock issue created a negative valuation movement"
-            );
-          const supplierCredit = qty.mul(source.unitPurchaseCost).toDecimalPlaces(2);
-          const variance = inventoryValue.minus(supplierCredit);
+          const inventoryValue = new Decimal(financials.inventoryCredit);
+          const supplierCredit = new Decimal(financials.supplierDebit);
+          const varianceDebit = new Decimal(financials.varianceDebit);
+          const varianceCredit = new Decimal(financials.varianceCredit);
           const note = `Supplier return ${source.code} x ${qty.toFixed(3)} from ${source.containerNumber} (offload #${source.offloadId})`;
           const voucher = await postFactoryVoucherTx(tx, {
             companyId,
@@ -554,23 +561,20 @@ export function registerErpSupplierReturnRoutes(app: Express) {
                 credit: inventoryValue,
                 narration: `Inventory shipped back: ${note}`,
               },
-              ...(variance.gt(0)
-                ? [
-                    {
-                      ledgerAccountId: varianceAccountId,
-                      debit: variance,
-                      narration: "Unrecoverable landing cost / inventory cost difference",
-                    },
-                  ]
-                : variance.lt(0)
-                  ? [
-                      {
-                        ledgerAccountId: varianceAccountId,
-                        credit: variance.abs(),
-                        narration: "Supplier return valuation difference",
-                      },
-                    ]
-                  : []),
+              ...(varianceDebit.gt(0)
+                ? [{
+                    ledgerAccountId: varianceAccountId,
+                    debit: varianceDebit,
+                    narration: "Inventory relief above supplier purchase credit",
+                  }]
+                : []),
+              ...(varianceCredit.gt(0)
+                ? [{
+                    ledgerAccountId: varianceAccountId,
+                    credit: varianceCredit,
+                    narration: "Supplier purchase credit above inventory relief",
+                  }]
+                : []),
             ],
           });
           await tx.execute(sql`
@@ -583,6 +587,14 @@ export function registerErpSupplierReturnRoutes(app: Express) {
           totalQty = totalQty.add(qty);
           totalSupplier = totalSupplier.add(supplierCredit);
           totalInventory = totalInventory.add(inventoryValue);
+          postedFinancials.push({ quantity: qty.toFixed(3), financials });
+        }
+        const reconciled = reconcileSupplierReturnBatch(postedFinancials);
+        if (!totalQty.eq(reconciled.totalQuantity) ||
+            !totalSupplier.eq(reconciled.supplierDebit) ||
+            !totalInventory.eq(reconciled.inventoryCredit)) {
+          throw new ReturnError(409, "RETURN_BATCH_RECONCILIATION_FAILED",
+            "Supplier return inventory, supplier and audit totals are not reconciled");
         }
         if (requestedTotal !== null && !totalQty.eq(requestedTotal))
           throw new ReturnError(409, "RETURN_TOTAL_MISMATCH",
