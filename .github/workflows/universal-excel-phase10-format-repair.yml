@@ -1,0 +1,71 @@
+name: Temporary Excel Phase 10 Format Repair
+on:
+  push:
+    branches:
+      - feature/universal-excel-export-system
+    paths:
+      - .github/workflows/universal-excel-phase10-format-repair.yml
+
+permissions:
+  contents: write
+
+jobs:
+  format-targets:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact feature branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: feature/universal-excel-export-system
+          persist-credentials: true
+          fetch-depth: 2
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 24.22.2
+      - name: Install locked dependencies
+        run: |
+          sed -i 's#http://package-firewall.replit.local/npm/#https://registry.npmjs.org/#g' package-lock.json
+          npm ci --no-audit --bin-links=true
+      - name: Format only known failures and related Excel test changes
+        run: |
+          node node_modules/prettier/bin/prettier.cjs --write \
+            client/src/app/PosShell.tsx \
+            client/src/i18n/applicationTranslations.fr.ts \
+            client/src/i18n/excelAppearanceTranslations.ts \
+            client/src/pages/settings/ExcelAppearanceSettingsTab.tsx \
+            tests/excel-appearance-persistence.database.test.ts \
+            client/src/pages/factory/erpSupplierReturnPostedWorkbook.test.ts \
+            client/src/pages/factory/pressing-scanner/pressingReportClient.test.ts \
+            tests/ui/daily-scan-behavior.test.tsx
+          node node_modules/prettier/bin/prettier.cjs --check \
+            client/src/app/PosShell.tsx \
+            client/src/i18n/applicationTranslations.fr.ts \
+            client/src/i18n/excelAppearanceTranslations.ts \
+            client/src/pages/settings/ExcelAppearanceSettingsTab.tsx \
+            tests/excel-appearance-persistence.database.test.ts \
+            client/src/pages/factory/erpSupplierReturnPostedWorkbook.test.ts \
+            client/src/pages/factory/pressing-scanner/pressingReportClient.test.ts \
+            tests/ui/daily-scan-behavior.test.tsx
+      - name: Commit formatting to same feature branch, never main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add -- \
+            client/src/app/PosShell.tsx \
+            client/src/i18n/applicationTranslations.fr.ts \
+            client/src/i18n/excelAppearanceTranslations.ts \
+            client/src/pages/settings/ExcelAppearanceSettingsTab.tsx \
+            tests/excel-appearance-persistence.database.test.ts \
+            client/src/pages/factory/erpSupplierReturnPostedWorkbook.test.ts \
+            client/src/pages/factory/pressing-scanner/pressingReportClient.test.ts \
+            tests/ui/daily-scan-behavior.test.tsx
+          if git diff --cached --quiet; then
+            echo "All target files already formatted"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "style(excel): apply Prettier to Phase 10 CI failures"
+          git push origin HEAD:feature/universal-excel-export-system
