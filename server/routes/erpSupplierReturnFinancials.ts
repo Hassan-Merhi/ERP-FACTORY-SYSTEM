@@ -69,7 +69,7 @@ export function calculateSupplierReturnFinancials(input: SupplierReturnFinancial
 }
 
 export function reconcileSupplierReturnBatch(
-  lines: ReadonlyArray<{ quantity: Decimal.Value; financials: SupplierReturnFinancials }>,
+  lines: ReadonlyArray<{ quantity: Decimal.Value; financials: SupplierReturnFinancials }>
 ) {
   const quantity = lines.reduce((sum, line) => sum.plus(line.quantity), new D(0));
   const supplierDebit = lines.reduce((sum, line) => sum.plus(line.financials.supplierDebit), new D(0));
