@@ -115,6 +115,13 @@ describe("Phase 7 Factory Daybook exports", () => {
       .toEqual(["Debit", "Credit"]);
   });
 
+  it("rejects a partial detailed journal rather than exporting unaudited DR/CR lines", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 500 })));
+    await expect(exportFactoryDaybookDetailed([daybookEntry()], (v) => v))
+      .rejects.toThrow(/Could not verify all Daybook voucher lines/);
+    expect(mocked.exporter).not.toHaveBeenCalled();
+  });
+
   it("retains an empty workbook with declared columns for an empty filter", async () => {
     const result = await exportFactoryDaybookDetailed([], (v) => v);
     expect(result.rowCount).toBe(0);
