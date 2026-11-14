@@ -251,5 +251,5 @@ export function buildFactoryLoadingDispatchWorkbook(report: DispatchReport): Exc
     wb,
     wb.worksheets.map((worksheet) => ({ name: worksheet.name, headerRow: 1 }))
   );
-        return wb;
+  return wb;
 }

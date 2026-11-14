@@ -36,7 +36,7 @@ describe("Factory operational style bridge", () => {
       { name: "Manifest", headerRow: 3, titleRow: 1 },
     ]);
     expect(wb.creator).toBe("DAKZO SYSTEMS");
-    expect(wb.worksheets.map(s => s.name)).toEqual(["Summary", "Manifest"]);
+    expect(wb.worksheets.map((s) => s.name)).toEqual(["Summary", "Manifest"]);
     const ws = wb.getWorksheet("Summary")!;
     expect(ws.rowCount).toBe(3);
     expect(ws.getCell("A2").value).toBe("000123");
@@ -44,11 +44,15 @@ describe("Factory operational style bridge", () => {
     expect(JSON.stringify(ws.autoFilter)).toBe(filter);
     expect(JSON.stringify(ws.views)).toBe(frozen);
     expect(ws.getCell("A2").fill).toEqual({
-      type: "pattern", pattern: "solid", fgColor: { argb: "FFFEE2E2" },
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFFEE2E2" },
     });
     expect(ws.getCell("A1").font.bold).toBe(true);
     expect(ws.getCell("A1").fill).toEqual({
-      type: "pattern", pattern: "solid", fgColor: { argb: "FF183153" },
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FF183153" },
     });
     expect(wb.getWorksheet("Manifest")!.getCell("A1").value).toBe("TRUCK DISPATCH");
     expect(wb.getWorksheet("Manifest")!.model.merges).toContain("A1:C2");
@@ -68,13 +72,17 @@ describe("Factory operational style bridge", () => {
     ws.addRow([]);
     ws.addRow(["Reference", "Code"]);
     ws.getCell("A4").fill = {
-      type: "pattern", pattern: "solid", fgColor: { argb: "FFB91C1C" },
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFB91C1C" },
     };
     styleFactoryOperationalWorkbook(wb, [
       { name: "Missing Bales", titleRow: 1, headerRow: 4, preserveHeaderFill: true },
     ]);
     expect(ws.getCell("A4").fill).toEqual({
-      type: "pattern", pattern: "solid", fgColor: { argb: "FFB91C1C" },
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFB91C1C" },
     });
     expect(ws.getCell("A1").value).toBe("Missing Bales");
   });
@@ -105,10 +113,8 @@ describe("Factory operational style bridge", () => {
 
   it("rejects invalid sheet references without adding missing sheets", () => {
     const wb = legacyWorkbook();
-    expect(() => styleFactoryOperationalWorkbook(wb, [{ name: "Unknown", headerRow: 1 }]))
-      .toThrow(/sheet not found/);
-    expect(() => styleFactoryOperationalWorkbook(wb, [{ name: "Summary", headerRow: 99 }]))
-      .toThrow(/header position/);
+    expect(() => styleFactoryOperationalWorkbook(wb, [{ name: "Unknown", headerRow: 1 }])).toThrow(/sheet not found/);
+    expect(() => styleFactoryOperationalWorkbook(wb, [{ name: "Summary", headerRow: 99 }])).toThrow(/header position/);
     expect(wb.worksheets).toHaveLength(2);
   });
 });
@@ -123,7 +129,9 @@ describe("Factory full report and import-safe workbook schemas", () => {
       ];
       const rows = [{ reference: "000001", weight: 25.75, ...(canViewCost ? { cost: 19.95 } : {}) }];
       const wb = buildUniversalExcelWorkbook({
-        schemaVersion: 1, mode: "report", title: "Bales",
+        schemaVersion: 1,
+        mode: "report",
+        title: "Bales",
         sheets: [{ kind: "table", name: "Bales", columns, rows }],
       }).workbook;
       const ws = wb.getWorksheet("Bales")!;
@@ -135,16 +143,21 @@ describe("Factory full report and import-safe workbook schemas", () => {
 
   it("keeps re-importable price lists at row 1 and numeric prices unchanged", () => {
     const wb = buildUniversalExcelWorkbook({
-      schemaVersion: 1, mode: "import-template", title: "Factory Price List",
-      sheets: [{
-        kind: "table", name: "Price List",
-        columns: [
-          { key: "id", header: "ID (do not edit)", type: "integer" },
-          { key: "code", header: "Article Code" },
-          { key: "price", header: "Selling Price ($/bale)", type: "money" },
-        ],
-        rows: [{ id: 12, code: "000045", price: 18.25 }],
-      }],
+      schemaVersion: 1,
+      mode: "import-template",
+      title: "Factory Price List",
+      sheets: [
+        {
+          kind: "table",
+          name: "Price List",
+          columns: [
+            { key: "id", header: "ID (do not edit)", type: "integer" },
+            { key: "code", header: "Article Code" },
+            { key: "price", header: "Selling Price ($/bale)", type: "money" },
+          ],
+          rows: [{ id: 12, code: "000045", price: 18.25 }],
+        },
+      ],
     }).workbook;
     const ws = wb.getWorksheet("Price List")!;
     expect(ws.getCell("A1").value).toBe("ID (do not edit)");

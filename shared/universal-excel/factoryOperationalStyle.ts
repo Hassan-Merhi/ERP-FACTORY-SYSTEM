@@ -7,10 +7,7 @@
  * formulas, print ranges, group positions or import coordinates are fixed.
  */
 import type ExcelJS from "exceljs";
-import {
-  resolveUniversalExcelAppearance,
-  type UniversalExcelAppearance,
-} from "./design";
+import { resolveUniversalExcelAppearance, type UniversalExcelAppearance } from "./design";
 
 export interface FactoryOperationalSheetLayout {
   name: string;
@@ -47,21 +44,24 @@ export function styleFactoryOperationalWorkbook(
         cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: design.palette.primary } };
       }
       cell.font = {
-        name: "Aptos", size: 10, bold: true,
+        name: "Aptos",
+        size: 10,
+        bold: true,
         color: { argb: design.palette.onPrimary },
       };
       cell.alignment = { vertical: "middle", wrapText: true };
       cell.border = { bottom: { style: "thin", color: { argb: design.palette.border } } };
     }
     if (layout.titleRow !== undefined) {
-      if (!Number.isSafeInteger(layout.titleRow) ||
-          layout.titleRow < 1 || layout.titleRow >= layout.headerRow) {
+      if (!Number.isSafeInteger(layout.titleRow) || layout.titleRow < 1 || layout.titleRow >= layout.headerRow) {
         throw new Error("Invalid Factory title position");
       }
       const titleCell = ws.getRow(layout.titleRow).getCell(1);
       if (titleCell.value != null) {
         titleCell.font = {
-          name: "Aptos Display", size: 16, bold: true,
+          name: "Aptos Display",
+          size: 16,
+          bold: true,
           color: { argb: design.palette.primary },
         };
       }

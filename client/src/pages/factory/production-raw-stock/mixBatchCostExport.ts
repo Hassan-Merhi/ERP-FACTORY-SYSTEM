@@ -53,20 +53,20 @@ function dateKey(batch: MixBatchRow): string {
 }
 
 function excelDate(key: string): Date | string {
-  return /^\d{4}-\d{2}-\d{2}$/.test(key)
-    ? new Date(`${key}T12:00:00.000Z`)
-    : key;
+  return /^\d{4}-\d{2}-\d{2}$/.test(key) ? new Date(`${key}T12:00:00.000Z`) : key;
 }
 
 function textValue(value: string): string {
-  const trimmed = Array.from(value, character => character.charCodeAt(0) < 32 ? " " : character).join("").slice(0, 220);
+  const trimmed = Array.from(value, (character) => (character.charCodeAt(0) < 32 ? " " : character))
+    .join("")
+    .slice(0, 220);
   return /^[=+@-]/.test(trimmed.trimStart()) ? `'${trimmed}` : trimmed;
 }
 
 export function compileRows(batches: MixBatchRow[]): CostRow[] {
   return batches
-    .filter(batch => batch.carryForwardFromId == null)
-    .map(batch => {
+    .filter((batch) => batch.carryForwardFromId == null)
+    .map((batch) => {
       const date = dateKey(batch);
       const kg = numeric(batch.totalWeightKg);
       const cost = numeric(batch.totalCost);
@@ -99,7 +99,6 @@ export function groupRows(rows: CostRow[], period: "date" | "month"): CostGroup[
   return Array.from(map.values()).sort((a, b) => b.key.localeCompare(a.key));
 }
 
-
 export interface MixBatchCostSourceRow {
   id: number;
   mixBatchId: number;
@@ -124,10 +123,10 @@ export interface DailySupplierCostRow {
 }
 export function groupDailySupplierCosts(
   batches: MixBatchRow[],
-  sources: MixBatchCostSourceRow[],
+  sources: MixBatchCostSourceRow[]
 ): DailySupplierCostRow[] {
   const originals = compileRows(batches);
-  const batchById = new Map(originals.map(b => [b.id, b]));
+  const batchById = new Map(originals.map((b) => [b.id, b]));
   const map = new Map<string, DailySupplierCostRow & { ids: Set<number>; boxes: Set<string> }>();
   for (const source of sources) {
     const batch = batchById.get(Number(source.mixBatchId));
@@ -137,8 +136,18 @@ export function groupDailySupplierCosts(
     const key = JSON.stringify([batch.date, source.supplierId ?? supplierName]);
     let value = map.get(key);
     if (!value) {
-      value = { date: batch.date, supplierName, categoryName, batches: 0, kg: 0, cost: 0,
-        containers: "", review: "", ids: new Set(), boxes: new Set() };
+      value = {
+        date: batch.date,
+        supplierName,
+        categoryName,
+        batches: 0,
+        kg: 0,
+        cost: 0,
+        containers: "",
+        review: "",
+        ids: new Set(),
+        boxes: new Set(),
+      };
       map.set(key, value);
     }
     value.kg += numeric(source.weightKg);
@@ -146,27 +155,37 @@ export function groupDailySupplierCosts(
     value.ids.add(batch.id);
     if (source.containerNumber) value.boxes.add(textValue(source.containerNumber));
     if (value.categoryName !== categoryName) value.categoryName = "Multiple categories";
-    if (numeric(source.weightKg) <= 0 || numeric(source.totalCost) <= 0)
-      value.review = "CHECK SOURCE COST";
+    if (numeric(source.weightKg) <= 0 || numeric(source.totalCost) <= 0) value.review = "CHECK SOURCE COST";
     if (!source.supplierId && !source.sourceBatchId) value.review = "CHECK SUPPLIER";
   }
-  const result: DailySupplierCostRow[] = [...map.values()].map(row => ({
-    date: row.date, supplierName: row.supplierName, categoryName: row.categoryName,
-    batches: row.ids.size, kg: row.kg, cost: row.cost,
-    containers: [...row.boxes].join(", "), review: row.review,
+  const result: DailySupplierCostRow[] = [...map.values()].map((row) => ({
+    date: row.date,
+    supplierName: row.supplierName,
+    categoryName: row.categoryName,
+    batches: row.ids.size,
+    kg: row.kg,
+    cost: row.cost,
+    containers: [...row.boxes].join(", "),
+    review: row.review,
   }));
   // Preserve original-batch totals and visibly flag any source attribution gaps.
   for (const day of groupRows(originals, "date")) {
-    const attributed = result.filter(r => r.date === day.key);
+    const attributed = result.filter((r) => r.date === day.key);
     const differenceKg = day.kg - attributed.reduce((sum, r) => sum + r.kg, 0);
     const differenceCost = day.cost - attributed.reduce((sum, r) => sum + r.cost, 0);
     if (Math.abs(differenceKg) > 0.005 || Math.abs(differenceCost) > 0.01)
-      result.push({ date: day.key, supplierName: "Unattributed / reconciliation",
-        categoryName: "Batch valuation", batches: day.count,
-        kg: differenceKg, cost: differenceCost, containers: "",
-        review: "REVIEW SOURCE VS BATCH" });
+      result.push({
+        date: day.key,
+        supplierName: "Unattributed / reconciliation",
+        categoryName: "Batch valuation",
+        batches: day.count,
+        kg: differenceKg,
+        cost: differenceCost,
+        containers: "",
+        review: "REVIEW SOURCE VS BATCH",
+      });
   }
-  return result.sort((a,b) => b.date.localeCompare(a.date) || a.supplierName.localeCompare(b.supplierName));
+  return result.sort((a, b) => b.date.localeCompare(a.date) || a.supplierName.localeCompare(b.supplierName));
 }
 
 function color(argb: string): ExcelJS.Fill {
@@ -192,7 +211,7 @@ function header(sheet: ExcelJS.Worksheet, labels: string[]) {
   const row = sheet.getRow(4);
   row.values = labels;
   row.height = 29;
-  row.eachCell({ includeEmpty: true }, cell => {
+  row.eachCell({ includeEmpty: true }, (cell) => {
     cell.fill = color(NAVY_2);
     cell.font = { name: "Aptos", bold: true, size: 10, color: { argb: WHITE } };
     cell.alignment = { vertical: "middle", wrapText: true };
@@ -222,7 +241,7 @@ function dashboardCard(
   valueRange: string,
   label: string,
   value: ExcelJS.CellValue,
-  format: string,
+  format: string
 ) {
   sheet.mergeCells(labelRange);
   sheet.mergeCells(valueRange);
@@ -242,7 +261,7 @@ function dashboardCard(
 export async function exportMixBatchCostAnalysis(
   batches: MixBatchRow[],
   requestedMonth: string,
-  sources: MixBatchCostSourceRow[] = [],
+  sources: MixBatchCostSourceRow[] = []
 ): Promise<void> {
   // Deferred heavy dependency: don't load ExcelJS on ordinary Raw Materials visits.
   const { ExcelJS, writeFile } = await import("@/lib/excelHelper");
@@ -255,26 +274,30 @@ export async function exportMixBatchCostAnalysis(
   const months = groupRows(rows, "month");
   const days = groupRows(rows, "date");
   const allTime = requestedMonth === "all-time";
-  const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(requestedMonth)
-    ? requestedMonth : new Date().toISOString().slice(0, 7);
+  const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(requestedMonth) ? requestedMonth : new Date().toISOString().slice(0, 7);
   const current = allTime
-    ? { key: "all-time", count: rows.length, kg: rows.reduce((sum,r)=>sum+r.kg,0),
-        cost: rows.reduce((sum,r)=>sum+r.cost,0), zeroCost: rows.filter(r=>!!r.flag).length }
-    : months.find(item => item.key === month);
+    ? {
+        key: "all-time",
+        count: rows.length,
+        kg: rows.reduce((sum, r) => sum + r.kg, 0),
+        cost: rows.reduce((sum, r) => sum + r.cost, 0),
+        zeroCost: rows.filter((r) => !!r.flag).length,
+      }
+    : months.find((item) => item.key === month);
   const previousYear = Number(month.slice(0, 4));
   const previousMonthNum = Number(month.slice(5, 7)) - 1;
-  const previousKey = previousMonthNum === 0
-    ? `${previousYear - 1}-12`
-    : `${previousYear}-${String(previousMonthNum).padStart(2, "0")}`;
-  const previous = months.find(item => item.key === previousKey);
-  const selectedDays = allTime ? days : days.filter(item => item.key.startsWith(month));
+  const previousKey =
+    previousMonthNum === 0 ? `${previousYear - 1}-12` : `${previousYear}-${String(previousMonthNum).padStart(2, "0")}`;
+  const previous = months.find((item) => item.key === previousKey);
+  const selectedDays = allTime ? days : days.filter((item) => item.key.startsWith(month));
   const dailySuppliers = groupDailySupplierCosts(batches, sources);
-  const selectedMonthlyRow = months.findIndex(item => item.key === month) + 5;
+  const selectedMonthlyRow = months.findIndex((item) => item.key === month) + 5;
   const monthlyLinkedValue = (column: string, fallback: number): ExcelJS.CellValue =>
-    allTime ? { formula: `SUM('Monthly Average'!${column}5:${column}${Math.max(5,months.length+4)})`, result: fallback }
-    : selectedMonthlyRow >= 5
-      ? { formula: `'Monthly Average'!${column}${selectedMonthlyRow}`, result: fallback }
-      : fallback;
+    allTime
+      ? { formula: `SUM('Monthly Average'!${column}5:${column}${Math.max(5, months.length + 4)})`, result: fallback }
+      : selectedMonthlyRow >= 5
+        ? { formula: `'Monthly Average'!${column}${selectedMonthlyRow}`, result: fallback }
+        : fallback;
   const weightedAverage = current && current.kg > 0 ? current.cost / current.kg : 0;
   const previousAverage = previous && previous.kg > 0 ? previous.cost / previous.kg : 0;
 
@@ -287,14 +310,36 @@ export async function exportMixBatchCostAnalysis(
 
   // Details are the auditable source for all downstream Excel calculations.
   banner(detail, "MIX BATCH DETAILS", "Saved historical valuation · original batches only · all dates · USD", "I");
-  header(detail, ["Production date", "Month", "Batch code", "Mix name / origins", "Mixed KG", "Recorded cost (USD)", "Cost per KG", "Status", "Review"]);
-  [19, 14, 23, 39, 19, 23, 17, 17, 20].forEach((width, index) => { detail.getColumn(index + 1).width = width; });
-  rows.forEach(item => {
+  header(detail, [
+    "Production date",
+    "Month",
+    "Batch code",
+    "Mix name / origins",
+    "Mixed KG",
+    "Recorded cost (USD)",
+    "Cost per KG",
+    "Status",
+    "Review",
+  ]);
+  [19, 14, 23, 39, 19, 23, 17, 17, 20].forEach((width, index) => {
+    detail.getColumn(index + 1).width = width;
+  });
+  rows.forEach((item) => {
     const row = detail.addRow([
-      excelDate(item.date), item.month, item.code, item.name, item.kg, item.cost,
-      null, item.status, item.flag,
+      excelDate(item.date),
+      item.month,
+      item.code,
+      item.name,
+      item.kg,
+      item.cost,
+      null,
+      item.status,
+      item.flag,
     ]);
-    row.getCell(7).value = { formula: `IFERROR(F${row.number}/E${row.number},0)`, result: item.kg > 0 ? item.cost / item.kg : 0 };
+    row.getCell(7).value = {
+      formula: `IFERROR(F${row.number}/E${row.number},0)`,
+      result: item.kg > 0 ? item.cost / item.kg : 0,
+    };
     row.getCell(1).numFmt = "dd mmm yyyy";
     row.getCell(5).numFmt = KG_FMT;
     row.getCell(6).numFmt = USD_FMT;
@@ -318,21 +363,43 @@ export async function exportMixBatchCostAnalysis(
   const sourceCost = `'Mix Batch Details'!$F$5:$F$${sourceEnd}`;
   const sourceReview = `'Mix Batch Details'!$I$5:$I$${sourceEnd}`;
 
-
-  const batchById = new Map(rows.map(row => [row.id, row]));
-  const validSources = sources.filter(source => batchById.has(Number(source.mixBatchId)));
-  banner(sourceDetails, "MIX BATCH SOURCE DETAILS",
-    "Every supplier / container contribution · historical recorded USD values · original batches only", "J");
-  header(sourceDetails, ["Date", "Batch", "Supplier / source", "Category", "Container", "KG", "Recorded $/KG", "Cost USD", "Source batch ID", "Review"]);
-  [18, 24, 37, 26, 22, 19, 20, 23, 19, 25].forEach((width,i) => { sourceDetails.getColumn(i+1).width = width; });
+  const batchById = new Map(rows.map((row) => [row.id, row]));
+  const validSources = sources.filter((source) => batchById.has(Number(source.mixBatchId)));
+  banner(
+    sourceDetails,
+    "MIX BATCH SOURCE DETAILS",
+    "Every supplier / container contribution · historical recorded USD values · original batches only",
+    "J"
+  );
+  header(sourceDetails, [
+    "Date",
+    "Batch",
+    "Supplier / source",
+    "Category",
+    "Container",
+    "KG",
+    "Recorded $/KG",
+    "Cost USD",
+    "Source batch ID",
+    "Review",
+  ]);
+  [18, 24, 37, 26, 22, 19, 20, 23, 19, 25].forEach((width, i) => {
+    sourceDetails.getColumn(i + 1).width = width;
+  });
   for (const source of validSources) {
     const batch = batchById.get(Number(source.mixBatchId))!;
     const kg = numeric(source.weightKg);
     const cost = numeric(source.totalCost);
     const row = sourceDetails.addRow([
-      excelDate(batch.date), batch.code, textValue(source.supplierName || "Unassigned supplier"),
-      textValue(source.categoryName || "Uncategorized"), textValue(source.containerNumber || ""),
-      kg, null, cost, source.sourceBatchId ?? "",
+      excelDate(batch.date),
+      batch.code,
+      textValue(source.supplierName || "Unassigned supplier"),
+      textValue(source.categoryName || "Uncategorized"),
+      textValue(source.containerNumber || ""),
+      kg,
+      null,
+      cost,
+      source.sourceBatchId ?? "",
       kg <= 0 || cost <= 0 ? "CHECK SOURCE COST" : !source.supplierId && !source.sourceBatchId ? "CHECK SUPPLIER" : "",
     ]);
     row.getCell(7).value = { formula: `IFERROR(H${row.number}/F${row.number},0)`, result: kg > 0 ? cost / kg : 0 };
@@ -343,31 +410,67 @@ export async function exportMixBatchCostAnalysis(
   }
   styleData(sourceDetails, sourceDetails.rowCount, 10);
   for (let r = 5; r <= sourceDetails.rowCount; r++) {
-    for (const c of [2,3,4,5,10]) sourceDetails.getRow(r).getCell(c).alignment = { horizontal: "left" };
+    for (const c of [2, 3, 4, 5, 10]) sourceDetails.getRow(r).getCell(c).alignment = { horizontal: "left" };
     if (sourceDetails.getCell(`J${r}`).value) sourceDetails.getCell(`J${r}`).fill = color(ALERT);
   }
 
-  banner(bySupplier, "DAILY COST BY SUPPLIER",
-    "Separate historical weighted-average cost for each supplier each day, with a bold combined daily total", "I");
-  header(bySupplier, ["Date", "Supplier / source", "Category", "Batches", "KG used", "Cost USD", "Avg USD / KG", "Containers", "Review"]);
-  [19, 38, 26, 15, 21, 24, 21, 32, 30].forEach((width,i) => { bySupplier.getColumn(i+1).width = width; });
+  banner(
+    bySupplier,
+    "DAILY COST BY SUPPLIER",
+    "Separate historical weighted-average cost for each supplier each day, with a bold combined daily total",
+    "I"
+  );
+  header(bySupplier, [
+    "Date",
+    "Supplier / source",
+    "Category",
+    "Batches",
+    "KG used",
+    "Cost USD",
+    "Avg USD / KG",
+    "Containers",
+    "Review",
+  ]);
+  [19, 38, 26, 15, 21, 24, 21, 32, 30].forEach((width, i) => {
+    bySupplier.getColumn(i + 1).width = width;
+  });
   for (const day of days) {
-    for (const source of dailySuppliers.filter(item => item.date === day.key)) {
+    for (const source of dailySuppliers.filter((item) => item.date === day.key)) {
       const row = bySupplier.addRow([
-        excelDate(day.key), source.supplierName, source.categoryName, source.batches,
-        source.kg, source.cost, null, source.containers, source.review,
+        excelDate(day.key),
+        source.supplierName,
+        source.categoryName,
+        source.batches,
+        source.kg,
+        source.cost,
+        null,
+        source.containers,
+        source.review,
       ]);
-      row.getCell(7).value = { formula: `IFERROR(F${row.number}/E${row.number},0)`, result: source.kg > 0 ? source.cost / source.kg : 0 };
+      row.getCell(7).value = {
+        formula: `IFERROR(F${row.number}/E${row.number},0)`,
+        result: source.kg > 0 ? source.cost / source.kg : 0,
+      };
       row.getCell(1).numFmt = "dd mmm yyyy";
       row.getCell(5).numFmt = KG_FMT;
       row.getCell(6).numFmt = USD_FMT;
       row.getCell(7).numFmt = RATE_FMT;
     }
     const total = bySupplier.addRow([
-      excelDate(day.key), "DAILY TOTAL", "", day.count, day.kg, day.cost, null, "",
+      excelDate(day.key),
+      "DAILY TOTAL",
+      "",
+      day.count,
+      day.kg,
+      day.cost,
+      null,
+      "",
       day.zeroCost ? `${day.zeroCost} batch review(s)` : "",
     ]);
-    total.getCell(7).value = { formula: `IFERROR(F${total.number}/E${total.number},0)`, result: day.kg > 0 ? day.cost / day.kg : 0 };
+    total.getCell(7).value = {
+      formula: `IFERROR(F${total.number}/E${total.number},0)`,
+      result: day.kg > 0 ? day.cost / day.kg : 0,
+    };
     total.getCell(1).numFmt = "dd mmm yyyy";
     total.getCell(5).numFmt = KG_FMT;
     total.getCell(6).numFmt = USD_FMT;
@@ -375,7 +478,7 @@ export async function exportMixBatchCostAnalysis(
   }
   styleData(bySupplier, bySupplier.rowCount, 9);
   for (let r = 5; r <= bySupplier.rowCount; r++) {
-    for (const c of [2,3,8,9]) bySupplier.getRow(r).getCell(c).alignment = { horizontal: "left" };
+    for (const c of [2, 3, 8, 9]) bySupplier.getRow(r).getCell(c).alignment = { horizontal: "left" };
     if (bySupplier.getCell(`B${r}`).value === "DAILY TOTAL") {
       for (let c = 1; c <= 9; c++) {
         const cell = bySupplier.getRow(r).getCell(c);
@@ -388,10 +491,25 @@ export async function exportMixBatchCostAnalysis(
     }
   }
 
-  banner(daily, "DAILY WEIGHTED AVERAGE", "Daily cost = total recorded mix cost ÷ total KG mixed · all historical days", "G");
-  header(daily, ["Production date", "Month", "Batches", "Total KG mixed", "Total cost USD", "Avg cost / KG", "Cost review flags"]);
-  [20, 16, 14, 21, 23, 22, 21].forEach((width, index) => { daily.getColumn(index + 1).width = width; });
-  days.forEach(item => {
+  banner(
+    daily,
+    "DAILY WEIGHTED AVERAGE",
+    "Daily cost = total recorded mix cost ÷ total KG mixed · all historical days",
+    "G"
+  );
+  header(daily, [
+    "Production date",
+    "Month",
+    "Batches",
+    "Total KG mixed",
+    "Total cost USD",
+    "Avg cost / KG",
+    "Cost review flags",
+  ]);
+  [20, 16, 14, 21, 23, 22, 21].forEach((width, index) => {
+    daily.getColumn(index + 1).width = width;
+  });
+  days.forEach((item) => {
     const row = daily.addRow([excelDate(item.key), item.key.slice(0, 7), null, null, null, null, null]);
     const n = row.number;
     row.getCell(3).value = { formula: `COUNTIF(${sourceDate},A${n})`, result: item.count };
@@ -406,9 +524,24 @@ export async function exportMixBatchCostAnalysis(
   });
   styleData(daily, daily.rowCount, 7);
 
-  banner(monthly, "MONTHLY COST COMPARISON", "Compare every month's true kilogram-weighted mix cost · original batches only", "G");
-  header(monthly, ["Month", "Batches", "Total KG mixed", "Total cost USD", "Avg cost / KG", "Change vs prior month", "Cost review flags"]);
-  [20, 15, 23, 24, 21, 25, 22].forEach((width, index) => { monthly.getColumn(index + 1).width = width; });
+  banner(
+    monthly,
+    "MONTHLY COST COMPARISON",
+    "Compare every month's true kilogram-weighted mix cost · original batches only",
+    "G"
+  );
+  header(monthly, [
+    "Month",
+    "Batches",
+    "Total KG mixed",
+    "Total cost USD",
+    "Avg cost / KG",
+    "Change vs prior month",
+    "Cost review flags",
+  ]);
+  [20, 15, 23, 24, 21, 25, 22].forEach((width, index) => {
+    monthly.getColumn(index + 1).width = width;
+  });
   months.forEach((item, index) => {
     const row = monthly.addRow([item.key, null, null, null, null, null, null]);
     const n = row.number;
@@ -421,7 +554,7 @@ export async function exportMixBatchCostAnalysis(
     const priorDate = /^\d{4}-\d{2}$/.test(item.key) ? new Date(`${item.key}-01T12:00:00Z`) : null;
     if (priorDate) priorDate.setUTCMonth(priorDate.getUTCMonth() - 1);
     if (priorDate && prior && prior.key === priorDate.toISOString().slice(0, 7) && prior.kg > 0 && prior.cost > 0) {
-      const delta = item.kg > 0 ? (item.cost / item.kg) / (prior.cost / prior.kg) - 1 : 0;
+      const delta = item.kg > 0 ? item.cost / item.kg / (prior.cost / prior.kg) - 1 : 0;
       row.getCell(6).value = { formula: `IFERROR(E${n}/E${n + 1}-1,0)`, result: Number.isFinite(delta) ? delta : 0 };
     } else {
       row.getCell(6).value = "—";
@@ -434,15 +567,33 @@ export async function exportMixBatchCostAnalysis(
   });
   styleData(monthly, monthly.rowCount, 7);
 
-  banner(dashboard, "RAW MATERIALS  |  COST INTELLIGENCE", `Report period: ${allTime ? "ALL TIME" : month}    •    Created ${new Date().toLocaleDateString("en-GB")}    •    Recorded USD valuations`, "H");
+  banner(
+    dashboard,
+    "RAW MATERIALS  |  COST INTELLIGENCE",
+    `Report period: ${allTime ? "ALL TIME" : month}    •    Created ${new Date().toLocaleDateString("en-GB")}    •    Recorded USD valuations`,
+    "H"
+  );
   for (let c = 1; c <= 8; c++) dashboard.getColumn(c).width = 17;
   dashboard.getRow(5).height = 25;
   dashboard.getRow(6).height = 24;
   dashboard.getRow(7).height = 24;
-  dashboardCard(dashboard, "A5:B5", "A6:B7", "WEIGHTED AVG / KG",
-    allTime ? { formula: "IFERROR(E6/C6,0)", result: weightedAverage } : monthlyLinkedValue("E", weightedAverage), RATE_FMT);
+  dashboardCard(
+    dashboard,
+    "A5:B5",
+    "A6:B7",
+    "WEIGHTED AVG / KG",
+    allTime ? { formula: "IFERROR(E6/C6,0)", result: weightedAverage } : monthlyLinkedValue("E", weightedAverage),
+    RATE_FMT
+  );
   dashboardCard(dashboard, "C5:D5", "C6:D7", "TOTAL KG MIXED", monthlyLinkedValue("C", current?.kg || 0), KG_FMT);
-  dashboardCard(dashboard, "E5:F5", "E6:F7", "TOTAL RECORDED COST", monthlyLinkedValue("D", current?.cost || 0), USD_FMT);
+  dashboardCard(
+    dashboard,
+    "E5:F5",
+    "E6:F7",
+    "TOTAL RECORDED COST",
+    monthlyLinkedValue("D", current?.cost || 0),
+    USD_FMT
+  );
   dashboardCard(dashboard, "G5:H5", "G6:H7", "MIX BATCHES", monthlyLinkedValue("B", current?.count || 0), "#,##0");
   dashboard.mergeCells("A9:H9");
   dashboard.getCell("A9").value = `DAILY COST BREAKDOWN  ·  ${allTime ? "ALL TIME" : month}`;
@@ -461,8 +612,12 @@ export async function exportMixBatchCostAnalysis(
   selectedDays.forEach((item, index) => {
     const r = 12 + index;
     dashboard.getRow(r).values = [
-      excelDate(item.key), item.count, item.kg, item.cost,
-      item.kg > 0 ? item.cost / item.kg : 0, item.zeroCost || 0,
+      excelDate(item.key),
+      item.count,
+      item.kg,
+      item.cost,
+      item.kg > 0 ? item.cost / item.kg : 0,
+      item.zeroCost || 0,
       !allTime && index === 0 ? previousAverage : null,
       !allTime && index === 0 && previousAverage > 0 ? weightedAverage / previousAverage - 1 : null,
     ];

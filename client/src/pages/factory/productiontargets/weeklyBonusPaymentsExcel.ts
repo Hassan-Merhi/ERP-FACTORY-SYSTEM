@@ -237,9 +237,14 @@ export function buildWeeklyBonusPaymentsWorkbook(
     8,
     "Paid = posted and not reversed. Reversed gross is shown separately; it is NOT an unpaid amount eligible for repayment."
   );
-  styleFactoryOperationalWorkbook(book, book.worksheets.map(worksheet => ({
-    name: worksheet.name, titleRow: 1, headerRow: 5,
-  })));
+  styleFactoryOperationalWorkbook(
+    book,
+    book.worksheets.map((worksheet) => ({
+      name: worksheet.name,
+      titleRow: 1,
+      headerRow: 5,
+    }))
+  );
   return book;
 }
 

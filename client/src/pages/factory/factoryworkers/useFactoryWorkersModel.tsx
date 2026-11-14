@@ -4,7 +4,6 @@ import { useState, useMemo, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 
-
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { factoryApiRequest } from "@/lib/factoryApi";
@@ -642,30 +641,36 @@ export function useFactoryWorkersModel() {
       await exportOperationalWorkbook({
         title: "Factory Workers — Salaries",
         fileName: "workers-salaries-" + new Date().toLocaleDateString("en-CA") + ".xlsx",
-        sheets: [{
-          name: "Workers Salaries",
-          columns: [
-            { key: "no", header: "#", type: "integer", width: 6 },
-            { key: "code", header: "Code", width: 14 },
-            { key: "name", header: "Name", width: 30 },
-            { key: "position", header: "Position", width: 20 },
-            { key: "department", header: "Department", width: 18 },
-            { key: "salaryType", header: "Salary Type", width: 14 },
-            { key: "salary", header: "Base Salary", type: "money", width: 16 },
-            { key: "dueToday", header: "Due Today", type: "money", width: 16 },
-          ],
-          rows,
-          footer: {
-            no: null, code: "", name: "Total Workers: " + filteredWorkers.length,
-            position: "", department: "", salaryType: "TOTAL",
-            salary: totalSalary, dueToday: totalDueToday,
+        sheets: [
+          {
+            name: "Workers Salaries",
+            columns: [
+              { key: "no", header: "#", type: "integer", width: 6 },
+              { key: "code", header: "Code", width: 14 },
+              { key: "name", header: "Name", width: 30 },
+              { key: "position", header: "Position", width: 20 },
+              { key: "department", header: "Department", width: 18 },
+              { key: "salaryType", header: "Salary Type", width: 14 },
+              { key: "salary", header: "Base Salary", type: "money", width: 16 },
+              { key: "dueToday", header: "Due Today", type: "money", width: 16 },
+            ],
+            rows,
+            footer: {
+              no: null,
+              code: "",
+              name: "Total Workers: " + filteredWorkers.length,
+              position: "",
+              department: "",
+              salaryType: "TOTAL",
+              salary: totalSalary,
+              dueToday: totalDueToday,
+            },
           },
-        }],
+        ],
       });
     } catch (error: unknown) {
       toast({ title: "Export failed", description: getErrorMessage(error), variant: "destructive" });
     }
-
   };
 
   const balance = endResult ? parseFloat(endResult.balance) : 0;

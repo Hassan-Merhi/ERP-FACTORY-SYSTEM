@@ -14,16 +14,18 @@ export async function exportCreatedBalesWorkbook(createdBales: CreatedBale[], en
     title: "Factory Wipers Re-entry",
     fileName: "wipers-re-entry-" + entryDate + ".xlsx",
     filters: [{ label: "Entry date", value: entryDate }],
-    sheets: [{
-      name: "WipersReEntry",
-      columns: [
-        { key: "Reference", header: "Reference", width: 22 },
-        { key: "Product", header: "Product", width: 34 },
-        { key: "Article Code", header: "Article Code", width: 20 },
-        { key: "Weight (kg)", header: "Weight (kg)", type: "decimal", width: 17, numFmt: "#,##0.000" },
-        { key: "Entry Date", header: "Entry Date", width: 17 },
-      ],
-      rows,
-    }],
+    sheets: [
+      {
+        name: "WipersReEntry",
+        columns: [
+          { key: "Reference", header: "Reference", width: 22 },
+          { key: "Product", header: "Product", width: 34 },
+          { key: "Article Code", header: "Article Code", width: 20 },
+          { key: "Weight (kg)", header: "Weight (kg)", type: "decimal", width: 17, numFmt: "#,##0.000" },
+          { key: "Entry Date", header: "Entry Date", width: 17 },
+        ],
+        rows,
+      },
+    ],
   });
 }

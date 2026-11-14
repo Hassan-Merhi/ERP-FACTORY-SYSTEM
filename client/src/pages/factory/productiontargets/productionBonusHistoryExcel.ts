@@ -319,9 +319,14 @@ export function buildProductionBonusReportWorkbook(
     14,
     "Statements cover bonuses EARNED in the selected dates, with payment status as of export; they are not a payment-date cash movement ledger."
   );
-  styleFactoryOperationalWorkbook(book, book.worksheets.map(worksheet => ({
-    name: worksheet.name, titleRow: 1, headerRow: 5,
-  })));
+  styleFactoryOperationalWorkbook(
+    book,
+    book.worksheets.map((worksheet) => ({
+      name: worksheet.name,
+      titleRow: 1,
+      headerRow: 5,
+    }))
+  );
   return book;
 }
 

@@ -125,21 +125,23 @@ export function registerFactoryDailyReportRoutes(app: Express) {
           schemaVersion: 1,
           mode: "report",
           title: "Factory Raw Production",
-          sheets: [{
-            kind: "table",
-            name: "Production Report",
-            columns,
-            rows,
-            footer: {
-              date: "TOTAL",
-              batchCode: "",
-              batchName: "",
-              operatorUser: "",
-              kgUsed: totalKgUsed.toNumber(),
-              ...(showCost ? { costPerKg: null } : {}),
-              notes: "",
+          sheets: [
+            {
+              kind: "table",
+              name: "Production Report",
+              columns,
+              rows,
+              footer: {
+                date: "TOTAL",
+                batchCode: "",
+                batchName: "",
+                operatorUser: "",
+                kgUsed: totalKgUsed.toNumber(),
+                ...(showCost ? { costPerKg: null } : {}),
+                notes: "",
+              },
             },
-          }],
+          ],
         });
         const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
         res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");

@@ -489,7 +489,7 @@ export function useFactoryStockAllocationV5Model() {
       return exportIncludeZero;
     });
 
-    const rows = filtered.map(r => ({
+    const rows = filtered.map((r) => ({
       articleCode: r.articleCode,
       productName: r.productName,
       stockAvailable: r.stockAvailable,
@@ -506,9 +506,8 @@ export function useFactoryStockAllocationV5Model() {
       freeToPromise: filtered.reduce((s, r) => s + r.freeToPromise, 0),
     };
     const now = new Date();
-    const stamp = String(now.getFullYear()) +
-      String(now.getMonth() + 1).padStart(2, "0") +
-      String(now.getDate()).padStart(2, "0");
+    const stamp =
+      String(now.getFullYear()) + String(now.getMonth() + 1).padStart(2, "0") + String(now.getDate()).padStart(2, "0");
     try {
       const { buildUniversalExcelWorkbook } = await import("@shared/universal-excel/engine");
       const { writeFile } = await import("@/lib/excelHelper");
@@ -523,20 +522,22 @@ export function useFactoryStockAllocationV5Model() {
           { label: "Include zero", value: String(exportIncludeZero) },
           { label: "Include garbage/wipers", value: String(showGarbageWipers) },
         ],
-        sheets: [{
-          kind: "table",
-          name: "Stock Allocation",
-          columns: [
-            { key: "articleCode", header: "Article Code", width: 16 },
-            { key: "productName", header: "Product Name", width: 36 },
-            { key: "stockAvailable", header: "Stock Available", type: "decimal", width: 16 },
-            { key: "expectedToLoad", header: "Expected to Load", type: "decimal", width: 18 },
-            { key: "totalLoaded", header: "Total Loaded", type: "decimal", width: 14 },
-            { key: "freeToPromise", header: "Available Balance", type: "decimal", width: 18 },
-          ],
-          rows,
-          footer: totals,
-        }],
+        sheets: [
+          {
+            kind: "table",
+            name: "Stock Allocation",
+            columns: [
+              { key: "articleCode", header: "Article Code", width: 16 },
+              { key: "productName", header: "Product Name", width: 36 },
+              { key: "stockAvailable", header: "Stock Available", type: "decimal", width: 16 },
+              { key: "expectedToLoad", header: "Expected to Load", type: "decimal", width: 18 },
+              { key: "totalLoaded", header: "Total Loaded", type: "decimal", width: 14 },
+              { key: "freeToPromise", header: "Available Balance", type: "decimal", width: 18 },
+            ],
+            rows,
+            footer: totals,
+          },
+        ],
       });
       // Retain the legacy red/green meaning for available balance. Header,
       // filters and export design come from the universal workbook builder.
@@ -544,14 +545,13 @@ export function useFactoryStockAllocationV5Model() {
       rows.forEach((row, i) => {
         const cell = worksheet.getRow(i + 6).getCell(6);
         cell.fill = {
-          type: "pattern", pattern: "solid",
-          fgColor: { argb: row.freeToPromise > 0 ? "FFDCFCE7" :
-            row.freeToPromise < 0 ? "FFFEE2E2" : "FFF1F5F9" },
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: row.freeToPromise > 0 ? "FFDCFCE7" : row.freeToPromise < 0 ? "FFFEE2E2" : "FFF1F5F9" },
         };
         cell.font = {
           name: "Aptos",
-          color: { argb: row.freeToPromise > 0 ? "FF15803D" :
-            row.freeToPromise < 0 ? "FFDC2626" : "FF64748B" },
+          color: { argb: row.freeToPromise > 0 ? "FF15803D" : row.freeToPromise < 0 ? "FFDC2626" : "FF64748B" },
         };
       });
       await writeFile(workbook, "stock_allocation_" + stamp + ".xlsx");

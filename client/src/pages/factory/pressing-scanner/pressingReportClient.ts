@@ -1,6 +1,8 @@
 import { PRESSING_TIME_ZONE } from "@shared/pressingTimeZone";
 import {
-  PRESSING_COLUMN_LABELS, type PressingReportColumn, type PressingReportFilters,
+  PRESSING_COLUMN_LABELS,
+  type PressingReportColumn,
+  type PressingReportFilters,
 } from "@shared/pressingReportContracts";
 
 export interface PressingDetailRow {
@@ -41,8 +43,12 @@ export interface PressingCondensedRow {
 export interface PressingReportResponse {
   rows: Array<PressingDetailRow | PressingCondensedRow>;
   total: number;
-  summary: { totalBales: number; totalKg: string; voidedBales: number;
-    byOperator: Array<{ userId: string; name: string | null; totalBales: number; totalKg: string }> };
+  summary: {
+    totalBales: number;
+    totalKg: string;
+    voidedBales: number;
+    byOperator: Array<{ userId: string; name: string | null; totalBales: number; totalKg: string }>;
+  };
   overview: PressingReportResponse["summary"];
   page: number;
   limit: number;
@@ -62,7 +68,13 @@ export interface PressingReportOptions {
   serverToday: string;
   timeZone: string;
   machines: Array<{ id: number; code: string; name: string; active: boolean }>;
-  operators: Array<{ userId: string; name: string; displayName?: string | null; username?: string; isPressingWorker?: boolean }>;
+  operators: Array<{
+    userId: string;
+    name: string;
+    displayName?: string | null;
+    username?: string;
+    isPressingWorker?: boolean;
+  }>;
   weightsKg: string[];
   canCorrect: boolean;
 }
@@ -73,13 +85,13 @@ export interface PressingReportOptions {
  */
 export function pressingKpiWorkers(
   operators: PressingReportOptions["operators"],
-  byOperator: PressingReportResponse["summary"]["byOperator"],
+  byOperator: PressingReportResponse["summary"]["byOperator"]
 ) {
   return (["P1", "P2", "P3"] as const).map((slot, index) => {
-    const operator = operators.find(item =>
-      item.isPressingWorker === true && item.username?.trim().toUpperCase() === slot
+    const operator = operators.find(
+      (item) => item.isPressingWorker === true && item.username?.trim().toUpperCase() === slot
     );
-    const workerTotals = byOperator.find(item => item.userId === operator?.userId);
+    const workerTotals = byOperator.find((item) => item.userId === operator?.userId);
     return {
       slot,
       label: operator?.displayName?.trim() || `Worker ${index + 1} (display name not set)`,
@@ -98,10 +110,10 @@ export function pressingParams(filters: PressingReportFilters): URLSearchParams 
   return params;
 }
 export async function fetchPressingReport(filters: PressingReportFilters): Promise<PressingReportResponse> {
-  const response = await fetch(
-    "/api/factory/pressing-machines/report?" + pressingParams(filters).toString(),
-    { credentials: "include", cache: "no-store" }
-  );
+  const response = await fetch("/api/factory/pressing-machines/report?" + pressingParams(filters).toString(), {
+    credentials: "include",
+    cache: "no-store",
+  });
   if (!response.ok) throw new Error("Could not load pressing history (" + response.status + ")");
   return response.json() as Promise<PressingReportResponse>;
 }
@@ -111,45 +123,70 @@ export function pressingDisplayDateTime(time: string | null | undefined, _record
   if (!Number.isFinite(date.getTime())) return "—";
   // Even older confirmations recorded as UTC must display in Beirut.
   return date.toLocaleString("en-GB", {
-    day: "2-digit", month: "2-digit", year: "numeric",
-    hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
     timeZone: PRESSING_TIME_ZONE,
   });
 }
 export function pressingCell(
-  row: PressingDetailRow | PressingCondensedRow, key: PressingReportColumn
+  row: PressingDetailRow | PressingCondensedRow,
+  key: PressingReportColumn
 ): string | number {
   const detailed = "id" in row;
   switch (key) {
-    case "referenceNumber": return detailed ? row.referenceNumber : "—";
-    case "articleCode": return row.articleCode || "";
-    case "productName": return row.productName || "";
-    case "weightKg": return Number(row.weightKg);
-    case "machineName": return row.machineName;
-    case "operatorName": return row.operatorName?.trim() || "Display name not set";
-    case "shiftId": return row.shiftId ?? "—";
-    case "productionDate": return row.productionDate.split("-").reverse().join("/");
-    case "confirmedAt": return detailed ? pressingDisplayDateTime(row.confirmedAt, row.timezoneName) : "—";
-    case "deviceCapturedAt": return detailed ? pressingDisplayDateTime(row.deviceCapturedAt) : "—";
-    case "secondsSincePrevious": return detailed && row.secondsSincePrevious !== null
-      ? Number(row.secondsSincePrevious) : "";
-    case "status": return (detailed ? row.voidedAt !== null : row.voided) ? "Voided" : "Confirmed";
-    case "bales": return detailed ? 1 : row.bales;
-    case "firstScanAt": return detailed ? "" : pressingDisplayDateTime(row.firstScanAt, row.timezoneName);
-    case "lastScanAt": return detailed ? "" : pressingDisplayDateTime(row.lastScanAt, row.timezoneName);
+    case "referenceNumber":
+      return detailed ? row.referenceNumber : "—";
+    case "articleCode":
+      return row.articleCode || "";
+    case "productName":
+      return row.productName || "";
+    case "weightKg":
+      return Number(row.weightKg);
+    case "machineName":
+      return row.machineName;
+    case "operatorName":
+      return row.operatorName?.trim() || "Display name not set";
+    case "shiftId":
+      return row.shiftId ?? "—";
+    case "productionDate":
+      return row.productionDate.split("-").reverse().join("/");
+    case "confirmedAt":
+      return detailed ? pressingDisplayDateTime(row.confirmedAt, row.timezoneName) : "—";
+    case "deviceCapturedAt":
+      return detailed ? pressingDisplayDateTime(row.deviceCapturedAt) : "—";
+    case "secondsSincePrevious":
+      return detailed && row.secondsSincePrevious !== null ? Number(row.secondsSincePrevious) : "";
+    case "status":
+      return (detailed ? row.voidedAt !== null : row.voided) ? "Voided" : "Confirmed";
+    case "bales":
+      return detailed ? 1 : row.bales;
+    case "firstScanAt":
+      return detailed ? "" : pressingDisplayDateTime(row.firstScanAt, row.timezoneName);
+    case "lastScanAt":
+      return detailed ? "" : pressingDisplayDateTime(row.lastScanAt, row.timezoneName);
   }
 }
 export const PRESSING_EXPORT_LIMIT = 30000;
 export async function exportPressingReport(
-  filters: PressingReportFilters, columns: PressingReportColumn[],
+  filters: PressingReportFilters,
+  columns: PressingReportColumn[],
   onProgress?: (text: string) => void
 ): Promise<void> {
   // Use a fixed server-returned asOf cutoff on every subsequent page.
   const first = await fetchPressingReport({ ...filters, asOf: undefined, page: 1, limit: 250 });
   if (first.total > PRESSING_EXPORT_LIMIT) {
-    throw new Error("The report has " + first.total.toLocaleString() +
-      " groups/rows. Narrow your dates or filters to export at most " +
-      PRESSING_EXPORT_LIMIT.toLocaleString() + " at once.");
+    throw new Error(
+      "The report has " +
+        first.total.toLocaleString() +
+        " groups/rows. Narrow your dates or filters to export at most " +
+        PRESSING_EXPORT_LIMIT.toLocaleString() +
+        " at once."
+    );
   }
   const all = [...first.rows];
   const pages = Math.ceil(first.total / 250);
@@ -159,14 +196,10 @@ export async function exportPressingReport(
     all.push(...result.rows);
   }
   // Never silently distribute a partial workbook.
-  if (all.length !== first.total) throw new Error(
-    "Pressing records changed during export; refresh and try again."
-  );
+  if (all.length !== first.total) throw new Error("Pressing records changed during export; refresh and try again.");
   if (columns.length === 0) throw new Error("Select at least one pressing report column");
   const { exportOperationalWorkbook } = await import("@/lib/operationalExcelExport");
-  const rows = all.map((item) => Object.fromEntries(
-    columns.map((key) => [key, pressingCell(item, key)])
-  ));
+  const rows = all.map((item) => Object.fromEntries(columns.map((key) => [key, pressingCell(item, key)])));
   const footer = Object.fromEntries(
     columns.map((key) => [
       key,
@@ -185,27 +218,35 @@ export async function exportPressingReport(
     title: filters.mode === "condensed" ? "Pressing Machines — Daily Summary" : "Pressing Machines — Detailed History",
     fileName: "pressing-machines-" + filters.mode + "-" + stamp + ".xlsx",
     filters: [
-      { label: "Period (Beirut)", value:
-        (filters.from ? filters.from + (filters.fromTime ? " " + filters.fromTime : "") : "All time") +
-        " to " +
-        (filters.to ? filters.to + (filters.toTime ? " " + filters.toTime : "") : "All time") },
+      {
+        label: "Period (Beirut)",
+        value:
+          (filters.from ? filters.from + (filters.fromTime ? " " + filters.fromTime : "") : "All time") +
+          " to " +
+          (filters.to ? filters.to + (filters.toTime ? " " + filters.toTime : "") : "All time"),
+      },
       { label: "As of", value: pressingDisplayDateTime(first.asOf) },
       { label: "Accepted bales", value: String(first.summary.totalBales) },
       { label: "Voided bales", value: String(first.summary.voidedBales) },
       { label: "Accepted KG", value: first.summary.totalKg },
     ],
-    sheets: [{
-      name: filters.mode === "condensed" ? "Daily Summary" : "Detailed History",
-      columns: columns.map((key) => ({
-        key,
-        header: PRESSING_COLUMN_LABELS[key],
-        type: key === "weightKg" || key === "secondsSincePrevious"
-          ? "decimal" as const
-          : key === "bales" ? "integer" as const : "auto" as const,
-        width: Math.min(40, Math.max(14, (PRESSING_COLUMN_LABELS[key] || "").length + 5)),
-      })),
-      rows,
-      footer,
-    }],
+    sheets: [
+      {
+        name: filters.mode === "condensed" ? "Daily Summary" : "Detailed History",
+        columns: columns.map((key) => ({
+          key,
+          header: PRESSING_COLUMN_LABELS[key],
+          type:
+            key === "weightKg" || key === "secondsSincePrevious"
+              ? ("decimal" as const)
+              : key === "bales"
+                ? ("integer" as const)
+                : ("auto" as const),
+          width: Math.min(40, Math.max(14, (PRESSING_COLUMN_LABELS[key] || "").length + 5)),
+        })),
+        rows,
+        footer,
+      },
+    ],
   });
 }

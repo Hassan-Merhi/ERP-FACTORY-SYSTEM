@@ -76,7 +76,8 @@ function StatusBadge({
     return <Badge className="daily-scan-status bg-amber-500 text-white border-0">Pending Loading</Badge>;
   if (s === "IN_STOCK") return <Badge className="daily-scan-status bg-green-600 text-white border-0">In Stock</Badge>;
   if (s === "SOLD") return <Badge className="daily-scan-status bg-red-600 text-white border-0">Sold</Badge>;
-  if (s === "RESERVED_FOR_ORDER") return <Badge className="daily-scan-status bg-blue-600 text-white border-0">Reserved</Badge>;
+  if (s === "RESERVED_FOR_ORDER")
+    return <Badge className="daily-scan-status bg-blue-600 text-white border-0">Reserved</Badge>;
   return <Badge variant="outline">{status || "—"}</Badge>;
 }
 
@@ -288,32 +289,34 @@ export default function DailyScan() {
           { label: "Production date", value: formatDisplay(selectedDate) },
           { label: "Scanned", value: scanned.length + "/" + totalBales },
         ],
-        sheets: [{
-          name: formatDisplay(selectedDate).replaceAll("/", "-"),
-          columns: [
-            { key: "number", header: "#", type: "integer", width: 6 },
-            { key: "reference", header: "Ref Code", width: 18 },
-            { key: "article", header: "Article Code", width: 16 },
-            { key: "product", header: "Product Name", width: 32 },
-            { key: "weight", header: "Weight (kg)", type: "decimal", width: 14, numFmt: "#,##0.000" },
-            { key: "produced", header: "Date Produced", width: 16 },
-            { key: "worker", header: "Worker", width: 20 },
-            { key: "status", header: "Status", width: 12 },
-            { key: "scannedAt", header: "Scanned At", width: 14 },
-          ],
-          rows,
-          footer: {
-            number: null,
-            reference: "TOTAL",
-            article: "",
-            product: "",
-            weight: totalKg,
-            produced: "",
-            worker: "",
-            status: scanned.length + "/" + totalBales + " scanned",
-            scannedAt: "",
+        sheets: [
+          {
+            name: formatDisplay(selectedDate).replaceAll("/", "-"),
+            columns: [
+              { key: "number", header: "#", type: "integer", width: 6 },
+              { key: "reference", header: "Ref Code", width: 18 },
+              { key: "article", header: "Article Code", width: 16 },
+              { key: "product", header: "Product Name", width: 32 },
+              { key: "weight", header: "Weight (kg)", type: "decimal", width: 14, numFmt: "#,##0.000" },
+              { key: "produced", header: "Date Produced", width: 16 },
+              { key: "worker", header: "Worker", width: 20 },
+              { key: "status", header: "Status", width: 12 },
+              { key: "scannedAt", header: "Scanned At", width: 14 },
+            ],
+            rows,
+            footer: {
+              number: null,
+              reference: "TOTAL",
+              article: "",
+              product: "",
+              weight: totalKg,
+              produced: "",
+              worker: "",
+              status: scanned.length + "/" + totalBales + " scanned",
+              scannedAt: "",
+            },
           },
-        }],
+        ],
       });
     } catch (error: unknown) {
       toast({
@@ -376,7 +379,13 @@ export default function DailyScan() {
               {scanned.length}/{totalBales} verified · {formatNumber(scannedKg)}/{formatNumber(totalKg)} kg
             </span>
           )}
-          <Button className="daily-scan-export" variant="outline" size="sm" onClick={handleExport} data-testid="button-daily-scan-export">
+          <Button
+            className="daily-scan-export"
+            variant="outline"
+            size="sm"
+            onClick={handleExport}
+            data-testid="button-daily-scan-export"
+          >
             <Download className="h-4 w-4 mr-1" />
             Export
           </Button>
@@ -396,7 +405,12 @@ export default function DailyScan() {
           disabled={scanning}
         />
         <MobileBarcodeScanner onScan={(code) => void handleScan(code)} disabled={scanning} />
-        <Button className="daily-scan-submit" onClick={() => void handleScan()} disabled={scanning || !scanInput.trim()} data-testid="button-daily-scan-submit">
+        <Button
+          className="daily-scan-submit"
+          onClick={() => void handleScan()}
+          disabled={scanning || !scanInput.trim()}
+          data-testid="button-daily-scan-submit"
+        >
           {scanning ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
