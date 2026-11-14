@@ -49,6 +49,8 @@ jobs:
         run: npm run check
       - name: Focused Factory / universal Excel regression
         run: npx vitest run tests/universal-excel-factory-operational.test.ts tests/universal-excel-engine.test.ts tests/universal-excel-design.test.ts tests/universal-excel-dynamic-columns.test.ts
+      - name: Factory and ERP frontend Excel tests
+        run: npx vitest run --config vitest.config.frontend.ts tests/ui/universal-excel-operational.test.ts tests/ui/factory-pressing-universal-excel.test.ts
       - name: Formatting validation
         run: npm run format:check:changed
       - name: Source lint
