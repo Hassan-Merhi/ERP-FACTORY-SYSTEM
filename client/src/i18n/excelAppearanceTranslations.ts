@@ -5,6 +5,8 @@ const copy = {
   "en": {
     "title": "Excel Export Appearance",
     "subtitlePrefix": "Appearance for",
+    "companyLabel": "Company",
+    "dateLabel": "Date",
     "subtitleSuffix": "Applies to new report exports, not import templates or historic files.",
     "brandAndColors": "Brand and colors",
     "brandDescription": "Per-company styling for report titles and printed pages.",
@@ -57,6 +59,8 @@ const copy = {
   "ar": {
     "title": "مظهر تصدير إكسل",
     "subtitlePrefix": "إعدادات المظهر للشركة",
+    "companyLabel": "الشركة",
+    "dateLabel": "التاريخ",
     "subtitleSuffix": "تُطبّق على التقارير الجديدة فقط، وليس قوالب الاستيراد أو الملفات القديمة.",
     "brandAndColors": "العلامة التجارية والألوان",
     "brandDescription": "مظهر عناوين التقارير والصفحات المطبوعة لكل شركة.",
@@ -109,6 +113,8 @@ const copy = {
   "fr": {
     "title": "Apparence des exports Excel",
     "subtitlePrefix": "Apparence pour",
+    "companyLabel": "Société",
+    "dateLabel": "Date",
     "subtitleSuffix": "S'applique aux nouveaux rapports, pas aux modèles d'importation ni aux anciens fichiers.",
     "brandAndColors": "Marque et couleurs",
     "brandDescription": "Style des titres et des impressions, propre à chaque société.",
