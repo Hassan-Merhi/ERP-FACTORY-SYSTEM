@@ -63,7 +63,8 @@ if (!/const CACHE_VERSION = "erp-v\d+"/.test(serviceWorker)) {
 // installed PWA worker changes, iOS gets a NEW marker, and no refresh loop
 // can be caused by normal application deployments after this campaign.
 for (const token of [
-  'const CACHE_VERSION = "erp-v15"',
+  // erp-v17: Dakzo branding icons and manifest (main #3210) after erp-v15/v16.
+  'const CACHE_VERSION = "erp-v17"',
   'const IOS_FORCE_UPDATE_CAMPAIGN = "ios-pwa-2026-10-28-v3"',
   'if (await markerCache.match(IOS_FORCE_UPDATE_MARKER_URL)) return',
   'await markerCache.put(',
