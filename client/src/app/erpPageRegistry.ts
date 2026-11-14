@@ -1,5 +1,34 @@
-import { LayoutDashboard, ShoppingCart, Package, FileText, Layers, ListTree, BarChart3, FolderPlus, Wallet, Receipt, Book, UserCheck, PieChart, Ship, Calculator, TableProperties, ExternalLink, UserRound, ScrollText, Store, LayoutGrid, Handshake, Bot, ShieldCheck, Ticket, Replace } from "lucide-react";
+import {
+  LayoutDashboard,
+  ShoppingCart,
+  Package,
+  FileText,
+  Layers,
+  ListTree,
+  BarChart3,
+  FolderPlus,
+  Wallet,
+  Receipt,
+  Book,
+  UserCheck,
+  PieChart,
+  Ship,
+  Calculator,
+  TableProperties,
+  ExternalLink,
+  UserRound,
+  ScrollText,
+  Store,
+  LayoutGrid,
+  Handshake,
+  Bot,
+  ShieldCheck,
+  Ticket,
+  Replace,
+  PackageMinus,
+} from "lucide-react";
 import { NAV_COLOR, type NavItem, type NavSection } from "@/components/sidebar/sidebarPrimitives";
+import { supplierReturnsCopy } from "@/i18n/supplierReturnsTranslations";
 
 /** Canonical metadata for ERP desktop, phone, and command navigation. */
 export const ERP_PINNED_ITEMS: NavItem[] = [
@@ -10,7 +39,6 @@ export const ERP_PINNED_ITEMS: NavItem[] = [
   { title: "All Daybook", url: "/transaction-journal", icon: ScrollText },
   { title: "Vouchers", url: "/vouchers", icon: Receipt },
 ];
-
 
 export const ERP_NAV_SECTIONS: NavSection[] = [
   {
@@ -78,17 +106,16 @@ export const ERP_NAV_SECTIONS: NavSection[] = [
       { title: "Stock & Sales Report", url: "/stock-in-sales-report", icon: BarChart3 },
       { title: "Market Price Analysis", url: "/item-market-analysis", icon: BarChart3 },
       { title: "POS Item Replacement", url: "/pos-item-replacement", icon: Replace },
+      { title: supplierReturnsCopy.en.tab, url: "/supplier-returns", icon: PackageMinus },
     ],
   },
 ];
-
 
 export const ERP_UTILITY_ITEMS: NavItem[] = [
   { title: "Create", url: "/create", icon: FolderPlus },
   { title: "Spreadsheet", url: "/spreadsheet", icon: TableProperties },
   { title: "Live Sheets", url: "/live-sheets", icon: ExternalLink },
 ];
-
 
 /** Primary phone navigation is defined here, not independently in a second menu. */
 export type ErpPrimaryGroup = "tracking" | "inventory" | "sales" | "accounts";
@@ -98,8 +125,14 @@ export const ERP_MOBILE_PRIMARY_PATHS: Record<ErpPrimaryGroup, readonly string[]
   inventory: ["/inventory", "/stock", "/optional-vouchers", "/supplier-profit-check"],
   sales: ["/pos", "/sales-tools", "/sales-report", "/stock-in-sales-report", "/pos-item-replacement"],
   accounts: [
-    "/accounts", "/parties", "/daybook", "/transaction-journal",
-    "/vouchers", "/agents", "/financial-overview", "/payroll",
+    "/accounts",
+    "/parties",
+    "/daybook",
+    "/transaction-journal",
+    "/vouchers",
+    "/agents",
+    "/financial-overview",
+    "/payroll",
   ],
 };
 

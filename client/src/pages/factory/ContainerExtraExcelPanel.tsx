@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { getApiRequest } from "@/lib/factoryApi";
 import { useAppMode } from "@/contexts/AppModeContext";
+import { useCompany } from "@/contexts/CompanyContext";
 import { downloadContainerExtraTemplate, parseContainerExtraExcel, type ContainerExtraImportRow } from "./containerExtraExcel";
 
 type Product = { articleCode: string | null; sellingPrice?: string | null };
@@ -14,6 +15,7 @@ export function ContainerExtraExcelPanel({ endpoint, products, prices, onImporte
   endpoint: string; products: Product[]; prices: Price[]; onImported: () => void;
 }) {
   const { toast } = useToast();
+  const { selectedCompany } = useCompany();
   const request = getApiRequest(useAppMode());
   const [rows, setRows] = useState<ContainerExtraImportRow[]>([]);
   const [error, setError] = useState("");
@@ -39,7 +41,7 @@ export function ContainerExtraExcelPanel({ endpoint, products, prices, onImporte
   const openFile = async (file?: File) => {
     if (!file) return;
     setBusy(true); setError("");
-    try { setRows(await parseContainerExtraExcel(file)); }
+    try { setRows(await parseContainerExtraExcel(file, selectedCompany?.role)); }
     catch (cause) { setRows([]); setError(cause instanceof Error ? cause.message : "Could not read workbook"); }
     finally { setBusy(false); }
   };

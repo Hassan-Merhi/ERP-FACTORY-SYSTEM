@@ -23,7 +23,7 @@ import {
   privilegedMutationRateLimit,
   privilegedReadRateLimit,
 } from "../../middleware/privilegedEndpointSecurity";
-import { upload } from "../_helpers";
+import { spreadsheetUpload } from "../_helpers";
 import { readExcel, writeWorkbook } from "../../excelHelper";
 import {
   createInsuranceImportTemplate,
@@ -460,7 +460,7 @@ export function registerFactoryInsuranceRoutes(app: Express) {
     "/api/insurance/import/preview",
     privilegedMutationRateLimit,
     requireAuth,
-    upload.single("file"),
+    spreadsheetUpload.single("file"),
     async (req: Request, res: Response) => {
       try {
         resolveRequestCompanyId(req);
