@@ -25,12 +25,7 @@ import { reconcilePinnedOrder } from "./pinnedOrder";
 import { SeasonalBrandAccent } from "@/components/SeasonalBrandAccent";
 import { DakzoBrand } from "@/components/DakzoBrand";
 
-/**
- * A navigation glyph. Every call site passes a lucide-react icon, which is a
- * component taking the SVG props these primitives set (`className`, `style`).
- * Typing it this way rather than as `any` means a non-component — or a
- * component that cannot be styled — is rejected at the definition site.
- */
+/** Styleable lucide-react navigation icon. */
 export type NavIcon = LucideIcon;
 
 export interface NavItem {
