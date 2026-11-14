@@ -58,6 +58,17 @@ describe("ERP supplier returns — source purchase cost and moving-average valua
     });
   });
 
+  it("posts a return beyond available stock using the provisional negative-stock valuation", () => {
+    const financials = calculation("9", "32.63", "7", "-2", "227.50", "-65.00");
+    expect(financials).toMatchObject({
+      supplierDebit: "293.67",
+      inventoryCredit: "292.50",
+      varianceDebit: "0.00",
+      varianceCredit: "1.17",
+      effectiveInventoryCostPerBale: "32.5000000",
+    });
+  });
+
   it("reconciles line-level cent rounding across different purchase rates and stock buckets", () => {
     const first = calculation("17", "58.12", "100", "83", "6500.00", "5395.00");
     const second = calculation("1", "62.03", "10", "9", "700.00", "630.00");

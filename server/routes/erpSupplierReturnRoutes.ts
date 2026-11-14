@@ -464,17 +464,14 @@ export function registerErpSupplierReturnRoutes(app: Express) {
                AND stock_item_id=${stockItemId} FOR UPDATE
           `)
           );
-          if (!stock || new Decimal(stock.quantity).lt(needed))
+          // ERP supplier returns may create a negative-stock layer when the physical
+          // return exceeds the currently recorded on-hand quantity.
+          // Keep a row lock so the shortage and its accounting are atomic.
+          if (!stock)
             throw new ReturnError(
               409,
-              "RETURN_INSUFFICIENT_STOCK",
-              `Stock at location ${locationId}, item ${stockItemId} is less than the requested total ${needed}`
-            );
-          if (new Decimal(stock.total_value).isNegative())
-            throw new ReturnError(
-              409,
-              "RETURN_NEGATIVE_STOCK_VALUE",
-              "Inventory valuation is negative and requires reconciliation before return"
+              "RETURN_STOCK_ROW_MISSING",
+              `Inventory row missing at location ${locationId} for item ${stockItemId}`
             );
         }
         const [batch] = resultRows<{ id: number }>(
@@ -508,8 +505,8 @@ export function registerErpSupplierReturnRoutes(app: Express) {
                AND stock_item_id=${source.stockItemId} FOR UPDATE
           `)
           );
-          if (!stock || new Decimal(stock.quantity).lt(qty))
-            throw new ReturnError(409, "RETURN_INSUFFICIENT_STOCK", "Stock changed during supplier return");
+          if (!stock)
+            throw new ReturnError(409, "RETURN_STOCK_ROW_MISSING", "Stock row disappeared during supplier return");
           const currentCost = new Decimal(stock.quantity).gt(0)
             ? Decimal.max(new Decimal(stock.total_value).div(stock.quantity), 0)
             : new Decimal(0);
@@ -535,6 +532,7 @@ export function registerErpSupplierReturnRoutes(app: Express) {
               kind: "issue",
               quantity: qty.toFixed(3),
               unitCost: currentCost.toFixed(7),
+              allowNegativeStock: true,
               fromLocationId: source.locationId,
               occurredAt: parsedReturnDay.toISOString(),
               source: {
