@@ -69,8 +69,9 @@ export function styleFactoryOperationalWorkbook(
     // Preserve existing print areas, page setup, frozen views, row data and
     // all conditional/status fills. Only add a noninvasive print brand if
     // the original builder has not configured its own header.
-    if (design.showBranding && !ws.headerFooter.oddHeader) {
-      ws.headerFooter.oddHeader = "&L" + design.brandName.replaceAll("&", "");
+    if (design.printLayout && design.showBranding && !ws.headerFooter.oddHeader) {
+      ws.headerFooter.oddHeader = "&L" + (design.headerText || design.brandName).replaceAll("&", "");
+      if (design.footerText && !ws.headerFooter.oddFooter) ws.headerFooter.oddFooter = "&L" + design.footerText;
     }
   }
 }
