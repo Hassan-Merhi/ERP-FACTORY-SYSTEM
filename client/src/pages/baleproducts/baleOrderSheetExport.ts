@@ -1,3 +1,4 @@
+import { styleSpecializedWorkbook } from "@shared/universal-excel/specializedWorkbookStyle";
 /**
  * Excel "Make Your Order" sheet builders for the BaleProducts page.
  *
@@ -198,6 +199,12 @@ export async function downloadPricedBaleOrderSheet(
   ws.autoFilter = { from: "A6", to: `H${lastDataRow}` };
 
   // ── Download ─────────────────────────────────────────────────────
+  // Customers edit these order sheets and return them; retain exact headings,
+  // hidden references, validations and absolute row positions.
+  styleSpecializedWorkbook(wb, {
+    expectedSheetNames: ["Make Your Order"],
+    sheets: [{ name: "Make Your Order", purpose: "import-template" }],
+  });
   const buffer = await wb.xlsx.writeBuffer();
   const blob = new Blob([buffer], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -353,6 +360,12 @@ export async function downloadNoPriceBaleOrderSheet(options: BaleOrderSheetInput
   ws.views = [{ state: "frozen", xSplit: 0, ySplit: 6 }];
   ws.autoFilter = { from: "A6", to: `F${lastDataRow}` };
 
+  // Customers edit these order sheets and return them; retain exact headings,
+  // hidden references, validations and absolute row positions.
+  styleSpecializedWorkbook(wb, {
+    expectedSheetNames: ["Make Your Order"],
+    sheets: [{ name: "Make Your Order", purpose: "import-template" }],
+  });
   const buffer = await wb.xlsx.writeBuffer();
   const blob = new Blob([buffer], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
