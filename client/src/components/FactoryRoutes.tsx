@@ -386,9 +386,11 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
       <Route path="/factory/production-report">
         {() => {
           const legacyTab = new URLSearchParams(window.location.search).get("tab");
-          return legacyTab === "comparison" || legacyTab === "product-comparison"
-            ? <Redirect replace to={`/factory/others?tab=${legacyTab}`} />
-            : <DailyProductionReport />;
+          return legacyTab === "comparison" || legacyTab === "product-comparison" ? (
+            <Redirect replace to={`/factory/others?tab=${legacyTab}`} />
+          ) : (
+            <DailyProductionReport />
+          );
         }}
       </Route>
       <Route path="/factory/rental/warehouses" component={FactoryRentalWarehouses} />
