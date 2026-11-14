@@ -1,3 +1,4 @@
+import { styleFactoryOperationalWorkbook } from "@shared/universal-excel/factoryOperationalStyle";
 /**
  * Shared state and helpers for the factoryBaleExportRoutes routes.
  *
@@ -294,6 +295,7 @@ export async function buildWeeklyReportExcelBuffer(companyId: number, period: st
     sh.getColumn(4 + days.length).width = 11;
     sh.getColumn(5 + days.length).width = 12;
     hRow.height = 28;
+    styleFactoryOperationalWorkbook(wb, [{ name: "Weekly Report", headerRow: row }]);
     row++;
     const op = openBals.get(wk)!;
     const sm = weekSI.get(wk)!;
