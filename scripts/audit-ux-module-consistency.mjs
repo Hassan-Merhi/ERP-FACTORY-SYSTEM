@@ -13,8 +13,35 @@ const moduleImports = [
 ].map((match) => match[1]);
 const uniqueModules = [...new Set(moduleImports)].sort();
 
-if (uniqueModules.length < 200) {
-  failures.push(`Lazy module inventory unexpectedly fell to ${uniqueModules.length}; expected at least 200 routed surfaces`);
+// This counts direct lazy import modules, not routed pages. The 2026-11
+// dead-code cleanup retired 28 unused exports (including a sample-data mockup)
+// while preserving every live route and underlying hub module. Keep a floor
+// below the verified post-cleanup inventory of 190 to catch accidental loss.
+const MIN_LAZY_MODULES = 180;
+if (uniqueModules.length < MIN_LAZY_MODULES) {
+  failures.push(`Lazy module inventory unexpectedly fell to ${uniqueModules.length}; expected at least ${MIN_LAZY_MODULES} modules`);
+}
+
+// Only these route tables import the shared lazy-page registry. Add future
+// router consumers when they start importing client/src/lazyPages.ts.
+// A missing registration is not proof that the underlying page is unused.
+const lazyRouteConsumers = [
+  "client/src/routes/ErpRoutes.tsx",
+  "client/src/routes/PosRoutes.tsx",
+  "client/src/components/FactoryRoutes.tsx",
+  "client/src/app/PropertiesRoutes.tsx",
+];
+const runtimeLazyReferences = (await Promise.all(lazyRouteConsumers.map(read))).join("\n");
+const lazyExportNames = [...lazyPages.matchAll(/^export const (\w+)\s*=\s*lazy\(/gm)].map((match) => match[1]);
+// FactoryWorkersHub is pinned by the lazy-import contract, and its page is
+// also used by the payroll hub and offline preload. Keep that export.
+const testPinnedLazyExports = new Set(["FactoryWorkersHub"]);
+const activeLazyTokens = new Set(runtimeLazyReferences.split(/[^A-Za-z0-9_$]+/));
+const unreferencedLazyExports = lazyExportNames.filter(
+  (name) => !testPinnedLazyExports.has(name) && !activeLazyTokens.has(name)
+);
+if (unreferencedLazyExports.length > 0) {
+  failures.push(`Unused lazy-page exports without route consumers: ${unreferencedLazyExports.join(", ")}`);
 }
 
 for (const modulePath of uniqueModules) {
@@ -164,6 +191,8 @@ console.log(
     {
       status: "complete",
       lazyModuleSurfaces: uniqueModules.length,
+      lazyPageExports: lazyExportNames.length,
+      unusedLazyPageExports: unreferencedLazyExports.length,
       workspaceShells: shells.length,
       moduleGroups: groups,
       globalContracts: [

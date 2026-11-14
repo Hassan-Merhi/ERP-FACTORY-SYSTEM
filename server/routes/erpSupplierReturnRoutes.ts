@@ -16,6 +16,9 @@ import { postFactoryVoucherTx } from "../services/factory/factoryVoucherPosting"
 import { createDatabaseStockMovementAdapter } from "../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../services/inventory/stockMovementIntegrityService";
 import { assertActiveCompanyAccess } from "../security/companyAccessBoundary";
+import { allocateSupplierReturnRows } from "./erpSupplierReturnAllocation";
+import { validateReturnCommitRows, type ReturnCommitRow } from "./erpSupplierReturnCommitValidation";
+import { calculateSupplierReturnFinancials, reconcileSupplierReturnBatch, type SupplierReturnFinancials } from "./erpSupplierReturnFinancials";
 
 const movementAdapter = createDatabaseStockMovementAdapter();
 const qtyPattern = /^\d+(?:\.\d{1,3})?$/;
@@ -40,6 +43,7 @@ type Candidate = {
   availableQty: string;
   unitPurchaseCost: string;
   unitLandedCost: string;
+  averageCost: string;
 };
 class ReturnError extends Error {
   constructor(
@@ -89,6 +93,7 @@ function mapCandidate(row: Row): Candidate {
     remainingQty: remaining.toFixed(3),
     availableQty: String(row.available_qty ?? "0"),
     unitPurchaseCost: String(row.purchase_rate ?? "0"),
+    averageCost: String(row.average_cost ?? "0"),
     unitLandedCost: original.gt(0) ? new Decimal(String(row.landed_total ?? "0")).div(original).toFixed(4) : "0",
   };
 }
@@ -101,6 +106,7 @@ async function candidates(executor: DatabaseOrTransaction, companyId: number, co
            coi.rate::text AS purchase_rate, coi.total_value::text AS landed_total,
            COALESCE(rt.returned, 0)::text AS returned_qty,
            COALESCE(i.quantity, 0)::text AS available_qty,
+           CASE WHEN i.quantity > 0 THEN (i.total_value / i.quantity)::text ELSE '0' END AS average_cost,
            sources.supplier_id, sources.supplier_name, sources.supplier_count,
            sources.currency, sources.currency_count
     FROM container_offload_items coi
@@ -204,48 +210,41 @@ export function registerErpSupplierReturnRoutes(app: Express) {
       }
       if (!Array.isArray(rows) || rows.length < 1 || rows.length > 1000)
         throw new ReturnError(400, "RETURN_ROWS_INVALID", "Upload between 1 and 1000 rows");
-      const preview = [];
+      // Resolve the full workbook first, then allocate in input order. A source
+      // and its shared location/item inventory can be consumed by earlier rows.
+      const requested = [];
       for (let index = 0; index < rows.length; index++) {
         const row = rows[index] as { code?: unknown; quantity?: unknown; offloadItemId?: unknown };
         const code = String(row?.code ?? "").trim();
         if (!code || code.length > 50)
           throw new ReturnError(
-            400,
-            "RETURN_CODE_INVALID",
+            400, "RETURN_CODE_INVALID",
             `Row ${index + 2}: article code is required (max 50 characters)`
           );
         const qty = quantity(row?.quantity);
+        const selected = row?.offloadItemId == null || row.offloadItemId === ""
+          ? null : Number(row.offloadItemId);
+        if (selected !== null && (!Number.isSafeInteger(selected) || selected <= 0))
+          throw new ReturnError(400, "RETURN_SOURCE_INVALID", `Row ${index + 2}: invalid offload item`);
         const possible = (await candidates(db, companyId, code)).filter(
           (candidate) => supplierId === null || candidate.supplierId === supplierId
         );
-        const selected = Number(row?.offloadItemId);
-        const matching = selected ? possible.filter((item) => item.offloadItemId === selected) : possible;
-        const eligible = matching.filter(
-          (item) =>
-            new Decimal(item.remainingQty).gte(qty) &&
-            new Decimal(item.availableQty).gte(qty) &&
-            item.supplierCount === 1 &&
-            item.currencyCount === 1 &&
-            item.currency === "USD"
-        );
-        const status = !possible.length
-          ? "not-found"
-          : selected && !matching.length
-            ? "invalid-selection"
-            : !eligible.length
-              ? "insufficient-or-unsupported"
-              : eligible.length === 1
-                ? "matched"
-                : "needs-selection";
-        preview.push({
-          row: index + 2,
-          code,
-          quantity: qty.toFixed(3),
-          status,
-          suggestedOffloadItemId: status === "matched" ? eligible[0].offloadItemId : null,
-          candidates: possible,
-        });
+        requested.push({ row: index + 2, code, quantity: qty.toFixed(3), offloadItemId: selected, candidates: possible });
       }
+      const allocations = allocateSupplierReturnRows(requested);
+      const preview = requested.map((row, index) => ({
+        row: row.row,
+        code: row.code,
+        quantity: row.quantity,
+        status: allocations[index].status,
+        suggestedOffloadItemId: allocations[index].suggestedOffloadItemId,
+        allocations: allocations[index].allocations.map(({ offloadItemId, quantity }) => ({
+          offloadItemId, quantity,
+        })),
+        allocatedQty: allocations[index].allocatedQty,
+        unallocatedQty: allocations[index].unallocatedQty,
+        candidates: row.candidates,
+      }));
       res.json({ rows: preview, supplierId, ready: preview.every((r) => r.status === "matched") });
     } catch (error) {
       const err = error as ReturnError;
@@ -272,15 +271,28 @@ export function registerErpSupplierReturnRoutes(app: Express) {
         await db.execute(sql`
         SELECT l.id,l.article_code AS "articleCode",l.item_name AS "itemName",
                l.quantity::text AS quantity,c.container_number AS "containerNumber",
-               l.offload_id AS "offloadId",s.legal_name AS supplier,
+               l.offload_id AS "offloadId",l.offload_item_id AS "offloadItemId",
+               l.source_purchase_rate::text AS "sourcePurchaseRate",
+               s.legal_name AS supplier,
                l.supplier_credit_usd::text AS "supplierCreditUsd",
                l.inventory_reduction_usd::text AS "inventoryReductionUsd",
-               v.voucher_number AS "voucherNumber",l.voucher_id AS "voucherId"
+               v.voucher_number AS "voucherNumber",l.voucher_id AS "voucherId",
+               COALESCE(mapping.input_rows, '[]'::json) AS "requestedRows"
           FROM erp_supplier_return_lines l
           JOIN erp_supplier_return_batches b ON b.id=l.batch_id AND b.company_id=${companyId}
           JOIN containers c ON c.id=l.container_id AND c.company_id=${companyId}
           JOIN suppliers s ON s.id=l.supplier_id
           LEFT JOIN vouchers v ON v.id=l.voucher_id
+          LEFT JOIN LATERAL (
+            SELECT json_agg(json_build_object(
+              'inputRow', ar.input_row,
+              'requestedArticleCode', ar.requested_article_code,
+              'requestedQuantity', ar.requested_quantity::text,
+              'allocatedQuantity', ar.allocated_quantity::text
+            ) ORDER BY ar.input_row) AS input_rows
+            FROM erp_supplier_return_allocation_rows ar
+            WHERE ar.company_id=${companyId} AND ar.batch_id=l.batch_id AND ar.return_line_id=l.id
+          ) mapping ON TRUE
          WHERE l.company_id=${companyId} AND l.batch_id=${batchId}
          ORDER BY l.id
       `)
@@ -301,6 +313,7 @@ export function registerErpSupplierReturnRoutes(app: Express) {
         reason?: string;
         fileName?: string;
         lines?: Array<{ offloadItemId?: number; quantity?: string }>;
+        requestedRows?: ReturnCommitRow[];
       };
       if (body?.supplierId != null && (!Number.isSafeInteger(body.supplierId) || body.supplierId <= 0))
         throw new ReturnError(400, "RETURN_SUPPLIER_INVALID", "Choose a valid supplier");
@@ -328,6 +341,17 @@ export function registerErpSupplierReturnRoutes(app: Express) {
           "RETURN_LINES_DUPLICATE",
           "Each offload item may appear only once per return; combine duplicate quantities"
         );
+      let requestedTotal: string | null = null;
+      if (body.requestedRows !== undefined) {
+        try {
+          requestedTotal = validateReturnCommitRows(
+            body.requestedRows,
+            input.map(({ id, qty }) => ({ offloadItemId: id, quantity: qty.toFixed(3) }))
+          ).totalQty;
+        } catch (error) {
+          throw new ReturnError(400, "RETURN_ALLOCATION_INVALID", (error as Error).message);
+        }
+      }
       const result = await db.transaction(async (tx) => {
         // Serialize the same idempotency key BEFORE reading or changing stock.
         // Concurrent retries cannot both see a missing batch and double-post.
@@ -377,12 +401,44 @@ export function registerErpSupplierReturnRoutes(app: Express) {
             );
           matched.push({ source, qty: line.qty });
         }
+        // Verify submitted row article codes against their original offload sources.
+        // The client cannot redirect quantities from one imported article to another.
+        if (body.requestedRows) {
+          const matchedById = new Map(matched.map(({ source }) => [source.offloadItemId, source]));
+          const lookupCache = new Map<string, Set<number>>();
+          for (const row of body.requestedRows) {
+            const code = row.code.trim().toUpperCase();
+            let legal = lookupCache.get(code);
+            if (!legal) {
+              legal = new Set((await candidates(tx, companyId, row.code.trim())).map((item) => item.offloadItemId));
+              lookupCache.set(code, legal);
+            }
+            let rowSupplierId: number | null = null;
+            for (const allocation of row.allocations) {
+              const source = matchedById.get(allocation.offloadItemId);
+              if (!source || !legal.has(source.offloadItemId))
+                throw new ReturnError(409, "RETURN_ARTICLE_SOURCE_MISMATCH",
+                  `Source does not belong to article ${row.code}`);
+              if (rowSupplierId !== null && source.supplierId !== rowSupplierId)
+                throw new ReturnError(409, "RETURN_ROW_SUPPLIER_MIXED",
+                  `One article row cannot return quantities to multiple suppliers (${row.code})`);
+              rowSupplierId = source.supplierId;
+            }
+          }
+        }
         const demand = new Map<string, Decimal>();
         for (const { source, qty } of matched) {
           const key = `${source.locationId}:${source.stockItemId}`;
           demand.set(key, (demand.get(key) ?? new Decimal(0)).add(qty));
         }
-        for (const [key, needed] of demand) {
+        // Lock the entire inventory demand set in a consistent global order
+        // irrespective of which offload IDs a concurrent return happens to select.
+        const orderedDemand = [...demand].sort(([left], [right]) => {
+          const [ll, li] = left.split(":").map(Number);
+          const [rl, ri] = right.split(":").map(Number);
+          return ll - rl || li - ri;
+        });
+        for (const [key, needed] of orderedDemand) {
           const [locationId, stockItemId] = key.split(":").map(Number);
           const [stock] = resultRows<{ quantity: string; total_value: string }>(
             await tx.execute(sql`
@@ -391,17 +447,14 @@ export function registerErpSupplierReturnRoutes(app: Express) {
                AND stock_item_id=${stockItemId} FOR UPDATE
           `)
           );
-          if (!stock || new Decimal(stock.quantity).lt(needed))
+          // ERP supplier returns may create a negative-stock layer when the physical
+          // return exceeds the currently recorded on-hand quantity.
+          // Keep a row lock so the shortage and its accounting are atomic.
+          if (!stock)
             throw new ReturnError(
               409,
-              "RETURN_INSUFFICIENT_STOCK",
-              `Stock at location ${locationId}, item ${stockItemId} is less than the requested total ${needed}`
-            );
-          if (new Decimal(stock.total_value).isNegative())
-            throw new ReturnError(
-              409,
-              "RETURN_NEGATIVE_STOCK_VALUE",
-              "Inventory valuation is negative and requires reconciliation before return"
+              "RETURN_STOCK_ROW_MISSING",
+              `Inventory row missing at location ${locationId} for item ${stockItemId}`
             );
         }
         const [batch] = resultRows<{ id: number }>(
@@ -425,6 +478,8 @@ export function registerErpSupplierReturnRoutes(app: Express) {
         let totalQty = new Decimal(0),
           totalSupplier = new Decimal(0),
           totalInventory = new Decimal(0);
+        const postedFinancials: Array<{ quantity: string; financials: SupplierReturnFinancials }> = [];
+        const returnLineIds = new Map<number, number>();
         for (const { source, qty } of matched) {
           const [stock] = resultRows<{ quantity: string; total_value: string }>(
             await tx.execute(sql`
@@ -433,8 +488,8 @@ export function registerErpSupplierReturnRoutes(app: Express) {
                AND stock_item_id=${source.stockItemId} FOR UPDATE
           `)
           );
-          if (!stock || new Decimal(stock.quantity).lt(qty))
-            throw new ReturnError(409, "RETURN_INSUFFICIENT_STOCK", "Stock changed during supplier return");
+          if (!stock)
+            throw new ReturnError(409, "RETURN_STOCK_ROW_MISSING", "Stock row disappeared during supplier return");
           const currentCost = new Decimal(stock.quantity).gt(0)
             ? Decimal.max(new Decimal(stock.total_value).div(stock.quantity), 0)
             : new Decimal(0);
@@ -451,6 +506,7 @@ export function registerErpSupplierReturnRoutes(app: Express) {
           );
           if (!returnLine)
             throw new ReturnError(500, "RETURN_LINE_AUDIT_FAILED", "Could not record supplier return line");
+          returnLineIds.set(source.offloadItemId, returnLine.id);
           await postStockMovementTx(
             tx,
             {
@@ -459,6 +515,7 @@ export function registerErpSupplierReturnRoutes(app: Express) {
               kind: "issue",
               quantity: qty.toFixed(3),
               unitCost: currentCost.toFixed(7),
+              allowNegativeStock: true,
               fromLocationId: source.locationId,
               occurredAt: parsedReturnDay.toISOString(),
               source: {
@@ -479,15 +536,28 @@ export function registerErpSupplierReturnRoutes(app: Express) {
             "Supplier Return",
             returnLine.id
           );
-          const inventoryValue = new Decimal(moved.valueDelta).negated().toDecimalPlaces(2);
-          if (inventoryValue.isNegative())
-            throw new ReturnError(
-              409,
-              "RETURN_STOCK_VALUE_INVALID",
-              "Stock issue created a negative valuation movement"
-            );
-          const supplierCredit = qty.mul(source.unitPurchaseCost).toDecimalPlaces(2);
-          const variance = inventoryValue.minus(supplierCredit);
+          // The canonical issue is the audit record, but only adjustInventory
+          // changes the actual stock row. Its persisted 2dp value delta is the
+          // single source for the credit to the inventory control account.
+          let financials: SupplierReturnFinancials;
+          try {
+            financials = calculateSupplierReturnFinancials({
+              quantity: qty.toFixed(3),
+              purchaseRate: source.unitPurchaseCost,
+              inventoryValueDelta: moved.valueDelta,
+              previousQuantity: moved.previousQuantity,
+              newQuantity: moved.newQuantity,
+              previousTotalValue: moved.previousTotalValue,
+              newTotalValue: moved.newTotalValue,
+            });
+          } catch (error) {
+            throw new ReturnError(409, "RETURN_FINANCIAL_RECONCILIATION_FAILED",
+              `Cannot reconcile return for ${source.code}: ${(error as Error).message}`);
+          }
+          const inventoryValue = new Decimal(financials.inventoryCredit);
+          const supplierCredit = new Decimal(financials.supplierDebit);
+          const varianceDebit = new Decimal(financials.varianceDebit);
+          const varianceCredit = new Decimal(financials.varianceCredit);
           const note = `Supplier return ${source.code} x ${qty.toFixed(3)} from ${source.containerNumber} (offload #${source.offloadId})`;
           const voucher = await postFactoryVoucherTx(tx, {
             companyId,
@@ -504,36 +574,65 @@ export function registerErpSupplierReturnRoutes(app: Express) {
                 credit: inventoryValue,
                 narration: `Inventory shipped back: ${note}`,
               },
-              ...(variance.gt(0)
-                ? [
-                    {
-                      ledgerAccountId: varianceAccountId,
-                      debit: variance,
-                      narration: "Unrecoverable landing cost / inventory cost difference",
-                    },
-                  ]
-                : variance.lt(0)
-                  ? [
-                      {
-                        ledgerAccountId: varianceAccountId,
-                        credit: variance.abs(),
-                        narration: "Supplier return valuation difference",
-                      },
-                    ]
-                  : []),
+              ...(varianceDebit.gt(0)
+                ? [{
+                    ledgerAccountId: varianceAccountId,
+                    debit: varianceDebit,
+                    narration: "Inventory relief above supplier purchase credit",
+                  }]
+                : []),
+              ...(varianceCredit.gt(0)
+                ? [{
+                    ledgerAccountId: varianceAccountId,
+                    credit: varianceCredit,
+                    narration: "Supplier purchase credit above inventory relief",
+                  }]
+                : []),
             ],
           });
           await tx.execute(sql`
             UPDATE erp_supplier_return_lines
                SET supplier_credit_usd=${supplierCredit.toFixed(2)},
                    inventory_reduction_usd=${inventoryValue.toFixed(2)},
-                   voucher_id=${voucher.voucher.id}
+                   voucher_id=${voucher.voucher.id},
+                   source_purchase_rate=${new Decimal(source.unitPurchaseCost).toFixed(7)}
              WHERE id=${returnLine.id} AND company_id=${companyId}
           `);
           totalQty = totalQty.add(qty);
           totalSupplier = totalSupplier.add(supplierCredit);
           totalInventory = totalInventory.add(inventoryValue);
+          postedFinancials.push({ quantity: qty.toFixed(3), financials });
         }
+        // Preserve each original workbook-row allocation without multiplying the
+        // source-level financial postings when the same offload occurs in several rows.
+        if (body.requestedRows) {
+          for (let index = 0; index < body.requestedRows.length; index++) {
+            const requested = body.requestedRows[index];
+            for (const allocation of requested.allocations) {
+              const returnLineId = returnLineIds.get(allocation.offloadItemId);
+              if (!returnLineId)
+                throw new ReturnError(409, "RETURN_ALLOCATION_AUDIT_MISSING",
+                  "An allocated container has no committed source return line");
+              await tx.execute(sql`
+                INSERT INTO erp_supplier_return_allocation_rows
+                  (company_id,batch_id,return_line_id,input_row,requested_article_code,
+                   requested_quantity,allocated_quantity)
+                VALUES (${companyId},${batch.id},${returnLineId},${index + 2},
+                  ${requested.code.trim()},${requested.quantity},${allocation.quantity})
+              `);
+            }
+          }
+        }
+        const reconciled = reconcileSupplierReturnBatch(postedFinancials);
+        if (!totalQty.eq(reconciled.totalQuantity) ||
+            !totalSupplier.eq(reconciled.supplierDebit) ||
+            !totalInventory.eq(reconciled.inventoryCredit)) {
+          throw new ReturnError(409, "RETURN_BATCH_RECONCILIATION_FAILED",
+            "Supplier return inventory, supplier and audit totals are not reconciled");
+        }
+        if (requestedTotal !== null && !totalQty.eq(requestedTotal))
+          throw new ReturnError(409, "RETURN_TOTAL_MISMATCH",
+            "Posted quantity does not equal the original requested return quantity");
         await tx.execute(sql`
           UPDATE erp_supplier_return_batches
              SET total_quantity=${totalQty.toFixed(3)},

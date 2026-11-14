@@ -12,7 +12,7 @@ const sharp = require('sharp');
 const path  = require('path');
 const fs    = require('fs');
 
-const SOURCE = path.resolve(__dirname, '../../client/public/dakzo-icon-512-v1.png');
+const SOURCE = path.resolve(__dirname, '../../client/public/dakzo-icon-512-v2.png');
 const OUT    = path.resolve(__dirname, '../icons');
 // electron-builder has no appx.assets option: AppxTarget picks user tile assets
 // up from <buildResources>/appx, and buildResources is `build` in
