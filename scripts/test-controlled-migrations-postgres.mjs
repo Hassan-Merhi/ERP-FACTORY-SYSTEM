@@ -73,7 +73,10 @@ async function run() {
   if(!["postgres","postgresql"].includes(u.protocol.replace(":","")))
     throw new Error("Expected PostgreSQL URL");
 
-  // The controlled migration catalog grows; never freeze this integration test at an old count.\n  const migrationCount=(await readdir(path.join(root,"migrations/controlled")))\n    .filter(name=>/^\\d{8}_\\d{3}_[a-z0-9_-]+\\.sql$/.test(name)).length;\n  const dbName="phase8_test_"+randomUUID().replaceAll("-","").slice(0,16);
+  // The controlled migration catalog grows; never freeze this test at an old count.
+  const migrationCount=(await readdir(path.join(root,"migrations/controlled")))
+    .filter(name=>/^\d{8}_\d{3}_[a-z0-9_-]+\.sql$/.test(name)).length;
+  const dbName="phase8_test_"+randomUUID().replaceAll("-","").slice(0,16);
   const admin=new pg.Client({connectionString:raw,ssl:false,connectionTimeoutMillis:5000});
   let created=false;
   try {
