@@ -15,7 +15,6 @@ export type ReturnMatchCandidate = {
   unitPurchaseCost: string;
   unitLandedCost: string;
   averageCost?: string;
-  offloadItemId: number;
 };
 export type ReturnMatchEntry = {
   row: number;
