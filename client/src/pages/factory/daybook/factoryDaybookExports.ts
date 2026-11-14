@@ -70,8 +70,8 @@ type DetailRow = {
 
 /**
  * Detailed export: voucher-backed entries are expanded into their debit/credit
- * lines (one sheet per transaction type). A failed voucher fetch degrades to
- * the plain summary row for that entry rather than aborting the export.
+ * lines (one sheet per transaction type). Incomplete voucher evidence fails
+ * closed: a detailed ledger must never silently present summary-only values.
  */
 export async function exportFactoryDaybookDetailed(
   entries: DaybookEntry[],
@@ -91,26 +91,32 @@ export async function exportFactoryDaybookDetailed(
       Optional: entry.optional ? "Yes" : "No",
     };
     if (isVoucherBacked) {
+      // A "Detailed" ledger must never silently replace a missing voucher
+      // journal with a transaction summary. Reject the whole export instead.
+      let rows: Array<{ accountName?: string; debitAmount?: string; creditAmount?: string }>;
       try {
         const res = await fetch(`/api/vouchers/${entry.referenceId}/view-entries`, { credentials: "include" });
-        if (res.ok) {
-          const raw = await res.json();
-          const vEntries = Array.isArray(raw) ? raw : raw.entries || [];
-          if (vEntries.length > 0) {
-            for (const ve of vEntries) {
-              detailedData.push({
-                ...baseRow,
-                "Account Name": ve.accountName || "",
-                Debit: parseFloat(ve.debitAmount || "0") > 0 ? parseFloat(ve.debitAmount) : "",
-                Credit: parseFloat(ve.creditAmount || "0") > 0 ? parseFloat(ve.creditAmount) : "",
-              });
-            }
-            continue;
-          }
+        if (!res.ok) throw new Error("Voucher entries could not be loaded");
+        const raw: unknown = await res.json();
+        const value = Array.isArray(raw)
+          ? raw
+          : raw && typeof raw === "object" && "entries" in raw ? raw.entries : null;
+        if (!Array.isArray(value) || value.length === 0) {
+          throw new Error("Voucher journal has no available detail lines");
         }
+        rows = value;
       } catch {
-        // Failure here is non-fatal and the surrounding flow continues deliberately.
+        throw new Error("Could not verify all Daybook voucher lines. Refresh and retry the detailed export.");
       }
+      for (const ve of rows) {
+        detailedData.push({
+          ...baseRow,
+          "Account Name": ve.accountName || "",
+          Debit: Number(ve.debitAmount || 0) > 0 ? Number(ve.debitAmount) : "",
+          Credit: Number(ve.creditAmount || 0) > 0 ? Number(ve.creditAmount) : "",
+        });
+      }
+      continue;
     }
     detailedData.push({ ...baseRow, "Account Name": "", Debit: "", Credit: "" });
   }
