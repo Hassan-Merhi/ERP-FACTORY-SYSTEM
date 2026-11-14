@@ -18,7 +18,7 @@ import {
   reconcileSupplierReturnBatch,
   type SupplierReturnFinancials,
 } from "./erpSupplierReturnFinancials";
-import { byId, candidates, quantity, ReturnError, type Candidate, type Row } from "./erpSupplierReturnCandidates";
+import { byId, candidates, quantity, ReturnError, type Candidate } from "./erpSupplierReturnCandidates";
 
 const movementAdapter = createDatabaseStockMovementAdapter();
 
