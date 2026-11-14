@@ -8,7 +8,7 @@
  */
 import Decimal from "decimal.js";
 import type { MonetaryFxValuationResult, MonetaryFxValuationRow } from "./monetaryFxValuationService";
-import { reportRowMatchesBook } from "./monetaryFxBookMatch";
+import { BOOK_MATCH_TOLERANCE, reportRowMatchesBook } from "./monetaryFxBookMatch";
 
 export type MonetaryNetPositionAccount = {
   id?: number;
