@@ -34,6 +34,7 @@ interface Candidate {
   availableQty: string;
   unitPurchaseCost: string;
   unitLandedCost: string;
+  averageCost: string;
 }
 interface PreviewRow {
   row: number;
@@ -205,7 +206,7 @@ export default function FactorySupplierReturns() {
             quantity: line.allocation.quantity,
             status: entry.valid && combined.valid ? "matched" : "review-allocation",
             candidate: line.candidate,
-            valid: entry.valid && line.valid &&
+            valid: entry.valid && combined.valid && line.valid &&
               !!line.candidate &&
               !combined.overSources.has(line.candidate.offloadItemId) &&
               !combined.overStock.has(line.candidate.locationId + ":" + line.candidate.stockItemId),
@@ -582,7 +583,7 @@ export default function FactorySupplierReturns() {
                               <div className="text-xs text-muted-foreground">
                                 Offload #{candidate.offloadId} · {candidate.supplierName} ·
                                 remaining {candidate.remainingQty} · stock {candidate.availableQty} ·
-                                purchase {money(candidate.unitPurchaseCost)} / landed {money(candidate.unitLandedCost)}
+                                purchase {money(candidate.unitPurchaseCost)} / landed {money(candidate.unitLandedCost)} · avg stock/bale {money(candidate.averageCost)}
                               </div>
                             )}
                           </div>
@@ -595,12 +596,12 @@ export default function FactorySupplierReturns() {
                           Unallocated {entry.unallocatedQty}
                         </div>
                       </td>
-                      <td className="p-2 font-mono">{first?.originalQty ?? "—"}</td>
-                      <td className="p-2 font-mono">{first?.returnedQty ?? "—"}</td>
-                      <td className="p-2 font-mono">{first?.remainingQty ?? "—"}</td>
-                      <td className="p-2 font-mono">{first?.availableQty ?? "—"}</td>
+                      <td className="p-2 font-mono">{entry.lines.map((line) => line.candidate?.originalQty ?? "—").join(" / ") || "—"}</td>
+                      <td className="p-2 font-mono">{entry.lines.map((line) => line.candidate?.returnedQty ?? "—").join(" / ") || "—"}</td>
+                      <td className="p-2 font-mono">{entry.lines.map((line) => line.candidate?.remainingQty ?? "—").join(" / ") || "—"}</td>
+                      <td className="p-2 font-mono">{entry.lines.map((line) => line.candidate?.availableQty ?? "—").join(" / ") || "—"}</td>
                       <td className="p-2 font-mono">
-                        {first ? `${money(first.unitPurchaseCost)} / ${money(first.unitLandedCost)}` : "—"}
+                        {entry.lines.map((line) => line.candidate ? `${money(line.candidate.unitPurchaseCost)} / ${money(line.candidate.unitLandedCost)}` : "—").join("; ") || "—"}
                       </td>
                       <td className="p-2">
                         {valid ? (
