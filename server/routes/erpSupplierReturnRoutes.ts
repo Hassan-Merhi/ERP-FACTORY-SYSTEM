@@ -17,6 +17,7 @@ import { createDatabaseStockMovementAdapter } from "../services/inventory/databa
 import { postStockMovementTx } from "../services/inventory/stockMovementIntegrityService";
 import { assertActiveCompanyAccess } from "../security/companyAccessBoundary";
 import { allocateSupplierReturnRows } from "./erpSupplierReturnAllocation";
+import { validateReturnCommitRows, type ReturnCommitRow } from "./erpSupplierReturnCommitValidation";
 
 const movementAdapter = createDatabaseStockMovementAdapter();
 const qtyPattern = /^\d+(?:\.\d{1,3})?$/;
@@ -298,6 +299,7 @@ export function registerErpSupplierReturnRoutes(app: Express) {
         reason?: string;
         fileName?: string;
         lines?: Array<{ offloadItemId?: number; quantity?: string }>;
+        requestedRows?: ReturnCommitRow[];
       };
       if (body?.supplierId != null && (!Number.isSafeInteger(body.supplierId) || body.supplierId <= 0))
         throw new ReturnError(400, "RETURN_SUPPLIER_INVALID", "Choose a valid supplier");
@@ -325,6 +327,17 @@ export function registerErpSupplierReturnRoutes(app: Express) {
           "RETURN_LINES_DUPLICATE",
           "Each offload item may appear only once per return; combine duplicate quantities"
         );
+      let requestedTotal: string | null = null;
+      if (body.requestedRows !== undefined) {
+        try {
+          requestedTotal = validateReturnCommitRows(
+            body.requestedRows,
+            input.map(({ id, qty }) => ({ offloadItemId: id, quantity: qty.toFixed(3) }))
+          ).totalQty;
+        } catch (error) {
+          throw new ReturnError(400, "RETURN_ALLOCATION_INVALID", (error as Error).message);
+        }
+      }
       const result = await db.transaction(async (tx) => {
         // Serialize the same idempotency key BEFORE reading or changing stock.
         // Concurrent retries cannot both see a missing batch and double-post.
@@ -374,12 +387,44 @@ export function registerErpSupplierReturnRoutes(app: Express) {
             );
           matched.push({ source, qty: line.qty });
         }
+        // Verify submitted row article codes against their original offload sources.
+        // The client cannot redirect quantities from one imported article to another.
+        if (body.requestedRows) {
+          const matchedById = new Map(matched.map(({ source }) => [source.offloadItemId, source]));
+          const lookupCache = new Map<string, Set<number>>();
+          for (const row of body.requestedRows) {
+            const code = row.code.trim().toUpperCase();
+            let legal = lookupCache.get(code);
+            if (!legal) {
+              legal = new Set((await candidates(tx, companyId, row.code.trim())).map((item) => item.offloadItemId));
+              lookupCache.set(code, legal);
+            }
+            let rowSupplierId: number | null = null;
+            for (const allocation of row.allocations) {
+              const source = matchedById.get(allocation.offloadItemId);
+              if (!source || !legal.has(source.offloadItemId))
+                throw new ReturnError(409, "RETURN_ARTICLE_SOURCE_MISMATCH",
+                  `Source does not belong to article ${row.code}`);
+              if (rowSupplierId !== null && source.supplierId !== rowSupplierId)
+                throw new ReturnError(409, "RETURN_ROW_SUPPLIER_MIXED",
+                  `One article row cannot return quantities to multiple suppliers (${row.code})`);
+              rowSupplierId = source.supplierId;
+            }
+          }
+        }
         const demand = new Map<string, Decimal>();
         for (const { source, qty } of matched) {
           const key = `${source.locationId}:${source.stockItemId}`;
           demand.set(key, (demand.get(key) ?? new Decimal(0)).add(qty));
         }
-        for (const [key, needed] of demand) {
+        // Lock the entire inventory demand set in a consistent global order
+        // irrespective of which offload IDs a concurrent return happens to select.
+        const orderedDemand = [...demand].sort(([left], [right]) => {
+          const [ll, li] = left.split(":").map(Number);
+          const [rl, ri] = right.split(":").map(Number);
+          return ll - rl || li - ri;
+        });
+        for (const [key, needed] of orderedDemand) {
           const [locationId, stockItemId] = key.split(":").map(Number);
           const [stock] = resultRows<{ quantity: string; total_value: string }>(
             await tx.execute(sql`
@@ -476,6 +521,14 @@ export function registerErpSupplierReturnRoutes(app: Express) {
             "Supplier Return",
             returnLine.id
           );
+          // The canonical movement is audit evidence; adjustInventory is the
+          // only quantity/value write. Require its exact persisted delta.
+          if (!new Decimal(moved.previousQuantity).minus(moved.newQuantity).eq(qty) ||
+              new Decimal(moved.previousTotalValue).minus(moved.newTotalValue)
+                .toFixed(2) !== new Decimal(moved.valueDelta).negated().toFixed(2)) {
+            throw new ReturnError(409, "RETURN_STOCK_DELTA_MISMATCH",
+              `Inventory movement mismatch for ${source.code}`);
+          }
           const inventoryValue = new Decimal(moved.valueDelta).negated().toDecimalPlaces(2);
           if (inventoryValue.isNegative())
             throw new ReturnError(
@@ -531,6 +584,9 @@ export function registerErpSupplierReturnRoutes(app: Express) {
           totalSupplier = totalSupplier.add(supplierCredit);
           totalInventory = totalInventory.add(inventoryValue);
         }
+        if (requestedTotal !== null && !totalQty.eq(requestedTotal))
+          throw new ReturnError(409, "RETURN_TOTAL_MISMATCH",
+            "Posted quantity does not equal the original requested return quantity");
         await tx.execute(sql`
           UPDATE erp_supplier_return_batches
              SET total_quantity=${totalQty.toFixed(3)},
