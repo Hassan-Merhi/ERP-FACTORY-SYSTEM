@@ -2,7 +2,7 @@ import Decimal from "decimal.js";
 
 /**
  * Money in ERP supplier returns is USD, posted at two decimal places.
- * Authoritative inventory relief comes from adjustInventory().valueDelta,
+ * Authoritative inventory relief comes from the inventory helper's returned valueDelta,
  * never qty * a rounded display rate or historical container landed cost.
  */
 export interface SupplierReturnFinancialInput {
