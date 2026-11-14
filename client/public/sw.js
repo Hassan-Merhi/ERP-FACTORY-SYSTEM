@@ -1,7 +1,7 @@
 // Incident recovery: invalidate cached app shells and old hashed chunks after
 // confirmed production 404s on assets from previous Render releases.
 // Future routine releases must not bump this marker unnecessarily.
-const CACHE_VERSION = "erp-v15";
+const CACHE_VERSION = "erp-v16";
 const CACHE_PREFIX = "erp-";
 // One-time campaign marker kept outside CACHE_PREFIX so normal ERP cache cleanup
 // cannot erase it and accidentally trigger this migration again later.
@@ -13,7 +13,9 @@ const IOS_FORCE_UPDATE_MARKER_URL = "/__pwa_force_update_applied__";
 // Versioned branding assets make the new icons available to existing offline installations.
 const APP_SHELL = [
   "/",
-  "/manifest.json?brand=dakzo-20261111",
+  "/manifest.json?brand=dakzo-20261114",
+  "/dakzo-mark-dark-v2.svg",
+  "/dakzo-mark-light-v2.svg",
   "/dakzo-favicon-v1.png",
   "/dakzo-icon-192-v1.png",
   "/dakzo-icon-512-v1.png",
