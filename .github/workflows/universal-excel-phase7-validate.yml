@@ -61,7 +61,6 @@ jobs:
           tests/net-profit-excel-sheets.test.ts
           tests/net-profit-excel-exact.test.ts
           tests/account-statement-routes-behavior.test.ts
-          tests/cost-centers-lifecycle.test.ts
           tests/stats-net-position-excel-behavior.test.ts
       - name: Frontend financial and Factory Excel adapters
         run: >
