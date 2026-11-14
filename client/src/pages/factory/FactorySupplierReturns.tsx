@@ -568,7 +568,7 @@ export default function FactorySupplierReturns() {
                           <div key={index} className="rounded border p-2 space-y-1">
                             <div className="flex flex-wrap gap-1 items-center">
                               <select
-                                aria-label={`Container for row ${row.row} allocation ${index + 1}`}
+                                aria-label={`${copy.allocationContainer} ${row.row} ${copy.allocation} ${index + 1}`}
                                 disabled={busy || !!receipt}
                                 className="flex-1 min-w-40 max-w-full rounded border bg-background px-2 py-1"
                                 value={allocation.offloadItemId || ""}
@@ -576,7 +576,7 @@ export default function FactorySupplierReturns() {
                                   offloadItemId: Number(e.target.value) || 0,
                                 })}
                               >
-                                <option value="">Choose container</option>
+                                <option value="">{copy.chooseContainer}</option>
                                 {sourceOptions.filter((source) =>
                                   (rowSupplier == null || source.supplierId === rowSupplier ||
                                    source.offloadItemId === allocation.offloadItemId) &&
@@ -585,12 +585,12 @@ export default function FactorySupplierReturns() {
                                    source.offloadItemId === allocation.offloadItemId)
                                 ).map((source) => (
                                   <option key={source.offloadItemId} value={source.offloadItemId}>
-                                    {source.containerNumber} (remaining {source.remainingQty})
+                                    {source.containerNumber} ({copy.remainingLabel} {source.remainingQty})
                                   </option>
                                 ))}
                               </select>
                               <Input
-                                aria-label={`Quantity for row ${row.row} allocation ${index + 1}`}
+                                aria-label={`${copy.allocationQuantity} ${row.row} ${copy.allocation} ${index + 1}`}
                                 className="w-24 font-mono"
                                 inputMode="decimal"
                                 value={allocation.quantity}
@@ -600,25 +600,25 @@ export default function FactorySupplierReturns() {
                               <Button type="button" size="sm" variant="ghost"
                                 disabled={busy || !!receipt}
                                 onClick={() => removeAllocation(row.row, index)}
-                                aria-label={`Remove allocation ${index + 1} from row ${row.row}`}>
+                                aria-label={`${copy.removeAllocation} ${index + 1} ${copy.fromRow} ${row.row}`}>
                                 Remove
                               </Button>
                             </div>
                             {candidate && (
                               <div className="text-xs text-muted-foreground">
-                                Offload #{candidate.offloadId} · {candidate.supplierName} ·
-                                remaining {candidate.remainingQty} · stock {candidate.availableQty} ·
-                                purchase {money(candidate.unitPurchaseCost)} / landed {money(candidate.unitLandedCost)} · avg stock/bale {money(candidate.averageCost)}
+                                {copy.offloadId} #{candidate.offloadId} · {candidate.supplierName} ·
+                                {copy.remainingLabel} {candidate.remainingQty} · {copy.stockLabel} {candidate.availableQty} ·
+                                {copy.purchaseLabel} {money(candidate.unitPurchaseCost)} / {copy.landedLabel} {money(candidate.unitLandedCost)} · {copy.averagePerBale} {money(candidate.averageCost)}
                               </div>
                             )}
                           </div>
                         ))}
                         <Button type="button" variant="outline" size="sm"
                           disabled={busy || !!receipt || entry.lines.length >= sourceOptions.length}
-                          onClick={() => addAllocation(row.row)}>+ Add container</Button>
+                          onClick={() => addAllocation(row.row)}>+ {copy.addContainer}</Button>
                         <div className="text-xs font-mono">
-                          Allocated {entry.allocatedQty} / {row.quantity} ·
-                          Unallocated {entry.unallocatedQty}
+                          {copy.allocatedLabel} {entry.allocatedQty} / {row.quantity} ·
+                          {copy.unallocatedLabel} {entry.unallocatedQty}
                         </div>
                       </td>
                       <td className="p-2 font-mono">{entry.lines.map((line) => line.candidate?.originalQty ?? "—").join(" / ") || "—"}</td>
@@ -729,7 +729,7 @@ export default function FactorySupplierReturns() {
                         disabled={busy || exportingBatch !== null}
                         onClick={() => void exportPostedBatch(r)}>
                         <Download className="h-4 w-4 mr-1" />
-                        {exportingBatch === r.id ? copy.exporting : "Posted Excel"}
+                        {exportingBatch === r.id ? copy.exporting  : copy.postedExcel}
                       </Button>
                     </td>
                   </tr>
@@ -757,10 +757,10 @@ export default function FactorySupplierReturns() {
                       copy.supplierCredit,
                       copy.stockCost,
                       copy.voucher,
-                      "Excel rows",
-                      "Purchase / Bale",
-                      "Inventory / Bale",
-                      "Variance",
+                      copy.inputRows,
+                      copy.purchasePerBale,
+                      copy.inventoryPerBale,
+                      copy.variance,
                     ].map((x) => (
                       <th key={x} className="p-2 text-left">
                         {x}
