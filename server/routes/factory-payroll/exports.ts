@@ -1,3 +1,4 @@
+import { styleUniversalFinancialWorkbook } from "@shared/universal-excel/financialWorkbookStyle";
 import type { Database } from "../../db";
 import { toArrayBuffer } from "../../lib/bufferCompatibility";
 import type { Express, Request, Response, RequestHandler } from "express";
@@ -428,6 +429,7 @@ export function registerFactoryPayrollExportRoutes(app: Express, requireAuth: Re
         detailsSheet.getColumn(key).numFmt = "#,##0.00";
       });
 
+      styleUniversalFinancialWorkbook(workbook, workbook.worksheets.map(ws => ({ name: ws.name })));
       const xlsBuffer = Buffer.from(await workbook.xlsx.writeBuffer());
       await auditExport(req, companyId, "Excel", startDate, endDate);
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
