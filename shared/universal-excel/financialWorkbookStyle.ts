@@ -65,8 +65,9 @@ export function styleUniversalFinancialWorkbook(
     }
     // A print header is metadata, not a row. Existing headers, audit footers,
     // freeze panes, print ranges, cash/accounting signs and formatting survive.
-    if (design.showBranding && !ws.headerFooter?.oddHeader) {
-      ws.headerFooter.oddHeader = "&L" + design.brandName.replaceAll("&", "");
+    if (design.printLayout && design.showBranding && !ws.headerFooter?.oddHeader) {
+      ws.headerFooter.oddHeader = "&L" + (design.headerText || design.brandName).replaceAll("&", "");
+      if (design.footerText && !ws.headerFooter.oddFooter) ws.headerFooter.oddFooter = "&L" + design.footerText;
     }
   }
 }
