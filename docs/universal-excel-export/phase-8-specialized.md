@@ -57,3 +57,23 @@ Existing relevant tests:
 - `tests/excel-export-v2.test.ts` — DB-backed SP sales form integration (requires a provisioned test database; not a pure workbook test).
 
 Required release gates: TypeScript, frontend/backend Excel tests, lint, build, doc index, role/cost audit, full-company import round-trips, SP formula validation with database fixtures, and current-main integration. **No SQL, merge or Render deploy** in Phase 8.
+
+## Observed branch validation — 2026-11-14
+
+The [temporary Phase 8 validation run #43572242826](https://github.com/Hassan-Merhi/ERP-FACTORY-SYSTEM/actions/runs/43572242826) completed successfully against the Phase 8 source changes.
+
+- TypeScript: `npm run check` **passed**.
+- Core specialized and existing workbook Vitest: **83 tests passed** across 10 suites, including source production-matrix drilldowns, stock-transfer no-cost, canonical invoice, full-company backup and existing universal engine/financial safeguards.
+- Frontend workbook Vitest: **21 tests passed** across three suites (customer bale order sheets, truck trips and ERP financial adapters).
+- Changed-source Prettier validation **passed**.
+- Lint **passed** on **4,504 files**, with zero errors and zero warnings.
+- Production build **passed**.
+- Documentation index **passed**.
+
+The initial attempt found three null-versus-undefined expectations in new print-header assertions; the assertions were corrected to reflect ExcelJS's actual absent-header representation. No Excel formulas or values failed. The branch-only write-enabled validation workflow was removed after the successful run.
+
+### Production signoff still outstanding
+
+The successful focused tests verify source-level workbook behavior, not live dataset parity. The older `main` divergence, PR localization/translation audit, DB-backed SP Sales Form V2 and production import round-trips, full PR CI, and hidden-cost/user-role testing still require integration before merging to production.
+
+**Phase 8 specialized workbook implementation and focused validation complete. No SQL, merge or deployment.**
