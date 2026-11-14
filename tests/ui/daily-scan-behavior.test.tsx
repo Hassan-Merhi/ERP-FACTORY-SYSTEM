@@ -7,6 +7,7 @@
 import React from "react";
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import type ExcelJS from "exceljs";
+import { DEFAULT_EXCEL_APPEARANCE_SETTINGS } from "../../shared/universal-excel/appearanceSettings";
 import { renderWithProviders } from "./helpers";
 
 vi.mock("wouter", async () => (await import("./pageMocks")).wouterMock);
@@ -53,7 +54,11 @@ beforeEach(() => {
   (global as any).fetch = vi.fn(async (url: string) => ({
     ok: true,
     status: 200,
-    json: async () => (String(url).startsWith("/api/factory/daily-bale-scans") ? [bale(1, true), bale(2, false)] : []),
+    json: async () => (String(url).startsWith("/api/factory/daily-bale-scans")
+      ? [bale(1, true), bale(2, false)]
+      : String(url) === "/api/excel-export/appearance"
+        ? { appearance: DEFAULT_EXCEL_APPEARANCE_SETTINGS, companyName: "Factory" }
+        : []),
   }));
 });
 
@@ -73,14 +78,14 @@ describe("Daily Scan", () => {
 
     const rows: unknown[][] = [];
     ws.eachRow((row) => rows.push((row.values as unknown[]).slice(1)));
-    expect(rows[0][1]).toBe("Ref Code");
+    expect(rows[4][1]).toBe("Ref Code");
     // Scanned bales are listed first, then the missing ones, then the total.
-    expect(rows.slice(1, 3).map((r) => [r[1], r[7]])).toEqual([
+    expect(rows.slice(5, 7).map((r) => [r[1], r[7]])).toEqual([
       ["REF-1", "Scanned"],
       ["REF-2", "Missing"],
     ]);
-    expect(rows[3][4]).toBe(101);
-    expect(rows[3][7]).toBe("1/2 scanned");
+    expect(rows[7][4]).toBe(101);
+    expect(rows[7][7]).toBe("1/2 scanned");
   });
 
   it("keeps in-stock bales above sold, pending, deleted, and dispatched bales", async () => {
