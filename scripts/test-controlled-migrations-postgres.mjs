@@ -11,7 +11,7 @@
  */
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -73,6 +73,9 @@ async function run() {
   if(!["postgres","postgresql"].includes(u.protocol.replace(":","")))
     throw new Error("Expected PostgreSQL URL");
 
+  // The controlled migration catalog grows; never freeze this test at an old count.
+  const migrationCount=(await readdir(path.join(root,"migrations/controlled")))
+    .filter(name=>/^\d{8}_\d{3}_[a-z0-9_-]+\.sql$/.test(name)).length;
   const dbName="phase8_test_"+randomUUID().replaceAll("-","").slice(0,16);
   const admin=new pg.Client({connectionString:raw,ssl:false,connectionTimeoutMillis:5000});
   let created=false;
@@ -130,7 +133,7 @@ async function run() {
       let result=await executeRunner(dbUrl,"--status");
       assert.equal(result.code,0,result.stderr);
       assert.equal(JSON.parse(result.stdout).historyExists,false);
-      assert.equal(JSON.parse(result.stdout).pending.length,16);
+      assert.equal(JSON.parse(result.stdout).pending.length,migrationCount);
       assert.equal((await client.query("SELECT to_regclass('public.erp_controlled_migration_history') AS name")).rows[0].name,null);
       console.log("PASS: fresh status is read-only and detects all pending migrations");
 
@@ -150,7 +153,7 @@ async function run() {
       result=await executeRunner(dbUrl,"--apply");
       assert.equal(result.code,0,result.stderr);
       const history=await client.query("SELECT migration_name, checksum FROM erp_controlled_migration_history ORDER BY migration_name");
-      assert.equal(history.rows.length,16);
+      assert.equal(history.rows.length,migrationCount);
       assert.equal((await client.query("SELECT to_regclass('public.factory_fixed_production_plans') IS NOT NULL AS ok")).rows[0].ok,true);
       assert.equal((await client.query("SELECT to_regclass('public.exchange_rates_company_date_pair_unique') IS NOT NULL AS ok")).rows[0].ok,true);
       assert.equal((await client.query("SELECT to_regclass('public.user_security_permissions_unique') IS NOT NULL AS ok")).rows[0].ok,true);
@@ -241,7 +244,7 @@ async function run() {
       result=await executeRunner(dbUrl,"--apply");
       assert.equal(result.code,0,result.stderr);
       assert.match(result.stdout,/already up to date/);
-      assert.equal((await client.query("SELECT count(*)::int AS n FROM erp_controlled_migration_history")).rows[0].n,16);
+      assert.equal((await client.query("SELECT count(*)::int AS n FROM erp_controlled_migration_history")).rows[0].n,migrationCount);
       console.log("PASS: repeat apply is idempotent");
 
       result=await executeRunner(dbUrl,"--status");
