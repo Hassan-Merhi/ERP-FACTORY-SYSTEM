@@ -75,8 +75,8 @@ export function buildErpSupplierReturnMatchWorkbook(wb: ExcelJS.Workbook, data: 
       const item = line.candidate;
       const qty = line.valid ? new Decimal(line.quantity) : new Decimal(0);
       const requestedQty = new Decimal(line.requestedQuantity ?? line.quantity);
-      const estInventory = item?.averageCost != null && line.valid
-        ? qty.mul(item.averageCost).toDecimalPlaces(2) : null;
+      const estInventory =
+        item?.averageCost != null && line.valid ? qty.mul(item.averageCost).toDecimalPlaces(2) : null;
       const estCredit = item && line.valid ? qty.mul(item.unitPurchaseCost).toDecimalPlaces(2) : null;
       sheet.addRow({
         // ERP tracks bulk article quantities rather than unique physical bale references.
@@ -130,17 +130,21 @@ export function buildErpSupplierReturnMatchWorkbook(wb: ExcelJS.Workbook, data: 
     } else {
       inputRows.set(entry.row, {
         code: excelText(entry.code),
-        requested, allocated, status: entry.valid ? "matched" : "review",
+        requested,
+        allocated,
+        status: entry.valid ? "matched" : "review",
       });
     }
   }
   for (const [row, item] of [...inputRows].sort(([a], [b]) => a - b)) {
     const remaining = Decimal.max(item.requested.minus(item.allocated), 0);
     requests.addRow({
-      row, code: item.code, requested: item.requested.toNumber(),
-      allocated: item.allocated.toNumber(), unallocated: remaining.toNumber(),
-      status: item.status === "matched" && remaining.eq(0) &&
-        item.allocated.eq(item.requested) ? "matched" : "review",
+      row,
+      code: item.code,
+      requested: item.requested.toNumber(),
+      allocated: item.allocated.toNumber(),
+      unallocated: remaining.toNumber(),
+      status: item.status === "matched" && remaining.eq(0) && item.allocated.eq(item.requested) ? "matched" : "review",
     });
   }
 
