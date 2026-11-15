@@ -3,9 +3,9 @@
  * immutable first-decision writes, and zero stock approval side effects.
  */
 import { describe, expect, it } from "vitest";
-import fs from "node:fs";
 import path from "node:path";
-const read = (p: string) => fs.readFileSync(path.join(process.cwd(), p), "utf8");
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
+const read = (p: string) => readModuleFamily(path.join(process.cwd(), p));
 
 const webhook = read("server/routes/stockTransferOrderWaApprovalWebhookRoutes.ts");
 const parser = read("server/services/stockTransferOrderWhatsAppReplyParser.ts");
@@ -17,7 +17,10 @@ const stage = read("server/startup-schema/040-stock-transfer-order-wa-webhook.ts
 const boot = read("server/startup/ensureStockTransferOrderWhatsAppApprovalSchema.ts");
 const settings = read("server/routes/stockTransferOrderWaApprovalRoutes.ts");
 const manifest = JSON.parse(read("config/route-manifest.json")) as {
-  routeCount: number; routes: string[]; middlewareMountCount: number; middlewareMounts: string[];
+  routeCount: number;
+  routes: string[];
+  middlewareMountCount: number;
+  middlewareMounts: string[];
 };
 
 describe("Stock Transfer Order WhatsApp inbound Phase 3", () => {
@@ -40,8 +43,8 @@ describe("Stock Transfer Order WhatsApp inbound Phase 3", () => {
     expect(parser).toContain('root.typeWebhook !== "incomingMessageReceived"');
     expect(parser).toContain('message.typeMessage === "quotedMessage"');
     expect(parser).toContain('message.typeMessage === "textMessage"');
-    expect(parser).toContain('record(message.quotedMessage)?.stanzaId');
-    expect(parser).toContain('textData?.stanzaId');
+    expect(parser).toContain("record(message.quotedMessage)?.stanzaId");
+    expect(parser).toContain("textData?.stanzaId");
     expect(parser).toContain('normalized !== "DONE" && normalized !== "DECLINE"');
   });
 
@@ -52,7 +55,7 @@ describe("Stock Transfer Order WhatsApp inbound Phase 3", () => {
     expect(consumer).toContain("reply.senderE164 !== matched.authorized_phone_e164");
     expect(consumer).toContain("matched.current_phone !== matched.authorized_phone_e164");
     expect(consumer).toContain("matched.current_group !== matched.approval_group_chat_id");
-    expect(consumer).toContain("matched.status !== \"requested\"");
+    expect(consumer).toContain('matched.status !== "requested"');
     expect(consumer).toContain("runWithDatabaseMaintenanceScope");
   });
 

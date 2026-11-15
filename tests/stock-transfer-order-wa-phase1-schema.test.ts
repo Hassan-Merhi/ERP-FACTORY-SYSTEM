@@ -38,7 +38,9 @@ describe("Stock Transfer Order WhatsApp approval — Phase 1 contract", () => {
     expect(startupSql).toContain("sto_wa_events_immutable_trg");
     expect(startupSql).toContain("sto_wa_revisions_immutable_trg");
     expect(startupSql).toContain("sto_wa_batch_items_guard_trg");
-    expect(startupSql).not.toMatch(/\b(?:UPDATE|DELETE FROM|TRUNCATE)\s+(?:vouchers|stock_transfer_items|stock_transfer_revisions|inventory)\b/i);
+    expect(startupSql).not.toMatch(
+      /\b(?:UPDATE|DELETE FROM|TRUNCATE)\s+(?:vouchers|stock_transfer_items|stock_transfer_revisions|inventory)\b/i
+    );
     expect(startupSql).not.toMatch(/\b(?:INSERT INTO|DELETE FROM)\s+voucher_entries\b/i);
   });
 
@@ -48,14 +50,14 @@ describe("Stock Transfer Order WhatsApp approval — Phase 1 contract", () => {
     const service = file("server/services/inventory/createStockTransfer.ts");
     expect(ui).toContain('apiRequest("POST", "/api/stock-transfer-orders"');
     expect(route).toContain('req.path === "/api/stock-transfer-orders"');
-    expect(route).toContain('req.body?.workflowOrigin !== undefined');
-    expect(route).toContain('workflowOrigin,');
+    expect(route).toContain("req.body?.workflowOrigin !== undefined");
+    expect(route).toContain("workflowOrigin,");
     expect(service).toContain('workflowOrigin === "stock_transfer_order" ? "stock_transfer_order" : "stock_transfer"');
   });
 
   it("builds isolated frozen snapshots rather than approving or sending from Phase 1", () => {
     const batchService = file("server/services/stockTransferOrderWhatsAppApprovalBatch.ts");
-    expect(batchService).toContain('t.workflow_origin=\'stock_transfer_order\'');
+    expect(batchService).toContain("t.workflow_origin='stock_transfer_order'");
     expect(batchService).toContain("v.company_id=");
     expect(batchService).toContain("r.status='pending'");
     // Only the stock transfer row is locked. Locking posted vouchers needlessly

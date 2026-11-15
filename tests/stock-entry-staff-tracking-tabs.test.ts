@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "fs";
 import { resolve } from "path";
 
 import { FACTORY_TABS } from "../client/src/pages/settings/users/UserManagementConstants";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
 const ROOT = resolve(__dirname, "..");
-const src = (path: string) => readFileSync(resolve(ROOT, path), "utf8");
+const src = (path: string) => readModuleFamily(resolve(ROOT, path));
 
 // FactoryAttendance.tsx is covered by rendering it in
 // tests/ui/factory-attendance-behavior.test.tsx rather than by reading its source.

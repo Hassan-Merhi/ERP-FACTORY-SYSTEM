@@ -1,12 +1,12 @@
-import fs from "node:fs";
 import path from "node:path";
 import Decimal from "decimal.js";
 import { describe, expect, it } from "vitest";
 import { resolveFactoryOffloadValuationKg } from "../shared/factoryOffloadValuation";
 import { computeContainerLandedCost } from "../server/services/factory/containerLandedCost";
 import { calculateMovingAverageRate } from "../server/services/factory/factoryCostingEngine";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
-const repoFile = (...parts: string[]) => fs.readFileSync(path.join(process.cwd(), ...parts), "utf8");
+const repoFile = (...parts: string[]) => readModuleFamily(path.join(process.cwd(), ...parts));
 
 const buildContainer = (actualReceivedKg: string) =>
   ({

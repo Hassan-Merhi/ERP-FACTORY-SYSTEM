@@ -1,7 +1,7 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
-const read = (path: string) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
+const read = (path: string) => readModuleFamily(new URL(`../${path}`, import.meta.url));
 
 describe("factory loading proforma quantity alignment", () => {
   it("manual scanning delegates membership and overload decisions to the authoritative capacity engine", () => {

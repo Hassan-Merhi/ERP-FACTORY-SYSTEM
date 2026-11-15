@@ -1,6 +1,6 @@
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { readModuleFamily } from "../../../scripts/lib/readModuleFamily.mjs";
 
 // Formatting-insensitive source check: compares code tokens, not layout, so a
 // Prettier reflow of the source cannot break the contract.
@@ -12,12 +12,13 @@ const normalizeCode = (code: string) =>
     .replace(/,([}\])])/g, "$1");
 const expectCode = (code: string, expected: string) => expect(normalizeCode(code)).toContain(normalizeCode(expected));
 
-const source = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
+const source = (path: string) => readModuleFamily(resolve(process.cwd(), path));
 
 /** Static wiring safety gate; real SQL and voucher-posting integration must run separately. */
 describe("Phase 16 weekly bonus end-to-end source wiring", () => {
   it("ensures unconditional startup installs weekly review before one-time payment claims", () => {
-    const index = source("server/index.ts");
+    // Phase 3 moved the pre-listen schema guards out of server/index.ts.
+    const index = source("server/startup/runCoreStartupSchemaGuards.ts");
     const staff = source("server/startup/factoryStaffTrackingSchema.ts");
     const payment = source("server/startup/ensureFactoryTargetBonusPaymentSchema.ts");
     expect(index.indexOf("await ensureFactoryStaffTrackingSchema(pool)")).toBeLessThan(

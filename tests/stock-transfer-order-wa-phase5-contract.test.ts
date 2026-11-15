@@ -1,9 +1,9 @@
 /** Phase 5 route/workflow safeguards; full PostgreSQL/Green API E2E in Phase 7. */
-import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { stockTransferOrderWaDeliverySchema } from "../server/startup-schema/041-stock-transfer-order-wa-delivery";
-const read = (name: string) => fs.readFileSync(path.join(process.cwd(),name),"utf8");
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
+const read = (name: string) => readModuleFamily(path.join(process.cwd(), name));
 
 const migration = read("migrations/20261111_003_stock_transfer_order_whatsapp_excel_phase5.sql");
 const snapshot = read("server/services/stockTransferOrderApprovedWorkbookSnapshot.ts");
@@ -21,8 +21,8 @@ const ensure = read("server/startup/ensureStockTransferOrderWhatsAppApprovalSche
 describe("Stock Transfer Order Phase 5 no-cost Excel delivery", () => {
   it("mirrors seven idempotent migration statements, protects workbook snapshot and binary", () => {
     expect(stockTransferOrderWaDeliverySchema).toHaveLength(7);
-    for(const statement of stockTransferOrderWaDeliverySchema) expect(migration).toContain(statement);
-    const ddl=stockTransferOrderWaDeliverySchema.join("; ");
+    for (const statement of stockTransferOrderWaDeliverySchema) expect(migration).toContain(statement);
+    const ddl = stockTransferOrderWaDeliverySchema.join("; ");
     expect(ddl).toContain("stock_transfer_order_approval_workbooks");
     expect(ddl).toContain("workbook_bytes bytea");
     expect(ddl).toContain("sto_wa_workbook_immutable_trg");
@@ -60,9 +60,9 @@ describe("Stock Transfer Order Phase 5 no-cost Excel delivery", () => {
   });
 
   it("sends only from the original main instance, never fallback or blind network retry", () => {
-    const start=sending.indexOf("export async function sendApprovedStockTransferOrderWorkbook(");
-    const end=sending.indexOf("/** Send a plain text message to one specific chatId */",start);
-    const fn=sending.slice(start,end);
+    const start = sending.indexOf("export async function sendApprovedStockTransferOrderWorkbook(");
+    const end = sending.indexOf("/** Send a plain text message to one specific chatId */", start);
+    const fn = sending.slice(start, end);
     expect(fn).toContain("settings.instanceId !== expectedInstanceId");
     expect(fn).toContain("requestGreenApiUpload(settings");
     expect(fn).not.toContain("uploadGreenApiWithAuthFallback");
