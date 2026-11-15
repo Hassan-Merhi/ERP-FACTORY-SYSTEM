@@ -1,3 +1,4 @@
+// Extracted from ./netPositionHistoricalPipeline.ts to keep that module under the source-size cap.
 /**
  * Read-only Phase 5 reconstruction for Factory Net Position.
  *

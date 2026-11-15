@@ -1,3 +1,4 @@
+// Extracted from ./containers.ts to keep that module under the source-size cap.
 /** Core container, tracking event and tracking check Drizzle tables. */
 import {
   pgTable,

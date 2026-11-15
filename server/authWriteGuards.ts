@@ -1,3 +1,4 @@
+// Extracted from ./auth.ts to keep that module under the source-size cap.
 /** Role write/access boundaries moved from auth.ts without changing behavior. */
 import type { Request, Response, NextFunction } from "express";
 import { isErpTesterForbiddenApiPath } from "@shared/erpTestCompanyAccess";

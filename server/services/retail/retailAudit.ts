@@ -1,3 +1,4 @@
+// Extracted from ./retailReporting.ts to keep that module under the source-size cap.
 /** Retail stock-integrity and sale/return audit, unchanged read-only SQL. */
 import { pool } from "../../db";
 

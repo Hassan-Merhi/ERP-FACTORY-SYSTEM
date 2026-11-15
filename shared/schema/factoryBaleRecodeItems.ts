@@ -1,3 +1,4 @@
+// Extracted from ./factoryBilingualTables.ts to keep that module under the source-size cap.
 /** Bilingual bale recode item schema: exact migrated Drizzle table and validators. */
 import { pgTable, serial, integer, text } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";

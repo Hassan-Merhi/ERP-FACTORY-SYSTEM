@@ -1,3 +1,4 @@
+// Extracted from ./monetaryFxReportOverlay.ts to keep that module under the source-size cap.
 /** Balance-sheet FX display translation; never posts journals or vouchers. */
 import Decimal from "decimal.js";
 import type { MonetaryFxValuationResult } from "./monetaryFxValuationService";

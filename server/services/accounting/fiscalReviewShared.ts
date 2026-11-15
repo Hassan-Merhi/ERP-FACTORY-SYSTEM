@@ -1,3 +1,4 @@
+// Extracted from ./fiscalReviewService.ts to keep that module under the source-size cap.
 /**
  * Phase 13 fiscal period close readiness, immutable-source checks and review.
  *

@@ -1,3 +1,4 @@
+// Extracted from ./factoryBackendAccessBoundary.ts to keep that module under the source-size cap.
 /** Shared Factory API tab ownership constants and helpers. */
 import type { Request } from "express";
 import { hasPrefix, requirement, type FactoryApiAccessRequirement } from "./factoryBackendAccessBoundaryRules";

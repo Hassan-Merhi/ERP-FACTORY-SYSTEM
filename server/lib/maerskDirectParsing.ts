@@ -1,3 +1,4 @@
+// Extracted from ./maerskDirectScraper.ts to keep that module under the source-size cap.
 /** Maersk JSON shape parsing and local-calendar-date extraction. */
 import { firstDefined, jsonArray, jsonPath, jsonString } from "./externalJson";
 import type { TrackingEvent } from "./trackingProviders/types";

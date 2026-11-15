@@ -1,3 +1,4 @@
+// Extracted from ./monetaryFxReportOverlay.ts to keep that module under the source-size cap.
 /** Reporting-only book-basis tolerance for live monetary translation. */
 import Decimal from "decimal.js";
 import type { MonetaryFxValuationRow } from "./monetaryFxValuationService";

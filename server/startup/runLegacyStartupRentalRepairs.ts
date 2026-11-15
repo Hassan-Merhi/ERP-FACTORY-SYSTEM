@@ -1,3 +1,4 @@
+// Extracted from ./runServerStartupMigrations.ts to keep that module under the source-size cap.
 /** Exact legacy startup-only rental overpayment and partial-offload repairs. */
 import type { Client } from "pg";
 import { logger } from "../lib/logger";

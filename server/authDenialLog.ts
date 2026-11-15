@@ -1,3 +1,4 @@
+// Extracted from ./auth.ts to keep that module under the source-size cap.
 /** Shared security denial logging; reason levels preserved. */
 import { logger } from "./lib/logger";
 

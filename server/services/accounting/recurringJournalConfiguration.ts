@@ -1,3 +1,4 @@
+// Extracted from ./recurringJournalService.ts to keep that module under the source-size cap.
 /** Recurring journal configuration/read operations, with original database semantics. */
 import { and, asc, eq } from "drizzle-orm";
 import {

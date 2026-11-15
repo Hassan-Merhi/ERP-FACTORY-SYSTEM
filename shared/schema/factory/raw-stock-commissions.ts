@@ -1,3 +1,4 @@
+// Extracted from ./raw-stock-mix.ts to keep that module under the source-size cap.
 /** Runtime Factory container commission and duty-audit tables, unchanged definitions. */
 import { pgTable, text, varchar, serial, integer, decimal, boolean, timestamp, index } from "drizzle-orm/pg-core";
 import { factoryContainers } from "./suppliers-containers";

@@ -1,3 +1,4 @@
+// Extracted from ./netPositionHistoricalPipeline.ts to keep that module under the source-size cap.
 /** Read-only historical Factory customer-order reconstruction. */
 import { sql } from "drizzle-orm";
 import type { FactoryNetPositionAsOf } from "@shared/factoryNetPositionAsOf";

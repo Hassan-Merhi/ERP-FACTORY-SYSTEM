@@ -1,3 +1,4 @@
+// Extracted from ./inventoryReadinessResolution.ts to keep that module under the source-size cap.
 /**
  * Perpetual-inventory readiness resolution (2026-10 accounting audit, wave 15).
  *

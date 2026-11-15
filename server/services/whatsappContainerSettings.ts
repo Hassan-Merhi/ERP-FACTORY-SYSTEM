@@ -1,3 +1,4 @@
+// Extracted from ./whatsappService.ts to keep that module under the source-size cap.
 /** WhatsApp container, agent-duty and transfer recipient configuration. */
 import { pool } from "../db";
 import { cleanGreenApiCredential } from "./whatsappGreenApiCore";

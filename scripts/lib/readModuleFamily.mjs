@@ -54,3 +54,28 @@ export function readModuleFamily(fileOrUrl) {
     .map((member) => fs.readFileSync(member, "utf8"))
     .join("\n");
 }
+
+const ORIGIN_PATTERN = /Extracted from \.\/([\w.@-]+\.(?:ts|tsx|js|mjs|jsx))\b/;
+
+/**
+ * Original module a file was extracted from (one hop), or null for a module
+ * that is not an extracted sibling.
+ */
+export function extractedFrom(fileOrUrl) {
+  const file = fileOrUrl instanceof URL ? fileURLToPath(fileOrUrl) : String(fileOrUrl);
+  let head;
+  try {
+    head = fs.readFileSync(file, "utf8").slice(0, MARKER_WINDOW);
+  } catch {
+    return null;
+  }
+  const match = ORIGIN_PATTERN.exec(head);
+  if (!match) return null;
+  const origin = path.join(path.dirname(file), match[1]);
+  return fs.existsSync(origin) ? origin : null;
+}
+
+/** True when `file` is a sibling extracted from another module. */
+export function isExtractedModule(fileOrUrl) {
+  return extractedFrom(fileOrUrl) !== null;
+}

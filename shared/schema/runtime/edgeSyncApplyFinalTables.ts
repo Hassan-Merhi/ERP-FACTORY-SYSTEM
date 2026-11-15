@@ -1,3 +1,4 @@
+// Extracted from ./edgeSyncApply.ts to keep that module under the source-size cap.
 /** Immutable Phase 9 applied-events and Phase 10 operator log table definitions. */
 import { sql } from "drizzle-orm";
 import {

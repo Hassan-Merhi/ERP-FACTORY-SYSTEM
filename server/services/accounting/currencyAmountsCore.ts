@@ -1,3 +1,4 @@
+// Extracted from ./currencyAmounts.ts to keep that module under the source-size cap.
 /**
  * server/services/accounting/currencyAmounts.ts
  *

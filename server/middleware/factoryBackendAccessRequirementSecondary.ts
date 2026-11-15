@@ -1,3 +1,4 @@
+// Extracted from ./factoryBackendAccessBoundary.ts to keep that module under the source-size cap.
 /** Factory API requirement rules: ordered second half, preserving first-match order. */
 import type { Request } from "express";
 import {

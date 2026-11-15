@@ -1,3 +1,4 @@
+// Extracted from ./bandwidthDebug.ts to keep that module under the source-size cap.
 /** Internal bandwidth metrics classification; same thresholds and semantics. */
 import type { Request } from "express";
 

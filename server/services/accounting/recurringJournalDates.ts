@@ -1,3 +1,4 @@
+// Extracted from ./recurringJournalService.ts to keep that module under the source-size cap.
 /** Pure recurrence dates, entry templates and validation. */
 import { voucherEntries, type RecurringJournalAccountType, type RecurringJournalEntryTemplate } from "@shared/schema";
 import { toMoney } from "../../lib/money";

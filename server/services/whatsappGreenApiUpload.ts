@@ -1,3 +1,4 @@
+// Extracted from ./whatsappService.ts to keep that module under the source-size cap.
 /** Green API multipart upload with serialized artifact materialization. */
 import FormDataLib from "form-data";
 import { getErrorMessage } from "../lib/httpHandlers";

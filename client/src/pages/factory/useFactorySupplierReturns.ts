@@ -1,3 +1,4 @@
+// Extracted from ./FactorySupplierReturns.tsx to keep that module under the source-size cap.
 import Decimal from "decimal.js";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { getSupplierReturnsCopy } from "@/i18n/supplierReturnsTranslations";

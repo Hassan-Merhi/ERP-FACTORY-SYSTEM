@@ -1,3 +1,4 @@
+// Extracted from ./fiscalReviewService.ts to keep that module under the source-size cap.
 /** Read-only fiscal readiness: guard checks, trial balance and fingerprint. */
 import Decimal from "decimal.js";
 import { sql } from "drizzle-orm";

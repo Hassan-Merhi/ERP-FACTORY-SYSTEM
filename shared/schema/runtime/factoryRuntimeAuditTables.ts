@@ -1,3 +1,4 @@
+// Extracted from ./factory.ts to keep that module under the source-size cap.
 /** Factory historical replay, physical deletion and priority scan runtime tables. */
 import {
   pgTable,

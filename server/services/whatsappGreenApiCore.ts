@@ -1,3 +1,4 @@
+// Extracted from ./whatsappService.ts to keep that module under the source-size cap.
 /**
  * Green API (free tier) WhatsApp service.
  * Supports individual numbers and group chats.

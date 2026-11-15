@@ -1,3 +1,4 @@
+// Extracted from ./runServerStartupMigrations.ts to keep that module under the source-size cap.
 /** Idempotent pre-listen schema safeguards, preserving exact startup order. */
 import { pool } from "../db";
 import { logger } from "../lib/logger";

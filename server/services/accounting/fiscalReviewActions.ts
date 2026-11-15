@@ -1,3 +1,4 @@
+// Extracted from ./fiscalReviewService.ts to keep that module under the source-size cap.
 /** Fiscal review metadata and reviewed close coordination; no bypasses. */
 import { sql } from "drizzle-orm";
 import type { DbTransaction } from "../../db";

@@ -1,3 +1,4 @@
+// Extracted from ./professionalFinancialStatements.ts to keep that module under the source-size cap.
 /** Read-only categorized cash-flow evidence from posted vouchers. */
 import Decimal from "decimal.js";
 import { sql } from "drizzle-orm";

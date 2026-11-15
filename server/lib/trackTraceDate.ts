@@ -1,3 +1,4 @@
+// Extracted from ./trackTraceScraper.ts to keep that module under the source-size cap.
 /** Date parsing helper for track-trace.com scraper. */
 /** Parse a date string into YYYY-MM-DD. Returns null if unparseable. */
 export function parseDate(raw: string | null | undefined): string | null {

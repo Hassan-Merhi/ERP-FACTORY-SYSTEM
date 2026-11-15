@@ -1,3 +1,4 @@
+// Extracted from ./factoryAccessRegistry.ts to keep that module under the source-size cap.
 /** Canonical Factory pages: finance and remaining administration screens. */
 import type { FactoryPageDefinition } from "./factoryAccessRegistry";
 

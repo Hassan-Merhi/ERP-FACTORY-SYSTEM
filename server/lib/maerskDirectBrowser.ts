@@ -1,3 +1,4 @@
+// Extracted from ./maerskDirectScraper.ts to keep that module under the source-size cap.
 /** Shared Maersk Puppeteer browser lifecycle and idle shutdown. */
 import type { Browser } from "puppeteer";
 import { getErrorMessage } from "../lib/httpHandlers";

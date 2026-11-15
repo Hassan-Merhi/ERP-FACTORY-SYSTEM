@@ -1,3 +1,4 @@
+// Extracted from ./parcelsAppClient.ts to keep that module under the source-size cap.
 /** ParcelsApp shipment event normalization and ETA presentation helpers. */
 import type { ParcelsAppEvent, ParcelsAppShipment } from "./parcelsAppClient";
 import { logger } from "./logger";

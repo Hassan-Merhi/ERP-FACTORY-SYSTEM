@@ -1,3 +1,4 @@
+// Extracted from ./recurringJournalService.ts to keep that module under the source-size cap.
 /** Recurring journal scheduled posting, with original tenant and transaction boundaries. */
 import { and, asc, eq, lte } from "drizzle-orm";
 import {

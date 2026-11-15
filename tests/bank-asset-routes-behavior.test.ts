@@ -80,6 +80,7 @@ vi.mock("../server/auth", () => ({
 }));
 vi.mock("../server/routes/_helpers", () => ({
   upload: { single: () => (_req: any, _res: any, next: any) => next() },
+  spreadsheetUpload: { single: () => (_req: any, _res: any, next: any) => next() },
   logAudit: harness.logAudit,
 }));
 vi.mock("../server/excelHelper", () => ({ readExcel: vi.fn(), sheetToJson: vi.fn() }));

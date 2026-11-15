@@ -1,3 +1,4 @@
+// Extracted from ./historicalMixBatchReconciliation.ts to keep that module under the source-size cap.
 /**
  * Phase 3 — evidence-led, read-only historical mix-batch reconciliation.
  *

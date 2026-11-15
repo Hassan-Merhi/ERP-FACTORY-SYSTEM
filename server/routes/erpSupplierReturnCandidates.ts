@@ -1,3 +1,4 @@
+// Extracted from ./erpSupplierReturnRoutes.ts to keep that module under the source-size cap.
 /** Existing ERP supplier-return source lookup and strict quantity validation. */
 import Decimal from "decimal.js";
 import { sql } from "drizzle-orm";

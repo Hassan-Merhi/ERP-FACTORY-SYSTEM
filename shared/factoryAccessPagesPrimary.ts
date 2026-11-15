@@ -1,3 +1,4 @@
+// Extracted from ./factoryAccessRegistry.ts to keep that module under the source-size cap.
 /** Canonical Factory pages: primary navigation, production and inventory. */
 import type { FactoryPageDefinition } from "./factoryAccessRegistry";
 
