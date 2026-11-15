@@ -23,6 +23,11 @@ vi.mock("../server/auth", () => ({
 }));
 
 vi.mock("../server/routes/_helpers", () => ({
+  // Spreadsheet routes use their own size-capped uploader since #3205.
+  spreadsheetUpload: {
+    single: () => (_req: unknown, _res: unknown, next: () => void) => next(),
+    fields: () => (_req: unknown, _res: unknown, next: () => void) => next(),
+  },
   upload: {
     single: vi.fn(() => (_req: unknown, _res: unknown, next: () => void) => next()),
   },
