@@ -119,14 +119,10 @@ describe("posted ERP supplier returns Excel", () => {
   it("rejects inconsistent repeated request-row amounts", () => {
     const wb = new ExcelJS.Workbook();
     const a = line(1, "17.000", "988.04", "1105.00", {
-      requestedRows: [
-        { inputRow: 2, requestedArticleCode: "A", requestedQuantity: "18", allocatedQuantity: "17" },
-      ],
+      requestedRows: [{ inputRow: 2, requestedArticleCode: "A", requestedQuantity: "18", allocatedQuantity: "17" }],
     });
     const b = line(2, "1.000", "62.03", "65.00", {
-      requestedRows: [
-        { inputRow: 2, requestedArticleCode: "A", requestedQuantity: "19", allocatedQuantity: "1" },
-      ],
+      requestedRows: [{ inputRow: 2, requestedArticleCode: "A", requestedQuantity: "19", allocatedQuantity: "1" }],
     });
     const action = () => buildPostedSupplierReturnWorkbook(wb, receipt, [a, b]);
     expect(action).toThrow(/do not agree/);
