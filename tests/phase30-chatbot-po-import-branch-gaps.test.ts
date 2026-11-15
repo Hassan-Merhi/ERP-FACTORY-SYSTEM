@@ -22,6 +22,9 @@ vi.mock("../server/routes/_helpers", () => ({
   upload: {
     single: vi.fn(() => (_req: unknown, _res: unknown, next: () => void) => next()),
   },
+  spreadsheetUpload: {
+    single: vi.fn(() => (_req: unknown, _res: unknown, next: () => void) => next()),
+  },
 }));
 
 vi.mock("../server/lib/aiActionPermission", () => ({
