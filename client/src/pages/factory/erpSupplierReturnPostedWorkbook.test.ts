@@ -46,7 +46,7 @@ describe("posted ERP supplier returns Excel", () => {
     const requested = wb.getWorksheet("Original Input Allocations")!;
     expect(requested.getRow(2).getCell(6).value).toBe(17);
     expect(requested.getRow(3).getCell(6).value).toBe(1);
-    expect(wb.getWorksheet("Posted Summary")!.getRow(6).getCell(2).value).toBe(18);
+    expect(wb.getWorksheet("Posted Summary")!.getRow(7).getCell(2).value).toBe(18);
   });
 
   it("does not duplicate financial amounts for two input rows sharing a source", () => {
@@ -112,6 +112,6 @@ describe("posted ERP supplier returns Excel", () => {
     expect(posted.getRow(2).getCell(2).value).toBe("'+CODE");
     expect(posted.getRow(2).getCell(6).value).toBe("'-DANGEROUS");
     expect(posted.getRow(2).getCell(7).value).toBe("'=BAD()");
-    expect(wb.getWorksheet("Posted Summary")!.getRow(4).getCell(2).value).toBe("'=BAD()");
+    expect(wb.getWorksheet("Posted Summary")!.getRow(5).getCell(2).value).toBe("'=BAD()");
   });
 });
