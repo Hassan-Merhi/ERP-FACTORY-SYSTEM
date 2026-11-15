@@ -135,7 +135,13 @@ export function positive(v: number, name: string) {
 export function hashes(evidence: unknown) {
   return createHash("sha256").update(JSON.stringify(evidence)).digest("hex");
 }
-export async function signoffRowsTx(tx: DbTransaction, companyId: number, start: string, end: string, accountId: number) {
+export async function signoffRowsTx(
+  tx: DbTransaction,
+  companyId: number,
+  start: string,
+  end: string,
+  accountId: number
+) {
   return resultRows<Signoff>(
     await tx.execute(sql`
  SELECT id,company_id,period_start_date::text,period_end_date::text,

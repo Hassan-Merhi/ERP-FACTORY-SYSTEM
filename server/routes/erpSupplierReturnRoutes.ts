@@ -69,18 +69,24 @@ export function registerErpSupplierReturnRoutes(app: Express) {
         const code = String(row?.code ?? "").trim();
         if (!code || code.length > 50)
           throw new ReturnError(
-            400, "RETURN_CODE_INVALID",
+            400,
+            "RETURN_CODE_INVALID",
             `Row ${index + 2}: article code is required (max 50 characters)`
           );
         const qty = quantity(row?.quantity);
-        const selected = row?.offloadItemId == null || row.offloadItemId === ""
-          ? null : Number(row.offloadItemId);
+        const selected = row?.offloadItemId == null || row.offloadItemId === "" ? null : Number(row.offloadItemId);
         if (selected !== null && (!Number.isSafeInteger(selected) || selected <= 0))
           throw new ReturnError(400, "RETURN_SOURCE_INVALID", `Row ${index + 2}: invalid offload item`);
         const possible = (await candidates(db, companyId, code)).filter(
           (candidate) => supplierId === null || candidate.supplierId === supplierId
         );
-        requested.push({ row: index + 2, code, quantity: qty.toFixed(3), offloadItemId: selected, candidates: possible });
+        requested.push({
+          row: index + 2,
+          code,
+          quantity: qty.toFixed(3),
+          offloadItemId: selected,
+          candidates: possible,
+        });
       }
       const allocations = allocateSupplierReturnRows(requested);
       const preview = requested.map((row, index) => ({
@@ -90,7 +96,8 @@ export function registerErpSupplierReturnRoutes(app: Express) {
         status: allocations[index].status,
         suggestedOffloadItemId: allocations[index].suggestedOffloadItemId,
         allocations: allocations[index].allocations.map(({ offloadItemId, quantity }) => ({
-          offloadItemId, quantity,
+          offloadItemId,
+          quantity,
         })),
         allocatedQty: allocations[index].allocatedQty,
         unallocatedQty: allocations[index].unallocatedQty,

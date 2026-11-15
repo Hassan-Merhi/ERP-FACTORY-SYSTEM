@@ -117,7 +117,11 @@ async function getGreenApiAuthFallback(current: GreenApiCredentials): Promise<Gr
 
 // Read-only Green API requests use IPv4 to avoid Render's observed 10-second
 // Undici connect timeout. Never retry POST operations (duplicate sends risk).
-async function fetchGreenApiReadOnly(credentials: GreenApiCredentials, method: string, init: RequestInit): Promise<Response> {
+async function fetchGreenApiReadOnly(
+  credentials: GreenApiCredentials,
+  method: string,
+  init: RequestInit
+): Promise<Response> {
   const endpoint = new URL(baseUrl(credentials.instanceId, credentials.apiToken, method));
   let lastCode = "NETWORK_ERROR";
   for (let attempt = 1; attempt <= 2; attempt++) {
@@ -130,7 +134,10 @@ async function fetchGreenApiReadOnly(credentials: GreenApiCredentials, method: s
           res.on("error", reject);
         });
         const abort = () => req.destroy(Object.assign(new Error("Request aborted"), { code: "ABORT_ERR" }));
-        if (init.signal?.aborted) { abort(); return; }
+        if (init.signal?.aborted) {
+          abort();
+          return;
+        }
         init.signal?.addEventListener("abort", abort, { once: true });
         req.on("close", () => init.signal?.removeEventListener("abort", abort));
         req.on("timeout", () => req.destroy(Object.assign(new Error("Connection timed out"), { code: "ETIMEDOUT" })));
@@ -154,9 +161,10 @@ export async function fetchGreenApiWithAuthFallback(
 ): Promise<Response> {
   const primaryInstanceId = cleanGreenApiCredential(credentials.instanceId);
   const primaryApiToken = cleanGreenApiCredential(credentials.apiToken);
-  const primary = init.method === "GET" && (method === "getChats" || method === "getStateInstance")
-    ? await fetchGreenApiReadOnly({ instanceId: primaryInstanceId, apiToken: primaryApiToken }, method, init)
-    : await fetch(baseUrl(primaryInstanceId, primaryApiToken, method), greenApiRequestInit(init));
+  const primary =
+    init.method === "GET" && (method === "getChats" || method === "getStateInstance")
+      ? await fetchGreenApiReadOnly({ instanceId: primaryInstanceId, apiToken: primaryApiToken }, method, init)
+      : await fetch(baseUrl(primaryInstanceId, primaryApiToken, method), greenApiRequestInit(init));
   if (primary.status !== 401) return primary;
 
   const alternate = await getGreenApiAuthFallback({ instanceId: primaryInstanceId, apiToken: primaryApiToken });
@@ -168,9 +176,10 @@ export async function fetchGreenApiWithAuthFallback(
     method,
   });
 
-  const fallback = init.method === "GET" && (method === "getChats" || method === "getStateInstance")
-    ? await fetchGreenApiReadOnly(alternate, method, init)
-    : await fetch(baseUrl(alternate.instanceId, alternate.apiToken, method), greenApiRequestInit(init));
+  const fallback =
+    init.method === "GET" && (method === "getChats" || method === "getStateInstance")
+      ? await fetchGreenApiReadOnly(alternate, method, init)
+      : await fetch(baseUrl(alternate.instanceId, alternate.apiToken, method), greenApiRequestInit(init));
   if (fallback.ok) {
     logger.warn("[WhatsApp] Green API backup credentials accepted after primary 401", {
       primaryInstanceId,
@@ -193,20 +202,24 @@ export async function requestGreenApiUpload(
 ): Promise<Response> {
   const endpoint = new URL(baseUrl(credentials.instanceId, credentials.apiToken, "sendFileByUpload", true));
   return new Promise<Response>((resolve, reject) => {
-    const req = httpsRequest(endpoint, {
-      method: "POST",
-      family: 4,
-      timeout: GREEN_API_REQUEST_TIMEOUT_MS,
-      headers: { ...headers, "Content-Length": body.length },
-    }, (res) => {
-      const chunks: Buffer[] = [];
-      res.on("data", (chunk: Buffer) => chunks.push(chunk));
-      res.on("error", reject);
-      res.on("end", () => {
-        const responseBody = Buffer.concat(chunks);
-        resolve(new Response(responseBody, { status: res.statusCode || 502 }));
-      });
-    });
+    const req = httpsRequest(
+      endpoint,
+      {
+        method: "POST",
+        family: 4,
+        timeout: GREEN_API_REQUEST_TIMEOUT_MS,
+        headers: { ...headers, "Content-Length": body.length },
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (chunk: Buffer) => chunks.push(chunk));
+        res.on("error", reject);
+        res.on("end", () => {
+          const responseBody = Buffer.concat(chunks);
+          resolve(new Response(responseBody, { status: res.statusCode || 502 }));
+        });
+      }
+    );
     req.on("timeout", () => req.destroy(new Error("Green API upload connection timed out after 30 seconds")));
     req.on("error", reject);
     req.end(body);
@@ -282,7 +295,8 @@ export interface GreenChat {
 }
 
 /** Green API instance states returned by getStateInstance */
-export type GreenInstanceState = "authorized" | "notAuthorized" | "sleepMode" | "starting" | "yellowCard" | "blocked" | "suspended" | "unknown";
+export type GreenInstanceState =
+  "authorized" | "notAuthorized" | "sleepMode" | "starting" | "yellowCard" | "blocked" | "suspended" | "unknown";
 
 /**
  * Call Green API's getStateInstance to get the real connection state.
@@ -297,7 +311,15 @@ export async function getGreenInstanceState(instanceId: string, apiToken: string
     if (!response.ok) return "unknown";
     const json = await response.json().catch(() => null);
     const state: string = json?.stateInstance ?? "unknown";
-    const validStates: GreenInstanceState[] = ["authorized", "notAuthorized", "sleepMode", "starting", "yellowCard", "blocked", "suspended"];
+    const validStates: GreenInstanceState[] = [
+      "authorized",
+      "notAuthorized",
+      "sleepMode",
+      "starting",
+      "yellowCard",
+      "blocked",
+      "suspended",
+    ];
     return validStates.includes(state as GreenInstanceState) ? (state as GreenInstanceState) : "unknown";
   } catch (error) {
     logger.warn("[WhatsApp] Green API instance status unavailable", { error: getErrorMessage(error) });
@@ -326,13 +348,20 @@ export async function getStrictGreenMainInstanceState(
     });
     if (response.status === 401 || response.status === 403) return "invalidCredentials";
     if (!response.ok) return "unknown";
-    const body = await response.json().catch(() => null) as { stateInstance?: unknown } | null;
+    const body = (await response.json().catch(() => null)) as { stateInstance?: unknown } | null;
     const state = body?.stateInstance;
     const allowed: GreenInstanceState[] = [
-      "authorized", "notAuthorized", "sleepMode", "starting", "yellowCard", "blocked", "suspended",
+      "authorized",
+      "notAuthorized",
+      "sleepMode",
+      "starting",
+      "yellowCard",
+      "blocked",
+      "suspended",
     ];
     return typeof state === "string" && allowed.includes(state as GreenInstanceState)
-      ? state as GreenInstanceState : "unknown";
+      ? (state as GreenInstanceState)
+      : "unknown";
   } catch {
     // Do not log the provider URL or credentials (GREEN API uses token-in-URL).
     logger.warn("[STO WA] Main WhatsApp authorization check unavailable");
@@ -357,7 +386,8 @@ export type StoWaMainWebhookReadiness = {
 };
 
 export async function getStrictGreenMainWebhookReadiness(
-  instanceId: string, apiToken: string
+  instanceId: string,
+  apiToken: string
 ): Promise<StoWaMainWebhookReadiness> {
   const response = await fetchGreenApiReadOnly({ instanceId, apiToken }, "getSettings", {
     method: "GET",
@@ -379,11 +409,17 @@ export async function getStrictGreenMainWebhookReadiness(
       if (parsed.protocol === "https:" && parsed.username === "" && parsed.password === "") {
         webhookHost = parsed.hostname;
         webhookEndpointMatches =
-          ["hmdinternationalgroup.com", "www.hmdinternationalgroup.com", "erp-pos-system-copy.onrender.com"].includes(parsed.hostname) &&
+          ["hmdinternationalgroup.com", "www.hmdinternationalgroup.com", "erp-pos-system-copy.onrender.com"].includes(
+            parsed.hostname
+          ) &&
           parsed.pathname.replace(/[/]$/, "") === "/api/stock-transfer-order/wa-approval/webhook" &&
-          parsed.search === "" && parsed.hash === "" && !parsed.port;
+          parsed.search === "" &&
+          parsed.hash === "" &&
+          !parsed.port;
       }
-    } catch { /* malformed or secret-bearing URL: report only a boolean */ }
+    } catch {
+      /* malformed or secret-bearing URL: report only a boolean */
+    }
   }
   return {
     incomingWebhookEnabled: provider.incomingWebhook === "yes",
@@ -392,35 +428,36 @@ export async function getStrictGreenMainWebhookReadiness(
     webhookEndpointMatches,
     webhookTokenMatches: authorizedStockTransferOrderWaWebhook(bearer),
     webhookHost,
-    mainAccountChatId: typeof provider.wid === "string" &&
-      /^[1-9][0-9]{6,14}@c[.]us$/.test(provider.wid) ? provider.wid : null,
+    mainAccountChatId:
+      typeof provider.wid === "string" && /^[1-9][0-9]{6,14}@c[.]us$/.test(provider.wid) ? provider.wid : null,
   };
 }
 
 /** Read only chats from the exact main instance, without POS fallback. */
-export async function fetchStrictGreenMainChats(
-  instanceId: string,
-  apiToken: string
-): Promise<GreenChat[]> {
+export async function fetchStrictGreenMainChats(instanceId: string, apiToken: string): Promise<GreenChat[]> {
   const response = await fetchGreenApiReadOnly({ instanceId, apiToken }, "getChats", {
     method: "GET",
     signal: AbortSignal.timeout(8000),
   });
   if (!response.ok) {
-    throw new Error(response.status === 401 || response.status === 403
-      ? "Main WhatsApp credentials are rejected by GREEN API."
-      : "Unable to verify the approval group on the main WhatsApp instance.");
+    throw new Error(
+      response.status === 401 || response.status === 403
+        ? "Main WhatsApp credentials are rejected by GREEN API."
+        : "Unable to verify the approval group on the main WhatsApp instance."
+    );
   }
   const data: unknown = await response.json().catch(() => null);
   if (!Array.isArray(data)) throw new Error("Main WhatsApp returned an invalid chat list.");
-  return data.filter((c): c is { id: string; name?: string; type?: string } =>
-    c !== null && typeof c === "object" &&
-    typeof (c as { id?: unknown }).id === "string"
-  ).map(c => ({
-    id: c.id,
-    name: typeof c.name === "string" && c.name ? c.name : c.id,
-    type: c.id.endsWith("@g.us") ? "group" : (typeof c.type === "string" ? c.type : "contact"),
-  }));
+  return data
+    .filter(
+      (c): c is { id: string; name?: string; type?: string } =>
+        c !== null && typeof c === "object" && typeof (c as { id?: unknown }).id === "string"
+    )
+    .map((c) => ({
+      id: c.id,
+      name: typeof c.name === "string" && c.name ? c.name : c.id,
+      type: c.id.endsWith("@g.us") ? "group" : typeof c.type === "string" ? c.type : "contact",
+    }));
 }
 
 export async function fetchGreenApiChats(instanceId: string, apiToken: string): Promise<GreenChat[]> {
@@ -436,7 +473,7 @@ export async function fetchGreenApiChats(instanceId: string, apiToken: string): 
     .map((c) => ({
       id: c.id,
       name: c.name || c.id,
-      type: String(c.id).endsWith("@g.us") ? "group" : (c.type || "contact"),
+      type: String(c.id).endsWith("@g.us") ? "group" : c.type || "contact",
     }));
 }
 

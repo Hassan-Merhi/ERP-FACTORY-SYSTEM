@@ -80,7 +80,11 @@ function mapCandidate(row: Row): Candidate {
     unitLandedCost: original.gt(0) ? new Decimal(String(row.landed_total ?? "0")).div(original).toFixed(4) : "0",
   };
 }
-export async function candidates(executor: DatabaseOrTransaction, companyId: number, code: string): Promise<Candidate[]> {
+export async function candidates(
+  executor: DatabaseOrTransaction,
+  companyId: number,
+  code: string
+): Promise<Candidate[]> {
   const rows = resultRows<Row>(
     await executor.execute(sql`
     SELECT coi.id AS offload_item_id, co.id AS offload_id, c.id AS container_id,

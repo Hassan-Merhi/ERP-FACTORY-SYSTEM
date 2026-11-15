@@ -138,11 +138,17 @@ export function registerErpSupplierReturnCommitRoute(app: Express) {
             for (const allocation of row.allocations) {
               const source = matchedById.get(allocation.offloadItemId);
               if (!source || !legal.has(source.offloadItemId))
-                throw new ReturnError(409, "RETURN_ARTICLE_SOURCE_MISMATCH",
-                  `Source does not belong to article ${row.code}`);
+                throw new ReturnError(
+                  409,
+                  "RETURN_ARTICLE_SOURCE_MISMATCH",
+                  `Source does not belong to article ${row.code}`
+                );
               if (rowSupplierId !== null && source.supplierId !== rowSupplierId)
-                throw new ReturnError(409, "RETURN_ROW_SUPPLIER_MIXED",
-                  `One article row cannot return quantities to multiple suppliers (${row.code})`);
+                throw new ReturnError(
+                  409,
+                  "RETURN_ROW_SUPPLIER_MIXED",
+                  `One article row cannot return quantities to multiple suppliers (${row.code})`
+                );
               rowSupplierId = source.supplierId;
             }
           }
@@ -272,8 +278,11 @@ export function registerErpSupplierReturnCommitRoute(app: Express) {
               newTotalValue: moved.newTotalValue,
             });
           } catch (error) {
-            throw new ReturnError(409, "RETURN_FINANCIAL_RECONCILIATION_FAILED",
-              `Cannot reconcile return for ${source.code}: ${(error as Error).message}`);
+            throw new ReturnError(
+              409,
+              "RETURN_FINANCIAL_RECONCILIATION_FAILED",
+              `Cannot reconcile return for ${source.code}: ${(error as Error).message}`
+            );
           }
           const inventoryValue = new Decimal(financials.inventoryCredit);
           const supplierCredit = new Decimal(financials.supplierDebit);
@@ -296,18 +305,22 @@ export function registerErpSupplierReturnCommitRoute(app: Express) {
                 narration: `Inventory shipped back: ${note}`,
               },
               ...(varianceDebit.gt(0)
-                ? [{
-                    ledgerAccountId: varianceAccountId,
-                    debit: varianceDebit,
-                    narration: "Inventory relief above supplier purchase credit",
-                  }]
+                ? [
+                    {
+                      ledgerAccountId: varianceAccountId,
+                      debit: varianceDebit,
+                      narration: "Inventory relief above supplier purchase credit",
+                    },
+                  ]
                 : []),
               ...(varianceCredit.gt(0)
-                ? [{
-                    ledgerAccountId: varianceAccountId,
-                    credit: varianceCredit,
-                    narration: "Supplier purchase credit above inventory relief",
-                  }]
+                ? [
+                    {
+                      ledgerAccountId: varianceAccountId,
+                      credit: varianceCredit,
+                      narration: "Supplier purchase credit above inventory relief",
+                    },
+                  ]
                 : []),
             ],
           });
@@ -332,8 +345,11 @@ export function registerErpSupplierReturnCommitRoute(app: Express) {
             for (const allocation of requested.allocations) {
               const returnLineId = returnLineIds.get(allocation.offloadItemId);
               if (!returnLineId)
-                throw new ReturnError(409, "RETURN_ALLOCATION_AUDIT_MISSING",
-                  "An allocated container has no committed source return line");
+                throw new ReturnError(
+                  409,
+                  "RETURN_ALLOCATION_AUDIT_MISSING",
+                  "An allocated container has no committed source return line"
+                );
               await tx.execute(sql`
                 INSERT INTO erp_supplier_return_allocation_rows
                   (company_id,batch_id,return_line_id,input_row,requested_article_code,
@@ -345,15 +361,23 @@ export function registerErpSupplierReturnCommitRoute(app: Express) {
           }
         }
         const reconciled = reconcileSupplierReturnBatch(postedFinancials);
-        if (!totalQty.eq(reconciled.totalQuantity) ||
-            !totalSupplier.eq(reconciled.supplierDebit) ||
-            !totalInventory.eq(reconciled.inventoryCredit)) {
-          throw new ReturnError(409, "RETURN_BATCH_RECONCILIATION_FAILED",
-            "Supplier return inventory, supplier and audit totals are not reconciled");
+        if (
+          !totalQty.eq(reconciled.totalQuantity) ||
+          !totalSupplier.eq(reconciled.supplierDebit) ||
+          !totalInventory.eq(reconciled.inventoryCredit)
+        ) {
+          throw new ReturnError(
+            409,
+            "RETURN_BATCH_RECONCILIATION_FAILED",
+            "Supplier return inventory, supplier and audit totals are not reconciled"
+          );
         }
         if (requestedTotal !== null && !totalQty.eq(requestedTotal))
-          throw new ReturnError(409, "RETURN_TOTAL_MISMATCH",
-            "Posted quantity does not equal the original requested return quantity");
+          throw new ReturnError(
+            409,
+            "RETURN_TOTAL_MISMATCH",
+            "Posted quantity does not equal the original requested return quantity"
+          );
         await tx.execute(sql`
           UPDATE erp_supplier_return_batches
              SET total_quantity=${totalQty.toFixed(3)},

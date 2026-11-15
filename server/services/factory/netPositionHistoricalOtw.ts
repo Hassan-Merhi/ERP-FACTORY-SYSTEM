@@ -365,4 +365,3 @@ export async function getHistoricalOtw(
   }
   return { value: cents(total), warnings: [...warnings] };
 }
-

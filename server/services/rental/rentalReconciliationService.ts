@@ -101,7 +101,7 @@ export async function runRentalReconciliation(
   for (const r of driftRows) {
     mismatches.push({
       type: "A",
-      description: `paid_amount cache drift: cached=${Number(r.cached).toFixed(2)}, actual POSTED=${Number(r.actual).toFixed(2)} (contract ${r.contract_id}, ${r.year}-${String(r.month).padStart(2,"0")})`,
+      description: `paid_amount cache drift: cached=${Number(r.cached).toFixed(2)}, actual POSTED=${Number(r.actual).toFixed(2)} (contract ${r.contract_id}, ${r.year}-${String(r.month).padStart(2, "0")})`,
       contractId: r.contract_id,
       ledgerRowId: r.ledger_row_id,
       amount: Math.abs(Number(r.cached) - Number(r.actual)),
@@ -129,7 +129,7 @@ export async function runRentalReconciliation(
 
   // ── Type C: flag drift (usedPrepaidAccount / usedAdvanceAccount) ─────────
   // A row should have usedPrepaidAccount/usedAdvanceAccount set if its accrual
-  // voucher was posted with the advance-rent path (accrualVoucherId != null + 
+  // voucher was posted with the advance-rent path (accrualVoucherId != null +
   // voucher type = "Journal" with "Advance Rent Paid").
   // Simplified check: any accrualVoucherId row that has neither flag set but
   // corresponds to an advance-type voucher description.
@@ -146,7 +146,7 @@ export async function runRentalReconciliation(
   for (const r of flagDriftRows) {
     mismatches.push({
       type: "C",
-      description: `Flag drift: accrualVoucherId=${r.accrual_voucher_id} set but usedPrepaidAccount/usedAdvanceAccount both null (contract ${r.contract_id}, ${r.year}-${String(r.month).padStart(2,"0")})`,
+      description: `Flag drift: accrualVoucherId=${r.accrual_voucher_id} set but usedPrepaidAccount/usedAdvanceAccount both null (contract ${r.contract_id}, ${r.year}-${String(r.month).padStart(2, "0")})`,
       contractId: r.contract_id,
       ledgerRowId: r.ledger_row_id,
       detail: { accrualVoucherId: r.accrual_voucher_id },
@@ -169,7 +169,7 @@ export async function runRentalReconciliation(
   for (const r of orphanAccruals) {
     mismatches.push({
       type: "D",
-      description: `Orphan accrual: accrualVoucherId=${r.accrual_voucher_id} references a deleted/missing voucher (contract ${r.contract_id}, ${r.year}-${String(r.month).padStart(2,"0")})`,
+      description: `Orphan accrual: accrualVoucherId=${r.accrual_voucher_id} references a deleted/missing voucher (contract ${r.contract_id}, ${r.year}-${String(r.month).padStart(2, "0")})`,
       contractId: r.contract_id,
       ledgerRowId: r.ledger_row_id,
       detail: { accrualVoucherId: r.accrual_voucher_id, voucherDeletedAt: r.voucher_deleted_at },
@@ -216,7 +216,7 @@ export async function runRentalReconciliation(
     const billingDate = String(r.billing_date).slice(0, 10);
     mismatches.push({
       type: "E",
-      description: `Premature accrual: month ${r.year}-${String(r.month).padStart(2,"0")} accrued before billing date ${billingDate} (contract ${r.contract_id})`,
+      description: `Premature accrual: month ${r.year}-${String(r.month).padStart(2, "0")} accrued before billing date ${billingDate} (contract ${r.contract_id})`,
       contractId: r.contract_id,
       ledgerRowId: r.ledger_row_id,
       detail: { billingDate, accrualVoucherId: r.accrual_voucher_id },

@@ -7,11 +7,7 @@ import {
   withSerializedExportAttachmentBuffer,
   type ExportAttachmentSource,
 } from "../helpers/exportAttachmentSource";
-import {
-  uploadGreenApiWithAuthFallback,
-  type WaSettings,
-  type WhatsAppSendResult,
-} from "./whatsappGreenApiCore";
+import { uploadGreenApiWithAuthFallback, type WaSettings, type WhatsAppSendResult } from "./whatsappGreenApiCore";
 
 export async function sendGreenApiFileUpload({
   settings,

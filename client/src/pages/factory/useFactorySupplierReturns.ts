@@ -125,16 +125,13 @@ export function useFactorySupplierReturns() {
     queryFn: async () => (await apiRequest("GET", "/api/erp/supplier-returns/history")).json(),
   });
 
-  const combined = useMemo(
-    () => validateSupplierReturnAllocations(preview, allocations),
-    [preview, allocations]
-  );
+  const combined = useMemo(() => validateSupplierReturnAllocations(preview, allocations), [preview, allocations]);
   const ready = preview.length > 0 && previewSupplierId === supplierId && combined.valid;
   const totalBales = preview.reduce((total, row) => total.plus(row.quantity), new Decimal(0)).toFixed(3);
   function changeAllocation(row: number, index: number, change: Partial<EditableAllocation>) {
     setAllocations((current) => ({
       ...current,
-      [row]: (current[row] ?? []).map((line, at) => at === index ? { ...line, ...change } : line),
+      [row]: (current[row] ?? []).map((line, at) => (at === index ? { ...line, ...change } : line)),
     }));
     setConfirm(false);
   }
@@ -194,20 +191,26 @@ export function useFactorySupplierReturns() {
             requestedQuantity: entry.row.quantity,
             status: entry.valid && combined.valid ? "matched" : "review-allocation",
             candidate: line.candidate,
-            valid: entry.valid && line.valid &&
+            valid:
+              entry.valid &&
+              line.valid &&
               !!line.candidate &&
               !combined.overSources.has(line.candidate.offloadItemId) &&
               !combined.overStock.has(line.candidate.locationId + ":" + line.candidate.stockItemId),
           }));
-          return lines.length ? lines : [{
-            row: entry.row.row,
-            code: preview.find((p) => p.row === entry.row.row)?.code ?? "",
-            quantity: entry.row.quantity,
-            requestedQuantity: entry.row.quantity,
-            status: "unallocated",
-            candidate: undefined,
-            valid: false,
-          }];
+          return lines.length
+            ? lines
+            : [
+                {
+                  row: entry.row.row,
+                  code: preview.find((p) => p.row === entry.row.row)?.code ?? "",
+                  quantity: entry.row.quantity,
+                  requestedQuantity: entry.row.quantity,
+                  status: "unallocated",
+                  candidate: undefined,
+                  valid: false,
+                },
+              ];
         }),
       });
       await writeFile(wb, "ERP_Supplier_Return_Container_Matches.xlsx");
@@ -275,11 +278,17 @@ export function useFactorySupplierReturns() {
       ).json()) as { rows: PreviewRow[]; supplierId: number | null };
       setPreview(result.rows);
       setPreviewSupplierId(result.supplierId);
-      setAllocations(Object.fromEntries(result.rows.map((row) => [
-        row.row, row.allocations ?? (row.suggestedOffloadItemId
-          ? [{ offloadItemId: row.suggestedOffloadItemId, quantity: row.quantity }]
-          : []),
-      ])));
+      setAllocations(
+        Object.fromEntries(
+          result.rows.map((row) => [
+            row.row,
+            row.allocations ??
+              (row.suggestedOffloadItemId
+                ? [{ offloadItemId: row.suggestedOffloadItemId, quantity: row.quantity }]
+                : []),
+          ])
+        )
+      );
       toast({
         title: copy.mappedTitle,
         description: copy.mappedBody,
@@ -309,19 +318,24 @@ export function useFactorySupplierReturns() {
     if (exportingBatch !== null || busy) return;
     setExportingBatch(batch.id);
     try {
-      const details = (await (
-        await apiRequest("GET", `/api/erp/supplier-returns/history/${batch.id}`)
-      ).json()) as { rows: PostedSupplierReturnRow[] };
+      const details = (await (await apiRequest("GET", `/api/erp/supplier-returns/history/${batch.id}`)).json()) as {
+        rows: PostedSupplierReturnRow[];
+      };
       const wb = utils.book_new();
-      buildPostedSupplierReturnWorkbook(wb, {
-        id: batch.id,
-        returnDate: batch.returnDate,
-        fileName: batch.fileName,
-        reason: batch.reason,
-        totalQty: batch.totalQty,
-        supplierCreditUsd: batch.supplierCreditUsd,
-        inventoryReductionUsd: batch.inventoryReductionUsd,
-      }, details.rows, language);
+      buildPostedSupplierReturnWorkbook(
+        wb,
+        {
+          id: batch.id,
+          returnDate: batch.returnDate,
+          fileName: batch.fileName,
+          reason: batch.reason,
+          totalQty: batch.totalQty,
+          supplierCreditUsd: batch.supplierCreditUsd,
+          inventoryReductionUsd: batch.inventoryReductionUsd,
+        },
+        details.rows,
+        language
+      );
       await writeFile(wb, `ERP_Supplier_Return_Batch_${batch.id}.xlsx`);
       toast({ title: copy.exported });
     } catch (e) {
@@ -337,8 +351,10 @@ export function useFactorySupplierReturns() {
       const totals = new Map<number, Decimal>();
       for (const entry of combined.entries) {
         for (const { allocation } of entry.lines) {
-          totals.set(allocation.offloadItemId,
-            (totals.get(allocation.offloadItemId) ?? new Decimal(0)).plus(allocation.quantity));
+          totals.set(
+            allocation.offloadItemId,
+            (totals.get(allocation.offloadItemId) ?? new Decimal(0)).plus(allocation.quantity)
+          );
         }
       }
       const lines = [...totals].map(([offloadItemId, qty]) => ({ offloadItemId, quantity: qty.toFixed(3) }));

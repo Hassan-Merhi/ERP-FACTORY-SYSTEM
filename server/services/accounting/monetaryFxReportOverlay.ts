@@ -63,7 +63,11 @@ const money = (x: Decimal.Value) => new Decimal(x).toDecimalPlaces(2).toNumber()
  * as "<type> Deposits" on the What We Have side. When a translated balance
  * moves a row to the other side, the category must follow the side.
  */
-function categoryForSide(category: string | undefined, val: MonetaryFxValuationRow, side: PositionSide): string | undefined {
+function categoryForSide(
+  category: string | undefined,
+  val: MonetaryFxValuationRow,
+  side: PositionSide
+): string | undefined {
   if (!category) return category;
   const suffix = " Deposits";
   if (side === "onUs" && category.endsWith(suffix)) return category.slice(0, -suffix.length);
@@ -119,7 +123,14 @@ export function applyVerifiedMonetaryFxOverlay(
   const appliedKeys: string[] = [];
   const skipped: MonetaryReportOverlayDiagnostic[] = [];
   if (!payload?.forUs || !payload.onUs) {
-    return { payload, appliedKeys, skipped, currentMonetaryTranslationDifferenceUsd: "0.000000", ledgerForUsDelta: 0, ledgerOnUsDelta: 0 };
+    return {
+      payload,
+      appliedKeys,
+      skipped,
+      currentMonetaryTranslationDifferenceUsd: "0.000000",
+      ledgerForUsDelta: 0,
+      ledgerOnUsDelta: 0,
+    };
   }
   const sides = { forUs: payload.forUs, onUs: payload.onUs };
   const totals = {
@@ -134,8 +145,14 @@ export function applyVerifiedMonetaryFxOverlay(
   // plus these signed currency deltas equal the same current-rate Net Position
   // as the existing replacement projection; there is no double counting.
   const fxAccountRows = {
-    gain: { total: new Decimal(0), breakdown: [] as Array<{ label: string; native: string; usd: number; sourceKey?: string }> },
-    loss: { total: new Decimal(0), breakdown: [] as Array<{ label: string; native: string; usd: number; sourceKey?: string }> },
+    gain: {
+      total: new Decimal(0),
+      breakdown: [] as Array<{ label: string; native: string; usd: number; sourceKey?: string }>,
+    },
+    loss: {
+      total: new Decimal(0),
+      breakdown: [] as Array<{ label: string; native: string; usd: number; sourceKey?: string }>,
+    },
   };
   const breakdownDeltas = { forUs: new Map<string, Decimal>(), onUs: new Map<string, Decimal>() };
   const moveBreakdown = (side: PositionSide, category: string | undefined, delta: Decimal) => {
@@ -188,7 +205,8 @@ export function applyVerifiedMonetaryFxOverlay(
         bucket.total = bucket.total.plus(Math.abs(visibleDifference));
         const native = Object.entries(val.nativeBalancesByCurrency)
           .filter(([currency, amount]) => currency !== "USD" && !new Decimal(amount).isZero())
-          .map(([currency, amount]) => `${amount} ${currency}`).join(", ");
+          .map(([currency, amount]) => `${amount} ${currency}`)
+          .join(", ");
         bucket.breakdown.push({
           label: `${val.accountKind === "customer" ? "Customer" : val.category === "loan" ? "Loan" : "Account"}: ${oldRow.name}`,
           native,
@@ -242,7 +260,14 @@ export function applyVerifiedMonetaryFxOverlay(
   // No successful replacements: preserve the source report exactly, including
   // specialized operational breakdowns, labels and signed category rules.
   if (appliedKeys.length === 0) {
-    return { payload, appliedKeys, skipped, currentMonetaryTranslationDifferenceUsd: "0.000000", ledgerForUsDelta: 0, ledgerOnUsDelta: 0 };
+    return {
+      payload,
+      appliedKeys,
+      skipped,
+      currentMonetaryTranslationDifferenceUsd: "0.000000",
+      ledgerForUsDelta: 0,
+      ledgerOnUsDelta: 0,
+    };
   }
   if (options.showFxAsRows) {
     for (const [side, bucket, code, name, category] of [
@@ -255,7 +280,7 @@ export function applyVerifiedMonetaryFxOverlay(
       if (existing) {
         existing.value = money(new Decimal(existing.value).plus(amount));
         const previous = Array.isArray(existing.breakdown)
-          ? existing.breakdown as Array<{ label: string; native: string; usd: number }>
+          ? (existing.breakdown as Array<{ label: string; native: string; usd: number }>)
           : [];
         existing.breakdown = [...previous, ...bucket.breakdown];
       } else {
@@ -268,23 +293,24 @@ export function applyVerifiedMonetaryFxOverlay(
   for (const side of ["forUs", "onUs"] as const) {
     const entry = sides[side];
     entry.total = money(totals[side]);
-    entry.accounts = entry.accounts
-      .filter((row) => Math.abs(row.value) >= 0.005)
-      .sort((a, b) => b.value - a.value);
+    entry.accounts = entry.accounts.filter((row) => Math.abs(row.value) >= 0.005).sort((a, b) => b.value - a.value);
     entry.breakdown = adjustBreakdown(entry.breakdown, breakdownDeltas[side]);
   }
   payload.forUsTotal = sides.forUs.total;
   payload.onUsTotal = sides.onUs.total;
   // Supplier-partner reports include equity in the net position; the
   // translation must not erase that contribution.
-  const equityContribution = payload.equity?.includedInNetPosition === true
-    ? new Decimal(payload.equity.total ?? 0) : new Decimal(0);
+  const equityContribution =
+    payload.equity?.includedInNetPosition === true ? new Decimal(payload.equity.total ?? 0) : new Decimal(0);
   const netPosition = money(totals.forUs.minus(totals.onUs).plus(equityContribution));
   payload.netPosition = netPosition;
   payload.netWorth = netPosition;
   payload.netPositionLabel = netPositionLabelFor(payload.netPositionLabel, netPosition);
   if (payload.netPositionBreakdown) {
-    for (const [side, breakdownKey] of [["forUs", "assets"], ["onUs", "liabilities"]] as const) {
+    for (const [side, breakdownKey] of [
+      ["forUs", "assets"],
+      ["onUs", "liabilities"],
+    ] as const) {
       const breakdown = payload.netPositionBreakdown[breakdownKey];
       if (breakdown && typeof breakdown === "object" && !Array.isArray(breakdown)) {
         Object.assign(breakdown, { total: sides[side].total, breakdown: sides[side].breakdown });
@@ -320,22 +346,29 @@ export function applyCurrentAccountsFxOverlay<
     partyLedgerBalance?: string;
     notInLedgerTotal?: string | number;
     heldUnfinalizedCharges?: number;
-  }
+  },
 >(
   rows: T[],
   valuation: MonetaryFxValuationResult
-): Array<T & {
-  historicalBalanceUsd?: string;
-  currentTranslatedUsd?: string;
-  nativeBalancesByCurrency?: Record<string, string>;
-  monetaryFxProvisional?: boolean;
-  currencyRevalued?: boolean;
-}> {
+): Array<
+  T & {
+    historicalBalanceUsd?: string;
+    currentTranslatedUsd?: string;
+    nativeBalancesByCurrency?: Record<string, string>;
+    monetaryFxProvisional?: boolean;
+    currencyRevalued?: boolean;
+  }
+> {
   const valuations = new Map(valuation.accounts.map((v) => [v.accountKey, v]));
   return rows.map((row) => {
-    const key = row.type === "bank" ? `bank:${row.accountId}`
-      : row.type === "ledger" && row.customerId != null ? `customer:${row.customerId}`
-      : row.type === "ledger" ? `ledger:${row.accountId}` : null;
+    const key =
+      row.type === "bank"
+        ? `bank:${row.accountId}`
+        : row.type === "ledger" && row.customerId != null
+          ? `customer:${row.customerId}`
+          : row.type === "ledger"
+            ? `ledger:${row.accountId}`
+            : null;
     if (!key) return row;
     const val: MonetaryFxValuationRow | undefined = valuations.get(key);
     if (!val || val.eligibility === "needs_review") return row;
@@ -383,29 +416,39 @@ export function applyCurrentAccountsFxOverlay<
  * their existing historical USD and expose provisional metadata.
  */
 export function applyCurrentCustomerFxOverlay<
-  T extends { id: number; balance: number; balanceSide: string; notInLedgerTotal?: number; heldUnfinalizedCharges?: number }
+  T extends {
+    id: number;
+    balance: number;
+    balanceSide: string;
+    notInLedgerTotal?: number;
+    heldUnfinalizedCharges?: number;
+  },
 >(
   rows: T[],
   valuation: MonetaryFxValuationResult
-): Array<T & {
-  historicalBalanceUsd?: string;
-  currentTranslatedUsd?: string;
-  nativeBalancesByCurrency?: Record<string, string>;
-  monetaryFxProvisional?: boolean;
-  currencyRevalued?: boolean;
-}> {
+): Array<
+  T & {
+    historicalBalanceUsd?: string;
+    currentTranslatedUsd?: string;
+    nativeBalancesByCurrency?: Record<string, string>;
+    monetaryFxProvisional?: boolean;
+    currencyRevalued?: boolean;
+  }
+> {
   const customers = new Map(
-    valuation.accounts.filter((val) => val.accountKind === "customer")
-      .map((val) => [val.id, val])
+    valuation.accounts.filter((val) => val.accountKind === "customer").map((val) => [val.id, val])
   );
   return rows.map((row) => {
     const val = customers.get(row.id);
     if (!val) return row;
     if (
-      val.provisional || val.currentTranslatedUsd === null || val.historicalBaseUsd === null ||
+      val.provisional ||
+      val.currentTranslatedUsd === null ||
+      val.historicalBaseUsd === null ||
       Math.abs(row.notInLedgerTotal ?? 0) >= 0.005 ||
       Math.abs(row.heldUnfinalizedCharges ?? 0) >= 0.005
-    ) return { ...row, monetaryFxProvisional: true };
+    )
+      return { ...row, monetaryFxProvisional: true };
     const signedBook = new Decimal(row.balance).mul(row.balanceSide === "Cr" ? -1 : 1);
     if (!reportRowMatchesBook(signedBook, val)) {
       return { ...row, monetaryFxProvisional: true };
@@ -419,12 +462,14 @@ export function applyCurrentCustomerFxOverlay<
       balanceSide: nextSide,
       // Factory Party ledger components share this single book ownership;
       // operational memo stays zero on the eligible path.
-      ...("ledgerBalance" in row ? {
-        ledgerBalance: nextBalance,
-        ledgerBalanceSide: nextSide,
-        generalLedgerBalance: nextBalance,
-        generalLedgerBalanceSide: nextSide,
-      } : {}),
+      ...("ledgerBalance" in row
+        ? {
+            ledgerBalance: nextBalance,
+            ledgerBalanceSide: nextSide,
+            generalLedgerBalance: nextBalance,
+            generalLedgerBalanceSide: nextSide,
+          }
+        : {}),
       historicalBalanceUsd: signedBook.toDecimalPlaces(6).toFixed(6),
       currentTranslatedUsd: val.currentTranslatedUsd,
       nativeBalancesByCurrency: val.nativeBalancesByCurrency,

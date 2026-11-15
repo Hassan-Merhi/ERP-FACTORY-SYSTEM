@@ -37,8 +37,7 @@ export interface MonetaryBalanceSheetPayload {
   balanced: boolean;
 }
 export const BALANCE_SHEET_FX_TRANSLATION_CODE = "FX_TRANSLATION_CURRENT_RATE";
-export const BALANCE_SHEET_FX_TRANSLATION_NAME =
-  "Unrealized FX translation (current rate, reporting only, not posted)";
+export const BALANCE_SHEET_FX_TRANSLATION_NAME = "Unrealized FX translation (current rate, reporting only, not posted)";
 
 export interface MonetaryBalanceSheetOverlayResult {
   payload: MonetaryBalanceSheetPayload;
@@ -60,7 +59,10 @@ export function applyCurrentBalanceSheetFxOverlay(
   const appliedKeys: string[] = [];
   const skipped: MonetaryReportOverlayDiagnostic[] = [];
   const none = (): MonetaryBalanceSheetOverlayResult => ({
-    payload, appliedKeys, skipped, translationDifferenceUsd: "0.000000",
+    payload,
+    appliedKeys,
+    skipped,
+    translationDifferenceUsd: "0.000000",
   });
   if (payload.asOfDate || !payload.assets || !payload.liabilities || !payload.equity) return none();
   const sum = (lines: MonetaryBalanceSheetLine[]) =>
@@ -76,7 +78,8 @@ export function applyCurrentBalanceSheetFxOverlay(
     }
     const matches: Array<{ side: "assets" | "liabilities"; line: MonetaryBalanceSheetLine }> = [];
     for (const line of assets) if (balanceSheetLineKey(line) === val.accountKey) matches.push({ side: "assets", line });
-    for (const line of liabilities) if (balanceSheetLineKey(line) === val.accountKey) matches.push({ side: "liabilities", line });
+    for (const line of liabilities)
+      if (balanceSheetLineKey(line) === val.accountKey) matches.push({ side: "liabilities", line });
     if (matches.length !== 1) {
       skipped.push({ key: val.accountKey, reason: matches.length ? "duplicate_report_row" : "missing_in_report" });
       continue;

@@ -137,8 +137,6 @@ export const READINESS_ROW_MISSING_MESSAGE = "An inventory row of the plan is mi
 export const archivedLocationCode = (locationId: number) => `ARCHIVED-LOC-${locationId}`;
 export const archivedLocationName = (locationId: number) => `Archived location #${locationId}`;
 
-
-
 export async function rows<T>(executor: Pick<DbTransaction, "execute">, query: ReturnType<typeof sql>): Promise<T[]> {
   return (await executor.execute(query)).rows as unknown as T[];
 }
