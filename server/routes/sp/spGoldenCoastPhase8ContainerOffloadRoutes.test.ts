@@ -1,22 +1,19 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { readModuleFamily } from "../../../scripts/lib/readModuleFamily.mjs";
 
-const routeSource = readFileSync(new URL("./spGoldenCoastPhase8ContainerOffloadRoutes.ts", import.meta.url), "utf8");
-const spIndexSource = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
-const accessControlSource = readFileSync(new URL("./spAccessControl.ts", import.meta.url), "utf8");
-const phase4RouteSource = readFileSync(new URL("./spGoldenCoastPhase4CutoverFifoRoutes.ts", import.meta.url), "utf8");
-const phase4ServiceSource = readFileSync(
-  new URL("../../services/accounting/goldenCoastPhase4CutoverFifo.ts", import.meta.url),
-  "utf8"
+const routeSource = readModuleFamily(new URL("./spGoldenCoastPhase8ContainerOffloadRoutes.ts", import.meta.url));
+const spIndexSource = readModuleFamily(new URL("./index.ts", import.meta.url));
+const accessControlSource = readModuleFamily(new URL("./spAccessControl.ts", import.meta.url));
+const phase4RouteSource = readModuleFamily(new URL("./spGoldenCoastPhase4CutoverFifoRoutes.ts", import.meta.url));
+const phase4ServiceSource = readModuleFamily(
+  new URL("../../services/accounting/goldenCoastPhase4CutoverFifo.ts", import.meta.url)
 );
-const migrationReconcileSource = readFileSync(new URL("./spMigrationPhase4Reconcile.ts", import.meta.url), "utf8");
-const phase8ServiceSource = readFileSync(
-  new URL("../../services/accounting/goldenCoastPhase8ContainerOffload.ts", import.meta.url),
-  "utf8"
+const migrationReconcileSource = readModuleFamily(new URL("./spMigrationPhase4Reconcile.ts", import.meta.url));
+const phase8ServiceSource = readModuleFamily(
+  new URL("../../services/accounting/goldenCoastPhase8ContainerOffload.ts", import.meta.url)
 );
-const phase5ServiceSource = readFileSync(
-  new URL("../../services/accounting/goldenCoastPhase5PosSale.ts", import.meta.url),
-  "utf8"
+const phase5ServiceSource = readModuleFamily(
+  new URL("../../services/accounting/goldenCoastPhase5PosSale.ts", import.meta.url)
 );
 
 describe("Golden Coast Phase 8 container/offload route", () => {

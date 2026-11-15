@@ -5,16 +5,16 @@
  * startup guard that production actually runs, route registration, the approval-token wiring,
  * the client UI entry points, and the EN/AR/FR translations for the new screens.
  */
-import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { pool } from "../server/db";
 import { ensureRetailSellingSchema, ensureRetailStockCountSchema } from "../server/startup/ensureRuntimeSchema";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
 const describeWithDatabase = process.env.DATABASE_URL ? describe : describe.skip;
 
 function read(relativePath: string): string {
-  return fs.readFileSync(path.join(process.cwd(), relativePath), "utf8");
+  return readModuleFamily(path.join(process.cwd(), relativePath));
 }
 
 describe("Retail Wave 2 — schema", () => {
@@ -67,7 +67,9 @@ describe("Retail Wave 2 — schema", () => {
   });
 
   it("mirrors every Wave 2 table in the always-on startup guard", () => {
-    const guard = read("server/startup/ensureRuntimeSchema.ts");
+    // The retail guards live in runtimeSchema/retailSchema.ts and are invoked from the
+    // always-on ensureRuntimeSchema entry point; check both halves of that guard.
+    const guard = read("server/startup/ensureRuntimeSchema.ts") + read("server/startup/runtimeSchema/retailSchema.ts");
     expect(guard).toContain("ensureRetailSellingSchema");
     expect(guard).toContain("ensureRetailStockCountSchema");
     for (const table of [
