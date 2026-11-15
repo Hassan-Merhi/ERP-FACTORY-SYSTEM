@@ -11,6 +11,7 @@ import {
   serializeRouteManifest,
   type SerializedRouteManifest,
 } from "./helpers/routeManifest";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
 interface RouteManifestReplacement {
   expected: string;
@@ -26,7 +27,7 @@ interface RatchetAllowances {
 const MANIFEST_PATH = path.join(process.cwd(), "config/route-manifest.json");
 const ALLOWANCES_PATH = path.join(process.cwd(), "config/ci-ratchet-allowances.json");
 const shouldUpdate = process.env.UPDATE_ROUTE_MANIFEST === "1";
-const allowances = JSON.parse(fs.readFileSync(ALLOWANCES_PATH, "utf8")) as RatchetAllowances;
+const allowances = JSON.parse(readModuleFamily(ALLOWANCES_PATH)) as RatchetAllowances;
 const reviewedSpMounts: string[] = [];
 // Raised from 152 when the route manifest was refreshed on 2026-08-05. Most of the increase is
 // deliberate layering: language-specific readers (factoryFrenchCatalogReadRoutes) and permission
@@ -210,7 +211,7 @@ describe("route manifest", () => {
     expect(actual.routes.filter((entry) => entry.endsWith("[]"))).toEqual([]);
   });
   it("matches the committed snapshot plus exact reviewed deltas", () => {
-    const expected = JSON.parse(fs.readFileSync(MANIFEST_PATH, "utf8")) as SerializedRouteManifest;
+    const expected = JSON.parse(readModuleFamily(MANIFEST_PATH)) as SerializedRouteManifest;
     const reviewedRoutes = new Set(allowances.routeManifestAdditions);
     const reviewedMounts = new Set([...allowances.routeManifestMountAdditions, ...reviewedSpMounts]);
     const reviewedReplacements = allowances.routeManifestReplacements ?? [];
@@ -260,7 +261,7 @@ describe("route manifest", () => {
     ).toBeLessThanOrEqual(MAX_SHADOWED_REGISTRATIONS);
   });
   it("keeps every /api route behind an explicit guard", () => {
-    const snapshot = JSON.parse(fs.readFileSync(MANIFEST_PATH, "utf8")) as SerializedRouteManifest;
+    const snapshot = JSON.parse(readModuleFamily(MANIFEST_PATH)) as SerializedRouteManifest;
     const publicRoutes = new Set(snapshot.routes.filter((entry) => entry.includes("[<anonymous>]")));
     const unguarded = actual.routes.filter(
       (entry) => entry.includes("[<anonymous>]") && !publicRoutes.has(normalizeReviewedMiddlewareWrappers(entry))

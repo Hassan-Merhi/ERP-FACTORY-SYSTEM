@@ -1,7 +1,7 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
-const read = (file: string) => readFileSync(file, "utf8");
+const read = (file: string) => readModuleFamily(file);
 const manager = read("client/src/pages/factory/PressingMachineManagement.tsx");
 const camera = read("client/src/pages/factory/ContinuousPressingScanner.tsx");
 const history = read("client/src/pages/factory/PressingHistoryReport.tsx");

@@ -1,19 +1,14 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { readModuleFamily } from "../../../scripts/lib/readModuleFamily.mjs";
 
-const routeSource = readFileSync(
-  new URL("./spGoldenCoastPhase10SalesCashSettlementRoutes.ts", import.meta.url),
-  "utf8"
+const routeSource = readModuleFamily(new URL("./spGoldenCoastPhase10SalesCashSettlementRoutes.ts", import.meta.url));
+const spIndexSource = readModuleFamily(new URL("./index.ts", import.meta.url));
+const accessControlSource = readModuleFamily(new URL("./spAccessControl.ts", import.meta.url));
+const serviceSource = readModuleFamily(
+  new URL("../../services/accounting/goldenCoastPhase10SalesCashSettlement.ts", import.meta.url)
 );
-const spIndexSource = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
-const accessControlSource = readFileSync(new URL("./spAccessControl.ts", import.meta.url), "utf8");
-const serviceSource = readFileSync(
-  new URL("../../services/accounting/goldenCoastPhase10SalesCashSettlement.ts", import.meta.url),
-  "utf8"
-);
-const panelSource = readFileSync(
-  new URL("../../../client/src/pages/sp/golden-coast/GcSalesCashPanel.tsx", import.meta.url),
-  "utf8"
+const panelSource = readModuleFamily(
+  new URL("../../../client/src/pages/sp/golden-coast/GcSalesCashPanel.tsx", import.meta.url)
 );
 
 describe("Golden Coast Phase 10 GC Sales Cash settlement route surface", () => {

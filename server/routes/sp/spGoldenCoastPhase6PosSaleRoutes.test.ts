@@ -1,13 +1,12 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { readModuleFamily } from "../../../scripts/lib/readModuleFamily.mjs";
 
-const routeSource = readFileSync(new URL("./spGoldenCoastPhase6PosSaleRoutes.ts", import.meta.url), "utf8");
-const autoHadiSource = readFileSync(new URL("./goldenCoastPhase6AutoHadi.ts", import.meta.url), "utf8");
-const spIndexSource = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
-const phase5RouteSource = readFileSync(new URL("./spGoldenCoastPhase5PosSaleRoutes.ts", import.meta.url), "utf8");
-const phase6ServiceSource = readFileSync(
-  new URL("../../services/accounting/goldenCoastPhase6SpecialLocationDeduction.ts", import.meta.url),
-  "utf8"
+const routeSource = readModuleFamily(new URL("./spGoldenCoastPhase6PosSaleRoutes.ts", import.meta.url));
+const autoHadiSource = readModuleFamily(new URL("./goldenCoastPhase6AutoHadi.ts", import.meta.url));
+const spIndexSource = readModuleFamily(new URL("./index.ts", import.meta.url));
+const phase5RouteSource = readModuleFamily(new URL("./spGoldenCoastPhase5PosSaleRoutes.ts", import.meta.url));
+const phase6ServiceSource = readModuleFamily(
+  new URL("../../services/accounting/goldenCoastPhase6SpecialLocationDeduction.ts", import.meta.url)
 );
 
 describe("Golden Coast Phase 6 POS sale route", () => {

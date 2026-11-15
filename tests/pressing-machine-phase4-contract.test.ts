@@ -1,5 +1,5 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
 // Formatting-insensitive source check: compares code tokens, not layout, so a
 // Prettier reflow of the source cannot break the contract.
@@ -13,7 +13,7 @@ const expectCode = (code: string, expected: string) => expect(normalizeCode(code
 const expectNoCode = (code: string, unexpected: string) =>
   expect(normalizeCode(code)).not.toContain(normalizeCode(unexpected));
 
-const read = (path: string) => readFileSync(path, "utf8");
+const read = (path: string) => readModuleFamily(path);
 const route = read("server/routes/factory/factoryPressingConfirmationRoutes.ts");
 const hub = read("server/routes/factoryRoutes.ts");
 const client = read("client/src/pages/factory/pressing-scanner/pressingConfirmClient.ts");

@@ -1,7 +1,7 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
-const read = (path: string) => readFileSync(path, "utf8");
+const read = (path: string) => readModuleFamily(path);
 const correction = read("server/routes/factory/factoryPressingCorrectionRoutes.ts");
 const confirm = read("server/routes/factory/factoryPressingConfirmationRoutes.ts");
 const report = read("server/routes/factory/factoryPressingReportRoutes.ts");
@@ -14,9 +14,10 @@ const contract = read("shared/schema/factory/pressing-machine-tracking.ts");
 
 describe("Pressing Machines Phase 8 correction and audit controls", () => {
   it("requires authenticated supervisor/manager role behind Factory page access", () => {
-    expect(routes).toContain('registerFactoryPressingCorrectionRoutes(app)');
-    expect(routes.indexOf('app.use("/api/factory", enforceFactoryBackendAccess)'))
-      .toBeLessThan(routes.indexOf('registerFactoryPressingCorrectionRoutes(app)'));
+    expect(routes).toContain("registerFactoryPressingCorrectionRoutes(app)");
+    expect(routes.indexOf('app.use("/api/factory", enforceFactoryBackendAccess)')).toBeLessThan(
+      routes.indexOf("registerFactoryPressingCorrectionRoutes(app)")
+    );
     expect(correction).toContain('"/api/factory/pressing-machines/confirmations/:id/void"');
     expect(correction).toContain("requireAuth");
     expect(correction).toContain("requireSupervisor(req)");
@@ -29,7 +30,7 @@ describe("Pressing Machines Phase 8 correction and audit controls", () => {
     expect(correction).toContain("correctionRequest.parse(req.body ?? {})");
     expect(correction).toContain("Deleted from active pressing scans by supervisor");
     expect(correction).toContain("PRESSING_ALREADY_VOIDED");
-    expect(correction).toContain('reason: { old: null, new: reason }');
+    expect(correction).toContain("reason: { old: null, new: reason }");
   });
 
   it("locks correct tenant/machine/bale/confirmation before mutation", () => {
@@ -74,9 +75,9 @@ describe("Pressing Machines Phase 8 correction and audit controls", () => {
     expect(report).toContain("SUM(c.weight_kg) FILTER (WHERE c.voided_at IS NULL)");
     expect(routes).not.toContain("registerFactoryPressingOperationsRoutes(app)");
     expect(report).toContain('"c.voided_at IS NOT NULL"');
-    expect(report).toContain('AND active.voided_at IS NULL');
+    expect(report).toContain("AND active.voided_at IS NULL");
     expect(report).toContain('AS "canReturn"');
-    expect(ui).toContain('row.canReturn !== false');
+    expect(ui).toContain("row.canReturn !== false");
     expect(report).toContain('c.voided_at AS "voidedAt"');
     expect(queue).toContain("supervisors may subsequently void them");
   });
@@ -104,7 +105,7 @@ describe("Pressing Machines Phase 8 correction and audit controls", () => {
     expect(correction).toContain("PRESSING_NOT_VOIDED");
     expect(correction).toContain("PRESSING_ALREADY_CONFIRMED");
     expect(correction).toContain("isNull(factoryPressingConfirmations.voidedAt)");
-    expect(correction).toContain("requestId: \"supervisor-restore-\" + randomUUID()");
+    expect(correction).toContain('requestId: "supervisor-restore-" + randomUUID()');
     expect(correction).toContain("userId: original.userId");
     expect(correction).toContain("weightKg: original.weightKg");
     expect(correction).toContain("confirmedAt: original.confirmedAt");

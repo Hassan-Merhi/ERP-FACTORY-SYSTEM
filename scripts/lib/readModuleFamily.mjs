@@ -79,3 +79,19 @@ export function extractedFrom(fileOrUrl) {
 export function isExtractedModule(fileOrUrl) {
   return extractedFrom(fileOrUrl) !== null;
 }
+
+/** Original (root) module of the family `file` belongs to. */
+export function moduleFamilyRoot(fileOrUrl) {
+  let current = fileOrUrl instanceof URL ? fileURLToPath(fileOrUrl) : String(fileOrUrl);
+  const seen = new Set();
+  for (let origin = extractedFrom(current); origin && !seen.has(origin); origin = extractedFrom(current)) {
+    seen.add(origin);
+    current = origin;
+  }
+  return current;
+}
+
+/** Source of the whole family that `file` belongs to, read from its root module. */
+export function readWholeModuleFamily(fileOrUrl) {
+  return readModuleFamily(moduleFamilyRoot(fileOrUrl));
+}

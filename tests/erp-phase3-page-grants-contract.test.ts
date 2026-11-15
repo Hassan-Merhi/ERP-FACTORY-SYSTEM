@@ -1,8 +1,8 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { FEATURE_KEYS } from "../shared/schema/common";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
-const source = readFileSync(new URL("../server/routes/admin/userManagementRoutes.ts", import.meta.url), "utf8");
+const source = readModuleFamily(new URL("../server/routes/admin/userManagementRoutes.ts", import.meta.url));
 const putHandler = source.slice(
   source.indexOf('app.put("/api/erp-user-page-access/:userId"'),
   source.indexOf('app.get("/api/erp-user-hidden-costs/:userId"')

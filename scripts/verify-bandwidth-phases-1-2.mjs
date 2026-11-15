@@ -2,9 +2,10 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { readModuleFamily } from "./lib/readModuleFamily.mjs";
 
 const root = process.cwd();
-const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
+const read = (file) => readModuleFamily(path.join(root, file));
 const failures = [];
 const requireText = (source, text, message) => {
   if (!source.includes(text)) failures.push(message);
@@ -312,7 +313,7 @@ if (fs.existsSync(distAssets)) {
   for (const name of jsFiles) {
     const filePath = path.join(distAssets, name);
     const size = fs.statSync(filePath).size;
-    const source = fs.readFileSync(filePath, "utf8");
+    const source = readModuleFamily(filePath);
     if (source.includes(embeddedLogoSignature)) {
       failures.push(`${name} still contains the full embedded HMD label PNG.`);
     }
