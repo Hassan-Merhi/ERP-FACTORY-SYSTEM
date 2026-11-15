@@ -43,7 +43,9 @@ export function calculateSupplierReturnFinancials(input: SupplierReturnFinancial
   const delta = finite(input.inventoryValueDelta, "inventory value delta");
 
   if (!quantity.gt(0) || !purchaseRate.gte(0)) throw new Error("Invalid return quantity or purchase cost");
-  if (!oldQty.minus(newQty).eq(quantity) || newQty.lt(0))
+  // Negative inventory is supported by adjustInventory's provisional cost layers.
+  // Require the exact quantity reduction even when the result crosses below zero.
+  if (!oldQty.minus(newQty).eq(quantity))
     throw new Error("Supplier return inventory quantity did not decrease by the allocated amount");
   // Stored values are two-decimal ledger values. Never tolerate unexplained rounding
   // gaps between the inventory subledger and the voucher's inventory credit.
