@@ -111,12 +111,15 @@ function source(path: string) {
   return readFileSync(fileURLToPath(new URL(path, import.meta.url)), "utf8");
 }
 
+const compact = (text: string) => text.replace(/\s+/g, "");
+
 describe("Phase 7 rental route wiring", () => {
   it("protects posted and scheduled payment deletion after authentication", () => {
     expect(source("../server/routes/rental/centralRentalPaymentDeletionRoute.ts"))
       .toContain('app.delete(`${urlPrefix}/payments/:id`, requireAuth, requireRentalDeletePermission,');
-    expect(source("../server/routes/rental/rentalPaymentsAccrualRoutes.ts"))
-      .toContain('app.delete(`${urlPrefix}/payments/scheduled/:groupId`, requireAuth, requireRentalDeletePermission,');
+    expect(compact(source("../server/routes/rental/rentalPaymentsAccrualRoutes.ts"))).toContain(
+      compact('app.delete(`${urlPrefix}/payments/scheduled/:groupId`, requireAuth, requireRentalDeletePermission,')
+    );
   });
 
   it("protects reconciliation with the active company role", () => {

@@ -3,7 +3,7 @@
  * logouts.  A business endpoint returning 401 must NOT redirect to /login
  * unless /api/auth/me also confirms the session is gone.
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach, afterAll } from "vitest";
 import {
   verifySessionExpired,
   handlePossibleSessionExpiry,
@@ -52,6 +52,13 @@ beforeEach(() => {
 afterEach(() => {
   _testOnly_setRedirectFn(null);
   vi.restoreAllMocks();
+});
+
+// A confirmed expiry revokes the offline read scope through a fire-and-forget
+// dynamic import. Let that module graph finish loading before the test
+// environment is torn down, so the import cannot outlive this file.
+afterAll(async () => {
+  await import("@/lib/offline/offlineReadCache");
 });
 
 // ---------------------------------------------------------------------------
