@@ -291,7 +291,12 @@ export async function establishCompanyScope(
   res: Response,
   access: EffectiveRouteAccess,
   proceed: (context: ActiveCompanyPermissionContext) => void | Promise<void>,
-  fail: (error: unknown) => void
+  fail: (error: unknown) => void,
+  /**
+   * Called instead of sending the 401/403 when the session has no usable
+   * company. Used for URLs that name no route, which answer 404 either way.
+   */
+  onCompanyUnavailable?: () => void
 ): Promise<void> {
   let context: ActiveCompanyPermissionContext | null = null;
   try {
@@ -442,6 +447,10 @@ export async function establishCompanyScope(
       return;
     }
     if (error instanceof ActiveCompanyPermissionContextError) {
+      if (onCompanyUnavailable) {
+        onCompanyUnavailable();
+        return;
+      }
       logIsolationDenial(req, context, error.code);
       res.status(error.status).json({ code: error.code, message: error.message });
       return;

@@ -135,6 +135,18 @@ async function enforcePermissions(
   return true;
 }
 
+/** Company binding applied to a signed-in request whose URL names no route. */
+const UNDECLARED_ROUTE_ACCESS: EffectiveRouteAccess = {
+  ruleIds: [],
+  companyScope: "request-resolved",
+  crossCompany: new Set(),
+  companyRoles: [],
+  permissions: [],
+  policies: [],
+  pathCompanyIds: [],
+  methodFallback: false,
+};
+
 export function createManifestAccessBoundary(options: ManifestAccessBoundaryOptions = {}): RequestHandler {
   // Compiled once. An invalid manifest throws here, so a server with a broken
   // access declaration never starts serving requests.
@@ -165,6 +177,14 @@ export function createManifestAccessBoundary(options: ManifestAccessBoundaryOpti
       return;
     }
 
+    let finished = false;
+    const fail = (error: unknown) => {
+      if (finished) return;
+      finished = true;
+      // A resolver that throws must never fall through to the handler.
+      next(error ?? new Error("Access boundary failed"));
+    };
+
     const access = resolver.resolve(req.method, req.path);
     if (!access) {
       // No declared route: refuse before any handler or later middleware can
@@ -178,7 +198,20 @@ export function createManifestAccessBoundary(options: ManifestAccessBoundaryOpti
           path: req.path,
         })
       );
-      res.status(404).json({ code: "API_ROUTE_NOT_FOUND", message: "API endpoint not found" });
+      const notFound = () => {
+        if (finished) return;
+        finished = true;
+        res.status(404).json({ code: "API_ROUTE_NOT_FOUND", message: "API endpoint not found" });
+      };
+      if (!req.session?.userId) {
+        notFound();
+        return;
+      }
+      // A signed-in request to an unknown URL still passes the company and
+      // role checks first, so a role that is refused a whole URL family
+      // (settings for ERP Tester, writes for View Only) keeps getting that
+      // refusal rather than learning which URLs exist. Then it is 404.
+      void establishCompanyScope(req, res, UNDECLARED_ROUTE_ACCESS, notFound, fail, notFound).catch(fail);
       return;
     }
     req.routeAccess = access;
@@ -193,14 +226,6 @@ export function createManifestAccessBoundary(options: ManifestAccessBoundaryOpti
       next();
       return;
     }
-
-    let finished = false;
-    const fail = (error: unknown) => {
-      if (finished) return;
-      finished = true;
-      // A resolver that throws must never fall through to the handler.
-      next(error ?? new Error("Access boundary failed"));
-    };
 
     void establishCompanyScope(
       req,

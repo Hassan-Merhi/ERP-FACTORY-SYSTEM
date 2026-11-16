@@ -214,6 +214,9 @@ direction:
 - **Fast responders.** A cached Factory read that answered ahead of the Factory
   page boundary is now checked first.
 - **Undeclared URLs** get 404 at the boundary instead of at the API fallback.
+  A signed-in request still passes the company and role checks first, so a
+  role refused a whole URL family (settings for ERP Tester, writes for View
+  Only) keeps that refusal.
 - **Chain permission guards** (`requirePageAccess` and friends on a route) are
   also enforced by the boundary, so both must pass.
 - **Path-word matches from parameter values** (a parameter whose value is

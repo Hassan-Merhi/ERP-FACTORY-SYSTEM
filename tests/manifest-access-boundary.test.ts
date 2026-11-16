@@ -41,7 +41,10 @@ import {
   type RouteAccessManifest,
   type RouteAccessRule,
 } from "../server/security/access/routeAccessManifest";
-import type { ActiveCompanyPermissionContext } from "../server/services/security/activeCompanyPermissionContext";
+import {
+  ActiveCompanyPermissionContextError,
+  type ActiveCompanyPermissionContext,
+} from "../server/services/security/activeCompanyPermissionContext";
 
 const committed = routeAccessManifestJson as unknown as RouteAccessManifest;
 
@@ -129,6 +132,8 @@ async function send(
     query?: Record<string, unknown>;
     body?: Record<string, unknown>;
     factoryCompanyId?: number;
+    /** A signed-in session that has not selected a company yet. */
+    signedInWithoutCompany?: boolean;
     policies?: Partial<Record<AccessPolicyName, AccessPolicy>>;
   }
 ): Promise<Outcome> {
@@ -168,7 +173,9 @@ async function send(
             currentRole: input.sessionRole ?? role,
             factoryCompanyId: input.factoryCompanyId,
           }
-        : {},
+        : input.signedInWithoutCompany
+          ? { userId: "user-1" }
+          : {},
     };
     boundary(req, res, (error?: unknown) => {
       outcome.nextCalled = true;
@@ -208,6 +215,38 @@ describe("rule resolution", () => {
       expect(outcome.nextCalled).toBe(false);
     }
     expect(harness.logger.warn).toHaveBeenCalled();
+  });
+
+  it("keeps a role's refusal ahead of the 404 for an unknown URL, and never reaches a handler", async () => {
+    // The session still says Owner; the membership is now ERP Tester, which is refused every settings URL.
+    const tester = await send(manifest, { path: "/api/role-settings", role: "ERP Tester", sessionRole: "Owner" });
+    expect(tester.status).toBe(403);
+    expect(tester.body.code).toBe("ERP_TESTER_SETTINGS_DENIED");
+    expect(tester.nextCalled).toBe(false);
+
+    const viewOnly = await send(manifest, {
+      method: "POST",
+      path: "/api/not-declared",
+      role: "View Only",
+      sessionRole: "Manager",
+    });
+    expect(viewOnly.status).toBe(403);
+    expect(viewOnly.body.code).toBe("VIEW_ONLY_WRITE_DENIED");
+    expect(viewOnly.nextCalled).toBe(false);
+  });
+
+  it("answers 404, not a session error, when an unknown URL is requested before a company is selected", async () => {
+    harness.getActiveCompanyPermissionContext.mockRejectedValue(
+      new ActiveCompanyPermissionContextError(
+        "An active company session is required.",
+        401,
+        "ACTIVE_COMPANY_CONTEXT_REQUIRED"
+      )
+    );
+    const outcome = await send(manifest, { path: "/api/auth/not-declared", role: null, signedInWithoutCompany: true });
+    expect(outcome.status).toBe(404);
+    expect(outcome.body.code).toBe("API_ROUTE_NOT_FOUND");
+    expect(outcome.nextCalled).toBe(false);
   });
 
   it("does not treat a differently-cased or over-long URL as a declared route", async () => {
