@@ -394,10 +394,15 @@ export function registerCompanyAccessRoutes(app: Express) {
       // The request's normal DB scope is still pinned to the active company, so
       // run this one operation under the already-authorized target scope. This is
       // required for forced RLS tables such as vouchers, customers and inventory.
+      const forceDeleteWithHistory = req.body?.forceDeleteWithHistory === true;
+      const confirmedCompanyCode = typeof req.body?.confirmedCompanyCode === "string" ? req.body.confirmedCompanyCode : undefined;
+      if (forceDeleteWithHistory && confirmedCompanyCode !== targetCompany.code) {
+        return res.status(400).json({ message: "Enter the exact company code to permanently delete its accounting history." });
+      }
       const accessibleCompanyIds = await getAccessibleCompanyIds(req.user.id);
       await runWithDatabaseScopeRuntimeContext(
         createTenantDatabaseScope(companyId, [...accessibleCompanyIds], "authorized-companies"),
-        () => storage.deleteCompany(companyId, { userId: req.user?.id, username: req.user?.username })
+        () => storage.deleteCompany(companyId, { userId: req.user?.id, username: req.user?.username, forceDeleteWithHistory, confirmedCompanyCode })
       );
 
       res.json({ message: "Company deleted successfully" });
