@@ -218,12 +218,6 @@ jobs:
       - name: Commercial subscription security contracts
         if: always() && steps.install.outcome == 'success'
         run: node --test tests/commercial-subscription-policy.node.test.mjs tests/commercial-paddle-verification.node.test.mjs tests/commercial-paddle-event-processor.node.test.mjs tests/commercial-postgres-subscription.node.test.mjs
-      - name: Temporary commercial Prettier output
-        if: always() && steps.install.outcome == 'success'
-        run: |
-          node node_modules/prettier/bin/prettier.cjs --write server/middleware/commercialAccountAdmission.ts server/services/commercial/commercialRouteEntitlements.ts server/services/commercial/paddleEventProcessor.mjs server/services/commercial/postgresSubscriptionRepository.mjs tests/commercial-account-admission.test.ts tests/commercial-paddle-event-processor.node.test.mjs tests/commercial-postgres-subscription.node.test.mjs
-          node -e 'const fs=require("fs");for(const p of ["server/middleware/commercialAccountAdmission.ts","server/services/commercial/commercialRouteEntitlements.ts","server/services/commercial/paddleEventProcessor.mjs","server/services/commercial/postgresSubscriptionRepository.mjs","tests/commercial-account-admission.test.ts","tests/commercial-paddle-event-processor.node.test.mjs","tests/commercial-postgres-subscription.node.test.mjs"])console.log("FORMATTED:"+p+":"+fs.readFileSync(p).toString("base64"))'
-
 
   typecheck:
     name: Type-check
