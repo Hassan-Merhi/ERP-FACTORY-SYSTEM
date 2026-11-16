@@ -105,13 +105,13 @@ async function clearRemainingRestrictiveReferences(
 
   const references = executeRows<RestrictiveReference>(result);
   for (const reference of references) {
-    const qualifiedTable = `${quoteIdentifier(reference.schema_name)}.${quoteIdentifier(reference.table_name)}`;
-    const column = quoteIdentifier(reference.column_name);
+    const qualifiedTable = sql.identifier(reference.schema_name, reference.table_name);
+    const column = sql.identifier(reference.column_name);
     const statement = reference.column_not_null
-      ? `DELETE FROM ${qualifiedTable} WHERE ${column} = ${parentId}`
-      : `UPDATE ${qualifiedTable} SET ${column} = NULL WHERE ${column} = ${parentId}`;
+      ? sql`DELETE FROM ${qualifiedTable} WHERE ${column} = ${parentId}`
+      : sql`UPDATE ${qualifiedTable} SET ${column} = NULL WHERE ${column} = ${parentId}`;
 
-    await tx.execute(sql.raw(statement));
+    await tx.execute(statement);
   }
 }
 
