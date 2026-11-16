@@ -180,7 +180,7 @@ export function registerCompanyAccessRoutes(app: Express) {
       if (req.user.role === "Developer") {
         const allCompanies = await storage.getAllCompanies();
         return res.json(
-          allCompanies.map((company) => ({
+          allCompanies.filter((company) => company.active).map((company) => ({
             id: -1,
             userId: req.user!.id,
             companyId: company.id,
@@ -221,7 +221,7 @@ export function registerCompanyAccessRoutes(app: Express) {
            COALESCE(c.company_type, 'erp') AS "companyType"
          FROM user_company_roles ucr
          INNER JOIN companies c ON c.id = ucr.company_id
-         WHERE ucr.user_id = $1
+         WHERE ucr.user_id = $1 AND c.active = true
          ORDER BY c.name`,
         [req.user.id]
       );
@@ -373,12 +373,16 @@ export function registerCompanyAccessRoutes(app: Express) {
     }
   });
 
-  // Wave 12 (owner decision 4): Owner only (Developer passes, as with every
-  // requireRole), and the Owner must hold the Owner role on the target company
-  // too. Only an empty company can be deleted; one with history is refused 409.
-  app.delete("/api/companies/:id", requireAuth, requireRole("Owner"), async (req, res) => {
+  // Only inactive companies are eligible for deletion. Admins and Developers
+  // may manage companies, but the storage layer still refuses protected history.
+  app.delete("/api/companies/:id", requireAuth, requireRole("Admin"), async (req, res) => {
     try {
       const companyId = await resolveAuthorizedCompanyId(req, req.params.id);
+      const targetCompany = await storage.getCompanyById(companyId);
+      if (!targetCompany) return res.status(404).json({ message: "Company not found" });
+      if (targetCompany.active) {
+        return res.status(409).json({ message: "Deactivate this company before deleting it.", code: "COMPANY_MUST_BE_INACTIVE" });
+      }
       if (Number(req.session.currentCompanyId) === companyId) {
         return res.status(409).json({
           message: "Switch to a different company before deleting the company that is currently active.",
@@ -386,13 +390,6 @@ export function registerCompanyAccessRoutes(app: Express) {
         });
       }
       if (!req.user) return res.status(401).json({ message: "Unauthorized" });
-      if (req.user.role !== "Developer") {
-        const targetRole = await storage.getUserCompanyRole(req.user.id, companyId);
-        if (targetRole?.role !== "Owner") {
-          return res.status(403).json({ message: "Only an Owner of the company can delete it." });
-        }
-      }
-
       // Company Management is intentionally cross-company for Admin/Developer.
       // The request's normal DB scope is still pinned to the active company, so
       // run this one operation under the already-authorized target scope. This is
@@ -448,10 +445,14 @@ export function registerCompanyAccessRoutes(app: Express) {
       }
 
       const [companyRow] = await db
-        .select({ name: companies.name })
+        .select({ name: companies.name, active: companies.active })
         .from(companies)
         .where(eq(companies.id, companyId))
         .limit(1);
+
+      if (!companyRow?.active) {
+        return res.status(409).json({ message: "This company is inactive. Reactivate it in Company Management before switching.", code: "COMPANY_INACTIVE" });
+      }
 
       req.session.currentCompanyId = companyId;
       delete req.session.factoryCompanyId;
