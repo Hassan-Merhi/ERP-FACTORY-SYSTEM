@@ -1,3 +1,4 @@
+import { useCompany } from "@/contexts/CompanyContext";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 /**
@@ -28,6 +29,8 @@ import { SummaryCard } from "./SummaryCard";
 
 export function PerWorkerView() {
   const { toast } = useToast();
+  const { selectedCompany } = useCompany();
+  const canEditPastWithoutPassword = selectedCompany?.role === "Admin" || selectedCompany?.role === "Developer";
   const recordChanges = useExistingRecordChangeAccess();
   const [selectedWorkerId, setSelectedWorkerId] = useState<string>("");
   const [workerComboOpen, setWorkerComboOpen] = useState(false);
@@ -138,7 +141,7 @@ export function PerWorkerView() {
       return { workerId: workerIdNum, attendanceDate: d, status: "Absent" };
     });
     const priorDates = attendancePastDates(records.map((record) => record.attendanceDate));
-    if (priorDates.length) {
+    if (priorDates.length && !canEditPastWithoutPassword) {
       setApprovalDates(priorDates);
       setPendingApprovalRecords(records);
       setApprovalOpen(true);
@@ -156,7 +159,7 @@ export function PerWorkerView() {
   return (
     <div className="space-y-4">
       {/* Controls */}
-      {attendancePastDates(generateDateRange(startDate, endDate)).length > 0 && (
+      {attendancePastDates(generateDateRange(startDate, endDate)).length > 0 && !canEditPastWithoutPassword && (
         <Badge variant="secondary">Earlier dates require Admin approval to save</Badge>
       )}
       <Card className="overflow-hidden border-border/70 bg-card/75 shadow-none">
