@@ -2,7 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../server/db", () => ({ db: { execute: vi.fn() } }));
 
-import { decideCommercialAccountAdmission, makeCommercialAdmissionBoundary } from "../server/middleware/commercialAccountAdmission";
+import {
+  decideCommercialAccountAdmission,
+  makeCommercialAdmissionBoundary,
+} from "../server/middleware/commercialAccountAdmission";
 
 const account = {
   id: "tenant_first_0001",
@@ -101,7 +104,11 @@ describe("commercial ERP admission gate", () => {
     const next = vi.fn();
     const res = mockResponse();
     const boundary = makeCommercialAdmissionBoundary(vi.fn().mockResolvedValue([account]));
-    await boundary(fakeRequest({ session: { userId: "user_001", currentCompanyId: 101, currentRole: "Developer" } }) as never, res as never, next);
+    await boundary(
+      fakeRequest({ session: { userId: "user_001", currentCompanyId: 101, currentRole: "Developer" } }) as never,
+      res as never,
+      next
+    );
     expect(res.status).toHaveBeenCalledWith(403);
     expect(next).not.toHaveBeenCalled();
   });
@@ -122,12 +129,12 @@ describe("commercial ERP admission gate", () => {
     const boundary = makeCommercialAdmissionBoundary(
       vi.fn().mockResolvedValue([account]),
       vi.fn().mockResolvedValue([101, 102]),
-      vi.fn().mockResolvedValue(4),
+      vi.fn().mockResolvedValue(4)
     );
     await boundary(
       fakeRequest({ body: { destinationCompanyId: 777, operation: { sourceCompanyId: 101 } } }) as never,
       res as never,
-      next,
+      next
     );
     expect(res.status).toHaveBeenCalledWith(403);
     expect(next).not.toHaveBeenCalled();
@@ -139,7 +146,7 @@ describe("commercial ERP admission gate", () => {
     const boundary = makeCommercialAdmissionBoundary(
       vi.fn().mockResolvedValue([account]),
       vi.fn().mockResolvedValue([101]),
-      vi.fn().mockResolvedValue(4),
+      vi.fn().mockResolvedValue(4)
     );
     await boundary(fakeRequest({ query: { companyId: ["101", "777"] } }) as never, res as never, next);
     expect(res.status).toHaveBeenCalledWith(403);
@@ -151,9 +158,13 @@ describe("commercial ERP admission gate", () => {
     const res = mockResponse();
     const boundary = makeCommercialAdmissionBoundary(
       vi.fn().mockResolvedValue([account]),
-      vi.fn().mockResolvedValue([101, 102]),
+      vi.fn().mockResolvedValue([101, 102])
     );
-    await boundary(fakeRequest({ body: { sourceCompanyId: 101, destinationCompanyId: 102 } }) as never, res as never, next);
+    await boundary(
+      fakeRequest({ body: { sourceCompanyId: 101, destinationCompanyId: 102 } }) as never,
+      res as never,
+      next
+    );
     expect(next).toHaveBeenCalledOnce();
   });
 
@@ -163,14 +174,14 @@ describe("commercial ERP admission gate", () => {
     await makeCommercialAdmissionBoundary(
       vi.fn().mockResolvedValue([account]),
       vi.fn().mockResolvedValue([101]),
-      vi.fn().mockResolvedValue(16),
+      vi.fn().mockResolvedValue(16)
     )(fakeRequest() as never, tooManyUsers as never, next);
     expect(tooManyUsers.status).toHaveBeenCalledWith(403);
     const tooManyCompanies = mockResponse();
     await makeCommercialAdmissionBoundary(
       vi.fn().mockResolvedValue([account]),
-      vi.fn().mockResolvedValue([101,102,103,104]),
-      vi.fn().mockResolvedValue(4),
+      vi.fn().mockResolvedValue([101, 102, 103, 104]),
+      vi.fn().mockResolvedValue(4)
     )(fakeRequest() as never, tooManyCompanies as never, next);
     expect(tooManyCompanies.status).toHaveBeenCalledWith(403);
     expect(next).not.toHaveBeenCalled();
