@@ -152,7 +152,7 @@ export function registerAiAgentRoutes(app: Express) {
           if (step.status !== "pending") continue;
 
           const { step: updatedStep, approvalId: aId } = await executeStep(step, companyId, userId, taskId);
-          Object.assign(step, updatedStep);
+          // executeStep() updates `step` in place and returns that same object.
 
           if (updatedStep.status === "waiting_approval") {
             waitingForApproval = true;
@@ -283,7 +283,7 @@ export function registerAiAgentRoutes(app: Express) {
             if (step.status !== "pending") continue;
 
             const { step: updatedStep } = await executeStep(step, companyId, userId, approval.taskId);
-            Object.assign(step, updatedStep);
+            // executeStep() updates `step` in place and returns that same object.
 
             if (updatedStep.status === "waiting_approval") break;
             if (updatedStep.status === "failed") break;
