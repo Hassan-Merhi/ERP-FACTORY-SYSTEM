@@ -19,6 +19,15 @@ describe("Phase 2 route access review ledger", () => {
     ).not.toThrow();
   });
 
+  it("refuses to certify the live inventory while any rule is unreviewed", () => {
+    expect(() =>
+      execFileSync(process.execPath, ["scripts/generate-route-access-review.mjs", "--check", "--require-reviewed"], {
+        cwd: root,
+        stdio: "pipe",
+      })
+    ).toThrow();
+  });
+
   it("tracks every registration, including repeated method/path handlers", () => {
     expect(review.routeCount).toBe(routes.routes.length);
     expect(review.entries.map((entry: { id: string }) => entry.id)).toEqual(
