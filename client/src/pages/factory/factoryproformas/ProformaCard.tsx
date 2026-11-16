@@ -399,7 +399,8 @@ export function ProformaCard(props: ProformaCardProps) {
               variant="outline"
               onClick={() => {
                 if (!navigator.onLine) {
-                  window.print();
+                  // The PDF is built on the server; offline there is nothing to save (owner decision 11).
+                  toast({ title: "PDF needs a connection", variant: "destructive" });
                   return;
                 }
                 window.open(`/api/factory/customer-proformas/${proforma.id}/export/pdf`, "_blank");

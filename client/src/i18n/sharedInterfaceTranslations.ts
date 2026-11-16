@@ -426,6 +426,7 @@ export const sharedInterfaceTranslations: SharedEntry[] = [
   { en: "Delete failed", ar: "فشل الحذف", fr: "Échec de la suppression" },
   { en: "Update failed", ar: "فشل التحديث", fr: "Échec de la mise à jour" },
   { en: "Load failed", ar: "فشل التحميل", fr: "Échec du chargement" },
+  { en: "PDF needs a connection", ar: "يتطلب ملف PDF اتصالاً بالإنترنت", fr: "Le PDF nécessite une connexion" },
   // Submit label on forms that edit an existing voucher.
   { en: "Update", ar: "تحديث", fr: "Mettre à jour" },
   { en: "Updating…", ar: "جارٍ التحديث…", fr: "Mise à jour…" },
