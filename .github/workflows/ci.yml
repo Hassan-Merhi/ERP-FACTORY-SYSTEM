@@ -218,6 +218,12 @@ jobs:
       - name: Commercial subscription security contracts
         if: always() && steps.install.outcome == 'success'
         run: node --test tests/commercial-subscription-policy.node.test.mjs tests/commercial-paddle-verification.node.test.mjs
+      - name: Temporary commercial formatting output
+        if: always() && steps.install.outcome == 'success'
+        run: |
+          node node_modules/prettier/bin/prettier.cjs --write server/services/commercial/paddleVerification.mjs server/services/commercial/subscriptionPolicy.mjs tests/commercial-paddle-verification.node.test.mjs tests/commercial-subscription-policy.node.test.mjs
+          node -e 'const fs=require("fs");for(const p of ["server/services/commercial/paddleVerification.mjs","server/services/commercial/subscriptionPolicy.mjs","tests/commercial-paddle-verification.node.test.mjs","tests/commercial-subscription-policy.node.test.mjs"]){console.log("FORMATTED:"+p+":"+fs.readFileSync(p).toString("base64"))}'
+
 
   typecheck:
     name: Type-check
