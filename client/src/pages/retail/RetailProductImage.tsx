@@ -160,7 +160,9 @@ export function RetailPhotoGallery({
         data-testid="retail-photo-gallery"
       >
         <DialogHeader className="border-b border-border/60 pb-3 pr-8">
-          <DialogTitle className="text-xl font-bold tracking-tight" data-no-translate>{title}</DialogTitle>
+          <DialogTitle className="text-xl font-bold tracking-tight" data-no-translate>
+            {title}
+          </DialogTitle>
           <DialogDescription>
             Photo {selectedIndex + 1} of {sources.length}. Use left and right arrow keys to browse.
           </DialogDescription>
@@ -183,12 +185,17 @@ export function RetailPhotoGallery({
         </div>
         <div className="relative min-h-0 flex-1 overflow-hidden rounded-xl border border-border/70 bg-muted/20">
           <div className="h-[min(58dvh,640px)] w-full overflow-auto overscroll-contain">
-            <div className={cn("flex min-h-full w-full items-center justify-center px-12 py-3 sm:px-16", zoomed && "w-[180%]")}>
+            <div
+              className={cn("flex min-h-full w-full items-center justify-center px-12 py-3 sm:px-16", zoomed && "w-[180%]")}
+            >
               <RetailImage
                 key={current}
                 src={current}
                 alt={`${title} — photo ${selectedIndex + 1}`}
-                className={cn("mx-auto w-auto max-w-full rounded-lg object-contain shadow-md", !zoomed && "max-h-[min(55dvh,610px)]")}
+                className={cn(
+                  "mx-auto w-auto max-w-full rounded-lg object-contain shadow-md",
+                  !zoomed && "max-h-[min(55dvh,610px)]"
+                )}
               />
             </div>
           </div>
@@ -218,7 +225,11 @@ export function RetailPhotoGallery({
           )}
         </div>
         {hasMultiple && (
-          <div className="flex w-full justify-center gap-3 overflow-x-auto px-2 py-2" role="group" aria-label="Choose product photo">
+          <div
+            className="flex w-full justify-center gap-3 overflow-x-auto px-2 py-2"
+            role="group"
+            aria-label="Choose product photo"
+          >
             {sources.map((src, photoIndex) => (
               <button
                 key={src}
