@@ -46,8 +46,12 @@
     },
     {
       "description": "Hold @types/express-serve-static-core below 5.1. From 5.1.0 ParamsDictionary is `string | string[]` so that wildcard routes (`/*name`) type correctly. This app declares no wildcard parameters — only the unread `/{*splat}` SPA fallbacks — but its routes register middleware alongside the handler, and that overload falls back to ParamsDictionary instead of inferring from the path literal. The result is 500+ type errors on `req.params.<name>` across the server with no runtime meaning. The package.json override pins the resolved version; this rule keeps Renovate from undoing it.",
-      "matchDatasources": ["npm"],
-      "matchPackageNames": ["@types/express-serve-static-core"],
+      "matchDatasources": [
+        "npm"
+      ],
+      "matchPackageNames": [
+        "@types/express-serve-static-core"
+      ],
       "allowedVersions": "<5.1",
       "minimumReleaseAge": "7 days",
       "dependencyDashboardApproval": true,
@@ -97,8 +101,12 @@
     },
     {
       "description": "Hold supertest below 7.3. supertest 7.3.x reads server.address() before the test app is listening and crashes with \"Cannot read properties of null (reading 'address')\" (tests/voucherRequestIdentityTestBridge.mjs, so every backend test that sends requests through it). Lift once a newer release passes the backend suite.",
-      "matchDatasources": ["npm"],
-      "matchPackageNames": ["supertest"],
+      "matchDatasources": [
+        "npm"
+      ],
+      "matchPackageNames": [
+        "supertest"
+      ],
       "allowedVersions": "<7.3.0",
       "minimumReleaseAge": "7 days",
       "automerge": false
@@ -142,5 +150,6 @@
       "groupName": "GitHub Actions digests",
       "automerge": false
     }
-  ]
+  ],
+  "enabled": false
 }
