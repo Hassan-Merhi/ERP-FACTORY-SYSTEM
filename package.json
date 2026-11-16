@@ -103,7 +103,7 @@
     "audit:database-integrity:catalog": "node scripts/audit-database-integrity-catalog.mjs --json",
     "db:drift:fingerprint": "node scripts/audit-database-schema-drift.mjs --fingerprint",
     "audit:manifest-access-baseline": "node scripts/audit-manifest-access-baseline.mjs",
-    "verify:route-access-coverage": "node scripts/verify-route-access-coverage.mjs && node scripts/generate-route-access-review.mjs --check && node scripts/generate-route-access-manifest.mjs --check"
+    "verify:route-access-coverage": "node scripts/verify-route-access-coverage.mjs && node scripts/generate-route-access-review.mjs --check && node scripts/generate-route-access-manifest.mjs --check && node --test tests/route-access-manifest.node.test.mjs"
   },
   "dependencies": {
     "@aparajita/capacitor-biometric-auth": "^10.0.0",
