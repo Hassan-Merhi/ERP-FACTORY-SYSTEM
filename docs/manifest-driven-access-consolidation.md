@@ -31,6 +31,7 @@ Branch: `refactor/manifest-driven-access-layer`. **Work in progress — not prod
 
 - `config/route-access-review.json` enumerates **all 2,439** current registrations in Express order, preserving duplicate registrations and exact guard chains. It is **non-enforcing**.
 - The existing V2 action inventory contains **112** method/path candidates covering **135** registrations; **2,304** registrations have no matching V2 candidate. The candidate inventory explicitly labels these as candidates, **not reviewed**.
+- Existing operational policy source supplies explicit permission keys and role exceptions for **259** registrations; **14** also have V2 candidates. The combined evidence covers **380** registrations, leaving **2,059** without either source of evidence. These numbers describe *evidence coverage*, **not approved final policies**. Policy keys include `act_import_data`, `act_bulk_operations` and export permissions; company scopes and the full legacy guard semantics still need verification.
 - The 2,439-row ledger deliberately marks every rule `unreviewed`; Phase 2 is **not complete** until company scope, permission, role, and special authentication/ownership semantics are verified against implementation for each registration.
 - Generator: `node scripts/generate-route-access-review.mjs --write`, audit `--check`.
 - Test: `npm run test:backend -- tests/route-access-review-ledger.test.ts`.
