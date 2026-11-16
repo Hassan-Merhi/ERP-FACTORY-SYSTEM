@@ -1,6 +1,6 @@
 /** ERP supplier-return lookup, preview, history and commit-route composition. */
 import { sql } from "drizzle-orm";
-import type { Express } from "express";
+import type { Express, Response } from "express";
 import { requireAuth, requireRole } from "../auth";
 import { db } from "../db";
 import { resultRows } from "../lib/queryResult";
@@ -8,6 +8,42 @@ import { assertActiveCompanyAccess } from "../security/companyAccessBoundary";
 import { allocateSupplierReturnRows } from "./erpSupplierReturnAllocation";
 import { ReturnError, quantity, candidates, type Row } from "./erpSupplierReturnCandidates";
 import { registerErpSupplierReturnCommitRoute } from "./erpSupplierReturnCommitRoutes";
+
+/**
+ * Supplier-return history reads tables installed by the controlled migrations
+ * 20261113_001 and 20261114_001. Until they are installed the history routes
+ * refuse with an explicit fail-closed 503 instead of an opaque database error.
+ */
+const SUPPLIER_RETURN_HISTORY_TABLES = [
+  "erp_supplier_return_batches",
+  "erp_supplier_return_lines",
+  "erp_supplier_return_allocation_rows",
+] as const;
+
+async function missingSupplierReturnHistoryTables(): Promise<string[]> {
+  const [row] = resultRows<{ present: string[] | null }>(
+    await db.execute(sql`
+      SELECT array_agg(name) FILTER (WHERE to_regclass('public.' || name) IS NOT NULL) AS present
+        FROM unnest(ARRAY[${sql.join(
+          SUPPLIER_RETURN_HISTORY_TABLES.map((table) => sql`${table}`),
+          sql`, `
+        )}]::text[]) AS name
+    `)
+  );
+  const present = new Set(row?.present ?? []);
+  return SUPPLIER_RETURN_HISTORY_TABLES.filter((table) => !present.has(table));
+}
+
+async function refuseWhenHistorySchemaPending(res: Response): Promise<boolean> {
+  const missing = await missingSupplierReturnHistoryTables();
+  if (missing.length === 0) return false;
+  res.status(503).json({
+    code: "ERP_SUPPLIER_RETURN_SCHEMA_PENDING",
+    message: "Supplier-return history tables are not installed yet",
+    missing,
+  });
+  return true;
+}
 
 async function readHistory(companyId: number) {
   return resultRows<Row>(
@@ -114,6 +150,7 @@ export function registerErpSupplierReturnRoutes(app: Express) {
   app.get("/api/erp/supplier-returns/history", ...guards, async (req, res) => {
     try {
       const { activeCompanyId } = await assertActiveCompanyAccess(req);
+      if (await refuseWhenHistorySchemaPending(res)) return;
       res.json({ rows: await readHistory(activeCompanyId) });
     } catch (error) {
       res.status(500).json({ message: (error as Error).message });
@@ -125,6 +162,7 @@ export function registerErpSupplierReturnRoutes(app: Express) {
       const batchId = Number(req.params.batchId);
       if (!Number.isInteger(batchId) || batchId < 1)
         throw new ReturnError(400, "RETURN_BATCH_ID_INVALID", "Invalid batch");
+      if (await refuseWhenHistorySchemaPending(res)) return;
       const rows = resultRows<Row>(
         await db.execute(sql`
         SELECT l.id,l.article_code AS "articleCode",l.item_name AS "itemName",

@@ -142,6 +142,9 @@ const READINESS_GATED_ROUTES = new Map<string, { status: number; code: string }>
     "GET /api/factory/customer-orders/:id/loading-dispatches/combined-invoice/preview",
     { status: 503, code: "FACTORY_DISPATCH_TABLEPLUS_GUARDS_PENDING" },
   ],
+  // ERP supplier-return history reads tables from controlled migrations
+  // 20261113_001 / 20261114_001, which the CI database does not install.
+  ["GET /api/erp/supplier-returns/history/:batchId", { status: 503, code: "ERP_SUPPLIER_RETURN_SCHEMA_PENDING" }],
 ]);
 
 function isDocumentedReadinessRefusal(routeKey: string, status: number, body: unknown): boolean {
