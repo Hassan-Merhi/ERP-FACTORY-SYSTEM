@@ -135,9 +135,9 @@ async function main() {
             await client.query("COMMIT");
             console.log(`  ✓ Repaired voucher #${voucherId ?? "(none)"} → SCHEDULED`);
             totalRepaired++;
-          } catch (e: any) {
+          } catch (e: unknown) {
             await client.query("ROLLBACK");
-            console.error(`  ✗ Failed:`, e.message);
+            console.error(`  ✗ Failed:`, e instanceof Error ? e.message : String(e));
           } finally {
             client.release();
           }
@@ -234,9 +234,9 @@ async function main() {
               );
               flaggedOnly++;
             }
-          } catch (e: any) {
+          } catch (e: unknown) {
             await client.query("ROLLBACK").catch(() => {});
-            console.error(`  ✗ Failed to rebuild voucher #${r.voucher_id}:`, e.message);
+            console.error(`  ✗ Failed to rebuild voucher #${r.voucher_id}:`, e instanceof Error ? e.message : String(e));
           } finally {
             client.release();
           }
@@ -425,9 +425,9 @@ async function main() {
             const total = rows.reduce((s, r) => s + parseFloat(r.amount), 0);
             console.log(`  ✓ Posted group ${groupId} | ${total.toFixed(2)} | ${rows[0].payment_date}`);
             posted++;
-          } catch (e: any) {
+          } catch (e: unknown) {
             await client.query("ROLLBACK");
-            console.error(`  ✗ Failed group ${groupId}:`, e.message);
+            console.error(`  ✗ Failed group ${groupId}:`, e instanceof Error ? e.message : String(e));
           } finally {
             client.release();
           }
@@ -447,6 +447,6 @@ async function main() {
 }
 
 main().catch((e) => {
-  console.error("Fatal:", e.message);
+  console.error("Fatal:", e instanceof Error ? e.message : String(e));
   process.exit(1);
 });
