@@ -6,6 +6,7 @@ import { tenantCompanyParamBoundary, tenantIsolationBoundary } from "../middlewa
 import { enforcePrivilegedMaintenanceScope } from "../middleware/privilegedMaintenanceScope";
 import { browserMutationFailClosedBoundary } from "../security/browserMutationBoundary";
 import { permissionsV2Enforcement } from "../middleware/permissionsV2Enforcement";
+import { makeCommercialAdmissionBoundary } from "../middleware/commercialAccountAdmission";
 
 /**
  * Installs the canonical tenant and mutation boundaries (security headers are
@@ -22,6 +23,9 @@ export function registerTenantIsolationBoundary(app: Express): void {
   // (read by the database audit triggers through the lease settings).
   app.use(auditRequestContextMiddleware);
   app.use(browserMutationFailClosedBoundary);
+  // Disabled unless DAKZO_COMMERCIAL_MODE=enabled in an isolated deployment.
+  // Reject unrelated customers before legacy Developer/company exceptions run.
+  app.use(makeCommercialAdmissionBoundary());
   app.use(tenantIsolationBoundary);
   // Deny-only V2 matrix for companies an administrator has activated; a no-op
   // until the operator sets PERMISSIONS_V2_ENFORCEMENT=enabled.
