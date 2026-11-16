@@ -586,7 +586,9 @@ export default function RetailInventory() {
                     <span className="min-w-0 flex-1 truncate text-lg font-bold tracking-tight" data-no-translate>
                       {brand.name}
                     </span>
-                    <span className="rounded-full border border-border/70 bg-muted/40 px-3 py-1 text-xs text-muted-foreground">{brand.productCount} products</span>
+                    <span className="rounded-full border border-border/70 bg-muted/40 px-3 py-1 text-xs text-muted-foreground">
+                      {brand.productCount} products
+                    </span>
                   </button>
                   {expandedBrandKey === brand.key && (
                     <div className="space-y-4 border-t border-border/60 p-3 sm:p-5">
