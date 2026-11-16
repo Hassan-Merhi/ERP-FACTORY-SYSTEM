@@ -129,6 +129,10 @@ export function makeCommercialAdmissionBoundary(
       next();
       return;
     }
+    if (process.env.DAKZO_COMMERCIAL_ISOLATED_DATABASE !== "confirmed") {
+      res.status(503).json({ code: "COMMERCIAL_ISOLATION_NOT_CERTIFIED" });
+      return;
+    }
     if (PUBLIC_PATHS.has(req.path)) {
       next();
       return;
