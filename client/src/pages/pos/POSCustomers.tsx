@@ -92,14 +92,14 @@ export default function POSCustomers() {
       return await apiRequest("POST", "/api/pos/customers", data);
     },
     onSuccess: () => {
-      toast({ title: "Success", description: "Customer created successfully" });
+      toast({ title: "Created", description: "Customer created successfully" });
       queryClient.invalidateQueries({ queryKey: ["/api/pos/customers"] });
       setIsCreateOpen(false);
       form.reset({ legalName: "", phone: "", openingBalance: "0", openingBalanceSide: "Dr" });
     },
     onError: (error: Error) => {
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Save failed", description: error.message, variant: "destructive" });
     },
   });
 

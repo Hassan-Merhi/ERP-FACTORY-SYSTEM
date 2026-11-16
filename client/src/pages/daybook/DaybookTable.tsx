@@ -1,5 +1,5 @@
 import { ErpListTable } from "@/erp-core";
-import { ChevronDown, ChevronRight, Package, Eye, ExternalLink, Lock, Edit, EyeOff, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Package, Eye, ExternalLink, Lock, Pencil, EyeOff, Trash2 } from "lucide-react";
 import { parseISO } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -537,7 +537,7 @@ export function DaybookTable({
                     }}
                     data-testid={`button-edit-${voucher.id}`}
                   >
-                    <Edit className="w-4 h-4" />
+                    <Pencil className="w-4 h-4" />
                   </Button>
                 ) : null}
                 <Button
@@ -827,7 +827,7 @@ export function DaybookTable({
                     onClick={() => handleEdit(voucher)}
                     data-testid={`button-edit-mobile-${voucher.id}`}
                   >
-                    <Edit className="w-3.5 h-3.5" />
+                    <Pencil className="w-3.5 h-3.5" />
                   </Button>
                 ) : null}
                 {canDelete() && !voucherLocked && (

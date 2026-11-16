@@ -41,7 +41,7 @@ export default function SpAliases() {
       setStockItemId("");
       setDescription("");
     },
-    onError: (e: ClientErrorLike) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: ClientErrorLike) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
   });
 
   const deleteMutation = useMutation({
@@ -50,7 +50,7 @@ export default function SpAliases() {
       queryClient.invalidateQueries({ queryKey: ["/api/sp/aliases"] });
       toast({ title: "Alias removed" });
     },
-    onError: (e: ClientErrorLike) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: ClientErrorLike) => toast({ title: "Delete failed", description: e.message, variant: "destructive" }),
   });
 
   const handleAdd = () => {

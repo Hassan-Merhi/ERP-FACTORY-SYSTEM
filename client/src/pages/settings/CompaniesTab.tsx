@@ -65,7 +65,10 @@ export function CompaniesTab() {
       }
     },
     onSuccess: () => {
-      toast({ title: "Success", description: editingCompany ? "Company updated." : "Company created." });
+      toast({
+        title: editingCompany ? "Updated" : "Created",
+        description: editingCompany ? "Company updated." : "Company created.",
+      });
       queryClient.invalidateQueries({ queryKey: ["/api/companies"] });
       if (editingCompany) {
         queryClient.invalidateQueries({ queryKey: [`/api/companies/${editingCompany.id}`] });
@@ -97,7 +100,7 @@ export function CompaniesTab() {
       });
     },
     onError: (error: ClientErrorLike) => {
-      toast({ title: "Error", description: error.message || "Failed to save company.", variant: "destructive" });
+      toast({ title: "Save failed", description: error.message || "Failed to save company.", variant: "destructive" });
     },
   });
 
@@ -112,7 +115,11 @@ export function CompaniesTab() {
       setCompanyToDelete(null);
     },
     onError: (error: ClientErrorLike) => {
-      toast({ title: "Error", description: error.message || "Failed to delete company.", variant: "destructive" });
+      toast({
+        title: "Delete failed",
+        description: error.message || "Failed to delete company.",
+        variant: "destructive",
+      });
     },
   });
 

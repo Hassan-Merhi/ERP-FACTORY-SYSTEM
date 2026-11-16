@@ -124,7 +124,7 @@ function EditEntryDialog({ model }: { model: FactoryDaybookModel }) {
                     onClick={() => model.wrapAdminAction(model.handleEditSubmit, "Edit Entry")}
                     data-testid="button-submit-edit"
                   >
-                    {model.editMutation.isPending ? "Saving..." : "Save Changes"}
+                    {model.editMutation.isPending ? "Updating…" : "Update"}
                   </Button>
                 </div>
               </div>

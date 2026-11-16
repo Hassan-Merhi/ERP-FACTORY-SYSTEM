@@ -220,7 +220,7 @@ export function CostCenterAutomationRules({ baseUrl, centers }: { baseUrl: strin
           </CardTitle>
           {canWrite && (
             <Button size="sm" variant="outline" onClick={createRule}>
-              <Plus className="h-4 w-4 mr-1" /> New Rule
+              <Plus className="h-4 w-4 mr-1" /> Add Rule
             </Button>
           )}
         </div>

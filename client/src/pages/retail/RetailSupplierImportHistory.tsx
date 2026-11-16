@@ -1,7 +1,7 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, FileText, Printer, RefreshCcw, Search } from "lucide-react";
+import { AlertTriangle, FileText, Printer, RefreshCw, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -133,7 +133,7 @@ export function RetailSupplierImportHistory({
               onChange={event => { setQuery(event.target.value); setOffset(0); setSelectedId(null); }} />
           </div>
           <Button type="button" variant="outline" size="sm" disabled={isFetching} onClick={() => void refetch()}>
-            <RefreshCcw className="mr-2 h-4 w-4" />Refresh
+            <RefreshCw className="mr-2 h-4 w-4" />Refresh
           </Button>
         </div>
         {isLoading && <p className="text-sm text-muted-foreground">Loading supplier purchases…</p>}

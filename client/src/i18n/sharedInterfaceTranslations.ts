@@ -422,6 +422,21 @@ export const sharedInterfaceTranslations: SharedEntry[] = [
   { en: "Success", ar: "تم بنجاح", fr: "Succès" },
   { en: "Error", ar: "خطأ", fr: "Erreur" },
   { en: "Warning", ar: "تحذير", fr: "Avertissement" },
+  // Toast titles that name the failed action (UI unification standard).
+  { en: "Delete failed", ar: "فشل الحذف", fr: "Échec de la suppression" },
+  { en: "Update failed", ar: "فشل التحديث", fr: "Échec de la mise à jour" },
+  { en: "Load failed", ar: "فشل التحميل", fr: "Échec du chargement" },
+  // Submit label on forms that edit an existing voucher.
+  { en: "Update", ar: "تحديث", fr: "Mettre à jour" },
+  { en: "Updating…", ar: "جارٍ التحديث…", fr: "Mise à jour…" },
+  // "Add <thing>" buttons that start creating a record.
+  { en: "Add Rule", ar: "إضافة قاعدة", fr: "Ajouter une règle" },
+  { en: "Add Worker", ar: "إضافة عامل", fr: "Ajouter un ouvrier" },
+  { en: "Add Order", ar: "إضافة طلب", fr: "Ajouter une commande" },
+  { en: "Add Dispatch", ar: "إضافة إرسالية", fr: "Ajouter une expédition" },
+  { en: "Add Cost Center", ar: "إضافة مركز تكلفة", fr: "Ajouter un centre de coûts" },
+  { en: "Add Mix Batch", ar: "إضافة دفعة خلط", fr: "Ajouter un lot de mélange" },
+  { en: "Add Batch", ar: "إضافة دفعة", fr: "Ajouter un lot" },
 
   // Session and top bar
   { en: "Log out", ar: "تسجيل الخروج", fr: "Déconnexion" },

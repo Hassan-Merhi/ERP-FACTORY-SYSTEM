@@ -69,7 +69,7 @@ export function RecipientsTab({
       qc.invalidateQueries({ queryKey: ["/api/export/recipients"] });
       toast({ title: "Recipient added" });
     },
-    onError: (e: ClientErrorLike) => toast({ variant: "destructive", title: "Error", description: e.message }),
+    onError: (e: ClientErrorLike) => toast({ variant: "destructive", title: "Save failed", description: e.message }),
   });
 
   const removeEmailRecipient = useMutation({

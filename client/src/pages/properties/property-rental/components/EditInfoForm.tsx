@@ -72,7 +72,7 @@ function EditInfoForm({
       queryClient.invalidateQueries({ queryKey: [apiBase + "/units"] });
       queryClient.invalidateQueries({ queryKey: [apiBase + "/units", unitId, "detail"] });
     },
-    onError: (e: ClientErrorLike) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: ClientErrorLike) => toast({ title: "Update failed", description: e.message, variant: "destructive" }),
   });
 
   const saveUnit = useMutation({
@@ -81,7 +81,7 @@ function EditInfoForm({
       toast({ title: "Unit name updated" });
       queryClient.invalidateQueries({ queryKey: [apiBase + "/units"] });
     },
-    onError: (e: ClientErrorLike) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: ClientErrorLike) => toast({ title: "Update failed", description: e.message, variant: "destructive" }),
   });
 
   const contractChanged =
