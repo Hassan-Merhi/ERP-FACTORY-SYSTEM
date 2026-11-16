@@ -9,8 +9,17 @@ export const commercialModulesByPlan = {
   business: ["erp", "pos", "inventory", "accounting", "purchasing", "reports"],
   factory: ["erp", "factory", "inventory", "accounting", "dispatch", "reports"],
   enterprise: [
-    "erp", "pos", "retail", "inventory", "accounting", "purchasing",
-    "factory", "dispatch", "logistics", "reports", "multi_company",
+    "erp",
+    "pos",
+    "retail",
+    "inventory",
+    "accounting",
+    "purchasing",
+    "factory",
+    "dispatch",
+    "logistics",
+    "reports",
+    "multi_company",
   ],
 } as const;
 
@@ -43,7 +52,7 @@ export function classifyCommercialRoute(path: string): string | null {
 
 export function commercialRouteEntitlement(
   plan: string | null,
-  path: string,
+  path: string
 ): { allowed: boolean; reason: string; module?: string } {
   if (!plan || !Object.hasOwn(commercialModulesByPlan, plan)) {
     return { allowed: false, reason: "plan_unknown" };
