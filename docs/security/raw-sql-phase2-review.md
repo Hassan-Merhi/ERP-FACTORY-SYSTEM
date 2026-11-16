@@ -119,3 +119,18 @@ including 2,311 under `server`, 263 under `scripts`, 151 under
 `shared`, and 1,623 under `tests`. The tree is **path inventory only**;
 it does not establish that the contents of all those files were inspected.
 The Phase 2 review cannot be certified as exhaustive from GitHub search.
+
+## Expanded detection gate
+
+The checker now also flags SQL-shaped text templates assigned to
+`query`/`sql`/`statement`/`ddl`/`text`-named variables. This is a
+heuristic that surfaces indirect builders that an immediate
+`pool.query(template)` check misses. It **does not** prove full taint flow:
+complex query builders and arbitrary variable names can evade this test,
+while some flagged strings may be demonstrably safe. All findings still
+require manual classification.
+
+The remaining acceptance gate is therefore unchanged: run an exhaustive
+inventory against a checkout, inspect each original SQL-value source and
+database sink, and produce a complete reviewed allowlist before Phase 2
+can be considered complete.
