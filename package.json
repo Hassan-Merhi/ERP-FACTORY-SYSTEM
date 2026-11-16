@@ -101,7 +101,8 @@
     "audit:startup-mutations": "node scripts/audit-startup-mutation-coverage.mjs",
     "audit:startup-mutations:strict": "node scripts/audit-startup-mutation-coverage.mjs --strict",
     "audit:database-integrity:catalog": "node scripts/audit-database-integrity-catalog.mjs --json",
-    "db:drift:fingerprint": "node scripts/audit-database-schema-drift.mjs --fingerprint"
+    "db:drift:fingerprint": "node scripts/audit-database-schema-drift.mjs --fingerprint",
+    "audit:manifest-access-baseline": "node scripts/audit-manifest-access-baseline.mjs"
   },
   "dependencies": {
     "@aparajita/capacitor-biometric-auth": "^10.0.0",
