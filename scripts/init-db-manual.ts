@@ -33,11 +33,12 @@ async function init() {
           ['admin', await hashPassword('admin'), true]
         );
         console.log('✅ Admin user created:', result.rows[0]);
-      } catch (err: any) {
-        if (err.code === '23505') {
+      } catch (err: unknown) {
+        const dbError = err as { code?: unknown; message?: unknown };
+        if (dbError?.code === '23505') {
           console.log('ℹ️  Admin user already exists');
         } else {
-          console.error('❌ Error creating user:', err.message);
+          console.error('❌ Error creating user:', err instanceof Error ? err.message : String(err));
         }
       }
     } else {
@@ -45,9 +46,10 @@ async function init() {
       console.log('Run `npm run db:push` to create tables first.');
     }
     
-  } catch (error: any) {
-    console.error('❌ Connection failed:', error.message);
-    if (error.message?.includes('disabled')) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('❌ Connection failed:', message);
+    if (message.includes('disabled')) {
       console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       console.log('⚠️  NEON DATABASE ENDPOINT IS DISABLED');
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
