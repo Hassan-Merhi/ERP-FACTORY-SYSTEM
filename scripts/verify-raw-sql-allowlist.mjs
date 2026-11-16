@@ -46,6 +46,18 @@ for (const file of files.sort()) {
       if (["query", "execute"].includes(method) &&
           node.arguments.some(a => ts.isTemplateExpression(a))) kind = "interpolated-query";
     }
+    // A text template can be assembled before being handed to pool.query,
+    // client.query, or a wrapper. Track query-shaped declarations separately
+    // so those sites cannot disappear behind identifier arguments.
+    if (ts.isVariableDeclaration(node) && node.initializer &&
+        /^[A-Za-z_$][\\w$]*(?:query|sql|statement|ddl|text)[\\w$]*$/i.test(node.name.getText(ast)) &&
+        (ts.isTemplateExpression(node.initializer) ||
+         (ts.isBinaryExpression(node.initializer) &&
+          node.initializer.operatorToken.kind === ts.SyntaxKind.PlusToken))) {
+      const value = node.initializer.getText(ast);
+      if (/\\b(?:SELECT|INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|WITH|FROM|WHERE)\\b/i.test(value))
+        kind = "assembled-sql-text";
+    }
     if (kind) {
       const expression = node.getText(ast);
       const repeatKey = path + "\\n" + expression;
