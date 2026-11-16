@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import fs from "node:fs";
+import { execFileSync } from "node:child_process";
 import { routeIdentity, validateRouteAccessCoverage } from "../scripts/verify-route-access-coverage.mjs";
 
 const routeSnapshot = {
@@ -17,6 +19,41 @@ const validRule = (id: string) => ({
 const identities = routeSnapshot.routes.map(routeIdentity);
 
 describe("route access declaration coverage", () => {
+  it("requires every actual route to have a declaration", () => {
+    const routeSnapshot = JSON.parse(fs.readFileSync("config/route-manifest.json", "utf8"));
+    const declarations = JSON.parse(fs.readFileSync("config/route-access-manifest.json", "utf8"));
+    expect(validateRouteAccessCoverage(routeSnapshot, declarations)).toEqual([]);
+    expect(declarations.rules.length).toBe(routeSnapshot.routes.length);
+    expect(declarations.rules.filter((rule: { status: string }) => rule.status === "reviewed")).toHaveLength(2);
+    expect(() =>
+      execFileSync(process.execPath, ["scripts/generate-route-access-manifest.mjs", "--check"], {
+        stdio: "pipe",
+      })
+    ).not.toThrow();
+  });
+
+  it("refuses unreviewed rules that pretend to authorize traffic directly", () => {
+    const routeSnapshot = { routes: ["GET /api/test [handler]"] };
+    const id = routeIdentity(routeSnapshot.routes[0], 0);
+    const invalid = {
+      rules: [{ id, companyScope: "active-company", permission: "allow", roles: ["Admin"], status: "unreviewed" }],
+    };
+    expect(validateRouteAccessCoverage(routeSnapshot, invalid)).toContain(
+      `Unreviewed rule cannot declare direct authorization: ${id}`
+    );
+  });
+
+  it("refuses a delegated record with forged permissions", () => {
+    const routeSnapshot = { routes: ["GET /api/test [handler]"] };
+    const id = routeIdentity(routeSnapshot.routes[0], 0);
+    const invalid = {
+      rules: [{ id, companyScope: "delegated", permission: "all", roles: ["Admin"], enforcement: "legacy-delegated", status: "unreviewed" }],
+    };
+    expect(validateRouteAccessCoverage(routeSnapshot, invalid)).toContain(
+      `Invalid legacy delegation: ${id}`
+    );
+  });
+
   it("preserves repeated method/path registration identity", () => {
     expect(new Set(identities).size).toBe(3);
     expect(identities[0]).toBe("0:GET /api/example [requireAuth > handler]");
