@@ -43,9 +43,11 @@ function mockResponse() {
 describe("commercial ERP admission gate", () => {
   beforeEach(() => {
     process.env.DAKZO_COMMERCIAL_MODE = "enabled";
+    process.env.DAKZO_COMMERCIAL_ISOLATED_DATABASE = "confirmed";
   });
   afterEach(() => {
     delete process.env.DAKZO_COMMERCIAL_MODE;
+    delete process.env.DAKZO_COMMERCIAL_ISOLATED_DATABASE;
   });
 
   it("is completely inert for the existing operational ERP when flag is disabled", async () => {
@@ -56,6 +58,16 @@ describe("commercial ERP admission gate", () => {
     await middleware(fakeRequest() as never, mockResponse() as never, next);
     expect(next).toHaveBeenCalledOnce();
     expect(lookup).not.toHaveBeenCalled();
+  });
+
+  it("requires an explicitly certified isolated deployment", async () => {
+    delete process.env.DAKZO_COMMERCIAL_ISOLATED_DATABASE;
+    const res = mockResponse();
+    const next = vi.fn();
+    const middleware = makeCommercialAdmissionBoundary(vi.fn());
+    await middleware(fakeRequest() as never, res as never, next);
+    expect(res.status).toHaveBeenCalledWith(503);
+    expect(next).not.toHaveBeenCalled();
   });
 
   it("denies anonymous or unbound company sessions", async () => {
