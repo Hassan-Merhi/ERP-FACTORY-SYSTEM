@@ -14,7 +14,7 @@ const files = execFileSync("git", ["ls-files", "-z"], {
   cwd: root, encoding: "utf8", maxBuffer: 32 * 1024 * 1024,
 }).split("\0").filter(Boolean).sort();
 const srcExt = /\.(?:[cm]?[jt]sx?|json|ya?ml|sql|sh|py|md|html|css|mts|cts)$/i;
-const candidate = /(?:^|[^a-z])(wave|phase)[-_ ]?\d+[a-z]?(?=[^a-z]|[A-Z]|$)/i;
+const candidate = /(?:wave|phase)[-_ ]?\d+[a-z]?(?=[^a-z]|[A-Z]|$)/i;
 const historical = /^(?:docs\/archive\/|docs\/superpowers\/|migrations\/|scripts\/repairs\/|deploy\/.*\.sql$)/;
 const docs = /^(?:docs\/|\.agents\/)/;
 const tests = /(?:^|\/)(?:tests?\/|__tests__\/)|\.(?:test|spec)\.[cm]?[jt]sx?$/;
