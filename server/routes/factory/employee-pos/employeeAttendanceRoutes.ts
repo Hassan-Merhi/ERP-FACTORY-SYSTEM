@@ -1,4 +1,5 @@
 import { getErrorMessage } from "../../../lib/httpHandlers";
+import { getClientDate } from "../../../lib/dateUtils";
 import { logger } from "../../../lib/logger";
 import type { Express, Request, Response } from "express";
 import { db } from "../../../db";
@@ -203,7 +204,7 @@ export function registerEmployeeAttendanceRoutes(app: Express) {
       // An inactive worker remains absent from their deactivation date through
       // today, including while the worker has not yet been reactivated.
       // Reactivation persists these days as real attendance records.
-      const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Beirut" });
+      const today = getClientDate(req);
       for (const worker of workers) {
         if (worker.active || !worker.contractEndDate) continue;
         const inactiveFrom = String(worker.contractEndDate).slice(0, 10);
