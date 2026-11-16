@@ -30,12 +30,21 @@ function response() {
   return res as unknown as Response & typeof res;
 }
 
+
+function mockCompanyRequester(user: { id: string; username: string; active: boolean; role: string }) {
+  const limit = vi.fn().mockResolvedValue([user]);
+  const where = vi.fn().mockReturnValue({ limit });
+  const innerJoin = vi.fn().mockReturnValue({ where });
+  selectMock.mockReturnValueOnce({ from: vi.fn().mockReturnValue({ innerJoin }) });
+}
+
 describe("Factory attendance historical edit lock", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   it("requires an Admin password for historical edits by Owners (no direct override)", async () => {
+    mockCompanyRequester({ id: "owner-user", username: "factory-owner", active: true, role: "Owner" });
     const res = response();
     const result = await requireAttendanceEditApproval(
       requester("Owner"), res, 42, [pastAttendanceDate()], undefined
@@ -47,7 +56,7 @@ describe("Factory attendance historical edit lock", () => {
       code: "ATTENDANCE_ADMIN_APPROVAL_REQUIRED",
       requiresAdminApproval: true,
     }));
-    expect(selectMock).not.toHaveBeenCalled();
+    expect(passwordCheckMock).not.toHaveBeenCalled();
   });
 
   it("still allows same-day attendance without approval", async () => {
@@ -61,12 +70,36 @@ describe("Factory attendance historical edit lock", () => {
     expect(selectMock).not.toHaveBeenCalled();
   });
 
+
+  it.each(["Admin", "Developer"])("allows an authenticated company %s without password", async (role) => {
+    mockCompanyRequester({ id: "owner-user", username: "signed-in-user", active: true, role });
+    const res = response();
+    const result = await requireAttendanceEditApproval(requester(role), res, 42, [pastAttendanceDate()], undefined);
+    expect(result).toEqual({
+      id: "owner-user",
+      username: "signed-in-user",
+      authorizationMethod: "authenticated_role",
+    });
+    expect(passwordCheckMock).not.toHaveBeenCalled();
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  it("does not allow an inactive Admin to bypass approval", async () => {
+    mockCompanyRequester({ id: "owner-user", username: "inactive-admin", active: false, role: "Admin" });
+    const res = response();
+    const result = await requireAttendanceEditApproval(requester("Admin"), res, 42, [pastAttendanceDate()], undefined);
+    expect(result).toBeUndefined();
+    expect(res.status).toHaveBeenCalledWith(403);
+  });
+
   it("accepts a separately verified active company Admin for historical attendance", async () => {
+    mockCompanyRequester({ id: "owner-user", username: "factory-owner", active: true, role: "Owner" });
     const admin = { id: "admin-user", username: "factory-admin", active: true, role: "Admin", password: "hash" };
     const limit = vi.fn().mockResolvedValue([admin]);
     const where = vi.fn().mockReturnValue({ limit });
     const innerJoin = vi.fn().mockReturnValue({ where });
-    selectMock.mockReturnValue({ from: vi.fn().mockReturnValue({ innerJoin }) });
+    selectMock.mockReturnValueOnce({ from: vi.fn().mockReturnValue({ innerJoin: vi.fn().mockReturnValue({ where: vi.fn().mockReturnValue({ limit: vi.fn().mockResolvedValue([{ id: "owner-user", username: "factory-owner", active: true, role: "Owner" }]) }) }) }) }) });
+    selectMock.mockReturnValueOnce({ from: vi.fn().mockReturnValue({ innerJoin }) });
     passwordCheckMock.mockResolvedValue(true);
     const res = response();
 
