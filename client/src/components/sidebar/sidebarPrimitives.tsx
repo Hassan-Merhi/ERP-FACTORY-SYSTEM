@@ -403,44 +403,18 @@ interface ModuleHeaderProps {
   accent: string;
 }
 
-export function ModuleHeader({ icon: Icon, label, tagline, accent }: ModuleHeaderProps) {
-  const badgeLabel = tagline.split("/")[0].trim();
+/** Keep a single Dakzo Systems identity across ERP, Factory and Properties.
+ * Legacy module metadata remains accepted by callers but is not rendered. */
+export function ModuleHeader({ accent }: ModuleHeaderProps) {
   return (
     <SidebarHeader
-      className="premium-nav-brand px-4 py-4 border-b border-sidebar-border relative overflow-hidden"
+      className="premium-nav-brand px-4 py-3 border-b border-sidebar-border relative overflow-hidden"
       style={{
         background: `linear-gradient(135deg, ${accent}30 0%, ${accent}10 55%, transparent 100%)`,
       }}
     >
       <SeasonalBrandAccent />
-      <DakzoBrand compact className="relative mb-2 text-sidebar-foreground" />
-      {/* subtle radial glow behind the icon */}
-      <div
-        className="absolute -top-4 -left-4 h-20 w-20 rounded-full pointer-events-none"
-        style={{ background: `radial-gradient(circle, ${accent}22 0%, transparent 70%)` }}
-      />
-      <div className="flex items-center gap-3 relative">
-        {/* Icon tile — layered depth */}
-        <div
-          className="premium-nav-brand-tile flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white"
-          style={{
-            backgroundColor: accent,
-            boxShadow: `0 3px 16px ${accent}66, inset 0 1px 0 rgba(255,255,255,0.22), inset 0 -1px 0 rgba(0,0,0,0.15)`,
-          }}
-        >
-          <Icon className="h-5 w-5 drop-shadow-xs" />
-        </div>
-        <div className="flex flex-col min-w-0 gap-0.5">
-          <span className="text-sm font-bold leading-tight">{label}</span>
-          {/* Module badge beneath title */}
-          <span
-            className="premium-nav-brand-tagline inline-flex w-fit items-center px-1.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-widest"
-            style={{ backgroundColor: `${accent}22`, color: accent }}
-          >
-            {badgeLabel}
-          </span>
-        </div>
-      </div>
+      <DakzoBrand compact className="relative text-sidebar-foreground" />
     </SidebarHeader>
   );
 }
