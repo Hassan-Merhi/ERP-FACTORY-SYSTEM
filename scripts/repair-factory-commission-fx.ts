@@ -130,7 +130,7 @@ async function main() {
   }
   const reports: Report[] = [];
 
-  for (const comm of commRows as any[]) {
+  for (const comm of commRows) {
     const containerId: number = comm.containerId;
     const companyId: number = comm.companyId;
     const commCcy: string = (comm.currencyCode || "USD").toUpperCase();
@@ -194,7 +194,7 @@ async function main() {
     if (commCcy === "USD") continue;
 
     // Check if the commission FX looks wrong
-    const commConfirmed: boolean = (comm as any).fxRateConfirmed === true;
+    const commConfirmed: boolean = comm.fxRateConfirmed === true;
     const storedCommFx: string = String(comm.fxRateToUsd ?? "");
     const looksWrong = isWrongFx(commCcy, containerCcy, storedCommFx, containerFx, commConfirmed);
 
@@ -254,7 +254,7 @@ async function main() {
         fxRateToUsd: String(correctRate.rate),
         fxRateConfirmed: true,
       };
-      const corrected = computeCorrectContainerCost(container as any, addlCharges as any, simCommRecord as any);
+      const corrected = computeCorrectContainerCost(container, addlCharges, simCommRecord);
       newCommUsd = fmt2(nativeAmt * correctRate.rate);
       newCostPerKgUsd = fmt6(corrected.costPerKgUsd);
     }
@@ -304,7 +304,7 @@ async function main() {
               fxRateToUsd: correctFxStr,
               fxRateConfirmed: true,
               commissionTotalUsd: newCommTotalUsd,
-            } as any)
+            })
             .where(eq(factoryContainerCommissions.id, comm.id));
 
           // 2. Update container commission FX snapshot
@@ -325,13 +325,14 @@ async function main() {
             .limit(1);
 
           const correctedComm = { ...comm, fxRateToUsd: correctFxStr, fxRateConfirmed: true };
+          if (!refreshedContainer[0]) throw new Error(`Container #${containerId} not found after FX update`);
           const correctedCost = computeCorrectContainerCost(
-            refreshedContainer[0] as any,
-            addlCharges as any,
-            correctedComm as any
+            refreshedContainer[0],
+            addlCharges,
+            correctedComm
           );
 
-          await cascadeContainerCostChange(tx as any, {
+          await cascadeContainerCostChange(tx, {
             containerId,
             companyId,
             newCostPerKg: correctedCost.costPerKg,
