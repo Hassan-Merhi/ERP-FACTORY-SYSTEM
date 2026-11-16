@@ -1,0 +1,49 @@
+name: Apply backend semantic filename refactor
+on:
+  push:
+    branches: [refactor/phase-wave-semantic-names]
+    paths:
+      - .github/workflows/backend-phase2-apply.yml
+  workflow_dispatch:
+jobs:
+  refactor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts
+      - name: Apply full backend semantic rename
+        run: |
+          node scripts/refactor-backend-semantic-filenames.mjs --apply > backend-phase2-renames.json
+          git diff --check
+          node -e "const r=require('./backend-phase2-renames.json');if(r.renameCount<100)throw Error('Expected >100 remaining backend files');console.log('Renamed',r.renameCount,'backend modules; modified',r.modifiedReferenceFiles,'references')"
+      - name: Compile and check imports
+        run: npm run check
+      - name: Focused backend semantic rename regression checks
+        run: |
+          node scripts/verify-phase6-chat-report-domains.mjs
+          node node_modules/vitest/vitest.mjs run tests/chat-phase1-classifier.test.ts tests/phase6-chat-report-domains.test.ts tests/inventory-valuation-wave6-repair.test.ts tests/startup-preload-manifest.test.ts
+      - name: Commit validated changes on same branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git reset -q -- backend-phase2-renames.json
+          git diff --cached --quiet && exit 0
+          git commit -m "refactor(backend): rename remaining numbered phase/wave runtime modules"
+          git push origin HEAD:refactor/phase-wave-semantic-names
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-phase2-rename-plan
+          path: backend-phase2-renames.json
+          if-no-files-found: ignore
