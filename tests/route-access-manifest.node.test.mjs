@@ -42,6 +42,18 @@ test("delegated rules cannot become direct grants by changing one field", () => 
   );
 });
 
+test("legacy guard-chain evidence cannot drift independently of registration", () => {
+  const index = manifest.rules.findIndex((rule) => rule.companyScope === "delegated");
+  assert.notEqual(index, -1);
+  const rules = [...manifest.rules];
+  rules[index] = { ...rules[index], originalGuardChain: ["removed-auth-guard"] };
+  assert.ok(
+    validateRouteAccessCoverage(snapshot, { ...manifest, rules }).includes(
+      "Legacy handler chain drift: " + rules[index].id
+    )
+  );
+});
+
 test("reviewed declarations require cited source evidence", () => {
   const reviewed = manifest.rules.filter((rule) => rule.status === "reviewed");
   assert.ok(reviewed.length > 0);
