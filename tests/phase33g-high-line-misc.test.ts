@@ -57,6 +57,10 @@ vi.mock("../server/auth", () => ({
   requireAuth: (_req: unknown, _res: unknown, next: () => void) => next(),
 }));
 vi.mock("../server/routes/_helpers", () => ({
+  spreadsheetUpload: {
+    single: vi.fn(() => (_req: unknown, _res: unknown, next: () => void) => next()),
+    fields: vi.fn(() => (_req: unknown, _res: unknown, next: () => void) => next()),
+  },
   upload: {
     fields: () => (_req: unknown, _res: unknown, next: () => void) => next(),
   },
