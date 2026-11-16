@@ -1,4 +1,6 @@
 import { downloadBlob } from "@/lib/downloadBlob";
+import { exportFileName } from "@/lib/exportFile";
+import { ExportButton } from "@/components/export/ReportExportMenu";
 import { TabsList, PillTabButton } from "@/components/ui/tabs";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { Suspense, useState, useMemo, useEffect } from "react";
@@ -40,17 +42,19 @@ import {
   PlusCircle,
   History,
   Columns3,
-  Download,
-  Printer,
   RefreshCw,
-  Warehouse,
   Wallet,
   Check,
 } from "lucide-react";
+import { PageHeader } from "@/components/PageHeader";
 
 import type { SheetsAndSacksItem } from "./factorysheetsandsacks/types";
 import { TYPES, fmt, fmtInt } from "./factorysheetsandsacks/utils";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
+import type { RouteComponentProps } from "wouter";
+
+/** Routed standalone (receives route props) or embedded as a hub tab panel. */
+type EmbeddablePageProps = { embedded?: boolean } & Partial<RouteComponentProps>;
 // Optional workflows should not extend the initial stock tab's JavaScript load.
 const ItemFormDialog = lazy(() =>
   import("./factorysheetsandsacks/components/ItemFormDialog").then((module) => ({ default: module.ItemFormDialog }))
@@ -85,7 +89,8 @@ function csvCell(value: string | number | null | undefined) {
   return '"' + safe.replace(/"/g, '""') + '"';
 }
 
-export default function FactorySheetsAndSacks() {
+/** `embedded`: rendered as the Overview hub "Sheets & Sacks" tab, whose PageHeader already titles the page. */
+export default function FactorySheetsAndSacks({ embedded = false }: EmbeddablePageProps) {
   const { selectedCompany } = useCompany();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<"stock" | "movements">("stock");
@@ -241,7 +246,10 @@ export default function FactorySheetsAndSacks() {
       shown.map((column) => csvCell(column.label)).join(","),
       ...rows.map((item) => shown.map((column) => csvCell(column.value(item))).join(",")),
     ].join("\r\n");
-    downloadBlob(new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }), "sheets-sacks-stock.csv");
+    downloadBlob(
+      new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }),
+      exportFileName("sheets sacks stock", "csv")
+    );
   };
 
   const typeBadge = (type: string) => (
@@ -259,44 +267,31 @@ export default function FactorySheetsAndSacks() {
     </Badge>
   );
 
+  const addItemButton = (
+    <Button
+      onClick={() => setShowAddDialog(true)}
+      data-testid="button-add-item"
+      className="h-10 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 font-semibold text-white shadow-md shadow-indigo-600/20 hover:from-blue-700 hover:to-indigo-700"
+    >
+      <Plus className="mr-2 h-4 w-4" /> Add Item
+    </Button>
+  );
+
   return (
     <div className="space-y-5 p-4 sm:p-6">
       {/* Visual refresh: existing stock KPIs, permissions and mutations stay unchanged. */}
-      <div className="relative isolate overflow-hidden rounded-2xl border border-indigo-200/70 bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 px-5 py-6 shadow-sm dark:border-indigo-400/20 dark:from-blue-950 dark:via-blue-900 dark:to-blue-800 sm:px-7">
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute -right-16 -top-24 h-72 w-72 rounded-full bg-blue-400/20 blur-3xl dark:bg-blue-500/20"
-        />
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute -bottom-36 right-20 h-64 w-96 rounded-full bg-violet-400/20 blur-3xl"
-        />
-        <div className="relative flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-lg shadow-indigo-600/20">
-              <Layers className="h-7 w-7" />
-            </div>
-            <div>
-              <p className="mb-1 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.17em] text-indigo-600 dark:text-indigo-300">
-                <Warehouse className="h-3.5 w-3.5" /> Packaging inventory
-              </p>
-              <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white sm:text-3xl">
-                Sheets &amp; Sacks
-              </h1>
-              <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Track packaging materials inventory</p>
-            </div>
-          </div>
-          {canEdit && showStock && (
-            <Button
-              onClick={() => setShowAddDialog(true)}
-              data-testid="button-add-item"
-              className="h-10 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 font-semibold text-white shadow-md shadow-indigo-600/20 hover:from-blue-700 hover:to-indigo-700"
-            >
-              <Plus className="mr-2 h-4 w-4" /> Add Item
-            </Button>
-          )}
-        </div>
-      </div>
+      {embedded ? (
+        // Overview hub tab: the hub PageHeader titles the page; keep the action only.
+        canEdit && showStock && <div className="flex justify-end">{addItemButton}</div>
+      ) : (
+        <PageHeader
+          title="Sheets & Sacks"
+          subtitle="Track packaging materials inventory"
+          icon={<Layers className="h-5 w-5" />}
+        >
+          {canEdit && showStock && addItemButton}
+        </PageHeader>
+      )}
 
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         {[
@@ -492,24 +487,22 @@ export default function FactorySheetsAndSacks() {
                     </Button>
                   </PopoverContent>
                 </Popover>
-                <Button
+                <ExportButton
+                  kind="csv"
                   variant="outline"
                   size="sm"
                   className="h-9 gap-1.5 rounded-xl"
                   onClick={exportStock}
                   disabled={!filtered.length}
                   title={selectedVisibleCount ? "Export selected rows" : "Export filtered rows"}
-                >
-                  <Download className="h-4 w-4" /> Export
-                </Button>
-                <Button
+                />
+                <ExportButton
+                  kind="print"
                   variant="outline"
                   size="sm"
                   className="h-9 gap-1.5 rounded-xl print:hidden"
                   onClick={() => window.print()}
-                >
-                  <Printer className="h-4 w-4" /> Print
-                </Button>
+                />
                 <Button
                   variant="outline"
                   size="icon"

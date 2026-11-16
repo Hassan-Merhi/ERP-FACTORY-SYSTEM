@@ -221,7 +221,7 @@ describe("ERP payroll model positive paths", () => {
     await result.current.exportRunExcel(payrollRun as never);
     expect(harness.aoaToSheet).toHaveBeenCalled();
     expect(harness.bookAppendSheet).toHaveBeenCalledWith(expect.anything(), expect.anything(), "Payroll");
-    expect(harness.writeFile).toHaveBeenCalledWith(expect.anything(), "payroll-70-2026-08-11.xlsx");
+    expect(harness.writeFile).toHaveBeenCalledWith(expect.anything(), "payroll-70_2026-08-11.xlsx");
   });
 
   it("executes every payroll mutation contract and applies their success/error state transitions", async () => {

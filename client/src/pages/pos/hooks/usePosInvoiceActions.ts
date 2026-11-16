@@ -1,6 +1,7 @@
 import { useReactToPrint } from "react-to-print";
 import type { InvoiceSale } from "../pos-components/InvoiceTemplate";
 import * as XLSX from "xlsx-js-style";
+import { exportFileName } from "@/lib/exportFile";
 import type { SaleRow, APIInventoryItem, Location } from "../pos-components/posTypes";
 
 interface PosInvoiceActionsParams {
@@ -38,7 +39,11 @@ export function usePosInvoiceActions({
     const pdfUrl = `/api/pos/invoice/${encodeURIComponent(String(voucherId))}/pdf`;
     const printWindow = window.open(pdfUrl, "_blank", "noopener,noreferrer");
     if (!printWindow) {
-      toast({ title: "Pop-up blocked", description: "Allow pop-ups to open the invoice PDF and print it.", variant: "destructive" });
+      toast({
+        title: "Pop-up blocked",
+        description: "Allow pop-ups to open the invoice PDF and print it.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -66,7 +71,7 @@ export function usePosInvoiceActions({
     const worksheet = XLSX.utils.json_to_sheet(exportData);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Inventory");
-    const fileName = `Inventory_${activeLocation.name.replace(/\s+/g, "_")}_${new Date().toLocaleDateString("en-CA")}.xlsx`;
+    const fileName = exportFileName(`inventory ${activeLocation.name}`, "xlsx");
     XLSX.writeFile(workbook, fileName);
     toast({ title: "Export successful", description: `Downloaded ${fileName}` });
   };
@@ -87,7 +92,7 @@ export function usePosInvoiceActions({
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Summary");
-    XLSX.writeFile(wb, `POS_Summary_${new Date().toLocaleDateString("en-CA")}.xlsx`);
+    XLSX.writeFile(wb, exportFileName("pos summary", "xlsx"));
     toast({ title: "Summary exported" });
   };
 
@@ -114,7 +119,7 @@ export function usePosInvoiceActions({
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Detailed");
-    XLSX.writeFile(wb, `POS_Detailed_${new Date().toLocaleDateString("en-CA")}.xlsx`);
+    XLSX.writeFile(wb, exportFileName("pos detailed", "xlsx"));
     toast({ title: "Detailed export downloaded" });
   };
 

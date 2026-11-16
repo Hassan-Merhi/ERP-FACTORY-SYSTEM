@@ -5,6 +5,7 @@ import { erpPageAccessQueryOptions } from "@/app/erpAccessQuery";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { exportFileName } from "@/lib/exportFile";
 
 import type { Location, PagedStockItemsResponse, StockCategory, StockGrade, StockGroup, StockItem } from "./types";
 import { PAGE_SIZE } from "./utils";
@@ -369,7 +370,7 @@ export function useStockItems() {
       const worksheet = utils.json_to_sheet(data);
       const workbook = utils.book_new();
       utils.book_append_sheet(workbook, worksheet, "Sales History");
-      await writeFile(workbook, "stock-items-sales-history.xlsx");
+      await writeFile(workbook, exportFileName("stock items sales history", "xlsx"));
     } catch {
       toast({ title: "Export failed", description: "Could not export sales history", variant: "destructive" });
     }
@@ -449,7 +450,7 @@ export function useStockItems() {
       const worksheet = utils.json_to_sheet(data);
       const workbook = utils.book_new();
       utils.book_append_sheet(workbook, worksheet, "Stock Items");
-      await writeFile(workbook, "stock-items.xlsx");
+      await writeFile(workbook, exportFileName("stock items", "xlsx"));
     } catch (error) {
       toast({
         title: "Export failed",

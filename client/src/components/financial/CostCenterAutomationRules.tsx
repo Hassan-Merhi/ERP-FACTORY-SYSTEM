@@ -26,6 +26,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Pencil, Trash2, Zap } from "lucide-react";
 import { readCostCenterApi, writeCostCenterApi, type CostCenter } from "@/api/costCentersApi";
+import { confirmAction } from "@/components/ConfirmHost";
 
 type Account = { id: number; code: string; name: string; accountType: string };
 type Rule = {
@@ -292,11 +293,14 @@ export function CostCenterAutomationRules({ baseUrl, centers }: { baseUrl: strin
                     size="icon"
                     title="Disable rule"
                     disabled={remove.isPending}
-                    onClick={() => {
-                      if (
-                        window.confirm("Disable this mapping for future entries? Existing tagged costs stay unchanged.")
-                      )
-                        remove.mutate(rows);
+                    onClick={async () => {
+                      const confirmed = await confirmAction({
+                        title: "Disable this mapping?",
+                        description: "It will stop applying to future entries. Existing tagged costs stay unchanged.",
+                        confirmText: "Disable",
+                        tone: "warning",
+                      });
+                      if (confirmed) remove.mutate(rows);
                     }}
                   >
                     <Trash2 className="h-4 w-4" />

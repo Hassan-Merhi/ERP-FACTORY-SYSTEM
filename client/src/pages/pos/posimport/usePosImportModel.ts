@@ -13,6 +13,7 @@ import { useReactToPrint } from "react-to-print";
 import { formatNumber } from "@/lib/formatNumber";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { downloadFromUrl } from "@/lib/exportFile";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import type {
@@ -453,8 +454,16 @@ export function usePosImportModel() {
     doImport();
   };
 
-  const downloadTemplate = () => {
-    window.open("/api/pos-import/template", "_blank");
+  const downloadTemplate = async () => {
+    try {
+      await downloadFromUrl("/api/pos-import/template", { fileName: "pos_import_template.xlsx" });
+    } catch (error) {
+      toast({
+        title: "Template download failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const skipPrint = () => {

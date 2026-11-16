@@ -34,6 +34,7 @@ import {
   type PriceListLine,
   type StatementData,
 } from "./factorycustomerstatement/statementHelpers";
+import { confirmAction } from "@/components/ConfirmHost";
 
 export default function FactoryCustomerStatement() {
   const { selectedCompany } = useCompany();
@@ -146,10 +147,19 @@ export default function FactoryCustomerStatement() {
     }
   }, [priceDestination, priceDestinationsQuery.data]);
 
-  const selectPriceDestination = (destination: string) => {
+  const selectPriceDestination = async (destination: string) => {
     if (!destination || savePricesMutation.isPending || deletePriceMutation.isPending) return;
     const hasPendingEdits = Object.keys(priceEdits).length > 0 || !!(newCode.trim() && newPrice);
-    if (hasPendingEdits && !window.confirm("Discard unsaved price edits before changing destination?")) return;
+    if (
+      hasPendingEdits &&
+      !(await confirmAction({
+        title: "Discard unsaved price edits?",
+        description: "Changing destination will discard the price edits you have not saved.",
+        confirmText: "Discard",
+        tone: "warning",
+      }))
+    )
+      return;
     setPriceDestination(destination);
     setPriceEdits({});
     setNewCode("");
@@ -162,7 +172,7 @@ export default function FactoryCustomerStatement() {
       toast({ title: "Enter a valid destination (up to 120 characters)", variant: "destructive" });
       return;
     }
-    selectPriceDestination(destination);
+    void selectPriceDestination(destination);
     setNewDestination("");
   };
 
@@ -808,7 +818,7 @@ export default function FactoryCustomerStatement() {
                       data-testid="select-price-destination"
                       className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground"
                       value={priceDestination}
-                      onChange={(e) => selectPriceDestination(e.target.value)}
+                      onChange={(e) => void selectPriceDestination(e.target.value)}
                       disabled={savePricesMutation.isPending || deletePriceMutation.isPending}
                     >
                       <option value="" disabled>

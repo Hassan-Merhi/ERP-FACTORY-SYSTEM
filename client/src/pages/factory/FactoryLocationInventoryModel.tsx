@@ -36,6 +36,7 @@ import {
   groupInventoryByCategory,
   toProformaSelection,
 } from "./factorylocationinventory/inventoryModelHelpers";
+import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
 
 export function useFactoryLocationInventory() {
   const { colors } = useLabelDesignColors();
@@ -702,9 +703,19 @@ export function useFactoryLocationInventory() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [proformaAutoSave, proformaMode, editingProformaId, selections, editModeInitialized]);
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     if (!savedProformaId) return;
-    window.open(`/api/factory/customer-proformas/${savedProformaId}/export/excel`, "_blank");
+    try {
+      await downloadFromUrl(`/api/factory/customer-proformas/${savedProformaId}/export/excel`, {
+        fileName: exportFileName(`proforma ${proformaName || savedProformaId}`, "xlsx"),
+      });
+    } catch (error) {
+      toast({
+        title: "Export failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleExportPdf = () => {

@@ -279,7 +279,7 @@ export function KeyboardShortcuts() {
         }
         if (key === "s") {
           e.preventDefault();
-          navigate("/factory/stock-allocation");
+          navigate("/factory/stock-allocation-v5");
           return;
         }
         if (key === "r") {

@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ErpReportExportMenu, ErpReportPrintFooter, exportErpReportCsv } from "@/erp-core";
+import { exportFileName } from "@/lib/exportFile";
+import { PageHeader } from "@/components/PageHeader";
 
 interface Line {
   kind: string;
@@ -207,7 +209,7 @@ function exportedCsv(record: Package) {
   exportErpReportCsv({
     headers: [],
     rows,
-    fileName: `financial-statements-${record.companyId}-${record.asOfDate}.csv`,
+    fileName: exportFileName(`financial statements ${record.companyId}`, "csv", { date: record.asOfDate }),
   });
 }
 function SectionTable({ title, current, previous }: { title: string; current: Section; previous?: Section }) {
@@ -300,13 +302,15 @@ export default function ProfessionalFinancialStatements() {
   );
   return (
     <div className="space-y-5 p-3 sm:p-5 print:p-0" data-testid="professional-financial-statements">
-      <div>
-        <h1 className="text-2xl font-semibold">Professional Financial Statements</h1>
-        <p className="text-sm text-muted-foreground">
-          {selectedCompany?.name ?? "Selected company"} · USD posted historical base · company standalone statements.
-          Source accounting vouchers are never modified.
-        </p>
-      </div>
+      <PageHeader
+        title="Professional Financial Statements"
+        meta={
+          <>
+            {selectedCompany?.name ?? "Selected company"} · USD posted historical base · company standalone statements.
+          </>
+        }
+        subtitle="Source accounting vouchers are never modified."
+      />
       <Card className="print:hidden">
         <CardHeader>
           <CardTitle>Statement period</CardTitle>
@@ -336,7 +340,7 @@ export default function ProfessionalFinancialStatements() {
                       if (pkg) exportedCsv(pkg);
                     },
                   },
-                  { id: "statements-print", label: "Print / Save PDF", kind: "print", onSelect: () => window.print() },
+                  { id: "statements-print", label: "Print", kind: "print", onSelect: () => window.print() },
                 ]}
               />
             </div>

@@ -13,6 +13,7 @@ import {
   Printer,
   Upload,
 } from "lucide-react";
+import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -285,10 +286,16 @@ export default function RetailInventory() {
     }
     return (
       <div className="mx-auto max-w-7xl space-y-5 p-4 pb-24 md:p-6 md:pb-24">
-        <div className="flex items-center justify-between gap-3">
-          <Button variant="ghost" onClick={() => navigate("/retail/inventory")}>
-            <ArrowLeft className="mr-2 h-4 w-4" /> Inventory
-          </Button>
+        <PageHeader
+          title={detailProduct.name}
+          meta={
+            <span>
+              {detailProduct.brand.name}
+              {detailProduct.category ? ` · ${detailProduct.category}` : ""}
+            </span>
+          }
+          backTarget="/retail/inventory"
+        >
           <Button
             onClick={() => {
               if (!recordChanges.allowed) return;
@@ -301,22 +308,13 @@ export default function RetailInventory() {
           >
             <Pencil className="mr-2 h-4 w-4" /> Edit product
           </Button>
-        </div>
+        </PageHeader>
 
-        <div className="flex flex-wrap items-start gap-5">
-          <ProductImageGallery
-            product={detailProduct}
-            className="max-w-full"
-            imageClassName="h-36 w-36 rounded-lg border sm:h-44 sm:w-44"
-          />
-          <div>
-            <h1 className="text-3xl font-bold">{detailProduct.name}</h1>
-            <p className="mt-1">
-              {detailProduct.brand.name}
-              {detailProduct.category ? ` · ${detailProduct.category}` : ""}
-            </p>
-          </div>
-        </div>
+        <ProductImageGallery
+          product={detailProduct}
+          className="max-w-full"
+          imageClassName="h-36 w-36 rounded-lg border sm:h-44 sm:w-44"
+        />
 
         <Card>
           <CardHeader>
@@ -360,38 +358,31 @@ export default function RetailInventory() {
 
   return (
     <div className="mx-auto max-w-[1600px] space-y-5 p-4 pb-24 md:p-6 md:pb-24">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <Boxes className="h-6 w-6" />
-            <h1 className="text-2xl font-bold">Retail Inventory</h1>
-          </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Choose a location, open a category, then expand a brand to browse its items.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {/* Create Only cannot import stock; View Only sees it disabled. */}
-          {!recordChanges.isCreateOnly && (
-            <Button
-              onClick={() => setSupplierImportOpen(true)}
-              disabled={!recordChanges.allowed}
-              title={recordChanges.reason ?? undefined}
-            >
-              <Upload className="mr-2 h-4 w-4" /> Supplier Stock Import
-            </Button>
-          )}
+      <PageHeader
+        title="Retail Inventory"
+        subtitle="Choose a location, open a category, then expand a brand to browse its items."
+        icon={<Boxes className="h-6 w-6" />}
+      >
+        {/* Create Only cannot import stock; View Only sees it disabled. */}
+        {!recordChanges.isCreateOnly && (
           <Button
-            variant="outline"
-            onClick={() => {
-              setEditingProduct(null);
-              setEditorOpen(true);
-            }}
+            onClick={() => setSupplierImportOpen(true)}
+            disabled={!recordChanges.allowed}
+            title={recordChanges.reason ?? undefined}
           >
-            <Plus className="mr-2 h-4 w-4" /> Add Product
+            <Upload className="mr-2 h-4 w-4" /> Supplier Stock Import
           </Button>
-        </div>
-      </div>
+        )}
+        <Button
+          variant="outline"
+          onClick={() => {
+            setEditingProduct(null);
+            setEditorOpen(true);
+          }}
+        >
+          <Plus className="mr-2 h-4 w-4" /> Add Product
+        </Button>
+      </PageHeader>
 
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
         <Input

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Download } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { ExportButton } from "@/components/export/ReportExportMenu";
+import { useToast } from "@/hooks/use-toast";
+import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -51,6 +52,8 @@ const STATUS_OPTIONS = [
 /** Exact-variant stock and sales reports by brand, style, color, size, barcode, SKU and location. */
 export function RetailVariantReports({ companyKey }: { companyKey: number }) {
   const [kind, setKind] = useState<ReportKind>("stock");
+  const [exporting, setExporting] = useState(false);
+  const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [debounced, setDebounced] = useState("");
   const [brandId, setBrandId] = useState("");
@@ -100,6 +103,26 @@ export function RetailVariantReports({ companyKey }: { companyKey: number }) {
     queryKey: ["retail-variant-report", companyKey, kind, query],
     queryFn: () => getJson(`${endpoint}?${query}`),
   });
+
+  const exportCsv = async () => {
+    setExporting(true);
+    try {
+      await downloadFromUrl(`${endpoint}?${query}&format=csv`, {
+        fileName:
+          kind === "stock"
+            ? exportFileName("variant stock report", "csv")
+            : exportFileName("variant sales report", "csv", { from, to }),
+      });
+    } catch (error) {
+      toast({
+        title: "Export failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const selectClass = "h-10 rounded-md border bg-background px-2 text-sm";
   const stockRows = kind === "stock" ? (rows as StockRow[]) : [];
@@ -177,11 +200,7 @@ export function RetailVariantReports({ companyKey }: { companyKey: number }) {
               <Input type="date" aria-label="To" value={to} onChange={(event) => setTo(event.target.value)} />
             </>
           )}
-          <Button variant="outline" asChild>
-            <a href={`${endpoint}?${query}&format=csv`} download>
-              <Download className="mr-2 h-4 w-4" /> Export CSV
-            </a>
-          </Button>
+          <ExportButton kind="csv" busy={exporting} onClick={exportCsv} />
         </div>
       </CardHeader>
       <CardContent className="overflow-x-auto">

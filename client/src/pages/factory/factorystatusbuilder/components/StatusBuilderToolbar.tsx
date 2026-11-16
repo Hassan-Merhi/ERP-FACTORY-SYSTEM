@@ -1,6 +1,9 @@
 import type { RefObject } from "react";
 import { Button } from "@/components/ui/button";
-import { Download, FileDown, LayoutGrid, Save, Upload } from "lucide-react";
+import { FileDown, LayoutGrid, Save, Upload } from "lucide-react";
+import { ExportButton } from "@/components/export/ReportExportMenu";
+import { useToast } from "@/hooks/use-toast";
+import { downloadFromUrl } from "@/lib/exportFile";
 
 /** The Factory Sheets toolbar: template, Excel import/export, autosave state and Save. */
 export function StatusBuilderToolbar({
@@ -27,6 +30,20 @@ export function StatusBuilderToolbar({
   /** False for read-only company roles: Import and Save are not offered. */
   canEdit?: boolean;
 }) {
+  const { toast } = useToast();
+  const downloadTemplate = async () => {
+    try {
+      await downloadFromUrl("/api/factory/status-builder/sheets/template", {
+        fileName: "factory-sheets-template.xlsx",
+      });
+    } catch (error) {
+      toast({
+        title: "Export failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
   return (
     <div className="flex items-center gap-2 border-b border-border/60 bg-gradient-to-r from-muted/70 via-card to-card px-4 py-3 flex-wrap">
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-600/10 text-blue-600 ring-1 ring-blue-500/20 dark:bg-blue-500/15 dark:text-blue-400">
@@ -49,7 +66,7 @@ export function StatusBuilderToolbar({
       <Button
         size="sm"
         variant="outline"
-        onClick={() => window.open("/api/factory/status-builder/sheets/template", "_blank")}
+        onClick={() => void downloadTemplate()}
         data-testid="sb-button-download-template"
         className="rounded-lg border-border/70 bg-background/70 font-medium shadow-sm hover:bg-accent"
       >
@@ -69,17 +86,15 @@ export function StatusBuilderToolbar({
           Import Excel
         </Button>
       )}
-      <Button
+      <ExportButton
+        kind="excel"
         size="sm"
         variant="outline"
         onClick={onExport}
         disabled={exportDisabled}
         data-testid="sb-button-export-excel"
         className="rounded-lg border-border/70 bg-background/70 font-medium shadow-sm hover:bg-accent"
-      >
-        <Download className="h-3.5 w-3.5 mr-1.5" />
-        Export Excel
-      </Button>
+      />
       {savedAt && !isDirty && (
         <span className="text-xs text-muted-foreground" data-testid="sb-text-autosaved">
           Autosaved {savedAt}

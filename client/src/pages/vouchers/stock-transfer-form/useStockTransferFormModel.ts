@@ -12,6 +12,7 @@ import { useAppMode, useModePrefix } from "@/contexts/AppModeContext";
 import { getApiRequest } from "@/lib/factoryApi";
 import { queryClient } from "@/lib/queryClient";
 import { utils, writeFile } from "@/lib/excelHelper";
+import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
 import { parseDateLocal } from "@/components/vouchers/PrintTemplate";
 import { useToast } from "@/hooks/use-toast";
 import type { Location, StockItem, StockTransferFormData, StockTransferFormProps } from "../stocktransferform/types";
@@ -661,7 +662,7 @@ export function useStockTransferFormModel({ voucherIdToEdit, isPOS, posUser }: S
       const worksheet = utils.json_to_sheet(exportData);
       const workbook = utils.book_new();
       utils.book_append_sheet(workbook, worksheet, "Stock Transfer Detailed");
-      const fileName = `Stock_Transfer_Detailed_${voucherDate}.xlsx`;
+      const fileName = exportFileName("stock transfer detailed", "xlsx", { date: voucherDate });
       await writeFile(workbook, fileName);
       toast({ title: "Export successful", description: `Downloaded ${fileName} with ${validEntries.length} items.` });
     } else {
@@ -685,7 +686,7 @@ export function useStockTransferFormModel({ voucherIdToEdit, isPOS, posUser }: S
       const worksheet = utils.json_to_sheet(exportData);
       const workbook = utils.book_new();
       utils.book_append_sheet(workbook, worksheet, "Stock Transfer Summary");
-      const fileName = `Stock_Transfer_Summary_${voucherDate}.xlsx`;
+      const fileName = exportFileName("stock transfer summary", "xlsx", { date: voucherDate });
       await writeFile(workbook, fileName);
       toast({ title: "Export successful", description: `Downloaded ${fileName}.` });
     }
@@ -769,7 +770,19 @@ export function useStockTransferFormModel({ voucherIdToEdit, isPOS, posUser }: S
       items: validItems,
     });
   };
-  const downloadImportTemplate = () => window.open("/api/stock-transfer-import/template-multi-source", "_blank");
+  const downloadImportTemplate = async () => {
+    try {
+      await downloadFromUrl("/api/stock-transfer-import/template-multi-source", {
+        fileName: "stock_transfer_import_template.xlsx",
+      });
+    } catch (error) {
+      toast({
+        title: "Template download failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
 
   return {
     voucherIdToEdit,

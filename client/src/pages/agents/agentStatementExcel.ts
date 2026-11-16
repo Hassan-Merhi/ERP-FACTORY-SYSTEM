@@ -7,6 +7,7 @@
  */
 import { format } from "date-fns";
 import { utils, writeFile } from "@/lib/excelHelper";
+import { exportFileName } from "@/lib/exportFile";
 import type { Account, GroupedVoucher } from "./agentStatementMath";
 
 export interface AgentStatementExcelContext {
@@ -55,5 +56,5 @@ export async function exportAgentStatementExcel(account: Account, rows: string[]
     },
     account.name.substring(0, 31).replace(/[\\/*?[\]:]/g, "_")
   );
-  await writeFile(wb, `Agent_Statement_${account.name.replace(/[\\/*?[\]:]/g, "_").substring(0, 40)}.xlsx`);
+  await writeFile(wb, exportFileName(`agent statement ${account.name.substring(0, 40)}`, "xlsx"));
 }

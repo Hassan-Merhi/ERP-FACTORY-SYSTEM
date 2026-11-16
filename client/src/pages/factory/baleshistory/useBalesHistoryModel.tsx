@@ -26,6 +26,7 @@ import {
 import { useLabelDesignColors } from "@/hooks/useLabelDesignColors";
 import { type WeightEditBale } from "@/components/BaleWeightEditDialog";
 import { useBalesHistoryDateKeyboard } from "./pagePolicies";
+import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
 
 interface BaleRecord {
   id: number;
@@ -129,20 +130,13 @@ export function useBalesHistoryModel() {
       if (exportFrom) params.set("from", exportFrom);
       if (exportTo) params.set("to", exportTo);
       const url = `/api/factory/bales/stock-register.xlsx${params.toString() ? `?${params}` : ""}`;
-      const res = await fetch(url, { credentials: "include" });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ message: "Export failed" }));
-        throw new Error(err.message);
-      }
-      const blob = await res.blob();
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = `stock_register${exportFrom && exportTo ? `_${exportFrom}_to_${exportTo}` : "_all"}.xlsx`;
-      a.click();
-      URL.revokeObjectURL(a.href);
+      await downloadFromUrl(url, {
+        fileName: exportFileName("stock register", "xlsx", { from: exportFrom, to: exportTo }),
+        preferLocalFileName: true,
+      });
       setShowExportDialog(false);
     } catch (err) {
-      toast({ title: "Export Failed", description: getErrorDetails(err).message, variant: "destructive" });
+      toast({ title: "Export failed", description: getErrorDetails(err).message, variant: "destructive" });
     } finally {
       setExportLoading(false);
     }

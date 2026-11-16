@@ -13,7 +13,6 @@ import {
   BookmarkCheck,
   ChevronDown,
   ChevronRight,
-  Download,
   MoreHorizontal,
   Package,
   Pencil,
@@ -25,6 +24,9 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ExportButton } from "@/components/export/ReportExportMenu";
+import { useToast } from "@/hooks/use-toast";
+import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -86,6 +88,7 @@ interface ProformaCardProps {
 }
 
 export function ProformaCard(props: ProformaCardProps) {
+  const { toast } = useToast();
   const {
     proforma,
     isExpanded,
@@ -370,17 +373,28 @@ export function ProformaCard(props: ProformaCardProps) {
             >
               Apply Selling Price
             </Button>
-            <Button
+            <ExportButton
+              kind="excel"
               size="sm"
               variant="outline"
-              onClick={() => window.open(`/api/factory/customer-proformas/${proforma.id}/export/excel`, "_blank")}
+              onClick={async () => {
+                try {
+                  await downloadFromUrl(`/api/factory/customer-proformas/${proforma.id}/export/excel`, {
+                    fileName: exportFileName(`proforma ${proforma.name || proforma.id}`, "xlsx"),
+                  });
+                } catch (error) {
+                  toast({
+                    title: "Export failed",
+                    description: error instanceof Error ? error.message : "Please try again.",
+                    variant: "destructive",
+                  });
+                }
+              }}
               className="h-9 rounded-xl border-border/70 bg-background/70 px-3 shadow-sm"
               data-testid={`button-export-excel-${proforma.id}`}
-            >
-              <Download className="mr-1.5 h-3.5 w-3.5" />
-              Excel
-            </Button>
-            <Button
+            />
+            <ExportButton
+              kind="pdf"
               size="sm"
               variant="outline"
               onClick={() => {
@@ -392,10 +406,7 @@ export function ProformaCard(props: ProformaCardProps) {
               }}
               className="h-9 rounded-xl border-border/70 bg-background/70 px-3 shadow-sm"
               data-testid={`button-export-pdf-${proforma.id}`}
-            >
-              <Download className="mr-1.5 h-3.5 w-3.5" />
-              PDF
-            </Button>
+            />
           </div>
 
           {/* Price lines table — lazy detail only after expansion */}

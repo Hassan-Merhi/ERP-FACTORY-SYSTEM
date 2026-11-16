@@ -9,6 +9,7 @@ export default function ErpRentalWarehouses() {
       pageIcon={<Warehouse className="h-5 w-5 text-blue-600" />}
       testIdPrefix="erp-rental-warehouses"
       rentalModule="ERP"
+      paymentsLogUrl="/erp/rental/payments"
     />
   );
 }

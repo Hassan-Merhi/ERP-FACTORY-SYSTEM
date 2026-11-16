@@ -26,6 +26,7 @@ import {
   Trash2,
   Weight,
 } from "lucide-react";
+import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -319,7 +320,7 @@ export default function FactoryLoadingDispatch() {
   });
 
   const role = (user?.currentRole ?? user?.role ?? "").toLowerCase();
-  const canViewFinancialDashboard = ["admin","owner","developer"].includes(role);
+  const canViewFinancialDashboard = ["admin", "owner", "developer"].includes(role);
   const canDeleteDispatch = ["admin", "owner", "developer"].includes(role);
   const canEdit = !["View Only", "Create Only"].includes(user?.currentRole ?? user?.role ?? "");
   const canCreate = canEdit && activeOrderStatuses.has(orderQuery.data?.status ?? "");
@@ -421,76 +422,61 @@ export default function FactoryLoadingDispatch() {
       data-testid="factory-loading-dispatch-page"
     >
       <div className="mx-auto w-full max-w-[1480px] space-y-5 p-3 pb-10 sm:p-5 lg:p-7">
-        <div className="relative overflow-hidden rounded-[22px] border border-blue-200/80 bg-gradient-to-r from-white via-blue-50/90 to-sky-100/80 p-4 shadow-sm dark:border-blue-500/25 dark:from-[hsl(var(--factory-hue)_55%_16%)] dark:via-[hsl(var(--factory-hue)_64%_17%)] dark:to-[hsl(var(--factory-hue)_80%_18%)] sm:p-5">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex min-w-0 items-center gap-3">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-lg shadow-blue-500/20">
-                <Truck className="h-5 w-5" />
-              </div>
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h1 className="text-lg font-bold tracking-tight sm:text-xl">Dispatch Management</h1>
-                  <Badge variant="secondary">Loading #{orderId}</Badge>
-                  {orderQuery.data?.containerNumber && (
-                    <Badge variant="outline">{orderQuery.data.containerNumber}</Badge>
-                  )}
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground sm:text-sm">
-                  Scan actual bales on each trip, then compare all trips against Pending Loading.
-                </p>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button size="sm" variant="outline" onClick={backToLoading} data-testid="button-return-to-loading">
-                <ArrowLeft className="mr-1.5 h-4 w-4" /> Loading
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() =>
-                  navigate(
-                    "/factory/sales/loading/dispatch/" +
-                      orderId +
-                      (dispatchId !== null ? "/" + dispatchId : "") +
-                      "/report"
-                  )
-                }
-                data-testid="button-dispatch-reports"
-              >
-                <FileSpreadsheet className="mr-1.5 h-4 w-4" /> Reports & Excel
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => navigate("/factory/sales/loading/dispatch/" + orderId + "/compare")}
-                data-testid="button-compare-all-dispatches"
-              >
-                <FileSearch className="mr-1.5 h-4 w-4" /> Final Loading Comparison
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => void refresh()}
-                disabled={tripsQuery.isFetching || orderQuery.isFetching}
-                data-testid="button-refresh-dispatch"
-              >
-                <RefreshCw className="mr-1.5 h-4 w-4" /> Refresh
-              </Button>
-              {canCreate && (
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    setNewTrip(blankForm);
-                    setCreateOpen(true);
-                  }}
-                  data-testid="button-new-dispatch"
-                >
-                  <Plus className="mr-1.5 h-4 w-4" /> New Dispatch
-                </Button>
-              )}
-            </div>
-          </div>
-        </div>
+        <PageHeader
+          title="Dispatch Management"
+          icon={<Truck className="h-5 w-5" />}
+          subtitle="Scan actual bales on each trip, then compare all trips against Pending Loading."
+          onBack={backToLoading}
+          backButtonTestId="button-return-to-loading"
+          meta={
+            <>
+              <Badge variant="secondary">Loading #{orderId}</Badge>
+              {orderQuery.data?.containerNumber && <Badge variant="outline">{orderQuery.data.containerNumber}</Badge>}
+            </>
+          }
+        >
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() =>
+              navigate(
+                "/factory/sales/loading/dispatch/" + orderId + (dispatchId !== null ? "/" + dispatchId : "") + "/report"
+              )
+            }
+            data-testid="button-dispatch-reports"
+          >
+            <FileSpreadsheet className="mr-1.5 h-4 w-4" /> Reports & Excel
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => navigate("/factory/sales/loading/dispatch/" + orderId + "/compare")}
+            data-testid="button-compare-all-dispatches"
+          >
+            <FileSearch className="mr-1.5 h-4 w-4" /> Final Loading Comparison
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => void refresh()}
+            disabled={tripsQuery.isFetching || orderQuery.isFetching}
+            data-testid="button-refresh-dispatch"
+          >
+            <RefreshCw className="mr-1.5 h-4 w-4" /> Refresh
+          </Button>
+          {canCreate && (
+            <Button
+              size="sm"
+              onClick={() => {
+                setNewTrip(blankForm);
+                setCreateOpen(true);
+              }}
+              data-testid="button-new-dispatch"
+            >
+              <Plus className="mr-1.5 h-4 w-4" /> New Dispatch
+            </Button>
+          )}
+        </PageHeader>
 
         <div className="flex items-start gap-2 rounded-xl border border-indigo-200 bg-indigo-50/80 p-3 text-xs text-indigo-900 dark:border-indigo-500/25 dark:bg-indigo-500/10 dark:text-indigo-100">
           <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
@@ -538,7 +524,7 @@ export default function FactoryLoadingDispatch() {
         </Card>
 
         {dispatchId === null && canViewFinancialDashboard && (
-          <ErrorBoundary resetKey={"factory-dispatch-overview-"+orderId}>
+          <ErrorBoundary resetKey={"factory-dispatch-overview-" + orderId}>
             <FactoryDispatchOrderDashboard
               orderId={orderId}
               companyId={companyId}
@@ -672,28 +658,31 @@ export default function FactoryLoadingDispatch() {
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
                         {canDeleteDispatch && selectedTrip.status === "OPEN" && (
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => { setDeleteReason(""); setDeleteOpen(true); }}
-                          data-testid="button-delete-dispatch"
-                        >
-                          <Trash2 className="mr-1.5 h-4 w-4" /> Delete Dispatch
-                        </Button>
-                      )}
-                      {canEdit && selectedTrip.status === "OPEN" && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            setEditTrip(fromTrip(selectedTrip));
-                            setEditOpen(true);
-                          }}
-                          data-testid="button-edit-dispatch"
-                        >
-                          <Edit3 className="mr-1.5 h-4 w-4" /> Edit details
-                        </Button>
-                      )}
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => {
+                              setDeleteReason("");
+                              setDeleteOpen(true);
+                            }}
+                            data-testid="button-delete-dispatch"
+                          >
+                            <Trash2 className="mr-1.5 h-4 w-4" /> Delete Dispatch
+                          </Button>
+                        )}
+                        {canEdit && selectedTrip.status === "OPEN" && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setEditTrip(fromTrip(selectedTrip));
+                              setEditOpen(true);
+                            }}
+                            data-testid="button-edit-dispatch"
+                          >
+                            <Edit3 className="mr-1.5 h-4 w-4" /> Edit details
+                          </Button>
+                        )}
                       </div>
                     </div>
                     <div className="grid gap-3 sm:grid-cols-2">
@@ -852,22 +841,24 @@ export default function FactoryLoadingDispatch() {
         )}
 
         <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 pt-4 text-xs text-muted-foreground dark:border-slate-700">
-          <ShieldCheck className="h-4 w-4" /> Separate truck records · Same loading order · Draft charge previews do not post stock or accounting
-          changes
+          <ShieldCheck className="h-4 w-4" /> Separate truck records · Same loading order · Draft charge previews do not
+          post stock or accounting changes
         </div>
       </div>
 
       <Dialog
         open={deleteOpen}
-        onOpenChange={(open) => { if (!deleteMutation.isPending) setDeleteOpen(open); }}
+        onOpenChange={(open) => {
+          if (!deleteMutation.isPending) setDeleteOpen(open);
+        }}
       >
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Delete Dispatch #{selectedTrip?.dispatchNumber}?</DialogTitle>
             <DialogDescription>
-              Delete this open dispatch from the active list, release all its verified scans and reservations,
-              and preserve the audit history. The main loading, stock, customer balance and journal vouchers
-              will not be changed. Previously closed or financially recorded trips cannot be deleted.
+              Delete this open dispatch from the active list, release all its verified scans and reservations, and
+              preserve the audit history. The main loading, stock, customer balance and journal vouchers will not be
+              changed. Previously closed or financially recorded trips cannot be deleted.
             </DialogDescription>
           </DialogHeader>
           <Textarea

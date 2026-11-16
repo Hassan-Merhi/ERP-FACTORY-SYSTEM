@@ -8,7 +8,7 @@ import {
   Upload,
   Download,
   X,
-  FileDown,
+  FileSpreadsheet,
   ChevronDown,
   Bus,
   Banknote,
@@ -18,6 +18,8 @@ import {
   Layers,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import { downloadFromUrl } from "@/lib/exportFile";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -43,6 +45,7 @@ interface FactoryWorkersModelProps {
 }
 
 export function FactoryWorkersRosterPanel({ model, onOpenCategories }: FactoryWorkersModelProps) {
+  const { toast } = useToast();
   const {
     setLocation,
     searchQuery,
@@ -251,7 +254,17 @@ export function FactoryWorkersRosterPanel({ model, onOpenCategories }: FactoryWo
                 </DropdownMenuItem>
               )}
               <DropdownMenuItem
-                onClick={() => window.open("/api/factory/workers/template.xlsx", "_blank")}
+                onClick={async () => {
+                  try {
+                    await downloadFromUrl("/api/factory/workers/template.xlsx", { fileName: "workers-template.xlsx" });
+                  } catch (error) {
+                    toast({
+                      title: "Export failed",
+                      description: error instanceof Error ? error.message : "Please try again.",
+                      variant: "destructive",
+                    });
+                  }
+                }}
                 data-testid="button-download-template"
               >
                 <Download className="h-4 w-4" />
@@ -272,8 +285,8 @@ export function FactoryWorkersRosterPanel({ model, onOpenCategories }: FactoryWo
                 disabled={!filteredWorkers.length}
                 data-testid="button-export-salaries"
               >
-                <FileDown className="h-4 w-4" />
-                Export Salaries
+                <FileSpreadsheet className="h-4 w-4" />
+                Export Excel (Salaries)
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

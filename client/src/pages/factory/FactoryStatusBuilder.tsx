@@ -6,6 +6,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useCompany } from "@/contexts/CompanyContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
 import { useToast } from "@/hooks/use-toast";
+import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { Input } from "@/components/ui/input";
@@ -360,7 +361,19 @@ export default function FactoryStatusBuilder() {
     onError: (e: ClientErrorLike) => toast({ title: "Import failed", description: e.message, variant: "destructive" }),
   });
 
-  const handleExport = () => window.open("/api/factory/status-builder/sheets/export", "_blank");
+  const handleExport = async () => {
+    try {
+      await downloadFromUrl("/api/factory/status-builder/sheets/export", {
+        fileName: exportFileName("factory sheets", "xlsx"),
+      });
+    } catch (error) {
+      toast({
+        title: "Export failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
 
   // ── Tab operations ─────────────────────────────────────────────────────────
   const addTab = () => canCreateSheet && createMutation.mutate(`Page ${localSheets.length + 1}`);
@@ -538,7 +551,7 @@ export default function FactoryStatusBuilder() {
           fileInputRef={fileInputRef}
           onImportFile={(file) => importMutation.mutate(file)}
           importPending={importMutation.isPending}
-          onExport={handleExport}
+          onExport={() => void handleExport()}
           exportDisabled={localSheets.length === 0}
           savedAt={savedAt}
           isDirty={isDirty}

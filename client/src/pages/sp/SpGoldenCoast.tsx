@@ -5,6 +5,7 @@
  * phase panel owns its own state, readiness query, and mutation, so the
  * already-approved server flows stay one file each rather than one page.
  */
+import { PageHeader } from "@/components/PageHeader";
 import { RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -38,7 +39,7 @@ export default function SpGoldenCoast() {
   if (!isSupplierPartner) {
     return (
       <div className="mx-auto max-w-5xl space-y-4" data-testid="sp-golden-coast">
-        <h1 className="text-2xl font-semibold">{releaseDebtEnglish("Golden Coast operations")}</h1>
+        <PageHeader title={releaseDebtEnglish("Golden Coast operations")} />
         <Card>
           <CardContent className="p-6 text-sm text-muted-foreground">
             {releaseDebtEnglish("Select a Supplier Partner company before opening Golden Coast operations.")}
@@ -50,23 +51,18 @@ export default function SpGoldenCoast() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6" data-testid="sp-golden-coast">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-2xl font-semibold">{releaseDebtEnglish("Golden Coast operations")}</h1>
-            <Badge variant="outline">{selectedCompany?.name}</Badge>
-          </div>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            {releaseDebtEnglish(
-              "Frontend controls for the approved Golden Coast flows. Accounting rules and account routing stay server-owned."
-            )}
-          </p>
-        </div>
+      <PageHeader
+        title={releaseDebtEnglish("Golden Coast operations")}
+        subtitle={releaseDebtEnglish(
+          "Frontend controls for the approved Golden Coast flows. Accounting rules and account routing stay server-owned."
+        )}
+        meta={<Badge variant="outline">{selectedCompany?.name}</Badge>}
+      >
         <Button variant="outline" size="sm" onClick={invalidateReadiness} data-testid="button-gc-refresh-readiness">
           <RefreshCw className="mr-2 h-4 w-4" />
           {releaseDebtEnglish("Refresh readiness")}
         </Button>
-      </div>
+      </PageHeader>
 
       <Tabs value={tab} onValueChange={(value) => setTab(value as GoldenCoastTab)}>
         <div className="erp-mobile-scroll-tabs pb-1">

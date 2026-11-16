@@ -7,6 +7,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { ExportButton } from "@/components/export/ReportExportMenu";
 import { AlertCircle, Trash2, Check, Send, Plus } from "lucide-react";
 
 import type { Location, PosDraftSummary, PosStockPrintRow } from "./posTypes";
@@ -310,10 +311,12 @@ export function POSDialogs({
                   </Button>
                 );
               })()}
-            <Button onClick={() => handlePrint()} className="gap-2" data-testid="button-confirm-print">
-              <Check className="h-4 w-4" />
-              Print Now
-            </Button>
+            <ExportButton
+              kind="print"
+              variant="default"
+              onClick={() => handlePrint()}
+              data-testid="button-confirm-print"
+            />
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -379,15 +382,13 @@ export function POSDialogs({
                 Share on WhatsApp
               </Button>
             )}
-            <Button
+            <ExportButton
+              kind="print"
+              variant="default"
               onClick={handleStockPrint}
               disabled={stockInventoryLoading}
-              className="gap-2"
               data-testid="button-print-stock-report"
-            >
-              <Check className="h-4 w-4" />
-              Print Report
-            </Button>
+            />
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

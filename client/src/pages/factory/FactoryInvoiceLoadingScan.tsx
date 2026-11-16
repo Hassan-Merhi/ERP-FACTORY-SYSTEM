@@ -1,6 +1,7 @@
 import { visibleTabInterval } from "@/lib/queryPolicies";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/PageHeader";
 import { MobileBarcodeScanner, type CameraScanFeedback } from "@/components/MobileBarcodeScanner";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { translateCameraScanMessage } from "@/i18n/mobileCameraScanTranslations";
@@ -25,8 +26,6 @@ import {
   CheckCircle,
   XCircle,
   Trash2,
-  FileDown,
-  FileSpreadsheet,
   AlertTriangle,
   Package,
   Truck,
@@ -43,12 +42,27 @@ import {
   SessionBalesDialog,
 } from "./factoryinvoiceloadingscan/components/SessionDialogs";
 import { SessionHistoryCard } from "./factoryinvoiceloadingscan/components/SessionHistoryCard";
+import { ExportButton } from "@/components/export/ReportExportMenu";
+import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
 
 export default function FactoryInvoiceLoadingScan() {
   const [, navigate] = useLocation();
   const [, params] = useRoute("/factory/invoices/:id/loading-scan");
   const invoiceId = params?.id ? parseInt(params.id) : null;
   const { toast } = useToast();
+  const exportSessionExcel = async () => {
+    try {
+      await downloadFromUrl(`/api/factory/invoice-loading-sessions/${activeSessionId}/export/excel`, {
+        fileName: exportFileName(`loading session ${activeSessionId}`, "xlsx"),
+      });
+    } catch (error) {
+      toast({
+        title: "Export failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
   const { language } = useApplicationLanguage();
   const { formatDisplayDate } = useDateFormat();
   useEscapeToParent(`/factory/sales/invoices/${invoiceId}`);
@@ -302,30 +316,21 @@ export default function FactoryInvoiceLoadingScan() {
     <div
       className={`mx-auto flex min-h-full max-w-5xl flex-col space-y-4 sm:p-6 ${activeSessionId && currentSession ? `${FACTORY_MOBILE_ACTION_BAR_CLEARANCE} sm:pb-6` : ""}`}
     >
-      <div className="flex flex-wrap items-center gap-3">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => navigate(`/factory/sales/invoices/${invoiceId}`)}
-          data-testid="button-back"
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <div className="flex-1 min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-2xl font-bold" data-testid="text-invoice-title">
-              {inv.invoiceNumber || `Order #${inv.id}`}
-            </h1>
+      <PageHeader
+        title={<span data-testid="text-invoice-title">{inv.invoiceNumber || `Order #${inv.id}`}</span>}
+        backTarget={`/factory/sales/invoices/${invoiceId}`}
+        meta={
+          <>
             <Badge variant="default">Finalized</Badge>
             <Badge variant="outline" className="text-xs">
               Scan Loading
             </Badge>
-          </div>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {inv.customerName} · {inv.orderDate ? formatDisplayDate(inv.orderDate) : ""}
-          </p>
-        </div>
-      </div>
+            <span>
+              {inv.customerName} · {inv.orderDate ? formatDisplayDate(inv.orderDate) : ""}
+            </span>
+          </>
+        }
+      />
 
       <div className="grid grid-cols-2 gap-3">
         <Card>
@@ -574,7 +579,12 @@ export default function FactoryInvoiceLoadingScan() {
                 disabled={scanBaleMutation.isPending}
                 data-testid="input-scanner"
               />
-              <MobileBarcodeScanner onScan={(code) => scanBaleMutation.mutate(code)} feedback={cameraScanFeedback} disabled={!activeSessionId || scanBaleMutation.isPending} className="h-12 w-12 shrink-0" />
+              <MobileBarcodeScanner
+                onScan={(code) => scanBaleMutation.mutate(code)}
+                feedback={cameraScanFeedback}
+                disabled={!activeSessionId || scanBaleMutation.isPending}
+                className="h-12 w-12 shrink-0"
+              />
               <Button
                 type="submit"
                 size="default"
@@ -672,28 +682,21 @@ export default function FactoryInvoiceLoadingScan() {
                 </Button>
               </FactoryMobileActionBar>
               <div className="ml-auto flex items-center gap-2">
-                <Button
-                  variant="outline"
+                <ExportButton
                   size="sm"
-                  onClick={() =>
-                    window.open(`/api/factory/invoice-loading-sessions/${activeSessionId}/export/excel`, "_blank")
-                  }
+                  label="Export Excel (Session)"
+                  onClick={() => void exportSessionExcel()}
                   data-testid="button-export-session-excel"
-                >
-                  <FileSpreadsheet className="h-4 w-4 mr-1" />
-                  Session Excel
-                </Button>
-                <Button
-                  variant="outline"
+                />
+                <ExportButton
+                  kind="pdf"
                   size="sm"
+                  label="Export PDF (Session)"
                   onClick={() =>
                     window.open(`/api/factory/invoice-loading-sessions/${activeSessionId}/export/pdf`, "_blank")
                   }
                   data-testid="button-export-session-pdf"
-                >
-                  <FileDown className="h-4 w-4 mr-1" />
-                  Session PDF
-                </Button>
+                />
               </div>
             </div>
           </CardContent>

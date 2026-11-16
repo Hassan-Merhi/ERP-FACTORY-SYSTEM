@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ClipboardList, FileDown, Lock, Play, RotateCcw, ScanLine, Undo2 } from "lucide-react";
+import { ClipboardList, Lock, Play, RotateCcw, ScanLine, Undo2 } from "lucide-react";
+import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
+import { ExportButton } from "@/components/export/ReportExportMenu";
+import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
 import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -70,6 +73,23 @@ function lineStatusClass(status: RetailStockCountLineStatus): string {
 export default function RetailStockCount() {
   const { selectedCompany } = useCompany();
   const { toast } = useToast();
+  const [exportingCsv, setExportingCsv] = useState(false);
+  const exportStockCountCsv = async () => {
+    setExportingCsv(true);
+    try {
+      await downloadFromUrl(retailStockCountReportCsvUrl(locationId || undefined), {
+        fileName: exportFileName("stock count report", "csv"),
+      });
+    } catch (error) {
+      toast({
+        title: "Export failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setExportingCsv(false);
+    }
+  };
   const recordChanges = useExistingRecordChangeAccess();
   const canChangeCounts = recordChanges.allowed;
   const retailEnabled = selectedCompany?.companyType === "retail";
@@ -246,53 +266,47 @@ export default function RetailStockCount() {
   return (
     <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-4 p-3 pb-24 md:p-5 xl:pb-5">
       <RetailNav />
-      <div className="flex flex-col gap-3 rounded-xl border bg-card p-4 shadow-xs md:flex-row md:items-end md:justify-between">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
-            <ClipboardList className="h-6 w-6" /> Physical stock count
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Snapshot expected quantities, scan or key what is on the shelf, review variances, then finalize — inventory
-            only changes through the movements written at finalization.
-          </p>
+      <PageHeader
+        title="Physical stock count"
+        icon={<ClipboardList className="h-6 w-6" />}
+        subtitle="Snapshot expected quantities, scan or key what is on the shelf, review variances, then finalize — inventory only changes through the movements written at finalization."
+      />
+      <div className="flex flex-wrap items-end gap-2 rounded-xl border bg-card p-4 shadow-xs">
+        <div className="w-56">
+          <Label htmlFor="stock-count-location">Location</Label>
+          <select
+            id="stock-count-location"
+            value={locationId}
+            onChange={(event) => setLocationId(event.target.value ? Number(event.target.value) : "")}
+            className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm"
+            data-testid="stock-count-location"
+          >
+            <option value="">Select location</option>
+            {locations.map((location) => (
+              <option key={location.id} value={location.id}>
+                {location.name}
+              </option>
+            ))}
+          </select>
         </div>
-        <div className="flex flex-wrap items-end gap-2">
-          <div className="w-56">
-            <Label htmlFor="stock-count-location">Location</Label>
-            <select
-              id="stock-count-location"
-              value={locationId}
-              onChange={(event) => setLocationId(event.target.value ? Number(event.target.value) : "")}
-              className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm"
-              data-testid="stock-count-location"
-            >
-              <option value="">Select location</option>
-              {locations.map((location) => (
-                <option key={location.id} value={location.id}>
-                  {location.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <label className="flex h-10 items-center gap-2 rounded-md border px-3 text-sm">
-            <input
-              type="checkbox"
-              checked={includeAllVariants}
-              onChange={(event) => setIncludeAllVariants(event.target.checked)}
-              data-testid="stock-count-all-variants"
-            />
-            Include variants with no stock here
-          </label>
-          {recordChanges.canCreate("POST", "/api/pos/retail/stock-counts") && (
-            <Button
-              disabled={!locationId || createMutation.isPending}
-              onClick={() => createMutation.mutate()}
-              data-testid="stock-count-create"
-            >
-              <Play className="mr-1 h-4 w-4" /> {createMutation.isPending ? "Creating…" : "New count"}
-            </Button>
-          )}
-        </div>
+        <label className="flex h-10 items-center gap-2 rounded-md border px-3 text-sm">
+          <input
+            type="checkbox"
+            checked={includeAllVariants}
+            onChange={(event) => setIncludeAllVariants(event.target.checked)}
+            data-testid="stock-count-all-variants"
+          />
+          Include variants with no stock here
+        </label>
+        {recordChanges.canCreate("POST", "/api/pos/retail/stock-counts") && (
+          <Button
+            disabled={!locationId || createMutation.isPending}
+            onClick={() => createMutation.mutate()}
+            data-testid="stock-count-create"
+          >
+            <Play className="mr-1 h-4 w-4" /> {createMutation.isPending ? "Creating…" : "New count"}
+          </Button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,340px)_minmax(0,1fr)]">
@@ -607,13 +621,13 @@ export default function RetailStockCount() {
           <Card>
             <CardHeader className="flex-row items-center justify-between space-y-0 pb-3">
               <CardTitle className="text-lg">History &amp; variance</CardTitle>
-              <a
-                className="inline-flex items-center gap-1 text-sm text-primary underline-offset-2 hover:underline"
-                href={retailStockCountReportCsvUrl(locationId || undefined)}
+              <ExportButton
+                kind="csv"
+                size="sm"
+                busy={exportingCsv}
+                onClick={exportStockCountCsv}
                 data-testid="stock-count-csv"
-              >
-                <FileDown className="h-4 w-4" /> Export CSV
-              </a>
+              />
             </CardHeader>
             <CardContent className="space-y-2">
               {report && (
