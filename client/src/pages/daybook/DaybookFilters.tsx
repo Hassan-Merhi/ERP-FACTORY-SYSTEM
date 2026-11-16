@@ -1,4 +1,5 @@
-import { Search, X } from "lucide-react";
+import { SearchField } from "@/components/ui/search-field";
+import { X } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useCompany } from "@/contexts/CompanyContext";
 import { erpPageAccessQueryOptions } from "@/app/erpAccessQuery";
@@ -8,7 +9,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CoreErpFilterGrid } from "@/components/ui/core-erp-mobile";
 import { ErpMobileFilters } from "@/components/ui/erp-mobile-filters";
-import { Input } from "@/components/ui/input";
 import { PeriodFilter, PeriodFilterValue } from "@/components/ui/period-filter";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { FilterStateAction } from "@/hooks/use-paginated-filter-state";
@@ -73,17 +73,15 @@ export function DaybookFilters({
   ].filter(Boolean).length;
 
   const searchControl = (
-    <div className="relative w-full min-w-0 lg:col-span-2 xl:col-span-1">
-      <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-      <Input
-        id="search"
-        placeholder="Voucher # or description..."
-        value={filters.searchQuery}
-        onChange={(e) => setFilters({ ...filters, searchQuery: e.target.value })}
-        data-testid="input-search"
-        className="daybook-filter-search w-full pl-9"
-      />
-    </div>
+    <SearchField
+      id="search"
+      value={filters.searchQuery}
+      onValueChange={(value) => setFilters({ ...filters, searchQuery: value })}
+      placeholder="Voucher # or description..."
+      wrapperClassName="lg:col-span-2 xl:col-span-1"
+      className="daybook-filter-search"
+      data-testid="input-search"
+    />
   );
 
   return (

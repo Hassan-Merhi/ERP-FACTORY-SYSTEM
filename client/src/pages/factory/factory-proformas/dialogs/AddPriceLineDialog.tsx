@@ -5,12 +5,13 @@
  * discovered from compiler errors rather than guessed.
  */
 import type { useFactoryProformasModel } from "../../factoryproformas/useFactoryProformasModel";
+import { SearchField } from "@/components/ui/search-field";
 
 type FactoryProformasModel = ReturnType<typeof useFactoryProformasModel>;
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Search, BookOpen, PenLine } from "lucide-react";
+import { BookOpen, PenLine } from "lucide-react";
 
 export function AddPriceLineDialog({
   addLineMode,
@@ -99,17 +100,13 @@ export function AddPriceLineDialog({
               {/* Item picker */}
               {!catalogSelectedItem ? (
                 <div className="space-y-2">
-                  <div className="relative">
-                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Search by name or article code..."
-                      value={catalogSearch}
-                      onChange={(e) => setCatalogSearch(e.target.value)}
-                      className="pl-8"
-                      autoFocus
-                      data-testid="input-catalog-search"
-                    />
-                  </div>
+                  <SearchField
+                    placeholder="Search by name or article code..."
+                    value={catalogSearch}
+                    onValueChange={setCatalogSearch}
+                    autoFocus
+                    data-testid="input-catalog-search"
+                  />
                   <div className="border rounded-md overflow-hidden max-h-64 overflow-y-auto">
                     {allStockItems.length === 0 ? (
                       <p className="text-sm text-muted-foreground text-center py-6">Loading items...</p>

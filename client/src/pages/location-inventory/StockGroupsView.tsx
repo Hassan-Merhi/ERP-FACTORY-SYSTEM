@@ -9,12 +9,10 @@ import {
   MessageCircle,
   Pencil,
   Package,
-  Search,
   ChevronDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ReportExportMenu } from "@/components/export/ReportExportMenu";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
@@ -33,6 +31,7 @@ import {
   ErpMobileRecordList,
   ErpMobileSummaryGrid,
 } from "@/components/ui/erp-mobile-records";
+import { SearchField } from "@/components/ui/search-field";
 
 interface StockGroupsViewProps {
   selectedLocationLocal: Location;
@@ -147,16 +146,14 @@ export function StockGroupsView({
 
   const groupSearchControls = (
     <div className="flex items-center gap-2 flex-wrap">
-      <div className={isPhone ? "relative w-full" : "relative min-w-[220px] flex-[1_1_320px] max-w-xl"}>
-        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Search stock groups by name..."
-          value={groupSearchTerm}
-          onChange={(e) => setGroupSearchTerm(e.target.value)}
-          className="h-10 rounded-xl border-violet-200/80 bg-background/90 pl-10 shadow-sm focus-visible:ring-violet-500/30 dark:border-violet-500/25 dark:bg-slate-950/40"
-          data-testid="input-group-search"
-        />
-      </div>
+      <SearchField
+        placeholder="Search stock groups by name..."
+        value={groupSearchTerm}
+        onValueChange={setGroupSearchTerm}
+        wrapperClassName={isPhone ? "w-full" : "min-w-[220px] flex-[1_1_320px] max-w-xl"}
+        className="h-10 rounded-xl border-violet-200/80 bg-background/90 shadow-sm focus-visible:ring-violet-500/30 dark:border-violet-500/25 dark:bg-slate-950/40"
+        data-testid="input-group-search"
+      />
       <Select value={groupCategoryFilter || "all"} onValueChange={(v) => setGroupCategoryFilter(v === "all" ? "" : v)}>
         <SelectTrigger
           className={

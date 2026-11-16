@@ -1,12 +1,12 @@
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Filter, Search, SlidersHorizontal } from "lucide-react";
+import { Filter, SlidersHorizontal } from "lucide-react";
 
 import type { ShippingColId } from "../types";
 import { SHIPPING_COLS } from "../utils";
+import { SearchField } from "@/components/ui/search-field";
 
 interface ShippingToolbarProps {
   search: string;
@@ -50,16 +50,14 @@ export function ShippingToolbar({
 }: ShippingToolbarProps) {
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-card p-2.5 shadow-sm dark:bg-[hsl(var(--factory-hue)_50%_13%)]">
-      <div className="relative min-w-[200px] flex-[2_1_260px]">
-        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Search invoice, client, container, destination…"
-          className="h-9 rounded-lg bg-background/80 pl-8 text-xs"
-          value={search}
-          onChange={(e) => onSearch(e.target.value)}
-          data-testid="input-search"
-        />
-      </div>
+      <SearchField
+        placeholder="Search invoice, client, container, destination…"
+        wrapperClassName="min-w-[200px] flex-[2_1_260px]"
+        className="h-9 rounded-lg bg-background/80 text-xs"
+        value={search}
+        onValueChange={onSearch}
+        data-testid="input-search"
+      />
       <Select value={filterStatus} onValueChange={onFilterStatus}>
         <SelectTrigger
           className="h-9 min-w-[110px] flex-[1_1_110px] rounded-lg text-xs"

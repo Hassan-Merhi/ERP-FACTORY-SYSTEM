@@ -8,7 +8,7 @@
 import { Building2, Factory, Filter, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -157,18 +157,18 @@ export function JournalFilters({ model }: { model: TransactionJournalModel }) {
     <div className="space-y-1.5 flex-1 min-w-0 w-full md:min-w-[235px] md:w-auto">
       <Label className="text-[11px] font-semibold text-slate-600 dark:text-slate-300" htmlFor="search-tj">Search</Label>
       <div className="flex flex-col gap-2 sm:flex-row">
-        <div className="relative flex-1">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            id="search-tj"
-            value={model.searchInput}
-            onChange={(e) => model.setSearchInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && model.handleSearch()}
-            placeholder="Voucher # or narration…"
-            className="h-9 rounded-lg border-slate-200 bg-white/85 pl-9 shadow-sm focus-visible:ring-violet-500 dark:border-white/15 dark:bg-white/[0.04]"
-            data-testid="input-search"
-          />
-        </div>
+        <SearchField
+          id="search-tj"
+          wrapperClassName="flex-1"
+          value={model.searchInput}
+          onValueChange={model.setSearchInput}
+          onKeyDown={(e) => e.key === "Enter" && model.handleSearch()}
+          placeholder="Voucher # or narration…"
+          aria-label="Search"
+          showClear={false}
+          className="h-9 rounded-lg border-slate-200 bg-white/85 shadow-sm focus-visible:ring-violet-500 dark:border-white/15 dark:bg-white/[0.04]"
+          data-testid="input-search"
+        />
         <Button
           variant="default"
           className="h-9 w-full shrink-0 rounded-lg bg-gradient-to-r from-violet-600 to-purple-600 px-5 text-white shadow-sm hover:from-violet-700 hover:to-purple-700 sm:w-auto"
@@ -243,20 +243,19 @@ function JournalPhoneSearch({ model }: { model: TransactionJournalModel }) {
   const { t } = useApplicationLanguage();
   return (
     <div className="flex min-w-0 items-center gap-1.5">
-      <div className="relative min-w-0 flex-1">
-        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          id="search-tj"
-          value={model.searchInput}
-          onChange={(e) => model.setSearchInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && model.handleSearch()}
-          placeholder="Voucher # or narration…"
-          aria-label={t("mobileFilters.search")}
-          enterKeyHint="search"
-          className="h-9 rounded-lg border-slate-200 bg-white/85 pl-9 shadow-sm dark:border-white/15 dark:bg-white/[0.04]"
-          data-testid="input-search"
-        />
-      </div>
+      <SearchField
+        id="search-tj"
+        wrapperClassName="flex-1"
+        value={model.searchInput}
+        onValueChange={model.setSearchInput}
+        onKeyDown={(e) => e.key === "Enter" && model.handleSearch()}
+        placeholder="Voucher # or narration…"
+        aria-label={t("mobileFilters.search")}
+        enterKeyHint="search"
+        showClear={false}
+        className="h-9 rounded-lg border-slate-200 bg-white/85 shadow-sm dark:border-white/15 dark:bg-white/[0.04]"
+        data-testid="input-search"
+      />
       <Button
         variant="default"
         size="icon"

@@ -1,6 +1,7 @@
+import { SearchField } from "@/components/ui/search-field";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { BarChart3, Building2, ChevronDown, ChevronRight, Download, RefreshCw, Search } from "lucide-react";
+import { BarChart3, Building2, ChevronDown, ChevronRight, Download, RefreshCw } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
 import { ErpListTable, ErpPendingButton } from "@/erp-core";
@@ -10,7 +11,6 @@ import { getTopProfitCompanyByItem, groupMarketRows } from "./itemMarketAnalysis
 import { fetchSalePriceExportRows } from "./itemMarketAnalysisSalePrices";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { PeriodFilter, getDefaultPeriodValue, type PeriodFilterValue } from "@/components/ui/period-filter";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -19,7 +19,6 @@ import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/compon
 import { useCompany } from "@/contexts/CompanyContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { formatNumber } from "@/lib/formatNumber";
-
 
 import {
   StatusBadge,
@@ -360,16 +359,13 @@ export default function ItemMarketAnalysis() {
 
       <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-card p-3">
         <PeriodFilter value={period} onChange={setPeriod} data-testid="period-filter-item-market-analysis" />
-        <div className="relative min-w-[220px] flex-1 sm:max-w-sm">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search item code or name"
-            className="pl-8"
-            data-testid="input-item-market-search"
-          />
-        </div>
+        <SearchField
+          value={search}
+          onValueChange={setSearch}
+          placeholder="Search item code or name"
+          wrapperClassName="min-w-[220px] flex-1 sm:max-w-sm"
+          data-testid="input-item-market-search"
+        />
         <Popover open={companyPopoverOpen} onOpenChange={setCompanyPopoverOpen}>
           <PopoverTrigger asChild>
             <Button variant="outline" className="w-[190px] justify-between" data-testid="button-item-market-companies">
@@ -661,7 +657,12 @@ export default function ItemMarketAnalysis() {
                                 Company breakdown for {group.name}
                               </div>
                               <div className="overflow-x-auto rounded-md border">
-                                <ErpListTable pageKey="market-company-breakdown" companyId={selectedCompany?.id} showDensityControl={false} scrollLabel="Market company breakdown">
+                                <ErpListTable
+                                  pageKey="market-company-breakdown"
+                                  companyId={selectedCompany?.id}
+                                  showDensityControl={false}
+                                  scrollLabel="Market company breakdown"
+                                >
                                   <TableHeader>
                                     <TableRow>
                                       <TableHead>Company</TableHead>

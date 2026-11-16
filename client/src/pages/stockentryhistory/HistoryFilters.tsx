@@ -1,7 +1,8 @@
 import { useMemo } from "react";
-import { CalendarRange, Search, Users } from "lucide-react";
+import { CalendarRange, Users } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { StockEntryWorker } from "./derived";
@@ -23,9 +24,18 @@ interface HistoryFiltersProps {
 }
 
 export function HistoryFilters({
-  fromDate, toDate, onFromDateChange, onToDateChange, selectedWorkerId,
-  onWorkerChange, workers, groups, search, onSearchChange,
-  includeUnassigned, onIncludeUnassignedChange,
+  fromDate,
+  toDate,
+  onFromDateChange,
+  onToDateChange,
+  selectedWorkerId,
+  onWorkerChange,
+  workers,
+  groups,
+  search,
+  onSearchChange,
+  includeUnassigned,
+  onIncludeUnassignedChange,
 }: HistoryFiltersProps) {
   const workerOptions = useMemo(() => {
     const byId = new Map<number, string>();
@@ -57,7 +67,9 @@ export function HistoryFilters({
         />
       </div>
       <div className="space-y-1 shrink-0">
-        <Label htmlFor="stock-entry-history-to" className="text-xs text-muted-foreground">To</Label>
+        <Label htmlFor="stock-entry-history-to" className="text-xs text-muted-foreground">
+          To
+        </Label>
         <Input
           id="stock-entry-history-to"
           type="date"
@@ -72,27 +84,31 @@ export function HistoryFilters({
           <Users className="h-3.5 w-3.5" /> Worker
         </Label>
         <Select value={selectedWorkerId} onValueChange={onWorkerChange}>
-          <SelectTrigger className="w-48 h-8 text-xs" data-testid="select-stock-entry-worker" aria-label="Filter stock entry by worker">
+          <SelectTrigger
+            className="w-48 h-8 text-xs"
+            data-testid="select-stock-entry-worker"
+            aria-label="Filter stock entry by worker"
+          >
             <SelectValue placeholder="All workers" />
           </SelectTrigger>
           <SelectContent className="max-h-72">
             <SelectItem value="all">All workers</SelectItem>
             {workerOptions.map(([id, name]) => (
-              <SelectItem key={id} value={String(id)}>{name}</SelectItem>
+              <SelectItem key={id} value={String(id)}>
+                {name}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
       </div>
-      <div className="relative flex-1 min-w-[180px]">
-        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-        <Input
-          className="pl-8 h-8 text-xs"
-          placeholder="Search by reference number…"
-          value={search}
-          onChange={(event) => onSearchChange(event.target.value)}
-          data-testid="input-search"
-        />
-      </div>
+      <SearchField
+        wrapperClassName="flex-1 min-w-[180px]"
+        className="h-8 text-xs"
+        placeholder="Search by reference number…"
+        value={search}
+        onValueChange={onSearchChange}
+        data-testid="input-search"
+      />
       <div className="flex items-center gap-1.5 shrink-0 h-8">
         <Checkbox
           id="include-unassigned"

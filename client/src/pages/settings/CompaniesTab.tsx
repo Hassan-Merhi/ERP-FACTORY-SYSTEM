@@ -3,11 +3,12 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@/lib/form-resolver";
 import { z } from "zod";
-import { Plus, Building2, Search, Edit, Trash2 } from "lucide-react";
+import { Plus, Building2, Edit, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ParentCreditAccountSelect } from "./ParentCreditAccountSelect";
@@ -418,16 +419,13 @@ export function CompaniesTab() {
       </div>
 
       {companies.length > 3 && (
-        <div className="relative max-w-xs">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-          <Input
-            placeholder="Search companies…"
-            value={companySearch}
-            onChange={(e) => setCompanySearch(e.target.value)}
-            className="pl-9"
-            data-testid="input-company-search"
-          />
-        </div>
+        <SearchField
+          placeholder="Search companies…"
+          value={companySearch}
+          onValueChange={setCompanySearch}
+          wrapperClassName="max-w-xs"
+          data-testid="input-company-search"
+        />
       )}
 
       {isLoadingCompanies ? (

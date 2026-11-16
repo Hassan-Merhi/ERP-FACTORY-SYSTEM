@@ -4,28 +4,26 @@
  * Pure presentation over the page model: only transaction types available
  * for the selected period appear in the type dropdown.
  */
-import { ChevronLeft, ChevronRight, Search, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PeriodFilter } from "@/components/ui/period-filter";
 import { ErpMobileFilters } from "@/components/ui/erp-mobile-filters";
 import type { FactoryDaybookModel } from "./useFactoryDaybookModel";
 import { formatTxType } from "./daybookUtils";
+import { SearchField } from "@/components/ui/search-field";
 
 export function FactoryDaybookFilters({ model }: { model: FactoryDaybookModel }) {
   const search = (
-    <div className="relative w-full min-w-0 sm:w-56">
-      <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-      <Input
-        placeholder="Search..."
-        value={model.searchQuery}
-        onChange={(e) => model.setSearchQuery(e.target.value)}
-        data-testid="input-search"
-        className="h-10 w-full rounded-xl border-border/70 bg-background/80 pl-9 text-sm shadow-sm focus-visible:ring-blue-500/30"
-      />
-    </div>
+    <SearchField
+      placeholder="Search..."
+      value={model.searchQuery}
+      onValueChange={model.setSearchQuery}
+      data-testid="input-search"
+      wrapperClassName="w-full min-w-0 sm:w-56"
+      className="h-10 rounded-xl border-border/70 bg-background/80 text-sm shadow-sm focus-visible:ring-blue-500/30"
+    />
   );
   // Inline (tablet/desktop) the stepper's controls sit directly in the filter row as before; on
   // phones they share one full-width row with the period picker taking the free space.
@@ -60,7 +58,10 @@ export function FactoryDaybookFilters({ model }: { model: FactoryDaybookModel })
   );
   const typeSelect = (
     <Select value={model.txTypeFilter} onValueChange={model.setTxTypeFilter}>
-      <SelectTrigger className="h-10 w-full rounded-xl border-border/70 bg-background/80 text-sm shadow-sm sm:w-40" data-testid="select-tx-type">
+      <SelectTrigger
+        className="h-10 w-full rounded-xl border-border/70 bg-background/80 text-sm shadow-sm sm:w-40"
+        data-testid="select-tx-type"
+      >
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -75,7 +76,10 @@ export function FactoryDaybookFilters({ model }: { model: FactoryDaybookModel })
   );
   const statusSelect = (
     <Select value={model.statusFilter} onValueChange={(v) => model.setStatusFilter(v as "all" | "exclude" | "only")}>
-      <SelectTrigger className="h-10 w-full rounded-xl border-border/70 bg-background/80 text-sm shadow-sm sm:w-40" data-testid="select-status-filter">
+      <SelectTrigger
+        className="h-10 w-full rounded-xl border-border/70 bg-background/80 text-sm shadow-sm sm:w-40"
+        data-testid="select-status-filter"
+      >
         <SelectValue />
       </SelectTrigger>
       <SelectContent>

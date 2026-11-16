@@ -1,3 +1,4 @@
+import { SearchField } from "@/components/ui/search-field";
 import { formatMoneyDisplay } from "@/lib/moneyDisplay";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -11,13 +12,11 @@ import {
   ChevronRight,
   GitCompare,
   RefreshCw,
-  Search,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
 import { PeriodFilter, getDefaultPeriodValue, type PeriodFilterValue } from "@/components/ui/period-filter";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -400,15 +399,12 @@ export default function StockInSalesReportComparison() {
             <SelectItem value="yearly">Yearly</SelectItem>
           </SelectContent>
         </Select>
-        <div className="relative col-span-2 min-w-0 flex-1 sm:min-w-52 sm:max-w-sm">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search item, group, location..."
-            className="pl-9"
-          />
-        </div>
+        <SearchField
+          value={search}
+          onValueChange={setSearch}
+          placeholder="Search item, group, location..."
+          wrapperClassName="col-span-2 flex-1 sm:min-w-52 sm:max-w-sm"
+        />
         {isFetching && !isLoading && <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />}
       </div>
 

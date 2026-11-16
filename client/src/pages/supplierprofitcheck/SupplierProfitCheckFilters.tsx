@@ -1,8 +1,8 @@
-import { ChevronDown, Columns, Filter, RotateCcw, Search } from "lucide-react";
+import { ChevronDown, Columns, Filter, RotateCcw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ALL_COLUMNS, STATUS_OPTIONS } from "./utils";
 import type { useSupplierProfitCheckModel } from "./useSupplierProfitCheckModel";
@@ -13,16 +13,14 @@ export function SupplierProfitCheckFilters({ model }: { model: ProfitModel }) {
   if (!model.loaded) return null;
   return (
     <div className="flex flex-wrap gap-2 items-center">
-      <div className="relative max-sm:w-full">
-        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-        <Input
-          placeholder="Search code / name"
-          value={model.search}
-          onChange={(event) => model.setSearch(event.target.value)}
-          className="pl-8 w-48 rounded-lg max-sm:w-full"
-          data-testid="input-search"
-        />
-      </div>
+      <SearchField
+        placeholder="Search code / name"
+        value={model.search}
+        onValueChange={model.setSearch}
+        wrapperClassName="w-48 max-sm:w-full"
+        className="rounded-lg"
+        data-testid="input-search"
+      />
 
       <Popover open={model.showStatusPicker} onOpenChange={model.setShowStatusPicker}>
         <PopoverTrigger asChild>

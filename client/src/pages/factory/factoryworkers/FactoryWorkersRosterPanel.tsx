@@ -1,7 +1,6 @@
 import {
   Plus,
   Pencil,
-  Search,
   Users,
   UserX,
   UserCheck,
@@ -21,7 +20,6 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { downloadFromUrl } from "@/lib/exportFile";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 import {
@@ -38,6 +36,7 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
 import { getAvatarColor, getInitials } from "./utils";
 import type { useFactoryWorkersModel } from "./useFactoryWorkersModel";
+import { SearchField } from "@/components/ui/search-field";
 
 interface FactoryWorkersModelProps {
   model: ReturnType<typeof useFactoryWorkersModel>;
@@ -190,16 +189,14 @@ export function FactoryWorkersRosterPanel({ model, onOpenCategories }: FactoryWo
 
         {/* Filter + actions row */}
         <div className="flex flex-wrap items-center gap-3">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by name, code, position, nationality..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-10 rounded-lg border-border/70 bg-card/80 pl-9 shadow-sm focus-visible:ring-primary/40"
-              data-testid="input-search"
-            />
-          </div>
+          <SearchField
+            placeholder="Search by name, code, position, nationality..."
+            value={searchQuery}
+            onValueChange={setSearchQuery}
+            wrapperClassName="flex-1 min-w-[200px]"
+            className="h-10 rounded-lg border-border/70 bg-card/80 shadow-sm focus-visible:ring-primary/40"
+            data-testid="input-search"
+          />
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="h-10 w-32 rounded-lg bg-card/80" data-testid="select-status-filter">
               <SelectValue />
