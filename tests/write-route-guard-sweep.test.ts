@@ -221,6 +221,8 @@ const SENSITIVE_WRITE_ROUTES = [
   "POST /api/dev/seed",
   // POST /api/exchange-rates left this list in wave 9 (ledger safety): saving a
   // rate no longer auto-posts an FX-REVAL journal, so it writes no ledger rows.
+  "POST /api/erp/supplier-returns/commit",
+  "POST /api/erp/supplier-returns/preview",
   "POST /api/factory/admin/fix-other-charges-currency",
   "POST /api/factory/advances/:id/repayments",
   "POST /api/factory/advances/:id/reverse",
@@ -285,6 +287,7 @@ const SENSITIVE_WRITE_ROUTES = [
   "POST /api/factory/employees/bulk-payroll",
   "POST /api/factory/employees/bulk-withdraw",
   "POST /api/factory/finalize",
+  "POST /api/factory/finalized-sale-returns/apply",
   "POST /api/factory/fx-agent-wallets/:id/settle",
   "POST /api/factory/import-company-data",
   "POST /api/factory/import/bales",
