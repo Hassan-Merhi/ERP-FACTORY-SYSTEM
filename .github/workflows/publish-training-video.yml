@@ -44,7 +44,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: "24.22.2"
+          node-version: "24.22.3"
       - name: Reject malformed source identifiers before calling GitHub API
         shell: bash
         run: |
@@ -148,7 +148,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: "24.22.2"
+          node-version: "24.22.3"
       - name: Fail closed unless protected approval and storage are configured
         shell: bash
         run: |

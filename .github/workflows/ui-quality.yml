@@ -97,7 +97,7 @@ jobs:
       - name: Set up Node.js 24.22.2
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: "24.22.2"
+          node-version: "24.22.3"
 
       - name: Run classified i18n gate when relevant
         env:
@@ -150,7 +150,7 @@ jobs:
       - name: Set up Node.js 24.22.2
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: "24.22.2"
+          node-version: "24.22.3"
           cache: npm
 
       - name: Normalize registry URLs
@@ -243,7 +243,7 @@ jobs:
       - name: Set up Node.js 24.22.2
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: "24.22.2"
+          node-version: "24.22.3"
           cache: npm
 
       - name: Install dependencies
