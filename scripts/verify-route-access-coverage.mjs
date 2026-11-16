@@ -51,6 +51,11 @@ export function validateRouteAccessCoverage(routeSnapshot, accessSnapshot) {
         rule.roles.length !== 1 ||
         rule.roles[0] !== "delegated"
       ) errors.push(`Invalid legacy delegation: ${rule.id}`);
+      const registeredChain = /^\\d+:\\S+ \\S+ \\[([^\\]]*)\\]$/.exec(rule.id)?.[1];
+      if (!registeredChain || !Array.isArray(rule.originalGuardChain) ||
+          JSON.stringify(rule.originalGuardChain) !== JSON.stringify(registeredChain.split(" > "))) {
+        errors.push(`Legacy handler chain drift: ${rule.id}`);
+      }
     } else if (rule.status !== "reviewed" || rule.enforcement === "legacy-delegated") {
       errors.push(`Unreviewed rule cannot declare direct authorization: ${rule.id}`);
     }
