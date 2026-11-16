@@ -59,12 +59,16 @@ export function useVoucherEditMutations({
       queryClient.invalidateQueries({ queryKey: ["/api/factory/customers"] });
       queryClient.invalidateQueries({ predicate: keyStartsWith("/api/factory/customer-orders") });
       invalidateContainerLandedCostQueries();
-      toast({ title: "Success", description: "Voucher updated successfully" });
+      toast({ title: "Updated", description: "Voucher updated successfully" });
       handleBack();
     },
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message || "Failed to update voucher", variant: "destructive" });
+      toast({
+        title: "Update failed",
+        description: error.message || "Failed to update voucher",
+        variant: "destructive",
+      });
     },
   });
 
@@ -76,12 +80,12 @@ export function useVoucherEditMutations({
       queryClient.invalidateQueries({ queryKey: ["/api/vouchers"] });
       queryClient.invalidateQueries({ queryKey: [`/api/vouchers/${id}`] });
       queryClient.invalidateQueries({ queryKey: ["/api/accounts/all"] });
-      toast({ title: "Success", description: "Optional status updated successfully" });
+      toast({ title: "Updated", description: "Optional status updated successfully" });
     },
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;
       toast({
-        title: "Error",
+        title: "Update failed",
         description: error.message || "Failed to update optional status",
         variant: "destructive",
       });
@@ -106,12 +110,16 @@ export function useVoucherEditMutations({
       queryClient.invalidateQueries({ queryKey: ["/api/stock-transfers"] });
       queryClient.invalidateQueries({ queryKey: ["/api/daybook"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/daybook"] });
-      toast({ title: "Success", description: "Sales voucher updated successfully" });
+      toast({ title: "Updated", description: "Sales voucher updated successfully" });
       navigate(`${modePrefix}/daybook`);
     },
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message || "Failed to update sales voucher", variant: "destructive" });
+      toast({
+        title: "Update failed",
+        description: error.message || "Failed to update sales voucher",
+        variant: "destructive",
+      });
     },
   });
 
@@ -129,13 +137,13 @@ export function useVoucherEditMutations({
       queryClient.invalidateQueries({ queryKey: ["/api/stock-transfers"] });
       queryClient.invalidateQueries({ queryKey: ["/api/daybook"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/daybook"] });
-      toast({ title: "Success", description: "Purchase voucher updated successfully" });
+      toast({ title: "Updated", description: "Purchase voucher updated successfully" });
       navigate(`${modePrefix}/daybook`);
     },
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;
       toast({
-        title: "Error",
+        title: "Update failed",
         description: error.message || "Failed to update purchase voucher",
         variant: "destructive",
       });
@@ -156,13 +164,13 @@ export function useVoucherEditMutations({
       queryClient.invalidateQueries({ queryKey: ["/api/stock-transfers"] });
       queryClient.invalidateQueries({ queryKey: ["/api/daybook"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/daybook"] });
-      toast({ title: "Success", description: "Adjustment voucher updated successfully" });
+      toast({ title: "Updated", description: "Adjustment voucher updated successfully" });
       navigate(`${modePrefix}/daybook`);
     },
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;
       toast({
-        title: "Error",
+        title: "Update failed",
         description: error.message || "Failed to update adjustment voucher",
         variant: "destructive",
       });
@@ -183,13 +191,13 @@ export function useVoucherEditMutations({
       queryClient.invalidateQueries({ queryKey: ["/api/stock-transfers"] });
       queryClient.invalidateQueries({ queryKey: ["/api/daybook"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/daybook"] });
-      toast({ title: "Success", description: "Stock transfer voucher updated successfully" });
+      toast({ title: "Updated", description: "Stock transfer voucher updated successfully" });
       navigate(`${modePrefix}/daybook`);
     },
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;
       toast({
-        title: "Error",
+        title: "Update failed",
         description: error.message || "Failed to update stock transfer voucher",
         variant: "destructive",
       });

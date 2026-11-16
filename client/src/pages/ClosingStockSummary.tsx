@@ -91,7 +91,7 @@ export default function ClosingStockSummary() {
       return response.json();
     },
     onSuccess: (result) => {
-      toast({ title: "Success", description: result.message });
+      toast({ title: "Saved", description: result.message });
       setShowCarryForwardDialog(false);
       void invalidateErpDataFamilies(queryClient, [
         "/api/reports/closing-stock-summary",

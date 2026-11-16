@@ -128,7 +128,7 @@ function SpContainerDetailView() {
       setShowEditDialog(false);
     },
     onError: (err: Error) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Update failed", description: err.message, variant: "destructive" });
     },
   });
 
