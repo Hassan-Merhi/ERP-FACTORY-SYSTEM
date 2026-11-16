@@ -32,7 +32,10 @@ vi.mock("../server/storage", () => ({ storage: harness.storage }));
 vi.mock("../server/auth", () => ({ requireAuth: (_req: any, _res: any, next: any) => next() }));
 vi.mock("../server/routes/_helpers", () => ({
   upload: { single: () => (_req: any, _res: any, next: any) => next() },
-  spreadsheetUpload: { single: () => (_req: any, _res: any, next: any) => next() },
+  spreadsheetUpload: {
+    single: () => (_req: unknown, _res: unknown, next: () => void) => next(),
+    fields: () => (_req: unknown, _res: unknown, next: () => void) => next(),
+  },
 }));
 vi.mock("../server/excelHelper", () => ({ readExcel: vi.fn(), sheetToJson: vi.fn() }));
 vi.mock("../server/lib/logger", () => ({ logger: { error: vi.fn() } }));

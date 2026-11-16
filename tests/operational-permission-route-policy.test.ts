@@ -34,7 +34,7 @@ const REVIEWED_UNGUARDED_ROUTES: Record<string, string> = {
     "Capability probe that answers whether the user may import; the route checks act_import_data itself.",
   "POST /api/factory/raw-stock/recalc/mix-batches-preview": "Admin-only preview; it writes nothing.",
   "POST /api/factory/finalized-sale-returns/import-preview":
-    "Admin/Developer-only (requireRole) read-only matching of uploaded bale references against the selected customer's finalized sales; it writes nothing. Applying returns is the separate /apply route. Route added on main; recorded when the route manifest was refreshed.",
+    "Admin/Developer-only, read-only match of uploaded bale references to finalized invoices (#3198); it writes nothing. Posting goes through /api/factory/finalized-sale-returns/apply.",
   "POST /api/factory/customer-orders/loading-list/automatic-print-preflight-batch":
     "Bale-label print preparation (Automatic Priority Printing); owned by the Factory label-printing pages in the backend access boundary, like /api/bale-label-prints. Not an invoice print.",
   "POST /api/factory/customer-orders/loading-list/automatic-print-preflight":

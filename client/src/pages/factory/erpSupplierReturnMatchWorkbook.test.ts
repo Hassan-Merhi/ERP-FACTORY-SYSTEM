@@ -80,20 +80,48 @@ describe("ERP supplier return pre-application Excel review", () => {
   it("exports 17 + 1 source splits against one requested quantity without double counting", () => {
     const wb = new ExcelJS.Workbook();
     const base = {
-      offloadId: 91, offloadItemId: 10, containerNumber: "A",
-      supplierName: "Supplier A", code: "HMD12034", name: "Mix",
-      originalQty: "17", returnedQty: "0", remainingQty: "17",
-      availableQty: "18", unitPurchaseCost: "58", unitLandedCost: "60",
+      offloadId: 91,
+      offloadItemId: 10,
+      containerNumber: "A",
+      supplierName: "Supplier A",
+      code: "HMD12034",
+      name: "Mix",
+      originalQty: "17",
+      returnedQty: "0",
+      remainingQty: "17",
+      availableQty: "18",
+      unitPurchaseCost: "58",
+      unitLandedCost: "60",
       averageCost: "65",
     };
     buildErpSupplierReturnMatchWorkbook(wb, {
       entries: [
-        { row: 2, code: "HMD12034", requestedQuantity: "18",
-          quantity: "17", status: "matched", valid: true, candidate: base },
-        { row: 2, code: "HMD12034", requestedQuantity: "18",
-          quantity: "1", status: "matched", valid: true,
-          candidate: { ...base, offloadId: 92, offloadItemId: 11, containerNumber: "B",
-            originalQty: "5", remainingQty: "5", unitPurchaseCost: "62" } },
+        {
+          row: 2,
+          code: "HMD12034",
+          requestedQuantity: "18",
+          quantity: "17",
+          status: "matched",
+          valid: true,
+          candidate: base,
+        },
+        {
+          row: 2,
+          code: "HMD12034",
+          requestedQuantity: "18",
+          quantity: "1",
+          status: "matched",
+          valid: true,
+          candidate: {
+            ...base,
+            offloadId: 92,
+            offloadItemId: 11,
+            containerNumber: "B",
+            originalQty: "5",
+            remainingQty: "5",
+            unitPurchaseCost: "62",
+          },
+        },
       ],
     });
     const matched = wb.getWorksheet("Matched Containers")!;
@@ -111,8 +139,7 @@ describe("ERP supplier return pre-application Excel review", () => {
   it("keeps incomplete source allocation visible in the input row review", () => {
     const wb = new ExcelJS.Workbook();
     buildErpSupplierReturnMatchWorkbook(wb, {
-      entries: [{ row: 2, code: "A", requestedQuantity: "18",
-        quantity: "17", status: "partial", valid: false }],
+      entries: [{ row: 2, code: "A", requestedQuantity: "18", quantity: "17", status: "partial", valid: false }],
     });
     const review = wb.getWorksheet("Input Row Allocations")!;
     expect(review.getRow(2).getCell(3).value).toBe(18);
@@ -120,5 +147,4 @@ describe("ERP supplier return pre-application Excel review", () => {
     expect(review.getRow(2).getCell(5).value).toBe(18);
     expect(review.getRow(2).getCell(6).value).toBe("review");
   });
-
 });
