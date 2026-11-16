@@ -73,10 +73,9 @@ for (const [, policyName, declarations] of policyGroups) {
 // endpoint as an anonymous/public endpoint or a cross-company read as unrestricted.
 const tenantSource = fs.readFileSync(path.join(root, "server/middleware/tenantIsolationBoundary.ts"), "utf8");
 function extractExactPathSet(name) {
-  const escaped = name.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\const rows = source.routes.map((registration, index) => {");
-  const match = new RegExp("const " + escaped + " = new Set\\\\(\\\\[([\\\\s\\\\S]*?)\\\\]\\\\);").exec(tenantSource);
-  if (!match) throw new Error(`Tenant policy set ${name} changed; cannot extract safe route evidence`);
-  return new Set([...match[1].replace(/\\/\\/[^\\n]*/g, "").matchAll(/"([^"]+)"/g)].map((item) => item[1]));
+  const match = new RegExp("const " + name + " = new Set\\(\\[([\\s\\S]*?)\\]\\);").exec(tenantSource);
+  if (!match) throw new Error("Tenant policy set " + name + " changed; cannot extract safe route evidence");
+  return new Set([...match[1].replace(/\/\/[^\n]*/g, "").matchAll(/"([^"]+)"/g)].map((item) => item[1]));
 }
 const tenantSets = {
   contextOptional: extractExactPathSet("CONTEXT_OPTIONAL_PATHS"),
