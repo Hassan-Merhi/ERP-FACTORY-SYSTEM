@@ -66,7 +66,7 @@ for(const [from,to] of plan){
 }
 const rules=[...plan].sort((a,b)=>b[0].length-a[0].length);
 const escapeRx=s=>s.replace(/[-/\\^$*+?.()|[\]{}]/g,"\\$&");
-const editable=p=>/\.(?:[cm]?[jt]sx?|json|ya?ml|md|sh)$/.test(p)&&!p.startsWith("docs/archive/")&&!p.startsWith("docs/superpowers/")&&!p.startsWith("migrations/")&&!p.startsWith("scripts/repairs/")&&!p.endsWith("package-lock.json")&&!p.startsWith("docs/audits/");
+const editable=p=>/\.(?:[cm]?[jt]sx?|json|ya?ml|md|sh)$/.test(p)&&!p.startsWith(".github/")&&!p.startsWith("docs/archive/")&&!p.startsWith("docs/superpowers/")&&!p.startsWith("migrations/")&&!p.startsWith("scripts/repairs/")&&!p.endsWith("package-lock.json")&&!p.startsWith("docs/audits/");
 const edits=new Map();
 for(const p of files.filter(editable)){
  let orig;try{orig=fs.readFileSync(path.join(root,p),"utf8")}catch{continue}
