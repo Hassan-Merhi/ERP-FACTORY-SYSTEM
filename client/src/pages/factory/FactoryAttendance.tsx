@@ -184,13 +184,15 @@ export default function FactoryAttendance() {
 
   const handleSave = useCallback(() => {
     if (!data?.workers.length) return;
-    const records = data.workers.filter((w) => w.active !== false).map((w) => ({
-      workerId: w.id,
-      attendanceDate: selectedDate,
-      shift: shift || undefined,
-      status: attendanceMap[w.id] ?? "Present",
-      notes: notesMap[w.id] || undefined,
-    }));
+    const records = data.workers
+      .filter((w) => w.active !== false)
+      .map((w) => ({
+        workerId: w.id,
+        attendanceDate: selectedDate,
+        shift: shift || undefined,
+        status: attendanceMap[w.id] ?? "Present",
+        notes: notesMap[w.id] || undefined,
+      }));
     const priorDates = attendancePastDates(records.map((record) => record.attendanceDate));
     if (priorDates.length && !canEditPastWithoutPassword) {
       setApprovalDates(priorDates);

@@ -29,15 +29,19 @@ export const attendanceApprovalRateLimiter = rateLimit({
   skip: (req) => {
     const body = req.body ?? {};
     if (req.path === "/api/factory/staff-tracking/bulk" && body.page !== "attendance") return true;
-    const dates: unknown[] = req.path === "/api/factory/staff-tracking/bulk"
-      ? [body.periodStart, body.periodEnd]
-      : Array.isArray(body.records) ? body.records.map((record: { attendanceDate?: unknown }) => record?.attendanceDate) : [];
+    const dates: unknown[] =
+      req.path === "/api/factory/staff-tracking/bulk"
+        ? [body.periodStart, body.periodEnd]
+        : Array.isArray(body.records)
+          ? body.records.map((record: { attendanceDate?: unknown }) => record?.attendanceDate)
+          : [];
     const today = factoryAttendanceToday();
     return !dates.some((date) => typeof date === "string" && date < today);
   },
-  handler: (_req, res) => res.status(429).json({
-    message: "Too many attendance Admin approval attempts. Try again later.",
-  }),
+  handler: (_req, res) =>
+    res.status(429).json({
+      message: "Too many attendance Admin approval attempts. Try again later.",
+    }),
 });
 
 export type AttendanceAdminCredentials = {
@@ -45,7 +49,11 @@ export type AttendanceAdminCredentials = {
   adminPassword?: unknown;
 };
 
-export type AttendanceApprover = { id: string; username: string; authorizationMethod: "admin_password" | "authenticated_role" };
+export type AttendanceApprover = {
+  id: string;
+  username: string;
+  authorizationMethod: "admin_password" | "authenticated_role";
+};
 
 /**
  * Returns undefined after sending a rejection, null for same-day records,
@@ -78,7 +86,10 @@ export async function requireAttendanceEditApproval(
     const [requester] = await db
       .select({ id: users.id, username: users.username, active: users.active, role: userCompanyRoles.role })
       .from(users)
-      .innerJoin(userCompanyRoles, and(eq(userCompanyRoles.userId, users.id), eq(userCompanyRoles.companyId, companyId)))
+      .innerJoin(
+        userCompanyRoles,
+        and(eq(userCompanyRoles.userId, users.id), eq(userCompanyRoles.companyId, companyId))
+      )
       .where(eq(users.id, requesterId))
       .limit(1);
     if (requester?.active && (requester.role === "Admin" || requester.role === "Developer")) {
@@ -103,14 +114,24 @@ export async function requireAttendanceEditApproval(
   }
 
   const [admin] = await db
-    .select({ id: users.id, username: users.username, password: users.password, active: users.active, role: userCompanyRoles.role })
+    .select({
+      id: users.id,
+      username: users.username,
+      password: users.password,
+      active: users.active,
+      role: userCompanyRoles.role,
+    })
     .from(users)
     .innerJoin(userCompanyRoles, and(eq(userCompanyRoles.userId, users.id), eq(userCompanyRoles.companyId, companyId)))
     .where(eq(users.username, username))
     .limit(1);
 
-  if (!admin || !admin.active || admin.role !== "Admin" ||
-      !(await verifyPasswordBcryptOnly(password, admin.password))) {
+  if (
+    !admin ||
+    !admin.active ||
+    admin.role !== "Admin" ||
+    !(await verifyPasswordBcryptOnly(password, admin.password))
+  ) {
     res.status(401).json({ message: "Invalid Admin credentials for this factory company" });
     return undefined;
   }
