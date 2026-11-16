@@ -26,8 +26,8 @@ import {
   type RemoteMouseFrameSize,
   type RemoteMouseFrameViewport,
 } from "@/hooks/remote-mouse-control-policy";
-import { translateRemoteSupportPhase4Text } from "@/i18n/remoteSupportPhase4Translations";
-import { translateRemoteSupportPhase5Text } from "@/i18n/remoteSupportPhase5Translations";
+import { translateRemoteSupportPhase4Text } from "@/i18n/remoteSupportSessionTranslations";
+import { translateRemoteSupportPhase5Text } from "@/i18n/remoteSupportMouseTranslations";
 import {
   RemoteControlRealtimeError,
   requestRemoteControlRealtime,

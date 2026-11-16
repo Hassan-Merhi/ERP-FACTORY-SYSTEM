@@ -5,7 +5,7 @@ import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Clock3, History
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
-import { translateRemoteSupportPhase5Text } from "@/i18n/remoteSupportPhase5Translations";
+import { translateRemoteSupportPhase5Text } from "@/i18n/remoteSupportMouseTranslations";
 import { apiRequest } from "@/lib/queryClient";
 import {
   reportScreenFeedFrameRendered,

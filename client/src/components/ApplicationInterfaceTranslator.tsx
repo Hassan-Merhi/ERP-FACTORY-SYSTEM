@@ -27,9 +27,9 @@ import {
   isPosItemReplacementText,
   translatePosItemReplacementLiteral,
 } from "@/i18n/posItemReplacement.applicationTranslations";
-import { isRetailWave1Text, translateRetailWave1Text } from "@/i18n/retailWave1Translations";
-import { isRetailWave2Text, translateRetailWave2Text } from "@/i18n/retailWave2Translations";
-import { isRetailWave3Text, translateRetailWave3Text } from "@/i18n/retailWave3Translations";
+import { isRetailWave1Text, translateRetailWave1Text } from "@/i18n/retailCatalogTranslations";
+import { isRetailWave2Text, translateRetailWave2Text } from "@/i18n/retailPosPricingTranslations";
+import { isRetailWave3Text, translateRetailWave3Text } from "@/i18n/retailAnalyticsTranslations";
 import { isRetailFinancialText, translateRetailFinancialText } from "@/i18n/retailFinancialTranslations";
 import { isRetailFashionText, translateRetailFashionText } from "@/i18n/retailFashionTranslations";
 import { isWave8ReleaseText, translateWave8ReleaseText } from "@/i18n/wave8ReleaseTranslations";

@@ -262,7 +262,7 @@ describe("Retail Wave 2 — client UI", () => {
   });
 
   it("translates the new screens into EN/AR/FR", () => {
-    const translations = read("client/src/i18n/retailWave2Translations.ts");
+    const translations = read("client/src/i18n/retailPosPricingTranslations.ts");
     for (const phrase of [
       "Physical stock count",
       "Selling settings",
