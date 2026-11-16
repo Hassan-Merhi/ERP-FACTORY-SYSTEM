@@ -153,11 +153,9 @@ export function DaybookTable({
       });
 
     return (
-      <ErpListTable
-        pageKey="daybook-condensed"
-        scrollLabel="Condensed daybook"
-        wrapperClassName="max-h-[calc(100dvh-220px)]"
-      >
+      // build/vitePhase1PaginationPlugin.ts matches this opening tag on one line.
+      // prettier-ignore
+      <ErpListTable pageKey="daybook-condensed" scrollLabel="Condensed daybook" wrapperClassName="max-h-[calc(100dvh-220px)]">
         <TableHeader className="sticky top-0 z-20 bg-muted [&_th]:bg-muted [&_th]:text-foreground/90">
           <TableRow>
             <TableHead className="sticky left-0 bg-muted z-10 pl-4">
@@ -884,11 +882,9 @@ export function DaybookTable({
 
       {/* ── Desktop table (hidden below sm) ── */}
       <div className="hidden sm:block">
-        <ErpListTable
-          pageKey="daybook-detailed"
-          scrollLabel="Detailed daybook"
-          wrapperClassName="max-h-[calc(100dvh-220px)]"
-        >
+        {/* build/vitePhase1PaginationPlugin.ts matches this opening tag on one line. */}
+        {/* prettier-ignore */}
+        <ErpListTable pageKey="daybook-detailed" scrollLabel="Detailed daybook" wrapperClassName="max-h-[calc(100dvh-220px)]">
           <TableHeader className="sticky top-0 z-20 bg-muted [&_th]:bg-muted [&_th]:text-foreground/90">
             <TableRow>
               <TableHead className="sticky left-0 bg-muted z-10">Date &amp; Time</TableHead>
