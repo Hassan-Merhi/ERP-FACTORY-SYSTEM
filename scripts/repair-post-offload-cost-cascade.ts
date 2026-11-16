@@ -254,9 +254,9 @@ async function main() {
         report.openBatches = openBatches;
         report.completedBatches = completedBatches;
         report.bales = cascadeResult.affectedBales.length;
-      } catch (err: any) {
+      } catch (err: unknown) {
         report.appliedOk = false;
-        report.skippedReason = `APPLY ERROR: ${err?.message}`;
+        report.skippedReason = `APPLY ERROR: ${err instanceof Error ? err.message : String(err)}`;
       }
     }
 
