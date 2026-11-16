@@ -1,7 +1,8 @@
 /**
  * Factory row history (server/services/audit/factoryRowHistory.ts), against a
- * real PostgreSQL schema: the install snapshots every existing row once and is
- * a no-op afterwards; inserts, material edits and deletes are recorded, with an
+ * real PostgreSQL schema built by the migrations (which define the history
+ * tables, functions and triggers): the boot baseline snapshots every existing
+ * row once and is a no-op afterwards; inserts, material edits and deletes are recorded, with an
  * edit keeping only the columns it changed; touch-only and carrier-tracking
  * updates are not; the history itself cannot be rewritten.
  */
@@ -10,10 +11,23 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { pool } from "../server/db";
 import { runWithDatabaseMaintenanceScope } from "../server/services/security/databaseScopeRuntimeContext";
 import {
-  ensureFactoryRowHistory,
   FACTORY_ROW_HISTORY_TABLES,
   FACTORY_ROW_HISTORY_VERSION,
+  recordFactoryRowHistoryBaselines,
 } from "../server/services/audit/factoryRowHistory";
+import { triggerDefinition } from "./helpers/schemaManifest";
+
+describe("factory row history schema (defined by the migrations)", () => {
+  it("has insert/update/delete history triggers on every tracked table, with its noise prefixes", () => {
+    for (const [table, noisePrefixes] of FACTORY_ROW_HISTORY_TABLES) {
+      const args = noisePrefixes.map((prefix) => `'${prefix}'`).join(", ");
+      for (const op of ["insert", "update", "delete"]) {
+        const definition = triggerDefinition(table, `${table}_row_history_${op}`);
+        expect(definition, `${table} ${op}`).toContain(`FOR EACH STATEMENT EXECUTE FUNCTION erp_factory_row_history(${args})`);
+      }
+    }
+  });
+});
 
 const hasDatabase = Boolean(process.env.DATABASE_URL);
 const databaseDescribe = hasDatabase ? describe : describe.skip;
@@ -47,8 +61,8 @@ databaseDescribe("factory row history", () => {
       [`RH${suffix}`, `Row history ${suffix}`]
     );
     companyId = company.rows[0].id;
-    // Exists before the install, so it must appear in the baseline (unless an
-    // earlier run already installed the triggers, in which case it is an insert).
+    // Exists before the baseline: recorded as an insert by the migrated trigger,
+    // and in the snapshot when this run takes the first baseline.
     const supplier = await pool.query<{ id: number }>(
       `INSERT INTO factory_suppliers (company_id, name) VALUES ($1, $2) RETURNING id`,
       [companyId, `Before ${suffix}`]
@@ -63,8 +77,8 @@ databaseDescribe("factory row history", () => {
     await pool.query(`DELETE FROM companies WHERE id = $1`, [companyId]);
   });
 
-  it("installs every tracked table once, with its baseline, and skips it afterwards", async () => {
-    const first = await ensureFactoryRowHistory(pool);
+  it("records every tracked table's baseline once, and skips it afterwards", async () => {
+    const first = await recordFactoryRowHistoryBaselines(pool);
     expect(first.failed).toEqual([]);
 
     const baselines = await pool.query<{ table_name: string; snapshot_rows: number; version: string }>(
@@ -83,19 +97,22 @@ databaseDescribe("factory row history", () => {
     const before = await runWithDatabaseMaintenanceScope("row-history-test-count", () =>
       pool.query<{ n: string }>(`SELECT count(*) AS n FROM factory_row_history WHERE op = 'S'`)
     );
-    const second = await ensureFactoryRowHistory(pool);
-    expect(second.installed).toEqual([]);
+    const second = await recordFactoryRowHistoryBaselines(pool);
+    expect(second.recorded).toEqual([]);
     expect(second.failed).toEqual([]);
     const after = await runWithDatabaseMaintenanceScope("row-history-test-count", () =>
       pool.query<{ n: string }>(`SELECT count(*) AS n FROM factory_row_history WHERE op = 'S'`)
     );
     expect(after.rows[0].n).toBe(before.rows[0].n);
 
-    // In the baseline when this run took it; an insert when an earlier install already recorded it.
+    // An insert (the trigger exists from the migrations), plus the snapshot when this run took the baseline.
     const recorded = await history("factory_suppliers", preexistingSupplier);
-    expect(recorded).toHaveLength(1);
-    expect(["S", "I"]).toContain(recorded[0].op);
-    expect(recorded[0]).toMatchObject({ company_id: companyId, new_values: { name: `Before ${suffix}` } });
+    expect(recorded[0].op).toBe("I");
+    expect(recorded.map((row) => row.op).slice(1).every((op) => op === "S")).toBe(true);
+    expect(recorded.length).toBeLessThanOrEqual(2);
+    for (const row of recorded) {
+      expect(row).toMatchObject({ company_id: companyId, new_values: { name: `Before ${suffix}` } });
+    }
   });
 
   it("records inserts, only the changed columns of an edit, and deletes", async () => {
@@ -177,7 +194,7 @@ databaseDescribe("factory row history", () => {
 
   it("records an unscoped write under RLS and shows each tenant only its own history", async () => {
     // The superuser test connection bypasses RLS; production's role does not.
-    expect((await ensureFactoryRowHistory(pool)).failed).toEqual([]);
+    expect((await recordFactoryRowHistoryBaselines(pool)).failed).toEqual([]);
     const role = `rh_app_${suffix}`;
     await pool.query(`CREATE ROLE ${role} NOLOGIN NOSUPERUSER NOBYPASSRLS`);
     await pool.query(`GRANT USAGE ON SCHEMA public TO ${role}`);

@@ -18,7 +18,6 @@ import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { db, pool } from "../server/db";
-import { ensureAuditLogAppendOnlyGuard } from "../server/services/audit/auditLogAppendOnlyGuard";
 import { pruneRemoteSupportAuditRows } from "../server/services/remoteSupportAuditRetention";
 import { syncEmployeeBalancesFromEntries } from "../server/routes/helpers/employeeHelpers";
 import { maybeRunAutoTransfer } from "../server/routes/rental/shared/auto-transfer";
@@ -84,7 +83,6 @@ async function createCompany(suffix: string): Promise<number> {
 
 beforeAll(async () => {
   ctx = await seedTestData(PREFIX);
-  await ensureAuditLogAppendOnlyGuard(pool);
   agent = request.agent(ctx.app);
   const login = await agent
     .post("/api/auth/login")

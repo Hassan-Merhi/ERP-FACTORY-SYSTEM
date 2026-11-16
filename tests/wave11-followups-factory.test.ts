@@ -23,7 +23,6 @@ vi.mock("../server/auth", async (importOriginal) => {
 import { db, pool } from "../server/db";
 import { deleteAuditLogRowsForTests } from "./helpers/auditLogCleanup";
 import { factoryStockValuation } from "../server/services/accounting/perpetualInventory/factoryValuation";
-import { ensureFactoryCostBasisSchema } from "../server/services/factory/factoryCostBasisSchema";
 import { registerRawStockReceiptRoutes } from "../server/routes/factory/raw-stock/rawStockReceiptRoutes";
 import { registerRawStockAdjRoutes } from "../server/routes/factory/raw-stock/rawStockAdjRoutes";
 import { registerFactoryMixBatchFinalizeDeleteRoutes } from "../server/routes/factory/mix-batches/finalize-delete";
@@ -172,7 +171,6 @@ async function cleanup(id: number) {
 }
 
 beforeAll(async () => {
-  await ensureFactoryCostBasisSchema(pool);
   for (const leftover of (
     await pool.query<{ id: number }>(`SELECT id FROM companies WHERE code = $1`, [PREFIX.toUpperCase()])
   ).rows) {

@@ -1,15 +1,15 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Client } from "pg";
 import { randomUUID } from "node:crypto";
-import { ensureCloudEdgeStageSchema, stageVoucherEvents } from "../server/edge/edgeCloudStaging";
+import { stageVoucherEvents } from "../server/edge/edgeCloudStaging";
 import { EDGE_SYNC_STAGE_VERSION, hashEvidence } from "../server/edge/edgeSyncStageProtocol.mjs";
 
-const siteId = "027d7472-4a29-4bb3-a4aa-5b30e4ad631f";
+// A fresh site per run: the staged evidence lives in the shared migrated database.
+const siteId = randomUUID();
 const enabled = Boolean(process.env.DATABASE_URL);
 
 (enabled ? describe : describe.skip)("cloud staged voucher evidence durability", () => {
   const client = new Client({ connectionString: process.env.DATABASE_URL, ssl: false });
-  const namespace = "edge_sync_test_" + randomUUID().replaceAll("-", "");
   const transportPool = {
     connect: async () => ({
       query: client.query.bind(client),
@@ -34,16 +34,20 @@ const enabled = Boolean(process.env.DATABASE_URL);
     events,
   });
 
+  // The staging tables and their append-only trigger come from migrations/.
   beforeAll(async () => {
     await client.connect();
-    await client.query(`CREATE SCHEMA "${namespace}"`);
-    await client.query(`SET search_path TO "${namespace}"`);
-    await ensureCloudEdgeStageSchema(client as never, true);
   });
 
   afterAll(async () => {
-    await client.query("SET search_path TO public").catch(() => undefined);
-    await client.query(`DROP SCHEMA IF EXISTS "${namespace}" CASCADE`).catch(() => undefined);
+    // Test cleanup only: lift the append-only guard for this run's site rows.
+    await client.query("ROLLBACK").catch(() => undefined);
+    await client.query("BEGIN");
+    await client.query("ALTER TABLE factory_edge_staged_vouchers DISABLE TRIGGER factory_edge_stage_no_modify");
+    await client.query("DELETE FROM factory_edge_staged_vouchers WHERE site_id = $1", [siteId]);
+    await client.query("ALTER TABLE factory_edge_staged_vouchers ENABLE TRIGGER factory_edge_stage_no_modify");
+    await client.query("DELETE FROM factory_edge_stage_cursor WHERE site_id = $1", [siteId]);
+    await client.query("COMMIT").catch(() => client.query("ROLLBACK"));
     await client.end().catch(() => undefined);
   });
 
@@ -51,7 +55,9 @@ const enabled = Boolean(process.env.DATABASE_URL);
     const receipt = await stageVoucherEvents(transportPool as never, envelope([event]), siteId);
     expect(receipt.state).toBe("staged-not-applied");
     expect(receipt.lastSequence).toBe("1");
-    const count = await client.query("SELECT COUNT(*)::integer AS count FROM factory_edge_staged_vouchers");
+    const count = await client.query("SELECT COUNT(*)::integer AS count FROM factory_edge_staged_vouchers WHERE site_id = $1", [
+      siteId,
+    ]);
     expect(count.rows[0].count).toBe(1);
   });
 
@@ -60,7 +66,9 @@ const enabled = Boolean(process.env.DATABASE_URL);
       state: "staged-not-applied",
       lastSequence: "1",
     });
-    const count = await client.query("SELECT COUNT(*)::integer AS count FROM factory_edge_staged_vouchers");
+    const count = await client.query("SELECT COUNT(*)::integer AS count FROM factory_edge_staged_vouchers WHERE site_id = $1", [
+      siteId,
+    ]);
     expect(count.rows[0].count).toBe(1);
   });
 
@@ -94,13 +102,15 @@ const enabled = Boolean(process.env.DATABASE_URL);
   it("keeps business tables untouched and rejects mutation to staged evidence", async () => {
     await client.query("BEGIN");
     await client.query("SAVEPOINT staged_immutable");
-    await expect(client.query("DELETE FROM factory_edge_staged_vouchers")).rejects.toMatchObject({
+    await expect(client.query("DELETE FROM factory_edge_staged_vouchers WHERE site_id = $1", [siteId])).rejects.toMatchObject({
       code: "23514",
     });
     await client.query("ROLLBACK TO SAVEPOINT staged_immutable");
     await client.query("COMMIT");
     // No business-posting SQL appears in the staging implementation.
-    const rows = await client.query("SELECT COUNT(*)::integer AS count FROM factory_edge_staged_vouchers");
+    const rows = await client.query("SELECT COUNT(*)::integer AS count FROM factory_edge_staged_vouchers WHERE site_id = $1", [
+      siteId,
+    ]);
     expect(rows.rows[0].count).toBe(1);
   });
 });

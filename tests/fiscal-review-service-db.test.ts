@@ -7,11 +7,6 @@
 import type { PoolClient } from "pg";
 import { beforeAll, describe, expect, it } from "vitest";
 import { db, pool } from "../server/db";
-import { ensureClosedPeriodGuard } from "../server/services/accounting/closedPeriodGuard";
-import { ensureFiscalReviewSchema } from "../server/services/accounting/ensureFiscalReviewSchema";
-import { ensureOpeningBalanceLock } from "../server/services/accounting/openingBalanceLock";
-import { ensureAuditLogAppendOnlyGuard } from "../server/services/audit/auditLogAppendOnlyGuard";
-import { ensureVoucherAuditTrigger } from "../server/services/audit/voucherAuditTrigger";
 import {
   ensureReviewedFiscalCloseTx,
   fiscalReadinessTx,
@@ -25,16 +20,6 @@ import {
 } from "../server/services/accounting/fiscalReviewService";
 import { withRolledBackPool } from "./helpers/routedPoolClient";
 
-// Readiness reads every guard server startup installs. Earlier suites drop
-// some of them when they finish, so install them here rather than depend on
-// which files ran first.
-beforeAll(async () => {
-  await ensureClosedPeriodGuard(pool);
-  await ensureOpeningBalanceLock(pool);
-  await ensureVoucherAuditTrigger(pool);
-  await ensureAuditLogAppendOnlyGuard(pool);
-  await ensureFiscalReviewSchema(pool);
-});
 
 let seq = 0;
 const PERIOD = { periodStartDate: "2025-01-01", periodEndDate: "2025-12-31" };

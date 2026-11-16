@@ -17,7 +17,6 @@ vi.mock("../server/edge/edgeRuntimePolicy.mjs", async (importOriginal) => ({
 
 import { pool } from "../server/db";
 import { createPosSale } from "../server/services/pos/createSaleService";
-import { ensurePhase9PosOutboxSchema } from "../server/edge/phase9PosOutbox";
 import { hashEvidence } from "../server/edge/edgeSyncStageProtocol.mjs";
 import { validatePhase9Event } from "../server/edge/phase9EventProtocol.mjs";
 import { Phase9EventConflict } from "../server/edge/phase9CloudEventStore.mjs";
@@ -141,8 +140,6 @@ beforeAll(async () => {
     [ctx.companyId, `${PREFIX}_CUST`]
   );
   customerAccountId = Number(customer.rows[0].id);
-  edge.config = LAN;
-  await ensurePhase9PosOutboxSchema(pool);
   edge.config = CLOUD;
 }, 120_000);
 

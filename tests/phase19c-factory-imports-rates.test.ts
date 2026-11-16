@@ -23,7 +23,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { db, pool } from "../server/db";
 import { companyBusinessDate } from "../server/services/accounting/companyBusinessDate";
 import { perpetualReadinessReport } from "../server/services/accounting/perpetualInventory/readiness";
-import { ensureFactoryCostBasisSchema } from "../server/services/factory/factoryCostBasisSchema";
 import { writeDaybookEntry as sharedDaybookWriter } from "../server/services/factory/factoryDaybookWriter";
 import { writeDaybookEntry as payrollDaybookWriter } from "../server/routes/payroll/core/_helpers";
 import { writeDaybookEntry as factoryDaybookWriter } from "../server/routes/factory/_helpers";
@@ -109,7 +108,6 @@ async function excel(rows: unknown[][]): Promise<Buffer> {
 
 beforeAll(async () => {
   ctx = await seedTestData(PREFIX);
-  await ensureFactoryCostBasisSchema(pool);
   await pool.query(`UPDATE companies SET company_type = 'factory' WHERE id = $1`, [ctx.companyId]);
   agent = request.agent(ctx.app);
   expect(

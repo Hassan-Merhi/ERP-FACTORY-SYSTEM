@@ -18,7 +18,6 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 import { pool } from "../server/db";
 import { getOrFetchFxRateToUsd } from "../server/routes/factory/_helpers";
 import { getLatestCfaPerUsd } from "../server/services/accounting/latestCfaPerUsd";
-import { ensureCurrencyNormalizationGuard } from "../server/services/accounting/currencyNormalizationGuard";
 import {
   FactoryFxRepairPlanHashRequiredError,
   applyFactoryFxLegacyRepair,
@@ -94,7 +93,6 @@ async function insertRate(currency: string, rate: string, date: string, source: 
 beforeAll(async () => {
   ctx = await seedTestData(PREFIX);
   await pool.query(`UPDATE companies SET company_type = 'factory' WHERE id = $1`, [ctx.companyId]);
-  expect(await ensureCurrencyNormalizationGuard(pool)).toBe(true);
   agent = request.agent(ctx.app);
   expect(
     (await agent.post("/api/auth/login").send({ username: `${PREFIX}_testuser`, password: "testpassword123" })).status

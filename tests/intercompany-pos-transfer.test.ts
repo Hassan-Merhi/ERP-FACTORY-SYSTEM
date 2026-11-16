@@ -27,7 +27,6 @@ import {
   recalculateIntercompanyForDate,
   runIntercompanyPosTransfer,
 } from "../server/routes/helpers/intercompanyHelpers";
-import { ensureClosedPeriodGuard } from "../server/services/accounting/closedPeriodGuard";
 import { seedTestData, cleanupTestData, closeTestServer, type TestContext } from "./setup";
 
 const SOURCE_A = "icsrcaa";
@@ -145,7 +144,6 @@ beforeAll(async () => {
   a = await seedTestData(SOURCE_A);
   b = await seedTestData(SOURCE_B);
   dest = await seedTestData(DEST);
-  await ensureClosedPeriodGuard(pool);
   await cleanupConfigs();
 
   destIntercoId = await interco(dest.companyId, DEST, "IN");

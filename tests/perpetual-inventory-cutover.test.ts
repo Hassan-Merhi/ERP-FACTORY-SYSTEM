@@ -13,7 +13,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { db, pool } from "../server/db";
 import { deleteAuditLogRowsForTests } from "./helpers/auditLogCleanup";
 import {
-  ensureInventoryCutoverSchema,
   isPerpetualInventoryActive,
 } from "../server/services/accounting/perpetualInventory/cutover";
 import {
@@ -42,7 +41,6 @@ async function maintenance(work: (q: (text: string, values?: unknown[]) => Promi
 }
 
 beforeAll(async () => {
-  expect(await ensureInventoryCutoverSchema(pool)).toBe(true);
   await maintenance(async (q) => {
     companyId = (
       await q(`INSERT INTO companies (code, name) VALUES ($1::varchar, $1::text) RETURNING id`, [PREFIX.toUpperCase()])

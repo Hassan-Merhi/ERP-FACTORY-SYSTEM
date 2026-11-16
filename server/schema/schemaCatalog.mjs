@@ -247,7 +247,11 @@ export function comparisonKey(entry) {
 
 /** The comparable part of an entry once its key matched. */
 function comparisonValue(entry) {
-  if (entry.kind === "constraint") return entry.def.validated ? "validated" : "not-valid";
+  // FOREIGN KEY / CHECK constraints are enforced on every new or changed row
+  // whether or not historical rows were validated. Adoption adds them NOT VALID
+  // to populated tables so production history is never scanned or rewritten;
+  // validation is a separate, data-reviewed operator step (reported by verify).
+  if (entry.kind === "constraint") return "present";
   if (entry.kind === "index") return entry.def.valid ? "valid" : "invalid";
   return entry.raw;
 }
@@ -267,8 +271,6 @@ function isStricter(expected, actual) {
   const e = expected.def;
   const a = actual.def;
   switch (expected.kind) {
-    case "constraint":
-      return !e.validated && a.validated;
     case "function":
       return e.def === a.def && e.kind === a.kind && e.publicExecute !== false && a.publicExecute === false;
     case "table":

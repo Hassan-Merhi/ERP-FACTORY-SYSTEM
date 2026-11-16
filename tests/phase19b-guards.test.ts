@@ -21,15 +21,12 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { db, pool } from "../server/db";
 import { companyBusinessDate } from "../server/services/accounting/companyBusinessDate";
 import { findOrCreateLedgerAccount } from "../server/routes/rental/shared/ledger";
-import { ensureClosedPeriodGuard } from "../server/services/accounting/closedPeriodGuard";
 import { runAccountingIntegrityDiagnostic } from "../server/services/accounting/integrity/accountingIntegrityDiagnostic";
 import {
-  ensureLedgerIntegrityGuard,
   LEDGER_ACCOUNT_PARENT_FK,
   LEDGER_INTEGRITY_GUARD_VERSION,
 } from "../server/services/accounting/ledgerIntegrityGuard";
 import {
-  ensureOpeningBalanceLock,
   installedOpeningBalanceLockVersion,
   OPENING_BALANCE_LOCK_VERSION,
 } from "../server/services/accounting/openingBalanceLock";
@@ -38,7 +35,6 @@ import {
   ensureSystemAccounts,
 } from "../server/services/accounting/systemAccounts";
 import {
-  ensureVoucherBalanceGuard,
   installedVoucherBalanceGuardVersion,
   VOUCHER_BALANCE_GUARD_VERSION,
 } from "../server/services/accounting/voucherBalanceGuard";
@@ -132,10 +128,6 @@ const auditRows = async (tableName: string, recordId: number) =>
 
 beforeAll(async () => {
   ctx = await seedTestData(PREFIX);
-  await ensureClosedPeriodGuard(pool);
-  await ensureOpeningBalanceLock(pool);
-  expect(await ensureLedgerIntegrityGuard(pool)).toBe(true);
-  await ensureVoucherBalanceGuard(pool);
   otherCompanyId = (
     await pool.query(`INSERT INTO companies (code, name) VALUES ($1::varchar, $1::text) RETURNING id`, [
       `P19B${Date.now().toString(36).slice(-5).toUpperCase()}`,
@@ -245,14 +237,10 @@ describe("DI2, PE11: maintenance scope no longer bypasses the closed-period guar
     }
   });
 
-  it("boot still starts with closed periods: guards install and system accounts provision", async () => {
+  it("boot still starts with closed periods: guards present and system accounts provision", async () => {
     await closeBooks();
     try {
-      await ensureClosedPeriodGuard(pool);
-      await ensureOpeningBalanceLock(pool);
       expect(await installedOpeningBalanceLockVersion(pool)).toBe(OPENING_BALANCE_LOCK_VERSION);
-      expect(await ensureLedgerIntegrityGuard(pool)).toBe(true);
-      await ensureVoucherBalanceGuard(pool);
       expect(await installedVoucherBalanceGuardVersion(pool)).toBe(VOUCHER_BALANCE_GUARD_VERSION);
       // A missing registry account is created in the closed company (no voucher line, no opening).
       await withFixtureTransaction(async (client) => {
@@ -464,15 +452,13 @@ describe("C5: the account tree", () => {
     );
   });
 
-  it("leaves existing bad links alone (boot reinstalls the guard) and lists them in the diagnostic", async () => {
+  it("leaves existing bad links alone and lists them in the diagnostic", async () => {
     const income = await ledger("INC", "Income");
     const bad = await ledger("BADCHILD", "Asset");
     await withFixtureTransaction(async (client) => {
       await client.query(`SET LOCAL app.ledger_integrity_bypass = 'on'`);
       await client.query(`UPDATE ledger_accounts SET parent_id = $2 WHERE id = $1`, [bad, income]);
     });
-    await pool.query(`COMMENT ON FUNCTION erp_voucher_entry_target_guard() IS 'reinstall'`);
-    expect(await ensureLedgerIntegrityGuard(pool)).toBe(true);
     const version = await pool.query(
       `SELECT obj_description(to_regprocedure('erp_voucher_entry_target_guard()'), 'pg_proc') AS v`
     );

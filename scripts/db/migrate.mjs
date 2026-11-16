@@ -7,6 +7,9 @@
  *   node scripts/db/migrate.mjs apply             apply pending migrations
  *                                                 (MIGRATION_CONFIRMATION=APPLY_SCHEMA_MIGRATIONS)
  *   node scripts/db/migrate.mjs adopt             read-only adoption plan for an existing ERP database
+ *   node scripts/db/migrate.mjs adopt --dry-run   execute the adoption in a transaction, verify, ALWAYS roll back
+ *                                                 (finds data blockers; takes table locks while it runs, so use
+ *                                                 an isolated restore or a maintenance window)
  *   node scripts/db/migrate.mjs adopt --apply     adopt it (MIGRATION_CONFIRMATION=ADOPT_EXISTING_DATABASE)
  *   node scripts/db/migrate.mjs verify            read-only: history + catalog + tenant probes
  *   node scripts/db/migrate.mjs manifest --disposable [--check]
@@ -47,7 +50,7 @@ import {
 } from "../../server/schema/migrationRegistry.mjs";
 import { compareSnapshots, summariseComparison, takeCatalogSnapshot } from "../../server/schema/schemaCatalog.mjs";
 import { verifyDatabaseSchema } from "../../server/schema/verifyDatabaseSchema.mjs";
-import { planAdoption } from "./lib/schemaDdl.mjs";
+import { adoptionDataChecks, planAdoption } from "./lib/schemaDdl.mjs";
 
 const LOCK_KEY = 748_392_107;
 const APPLY_CONFIRMATION = "APPLY_SCHEMA_MIGRATIONS";
@@ -243,7 +246,7 @@ async function cmdApply() {
   }
 }
 
-async function cmdAdopt(apply) {
+async function cmdAdopt(apply, dryRun = false) {
   if (apply && process.env.MIGRATION_CONFIRMATION !== ADOPT_CONFIRMATION) {
     throw new UsageError(`Refusing to adopt: set MIGRATION_CONFIRMATION=${ADOPT_CONFIRMATION} for this command`);
   }
@@ -275,14 +278,31 @@ async function cmdAdopt(apply) {
         notes: plan.notes,
         planSha256: sha256(plan.statements.join("\n")),
       };
-      if (!apply) {
+      if (!apply && !dryRun) {
+        // Read-only: the data-dependent statements, checked against the rows.
+        const checks = adoptionDataChecks(plan.statements);
+        report.dataChecks = { run: checks.length, failed: [] };
+        await client.query("BEGIN READ ONLY");
+        try {
+          await client.query("SET LOCAL search_path = public");
+          await client.query("SET LOCAL statement_timeout = '5min'");
+          for (const check of checks) {
+            const { rows } = await client.query(check.sql);
+            if (rows[0].n > 0) {
+              report.dataChecks.failed.push({ rows: rows[0].n, statement: check.statement, check: check.sql });
+              plan.blockers.push(`data: ${rows[0].n} existing row(s)/group(s) block: ${check.statement}`);
+            }
+          }
+        } finally {
+          await client.query("ROLLBACK").catch(() => {});
+        }
         log(JSON.stringify(report, null, 2));
         log("-- Adoption DDL (review; nothing has been executed) --");
         for (const statement of plan.statements) log(statement);
         if (plan.blockers.length) process.exitCode = 1;
         return;
       }
-      if (plan.blockers.length) {
+      if (plan.blockers.length && !dryRun) {
         throw new Error(`Adoption blocked; resolve with reviewed migrations first:\n  - ${plan.blockers.join("\n  - ")}`);
       }
       const started = Date.now();
@@ -301,6 +321,13 @@ async function cmdAdopt(apply) {
               ).join("; ")
           );
         }
+        if (dryRun) {
+          await client.query("ROLLBACK");
+          log(JSON.stringify({ ...report, mode: "adopt-dry-run", converged: true, rolledBack: true }, null, 2));
+          log("Dry run: every adoption statement succeeded against this data and the result verified; all changes were rolled back.");
+          if (plan.blockers.length) process.exitCode = 1;
+          return;
+        }
         await client.query(HISTORY_DDL);
         await recordHistory(client, baseline, "adopted", Date.now() - started, {
           planSha256: report.planSha256,
@@ -312,12 +339,14 @@ async function cmdAdopt(apply) {
         await client.query("COMMIT");
       } catch (error) {
         await client.query("ROLLBACK").catch(() => {});
-        throw new Error(`Adoption failed and was rolled back; nothing changed: ${error instanceof Error ? error.message : error}`);
+        throw new Error(
+          `Adoption ${dryRun ? "dry run " : ""}failed and was rolled back; nothing changed: ${error instanceof Error ? error.message : error}`
+        );
       }
       log("Adopted baseline", { statements: plan.statements.length, ms: Date.now() - started, notes: plan.notes.length });
       log("Next: run `npm run db:migrate` to apply the migrations after the baseline.");
     };
-    if (apply) await withLock(client, run);
+    if (apply || dryRun) await withLock(client, run);
     else await run();
   } finally {
     await client.end();
@@ -387,13 +416,14 @@ async function main() {
     case "apply":
       return cmdApply();
     case "adopt":
-      return cmdAdopt(args.includes("--apply"));
+      if (args.includes("--apply") && args.includes("--dry-run")) throw new UsageError("Use either --dry-run or --apply");
+      return cmdAdopt(args.includes("--apply"), args.includes("--dry-run"));
     case "verify":
       return cmdVerify();
     case "manifest":
       return cmdManifest(args);
     default:
-      throw new UsageError("Usage: migrate.mjs plan|status|apply|adopt [--apply]|verify|manifest --disposable [--check]");
+      throw new UsageError("Usage: migrate.mjs plan|status|apply|adopt [--dry-run|--apply]|verify|manifest --disposable [--check]");
   }
 }
 

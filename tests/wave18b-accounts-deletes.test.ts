@@ -15,14 +15,12 @@ import {
   AccountHistoryError,
   assertAccountChangeAllowed,
 } from "../server/services/accounting/accountHistoryPolicy";
-import { ensureClosedPeriodGuard } from "../server/services/accounting/closedPeriodGuard";
 import {
   getOrCreateInventoryControlAccount,
   InventoryControlAccountConflictError,
 } from "../server/services/accounting/inventoryControlAccount";
 import { runAccountingIntegrityDiagnostic } from "../server/services/accounting/integrity/accountingIntegrityDiagnostic";
 import {
-  ensureLedgerIntegrityGuard,
   LEDGER_INTEGRITY_GUARD_VERSION,
 } from "../server/services/accounting/ledgerIntegrityGuard";
 import { isSystemResolvedAccountCode } from "../server/services/accounting/systemAccounts";
@@ -117,8 +115,6 @@ async function softDelete(table: string, id: number, daysAgo = 0) {
 
 beforeAll(async () => {
   ctx = await seedTestData(PREFIX);
-  expect(await ensureLedgerIntegrityGuard(pool)).toBe(true);
-  await ensureClosedPeriodGuard(pool);
   agent = request.agent(ctx.app);
   expect(
     (await agent.post("/api/auth/login").send({ username: `${PREFIX}_testuser`, password: "testpassword123" })).status

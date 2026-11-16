@@ -10,9 +10,9 @@ const requiredFiles = [
   bundlePath,
   resolve(root, "server/startupPreload.mjs"),
   resolve(root, "server/schemaPreload.mjs"),
-  resolve(root, "server/exportBufferBridge.mjs"),
-  resolve(root, "server/scheduledAttachmentBridge.mjs"),
-  resolve(root, "server/apiPaginationBridge.mjs"),
+  resolve(root, "server/runtime/exportBuffer.mjs"),
+  resolve(root, "server/runtime/scheduledAttachment.mjs"),
+  resolve(root, "server/runtime/apiPagination.mjs"),
   resolve(root, "server/runtimeMemoryGuard.mjs"),
 ];
 

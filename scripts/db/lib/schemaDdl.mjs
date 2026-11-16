@@ -240,6 +240,19 @@ export function planAdoption(comparison) {
   const phases = compileCreatePhases(
     missing.filter((e) => e.kind !== "column" || missingTables.has(tableOf(e.identity)))
   );
+  // Constraints added to tables that already hold data are created NOT VALID
+  // (FOREIGN KEY / CHECK): enforced for every new or changed row immediately,
+  // without scanning or rejecting historical rows. Validation is a separate,
+  // reviewed operator step.
+  for (const phase of [phases.post]) {
+    for (let i = 0; i < phase.length; i += 1) {
+      const match = /^ALTER TABLE (\S+) ADD CONSTRAINT \S+ (FOREIGN KEY|CHECK) .*;$/s.exec(phase[i]);
+      if (match && !missingTables.has(match[1]) && !/ NOT VALID;$/.test(phase[i])) {
+        phase[i] = phase[i].replace(/;$/, " NOT VALID;");
+        notes.push(`${match[1]}: ${match[2]} constraint added NOT VALID (historical rows not scanned)`);
+      }
+    }
+  }
   const addColumns = missing
     .filter((e) => e.kind === "column" && !missingTables.has(tableOf(e.identity)))
     .map((c) => `ALTER TABLE ${tableOf(c.identity)} ADD COLUMN ${columnSql(c)};`);
@@ -336,12 +349,8 @@ export function planAdoption(comparison) {
         break;
       }
       case "constraint":
-        if (expected.def.def.replace(/ NOT VALID$/, "") !== actual.def.def.replace(/ NOT VALID$/, "")) {
-          blockers.push(`${where}: a constraint with this name enforces "${actual.def.def}" instead of "${expected.def.def}"`);
-          break;
-        }
-        // Same table + definition, but the database copy is NOT VALID.
-        changeStatements.push(`ALTER TABLE ${tableOf(actual.identity)} VALIDATE CONSTRAINT ${lastPart(actual.identity)};`);
+        // Only reached for a name collision: same name, different definition.
+        blockers.push(`${where}: a constraint with this name enforces "${actual.def.def}" instead of "${expected.def.def}"`);
         break;
       case "index":
         blockers.push(
@@ -362,6 +371,49 @@ export function planAdoption(comparison) {
   const early = changeStatements.filter((sql) => !late.includes(sql));
   const statements = [...phases.pre, ...phases.tables, ...addColumns, ...early, ...phases.post, ...late];
   return { statements: statements.length > 1 ? statements : [], blockers, notes };
+}
+
+/**
+ * Read-only data checks for the data-dependent statements of an adoption plan,
+ * against tables that already hold rows. Each returns a count that must be 0:
+ *   - UNIQUE index / PRIMARY KEY / UNIQUE constraint: duplicate key groups;
+ *   - ADD COLUMN ... NOT NULL without DEFAULT: existing rows;
+ *   - SET NOT NULL: NULL rows;
+ *   - numeric precision change: values that would overflow;
+ *   - CHECK added NOT VALID: historical rows that violate it (they could no
+ *     longer be updated).
+ * @param {string[]} statements
+ * @returns {Array<{ statement: string, sql: string }>}
+ */
+export function adoptionDataChecks(statements) {
+  const created = new Set();
+  for (const sql of statements) {
+    const m = /^CREATE (?:UNLOGGED )?TABLE (\S+) \(/.exec(sql);
+    if (m) created.add(m[1]);
+  }
+  const checks = [];
+  const add = (statement, sql) => checks.push({ statement, sql });
+  for (const sql of statements) {
+    let m;
+    if ((m = /^CREATE UNIQUE INDEX \S+ ON (?:ONLY )?(\S+) USING \w+ \((.*?)\)( WHERE \((.*)\))?;$/s.exec(sql))) {
+      if (created.has(m[1])) continue;
+      add(sql, `SELECT count(*)::int AS n FROM (SELECT 1 FROM ${m[1]}${m[4] ? ` WHERE ${m[4]}` : ""} GROUP BY ${m[2]} HAVING count(*) > 1) d`);
+    } else if ((m = /^ALTER TABLE (\S+) ADD CONSTRAINT \S+ (?:PRIMARY KEY|UNIQUE) \((.*)\);$/s.exec(sql))) {
+      if (created.has(m[1])) continue;
+      add(sql, `SELECT count(*)::int AS n FROM (SELECT 1 FROM ${m[1]} GROUP BY ${m[2]} HAVING count(*) > 1) d`);
+    } else if ((m = /^ALTER TABLE (\S+) ADD COLUMN (\S+) .* NOT NULL;$/s.exec(sql)) && !/ DEFAULT /.test(sql)) {
+      add(sql, `SELECT count(*)::int AS n FROM ${m[1]}`);
+    } else if ((m = /^ALTER TABLE (\S+) ALTER COLUMN (\S+) SET NOT NULL;$/.exec(sql))) {
+      add(sql, `SELECT count(*)::int AS n FROM ${m[1]} WHERE ${m[2]} IS NULL`);
+    } else if ((m = /^ALTER TABLE (\S+) ALTER COLUMN (\S+) TYPE numeric\((\d+),(\d+)\)/.exec(sql))) {
+      const limit = `1e${Number(m[3]) - Number(m[4])}`;
+      add(sql, `SELECT count(*)::int AS n FROM ${m[1]} WHERE abs(${m[2]}) >= ${limit}`);
+    } else if ((m = /^ALTER TABLE (\S+) ADD CONSTRAINT \S+ CHECK (.*) NOT VALID;$/s.exec(sql))) {
+      if (created.has(m[1])) continue;
+      add(sql, `SELECT count(*)::int AS n FROM ${m[1]} WHERE NOT ${m[2]}`);
+    }
+  }
+  return checks;
 }
 
 export { indexShape };

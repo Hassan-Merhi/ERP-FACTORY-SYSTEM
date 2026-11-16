@@ -38,7 +38,6 @@ import { createFakeRouteApp } from "./helpers/fakeRouteApp";
 import { factoryStockValuation } from "../server/services/accounting/perpetualInventory/factoryValuation";
 import { syncFactoryStockJournalTx } from "../server/services/accounting/perpetualInventory/factoryStockJournal";
 import { cascadeContainerCostChange } from "../server/services/factory/rawStockCostCascade";
-import { ensureFactoryCostBasisSchema } from "../server/services/factory/factoryCostBasisSchema";
 import { stockEntryBaleCost } from "../server/services/factory/baleCostBasis";
 import { registerFactoryMixBatchCreateRoutes } from "../server/routes/factory/mix-batches/create";
 import { registerBalesFinalizeRoutes } from "../server/routes/factory/bales/balesFinalizeRoutes";
@@ -117,7 +116,6 @@ const baleCost = async (id: number) =>
   );
 
 beforeAll(async () => {
-  await ensureFactoryCostBasisSchema(pool);
   // A run that failed half-way leaves its company behind.
   for (const leftover of await all<{ id: number }>(`SELECT id FROM companies WHERE code = $1`, [
     PREFIX.toUpperCase(),

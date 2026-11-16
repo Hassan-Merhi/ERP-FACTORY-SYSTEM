@@ -70,6 +70,8 @@ export async function verifyDatabaseSchema(client, { catalog = true, probes = tr
     }
     if (result.changed.length > MAX_LISTED) problems.push(`... and ${result.changed.length - MAX_LISTED} more changed objects`);
     summary.extraObjects = result.extra.length;
+    // FK/CHECK constraints present but not yet validated against historical rows.
+    summary.notValidatedConstraints = actual.filter((line) => line.startsWith("constraint\t") && line.endsWith('"validated":false}')).length;
   }
 
   if (probes && problems.length === 0) {

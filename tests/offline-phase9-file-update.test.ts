@@ -24,10 +24,9 @@ vi.mock("../server/edge/edgeRuntimePolicy.mjs", async (importOriginal) => ({
 }));
 
 import { pool } from "../server/db";
-import { ensurePhase9AttachmentOutboxSchema } from "../server/edge/phase9AttachmentOutbox";
 import { hashEvidence } from "../server/edge/edgeSyncStageProtocol.mjs";
 import { phase9OverridableConflicts, validatePhase9Event } from "../server/edge/phase9EventProtocol.mjs";
-import { ensurePhase9CloudEventSchema, Phase9EventConflict } from "../server/edge/phase9CloudEventStore.mjs";
+import { Phase9EventConflict } from "../server/edge/phase9CloudEventStore.mjs";
 import {
   PHASE9_ATTACHMENT_FILE_CHANGED,
   phase9AttachmentUpdateEnvelope,
@@ -130,10 +129,7 @@ beforeAll(async () => {
   );
   folderA = Number(folders.rows[0].id);
   folderB = Number(folders.rows[1].id);
-  edge.config = LAN;
-  await ensurePhase9AttachmentOutboxSchema(pool);
   edge.config = CLOUD;
-  await ensurePhase9CloudEventSchema(pool);
   agent = request.agent(ctx.app);
   await agent.post("/api/auth/login").send({ username: `${PREFIX}_testuser`, password: "testpassword123" });
   await agent.post("/api/auth/set-company").send({ companyId: ctx.companyId });

@@ -3,7 +3,6 @@ import { sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { db, pool } from "../server/db";
-import { ensureFinancialOperationRequests } from "../server/services/accounting/ensureFinancialOperationRequests";
 import {
   financialOperationFingerprint,
   reserveFinancialOperationTx,
@@ -32,7 +31,6 @@ async function cleanup(): Promise<void> {
 
 describePostgres("durable financial operation PostgreSQL boundary", () => {
   beforeAll(async () => {
-    await ensureFinancialOperationRequests(pool);
     const result = await db.execute(sql`SELECT id FROM companies ORDER BY id LIMIT 1`);
     companyId = Number((result.rows[0] as { id?: number } | undefined)?.id);
     if (!Number.isInteger(companyId) || companyId <= 0) {

@@ -17,9 +17,7 @@ vi.mock("../server/edge/edgeRuntimePolicy.mjs", async (importOriginal) => ({
 }));
 
 import { pool } from "../server/db";
-import { ensurePhase10SyncControlSchema } from "../server/edge/phase10SyncControl.mjs";
 import {
-  ensurePhase10SyncControlFunction,
   recordPhase10OperatorSyncControl,
 } from "../server/edge/phase10OperatorControls.mjs";
 import { cleanupTestData, closeTestServer, seedTestData, setupTestApp, type TestContext } from "./setup";
@@ -37,8 +35,6 @@ beforeAll(async () => {
   // every business write stays refused.
   edge.config = { mode: "lan", primary: false, siteId: SITE, writeMode: "read-only" };
   ctx = await seedTestData(PREFIX);
-  await ensurePhase10SyncControlSchema(pool);
-  await ensurePhase10SyncControlFunction(pool);
   agent = request.agent(await setupTestApp({ edgeBoundary: true }));
   expect(
     (await agent.post("/api/auth/login").send({ username: `${PREFIX}_testuser`, password: "testpassword123" })).status

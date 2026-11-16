@@ -1,12 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { sql } from "drizzle-orm";
 import { db } from "../server/db";
-import { ensureSpAccessControlStorage } from "../server/routes/sp/spAccessControl";
-import { ensureCutoverSchema } from "../server/routes/sp/spMigrationCutoverState";
 import {
   buildSpProductionClosureStatus,
 } from "../server/routes/sp/spProductionClosureRoutes";
-import { ensureSpProductionClosureStorage } from "../server/routes/sp/spProductionClosureStorage";
+import { hasTable, tableConstraints } from "./helpers/schemaManifest";
 
 const hasDatabase = Boolean(process.env.DATABASE_URL);
 const databaseDescribe = hasDatabase ? describe : describe.skip;
@@ -23,11 +21,11 @@ const requiredChecks = [
 ] as const;
 
 databaseDescribe("Supplier Partner production closure database", () => {
-  it("creates startup-managed evidence and immutable completion tables idempotently", async () => {
-    await ensureSpAccessControlStorage();
-    await ensureCutoverSchema();
-    await ensureSpProductionClosureStorage();
-    await ensureSpProductionClosureStorage();
+  it("has the migration-defined evidence and immutable completion tables", async () => {
+    expect(hasTable("sp_production_evidence")).toBe(true);
+    expect(hasTable("sp_completion_records")).toBe(true);
+    expect(tableConstraints("sp_production_evidence")).toContain("UNIQUE (company_id, cutover_id, evidence_type)");
+    expect(tableConstraints("sp_completion_records")).toContain("UNIQUE (company_id, cutover_id)");
 
     const result = await db.execute(sql`
       SELECT table_name
@@ -89,8 +87,6 @@ databaseDescribe("Supplier Partner production closure database", () => {
     const targetCompanyId = 900000012;
     const otherCompanyId = 900000013;
 
-    await ensureCutoverSchema();
-    await ensureSpProductionClosureStorage();
     await db.execute(sql`
       DELETE FROM sp_completion_records
       WHERE company_id IN (${targetCompanyId}, ${otherCompanyId})

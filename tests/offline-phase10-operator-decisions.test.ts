@@ -18,10 +18,8 @@ vi.mock("../server/edge/edgeRuntimePolicy.mjs", async (importOriginal) => ({
 }));
 
 import { pool } from "../server/db";
-import { ensurePhase9CloudEventSchema } from "../server/edge/phase9CloudEventStore.mjs";
 import {
   decidePhase10Conflict,
-  ensurePhase10ConflictDecisionFunction,
 } from "../server/edge/phase10OperatorControls.mjs";
 import { cleanupTestData, closeTestServer, seedTestData, setupTestApp, type TestContext } from "./setup";
 
@@ -55,8 +53,6 @@ function decide(body: Record<string, unknown>) {
 
 beforeAll(async () => {
   ctx = await seedTestData(PREFIX);
-  await ensurePhase9CloudEventSchema(pool);
-  await ensurePhase10ConflictDecisionFunction(pool);
   await conflict(1, "PHASE9_STOCK_WOULD_GO_NEGATIVE");
   await conflict(2, "PHASE9_STOCK_ITEM_MISSING");
   await conflict(3, "PHASE9_STOCK_WOULD_GO_NEGATIVE");

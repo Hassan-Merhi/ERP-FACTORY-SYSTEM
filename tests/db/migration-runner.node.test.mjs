@@ -448,6 +448,51 @@ describe("existing-database adoption", { skip: pgSkip }, () => {
     assert.equal(rows.rows[0].n, 2, "data is untouched");
   });
 
+  it("adds missing foreign keys to populated tables NOT VALID: historical orphans are kept, new rows are enforced", async () => {
+    const db = await legacyDatabase();
+    const fk = await withClient(db, async (c) => {
+      const { rows } = await c.query(`
+        SELECT conname, conrelid::regclass::text AS tbl, pg_get_constraintdef(oid) AS def
+          FROM pg_constraint WHERE contype = 'f' AND conrelid = 'public.bale_sequences'::regclass LIMIT 1`);
+      const row = rows[0];
+      await c.query(`ALTER TABLE ${row.tbl} DROP CONSTRAINT ${row.conname}`);
+      await c.query("INSERT INTO bale_sequences (company_id) VALUES (987654)"); // orphan: no such company
+      return row;
+    });
+    const adopted = runner(["adopt", "--apply"], { db, env: ADOPT });
+    assert.equal(adopted.status, 0, adopted.out);
+    await withClient(db, async (c) => {
+      const { rows } = await c.query(
+        "SELECT convalidated FROM pg_constraint WHERE conname = $1 AND conrelid = $2::regclass",
+        [fk.conname, fk.tbl]
+      );
+      assert.equal(rows[0].convalidated, false, "added without scanning history");
+      const orphan = await c.query("SELECT count(*)::int AS n FROM bale_sequences WHERE company_id = 987654");
+      assert.equal(orphan.rows[0].n, 1, "historical row untouched");
+      await assert.rejects(c.query("INSERT INTO bale_sequences (company_id) VALUES (987655)"), /foreign key/);
+    });
+    assert.equal(runner(["apply"], { db, env: APPLY }).status, 0);
+    assert.equal(runner(["verify"], { db }).status, 0);
+  });
+
+  it("plan mode runs read-only data checks and reports rows that would block adoption", async () => {
+    const db = await legacyDatabase();
+    await withClient(db, async (c) => {
+      await c.query("ALTER TABLE label_design_colors DROP CONSTRAINT IF EXISTS label_design_colors_slug_key");
+      await c.query("INSERT INTO label_design_colors (slug, label, color_hex, sort_order) VALUES ('dup','a','#000000',1), ('dup','b','#000000',2)");
+    });
+    const plan = runner(["adopt"], { db });
+    assert.notEqual(plan.status, 0);
+    assert.match(plan.out, /data: 1 existing row\(s\)\/group\(s\) block/);
+    const dryRun = runner(["adopt", "--dry-run"], { db });
+    assert.notEqual(dryRun.status, 0);
+    assert.match(dryRun.out, /dry run failed and was rolled back; nothing changed/);
+    await withClient(db, async (c) => {
+      const { rows } = await c.query("SELECT to_regclass('schema_migrations') IS NULL AS absent");
+      assert.equal(rows[0].absent, true);
+    });
+  });
+
   it("refuses to adopt an empty database or one that already has history", async () => {
     const empty = await createDatabase("empty");
     let result = runner(["adopt"], { db: empty });

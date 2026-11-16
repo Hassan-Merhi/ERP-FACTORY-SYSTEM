@@ -9,7 +9,6 @@ vi.mock("../server/auth", () => ({
 }));
 
 import { pool } from "../server/db";
-import { ensureProformaDestinationPricingSchema } from "../server/services/factory/ensureProformaDestinationPricingSchema";
 import { registerFactoryCustomerProformaCrudRoutes } from "../server/routes/factory/customer-proformas/proformas";
 import { registerFactoryCustomerPriceListRoutes } from "../server/routes/factory/customer-proformas/price-lists";
 import { registerFactoryCustomerProformaLineRoutes } from "../server/routes/factory/customer-proformas/lines";
@@ -49,7 +48,6 @@ databaseDescribe("destination-scoped proforma prices", () => {
   }
 
   beforeAll(async () => {
-    await ensureProformaDestinationPricingSchema(pool);
     fixture = await createProformaLoadingFixture("PDI");
     firstId = await fixture.proforma([{ code: articleCode, qty: 2 }]);
     secondId = await fixture.proforma([{ code: articleCode, qty: 3 }]);
