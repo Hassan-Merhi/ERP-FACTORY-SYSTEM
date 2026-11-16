@@ -284,7 +284,6 @@ describe("rollout gate is fail-closed", () => {
   const financialPosting = [
     "/api/accounting/fiscal-review/close",
     "/api/accounting/fiscal-review/close/",
-    "/api/accounting/FISCAL-REVIEW/close",
     "/api/accounting/monetary-fx/realized/1/recognize",
     "/api/accounting/monetary-fx/realized/1/recognize/",
   ];
@@ -297,6 +296,11 @@ describe("rollout gate is fail-closed", () => {
     "/api/accounting/fiscal-review/policy",
     "/api/accounting/fiscal-review/policy/",
   ];
+
+  // Routing is case-sensitive, so a differently-cased URL names no route. The
+  // access boundary refuses it before the rollout gate or any handler is
+  // reached; the gate's own case-insensitive matching stays as a second net.
+  const caseVariant = "/api/accounting/FISCAL-REVIEW/close";
 
   it("normalizes the paths Express would still route", () => {
     expect(normalizedAccountingPath("/api/accounting/fiscal-review/close/")).toBe(
@@ -327,6 +331,16 @@ describe("rollout gate is fail-closed", () => {
       expect(res.status, url).toBe(423);
       expect(res.body.code, url).toBe("ACCOUNTING_READ_ONLY_ROLLOUT");
     }
+    expect(await financialChecksum()).toEqual(before);
+  });
+
+  it("refuses a differently-cased posting URL for every caller without changing data", async () => {
+    const before = await financialChecksum();
+    expect((await request(ctx.app).post(caseVariant).send({})).status).toBe(404);
+    expect([403, 404]).toContain((await viewer.post(caseVariant).send({})).status);
+    const res = await admin.post(caseVariant).send({ reason: "certification probe" });
+    expect(res.status).toBe(404);
+    expect(res.body.code).toBe("API_ROUTE_NOT_FOUND");
     expect(await financialChecksum()).toEqual(before);
   });
 });
