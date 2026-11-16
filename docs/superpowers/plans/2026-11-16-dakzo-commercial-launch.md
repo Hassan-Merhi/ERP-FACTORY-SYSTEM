@@ -1,7 +1,7 @@
 # Dakzo Systems — Commercial Launch Plan
 Date: 2026-11-16
 Branch: feature/dakzo-commercial-launch
-Status: Phase 1 source architecture/readiness audit completed 2026-11-16; no production changes. Phase 2 pending. See 2026-11-16-dakzo-phase1-readiness-audit.md.
+Status: Phase 1 architecture audit complete. Commercial website phases 2–4 tracked in the separate dakzo-systems-website repository. Phase 5 SaaS policy foundation implemented in ERP branch; payment onboarding, tenant security enforcement, and production certification remain OPEN. No production changes.
 
 ## Objective
 Commercialize the existing ERP + Factory platform via recurring subscriptions while preserving source-code ownership and protecting the current production operation.
@@ -97,3 +97,21 @@ Setup and migration priced separately. Test willingness to pay before publishing
 ## Success metrics
 - Qualified demo requests, booked and attended demos, paid customers.
 - Lead-to-demo and demo-to-paid conversion, CAC, churn, MRR and gross margin.
+
+## Phase 5 implementation checkpoint (2026-11-16)
+- Added `server/services/commercial/subscriptionPolicy.mjs`: explicit plan entitlements, user/company limits, subscription state transitions, cross-account deny checks, and stale-event rejection.
+- Added `server/services/commercial/paddleVerification.mjs`: Paddle signature verification using signed raw request bytes, HMAC SHA-256, timing-safe comparison, replay window, strict event parsing; not mounted to production HTTP routes.
+- Added `server/services/commercial/commercial-schema.preview.sql`: staged account/membership/company mapping/subscription/event tables, global unique company assignment, event-id deduplication and FORCE RLS with no policies. **Not versioned, not executed, not safe for live deployment.**
+- Added `tests/commercial-subscription-policy.node.test.mjs` and `tests/commercial-paddle-verification.node.test.mjs`. CI Repository Audits runs these contracts automatically.
+- Created draft PR #3242, keeping all changes off main.
+
+### Phase 5 completion gates — NOT yet met
+1. Confirm legal entity / Paddle merchant onboarding and payout path; Stripe does not list Lebanon as supported for local Stripe accounts as of 2026-11-16.
+2. Provision a disposable isolated PostgreSQL staging environment; approve and register a fully reviewed additive migration with tenant RLS policies and account binding.
+3. Implement and integrate account-aware authentication, user invitations, platform/admin role separation, signup and lifecycle management.
+4. Enforce subscription and account authorization on **all** protected HTTP APIs, WebSockets, background jobs, offline sync, files and exports; test two unrelated accounts with multiple companies.
+5. Integrate actual Paddle webhook HTTP endpoint with raw body verification, durable transactional event-id deduplication, out-of-order event time check, reconciliation and account mapping to trusted provider subscription IDs.
+6. Implement secure checkout, cancellation, grace/dunning, billing portal, accounting of refunds/tax, pricing authorization and billing support.
+7. Run DB migration/rollback, backup/restore, cross-tenant penetration/regression tests, real payment sandbox lifecycle and independent production release review.
+
+Do not claim Phase 5 production-ready or open paid self-service customer registration until ALL these gates are proven. A read-only public marketing tour does not constitute a production ERP sandbox.
