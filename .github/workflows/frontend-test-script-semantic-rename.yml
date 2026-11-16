@@ -68,7 +68,7 @@ jobs:
           npm run build
       - name: Run translation and baseline regression tests
         run: |
-          node node_modules/vitest/vitest.mjs run client/src/i18n tests/ui tests/chat-phase1-classifier.test.ts
+          node node_modules/vitest/vitest.mjs run tests/chat-classifier.test.ts tests/chat-report-domains.test.ts tests/api-payload-bandwidth.test.ts tests/retail-pos-money-contract.test.ts tests/i18n-release-gate.test.ts
       - name: Commit validated Phase 3 changes to the dedicated branch
         run: |
           git config user.name "github-actions[bot]"
