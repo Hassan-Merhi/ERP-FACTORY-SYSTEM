@@ -48,6 +48,11 @@ function fakeRepository(initial = {}) {
         return true;
       },
       setSubscriptionState: async (newState) => Object.assign(db, newState),
+      markWebhookReceipt: async (provider, eventId, status) => {
+        assert.equal(provider, "paddle");
+        assert.ok(receipts.has(provider + ":" + eventId));
+        assert.ok(["ignored", "processed"].includes(status));
+      },
     }),
   };
 }
