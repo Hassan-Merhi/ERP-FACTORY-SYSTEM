@@ -203,6 +203,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -224,6 +231,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -239,6 +253,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -254,6 +275,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -333,6 +361,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "stockExport",
+          "permissionKey": "exp_stock_report",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -351,6 +381,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "stockExport",
+          "permissionKey": "exp_stock_report",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -369,6 +401,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "pdfExport",
+          "permissionKey": "exp_pdf",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -397,6 +431,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "whatsappExport",
+          "permissionKey": "exp_whatsapp_send",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -497,6 +533,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -523,6 +561,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -648,6 +688,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -665,6 +707,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -682,6 +726,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -780,6 +826,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -930,6 +978,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -978,6 +1033,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -994,6 +1051,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -1243,6 +1302,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -1285,6 +1346,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -1301,6 +1369,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "pdfExport",
+          "permissionKey": "exp_pdf",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -1317,6 +1387,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -1333,6 +1405,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -1349,6 +1423,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -1407,6 +1483,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -1434,6 +1517,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -1452,6 +1537,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -1470,6 +1557,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -1489,6 +1583,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -1507,6 +1608,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -1556,6 +1664,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -1572,6 +1687,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -1780,6 +1902,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -1796,6 +1925,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -1813,6 +1949,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -2008,6 +2151,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -2056,6 +2206,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -2072,6 +2229,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -2312,6 +2476,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -2377,6 +2548,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -2457,6 +2635,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -2479,6 +2664,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -2510,6 +2702,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -2536,6 +2735,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -2562,6 +2768,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -2579,6 +2792,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -2596,6 +2816,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -2622,6 +2849,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -2657,6 +2891,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -2683,6 +2924,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -2700,6 +2948,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -2762,6 +3017,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -2779,6 +3041,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -2805,6 +3074,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -2831,6 +3107,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -3037,6 +3320,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -3053,6 +3338,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -3133,6 +3420,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -3209,6 +3498,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "print",
+          "permissionKey": "exp_print_invoice",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -3272,6 +3563,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -3294,6 +3592,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -3310,6 +3610,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "stockExport",
+          "permissionKey": "exp_stock_report",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -3335,6 +3637,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -3485,6 +3789,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "stockExport",
+          "permissionKey": "exp_stock_report",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -3525,6 +3831,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -3542,6 +3855,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -3559,6 +3879,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -3591,6 +3918,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -3608,6 +3942,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -3624,6 +3965,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -3755,6 +4103,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "pdfExport",
+          "permissionKey": "exp_pdf",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -3771,6 +4121,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -3987,6 +4339,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -4003,6 +4357,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "pdfExport",
+          "permissionKey": "exp_pdf",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -4250,6 +4606,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -4571,6 +4934,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -4671,6 +5041,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -4687,6 +5064,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -4703,6 +5082,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -4719,6 +5100,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -4735,6 +5118,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "pdfExport",
+          "permissionKey": "exp_pdf",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -4751,6 +5136,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -5046,6 +5433,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -5063,6 +5452,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -5231,6 +5627,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -5247,6 +5650,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -5914,6 +6324,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -6212,6 +6629,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -6524,6 +6948,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "whatsappExport",
+          "permissionKey": "exp_whatsapp_send",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -7012,6 +7438,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -7029,6 +7462,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -7093,6 +7533,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -7145,6 +7587,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -7175,6 +7624,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "pdfExport",
+          "permissionKey": "exp_pdf",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -7311,6 +7762,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -7455,6 +7913,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "pdfExport",
+          "permissionKey": "exp_pdf",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -7479,6 +7939,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -7657,6 +8124,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "pdfExport",
+          "permissionKey": "exp_pdf",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -7673,6 +8142,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -7974,6 +8445,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "pdfExport",
+          "permissionKey": "exp_pdf",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -8054,6 +8527,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -8102,6 +8582,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -8134,6 +8621,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -8150,6 +8639,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -8166,6 +8657,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -8230,6 +8723,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -8246,6 +8741,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -8286,6 +8783,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -8486,6 +8990,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -8838,6 +9344,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -9160,6 +9668,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -9415,6 +9925,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -9439,6 +9956,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -9592,6 +10111,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -9608,6 +10129,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "pdfExport",
+          "permissionKey": "exp_pdf",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -9624,6 +10147,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -9640,6 +10165,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "pdfExport",
+          "permissionKey": "exp_pdf",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -9793,6 +10320,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -9817,6 +10351,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -10088,6 +10624,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -10106,6 +10649,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -10123,6 +10673,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -10248,6 +10805,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -11223,6 +11787,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -11240,6 +11806,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "pdfExport",
+          "permissionKey": "exp_pdf",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -11257,6 +11825,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "stockExport",
+          "permissionKey": "exp_stock_report",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -11396,6 +11966,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -11416,6 +11993,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -11485,6 +12069,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -11502,6 +12093,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -11587,6 +12185,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "pdfExport",
+          "permissionKey": "exp_pdf",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -11603,6 +12203,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -12483,6 +13085,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -12598,6 +13207,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -12785,6 +13401,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -12841,6 +13464,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "stockExport",
+          "permissionKey": "exp_stock_report",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -12858,6 +13483,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "stockExport",
+          "permissionKey": "exp_stock_report",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -12960,6 +13587,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -12983,6 +13617,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -13010,6 +13651,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -13212,6 +13860,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -13265,6 +13920,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -13282,6 +13944,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -13299,6 +13968,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -13316,6 +13992,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -13339,6 +14022,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -13428,6 +14118,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -13627,6 +14324,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "posShiftSummary",
+          "permissionKey": "pos_perm_view_shift_summary",
+          "permissionType": "pos",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -13643,6 +14342,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "posShiftControl",
+          "permissionKey": "pos_perm_open_shift",
+          "permissionType": "pos",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -13824,6 +14525,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -13861,6 +14569,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -13887,6 +14602,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -14118,6 +14840,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -14189,6 +14918,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -14206,6 +14937,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -14223,6 +14956,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -14240,6 +14980,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -14256,6 +15003,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -14272,6 +15026,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -14287,6 +15048,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -14304,6 +15072,15 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "posSalesImport",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "View Only",
+            "Create Only"
+          ],
+          "permissionBypassRoles": [
+            "POS"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -14320,6 +15097,15 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "posSalesImport",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "View Only",
+            "Create Only"
+          ],
+          "permissionBypassRoles": [
+            "POS"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -14336,6 +15122,15 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "posSalesImport",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "View Only",
+            "Create Only"
+          ],
+          "permissionBypassRoles": [
+            "POS"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -14351,6 +15146,15 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "posSalesImport",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "View Only",
+            "Create Only"
+          ],
+          "permissionBypassRoles": [
+            "POS"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -14368,6 +15172,15 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "posSalesImport",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "View Only",
+            "Create Only"
+          ],
+          "permissionBypassRoles": [
+            "POS"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -14384,6 +15197,15 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "posSalesImport",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "View Only",
+            "Create Only"
+          ],
+          "permissionBypassRoles": [
+            "POS"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -14400,6 +15222,15 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "posSalesImport",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "View Only",
+            "Create Only"
+          ],
+          "permissionBypassRoles": [
+            "POS"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -14415,6 +15246,15 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "posSalesImport",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "View Only",
+            "Create Only"
+          ],
+          "permissionBypassRoles": [
+            "POS"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -14432,6 +15272,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -14448,6 +15295,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -14465,6 +15319,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -14480,6 +15341,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -14495,6 +15363,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -14513,6 +15388,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -14530,6 +15412,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -14547,6 +15436,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -14775,6 +15671,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "pdfExport",
+          "permissionKey": "exp_pdf",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -14791,6 +15689,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -14847,6 +15747,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -14871,6 +15773,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -14935,6 +15839,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -14959,6 +15865,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -16031,6 +16939,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -16057,6 +16972,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -16694,6 +17616,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "pdfExport",
+          "permissionKey": "exp_pdf",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -16710,6 +17634,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "pdfExport",
+          "permissionKey": "exp_pdf",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -16782,6 +17708,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "posShiftSummary",
+          "permissionKey": "pos_perm_view_shift_summary",
+          "permissionType": "pos",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -16798,6 +17726,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "posShiftSummary",
+          "permissionKey": "pos_perm_view_shift_summary",
+          "permissionType": "pos",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -16814,6 +17744,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "posShiftControl",
+          "permissionKey": "pos_perm_open_shift",
+          "permissionType": "pos",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -16836,6 +17768,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "posShiftControl",
+          "permissionKey": "pos_perm_open_shift",
+          "permissionType": "pos",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -16993,6 +17927,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -17021,6 +17957,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -17135,6 +18073,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -17221,6 +18166,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -17394,6 +18341,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -17536,6 +18490,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -17954,6 +18915,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -17980,6 +18948,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -18040,6 +19015,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -18102,6 +19084,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -18366,6 +19355,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -18382,6 +19378,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -18398,6 +19401,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -18438,6 +19448,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -18551,6 +19568,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -18850,6 +19874,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -18965,6 +19996,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -19574,6 +20612,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -19591,6 +20636,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -19608,6 +20660,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -19625,6 +20684,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -19642,6 +20708,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -19677,6 +20750,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -19737,6 +20817,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -19754,6 +20841,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -19774,6 +20868,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -19805,6 +20906,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -19846,6 +20954,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -19867,6 +20982,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -19929,6 +21051,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -20037,6 +21166,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -20072,6 +21208,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -20089,6 +21232,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -20106,6 +21256,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -20300,6 +21457,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -20399,6 +21563,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -20416,6 +21582,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -20568,6 +21736,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "whatsappExport",
+          "permissionKey": "exp_whatsapp_send",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -20869,6 +22039,9 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "globalExportCenter",
+          "permissionKey": "exp_backup_download",
+          "permissionType": "export",
+          "developerOnly": true,
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -20886,6 +22059,9 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "globalExportCenter",
+          "permissionKey": "exp_backup_download",
+          "permissionType": "export",
+          "developerOnly": true,
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -20903,6 +22079,9 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "globalExportCenter",
+          "permissionKey": "exp_backup_download",
+          "permissionType": "export",
+          "developerOnly": true,
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -20920,6 +22099,9 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "globalExportCenter",
+          "permissionKey": "exp_backup_download",
+          "permissionType": "export",
+          "developerOnly": true,
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -20937,6 +22119,9 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "globalExportCenter",
+          "permissionKey": "exp_backup_download",
+          "permissionType": "export",
+          "developerOnly": true,
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -20954,6 +22139,9 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "globalExportCenter",
+          "permissionKey": "exp_backup_download",
+          "permissionType": "export",
+          "developerOnly": true,
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -20971,6 +22159,9 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "globalExportCenter",
+          "permissionKey": "exp_backup_download",
+          "permissionType": "export",
+          "developerOnly": true,
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -20988,6 +22179,9 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "globalExportCenter",
+          "permissionKey": "exp_backup_download",
+          "permissionType": "export",
+          "developerOnly": true,
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -21005,6 +22199,9 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "globalExportCenter",
+          "permissionKey": "exp_backup_download",
+          "permissionType": "export",
+          "developerOnly": true,
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -21022,6 +22219,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "bulkMaintenance",
+          "permissionKey": "act_bulk_operations",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -21039,6 +22243,9 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "globalExportCenter",
+          "permissionKey": "exp_backup_download",
+          "permissionType": "export",
+          "developerOnly": true,
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -21110,6 +22317,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -21127,6 +22341,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -21145,6 +22366,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -21162,6 +22390,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -21339,6 +22574,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -21356,6 +22598,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -21850,6 +23099,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -22008,6 +23264,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -22024,6 +23287,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -22157,6 +23427,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -22349,6 +23621,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -22366,6 +23640,8 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "excelExport",
+          "permissionKey": "exp_excel",
+          "permissionType": "export",
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -22802,6 +24078,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -22818,6 +24101,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -22834,6 +24124,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -22850,6 +24147,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -22866,6 +24170,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -22882,6 +24193,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -22898,6 +24216,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -22914,6 +24239,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
@@ -22930,6 +24262,13 @@
         {
           "kind": "operational-permission-policy",
           "policyName": "import",
+          "permissionKey": "act_import_data",
+          "permissionType": "action",
+          "deniedRoles": [
+            "POS",
+            "View Only",
+            "Create Only"
+          ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
