@@ -10,6 +10,26 @@ concurrency:
   group: phase3-semantic-rename
   cancel-in-progress: true
 jobs:
+  plan-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/phase-wave-semantic-names
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check Phase 3 semantic names without modifying source
+        run: |
+          node scripts/refactor-ui-tests-scripts-filenames.mjs > phase3-dry-run-plan.json
+          node -e "const r=require('./phase3-dry-run-plan.json');if(r.candidateCount<500)throw Error('Phase 3 candidate inventory unexpectedly small');console.log(r.candidateCount,'candidate renames and',r.collisionGroups,'resolved collision groups')"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase3-readonly-plan
+          path: phase3-dry-run-plan.json
   rename-verify:
     runs-on: ubuntu-latest
     timeout-minutes: 60
