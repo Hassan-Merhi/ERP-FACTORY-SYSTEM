@@ -77,6 +77,8 @@ jobs:
           git reset -q -- phase3-rename-plan.json phase3-renames-applied.json
           git diff --cached --quiet && exit 0
           git commit -m "refactor(frontend-tests): rename numbered phase/wave files by function"
+          git fetch origin refactor/phase-wave-semantic-names
+          git rebase origin/refactor/phase-wave-semantic-names
           git push origin HEAD:refactor/phase-wave-semantic-names
       - uses: actions/upload-artifact@v4
         if: always()
