@@ -66,7 +66,7 @@ export async function postAccrualPassTx(tx: DbTransaction, input: AccrualPassPos
     FROM property_monthly_ledger ml
     JOIN property_units u ON u.id=ml.unit_id
     JOIN property_contracts c ON c.id=ml.contract_id
-    WHERE ml.id IN (${sql.raw(rowIds.join(","))})
+    WHERE ml.id IN (${sql.join(rowIds.map((id) => sql`${id}`), sql`, `)})
       AND (
         (ml.company_id=${input.companyId} AND ml.module=${input.module}
           AND c.company_id=${input.companyId} AND c.module=${input.module})
