@@ -98,7 +98,6 @@ describe("Factory attendance historical edit lock", () => {
     const limit = vi.fn().mockResolvedValue([admin]);
     const where = vi.fn().mockReturnValue({ limit });
     const innerJoin = vi.fn().mockReturnValue({ where });
-    selectMock.mockReturnValueOnce({ from: vi.fn().mockReturnValue({ innerJoin: vi.fn().mockReturnValue({ where: vi.fn().mockReturnValue({ limit: vi.fn().mockResolvedValue([{ id: "owner-user", username: "factory-owner", active: true, role: "Owner" }]) }) }) }) }) });
     selectMock.mockReturnValueOnce({ from: vi.fn().mockReturnValue({ innerJoin }) });
     passwordCheckMock.mockResolvedValue(true);
     const res = response();
@@ -122,7 +121,8 @@ describe("Factory attendance historical edit lock", () => {
     const limit = vi.fn().mockResolvedValue([owner]);
     const where = vi.fn().mockReturnValue({ limit });
     const innerJoin = vi.fn().mockReturnValue({ where });
-    selectMock.mockReturnValue({ from: vi.fn().mockReturnValue({ innerJoin }) });
+    mockCompanyRequester({ id: "owner-user", username: "factory-owner", active: true, role: "Owner" });
+    selectMock.mockReturnValueOnce({ from: vi.fn().mockReturnValue({ innerJoin }) });
     const res = response();
 
     const result = await requireAttendanceEditApproval(
