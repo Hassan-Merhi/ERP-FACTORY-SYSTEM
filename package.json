@@ -12,6 +12,8 @@
     "verify:lockfile": "node scripts/verify-lockfile-registry.mjs",
     "verify:dependency-audit": "node scripts/verify-dependency-audit.mjs",
     "verify:env-docs": "node scripts/verify-env-documentation.mjs",
+    "verify:clean-maintenance-types": "node scripts/verify-clean-maintenance-types.mjs",
+    "test:type-env-policy": "node --test tests/type-env-regression.node.test.mjs",
     "verify:migrations": "node scripts/verify-migration-registry.mjs",
     "verify:startup-migrations": "node scripts/verify-startup-migrations.mjs",
     "verify:server-bundle": "node scripts/verify-server-bundle.mjs",
