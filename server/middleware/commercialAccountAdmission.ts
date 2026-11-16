@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import { sql } from "drizzle-orm";
 import { db } from "../db";
+import { commercialRouteEntitlement, commercialModulesByPlan } from "../services/commercial/commercialRouteEntitlements";
 
 type AccountRow = {
   id: string;
@@ -84,7 +85,7 @@ export function decideCommercialAccountAdmission(params: {
   if (!["active", "trialing"].includes(account.subscription_status || "")) {
     return { allowed: false, reason: "subscription_inactive" };
   }
-  if (!["retail", "business", "factory", "enterprise"].includes(account.plan || "")) {
+  if (!account.plan || !Object.hasOwn(commercialModulesByPlan, account.plan)) {
     return { allowed: false, reason: "plan_invalid" };
   }
   if (!Number.isSafeInteger(sessionCompanyId) || !ownedCompanyIds.includes(sessionCompanyId)) {
@@ -148,10 +149,19 @@ export function makeCommercialAdmissionBoundary(
       res.status(401).json({ code: "COMMERCIAL_SESSION_REQUIRED" });
       return;
     }
+    if (req.session?.currentRole === "Developer") {
+      res.status(403).json({ code: "COMMERCIAL_GLOBAL_ROLE_DENIED" });
+      return;
+    }
     try {
       const records = await lookup(userId, Number(companyId));
       if (records.length !== 1) {
         res.status(403).json({ code: "COMMERCIAL_MEMBERSHIP_REQUIRED" });
+        return;
+      }
+      const routeAccess = commercialRouteEntitlement(records[0].plan, req.path);
+      if (!routeAccess.allowed) {
+        res.status(403).json({ code: "COMMERCIAL_FEATURE_NOT_LICENSED" });
         return;
       }
       const owned = await loadCompanies(records[0].id);
