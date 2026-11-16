@@ -469,11 +469,11 @@ export function StockEntryTab({ showHistory = false, onOpenHistory }: StockEntry
 
   const handleConfirmClick = () => {
     if (!selectedLocationId) {
-      toast({ title: "Save failed", description: "Please select a warehouse location", variant: "destructive" });
+      toast({ title: "Missing information", description: "Please select a warehouse location", variant: "destructive" });
       return;
     }
     if (cart.length === 0) {
-      toast({ title: "Save failed", description: "Please add items to the cart", variant: "destructive" });
+      toast({ title: "Missing information", description: "Please add items to the cart", variant: "destructive" });
       return;
     }
     if (cart.length > MAX_ITEMS_PER_ENTRY) {

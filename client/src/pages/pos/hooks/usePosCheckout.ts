@@ -112,7 +112,7 @@ export function usePosCheckout({
   // ISSUE 3: Full payload with shiftId, clientSaleId, currency, exchangeRate, correct rate conversion
   const handleSaveSale = () => {
     if (!activeLocation && !editVoucherId) {
-      toast({ title: "Save failed", description: "Please select a location", variant: "destructive" });
+      toast({ title: "Missing information", description: "Please select a location", variant: "destructive" });
       return;
     }
     if (isSpCompany && goldenCoastReadinessLoading) {
@@ -134,16 +134,16 @@ export function usePosCheckout({
       return;
     }
     if (!isCreditSale && !paymentAccountId) {
-      toast({ title: "Save failed", description: "Please select a payment account", variant: "destructive" });
+      toast({ title: "Missing information", description: "Please select a payment account", variant: "destructive" });
       return;
     }
     if (isCreditSale && !selectedCustomerId) {
-      toast({ title: "Save failed", description: "Please select a customer for credit sale", variant: "destructive" });
+      toast({ title: "Missing information", description: "Please select a customer for credit sale", variant: "destructive" });
       return;
     }
     if (activeCurrency !== "USD" && (!exchangeRate || !Number.isFinite(exchangeRate) || exchangeRate <= 0)) {
       toast({
-        title: "Save failed",
+        title: "Missing information",
         description: "Please enter an exchange rate for this transaction.",
         variant: "destructive",
       });
@@ -163,7 +163,7 @@ export function usePosCheckout({
     }
     const validItems = rows.filter((r) => r.stockItemId && r.quantity > 0 && r.rate > 0);
     if (validItems.length === 0) {
-      toast({ title: "Save failed", description: "Please add at least one item to the sale", variant: "destructive" });
+      toast({ title: "Missing information", description: "Please add at least one item to the sale", variant: "destructive" });
       return;
     }
 

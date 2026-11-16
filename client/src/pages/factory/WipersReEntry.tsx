@@ -594,12 +594,12 @@ export default function WipersReEntry() {
                 <Button
                   onClick={() => {
                     if (!entryDate) {
-                      toast({ title: "Save failed", description: "Entry date is required", variant: "destructive" });
+                      toast({ title: "Missing information", description: "Entry date is required", variant: "destructive" });
                       return;
                     }
                     if (!selectedLocationId) {
                       toast({
-                        title: "Save failed",
+                        title: "Missing information",
                         description: "Warehouse location is required",
                         variant: "destructive",
                       });
