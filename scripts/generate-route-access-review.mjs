@@ -93,6 +93,43 @@ const tenantSets = {
   authorizedCrossCompany: extractExactPathSet("AUTHORIZED_CROSS_COMPANY_PATHS"),
 };
 
+// Other source-authored security classifiers expose narrow route shapes.
+// Preserve those as review evidence only; they do not establish full access.
+const maintenanceSource = fs.readFileSync(
+  path.join(root, "server/services/security/globalMaintenanceRoutePolicy.ts"),
+  "utf8"
+);
+const maintenanceExact = new Map();
+for (const match of maintenanceSource.matchAll(/\{\s*method:\s*"(GET|POST)",\s*path:\s*"([^"]+)",\s*operation:\s*"([^"]+)"/g)) {
+  maintenanceExact.set(match[1] + " " + match[2], match[3]);
+}
+if (maintenanceExact.size < 8) throw new Error("Global maintenance classifier extraction incomplete");
+
+function securityClassifierEvidence(method, routePath) {
+  const evidence = [];
+  const maintenanceOperation = maintenanceExact.get(method + " " + routePath) ??
+    (["GET", "POST"].includes(method) && routePath.startsWith("/api/admin/account-migration/")
+      ? "account-migration"
+      : null);
+  if (maintenanceOperation) evidence.push({
+    kind: "global-maintenance-classifier",
+    operation: maintenanceOperation,
+    source: "server/services/security/globalMaintenanceRoutePolicy.ts",
+    status: "source-evidence-only",
+  });
+  if (/^\/api\/deleted-items\/:type\/:id\/(restore|permanent)$/.test(routePath)) evidence.push({
+    kind: "deleted-item-company-resource",
+    source: "server/services/security/deletedItemScopePolicy.ts",
+    status: "source-evidence-only",
+  });
+  if (/^\/api\/(user-locations|user-location-cash-accounts)\/:userId\/:companyId$/.test(routePath)) evidence.push({
+    kind: "user-location-company-resource",
+    source: "server/services/security/userLocationConfigurationPolicy.ts",
+    status: "source-evidence-only",
+  });
+  return evidence;
+}
+
 const rows = source.routes.map((registration, index) => {
   const match = /^(\S+) (\S+) \[([^\]]*)\]$/.exec(registration);
   if (!match) throw new Error(`Malformed registration at index ${index}: ${registration}`);
@@ -100,6 +137,7 @@ const rows = source.routes.map((registration, index) => {
   const key = `${method} ${routePath}`;
   const v2Candidate = v2.routes?.[key];
   const policyEvidence = operationalEvidence.get(key);
+  const scopeEvidence = securityClassifierEvidence(method, routePath);
   const tenantEvidence = [
     ...(tenantSets.contextOptional.has(routePath) ? ["context-optional"] : []),
     ...(method === "GET" && tenantSets.referenceRead.has(routePath) ? ["cross-company-reference-read"] : []),
@@ -119,6 +157,7 @@ const rows = source.routes.map((registration, index) => {
     existingGuards: guards.split(" > "),
     ...(policyEvidence ? { policyEvidence } : {}),
     ...(tenantEvidence.length ? { tenantEvidence } : {}),
+    ...(scopeEvidence.length ? { scopeEvidence } : {}),
     ...(v2Candidate ? {
       candidate: {
         resource: v2Candidate.resource,
