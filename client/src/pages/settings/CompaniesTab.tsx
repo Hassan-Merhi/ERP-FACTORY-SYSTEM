@@ -594,7 +594,7 @@ export function CompaniesTab() {
                   Are you sure you want to delete <strong>{companyToDelete?.name}</strong>?
                 </p>
                 <p className="text-destructive font-medium">
-                  Only inactive companies without protected accounting or operational history can be deleted. Deletion removes associated configuration, including:
+                  Inactive companies may be permanently deleted. Select the financial-history option below if the company has transactions or balances. Deletion removes associated records, including:
                 </p>
                 <ul className="list-disc list-inside text-sm space-y-1 ml-2">
                   <li>All locations and inventory</li>
