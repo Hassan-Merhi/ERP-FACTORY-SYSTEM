@@ -176,7 +176,7 @@ export function registerSpGitTrackingImportRoutes(app: Express): void {
                 )
               : { __spTrackingNotExisting: true };
             const assignments = fields.map(
-              (field) => sql`${sql.raw(SP_IMPORT_COLUMNS[field])} = ${patch[field] as string | boolean | null}`
+              (field) => sql`${sql.identifier(SP_IMPORT_COLUMNS[field])} = ${patch[field] as string | boolean | null}`
             );
             await db.transaction(async (tx) => {
               await tx.execute(sql`INSERT INTO sp_container_git_tracking (container_id, company_id)
@@ -233,7 +233,7 @@ export function registerSpGitTrackingImportRoutes(app: Express): void {
                   key as (typeof SP_IMPORT_COLUMNS)[keyof typeof SP_IMPORT_COLUMNS]
                 )
               )
-              .map(([key, value]) => sql`${sql.raw(key)} = ${value as string | boolean | null}`);
+              .map(([key, value]) => sql`${sql.identifier(key)} = ${value as string | boolean | null}`);
             if (assignments.length > 0)
               await db.execute(sql`UPDATE sp_container_git_tracking SET
               ${sql.join(assignments, sql`, `)}, updated_at = now()
