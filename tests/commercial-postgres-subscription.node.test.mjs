@@ -35,7 +35,13 @@ function createPool({
       released++;
     },
   };
-  return { pool: { connect: async () => client }, statements, get released() { return released; } };
+  return {
+    pool: { connect: async () => client },
+    statements,
+    get released() {
+      return released;
+    },
+  };
 }
 
 test("commercial subscription repository uses one transaction and explicit provider binding", async () => {
@@ -54,7 +60,7 @@ test("commercial subscription repository uses one transaction and explicit provi
         occurredAtMs: 1794817920000,
         eventHash: "f".repeat(64),
       }),
-      true,
+      true
     );
     await tx.setSubscriptionState({
       provider: "paddle",
@@ -71,9 +77,9 @@ test("commercial subscription repository uses one transaction and explicit provi
   assert.equal(instance.statements[0].sql, "BEGIN");
   assert.equal(instance.statements.at(-1).sql, "COMMIT");
   assert.equal(instance.released, 1);
-  assert.ok(instance.statements.some(x => x.sql.includes("FOR UPDATE")));
-  assert.ok(instance.statements.some(x => x.sql.includes("ON CONFLICT (provider,provider_event_id) DO NOTHING")));
-  assert.ok(instance.statements.every(x => !x.sql.includes("tenant_attacker")));
+  assert.ok(instance.statements.some((x) => x.sql.includes("FOR UPDATE")));
+  assert.ok(instance.statements.some((x) => x.sql.includes("ON CONFLICT (provider,provider_event_id) DO NOTHING")));
+  assert.ok(instance.statements.every((x) => !x.sql.includes("tenant_attacker")));
 });
 
 test("conflicting update rolls back the event receipt and never commits", async () => {
@@ -91,7 +97,7 @@ test("conflicting update rolls back the event receipt and never commits", async 
         sequence: 1794817920000,
       });
     }),
-    /Concurrent subscription state conflict/,
+    /Concurrent subscription state conflict/
   );
   assert.equal(instance.statements.at(-1).sql, "ROLLBACK");
   assert.equal(instance.released, 1);
@@ -101,15 +107,17 @@ test("rejects missing pool and malformed event fingerprints", async () => {
   assert.throws(() => makePostgresSubscriptionRepository({}), /pool/i);
   const instance = createPool();
   await assert.rejects(
-    makePostgresSubscriptionRepository(instance.pool).transaction(tx => tx.insertUniqueWebhookReceipt({
-      provider: "paddle",
-      eventId: "evt_invalid",
-      tenantId: "tenant_real_00001",
-      eventType: "subscription.updated",
-      occurredAtMs: 1794817920000,
-      eventHash: "not_sha256",
-    })),
-    /SHA-256/,
+    makePostgresSubscriptionRepository(instance.pool).transaction((tx) =>
+      tx.insertUniqueWebhookReceipt({
+        provider: "paddle",
+        eventId: "evt_invalid",
+        tenantId: "tenant_real_00001",
+        eventType: "subscription.updated",
+        occurredAtMs: 1794817920000,
+        eventHash: "not_sha256",
+      })
+    ),
+    /SHA-256/
   );
   assert.equal(instance.statements.at(-1).sql, "ROLLBACK");
 });
