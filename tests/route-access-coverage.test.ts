@@ -46,11 +46,13 @@ describe("route access declaration coverage", () => {
     rules[1].permission = "";
     rules[2].companyScope = "any" as "active-company";
     const errors = validateRouteAccessCoverage(routeSnapshot, { rules });
-    expect(errors).toEqual(expect.arrayContaining([
-      `Missing/invalid role declaration: ${identities[0]}`,
-      `Missing permission declaration: ${identities[1]}`,
-      `Invalid company scope: ${identities[2]}`,
-    ]));
+    expect(errors).toEqual(
+      expect.arrayContaining([
+        `Missing/invalid role declaration: ${identities[0]}`,
+        `Missing permission declaration: ${identities[1]}`,
+        `Invalid company scope: ${identities[2]}`,
+      ])
+    );
   });
 
   it("fails on duplicate or stale registrations", () => {
