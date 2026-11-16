@@ -281,17 +281,16 @@ export async function postRentAccrualForCompany(
           // the DB) rather than ANY($n::int[]) — Drizzle does not serialize a JS
           // array through the sql`` tag in a way pg accepts with ::int[] casting.
           const pendingIds = pendingRows.map((r) => r.id);
-          const idListSql = pendingIds.join(","); // safe: all are DB integers
+          const idListSql = sql.join(pendingIds.map((id) => sql`${id}`), sql`, `);
           const lockResult = await tx.execute(
-            sql.raw(
-              `SELECT id, company_id, module, contract_id, expected_amount, paid_amount, unit_id, month, year
+            sql`
+              SELECT id, company_id, module, contract_id, expected_amount, paid_amount, unit_id, month, year
          FROM property_monthly_ledger
          WHERE id IN (${idListSql})
            AND accrual_voucher_id IS NULL
            AND expected_amount::numeric > 0
            AND used_advance_account = false
          FOR UPDATE SKIP LOCKED`
-            )
           );
 
           if (!lockResult.rows || lockResult.rows.length === 0) return;
@@ -311,16 +310,15 @@ export async function postRentAccrualForCompany(
 
           // FIX #4: query actual POSTED payments (payment_date <= effectiveAsOf) per locked row
           //          instead of the potentially-stale paid_amount cache column.
-          const lockedIdList = lockedRows.map((r) => Number(r.id)).join(",");
+          const lockedIdList = sql.join(lockedRows.map((r) => sql`${r.id}`), sql`, `);
           const paidQueryResult = await tx.execute(
-            sql.raw(
-              `SELECT ledger_row_id, COALESCE(SUM(amount::numeric), 0) AS total_paid
+            sql`
+              SELECT ledger_row_id, COALESCE(SUM(amount::numeric), 0) AS total_paid
                FROM property_payments
                WHERE ledger_row_id IN (${lockedIdList})
                  AND posting_status = 'POSTED'
-                 AND payment_date <= '${effectiveAsOf}'
+                 AND payment_date <= ${effectiveAsOf}
                GROUP BY ledger_row_id`
-            )
           );
           const actualPaidByRowId = new Map(
             paidQueryResult.rows.map((r) => [Number(r.ledger_row_id), toMoney(r.total_paid as string)])
@@ -427,16 +425,15 @@ export async function postRentAccrualForCompany(
       if (dueAdvanceRows.length > 0) {
         await db.transaction(async (tx) => {
           const pendingIds15 = dueAdvanceRows.map((r) => r.id);
-          const idListSql15 = pendingIds15.join(",");
+          const idListSql15 = sql.join(pendingIds15.map((id) => sql`${id}`), sql`, `);
           const lock15 = await tx.execute(
-            sql.raw(
-              `SELECT id, expected_amount, paid_amount, unit_id, month, year
+            sql`
+              SELECT id, expected_amount, paid_amount, unit_id, month, year
              FROM property_monthly_ledger
              WHERE id IN (${idListSql15})
                AND accrual_voucher_id IS NULL
                AND used_advance_account = true
              FOR UPDATE SKIP LOCKED`
-            )
           );
           if (!lock15.rows || lock15.rows.length === 0) return;
           type LR15 = {
@@ -560,7 +557,7 @@ export async function postRentAccrualForCompany(
             SELECT ml.id, ml.paid_amount, ml.expected_amount, ml.notes,
               ml.accrual_voucher_id, ml.used_prepaid_account
             FROM property_monthly_ledger ml
-            WHERE ml.id IN (${sql.raw(prepaidIds.join(","))})
+            WHERE ml.id IN (${sql.join(prepaidIds.map((id) => sql`${id}`), sql`, `)})
               AND ml.accrual_voucher_id IS NULL
               AND ml.used_prepaid_account=TRUE
             ORDER BY ml.id FOR UPDATE OF ml
@@ -582,7 +579,7 @@ export async function postRentAccrualForCompany(
             JOIN property_contracts pc ON pc.id=ml.contract_id
             JOIN vouchers v ON v.id=p.voucher_id AND v.company_id=p.company_id
               AND v.deleted_at IS NULL AND v.optional=FALSE
-            WHERE p.ledger_row_id IN (${sql.raw(prepaidIds.join(","))})
+            WHERE p.ledger_row_id IN (${sql.join(prepaidIds.map((id) => sql`${id}`), sql`, `)})
               AND p.posting_status='POSTED'
               AND p.payment_date<=${effectiveAsOf}::date
               AND p.payment_date < MAKE_DATE(
