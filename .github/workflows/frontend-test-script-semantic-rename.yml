@@ -1,0 +1,67 @@
+name: Phase 3 UI scripts and tests semantic rename
+on:
+  push:
+    branches: [refactor/phase-wave-semantic-names]
+    paths:
+      - .github/workflows/frontend-test-script-semantic-rename.yml
+  workflow_dispatch:
+concurrency:
+  group: phase3-semantic-rename
+  cancel-in-progress: true
+jobs:
+  rename-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/phase-wave-semantic-names
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Ensure Phase 2 has landed first
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          if (fs.existsSync('server/edge/phase9CloudEventStore.mjs'))
+            throw Error('Phase 2 bulk backend renames have not landed; do not run Phase 3 on unfinished backend state');
+          NODE
+      - name: Inventory Phase 3 candidates before touching any files
+        run: node scripts/refactor-ui-tests-scripts-filenames.mjs > phase3-rename-plan.json
+      - name: Reconcile lockfile and install dependencies
+        run: |
+          npm install --package-lock-only --ignore-scripts --no-audit
+          npm ci --ignore-scripts
+      - name: Apply semantic renames with tracked references
+        run: |
+          node scripts/refactor-ui-tests-scripts-filenames.mjs --apply > phase3-renames-applied.json
+          git diff --check
+          node -e "const r=require('./phase3-renames-applied.json');if(r.candidateCount<500)throw Error('Unexpectedly small Phase 3 inventory');console.log(r.candidateCount,'renamed candidates,',r.referenceFiles,'reference files updated')"
+      - name: Check TypeScript and production build
+        run: |
+          npm run check
+          npm run build
+      - name: Run translation and baseline regression tests
+        run: |
+          node node_modules/vitest/vitest.mjs run client/src/i18n tests/ui tests/chat-phase1-classifier.test.ts
+      - name: Commit validated Phase 3 changes to the dedicated branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git reset -q -- phase3-rename-plan.json phase3-renames-applied.json
+          git diff --cached --quiet && exit 0
+          git commit -m "refactor(frontend-tests): rename numbered phase/wave files by function"
+          git push origin HEAD:refactor/phase-wave-semantic-names
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phase3-filename-rename-report
+          path: |
+            phase3-rename-plan.json
+            phase3-renames-applied.json
+          if-no-files-found: ignore
