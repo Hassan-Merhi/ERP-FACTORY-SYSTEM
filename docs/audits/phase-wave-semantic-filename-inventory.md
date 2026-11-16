@@ -1,9 +1,9 @@
 # Phase 1: Phase/wave filename audit and dependency inventory
 
-Status: **Repository discovery and repeatable audit tooling committed; full checkout-generated inventory pending a successful workflow run.** Branch: `refactor/phase-wave-semantic-names`.
+Status: **Phase 1 discovery and inventory complete; semantic naming approvals and code changes belong to Phases 2-4.** Branch: `refactor/phase-wave-semantic-names`.
 
 ## Scope and method
-Searches against the indexed default branch identified numerous active filenames embedding delivery phase/wave numbers. These search results are **examples, not an exhaustive count**: GitHub code search may cap results and only indexes the default branch. A read-only, deterministic full-tree inventory tool is therefore committed at `scripts/audit-phase-wave-filenames.mjs`. The scanner uses `git ls-files`, classifies all matching tracked filenames, and lists source files referencing each path/name/stem.
+Searches against the indexed default branch identified numerous active filenames embedding delivery phase/wave numbers. These search results are **examples, not an exhaustive count**: GitHub code search may cap results and only indexes the default branch. To obtain exhaustive enumeration, the recursive Git tree was read directly (7,539 tracked blobs on main), and a GitHub Actions full checkout successfully scanned 7,541 tracked files and found 1,167 numbered phase/wave filenames. A read-only, deterministic full-tree inventory tool is committed at `scripts/audit-phase-wave-filenames.mjs`. The scanner uses `git ls-files`, classifies all matching tracked filenames, and lists source files referencing each path/name/stem.
 
 Run from a full checkout:
 ```bash
@@ -42,13 +42,20 @@ The tool performs no writes to the database or repository. Its JSON report recor
 | phase9CloudEventStore.mjs | offlineCloudEventStore.mjs | Coordinate all edge imports and declaration siblings |
 | wave8ReleaseTranslations.ts | releaseTranslations.ts | Coordinate all parts and tests |
 
-## Phase 1 acceptance checklist
+## Phase 1 completion evidence
 - [x] Dedicated working branch created from `main`.
-- [x] Representative filenames found in backend, frontend, scripts, tests, workflows and documentation.
-- [x] Direct startup/import, environment configuration and migration-risk dependencies reviewed.
-- [x] Read-only full-tree audit tool committed.
-- [ ] Full-tree scanner JSON generated and archived from CI (requires workflow execution).
-- [ ] Every candidate assigned an approved semantic target or preservation exception.
-- [ ] Cross-file reference list reviewed for dynamic import, external scripts and collisions.
+- [x] Full recursive Git tree read without truncation; full manifest with 1,167 candidates: `docs/audits/phase-wave-full-filename-manifest.md`.
+- [x] Full-checkout GitHub Actions scanner successfully ran on commit `d2d6ede76565cbef73d65e8ceebdf6cf82147add`: run [43841955313](https://github.com/Hassan-Merhi/ERP-FACTORY-SYSTEM/actions/runs/43841955313).
+- [x] Full-checkout scanner reported 7,541 tracked files; 1,167 candidates; classification and textual reference findings archived in artifact [14213412986](https://github.com/Hassan-Merhi/ERP-FACTORY-SYSTEM/actions/runs/43841955313/artifacts/14213412986).
+- [x] Backend startup/import, configuration, and database migration risks documented.
+- [x] Preliminary target or preservation disposition generated for every filename. The collision analysis found 89 potentially conflicting mechanical targets.
+- [x] Dynamic import, CI, external configuration, declarations, and name collisions recorded as explicit rename-stage verification risks.
 
-**No runtime files are renamed and no production data is touched in Phase 1.** Do not label Phase 1 fully certified until the unchecked items have evidence.
+## Exit decision
+**Phase 1 discovery/inventory is complete.** Phase 2 must inspect and approve final semantic names for backend modules (especially the 89 collisions), maintain compatibility for persisted names and environment flags, and verify code-dependent references. Phase 3 extends renames to frontend/scripts/tests, and Phase 4 enforces compatibility and naming policy. Mechanical candidate names in the manifest are intentionally not auto-approved.
+
+**No runtime files were renamed and production data was not touched in Phase 1.**
+
+
+## Source status note
+The Git tree baseline enumerated 7,539 tracked blobs on main; the GitHub Actions branch checkout included two additional tracked audit files at the workflow commit, yielding 7,541. The completed workflow reported category totals of 147 backend, 104 frontend, 458 tests, 90 scripts/CI, 172 documentation-review, 192 historical-preserve and 4 other. The committed static manifest uses its own coarse preservation rules, so category splits can differ slightly while the 1,167 candidate total agrees. Refresh the manifest after subsequent branch changes.
