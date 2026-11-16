@@ -197,6 +197,12 @@ jobs:
       - name: Type-escape ratchet
         if: always() && steps.install.outcome == 'success'
         run: npm run audit:type-escapes
+      - name: Cleaned maintenance scripts type gate
+        if: always() && steps.install.outcome == 'success'
+        run: npm run verify:clean-maintenance-types
+      - name: Type/environment regression policy fixtures
+        if: always() && steps.install.outcome == 'success'
+        run: npm run test:type-env-policy
       - name: Documentation state index
         if: always() && steps.install.outcome == 'success'
         run: npm run audit:doc-index
