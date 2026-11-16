@@ -73,11 +73,38 @@ export function normalize(text) {
   return text.replace(/\s+/g, " ").trim();
 }
 
+/** Formatting-insensitive form used for fingerprints (line breaks / spaces around punctuation ignored). */
+export function normalizeForId(text) {
+  return normalize(text).replace(/\s*([(),[\]{};])\s*/g, "$1");
+}
+
 export function fingerprint(path, context, expression, occurrence) {
   return createHash("sha256")
-    .update(`${path}\n${context}\n${normalize(expression)}\n#${occurrence}`)
+    .update(`${path}\n${context}\n${normalizeForId(expression)}\n#${occurrence}`)
     .digest("hex")
     .slice(0, 20);
+}
+
+/**
+ * Assigns a fingerprint, numbering identical expressions in the same function
+ * by order of appearance so duplicates stay distinct call sites.
+ */
+function makeIdAllocator(path) {
+  const seen = new Map();
+  const legacySeen = new Map();
+  return (context, expression) => {
+    const key = `${context}\n${normalizeForId(expression)}`;
+    const occ = (seen.get(key) ?? 0) + 1;
+    seen.set(key, occ);
+    const out = { id: fingerprint(path, context, expression, occ) };
+    if (process.env.RAW_SQL_LEGACY_IDS) {
+      const lkey = `${context}\n${normalize(expression)}`;
+      const locc = (legacySeen.get(lkey) ?? 0) + 1;
+      legacySeen.set(lkey, locc);
+      out.legacyId = createHash("sha256").update(`${path}\n${context}\n${normalize(expression)}\n#${locc}`).digest("hex").slice(0, 20);
+    }
+    return out;
+  };
 }
 
 const NUMERIC_CALLS = new Set(["Number", "parseInt", "parseFloat", "Number.parseInt", "Number.parseFloat", "Date.now", "Math.round", "Math.floor", "Math.ceil", "Math.trunc", "Math.max", "Math.min", "Math.abs", "Math.random"]);
@@ -482,16 +509,13 @@ export function classifyPlpgsqlExecute(body) {
 
 export function scanSqlFile(path, source) {
   const findings = [];
-  const occurrences = new Map();
+  const allocate = makeIdAllocator(path);
   for (const m of source.matchAll(PLPGSQL_EXECUTE)) {
     const reason = classifyPlpgsqlExecute(m[1]);
     const line = source.slice(0, m.index).split("\n").length;
     const expression = m[0].slice(0, 400);
-    const key = normalize(expression);
-    const occ = (occurrences.get(key) ?? 0) + 1;
-    occurrences.set(key, occ);
     findings.push({
-      id: fingerprint(path, "<sql>", expression, occ), path, line, kind: "plpgsql-execute",
+      ...allocate("<sql>", expression), path, line, kind: "plpgsql-execute",
       context: "<sql>", sink: "PL/pgSQL EXECUTE", expression: normalize(expression).slice(0, 300),
       dynamicParts: reason ? [normalize(m[1]).slice(0, 200)] : [],
       autoVerified: reason ? null : "plpgsql-quoted-format",
@@ -509,21 +533,18 @@ export function scanSource(path, source) {
   const prover = createProver(ast, facts);
   const aliases = sqlAliases(ast);
   const findings = [];
-  const occurrences = new Map();
+  const allocate = makeIdAllocator(path);
   const reported = new Set(); // nodes already reported (avoid double counting nested text)
   const text = (n) => n.getText(ast);
 
   function report(node, kind, sink, parts, extra = {}) {
     const context = enclosingContext(node, ast);
     const expression = text(node);
-    const key = `${context}\n${normalize(expression)}`;
-    const occ = (occurrences.get(key) ?? 0) + 1;
-    occurrences.set(key, occ);
     const unproven = parts.map((p) => normalize(text(p)));
     let autoVerified = null;
     if (unproven.length === 0) autoVerified = extra.autoReason ?? "static";
     findings.push({
-      id: fingerprint(path, context, expression, occ),
+      ...allocate(context, expression),
       path,
       line: ast.getLineAndCharacterOfPosition(node.getStart(ast)).line + 1,
       kind,
@@ -560,11 +581,8 @@ export function scanSource(path, source) {
       if (!reason) continue;
       const expression = m[0].slice(0, 300);
       const context = enclosingContext(node, ast);
-      const key = `${context}\nEXEC ${normalize(expression)}`;
-      const occ = (occurrences.get(key) ?? 0) + 1;
-      occurrences.set(key, occ);
       findings.push({
-        id: fingerprint(path, context, "EXECUTE " + expression, occ), path,
+        ...allocate(context, "EXECUTE " + expression), path,
         line: ast.getLineAndCharacterOfPosition(node.getStart(ast)).line + 1,
         kind: "plpgsql-execute", context, sink: "PL/pgSQL EXECUTE (embedded)",
         expression: normalize(expression), dynamicParts: [normalize(m[1]).slice(0, 200)], autoVerified: null, note: reason,

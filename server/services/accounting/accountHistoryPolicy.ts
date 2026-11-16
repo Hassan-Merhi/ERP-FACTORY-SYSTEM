@@ -104,7 +104,7 @@ export async function countAccountLines(
     if (!LINE_COLUMNS.has(column) || !Number.isSafeInteger(id)) throw new Error("account_history_invalid_target");
   }
   const predicate = sql.join(
-    named.map(([column, id]) => sql`${sql.identifier("ve", column)} = ${id}`),
+    named.map(([column, id]) => sql`ve.${sql.identifier(column)} = ${id}`),
     sql` OR `
   );
   const result = await executor.execute<{ live: string | number; any: string | number }>(sql`
