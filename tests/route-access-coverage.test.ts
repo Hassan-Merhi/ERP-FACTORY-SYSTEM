@@ -19,12 +19,20 @@ const identities = routeSnapshot.routes.map(routeIdentity);
 describe("route access declaration coverage", () => {
   it("preserves repeated method/path registration identity", () => {
     expect(new Set(identities).size).toBe(3);
-    expect(identities[0]).toBe("0:GET /api/example");
-    expect(identities[1]).toBe("1:GET /api/example");
+    expect(identities[0]).toBe("0:GET /api/example [requireAuth > handler]");
+    expect(identities[1]).toBe("1:GET /api/example [prerequisite > handler]");
   });
 
   it("accepts explicitly declared and valid registration rules", () => {
     expect(validateRouteAccessCoverage(routeSnapshot, { rules: identities.map(validRule) })).toEqual([]);
+  });
+
+  it("rejects guard-chain drift even if method/path stay the same", () => {
+    const changed = { routes: [...routeSnapshot.routes] };
+    changed.routes[0] = "GET /api/example [handler]";
+    const errors = validateRouteAccessCoverage(changed, { rules: identities.map(validRule) });
+    expect(errors.some(error => error.startsWith("Missing access declaration: 0:"))).toBe(true);
+    expect(errors.some(error => error.startsWith("Stale access declaration: 0:"))).toBe(true);
   });
 
   it("fails when any individual route lacks a declaration", () => {
