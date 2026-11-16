@@ -122,6 +122,7 @@ describe("commercial ERP admission gate", () => {
     const boundary = makeCommercialAdmissionBoundary(
       vi.fn().mockResolvedValue([account]),
       vi.fn().mockResolvedValue([101, 102]),
+      vi.fn().mockResolvedValue(4),
     );
     await boundary(
       fakeRequest({ body: { destinationCompanyId: 777, operation: { sourceCompanyId: 101 } } }) as never,
@@ -138,6 +139,7 @@ describe("commercial ERP admission gate", () => {
     const boundary = makeCommercialAdmissionBoundary(
       vi.fn().mockResolvedValue([account]),
       vi.fn().mockResolvedValue([101]),
+      vi.fn().mockResolvedValue(4),
     );
     await boundary(fakeRequest({ query: { companyId: ["101", "777"] } }) as never, res as never, next);
     expect(res.status).toHaveBeenCalledWith(403);
@@ -153,6 +155,25 @@ describe("commercial ERP admission gate", () => {
     );
     await boundary(fakeRequest({ body: { sourceCompanyId: 101, destinationCompanyId: 102 } }) as never, res as never, next);
     expect(next).toHaveBeenCalledOnce();
+  });
+
+  it("blocks exceeding user or company limits even if a subscription is active", async () => {
+    const next = vi.fn();
+    const tooManyUsers = mockResponse();
+    await makeCommercialAdmissionBoundary(
+      vi.fn().mockResolvedValue([account]),
+      vi.fn().mockResolvedValue([101]),
+      vi.fn().mockResolvedValue(16),
+    )(fakeRequest() as never, tooManyUsers as never, next);
+    expect(tooManyUsers.status).toHaveBeenCalledWith(403);
+    const tooManyCompanies = mockResponse();
+    await makeCommercialAdmissionBoundary(
+      vi.fn().mockResolvedValue([account]),
+      vi.fn().mockResolvedValue([101,102,103,104]),
+      vi.fn().mockResolvedValue(4),
+    )(fakeRequest() as never, tooManyCompanies as never, next);
+    expect(tooManyCompanies.status).toHaveBeenCalledWith(403);
+    expect(next).not.toHaveBeenCalled();
   });
 
   it("denies inactive subscriptions even for existing members", () => {
