@@ -1,11 +1,11 @@
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { HEARTBEAT_INTERVAL } from "../client/src/hooks/use-presence";
 import { shouldEmitWriteInvalidation } from "../shared/realtimeInvalidation";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
 function source(path: string): string {
-  return readFileSync(resolve(process.cwd(), path), "utf8");
+  return readModuleFamily(resolve(process.cwd(), path));
 }
 
 describe("Wave 2 live-page policy", () => {

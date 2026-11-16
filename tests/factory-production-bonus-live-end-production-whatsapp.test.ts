@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
 function source(file: string): string {
-  return readFileSync(resolve(process.cwd(), file), "utf8");
+  return readModuleFamily(resolve(process.cwd(), file));
 }
 describe("Production bonus live calculation and manual-only WhatsApp", () => {
   it("loads open physical-bale production without requiring End Production", () => {

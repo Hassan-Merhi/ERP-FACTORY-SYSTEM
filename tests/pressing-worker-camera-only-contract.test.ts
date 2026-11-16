@@ -27,8 +27,9 @@ describe("Pressing worker camera-only access", () => {
   it("mounts workers' continuously scanning camera from the Open action without inner settings", () => {
     expect(camera).toContain("useState(simpleControls)");
     expect(camera).toContain("{!simpleControls && running && (");
-    expect(camera).toContain('{!simpleControls && <div className="flex flex-wrap gap-2">');
-    expect(camera).toContain("stream?.getTracks().forEach(track => track.stop())");
+    // Prettier formats the moved JSX as `{!simpleControls && (` + `<div ...>`.
+    expect(camera.replace(/\s+/g, " ")).toContain('{!simpleControls && ( <div className="flex flex-wrap gap-2">');
+    expect(camera).toContain("stream?.getTracks().forEach((track) => track.stop())");
     expect(camera).not.toContain("The camera stays open between reads.");
     expect(camera).not.toContain("Permanent history and filters are below.");
   });

@@ -1,9 +1,9 @@
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { companyQueryKey } from "../client/src/lib/companyQueryScope";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
-const source = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
+const source = (path: string) => readModuleFamily(resolve(process.cwd(), path));
 const factoryPage = (name: string) => source(`client/src/pages/factory/${name}`);
 
 describe("Factory Phase 2 selected-company access and query isolation", () => {
@@ -11,7 +11,11 @@ describe("Factory Phase 2 selected-company access and query isolation", () => {
     const code = factoryPage("dailyproductionreport/useDailyProductionReport.tsx");
     expect(code).toContain('companyQueryKey("/api/factory/my-access", selectedCompany?.id)');
     expect(code).toContain("myAccess.hasFactoryAccess === true");
-    for (const endpoint of ["/api/factory/production-value-report", "/api/factory/workers/attendance-report", "/api/factory/monthly-salary-summary"]) {
+    for (const endpoint of [
+      "/api/factory/production-value-report",
+      "/api/factory/workers/attendance-report",
+      "/api/factory/monthly-salary-summary",
+    ]) {
       expect(code).toContain(`companyQueryKey("${endpoint}", selectedCompany?.id`);
     }
   });
@@ -28,7 +32,9 @@ describe("Factory Phase 2 selected-company access and query isolation", () => {
     const code = factoryPage("baleshistory/useBalesHistoryModel.tsx");
     expect(code).toContain('companyQueryKey("/api/factory/my-access", selectedCompany?.id)');
     expect(code).toContain("const scopedAccess =");
-    expect(code).toContain('companyQueryKey("/api/factory/bales", selectedCompany?.id, returnToStockBale?.bale?.id, "order-info")');
+    expect(code).toContain(
+      'companyQueryKey("/api/factory/bales", selectedCompany?.id, returnToStockBale?.bale?.id, "order-info")'
+    );
     expect(code).not.toContain("placeholderData: (prev) => prev");
     expect(code).toContain("setSelectedIds(new Set())");
   });
@@ -68,17 +74,21 @@ describe("Factory Phase 2 selected-company access and query isolation", () => {
 
   it("clears invoice and optimizer drafts when the selected company changes", () => {
     const invoice = factoryPage("FactoryInvoiceCreate.tsx");
-    expect(invoice).toContain("setSelectedCustomerId(\"\")");
+    expect(invoice).toContain('setSelectedCustomerId("")');
     expect(invoice).toContain("setOrderId(null)");
     expect(invoice).toContain("lastCompanyRef.current = selectedCompany?.id");
     const optimizer = factoryPage("FactoryMixOptimizer.tsx");
-    expect(optimizer).toContain("setTargetProduct(\"\")");
+    expect(optimizer).toContain('setTargetProduct("")');
     expect(optimizer).toContain("setMaterials([{ supplierId:");
   });
 
   it("isolate dispatch batch detail, invoice preview and audit by selected company", () => {
     const code = factoryPage("FactoryDispatchBatchDetail.tsx");
-    for (const path of ["`/api/factory/dispatch-batches/${batchId}`", "`/api/factory/dispatch-batches/${batchId}/invoice-preview`", "`/api/factory/dispatch-batches/${batchId}/audit`"]) {
+    for (const path of [
+      "`/api/factory/dispatch-batches/${batchId}`",
+      "`/api/factory/dispatch-batches/${batchId}/invoice-preview`",
+      "`/api/factory/dispatch-batches/${batchId}/audit`",
+    ]) {
       expect(code).toContain(`companyQueryKey(${path}, selectedCompany?.id)`);
     }
   });

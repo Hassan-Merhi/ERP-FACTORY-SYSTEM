@@ -12,24 +12,54 @@ import { fileURLToPath } from "node:url";
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".mjs", ".jsx"]);
 const MARKER_WINDOW = 600;
 
-function extractedSiblings(file) {
-  const dir = path.dirname(file);
-  const marker = "Extracted from ./" + path.basename(file);
-  let entries;
+const headCache = new Map();
+
+/** First MARKER_WINDOW bytes of a file (cached; never reads whole files). */
+function headOf(file) {
+  if (headCache.has(file)) return headCache.get(file);
+  let head = "";
+  try {
+    const fd = fs.openSync(file, "r");
+    try {
+      const buffer = Buffer.alloc(MARKER_WINDOW);
+      const bytes = fs.readSync(fd, buffer, 0, MARKER_WINDOW, 0);
+      head = buffer.subarray(0, bytes).toString("utf8");
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch {
+    head = "";
+  }
+  headCache.set(file, head);
+  return head;
+}
+
+const dirCache = new Map();
+
+/** Map of original basename -> extracted siblings for one directory (cached). */
+function directoryIndex(dir) {
+  if (dirCache.has(dir)) return dirCache.get(dir);
+  const index = new Map();
+  let entries = [];
   try {
     entries = fs.readdirSync(dir);
   } catch {
-    return [];
+    entries = [];
   }
-  return entries
-    .filter((name) => SOURCE_EXTENSIONS.has(path.extname(name)))
-    .map((name) => path.join(dir, name))
-    .filter((candidate) => {
-      if (candidate === file) return false;
-      const head = fs.readFileSync(candidate, "utf8").slice(0, MARKER_WINDOW);
-      return head.includes(marker);
-    })
-    .sort();
+  for (const name of entries.sort()) {
+    if (!SOURCE_EXTENSIONS.has(path.extname(name))) continue;
+    const candidate = path.join(dir, name);
+    const match = /Extracted from \.\/([\w.@-]+\.(?:ts|tsx|js|mjs|jsx))\b/.exec(headOf(candidate));
+    if (!match) continue;
+    if (!index.has(match[1])) index.set(match[1], []);
+    index.get(match[1]).push(candidate);
+  }
+  dirCache.set(dir, index);
+  return index;
+}
+
+function extractedSiblings(file) {
+  return (directoryIndex(path.dirname(file)).get(path.basename(file)) ?? []).filter((candidate) => candidate !== file);
 }
 
 /** Files that make up the module family rooted at `file` (original first). */
@@ -63,13 +93,7 @@ const ORIGIN_PATTERN = /Extracted from \.\/([\w.@-]+\.(?:ts|tsx|js|mjs|jsx))\b/;
  */
 export function extractedFrom(fileOrUrl) {
   const file = fileOrUrl instanceof URL ? fileURLToPath(fileOrUrl) : String(fileOrUrl);
-  let head;
-  try {
-    head = fs.readFileSync(file, "utf8").slice(0, MARKER_WINDOW);
-  } catch {
-    return null;
-  }
-  const match = ORIGIN_PATTERN.exec(head);
+  const match = ORIGIN_PATTERN.exec(headOf(file));
   if (!match) return null;
   const origin = path.join(path.dirname(file), match[1]);
   return fs.existsSync(origin) ? origin : null;

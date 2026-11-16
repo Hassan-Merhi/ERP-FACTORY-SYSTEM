@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
@@ -8,18 +7,23 @@ import {
   canNavigateProperties,
   findPropertiesNavigationEntry,
 } from "../client/src/properties/config/propertiesNavigation";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
 const property = { companyType: "properties" as const, role: "User" };
 const admin = { companyType: "properties" as const, role: "Admin" };
 const developer = { companyType: "properties" as const, role: "Developer" };
-const source = (path: string) => readFileSync(fileURLToPath(new URL(path, import.meta.url)), "utf8");
+const source = (path: string) => readModuleFamily(fileURLToPath(new URL(path, import.meta.url)));
 
 describe("Phase 10 Properties navigation and legacy compatibility", () => {
   it("keeps exactly six visible pinned workspace roots without the compatibility dashboard", () => {
     const pinned = PROPERTIES_NAVIGATION.filter((entry) => entry.navigation === "pinned");
     expect(pinned.map((entry) => entry.path)).toEqual([
-      "/properties/daybook", "/properties/agents", "/properties/rentals",
-      "/properties/accounts", "/properties/vouchers", "/properties/analytics",
+      "/properties/daybook",
+      "/properties/agents",
+      "/properties/rentals",
+      "/properties/accounts",
+      "/properties/vouchers",
+      "/properties/analytics",
     ]);
     expect(findPropertiesNavigationEntry("/properties/dashboard")?.navigation).toBe("hidden");
     expect(canNavigateProperties("/properties/dashboard", { role: "User" }, property)).toBe(true);
@@ -64,7 +68,9 @@ describe("Phase 10 Properties navigation and legacy compatibility", () => {
     expect(findPropertiesNavigationEntry("/properties/rentals?tab=payments&from=bookmark")?.label).toBe("Payments");
     expect(findPropertiesNavigationEntry("/properties/rentals?tab=invalid")?.label).toBe("Rentals");
     expect(canNavigateProperties("/properties/rentals?tab=shops", { role: "User" }, property)).toBe(true);
-    expect(canNavigateProperties("/properties/rentals?tab=shops", { role: "User" }, { companyType: "erp", role: "User" })).toBe(false);
+    expect(
+      canNavigateProperties("/properties/rentals?tab=shops", { role: "User" }, { companyType: "erp", role: "User" })
+    ).toBe(false);
   });
 
   it("uses selected-company role for developer and admin direct links, including query URLs", () => {
@@ -73,7 +79,9 @@ describe("Phase 10 Properties navigation and legacy compatibility", () => {
     expect(canNavigateProperties("/properties/accounting/toolbox", { role: "Admin" }, admin)).toBe(false);
     expect(canNavigateProperties("/properties/accounting/toolbox", { role: "User" }, developer)).toBe(true);
     expect(canNavigateProperties("/properties/transfer", { role: "User" }, developer)).toBe(true);
-    expect(canNavigateProperties("/properties/my-settings", { role: "ERP Tester" }, { ...property, role: "ERP Tester" })).toBe(false);
+    expect(
+      canNavigateProperties("/properties/my-settings", { role: "ERP Tester" }, { ...property, role: "ERP Tester" })
+    ).toBe(false);
   });
 
   it("keeps registered dashboard actions and a directly routed compatibility page", () => {
@@ -83,7 +91,7 @@ describe("Phase 10 Properties navigation and legacy compatibility", () => {
     expect(pageSource).toContain("apiRequest");
     expect(pageSource).toContain("dashboard-cash-accounts");
     expect(pageSource).toContain("dashboard-payable-accounts");
-    expect(routeSource).toContain('Object.entries(PROPERTIES_LEGACY_RENTAL_REDIRECTS).map');
+    expect(routeSource).toContain("Object.entries(PROPERTIES_LEGACY_RENTAL_REDIRECTS).map");
     expect(routeSource).toContain("<Redirect replace to={to} />");
     expect(routeSource).toContain('<Redirect replace to="/properties/daybook" />');
   });
