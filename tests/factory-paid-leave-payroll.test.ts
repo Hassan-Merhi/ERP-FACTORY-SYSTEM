@@ -8,7 +8,7 @@ import {
 
 describe("factory payroll paid leave", () => {
   it("pays Leave at one full monthly daily rate", () => {
-    const salary = new MoneyDecimal(3100);
+    const salary = new MoneyDecimal(3000);
     const attendance = [
       { status: "Present" },
       { status: "Leave" },
