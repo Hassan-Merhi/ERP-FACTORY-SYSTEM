@@ -31,6 +31,7 @@ import { generateNetPositionExcel, generateMonthEnds } from "../helpers/generate
 import { generateStockPdf } from "../helpers/generateStockPdf";
 import { sendExportEmail } from "../services/emailService";
 import { triggerDailyWhatsAppSendNow } from "../services/scheduler";
+import { invalidExportDateRange } from "../services/export-excel/workbook";
 import { ZipArchive } from "archiver";
 import { getClientDate } from "../lib/dateUtils";
 
@@ -514,6 +515,8 @@ export function registerWhatsAppRoutes(app: Express) {
 
   app.post("/api/daily-export/trigger-whatsapp", requireAuth, async (req, res) => {
     const { fromDate, toDate } = req.body as { fromDate?: string; toDate?: string };
+    const invalidDate = invalidExportDateRange(fromDate, toDate);
+    if (invalidDate) return res.status(400).json({ message: invalidDate });
 
     // Respond immediately — building the full ZIP and sending it can take >30 s for large
     // company sets, which would timeout the browser request.  The result is recorded in

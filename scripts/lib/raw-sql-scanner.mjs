@@ -81,7 +81,7 @@ export function fingerprint(path, context, expression, occurrence) {
 }
 
 const NUMERIC_CALLS = new Set(["Number", "parseInt", "parseFloat", "Number.parseInt", "Number.parseFloat", "Date.now", "Math.round", "Math.floor", "Math.ceil", "Math.trunc", "Math.max", "Math.min", "Math.abs", "Math.random"]);
-const NUMERIC_METHODS = new Set(["getTime", "valueOf", "indexOf", "lastIndexOf", "findIndex", "charCodeAt", "getFullYear", "getMonth", "getDate", "getUTCFullYear", "getUTCMonth", "getUTCDate", "getHours"]);
+const NUMERIC_METHODS = new Set(["push", "getTime", "valueOf", "indexOf", "lastIndexOf", "findIndex", "charCodeAt", "getFullYear", "getMonth", "getDate", "getUTCFullYear", "getUTCMonth", "getUTCDate", "getHours"]);
 const NUMERIC_PROPS = new Set(["length", "size"]);
 const ARITH = new Set([
   ts.SyntaxKind.MinusToken, ts.SyntaxKind.AsteriskToken, ts.SyntaxKind.SlashToken,
@@ -107,6 +107,8 @@ function collectFileFacts(ast) {
   const plusAssigned = new Set();
   const forOf = new Map(); // name -> [iterated expressions]
   const functions = new Map(); // name -> [function-like nodes]
+  const pushes = new Map(); // name -> [pushed argument nodes]
+  const nonPushWrites = new Set(); // names mutated other than by .push(...)
   function visit(node) {
     if (ts.isForOfStatement(node) && ts.isVariableDeclarationList(node.initializer) &&
       (node.initializer.flags & ts.NodeFlags.Const) !== 0) {
@@ -155,7 +157,7 @@ function collectFileFacts(ast) {
         if (ts.isIdentifier(target)) mutable.add(target.text);
         while (target && (ts.isPropertyAccessExpression(target) || ts.isElementAccessExpression(target))) {
           target = unwrap(target.expression);
-          if (ts.isIdentifier(target)) written.add(target.text);
+          if (ts.isIdentifier(target)) { written.add(target.text); nonPushWrites.add(target.text); }
         }
       }
     }
@@ -163,7 +165,14 @@ function collectFileFacts(ast) {
       const callee = node.expression;
       if (ts.isPropertyAccessExpression(callee) && ["push", "unshift", "splice", "set", "add", "fill", "sort", "reverse", "copyWithin", "assign", "defineProperty"].includes(callee.name.text)) {
         const recv = unwrap(callee.expression);
-        if (ts.isIdentifier(recv) && !["Object", "Reflect"].includes(recv.text)) written.add(recv.text);
+        if (ts.isIdentifier(recv) && !["Object", "Reflect"].includes(recv.text)) {
+          written.add(recv.text);
+          if (callee.name.text === "push") {
+            const arr = pushes.get(recv.text) ?? [];
+            arr.push(...node.arguments);
+            pushes.set(recv.text, arr);
+          } else nonPushWrites.add(recv.text);
+        }
         if (ts.isIdentifier(recv) && ["Object", "Reflect"].includes(recv.text) && node.arguments[0]) {
           const t = unwrap(node.arguments[0]);
           if (ts.isIdentifier(t)) written.add(t.text);
@@ -173,12 +182,14 @@ function collectFileFacts(ast) {
     ts.forEachChild(node, visit);
   }
   visit(ast);
-  return { consts, mutable, written, numericCounters, plusAssigned, forOf, functions };
+  return { consts, mutable, written, numericCounters, plusAssigned, forOf, functions, pushes, nonPushWrites };
 }
 
 export function createProver(ast, facts) {
   const text = (n) => n.getText(ast);
   const resolving = new Set();
+  const assumed = []; // stack of Sets: parameter names proven at the current call site
+  const isAssumed = (name) => assumed.some((set) => set.has(name));
 
   function constInitializers(name) {
     if (facts.mutable.has(name)) return null;
@@ -262,6 +273,7 @@ export function createProver(ast, facts) {
     }
     if (ts.isConditionalExpression(node)) return isProven(node.whenTrue) && isProven(node.whenFalse);
     if (ts.isIdentifier(node)) {
+      if (isAssumed(node.text)) return true;
       const iterated = facts.forOf.get(node.text);
       if (iterated && !facts.consts.has(node.text) && !resolving.has(node.text)) {
         resolving.add(node.text);
@@ -294,6 +306,7 @@ export function createProver(ast, facts) {
         if (m === "join" && (node.arguments.length === 0 || isStatic(node.arguments[0]))) {
           if (ts.isArrayLiteralExpression(recv)) return recv.elements.every((e) => !ts.isSpreadElement(e) && isProven(e));
           if (containerIdentifier(recv)) return true;
+          if (pushOnlyArray(recv)) return true;
         }
         if (["toUpperCase", "toLowerCase", "trim"].includes(m) && node.arguments.length === 0) return isStatic(recv);
         if (m === "toISOString" && node.arguments.length === 0) return true; // fixed [0-9T:.Z-] format
@@ -303,6 +316,8 @@ export function createProver(ast, facts) {
       // Call to an in-file function whose every return value is proven
       // independently of its arguments.
       if (ts.isIdentifier(callee) && functionReturnsProven(callee.text)) return true;
+      if (ts.isIdentifier(callee) && node.arguments.every((a) => !ts.isSpreadElement(a) && isProven(a)) &&
+        functionReturnsProven(callee.text, true)) return true;
     }
     return false;
   }
@@ -319,16 +334,36 @@ export function createProver(ast, facts) {
     })(fn.body);
     return bare && out.length === 0 ? null : out;
   }
-  function functionReturnsProven(name) {
+  function functionReturnsProven(name, assumeParams = false) {
     const fns = facts.functions.get(name);
-    if (!fns || facts.mutable.has(name) || resolving.has("fn:" + name)) return false;
-    resolving.add("fn:" + name);
+    const key = (assumeParams ? "fnp:" : "fn:") + name;
+    if (!fns || facts.mutable.has(name) || resolving.has(key)) return false;
+    resolving.add(key);
     try {
       return fns.every((fn) => {
         const rets = returnExpressions(fn);
-        return !!rets && rets.length > 0 && rets.every((r) => isProven(r));
+        if (!rets || rets.length === 0) return false;
+        const params = new Set(assumeParams
+          ? fn.parameters.filter((p) => ts.isIdentifier(p.name) && !p.dotDotDotToken).map((p) => p.name.text)
+          : []);
+        if (assumeParams && params.size !== fn.parameters.length) return false;
+        assumed.push(params);
+        try { return rets.every((r) => isProven(r)); } finally { assumed.pop(); }
       });
-    } finally { resolving.delete("fn:" + name); }
+    } finally { resolving.delete(key); }
+  }
+
+  /** `const xs = [proven...]` mutated only by `xs.push(proven...)`. */
+  function pushOnlyArray(node) {
+    node = unwrap(node);
+    if (!ts.isIdentifier(node) || facts.nonPushWrites.has(node.text)) return false;
+    const inits = constInitializers(node.text);
+    if (!inits || resolving.has("arr:" + node.text)) return false;
+    resolving.add("arr:" + node.text);
+    try {
+      return inits.every((i) => ts.isArrayLiteralExpression(unwrap(i)) && isStaticValueContainer(i)) &&
+        (facts.pushes.get(node.text) ?? []).every((a) => !ts.isSpreadElement(a) && isProven(a));
+    } finally { resolving.delete("arr:" + node.text); }
   }
 
   function isStaticPath(node) {
@@ -607,7 +642,8 @@ export function scanSource(path, source) {
         const before = i === 0 ? node.head.text : node.templateSpans[i - 1].literal.text;
         return VALUE_POSITION.test(before) && /[A-Za-z_]/.test(before) && /^[\w"'.]*\s*[=<>]|\b(AND|OR|FROM|WHERE|SELECT)\b/.test(before + " " + s.literal.text);
       }));
-      if (sqlShaped && parts.length) {
+      const hasDynamic = ts.isTemplateExpression(node) || staticText(node, ast).includes("\u0000");
+      if (sqlShaped && hasDynamic) {
         report(node, "assembled-sql-text", "string assembly", parts);
         markReported(node);
       }

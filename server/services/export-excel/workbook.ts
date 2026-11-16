@@ -225,14 +225,39 @@ export async function buildCompanyWorkbook(
 // Peak RAM = ExcelJS workbook + one dataset, instead of all datasets at once.
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function qStream(sql: string) {
+async function qStream(sql: string, params: readonly string[] = []) {
   try {
-    const r = await pool.query(sql);
+    const r = await pool.query(sql, params.length ? [...params] : undefined);
     return r.rows;
   } catch (err: unknown) {
     logger.warn(`[ExportStream] Query warning: ${getErrorMessage(err)}`);
     return [];
   }
+}
+
+const EXPORT_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Accepts only a real YYYY-MM-DD calendar date; anything else is rejected before SQL. */
+export function assertExportDate(value: string, field: string): string {
+  if (typeof value !== "string" || !EXPORT_DATE.test(value)) throw new Error(`Invalid ${field}: expected YYYY-MM-DD`);
+  const parsed = new Date(`${value}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) {
+    throw new Error(`Invalid ${field}: not a calendar date`);
+  }
+  return value;
+}
+
+/** Request-boundary check: returns an error message for a malformed optional date range, else null. */
+export function invalidExportDateRange(fromDate: unknown, toDate: unknown): string | null {
+  for (const [field, value] of [["fromDate", fromDate], ["toDate", toDate]] as const) {
+    if (value === undefined || value === null || value === "") continue;
+    try {
+      assertExportDate(value as string, field);
+    } catch (error) {
+      return error instanceof Error ? error.message : `Invalid ${field}`;
+    }
+  }
+  return null;
 }
 
 export async function streamCompanyWorkbookDirect(
@@ -241,10 +266,18 @@ export async function streamCompanyWorkbookDirect(
   toDate: string | undefined
 ): Promise<Buffer> {
   const cid = Number(companyId);
+  if (!Number.isSafeInteger(cid) || cid <= 0) throw new Error("Invalid company id for export");
+  // The date range arrives from request bodies (POST /api/export/start, the
+  // WhatsApp manual send). It is validated as a calendar date and travels as a
+  // bound parameter; `df` only emits the `$n` placeholder text and a column
+  // name chosen by the literal call sites below.
+  const dateParams: string[] = [];
+  const fromPlaceholder = fromDate ? `$${dateParams.push(assertExportDate(fromDate, "fromDate"))}` : null;
+  const toPlaceholder = toDate ? `$${dateParams.push(assertExportDate(toDate, "toDate"))}` : null;
   const df = (col: string): string => {
     const parts: string[] = [];
-    if (fromDate) parts.push(`AND ${col} >= '${fromDate}'`);
-    if (toDate) parts.push(`AND ${col} <= '${toDate}'`);
+    if (fromPlaceholder) parts.push(`AND ${col} >= ${fromPlaceholder}`);
+    if (toPlaceholder) parts.push(`AND ${col} <= ${toPlaceholder}`);
     return parts.join(" ");
   };
 
@@ -262,7 +295,8 @@ export async function streamCompanyWorkbookDirect(
   // Content is written after all data sheets are fetched (summaryRows must be complete).
 
   async function fetch1(sheetName: string, sql: string): Promise<void> {
-    const rows = await qStream(sql);
+    // Only queries that contain a date filter reference the bound date values.
+    const rows = await qStream(sql, /\$\d/.test(sql) ? dateParams : []);
     try {
       addSheet(wb, sheetName, rows);
     } catch (sheetErr: unknown) {
