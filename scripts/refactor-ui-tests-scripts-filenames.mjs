@@ -9,7 +9,7 @@ const root=path.resolve(import.meta.dirname,"..");
 const apply=process.argv.includes("--apply");
 const files=execFileSync("git",["ls-files","-z"],{cwd:root,encoding:"utf8",maxBuffer:33554432}).split("\0").filter(Boolean);
 const all=new Set(files);
-const marker=/(?:wave|phase)[-_ ]?\d+[a-z]?(?=[^a-z]|[A-Z]|$)/gi;
+const marker=/(?:[Ww]ave|[Pp]hase)[-_ ]?\d+(?:[a-z](?=[A-Z._-]|$))?/g;
 const qualifies=p=>/^(?:client\/|tests\/|scripts\/|build\/)/.test(p)&&/(?:wave|phase)[-_ ]?\d+/i.test(path.posix.basename(p))&&!p.startsWith("scripts/repairs/");
 const candidates=files.filter(qualifies);
 const overrides={
