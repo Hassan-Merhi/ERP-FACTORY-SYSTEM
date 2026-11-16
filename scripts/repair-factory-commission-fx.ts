@@ -337,8 +337,6 @@ async function main() {
             companyId,
             newCostPerKg: correctedCost.costPerKg,
             newCostPerKgUsd: correctedCost.costPerKgUsd,
-            newTotalCost: correctedCost.totalCost,
-            newTotalUsd: correctedCost.totalUsd,
           });
         });
         report.appliedOk = true;
