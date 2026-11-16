@@ -1,4 +1,4 @@
-name: Apply backend semantic filename refactor
+name: Apply backend semantic filename refactor (collision reviewed)
 on:
   push:
     branches: [refactor/phase-wave-semantic-names]
