@@ -1,0 +1,38 @@
+{
+  "formatVersion": 1,
+  "description": "Hand-reviewed route-specific authorization facts. This list is NON-ENFORCING until the centralized middleware is certified. Do not guess further overrides.",
+  "rules": [
+    {
+      "id": "0:POST /api/stock-transfer-order/wa-approval/webhook [stockTransferOrderWaWebhookHandler]",
+      "companyScope": "service",
+      "permission": "service-token:STO_WA_GREEN_API_WEBHOOK_TOKEN",
+      "roles": [
+        "machine-webhook"
+      ],
+      "authMode": "dedicated-bearer-token",
+      "status": "reviewed",
+      "evidence": [
+        "server/routes.ts",
+        "server/routes/stockTransferOrderWaApprovalWebhookRoutes.ts",
+        "server/services/security/stockTransferOrderWaWebhookAuthentication.ts"
+      ],
+      "note": "Registered before browser tenant/session guards; dedicated 32-256 character Bearer secret is verified in constant time. 401 on invalid token, 503 if not configured."
+    },
+    {
+      "id": "1085:GET /api/health [<anonymous>]",
+      "companyScope": "public",
+      "permission": "none",
+      "roles": [
+        "any"
+      ],
+      "authMode": "public",
+      "status": "reviewed",
+      "evidence": [
+        "server/routes/core/healthRoutes.ts",
+        "server/routes/applicationRoutes.ts",
+        "server/middleware/tenantIsolationBoundary.ts"
+      ],
+      "note": "Public health response; context-optional route. No session role or permission is required."
+    }
+  ]
+}
