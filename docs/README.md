@@ -16,6 +16,10 @@ failure, so a correct document cannot quietly become undiscoverable.
 
 ## Start here
 
+| [superpowers/plans/2026-11-16-dakzo-commercial-launch.md](superpowers/plans/2026-11-16-dakzo-commercial-launch.md) | Dakzo commercial SaaS rollout architecture and phase gates |
+| [superpowers/plans/2026-11-16-dakzo-phase1-readiness-audit.md](superpowers/plans/2026-11-16-dakzo-phase1-readiness-audit.md) | Commercial account isolation risks and launch blockers |
+
+
 | [file-size-limits-20261113.md](file-size-limits-20261113.md) | Repository file length warning and hard cap |
 | [erp-supplier-returns-multi-container-phases.md](erp-supplier-returns-multi-container-phases.md) | Multi-container ERP supplier returns scope, phases and acceptance criteria |
 | [erp-supplier-returns-phase1-audit.md](erp-supplier-returns-phase1-audit.md) | Existing return data flow and inventory cost boundaries |
