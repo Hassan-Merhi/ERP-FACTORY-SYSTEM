@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 export function routeIdentity(entry, index) {
   const match = /^(\S+) (\S+) \[/.exec(entry);
   if (!match) throw new Error(`Malformed route manifest entry #${index}: ${entry}`);
-  return `${index}:${match[1]} ${match[2]}`;
+  return `${index}:${entry}`;
 }
 
 export function validateRouteAccessCoverage(routeSnapshot, accessSnapshot) {
@@ -24,6 +24,7 @@ export function validateRouteAccessCoverage(routeSnapshot, accessSnapshot) {
   if (errors.length) return errors;
 
   const expected = routeSnapshot.routes.map(routeIdentity);
+  if (new Set(expected).size !== expected.length) errors.push("Duplicate route identities in snapshot");
   const seen = new Set();
   const allowedScopes = new Set(["active-company", "explicit-company", "global", "public", "service"]);
   for (const rule of accessSnapshot.rules) {
