@@ -27,10 +27,6 @@ type DatabaseErrorMetadata = {
   detail?: string;
 };
 
-function quoteIdentifier(value: string): string {
-  return `"${value.replace(/"/g, '""')}"`;
-}
-
 function executeRows<T>(result: unknown): T[] {
   if (Array.isArray(result)) return result as T[];
   if (typeof result === "object" && result !== null && "rows" in result) {
