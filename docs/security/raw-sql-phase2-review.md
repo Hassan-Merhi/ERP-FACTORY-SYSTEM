@@ -134,3 +134,25 @@ The remaining acceptance gate is therefore unchanged: run an exhaustive
 inventory against a checkout, inspect each original SQL-value source and
 database sink, and produce a complete reviewed allowlist before Phase 2
 can be considered complete.
+
+## Task #2 — Input provenance trace (2026-11-16)
+
+Observed provenance from source for the following additional SQL sinks:
+
+| Site | Dynamic source | Trust boundary and mitigation |
+| --- | --- | --- |
+| `server/routes/git/spGitTrackingRoutes.ts` | HTTP update field name, mapped through `names[field]` | The key is selected from a fixed code-owned map; DB value is bound. Column now `sql.identifier` rather than raw SQL. |
+| `server/routes/git/spGitTrackingImportRoutes.ts` | Import field, mapped through `SP_IMPORT_COLUMNS[field]` | Column is fixed by import map; imported values bound. Also, revert keys are restricted to mapped column values. Both paths now use `sql.identifier`. |
+| `server/services/factory/netPositionAsOf.ts` | `scanAlias`, `orderAlias` arguments | Identifier context, not SQL values; converted to `sql.identifier`. Need a caller inventory to ensure aliases remain simple names. |
+| `server/services/factory/netPositionHistoricalPipeline.ts` | Voucher-number comparison expression | Observed callers pass two hard-coded SQL expressions; switched function signature to `SQL` to reject arbitrary string arguments. |
+| `server/routes/admin/dependentDeletedItemPermanentRoutes.ts` | FK metadata from PostgreSQL catalog | PostgreSQL-resolved identifier names remain identifiers; now separately quoted as schema and table, with bound parent ID. |
+| `server/services/accounting/monetaryFxValuation.ts` | Account kind chosen from bank/ledger branches | Table selected from fixed code literals, quoted with `sql.identifier`; values bound. |
+| `server/services/accounting/partyOpenItemService.ts` | Domain enum from requested party | Domain maps to exactly three literal table names. Quoted identifier; party and company IDs bound. |
+| `server/services/accounting/cashBankReconciliationService.ts` | Account kind validated to bank/ledger | Table selected from two literals. Quoted identifier; account/company IDs bound. |
+| `server/services/accounting/accountHistoryPolicy.ts` | Account-line column and lock-table name | Membership checked against fixed `LINE_COLUMNS` and `LOCKABLE_TABLES`; quoted identifiers; IDs bound. |
+
+**Unresolved high-priority provenance:** dynamically interpolated
+`factoryBilingualSnapshotService.ts` SQL fragments, indirect `pool.query`
+and `client.query` helper calls, and all scanner findings outside these
+source-level inspections. This document does not claim that every site has
+been proven non-user-controlled.
