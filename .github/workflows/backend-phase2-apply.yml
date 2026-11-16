@@ -1,4 +1,4 @@
-name: Apply backend semantic filename refactor (report suite fixed)
+name: Apply backend semantic filename refactor (workflow permissions fixed)
 on:
   push:
     branches: [refactor/phase-wave-semantic-names]
