@@ -22,6 +22,7 @@ import { pool } from "../../db";
 import { factoryDaybookEntries } from "@shared/schema";
 import { and, eq, inArray, isNull, or } from "drizzle-orm";
 import type { DatabaseOrTransaction } from "../../db";
+import { assertBindPlaceholder } from "../../lib/sqlTextGuards";
 
 // ── Source group definition ─────────────────────────────────────────────────
 
@@ -225,6 +226,7 @@ export const AUTO_FILL_REF_TABLE: Record<string, string> = {
  * and legacy rows (reference_table IS NULL, matched by tx_type).
  */
 export function buildPaginationIntegrityConditions(companyParam: string): string[] {
+  assertBindPlaceholder(companyParam, "daybook_integrity_company_param");
   return SOURCE_GROUPS.map((group) => {
     const txList = group.txTypes.map((t) => `'${t}'`).join(", ");
     const typeCheck =

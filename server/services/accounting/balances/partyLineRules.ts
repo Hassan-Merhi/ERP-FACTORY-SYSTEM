@@ -27,6 +27,7 @@
  */
 import { and, eq, isNull, sql, type SQL } from "drizzle-orm";
 import * as schema from "@shared/schema";
+import { assertSqlAlias } from "../../../lib/sqlTextGuards";
 
 /** Voucher-line columns that name a target other than a customer, in priority order. */
 export const NON_CUSTOMER_TARGET_COLUMNS = [
@@ -78,6 +79,7 @@ export function customerLinksBody(company: SqlValueExpr): string {
 
 /** The line (alias) names no target other than a customer. */
 export function noNonCustomerTarget(alias: string): string {
+  assertSqlAlias(alias, "party_line_rules_alias");
   return NON_CUSTOMER_TARGET_COLUMNS.map((column) => `${alias}.${column} IS NULL`).join(" AND ");
 }
 
@@ -89,6 +91,7 @@ export function ownedCustomerLedgerQuery(company: SqlValueExpr, customer: SqlVal
 
 /** Predicate on a voucher-line alias: the line belongs to the customer (see the header). */
 export function customerOwnedLinePredicate(alias: string, company: SqlValueExpr, customer: SqlValueExpr): string {
+  assertSqlAlias(alias, "party_line_rules_alias");
   const id = placeholderOrLiteral(customer);
   return `(${alias}.ledger_account_id IN (${ownedCustomerLedgerQuery(company, customer)})
         OR (${alias}.customer_id = ${id} AND ${noNonCustomerTarget(alias)}))`;
@@ -96,6 +99,7 @@ export function customerOwnedLinePredicate(alias: string, company: SqlValueExpr,
 
 /** Predicate on a voucher alias: posted (not optional, not soft-deleted) in the company. */
 export function liveVoucherPredicate(alias: string, company: SqlValueExpr): string {
+  assertSqlAlias(alias, "party_line_rules_alias");
   const c = placeholderOrLiteral(company);
   return `${alias}.company_id = ${c} AND ${alias}.optional = false AND ${alias}.deleted_at IS NULL`;
 }

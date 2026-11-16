@@ -7,6 +7,7 @@
  * The alias activates only once the source is explicitly retired (hidden,
  * inactive, and zero opening balance) by the guarded one-time repair.
  */
+import { assertBindPlaceholder, assertSqlColumnRef } from "../../lib/sqlTextGuards";
 export const HADI_ERP_RENT_MERGE = Object.freeze({
   companyId: 1,
   targetLedgerId: 1007,
@@ -22,6 +23,8 @@ export function consolidatedHadiRentLedgerPredicate(
   companyId: number | undefined,
   ledgerAccountId: number
 ): string {
+  assertSqlColumnRef(column, "hadi_rent_column");
+  assertBindPlaceholder(parameter, "hadi_rent_parameter");
   if (
     companyId !== HADI_ERP_RENT_MERGE.companyId ||
     ledgerAccountId !== HADI_ERP_RENT_MERGE.targetLedgerId
