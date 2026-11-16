@@ -71,6 +71,8 @@ jobs:
           git reset -q -- backend-phase2-renames.json
           git diff --cached --quiet && exit 0
           git commit -m "refactor(backend): rename remaining numbered phase/wave runtime modules"
+          git fetch origin refactor/phase-wave-semantic-names
+          git rebase origin/refactor/phase-wave-semantic-names
           git push origin HEAD:refactor/phase-wave-semantic-names
       - uses: actions/upload-artifact@v4
         if: always()
