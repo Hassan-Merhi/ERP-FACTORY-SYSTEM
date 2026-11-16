@@ -115,7 +115,7 @@ export default function FactoryAttendance() {
     const newMap: Record<number, AttendanceStatus> = {};
     const newNotes: Record<number, string> = {};
     for (const w of data.workers) {
-      newMap[w.id] = "Present";
+      newMap[w.id] = w.active === false ? "Absent" : "Present";
     }
     for (const a of data.attendance) {
       newMap[a.workerId] = a.status as AttendanceStatus;
@@ -183,7 +183,7 @@ export default function FactoryAttendance() {
 
   const handleSave = useCallback(() => {
     if (!data?.workers.length) return;
-    const records = data.workers.map((w) => ({
+    const records = data.workers.filter((w) => w.active !== false).map((w) => ({
       workerId: w.id,
       attendanceDate: selectedDate,
       shift: shift || undefined,
@@ -207,14 +207,14 @@ export default function FactoryAttendance() {
   const markAll = (status: AttendanceStatus) => {
     if (!data?.workers) return;
     const next: Record<number, AttendanceStatus> = {};
-    for (const w of data.workers) next[w.id] = status;
+    for (const w of data.workers.filter((w) => w.active !== false)) next[w.id] = status;
     setAttendanceMap(next);
   };
 
   const reset = () => {
     if (!data?.workers) return;
     const next: Record<number, AttendanceStatus> = {};
-    for (const w of data.workers) next[w.id] = "Present";
+    for (const w of data.workers.filter((w) => w.active !== false)) next[w.id] = "Present";
     setAttendanceMap(next);
     setNotesMap({});
   };
