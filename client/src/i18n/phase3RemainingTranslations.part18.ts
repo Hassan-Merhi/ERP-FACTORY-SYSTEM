@@ -96,8 +96,8 @@ export const phase3RemainingTranslationsPart18: readonly Phase3SharedUiEntry[] =
   { en: "Remaining Lines", ar: "الخطوط المتبقية", fr: "Lignes restantes" },
   { en: "Remaining Salary", ar: "المرتبات المتبقية", fr: "Autres traitements" },
   { en: "Remaining to be Loaded", ar: "تبقى محشوة", fr: "Reste à charger" },
-  { en: "Removal Failed", ar: "إزالة الألغام", fr: "Échec de l'enlèvement" },
-  { en: "Remove", ar: "إزالة الألغام", fr: "Supprimer" },
+  { en: "Removal Failed", ar: "فشلت الإزالة", fr: "Échec de l'enlèvement" },
+  { en: "Remove", ar: "إزالة", fr: "Supprimer" },
   { en: "Remove Bale", ar: "Remove Bale", fr: "Supprimer Bale" },
   {
     en: "Remove bale and return to unloaded",

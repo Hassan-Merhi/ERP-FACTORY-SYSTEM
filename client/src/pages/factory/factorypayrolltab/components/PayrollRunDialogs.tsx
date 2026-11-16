@@ -1,5 +1,6 @@
-import { getErrorDetails } from "@shared/errorUtils";
-import { ChevronDown, ChevronRight, X, FileDown } from "lucide-react";
+import { ChevronDown, ChevronRight, X } from "lucide-react";
+import { ExportButton } from "@/components/export/ReportExportMenu";
+import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -458,7 +459,8 @@ export function PayrollRunDialogs({ payroll }: { payroll: FactoryPayrollState })
             <Button variant="outline" onClick={() => setPreviewOpen(false)}>
               Back
             </Button>
-            <Button
+            <ExportButton
+              kind="excel"
               variant="outline"
               onClick={async () => {
                 try {
@@ -486,39 +488,28 @@ export function PayrollRunDialogs({ payroll }: { payroll: FactoryPayrollState })
                       net,
                     };
                   });
-                  const resp = await fetch("/api/factory/payrolls/preview-excel", {
+                  await downloadFromUrl("/api/factory/payrolls/preview-excel", {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    credentials: "include",
-                    body: JSON.stringify({
+                    body: {
                       periodStart: runForm.periodStart,
                       periodEnd: runForm.periodEnd,
                       rows: exportRows,
+                    },
+                    fileName: exportFileName("payroll", "xlsx", {
+                      from: runForm.periodStart,
+                      to: runForm.periodEnd,
                     }),
                   });
-                  if (!resp.ok) {
-                    const err = await resp.json().catch(() => ({}));
-                    throw new Error(err.message || "Export failed");
-                  }
-                  const blob = await resp.blob();
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement("a");
-                  a.href = url;
-                  a.download = `Payroll_${runForm.periodStart}_${runForm.periodEnd}.xlsx`;
-                  a.click();
-                  URL.revokeObjectURL(url);
-                } catch (err) {
+                } catch (error) {
                   toast({
-                    title: getErrorDetails(err).optionalMessage || "Failed to export Excel",
+                    title: "Export failed",
+                    description: error instanceof Error ? error.message : "Please try again.",
                     variant: "destructive",
                   });
                 }
               }}
               data-testid="button-export-payroll-excel"
-            >
-              <FileDown className="h-4 w-4 mr-2" />
-              Export Excel
-            </Button>
+            />
             {canChangeExistingRecords && (
               <Button
                 onClick={() => generateMutation.mutate()}

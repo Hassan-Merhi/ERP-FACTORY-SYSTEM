@@ -49,6 +49,7 @@ import { InvoiceGroupRow } from "./factoryinvoices/InvoiceGroupRow";
 import { InvoiceOrderRow, type EditableShippingField, type InvoiceColumnKey } from "./factoryinvoices/InvoiceOrderRow";
 import { ShippingAvailabilityTable } from "./factoryshippingcontainers/components/ShippingAvailabilityTable";
 import { ScheduledContainersTable } from "./factoryshippingcontainers/components/ScheduledContainersTable";
+import { downloadFromUrl } from "@/lib/exportFile";
 
 // All permitted invoice columns are visible unless the user chooses to hide them.
 const INVOICE_OPTIONAL_COLUMNS: { key: InvoiceColumnKey; label: string }[] = [
@@ -102,43 +103,16 @@ export default function FactoryInvoices() {
     });
   };
 
-  // Using fetch+blob instead of window.open() ensures auth cookies are always sent,
-  // and surfaces server errors as a toast instead of leaving the browser with a 0-byte file.
-  const downloadFromUrl = useCallback(
+  // Server-named downloads through the shared helper: auth cookies are sent and
+  // server errors surface as a toast instead of a blank tab.
+  const downloadExport = useCallback(
     async (url: string, fallbackName: string) => {
       try {
-        const res = await fetch(url, { credentials: "include", cache: "no-store" });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({ message: res.statusText }));
-          toast({ title: "Download failed", description: err.message || res.statusText, variant: "destructive" });
-          return;
-        }
-        const blob = await res.blob();
-        if (blob.size === 0) {
-          toast({ title: "Download failed", description: "Server returned an empty file.", variant: "destructive" });
-          return;
-        }
-        const disposition = res.headers.get("Content-Disposition") || "";
-        // Handle both  filename*=UTF-8''encoded-name  and  filename="plain-name"
-        const starMatch = disposition.match(/filename\*=UTF-8''([^;\s]+)/i);
-        const plainMatch = disposition.match(/filename="([^"]+)"/i);
-        const rawName = starMatch ? starMatch[1] : plainMatch ? plainMatch[1] : null;
-        const fileName = rawName ? decodeURIComponent(rawName) : fallbackName;
-        const blobUrl = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = blobUrl;
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        // Delay cleanup so Chrome has time to consume the blob URL before it is revoked.
-        setTimeout(() => {
-          document.body.removeChild(a);
-          URL.revokeObjectURL(blobUrl);
-        }, 10000);
+        await downloadFromUrl(url, { fileName: fallbackName });
       } catch (e) {
         toast({
-          title: "Download failed",
-          description: getErrorDetails(e).message || "Network error",
+          title: "Export failed",
+          description: getErrorDetails(e).message || "Please try again.",
           variant: "destructive",
         });
       }
@@ -449,7 +423,7 @@ export default function FactoryInvoices() {
     getStatusBadge,
     onRowClick: handleRowClick,
     onToggleHideOrder: (order: CustomerOrder) => hideMutation.mutate({ orderId: order.id, isHidden: !order.isHidden }),
-    onDownload: downloadFromUrl,
+    onDownload: downloadExport,
     onSaveShippingField: async (orderId: number, field: EditableShippingField, value: string) => {
       await shippingFieldMutation.mutateAsync({ orderId, field, value });
     },

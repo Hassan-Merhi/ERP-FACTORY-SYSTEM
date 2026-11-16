@@ -1,5 +1,6 @@
 import { format } from "date-fns";
 import { ExcelJS, writeFile } from "@/lib/excelHelper";
+import { exportFileName } from "@/lib/exportFile";
 import type { Location, OrderItem } from "../stocktransferorder/types";
 
 type ExportStockTransferOrderWorkbookInput = {
@@ -247,8 +248,7 @@ export async function exportStockTransferOrderWorkbook({
     };
   }
 
-  const safeDestinationName = destName.replace(/[/\\?%*:|"<>]/g, "_");
-  const fileName = `Truck_Trip_${safeDestinationName}_${format(transferDate, "yyyy-MM-dd")}.xlsx`;
+  const fileName = exportFileName(`truck trip ${destName}`, "xlsx", { date: transferDate });
   await writeFile(workbook, fileName);
 
   return { fileName, itemCount: orderItems.length };

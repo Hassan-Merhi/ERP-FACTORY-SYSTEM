@@ -1,7 +1,8 @@
 import { useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Loader2, Package, Printer, Trash2 } from "lucide-react";
+import { Loader2, Package, Trash2 } from "lucide-react";
+import { ExportButton } from "@/components/export/ReportExportMenu";
 import { fmt, fmtKg } from "../utils";
 
 interface WasteDispatchPrintBale {
@@ -244,9 +245,7 @@ export function WasteDispatchDialogs(props: WasteDispatchDialogsProps) {
               <Button variant="outline" onClick={() => props.setPrintData(null)}>
                 Close
               </Button>
-              <Button onClick={handlePrint} className="gap-2">
-                <Printer className="w-4 h-4" /> Print
-              </Button>
+              <ExportButton kind="print" variant="default" onClick={handlePrint} className="gap-2" />
             </DialogFooter>
           </DialogContent>
         </Dialog>

@@ -153,7 +153,7 @@ export default function FactoryInvoicing() {
         )}
         {activeTab === "proformas" && showProformas && <FactoryProformas />}
         {activeTab === "invoices" && showInvoices && <FactoryInvoices />}
-        {activeTab === "loadings" && showLoadings && <FactoryContainerLoadingScan />}
+        {activeTab === "loadings" && showLoadings && <FactoryContainerLoadingScan embedded />}
         {activeTab === "pending" && showPending && <FactoryPendingLoadings />}
         {activeTab === "priority" && showPriority && <FactoryPriorityScan />}
       </div>

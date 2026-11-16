@@ -12,6 +12,7 @@ import { useAppMode, useModePrefix } from "@/contexts/AppModeContext";
 import { getApiRequest } from "@/lib/factoryApi";
 import { queryClient } from "@/lib/queryClient";
 import { utils, writeFile } from "@/lib/excelHelper";
+import { exportFileName } from "@/lib/exportFile";
 import { parseDateLocal } from "@/components/vouchers/PrintTemplate";
 import { useToast } from "@/hooks/use-toast";
 import type {
@@ -327,7 +328,7 @@ export function useStockAdjustmentFormModel({ voucherIdToEdit }: StockAdjustment
       const worksheet = utils.json_to_sheet(exportData);
       const workbook = utils.book_new();
       utils.book_append_sheet(workbook, worksheet, "Production-Consumption Detailed");
-      const fileName = `Production_Consumption_Detailed_${voucherDate}.xlsx`;
+      const fileName = exportFileName("production consumption detailed", "xlsx", { date: voucherDate });
       await writeFile(workbook, fileName);
       toast({ title: "Export successful", description: `Downloaded ${fileName} with ${validEntries.length} items.` });
     } else {
@@ -352,7 +353,7 @@ export function useStockAdjustmentFormModel({ voucherIdToEdit }: StockAdjustment
       const worksheet = utils.json_to_sheet(exportData);
       const workbook = utils.book_new();
       utils.book_append_sheet(workbook, worksheet, "Production-Consumption Summary");
-      const fileName = `Production_Consumption_Summary_${voucherDate}.xlsx`;
+      const fileName = exportFileName("production consumption summary", "xlsx", { date: voucherDate });
       await writeFile(workbook, fileName);
       toast({ title: "Export successful", description: `Downloaded ${fileName}.` });
     }

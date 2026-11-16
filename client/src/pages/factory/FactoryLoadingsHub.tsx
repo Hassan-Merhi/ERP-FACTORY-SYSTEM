@@ -3,6 +3,7 @@ import FactoryContainerLoadingScan from "./FactoryContainerLoadingScan";
 import FactoryPendingLoadings from "./FactoryPendingLoadings";
 import FactoryPriorityScan from "./FactoryPriorityScan";
 import { Truck } from "lucide-react";
+import { PageHeader } from "@/components/PageHeader";
 import type { FactoryMyAccess } from "@shared/apiTypes";
 import { useCompany } from "@/contexts/CompanyContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
@@ -34,9 +35,10 @@ export default function FactoryLoadingsHub() {
     enabled: Boolean(selectedCompany?.id),
     staleTime: 5 * 60000,
   });
-  const hiddenTabs = myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
-    ? myAccess.hiddenCostFields
-    : ["hide_invoicing_loadings_tab","hide_tab_loadings_pending"];
+  const hiddenTabs =
+    myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
+      ? myAccess.hiddenCostFields
+      : ["hide_invoicing_loadings_tab", "hide_tab_loadings_pending"];
 
   const showLoadings = !hiddenTabs.includes("hide_invoicing_loadings_tab");
   const showPending =
@@ -63,16 +65,13 @@ export default function FactoryLoadingsHub() {
     <div className="flex flex-col h-full overflow-hidden">
       <div className="border-b bg-background shrink-0">
         {/* Header row */}
-        <div className="flex items-center gap-3 px-5 pt-4 pb-3">
-          <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-            <Truck className="h-4 w-4 text-primary" />
-          </div>
-          <div>
-            <h1 className="text-base font-semibold leading-tight">Loadings</h1>
-            <p className="text-xs text-muted-foreground">
-              {translatePriorityScanText("loadingsHubSubtitle", language)}
-            </p>
-          </div>
+        <div className="px-4 pt-4 [&>header]:mb-0 [&>header]:border-b-0 [&>header]:pb-3">
+          <PageHeader
+            title="Loadings"
+            subtitle={translatePriorityScanText("loadingsHubSubtitle", language)}
+            icon={<Truck className="h-5 w-5" />}
+            showBackButton={false}
+          />
         </div>
         {/* Tab row */}
         <div className="erp-mobile-scroll-tabs px-4 pb-1">
@@ -112,7 +111,7 @@ export default function FactoryLoadingsHub() {
         {!effectiveActiveTab && (
           <div className="p-6 text-sm text-muted-foreground">No Loadings tabs are available for this user.</div>
         )}
-        {effectiveActiveTab === "loadings" && showLoadings && <FactoryContainerLoadingScan />}
+        {effectiveActiveTab === "loadings" && showLoadings && <FactoryContainerLoadingScan embedded />}
         {effectiveActiveTab === "pending" && showPending && <FactoryPendingLoadings />}
         {effectiveActiveTab === "priority" && showPriority && <FactoryPriorityScan />}
       </div>

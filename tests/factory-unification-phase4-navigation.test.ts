@@ -21,6 +21,10 @@ describe("Factory Phase 4 navigation presentation contract", () => {
       "/factory/others?tab=product-comparison",
       "/factory/others?tab=sale-returns",
     ]);
+    // Finalized Sale Returns is the only admin-only Others tab.
+    expect(
+      FACTORY_OTHERS_NAV_LINKS.filter((item) => "adminOnly" in item && item.adminOnly).map((item) => item.url)
+    ).toEqual(["/factory/others?tab=sale-returns"]);
     expect(FACTORY_OTHERS_NAV_LINKS.every((item) => item.accessKey === "factory/production-report")).toBe(true);
     for (const item of FACTORY_OTHERS_NAV_LINKS) {
       expect(factoryHubTabHideKey("/factory/others", item.url.split("tab=")[1])).toBe(item.hideKey);

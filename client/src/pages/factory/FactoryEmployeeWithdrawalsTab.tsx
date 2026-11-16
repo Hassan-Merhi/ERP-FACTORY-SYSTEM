@@ -167,11 +167,8 @@ export default function FactoryEmployeeWithdrawalsTab() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap gap-3 items-center justify-between">
-        <div>
-          <h3 className="font-medium">Employee Withdrawals</h3>
-          <p className="text-sm text-muted-foreground">Deduct cash from one or multiple employees.</p>
-        </div>
+      {/* Employees hub "Withdrawals" tab: the Payroll hub PageHeader titles the page; keep the actions only. */}
+      <div className="flex flex-wrap gap-3 items-center justify-end">
         {recordChanges.allowed && (
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => setSingleOpen(true)} data-testid="button-withdraw-single">

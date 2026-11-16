@@ -11,6 +11,7 @@ import { companyQueryKey } from "@/lib/companyQueryScope";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useDebounce } from "@/hooks/use-debounce";
 import type { V5Data, V5Row } from "./types";
+import { exportFileName } from "@/lib/exportFile";
 
 function isGarbageOrWipers(row: V5Row) {
   if (row.isGarbageOrWipers) return true;
@@ -612,9 +613,7 @@ export function useFactoryStockAllocationV5Model() {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Stock Allocation");
 
-    const now = new Date();
-    const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
-    XLSX.writeFile(wb, `stock_allocation_${stamp}.xlsx`);
+    XLSX.writeFile(wb, exportFileName("stock allocation", "xlsx"));
     setExportDialogOpen(false);
   }
 

@@ -108,13 +108,10 @@ export function PriceGroupsTab() {
 
   return (
     <div className="space-y-6 p-4 max-w-2xl">
-      <div>
-        <h2 className="text-base font-semibold">Price Groups</h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          Configure master locations whose prices automatically cascade to their follower locations. The Price List will
-          show one column per master location.
-        </p>
-      </div>
+      <p className="text-sm text-muted-foreground">
+        Configure master locations whose prices automatically cascade to their follower locations. The Price List will
+        show one column per master location.
+      </p>
 
       <div className="space-y-4">
         {groups.length === 0 && (

@@ -11,6 +11,9 @@ import { useForm } from "react-hook-form";
 import type { VoucherFormData } from "@/pages/vouchers/voucherTypes";
 import { useVoucherFxWalletPayment } from "@/pages/vouchers/useVoucherFxWalletPayment";
 
+const confirmAction = vi.hoisted(() => vi.fn());
+vi.mock("@/components/ConfirmHost", () => ({ confirmAction }));
+
 const WALLET = {
   wallet: { id: 7, ledgerAccountId: 70, accountName: "Access Cash" },
   state: { eur: "5000", usd: "0", totalBookUsd: "5700" },
@@ -146,13 +149,17 @@ describe("useVoucherFxWalletPayment", () => {
     const { result } = setup();
     await waitFor(() => expect(result.current.hook.isWalletPayment).toBe(true));
     const toast = vi.fn();
-    expect(result.current.hook.confirmWalletPayment(result.current.values.entries, toast)).toBe(false);
+    await expect(result.current.hook.confirmWalletPayment(result.current.values.entries, toast)).resolves.toBe(false);
     expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Payment details required" }));
 
     act(() => result.current.hook.setFxPaymentRate("1.14"));
-    const confirm = vi.fn(() => true);
-    vi.stubGlobal("confirm", confirm);
-    expect(result.current.hook.confirmWalletPayment(result.current.values.entries, toast)).toBe(true);
-    expect(confirm).toHaveBeenCalledWith(expect.stringContaining("From: Access Cash"));
+    confirmAction.mockResolvedValue(true);
+    await expect(result.current.hook.confirmWalletPayment(result.current.values.entries, toast)).resolves.toBe(true);
+    expect(confirmAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Post Payment Voucher?",
+        details: expect.arrayContaining([{ label: "From", value: "Access Cash" }]),
+      })
+    );
   });
 });

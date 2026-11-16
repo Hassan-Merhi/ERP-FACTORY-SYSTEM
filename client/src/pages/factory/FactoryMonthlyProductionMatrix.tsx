@@ -4,7 +4,7 @@ import { downloadBlob } from "@/lib/downloadBlob";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
 import { useEffect, useMemo, useState } from "react";
-import { useLocation, useSearch } from "wouter";
+import { useLocation, useSearch, type RouteComponentProps } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
@@ -25,18 +25,12 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { moveProductNearItem, moveProductToPosition } from "./monthlyProductionRowOrder";
 import { useToast } from "@/hooks/use-toast";
 import type { MonthlyProductionExportBale } from "./monthlyProductionWorkbookDrilldown";
-import {
-  ArrowDown,
-  ArrowUp,
-  ChevronDown,
-  Download,
-  GripVertical,
-  ListOrdered,
-  Plus,
-  RotateCcw,
-  Search,
-  X,
-} from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, GripVertical, ListOrdered, Plus, RotateCcw, Search, X } from "lucide-react";
+import { ExportButton } from "@/components/export/ReportExportMenu";
+import { exportFileName } from "@/lib/exportFile";
+
+/** Routed standalone (receives route props) or embedded as a hub tab panel. */
+type EmbeddablePageProps = { embedded?: boolean } & Partial<RouteComponentProps>;
 
 type Product = { id: number; name: string; articleCode: string; categoryName: string };
 type MonthValue = { productId: number; month: string; quantity: number };
@@ -52,7 +46,8 @@ const prettyMonth = (month: string, locale?: string) => {
 };
 const csvCell = (value: string | number) => '"' + String(value).replace(/"/g, '""') + '"';
 
-export default function FactoryMonthlyProductionMatrix() {
+/** `embedded`: rendered as the Overview hub "Monthly Production" tab, whose PageHeader already titles the page. */
+export default function FactoryMonthlyProductionMatrix({ embedded = false }: EmbeddablePageProps) {
   const mhd = useFactoryMhdView();
   const isMobile = useIsMobile();
   const isPhoneLayout = useErpPhoneLayout();
@@ -285,7 +280,10 @@ export default function FactoryMonthlyProductionMatrix() {
       ]),
     ];
     const csv = "\uFEFF" + rows.map((row) => row.map(csvCell).join(",")).join("\r\n");
-    downloadBlob(new Blob([csv], { type: "text/csv;charset=utf-8" }), "factory-monthly-production.csv");
+    downloadBlob(
+      new Blob([csv], { type: "text/csv;charset=utf-8" }),
+      exportFileName("factory monthly production", "csv")
+    );
   };
   const exportExcel = async () => {
     if (exportingExcel || months.length === 0 || !data) return;
@@ -362,7 +360,7 @@ export default function FactoryMonthlyProductionMatrix() {
       });
     } catch (error) {
       toast({
-        title: "Unable to export Excel",
+        title: "Export failed",
         description: error instanceof Error ? error.message : "Please try again.",
         variant: "destructive",
       });
@@ -374,34 +372,39 @@ export default function FactoryMonthlyProductionMatrix() {
   const totals = months.map((month) => visibleProducts.reduce((sum, product) => sum + byId(product.id, month), 0));
   const overallTotal = totals.reduce((sum, count) => sum + count, 0);
 
+  const headerActions = (
+    <>
+      <Button variant="outline" size="sm" disabled={isFetching} onClick={() => void refetch()}>
+        <RotateCcw className="mr-2 h-4 w-4" /> {t("monthlyProduction.refresh")}
+      </Button>
+      <ExportButton
+        size="sm"
+        disabled={!data || months.length === 0 || exportingExcel}
+        label={exportingExcel ? exportProgress || "Exporting…" : undefined}
+        onClick={() => void exportExcel()}
+        data-testid="export-monthly-production-excel"
+      />
+      <ExportButton
+        kind="csv"
+        size="sm"
+        disabled={!data || months.length === 0}
+        label={t("monthlyProduction.exportCsv")}
+        onClick={exportCsv}
+        data-testid="export-monthly-production-csv"
+      />
+    </>
+  );
+
   return (
     <main className="p-3 sm:p-5 space-y-4" data-testid="factory-monthly-production-matrix">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <PageHeader title={t("monthlyProduction.title")} subtitle={t("monthlyProduction.subtitle")} />
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" disabled={isFetching} onClick={() => void refetch()}>
-            <RotateCcw className="mr-2 h-4 w-4" /> {t("monthlyProduction.refresh")}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={!data || months.length === 0 || exportingExcel}
-            onClick={() => void exportExcel()}
-            data-testid="export-monthly-production-excel"
-          >
-            <Download className="mr-2 h-4 w-4" /> {exportingExcel ? exportProgress || "Exporting…" : "Export Excel"}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={!data || months.length === 0}
-            onClick={exportCsv}
-            data-testid="export-monthly-production-csv"
-          >
-            <Download className="mr-2 h-4 w-4" /> {t("monthlyProduction.exportCsv")}
-          </Button>
-        </div>
-      </div>
+      {embedded ? (
+        // Overview hub "Monthly Production" tab: the hub PageHeader titles the page; keep the actions only.
+        <div className="flex flex-wrap justify-end gap-2">{headerActions}</div>
+      ) : (
+        <PageHeader title={t("monthlyProduction.title")} subtitle={t("monthlyProduction.subtitle")}>
+          {headerActions}
+        </PageHeader>
+      )}
       <div className="rounded-xl border bg-card p-3 space-y-3">
         <div className="flex flex-wrap gap-2 items-center">
           <Button size="sm" variant={mode === "all" ? "default" : "outline"} onClick={() => setMode("all")}>

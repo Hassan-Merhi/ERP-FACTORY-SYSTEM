@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageHeader } from "@/components/PageHeader";
 
 interface Company {
   id: number;
@@ -204,13 +205,10 @@ export default function GroupConsolidationAccounting() {
   // Display reference and owner company; switch to that company to drill in.
   return (
     <div className="space-y-5 p-3 sm:p-5" data-testid="group-accounting-consolidation">
-      <div>
-        <h1 className="text-2xl font-semibold">Intercompany & Consolidation</h1>
-        <p className="text-sm text-muted-foreground">
-          USD ledger workpaper across authorized companies: trial balances, paired intercompany receivables/payables,
-          reconciliation and hypothetical elimination entries. Source vouchers remain unchanged.
-        </p>
-      </div>
+      <PageHeader
+        title="Intercompany & Consolidation"
+        subtitle="USD ledger workpaper across authorized companies: trial balances, paired intercompany receivables/payables, reconciliation and hypothetical elimination entries. Source vouchers remain unchanged."
+      />
       <Card>
         <CardHeader>
           <CardTitle>Group scope and dates</CardTitle>

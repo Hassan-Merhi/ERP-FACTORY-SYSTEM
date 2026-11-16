@@ -5,9 +5,13 @@ import { useLocation } from "wouter";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { ExportButton } from "@/components/export/ReportExportMenu";
+import { downloadBlob } from "@/lib/downloadBlob";
+import { exportFileName } from "@/lib/exportFile";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { UnifiedAccountingBudgetBridge } from "@/components/financial/UnifiedAccountingBudgetBridge";
+import { PageHeader } from "@/components/PageHeader";
 
 interface Line {
   kind: string;
@@ -290,24 +294,22 @@ export default function UnifiedAccountingDashboard() {
           .join(",")
       )
       .join("\r\n");
-    const object = URL.createObjectURL(new Blob(["\ufeff", contents], { type: "text/csv;charset=utf-8" }));
-    const link = document.createElement("a");
-    link.href = object;
-    link.download = "unified-accounting-" + x.companyId + "-" + x.asOfDate + ".csv";
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(object);
+    downloadBlob(
+      new Blob(["\ufeff", contents], { type: "text/csv;charset=utf-8" }),
+      exportFileName(`unified accounting ${x.companyId}`, "csv", { from: x.fromDate, to: x.asOfDate })
+    );
   };
   return (
     <div className="space-y-5 p-3 sm:p-5" data-testid="unified-accounting-dashboard">
-      <div>
-        <h1 className="text-2xl font-semibold">Unified Net Position & Accounting Dashboard</h1>
-        <p className="text-sm text-muted-foreground">
-          {selectedCompany?.name ?? "Selected company"} · One company · Posted historical USD accounting · Provisional,
-          not certified
-        </p>
-      </div>
+      <PageHeader
+        title="Unified Net Position & Accounting Dashboard"
+        meta={
+          <>
+            {selectedCompany?.name ?? "Selected company"} · One company · Posted historical USD accounting ·
+            Provisional, not certified
+          </>
+        }
+      />
       <Card>
         <CardContent className="pt-5 space-y-3">
           <div className="grid sm:grid-cols-4 gap-3 items-end">
@@ -322,9 +324,7 @@ export default function UnifiedAccountingDashboard() {
             <Button variant="outline" disabled={data.isFetching} onClick={() => data.refetch()}>
               Refresh
             </Button>
-            <Button variant="outline" disabled={!x} onClick={csv}>
-              Export overview CSV
-            </Button>
+            <ExportButton kind="csv" disabled={!x} onClick={csv} />
           </div>
           <label className="text-sm flex gap-2 items-center">
             <input type="checkbox" checked={showOperations} onChange={(e) => setShowOperations(e.target.checked)} />

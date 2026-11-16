@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PageHeader } from "@/components/PageHeader";
 
 type Kind = "sale" | "purchase_order" | "offload" | "inventory_movement" | "credit_debit_note" | "transfer";
 type Status = "posted" | "cost_mismatch" | "date_mismatch" | "missing" | "expected_periodic" | "review";
@@ -107,13 +108,10 @@ export default function ErpInventoryAccounting() {
   );
   return (
     <div className="space-y-5 p-3 sm:p-5" data-testid="erp-inventory-accounting">
-      <div>
-        <h1 className="text-2xl font-semibold">ERP Inventory & COGS Accounting</h1>
-        <p className="text-sm text-muted-foreground">
-          Trace purchases, offloads, sales and stock adjustments to their financial journals. Read-only until the
-          existing perpetual inventory cutover is certified.
-        </p>
-      </div>
+      <PageHeader
+        title="ERP Inventory & COGS Accounting"
+        subtitle="Trace purchases, offloads, sales and stock adjustments to their financial journals. Read-only until the existing perpetual inventory cutover is certified."
+      />
       <Card>
         <CardHeader>
           <CardTitle>Accounting policy & cutover</CardTitle>

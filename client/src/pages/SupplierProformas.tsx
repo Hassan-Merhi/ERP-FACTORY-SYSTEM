@@ -15,6 +15,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
+import { ExportButton } from "@/components/export/ReportExportMenu";
+import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Plus, Trash2, Upload, Download, FileText, Pencil, Save, X, Star } from "lucide-react";
 import { format } from "date-fns";
@@ -326,6 +328,20 @@ export default function SupplierProformas() {
     await XLSX.writeFile(wb, "proforma_template.xlsx");
   };
 
+  const exportProformaExcel = async () => {
+    try {
+      await downloadFromUrl(`/api/suppliers/${supplierId}/proformas/${selectedProformaId}/export-excel`, {
+        fileName: exportFileName(`supplier proforma ${selectedProformaId}`, "xlsx"),
+      });
+    } catch (error) {
+      toast({
+        title: "Export failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const startEdit = (line: ProformaLine) => {
     setEditingLineId(line.id);
     setEditLineData({
@@ -361,7 +377,7 @@ export default function SupplierProformas() {
       >
         <Button variant="outline" onClick={downloadTemplate} data-testid="button-download-template">
           <Download className="mr-2 h-4 w-4" />
-          Template
+          Download template
         </Button>
         {recordChanges.allowed && (
           <Button onClick={() => setShowCreateDialog(true)} data-testid="button-create-proforma">
@@ -493,17 +509,11 @@ export default function SupplierProformas() {
                       Import Excel
                     </Button>
                   )}
-                  <Button
-                    variant="outline"
+                  <ExportButton
                     size="sm"
-                    onClick={() => {
-                      window.location.href = `/api/suppliers/${supplierId}/proformas/${selectedProformaId}/export-excel`;
-                    }}
+                    onClick={() => void exportProformaExcel()}
                     data-testid="button-export-excel"
-                  >
-                    <Download className="mr-1 h-3 w-3" />
-                    Export Excel
-                  </Button>
+                  />
                   {recordChanges.allowed && (
                     <Button size="sm" onClick={() => setAddingLine(true)} data-testid="button-add-line">
                       <Plus className="mr-1 h-3 w-3" />

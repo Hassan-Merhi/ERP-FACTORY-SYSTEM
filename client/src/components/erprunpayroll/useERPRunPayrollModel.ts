@@ -6,6 +6,7 @@ import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useToast } from "@/hooks/use-toast";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { exportFileName } from "@/lib/exportFile";
 
 import type {
   Employee,
@@ -456,7 +457,7 @@ export function useERPRunPayrollModel() {
         <tfoot><tr>${totalCells.join("")}</tr></tfoot>
       </table>
       <div class="no-print" style="margin-top:14px;text-align:right">
-        <button onclick="window.print()" style="padding:6px 16px;background:#000;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px">Print / Save PDF</button>
+        <button onclick="window.print()" style="padding:6px 16px;background:#000;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px">Print</button>
       </div>
       <script>window.onload=()=>window.print();</script>
     </body></html>`;
@@ -554,7 +555,7 @@ export function useERPRunPayrollModel() {
 
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Payroll");
-    XLSX.writeFile(wb, `payroll-${run.id}-${run.date}.xlsx`);
+    XLSX.writeFile(wb, exportFileName(`payroll ${run.id}`, "xlsx", { date: run.date }));
   }
 
   const isLoading = empLoading || groupsLoading;

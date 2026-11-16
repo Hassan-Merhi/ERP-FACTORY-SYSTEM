@@ -58,8 +58,8 @@ describe("Phase 3 translation completion", () => {
     // 8267 with the ERP test company dialog phrases (#2428); 8275 with the
     // ERP Tester role phrases (#2430-#2433); 8297 with the phrases merged on
     // main by 2026-10-30, including the Production Bonuses workspace (#2621);
-    // 8317 with the row-history reconstruction error codes (#2468).
-    // 8325 with the Stock Items all-pages export messages (#3184, #3185).
+    // 8317 with the row-history reconstruction error codes (#2468); 8325 with
+    // the phrases merged on main by 2026-11-13 without updating this count.
     expect(entries).toHaveLength(8325);
     expect(new Set(entries.map((entry) => entry.en)).size).toBe(entries.length);
   });

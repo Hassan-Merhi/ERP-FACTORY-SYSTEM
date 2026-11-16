@@ -11,8 +11,10 @@ import { Badge } from "@/components/ui/badge";
 
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, Download } from "lucide-react";
 import { ExcelJS } from "@/lib/excelHelper";
+import { downloadBlob } from "@/lib/downloadBlob";
+import { exportFileName } from "@/lib/exportFile";
+import { ExportButton } from "@/components/export/ReportExportMenu";
 import { selectAccountsArray, type AccountsAllPayload } from "@/lib/accountsAllPayload";
 import { useCompany } from "@/contexts/CompanyContext";
 
@@ -230,12 +232,7 @@ export function ExportAccountsSection() {
 
       const buf = await wb.xlsx.writeBuffer();
       const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-      const dlUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = dlUrl;
-      a.download = `Account_Export_${new Date().toLocaleDateString("en-CA")}.xlsx`;
-      a.click();
-      URL.revokeObjectURL(dlUrl);
+      downloadBlob(blob, exportFileName("account export", "xlsx"));
       toast({
         title: "Export complete",
         description: `${selectedIds.size} account${selectedIds.size !== 1 ? "s" : ""} exported successfully.`,
@@ -368,24 +365,14 @@ export function ExportAccountsSection() {
                   <span className="font-medium">Excel (.xlsx)</span>
                 </div>
               </div>
-              <Button
+              <ExportButton
+                kind="excel"
+                busy={exporting}
                 className="w-full"
                 onClick={handleExport}
                 disabled={exporting || selectedIds.size === 0}
                 data-testid="button-export-accounts"
-              >
-                {exporting ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Exporting…
-                  </>
-                ) : (
-                  <>
-                    <Download className="h-4 w-4 mr-2" />
-                    Export to Excel
-                  </>
-                )}
-              </Button>
+              />
             </CardContent>
           </Card>
         </div>

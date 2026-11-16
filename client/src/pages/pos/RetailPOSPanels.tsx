@@ -1,4 +1,5 @@
 import { Minus, Percent, Plus, Printer, Repeat, RotateCcw, Trash2 } from "lucide-react";
+import { ExportButton } from "@/components/export/ReportExportMenu";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RetailItemImage } from "./RetailScanFeedback";
@@ -127,7 +128,9 @@ export function RetailLastSaleSummary({
         </div>
       ) : null}
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        <label htmlFor="retail-receipt-width" className="sr-only">Thermal receipt paper width</label>
+        <label htmlFor="retail-receipt-width" className="sr-only">
+          Thermal receipt paper width
+        </label>
         <select
           id="retail-receipt-width"
           aria-label="Thermal receipt paper width"
@@ -139,9 +142,14 @@ export function RetailLastSaleSummary({
           <option value={80}>80 mm</option>
           <option value={58}>58 mm</option>
         </select>
-        <Button size="sm" variant="outline" className="min-w-[130px] flex-1" onClick={onPrint}>
-          <Printer className="mr-2 h-4 w-4" /> Print receipt
-        </Button>
+        <ExportButton
+          kind="print"
+          label="Print receipt"
+          size="sm"
+          variant="outline"
+          className="min-w-[130px] flex-1"
+          onClick={onPrint}
+        />
       </div>
     </div>
   );

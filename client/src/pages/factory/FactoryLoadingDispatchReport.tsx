@@ -6,22 +6,15 @@
 import { useMemo, useState } from "react";
 import { useLocation, useParams } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import {
-  AlertTriangle,
-  ArrowLeft,
-  FileSpreadsheet,
-  Loader2,
-  Printer,
-  RefreshCw,
-  ShieldCheck,
-  Truck,
-} from "lucide-react";
+import { AlertTriangle, ArrowLeft, Loader2, RefreshCw, ShieldCheck, Truck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useToast } from "@/hooks/use-toast";
 import { companyQueryKey } from "@/lib/companyQueryScope";
 import { downloadBlob } from "@/lib/downloadBlob";
+import { ExportButton } from "@/components/export/ReportExportMenu";
+import { exportFileName } from "@/lib/exportFile";
 
 interface Trip {
   id: string;
@@ -138,9 +131,6 @@ async function getReport(url: string): Promise<Report> {
   }
   return response.json() as Promise<Report>;
 }
-function sanitizeFile(value: string) {
-  return value.replace(/[^a-zA-Z0-9_-]+/g, "_").slice(0, 70);
-}
 
 export default function FactoryLoadingDispatchReport() {
   const { orderId: idText, dispatchId: dispatchText } = useParams<{ orderId: string; dispatchId?: string }>();
@@ -203,15 +193,15 @@ export default function FactoryLoadingDispatchReport() {
       }
       const blob = await response.blob();
       if (blob.size === 0) throw Error("Excel export returned an empty file");
-      const filename =
+      const filename = exportFileName(
         [
-          "Factory_Dispatch",
-          report.loading.containerNumber || "loading_" + orderId,
-          report.trip ? "trip_" + report.trip.dispatchNumber : "all_trips",
-          report.closure ? "closure_" + report.closure.revision : "live",
-        ]
-          .map(sanitizeFile)
-          .join("_") + ".xlsx";
+          "factory dispatch",
+          report.loading.containerNumber || "loading " + orderId,
+          report.trip ? "trip " + report.trip.dispatchNumber : "all trips",
+          report.closure ? "closure " + report.closure.revision : "live",
+        ].join(" "),
+        "xlsx"
+      );
       downloadBlob(new Blob([blob], { type: excelMime }), filename);
       toast({
         title: "Dispatch report exported",
@@ -280,28 +270,21 @@ export default function FactoryLoadingDispatchReport() {
             >
               <RefreshCw className="mr-1.5 h-4 w-4" /> Refresh
             </Button>
-            <Button
+            <ExportButton
               size="sm"
-              variant="outline"
-              disabled={!report || downloading}
+              disabled={!report}
+              busy={downloading}
               onClick={() => void downloadExcel()}
               data-testid="button-export-dispatch-xlsx"
-            >
-              {downloading ? (
-                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-              ) : (
-                <FileSpreadsheet className="mr-1.5 h-4 w-4" />
-              )}
-              Export Excel
-            </Button>
-            <Button
+            />
+            <ExportButton
+              kind="print"
               size="sm"
+              variant="default"
               disabled={!report || query.isFetching}
               onClick={() => window.print()}
               data-testid="button-print-dispatch-report"
-            >
-              <Printer className="mr-1.5 h-4 w-4" /> Print / Save PDF
-            </Button>
+            />
           </div>
         </div>
         {query.isLoading && (

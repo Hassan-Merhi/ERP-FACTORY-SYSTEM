@@ -179,134 +179,125 @@ export function StockItemsView({ stockItems }: { stockItems: StockItemsModel }) 
 
   return (
     <div className="stock-items-page flex flex-col gap-5 px-2 pb-5 sm:px-4 sm:py-4 md:px-6">
-      <div className="stock-items-hero">
-        <div className="stock-items-hero-art" aria-hidden="true">
-          <Package className="h-24 w-24" strokeWidth={1} />
-        </div>
-        <PageHeader
-          title="Stock Items"
-          subtitle="Manage all stock items in your company"
-          icon={<Package className="h-5 w-5" aria-hidden="true" />}
+      <PageHeader
+        title="Stock Items"
+        subtitle="Manage all stock items in your company"
+        icon={<Package className="h-5 w-5" aria-hidden="true" />}
+      >
+        {selectedIds.length > 0 && (
+          <>
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={() => {
+                setPendingCategoryId("");
+                setAssignCategoryDialogOpen(true);
+              }}
+              disabled={!recordChanges.allowed}
+              title={recordChangeReason}
+              aria-label={recordChanges.reason ?? "Assign category"}
+              data-testid="button-assign-category"
+            >
+              <Package className="h-4 w-4" />
+              <span className="hidden sm:inline">Assign Category</span>
+              <span className="sm:hidden">Category</span>
+              <Badge variant="secondary" className="ml-1">
+                {selectedIds.length}
+              </Badge>
+            </Button>
+            <Button
+              variant="destructive"
+              className="gap-2"
+              onClick={() => setDeleteDialogOpen(true)}
+              disabled={!recordChanges.allowed}
+              title={recordChangeReason}
+              aria-label={recordChanges.reason ?? `Delete ${selectedIds.length}`}
+              data-testid="button-delete-selected"
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete {selectedIds.length}
+            </Button>
+          </>
+        )}
+        <Button
+          className="stock-items-add-button gap-2"
+          onClick={() => setCreateDialogOpen(true)}
+          data-testid="button-add-item"
         >
-          {selectedIds.length > 0 && (
-            <>
-              <Button
-                variant="outline"
-                className="gap-2"
-                onClick={() => {
-                  setPendingCategoryId("");
-                  setAssignCategoryDialogOpen(true);
-                }}
-                disabled={!recordChanges.allowed}
-                title={recordChangeReason}
-                aria-label={recordChanges.reason ?? "Assign category"}
-                data-testid="button-assign-category"
-              >
-                <Package className="h-4 w-4" />
-                <span className="hidden sm:inline">Assign Category</span>
-                <span className="sm:hidden">Category</span>
-                <Badge variant="secondary" className="ml-1">
-                  {selectedIds.length}
-                </Badge>
-              </Button>
-              <Button
-                variant="destructive"
-                className="gap-2"
-                onClick={() => setDeleteDialogOpen(true)}
-                disabled={!recordChanges.allowed}
-                title={recordChangeReason}
-                aria-label={recordChanges.reason ?? `Delete ${selectedIds.length}`}
-                data-testid="button-delete-selected"
-              >
-                <Trash2 className="h-4 w-4" />
-                Delete {selectedIds.length}
-              </Button>
-            </>
-          )}
-          <Button
-            className="stock-items-add-button gap-2"
-            onClick={() => setCreateDialogOpen(true)}
-            data-testid="button-add-item"
-          >
-            <Plus className="h-4 w-4" />
-            Add Item
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                className="stock-items-manage-button gap-2"
-                data-testid="button-manage-dropdown"
-              >
-                <Settings className="h-4 w-4" />
-                Manage
-                <ChevronDown className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {/* Create Only cannot import; View Only sees it disabled. */}
-              {!recordChanges.isCreateOnly && (
-                <DropdownMenuItem
-                  onClick={() => setImportDialogOpen(true)}
-                  disabled={!recordChanges.allowed}
-                  title={recordChangeReason}
-                  data-testid="menu-import"
-                >
-                  <FileSpreadsheet className="h-4 w-4 mr-2" />
-                  Import
-                </DropdownMenuItem>
-              )}
+          <Plus className="h-4 w-4" />
+          Add Item
+        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" className="stock-items-manage-button gap-2" data-testid="button-manage-dropdown">
+              <Settings className="h-4 w-4" />
+              Manage
+              <ChevronDown className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {/* Create Only cannot import; View Only sees it disabled. */}
+            {!recordChanges.isCreateOnly && (
               <DropdownMenuItem
-                onClick={() => {
-                  void refetchAllItems();
-                  setAdjustDialogOpen(true);
-                }}
+                onClick={() => setImportDialogOpen(true)}
                 disabled={!recordChanges.allowed}
                 title={recordChangeReason}
-                data-testid="menu-adjust-stock"
+                data-testid="menu-import"
               >
-                <Edit className="h-4 w-4 mr-2" />
-                Adjust Stock
+                <FileSpreadsheet className="h-4 w-4 mr-2" />
+                Import
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={exportToExcel} disabled={exportingStockItems} data-testid="menu-export">
-                <Download className="h-4 w-4 mr-2" />
-                {exportingStockItems ? "Exporting all matching items..." : "Export Stock Items"}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={exportSalesHistory} data-testid="menu-export-sales-history">
-                <Download className="h-4 w-4 mr-2" />
-                Export Sales History
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => {
-                  setNewGradeName("");
-                  setEditingGradeId(null);
-                  setManageGradesOpen(true);
-                }}
-                disabled={!recordChanges.allowed}
-                title={recordChangeReason}
-                data-testid="menu-manage-grades"
-              >
-                <Tag className="h-4 w-4 mr-2" />
-                Manage Grades
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => {
-                  setNewCategoryName("");
-                  setEditingCategoryId(null);
-                  setManageCategoriesOpen(true);
-                }}
-                disabled={!recordChanges.allowed}
-                title={recordChangeReason}
-                data-testid="menu-manage-categories"
-              >
-                <Layers className="h-4 w-4 mr-2" />
-                Manage Categories
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </PageHeader>
-      </div>
+            )}
+            <DropdownMenuItem
+              onClick={() => {
+                void refetchAllItems();
+                setAdjustDialogOpen(true);
+              }}
+              disabled={!recordChanges.allowed}
+              title={recordChangeReason}
+              data-testid="menu-adjust-stock"
+            >
+              <Edit className="h-4 w-4 mr-2" />
+              Adjust Stock
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={exportToExcel} disabled={exportingStockItems} data-testid="menu-export">
+              <Download className="h-4 w-4 mr-2" />
+              {exportingStockItems ? "Exporting all matching items..." : "Export Stock Items"}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={exportSalesHistory} data-testid="menu-export-sales-history">
+              <Download className="h-4 w-4 mr-2" />
+              Export Sales History
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() => {
+                setNewGradeName("");
+                setEditingGradeId(null);
+                setManageGradesOpen(true);
+              }}
+              disabled={!recordChanges.allowed}
+              title={recordChangeReason}
+              data-testid="menu-manage-grades"
+            >
+              <Tag className="h-4 w-4 mr-2" />
+              Manage Grades
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => {
+                setNewCategoryName("");
+                setEditingCategoryId(null);
+                setManageCategoriesOpen(true);
+              }}
+              disabled={!recordChanges.allowed}
+              title={recordChangeReason}
+              data-testid="menu-manage-categories"
+            >
+              <Layers className="h-4 w-4 mr-2" />
+              Manage Categories
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </PageHeader>
 
       <div className="stock-items-metrics" aria-label="Stock items overview">
         <div className="stock-items-metric stock-items-metric-purple">

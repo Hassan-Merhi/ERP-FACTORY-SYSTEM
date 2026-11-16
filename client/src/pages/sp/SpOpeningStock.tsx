@@ -1,3 +1,4 @@
+import { PageHeader } from "@/components/PageHeader";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useId, useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -118,13 +119,10 @@ export default function SpOpeningStock() {
 
   return (
     <div className="space-y-6 max-w-3xl">
-      <div>
-        <h1 className="text-xl font-semibold">Opening Stock</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Import existing inventory before recording new containers. Supplier payable is not posted here — it is created
-          when you sell.
-        </p>
-      </div>
+      <PageHeader
+        title="Opening Stock"
+        subtitle="Import existing inventory before recording new containers. Supplier payable is not posted here — it is created when you sell."
+      />
 
       <Card>
         <CardHeader>

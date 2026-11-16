@@ -15,6 +15,7 @@ import { useEscapeToParent } from "@/hooks/use-escape-to-parent";
 import { queryClient, keyStartsWith, invalidateCustomerBalances } from "@/lib/queryClient";
 import { useState, useRef } from "react";
 import type { OrderDetail } from "./types";
+import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
 
 export function useFactoryInvoiceDetailModel() {
   const { selectedCompany } = useCompany();
@@ -499,36 +500,11 @@ export function useFactoryInvoiceDetailModel() {
     setEditValue("");
   };
 
-  // Shared helper: fetch a binary file from the server and trigger a browser download.
-  // Using fetch+blob instead of window.open() ensures auth cookies are always sent,
-  // errors surface as toast messages, and stalled 0-byte downloads are avoided.
-  const downloadFromUrl = async (url: string, fallbackName: string) => {
+  // Server-named exports: the shared helper sends auth cookies and rejects with
+  // the server's message, which surfaces here as a toast.
+  const downloadExport = async (url: string, fallbackName: string) => {
     try {
-      const res = await fetch(url, { credentials: "include", cache: "no-store" });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.message || `Server error ${res.status}`);
-      }
-      const blob = await res.blob();
-      if (blob.size === 0) {
-        throw new Error("Server returned an empty file.");
-      }
-      const cd = res.headers.get("content-disposition") || "";
-      // Handle both  filename*=UTF-8''encoded-name  and  filename="plain-name"
-      const starMatch = cd.match(/filename\*=UTF-8''([^;\s]+)/i);
-      const plainMatch = cd.match(/filename="([^"]+)"/i);
-      const rawName = starMatch ? starMatch[1] : plainMatch ? plainMatch[1] : null;
-      const objectUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = objectUrl;
-      a.download = rawName ? decodeURIComponent(rawName) : fallbackName;
-      document.body.appendChild(a);
-      a.click();
-      // Delay cleanup so Chrome has time to consume the blob URL before it is revoked.
-      setTimeout(() => {
-        document.body.removeChild(a);
-        URL.revokeObjectURL(objectUrl);
-      }, 10000);
+      await downloadFromUrl(url, { fileName: fallbackName });
     } catch (err) {
       toast({ title: "Export failed", description: getErrorDetails(err).message, variant: "destructive" });
     }
@@ -536,27 +512,36 @@ export function useFactoryInvoiceDetailModel() {
 
   const handleExportExcel = () => {
     if (!orderId) return;
-    downloadFromUrl(`/api/factory/customer-orders/${orderId}/export-excel`, "invoice.xlsx");
+    downloadExport(`/api/factory/customer-orders/${orderId}/export-excel`, exportFileName("invoice", "xlsx"));
   };
 
   const handleExportExcelNoCharges = () => {
     if (!orderId) return;
-    downloadFromUrl(`/api/factory/customer-orders/${orderId}/export-excel?noCharges=1`, "invoice-no-charges.xlsx");
+    downloadExport(
+      `/api/factory/customer-orders/${orderId}/export-excel?noCharges=1`,
+      exportFileName("invoice no charges", "xlsx")
+    );
   };
 
   const handleExportPdf = () => {
     if (!orderId) return;
-    downloadFromUrl(`/api/factory/customer-orders/${orderId}/export-pdf`, "invoice.pdf");
+    downloadExport(`/api/factory/customer-orders/${orderId}/export-pdf`, exportFileName("invoice", "pdf"));
   };
 
   const handleExportPdfNoCharges = () => {
     if (!orderId) return;
-    downloadFromUrl(`/api/factory/customer-orders/${orderId}/export-pdf?noCharges=1`, "invoice-no-charges.pdf");
+    downloadExport(
+      `/api/factory/customer-orders/${orderId}/export-pdf?noCharges=1`,
+      exportFileName("invoice no charges", "pdf")
+    );
   };
 
   const handleExportLoadingStatus = () => {
     if (!orderId) return;
-    downloadFromUrl(`/api/factory/customer-orders/${orderId}/loading-status-export`, "loading-status.xlsx");
+    downloadExport(
+      `/api/factory/customer-orders/${orderId}/loading-status-export`,
+      exportFileName("loading status", "xlsx")
+    );
   };
 
   return {

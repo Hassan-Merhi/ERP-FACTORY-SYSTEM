@@ -1,4 +1,5 @@
 import { downloadBlob } from "@/lib/downloadBlob";
+import { exportFileName } from "@/lib/exportFile";
 import { getErrorDetails } from "@shared/errorUtils";
 import { useEffect, useMemo, useRef } from "react";
 import { useLocation as useLocationContext } from "@/contexts/LocationContext";
@@ -526,7 +527,7 @@ export default function POS({ posUser, editVoucherId }: { posUser?: AuthMe; edit
       });
       const dateStr = editVoucher?.voucherDate?.slice(0, 10) ?? new Date().toISOString().slice(0, 10);
       const num = editVoucher?.voucherNumber ?? editVoucherId ?? "txn";
-      downloadBlob(blob, `transaction-${num}-${dateStr}.xlsx`);
+      downloadBlob(blob, exportFileName(`transaction ${num}`, "xlsx", { date: dateStr }));
     } catch (err) {
       toast({ title: "Export failed", description: getErrorDetails(err).optionalMessage, variant: "destructive" });
     }

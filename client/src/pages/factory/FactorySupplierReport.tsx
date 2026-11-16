@@ -1,9 +1,10 @@
 import { getErrorDetails } from "@shared/errorUtils";
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Download, FileText, Filter, Loader2, Package } from "lucide-react";
+import { FileText, Filter, Package } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { Button } from "@/components/ui/button";
+import { ExportButton } from "@/components/export/ReportExportMenu";
+import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -62,26 +63,20 @@ export default function FactorySupplierReport() {
 
     setIsGenerating(true);
     try {
-      const res = await fetch("/api/factory/reports/supplier-usage", {
+      await downloadFromUrl("/api/factory/reports/supplier-usage", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
+        body: {
           companyId,
           supplierId: supplierId ? Number(supplierId) : undefined,
           startDate,
           endDate,
           format,
+        },
+        fileName: exportFileName("supplier report", format === "pdf" ? "pdf" : "xlsx", {
+          from: startDate,
+          to: endDate,
         }),
       });
-      if (!res.ok) throw new Error("Failed to generate report");
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `supplier-report-${startDate}-${endDate}.${format === "pdf" ? "pdf" : "xlsx"}`;
-      a.click();
-      URL.revokeObjectURL(url);
       toast({ title: "Report generated successfully" });
     } catch (error) {
       toast({ title: "Export failed", description: getErrorDetails(error).message, variant: "destructive" });
@@ -175,33 +170,24 @@ export default function FactorySupplierReport() {
             </div>
 
             <div className="flex gap-2">
-              <Button
+              <ExportButton
+                kind="pdf"
+                variant="default"
+                busy={isGenerating}
                 onClick={() => handleExport("pdf")}
                 disabled={isGenerating || !companyId || !recordChanges.allowed}
                 title={recordChanges.reason ?? undefined}
                 data-testid="button-export-pdf"
-              >
-                {isGenerating ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                ) : (
-                  <FileText className="h-4 w-4 mr-2" />
-                )}
-                Export PDF
-              </Button>
-              <Button
+              />
+              <ExportButton
+                kind="excel"
+                busy={isGenerating}
                 variant="outline"
                 onClick={() => handleExport("excel")}
                 disabled={isGenerating || !companyId || !recordChanges.allowed}
                 title={recordChanges.reason ?? undefined}
                 data-testid="button-export-excel"
-              >
-                {isGenerating ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                ) : (
-                  <Download className="h-4 w-4 mr-2" />
-                )}
-                Export Excel
-              </Button>
+              />
             </div>
           </div>
         </CardContent>

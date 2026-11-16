@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
+import { downloadBlob } from "@/lib/downloadBlob";
 
 function orderIdFromPath(path: string): string | null {
   return (
@@ -40,16 +41,7 @@ export function FactoryBilingualDocumentActions() {
       const disposition = response.headers.get("content-disposition") || "";
       const encoded = disposition.match(/filename\*=UTF-8''([^;\s]+)/i)?.[1];
       const plain = disposition.match(/filename="([^"]+)"/i)?.[1];
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = encoded ? decodeURIComponent(encoded) : plain || fallbackName;
-      document.body.appendChild(anchor);
-      anchor.click();
-      setTimeout(() => {
-        anchor.remove();
-        URL.revokeObjectURL(url);
-      }, 10_000);
+      downloadBlob(blob, encoded ? decodeURIComponent(encoded) : plain || fallbackName);
     } catch (error) {
       toast({
         title: "Export failed",

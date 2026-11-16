@@ -13,6 +13,7 @@ import {
   ShoppingCart,
   TrendingUp,
 } from "lucide-react";
+import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -300,27 +301,20 @@ export default function RetailDashboard() {
   return (
     <div className="mx-auto max-w-[1700px] space-y-5 p-4 md:p-6">
       <RetailNav />
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            <BarChart3 className="h-6 w-6" />
-            <h1 className="text-2xl font-bold">Retail Dashboard</h1>
-          </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Sales, margin, inventory health, and variant-level reconciliation from the retail movement ledger.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => navigate("/retail/inventory")}>
-            <Boxes className="mr-2 h-4 w-4" />
-            Inventory
-          </Button>
-          <Button variant="outline" disabled={isFetching} onClick={() => refetch()}>
-            <RefreshCw className={`mr-2 h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title="Retail Dashboard"
+        icon={<BarChart3 className="h-6 w-6" />}
+        subtitle="Sales, margin, inventory health, and variant-level reconciliation from the retail movement ledger."
+      >
+        <Button variant="outline" onClick={() => navigate("/retail/inventory")}>
+          <Boxes className="mr-2 h-4 w-4" />
+          Inventory
+        </Button>
+        <Button variant="outline" disabled={isFetching} onClick={() => refetch()}>
+          <RefreshCw className={`mr-2 h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
+          Refresh
+        </Button>
+      </PageHeader>
 
       <Card>
         <CardContent className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4">

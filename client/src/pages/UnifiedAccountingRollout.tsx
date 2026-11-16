@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { apiRequest } from "@/lib/queryClient";
+import { PageHeader } from "@/components/PageHeader";
 
 type Kind = "TECHNICAL" | "SECURITY" | "FINANCE";
 type Mode = "READ_ONLY" | "METADATA_PILOT";
@@ -196,13 +197,11 @@ export default function UnifiedAccountingRollout() {
     !!d?.eligibleForExternalReview && !!d.reviewsComplete && !!d.deployedSha && d.metadataEntryReferencesCompatible;
   return (
     <div className="p-3 sm:p-5 space-y-5" data-testid="unified-accounting-rollout">
-      <div>
-        <h1 className="text-2xl font-semibold">Unified Accounting — Integration & Rollout</h1>
-        <p className="text-sm text-muted-foreground">
-          {selectedCompany?.name ?? "Selected company"} · Phase 15 · Company-specific read-only certification and
-          Owner-governed metadata pilot
-        </p>
-      </div>
+      <PageHeader
+        title="Unified Accounting — Integration & Rollout"
+        meta={<>{selectedCompany?.name ?? "Selected company"} · Phase 15</>}
+        subtitle="Company-specific read-only certification and Owner-governed metadata pilot"
+      />
       <Card>
         <CardContent className="pt-5 space-y-3">
           <div className="flex flex-wrap gap-3 items-center justify-between">

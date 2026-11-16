@@ -65,6 +65,10 @@ vi.mock("../server/routes/_helpers", () => ({
   upload: {
     fields: () => (_req: unknown, _res: unknown, next: () => void) => next(),
   },
+  spreadsheetUpload: {
+    single: () => (_req: unknown, _res: unknown, next: () => void) => next(),
+    fields: () => (_req: unknown, _res: unknown, next: () => void) => next(),
+  },
 }));
 vi.mock("../server/excelHelper", () => ({
   readExcel: vi.fn(async () => ({ SheetNames: [], Sheets: {} })),
