@@ -75,10 +75,10 @@ for (const file of collectSourceFiles(SERVER_DIR)) {
 const exampleSources = Object.fromEntries(ENV_EXAMPLES.map((file) => [file, readFileSync(file, "utf8")]));
 const examplePolicy = checkEnvExamplePolicy(exampleSources);
 if (examplePolicy.failures.length) {
-  console.error("ENVIRONMENT EXAMPLE POLICY FAILED:\\n" + examplePolicy.failures.join("\\n"));
+  console.error("ENVIRONMENT EXAMPLE POLICY FAILED:\n" + examplePolicy.failures.join("\n"));
   process.exit(1);
 }
-const exampleText = Object.values(exampleSources).join("\\n");
+const exampleText = Object.values(exampleSources).join("\n");
 const documented = new Set(
   [...exampleText.matchAll(/^#?\s*([A-Z][A-Z_0-9]{2,})=/gm)].map((match) => match[1]),
 );
