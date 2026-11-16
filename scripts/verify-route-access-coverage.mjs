@@ -80,6 +80,11 @@ export function validateRouteAccessCoverage(routeSnapshot, accessSnapshot) {
       errors.push("Inherited middleware mount count differs from registered middleware");
     }
   }
+  for (let index = 0; index < Math.min(expected.length, accessSnapshot.rules.length); index++) {
+    if (accessSnapshot.rules[index]?.id !== expected[index]) {
+      errors.push(`Registration-order mismatch at index ${index}: expected ${expected[index]}`);
+    }
+  }
   const expectedSet = new Set(expected);
   for (const id of expected) if (!seen.has(id)) errors.push(`Missing access declaration: ${id}`);
   for (const id of seen) if (!expectedSet.has(id)) errors.push(`Stale access declaration: ${id}`);
