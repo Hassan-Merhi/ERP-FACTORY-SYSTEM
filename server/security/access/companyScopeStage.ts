@@ -277,6 +277,40 @@ async function authorizePathCompanyId(
 }
 
 /**
+ * Authorize every `:companyId` URL parameter of the matched route. Returns
+ * true when the request may continue; otherwise the refusal has been sent.
+ *
+ * The boundary calls this last, after the route's policies, which is where
+ * the Express parameter hook it replaces used to run: a policy that hides a
+ * foreign record with 404 still answers before this check's 403.
+ */
+export async function authorizePathCompanyIds(
+  req: Request,
+  res: Response,
+  access: EffectiveRouteAccess,
+  context: ActiveCompanyPermissionContext
+): Promise<boolean> {
+  try {
+    for (const raw of access.pathCompanyIds) {
+      if (!(await authorizePathCompanyId(req, res, access, context, raw))) return false;
+    }
+    return true;
+  } catch (error) {
+    if (error instanceof CompanyIsolationError) {
+      logIsolationDenial(req, context, error.code);
+      res.status(403).json({ code: error.code, message: error.message });
+      return false;
+    }
+    if (error instanceof CompanyAccessError) {
+      logIsolationDenial(req, context, error.code);
+      sendCompanyAccessError(res, error);
+      return false;
+    }
+    throw error;
+  }
+}
+
+/**
  * Bind the request to its company and run `proceed` inside the tenant runtime
  * context and database scope. Sends the refusal itself when the request is not
  * allowed; unexpected failures go to `fail`.
@@ -401,10 +435,6 @@ export async function establishCompanyScope(
     if (userLocationRoute && userLocationRoute.companyId !== context.companyId) {
       await assertCompaniesAccess(context.userId, [userLocationRoute.companyId]);
       explicitAuthorizedCompanyId = userLocationRoute.companyId;
-    }
-
-    for (const raw of access.pathCompanyIds) {
-      if (!(await authorizePathCompanyId(req, res, access, context, raw))) return;
     }
 
     const secondaryCompanyIds = collectSecondaryCompanyIds(req);

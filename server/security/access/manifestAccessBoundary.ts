@@ -29,7 +29,7 @@ import { logger } from "../../lib/logger";
 import { enforcePermissionKey } from "../../lib/permissionMiddleware";
 import type { ActiveCompanyPermissionContext } from "../../services/security/activeCompanyPermissionContext";
 import { ACCESS_POLICIES, type AccessPolicy } from "./accessPolicies";
-import { establishCompanyScope } from "./companyScopeStage";
+import { authorizePathCompanyIds, establishCompanyScope } from "./companyScopeStage";
 import {
   ACCESS_POLICY_NAMES,
   POLICIES_AFTER_PERMISSIONS,
@@ -253,6 +253,7 @@ export function createManifestAccessBoundary(options: ManifestAccessBoundaryOpti
           if (!enforceCompanyRoles(req, res, access, context)) return;
           if (!(await enforcePermissions(req, res, access, context, false))) return;
           if (!(await runPolicies(req, res, access, (name) => POLICIES_AFTER_PERMISSIONS.has(name)))) return;
+          if (!(await authorizePathCompanyIds(req, res, access, context))) return;
           if (finished) return;
           finished = true;
           next();

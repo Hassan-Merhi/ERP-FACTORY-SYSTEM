@@ -41,12 +41,13 @@ of every API registrar. For each `/api` request it:
    answers 401, or to a route declared `public`.
 3. **Binds the company** (`companyScopeStage.ts`): reads the caller's role in
    the bound company from the database, refuses a caller-supplied company ID
-   the rule does not allow, authorizes a `:companyId` URL parameter, and opens
+   the rule does not allow, and opens
    the tenant runtime context and database scope that row-level security reads.
 4. **Runs the rule's checks** inside that scope, in this order:
    `permissions-v2`, `privileged-maintenance` → module permission keys → the
    other policies → company-role rule → remaining permission keys →
-   `factory-page-access`, `admin-company-scope`.
+   `factory-page-access`, `admin-company-scope` → the `:companyId` URL
+   parameter.
 5. Calls `next()`. Any refusal is sent by the stage that refused; any thrown
    error goes to the error handler. Nothing falls through to the handler.
 
