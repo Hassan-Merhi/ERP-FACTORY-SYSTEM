@@ -44,7 +44,9 @@ for (const file of files.sort()) {
       if (receiver === "sql" && method === "raw") kind = "sql.raw";
       // Direct SQL string templates skip the parameter binder entirely.
       if (["query", "execute"].includes(method) &&
-          node.arguments.some(a => ts.isTemplateExpression(a))) kind = "interpolated-query";
+          node.arguments.some(a => ts.isTemplateExpression(a) ||
+            (ts.isBinaryExpression(a) && a.operatorToken.kind === ts.SyntaxKind.PlusToken)))
+        kind = "interpolated-query";
     }
     // A text template can be assembled before being handed to pool.query,
     // client.query, or a wrapper. Track query-shaped declarations separately
