@@ -180,6 +180,12 @@ const review = {
   entries: rows,
 };
 const serialized = JSON.stringify(review, null, 2) + "\n";
+const unreviewedCount = rows.filter((row) => row.status !== "reviewed").length;
+if (process.argv.includes("--require-reviewed") && unreviewedCount > 0) {
+  console.error(`Access rule review incomplete: ${unreviewedCount} of ${rows.length} registrations are not reviewed.`);
+  process.exitCode = 1;
+}
+
 if (process.argv.includes("--write")) {
   fs.writeFileSync(outputPath, serialized);
   console.log(`Wrote ${rows.length} unreviewed route registrations to ${outputPath}`);
