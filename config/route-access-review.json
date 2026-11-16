@@ -199,6 +199,14 @@
       "existingGuards": [
         "<anonymous>"
       ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
+      ],
       "candidate": {
         "resource": "erp.stock_items",
         "action": "import",
@@ -211,6 +219,14 @@
       "status": "unreviewed",
       "existingGuards": [
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -218,6 +234,14 @@
       "status": "unreviewed",
       "existingGuards": [
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -225,6 +249,14 @@
       "status": "unreviewed",
       "existingGuards": [
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -296,6 +328,14 @@
         "enforcePosOperationalPermissionScope",
         "enforcePosCapabilityScope",
         "sendPosStockFast"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "stockExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -306,6 +346,14 @@
         "enforcePosOperationalPermissionScope",
         "enforcePosCapabilityScope",
         "sendPosStockFast"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "stockExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -316,6 +364,14 @@
         "enforcePosOperationalPermissionScope",
         "enforcePosCapabilityScope",
         "sendPosInvoiceFast"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "pdfExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -336,6 +392,14 @@
         "enforcePosOperationalPermissionScope",
         "enforcePosCapabilityScope",
         "sendUploadedPdfFast"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "whatsappExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -428,6 +492,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -446,6 +518,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -563,6 +643,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -572,6 +660,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -581,6 +677,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -671,6 +775,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -813,6 +925,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -853,6 +973,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -861,6 +989,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -1102,6 +1238,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -1136,6 +1280,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -1144,6 +1296,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "pdfExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -1152,6 +1312,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -1160,6 +1328,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -1168,6 +1344,14 @@
       "existingGuards": [
         "requireAuth",
         "loadingHandler"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -1218,6 +1402,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -1237,6 +1429,14 @@
         "<anonymous>",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -1247,6 +1447,14 @@
         "<anonymous>",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -1257,6 +1465,14 @@
         "<anonymous>",
         "uploadArabicWorkbook",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -1268,6 +1484,14 @@
         "<anonymous>",
         "uploadArabicWorkbook",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -1278,6 +1502,14 @@
         "<anonymous>",
         "uploadArabicWorkbook",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -1319,6 +1551,14 @@
         "requireAuth",
         "multerMiddleware",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -1327,6 +1567,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -1527,6 +1775,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -1535,6 +1791,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -1544,6 +1808,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -1731,6 +2003,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -1771,6 +2051,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -1779,6 +2067,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ],
       "candidate": {
         "resource": "factory.containers",
@@ -2012,6 +2308,14 @@
         "<anonymous>",
         "<anonymous>"
       ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
+      ],
       "candidate": {
         "resource": "system.maintenance",
         "action": "repair",
@@ -2068,6 +2372,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -2141,6 +2453,14 @@
         "requireAuth",
         "<anonymous>"
       ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
+      ],
       "candidate": {
         "resource": "system.maintenance",
         "action": "repair",
@@ -2154,6 +2474,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ],
       "candidate": {
         "resource": "system.maintenance",
@@ -2177,6 +2505,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -2195,6 +2531,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -2213,6 +2557,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -2222,6 +2574,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -2231,6 +2591,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -2249,6 +2617,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -2276,6 +2652,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -2294,6 +2678,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -2303,6 +2695,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -2357,6 +2757,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -2366,6 +2774,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -2384,6 +2800,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -2402,6 +2826,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -2600,6 +3032,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -2608,6 +3048,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -2680,6 +3128,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -2748,6 +3204,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "print",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -2804,6 +3268,14 @@
         "requireAuth",
         "<anonymous>"
       ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
+      ],
       "candidate": {
         "resource": "system.maintenance",
         "action": "repair",
@@ -2817,6 +3289,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -2825,6 +3305,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "stockExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -2842,6 +3330,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -2984,6 +3480,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "stockExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -3016,6 +3520,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -3025,6 +3537,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -3034,6 +3554,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -3058,6 +3586,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -3067,6 +3603,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -3075,6 +3619,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -3198,6 +3750,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "pdfExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -3206,6 +3766,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -3414,6 +3982,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -3422,6 +3998,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "pdfExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -3661,6 +4245,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -3974,6 +4566,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -4066,6 +4666,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -4074,6 +4682,14 @@
       "existingGuards": [
         "requireAuth",
         "exportInvoiceExcel"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -4082,6 +4698,14 @@
       "existingGuards": [
         "requireAuth",
         "exportInvoiceExcel"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -4090,6 +4714,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -4098,6 +4730,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "pdfExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -4106,6 +4746,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -4393,6 +5041,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -4402,6 +5058,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -4562,6 +5226,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -4570,6 +5242,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -5229,6 +5909,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -5519,6 +6207,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -5823,6 +6519,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "whatsappExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -6303,6 +7007,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -6312,6 +7024,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -6368,6 +7088,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -6413,6 +7141,14 @@
         "requireAuth",
         "<anonymous>"
       ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
+      ],
       "candidate": {
         "resource": "system.maintenance",
         "action": "repair",
@@ -6434,6 +7170,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "pdfExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -6562,6 +7306,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -6698,6 +7450,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "pdfExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -6714,6 +7474,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -6884,6 +7652,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "pdfExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -6892,6 +7668,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -7185,6 +7969,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "pdfExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -7257,6 +8049,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -7297,6 +8097,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -7321,6 +8129,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -7329,6 +8145,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -7337,6 +8161,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -7393,6 +8225,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -7401,6 +8241,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -7433,6 +8281,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -7625,6 +8481,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -7969,6 +8833,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -8283,6 +9155,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -8530,6 +9410,14 @@
         "requireAuth",
         "multerMiddleware",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -8546,6 +9434,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -8691,6 +9587,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -8699,6 +9603,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "pdfExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -8707,6 +9619,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -8715,6 +9635,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "pdfExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -8860,6 +9788,14 @@
         "requireAuth",
         "multerMiddleware",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -8876,6 +9812,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -9139,6 +10083,14 @@
         "<anonymous>",
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -9149,6 +10101,14 @@
         "requireAuth",
         "multerMiddleware",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -9158,6 +10118,14 @@
         "<anonymous>",
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -9275,6 +10243,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -10242,6 +11218,14 @@
         "requireAuth",
         "checkPOSLocation",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -10251,6 +11235,14 @@
         "requireAuth",
         "checkPOSLocation",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "pdfExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -10260,6 +11252,14 @@
         "requireAuth",
         "checkPOSLocation",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "stockExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -10391,6 +11391,14 @@
         "<anonymous>",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -10403,6 +11411,14 @@
         "<anonymous>",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -10464,6 +11480,14 @@
         "requireAuth",
         "requireNonPOS",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -10473,6 +11497,14 @@
         "requireAuth",
         "requireNonPOS",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -10550,6 +11582,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "pdfExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -10558,6 +11598,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -11430,6 +12478,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -11537,6 +12593,14 @@
         "requireAuth",
         "requireNonPOS",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -11717,6 +12781,14 @@
         "requireNonPOS",
         "<anonymous>"
       ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
+      ],
       "candidate": {
         "resource": "erp.stock_items",
         "action": "import",
@@ -11764,6 +12836,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "stockExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -11773,6 +12853,14 @@
         "requireAuth",
         "requireNonPOS",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "stockExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -11868,6 +12956,14 @@
         "requireNonPOS",
         "<anonymous>"
       ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
+      ],
       "candidate": {
         "resource": "erp.stock_items",
         "action": "import",
@@ -11882,6 +12978,14 @@
         "requireAuth",
         "requireNonPOS",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -11901,6 +13005,14 @@
         "requireNonPOS",
         "multerMiddleware",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -12095,6 +13207,14 @@
         "requireAuth",
         "requireNonPOS",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -12140,6 +13260,14 @@
         "requireAuth",
         "requireNonPOS",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -12149,6 +13277,14 @@
         "requireAuth",
         "requireNonPOS",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -12158,6 +13294,14 @@
         "requireAuth",
         "requireNonPOS",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -12167,6 +13311,14 @@
         "requireAuth",
         "requireNonPOS",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ],
       "candidate": {
         "resource": "retail.stock_imports",
@@ -12182,6 +13334,14 @@
         "requireAuth",
         "requireNonPOS",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -12263,6 +13423,14 @@
         "requireAuth",
         "requireNonPOS",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ],
       "candidate": {
         "resource": "retail.stock_imports",
@@ -12454,6 +13622,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "posShiftSummary",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -12462,6 +13638,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "posShiftControl",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -12635,6 +13819,14 @@
         "requireAuth",
         "multerMiddleware",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -12664,6 +13856,14 @@
         "requireNonPOS",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -12682,6 +13882,14 @@
         "requireAuth",
         "requireNonPOS",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -12905,6 +14113,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -12968,6 +14184,14 @@
         "requireAuth",
         "requireNonPOS",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -12977,6 +14201,14 @@
         "requireAuth",
         "requireNonPOS",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -12986,6 +14218,14 @@
         "requireAuth",
         "requireNonPOS",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -12995,6 +14235,14 @@
         "requireAuth",
         "requireNonPOS",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -13003,6 +14251,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -13011,6 +14267,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -13018,6 +14282,14 @@
       "status": "unreviewed",
       "existingGuards": [
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -13027,6 +14299,14 @@
         "requireAuth",
         "multerMiddleware",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "posSalesImport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -13035,6 +14315,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "posSalesImport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -13043,6 +14331,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "posSalesImport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -13050,6 +14346,14 @@
       "status": "unreviewed",
       "existingGuards": [
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "posSalesImport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -13059,6 +14363,14 @@
         "requireAuth",
         "multerMiddleware",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "posSalesImport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -13067,6 +14379,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "posSalesImport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -13075,6 +14395,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "posSalesImport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -13082,6 +14410,14 @@
       "status": "unreviewed",
       "existingGuards": [
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "posSalesImport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -13091,6 +14427,14 @@
         "requireAuth",
         "multerMiddleware",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -13099,6 +14443,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -13108,6 +14460,14 @@
         "requireAuth",
         "requireNonPOS",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -13115,6 +14475,14 @@
       "status": "unreviewed",
       "existingGuards": [
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -13122,6 +14490,14 @@
       "status": "unreviewed",
       "existingGuards": [
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -13132,6 +14508,14 @@
         "requireNonPOS",
         "multerMiddleware",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -13141,6 +14525,14 @@
         "requireAuth",
         "requireNonPOS",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -13150,6 +14542,14 @@
         "requireAuth",
         "requireNonPOS",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -13370,6 +14770,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "pdfExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -13378,6 +14786,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -13426,6 +14842,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -13442,6 +14866,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -13498,6 +14930,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -13514,6 +14954,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -14578,6 +16026,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -14596,6 +16052,14 @@
         "requireAuth",
         "requireNonPOS",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -15225,6 +16689,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "pdfExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -15233,6 +16705,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "pdfExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -15297,6 +16777,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "posShiftSummary",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -15305,6 +16793,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "posShiftSummary",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -15313,6 +16809,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "posShiftControl",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ],
       "candidate": {
         "resource": "retail.pos",
@@ -15327,6 +16831,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "posShiftControl",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ],
       "candidate": {
         "resource": "retail.pos",
@@ -15476,6 +16988,14 @@
         "requireAuth",
         "requireNonPOS",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -15496,6 +17016,14 @@
         "requireNonPOS",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -15602,6 +17130,14 @@
         "requireAuth",
         "requireNonPOS",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -15680,6 +17216,14 @@
         "requireNonPOS",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -15845,6 +17389,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -15979,6 +17531,14 @@
         "<anonymous>",
         "multerMiddleware",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ],
       "candidate": {
         "resource": "system.maintenance",
@@ -16389,6 +17949,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -16407,6 +17975,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -16459,6 +18035,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -16513,6 +18097,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -16769,6 +18361,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -16777,6 +18377,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -16785,6 +18393,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -16817,6 +18433,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -16922,6 +18546,14 @@
         "requireAuth",
         "multerMiddleware",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -17213,6 +18845,14 @@
         "requireAuth",
         "multerMiddleware",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -17320,6 +18960,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -17921,6 +19569,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -17930,6 +19586,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -17939,6 +19603,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -17948,6 +19620,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -17957,6 +19637,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -17984,6 +19672,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -18036,6 +19732,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -18045,6 +19749,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -18057,6 +19769,14 @@
         "<anonymous>",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -18080,6 +19800,14 @@
         "<anonymous>",
         "requirePasswordConfirmation",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -18113,6 +19841,14 @@
         "<anonymous>",
         "requirePasswordConfirmation",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -18126,6 +19862,14 @@
         "<anonymous>",
         "requirePasswordConfirmation",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -18180,6 +19924,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -18280,6 +20032,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -18307,6 +20067,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -18316,6 +20084,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -18325,6 +20101,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -18511,6 +20295,14 @@
         "requireAuth",
         "requireNonPOS",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -18602,6 +20394,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -18611,6 +20411,14 @@
         "requireAuth",
         "requireNonPOS",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -18755,6 +20563,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "whatsappExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -19048,6 +20864,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "globalExportCenter",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -19057,6 +20881,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "globalExportCenter",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -19066,6 +20898,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "globalExportCenter",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -19075,6 +20915,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "globalExportCenter",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -19084,6 +20932,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "globalExportCenter",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -19093,6 +20949,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "globalExportCenter",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -19102,6 +20966,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "globalExportCenter",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -19111,6 +20983,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "globalExportCenter",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -19120,6 +21000,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "globalExportCenter",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -19129,6 +21017,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "bulkMaintenance",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -19138,6 +21034,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "globalExportCenter",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -19201,6 +21105,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -19210,6 +21122,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -19220,6 +21140,14 @@
         "<anonymous>",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -19229,6 +21157,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -19398,6 +21334,14 @@
         "<anonymous>",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -19407,6 +21351,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -19893,6 +21845,14 @@
         "<anonymous>",
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -20043,6 +22003,14 @@
         "requireAuth",
         "multerMiddleware",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -20051,6 +22019,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -20176,6 +22152,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -20360,6 +22344,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -20369,6 +22361,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "excelExport",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -20797,6 +22797,14 @@
         "requireAuth",
         "multerMiddleware",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -20805,6 +22813,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -20813,6 +22829,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -20821,6 +22845,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -20829,6 +22861,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -20837,6 +22877,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -20845,6 +22893,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -20853,6 +22909,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -20861,6 +22925,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "policyEvidence": [
+        {
+          "kind": "operational-permission-policy",
+          "policyName": "import",
+          "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
