@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { applySubscriptionEvent } from "./subscriptionPolicy.mjs";
 import { parseVerifiedPaddleSubscription } from "./paddleVerification.mjs";
 
@@ -32,7 +33,8 @@ export async function processPaddleSubscriptionNotification({
     if (
       typeof tx.lockSubscriptionByProviderId !== "function" ||
       typeof tx.insertUniqueWebhookReceipt !== "function" ||
-      typeof tx.setSubscriptionState !== "function"
+      typeof tx.setSubscriptionState !== "function" ||
+      typeof tx.markWebhookReceipt !== "function"
     ) {
       throw new TypeError("Incomplete transaction repository");
     }
@@ -50,6 +52,7 @@ export async function processPaddleSubscriptionNotification({
       tenantId: current.tenantId,
       eventType: verified.eventType,
       occurredAtMs: verified.occurredAtMs,
+      eventHash: createHash("sha256").update(rawBody).digest("hex"),
     });
     if (!receiptInserted) {
       return { processed: false, reason: "duplicate_event" };
@@ -70,6 +73,7 @@ export async function processPaddleSubscriptionNotification({
       },
     );
     if (state.ignored) {
+      await tx.markWebhookReceipt("paddle", verified.eventId, "ignored");
       return { processed: false, reason: state.reason };
     }
     await tx.setSubscriptionState({
@@ -77,6 +81,7 @@ export async function processPaddleSubscriptionNotification({
       provider: "paddle",
       providerSubscriptionId: verified.providerSubscriptionId,
     });
+    await tx.markWebhookReceipt("paddle", verified.eventId, "processed");
     return { processed: true, reason: "updated" };
   });
 }
