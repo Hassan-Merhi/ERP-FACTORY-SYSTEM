@@ -27,6 +27,15 @@ Branch: `refactor/manifest-driven-access-layer`. **Work in progress — not prod
 - Test commands: `node scripts/audit-manifest-access-baseline.mjs` and `npm run test:backend -- tests/route-access-coverage.test.ts`.
 - The Phase 1 checker does **not** yet pass against the entire live route set: `config/route-access-manifest.json` intentionally does not exist until Phase 2 review. No runtime behavior has changed.
 
+## Phase 2 current evidence (2026-11-16)
+
+- `config/route-access-review.json` enumerates **all 2,439** current registrations in Express order, preserving duplicate registrations and exact guard chains. It is **non-enforcing**.
+- The existing V2 action inventory contains **112** method/path candidates covering **135** registrations; **2,304** registrations have no matching V2 candidate. The candidate inventory explicitly labels these as candidates, **not reviewed**.
+- The 2,439-row ledger deliberately marks every rule `unreviewed`; Phase 2 is **not complete** until company scope, permission, role, and special authentication/ownership semantics are verified against implementation for each registration.
+- Generator: `node scripts/generate-route-access-review.mjs --write`, audit `--check`.
+- Test: `npm run test:backend -- tests/route-access-review-ledger.test.ts`.
+- A route's handler names or method/path are not sufficient to infer its authorization. In particular, unreviewed privileged, upload, service-token, anonymous, conditional/fallthrough and cross-company routes must not get guessed `allow` policies.
+
 ## Access manifest contract (planned)
 
 ```json
