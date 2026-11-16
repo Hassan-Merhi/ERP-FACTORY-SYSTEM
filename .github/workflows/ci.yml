@@ -212,6 +212,9 @@ jobs:
       - name: Script inventory
         if: always() && steps.install.outcome == 'success'
         run: npm run audit:scripts
+      - name: Route access declaration coverage (fail on missing, stale or drifted routes)
+        if: always() && steps.install.outcome == 'success'
+        run: npm run verify:route-access-coverage
       - name: Readable logging contracts
         if: always() && steps.install.outcome == 'success'
         run: node scripts/verify-readable-logging-phase-10.mjs
