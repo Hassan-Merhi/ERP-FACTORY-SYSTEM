@@ -36,3 +36,57 @@ On the enforcement baseline, 4,223 application files were counted: 531 above 500
 
 ### Review before merging
 This branch intentionally makes **no production deployment**, **no main merge**, and **no database changes**.
+
+## Phases 3–10 progress (16 November 2026)
+
+Measured with `node scripts/audit-file-lines.mjs --compare-ref origin/main` on the
+branch head after merging main `2079a78`.
+
+| Application files | Enforcement baseline | Now |
+| --- | ---: | ---: |
+| Over 500 lines (grandfathered, may not grow) | 531 | **109** |
+| 301–500 lines (warning) | 660 | 1,149 |
+| At or below 300 lines | 3,032 | 3,818 |
+| Total application files | 4,223 | 5,076 |
+| Policy violations | 0 | **0** |
+
+422 of the 531 originally oversized application files are now at or below
+500 lines. The 109 that remain over 500 (68 client, 22 server routes,
+19 other server modules) are still frozen by the no-growth ratchet.
+
+### How files were decomposed (behavior-preserving mechanics)
+- **Top-level split**: declarations move verbatim into dependency-ordered
+  sibling modules (no import cycles; module-scope side effects stay put) and
+  the original path re-exports its public API. Siblings start with
+  `// Extracted from ./<original>`.
+- **Route outlining**: contiguous route registrations that only use the
+  registrar's typed parameters become `register*PartN(app)` functions called
+  at the same position, so registration order and middleware are unchanged
+  (route manifest regenerated on main and branch was byte-identical).
+- **Hook / section extraction (UI)**: a page's pre-`return` hooks and handlers
+  move into `use<Page>State`, and self-contained JSX subtrees whose only
+  inputs are hook bindings become section components.
+- **Step chaining**: large hooks and route handlers are cut into ordered
+  steps; early returns use a `{ done, value }` sentinel so responses and
+  transaction boundaries are unchanged.
+- Any family with a type error or a member over 500 lines was rolled back.
+
+### Deliberately not split
+- Pages rewritten by the build-time source transforms in `build/vite*Plugin.ts`
+  (sales reports, stock-entry history, orphaned records, V5 allocation, chat
+  widget), so the production bundle stays identical.
+- Families whose moved JSX text would change the classified i18n audit.
+- Files whose remaining size is one large function body that cannot be cut
+  without changing control flow or sharing mutable state across steps.
+
+### Contract tooling for split modules
+`scripts/lib/readModuleFamily.mjs` lets source-text contracts read a module
+together with its extracted siblings. The write-evidence, write-route,
+company-scope and audit-coverage checks attribute extracted siblings to the
+original module, so no review registry, baseline or ceiling was raised.
+
+### Phase 9 (301–500 warning band)
+The warning band grew because most extracted modules land between 300 and
+500 lines, which the policy deliberately accepts (warning, not failure).
+Further reduction toward 300 lines is recommended file by file during normal
+feature work, where it can be done without artificial fragmentation.
