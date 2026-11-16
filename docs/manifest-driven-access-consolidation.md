@@ -12,11 +12,20 @@ Branch: `refactor/manifest-driven-access-layer`. **Work in progress — not prod
 
 ## Required phases and gates
 
-1. **Inventory and contract**: retain the ordered registration snapshot, audit 38 proposed scope middleware replacements, and define explicit rule fields `companyScope`, `permission`, and `roles`. The coverage verifier introduced here fails on missing, duplicate, stale, or invalid declarations. Registration ordinal is part of identity to preserve duplicate/fallthrough registrations.
+1. **Inventory and contract**: retain the ordered registration snapshot, audit the claimed 38 scope middleware replacements against actual repository sources, and define explicit rule fields `companyScope`, `permission`, and `roles`. The coverage verifier introduced here fails on missing, duplicate, stale, or invalid declarations. Registration ordinal is part of identity to preserve duplicate/fallthrough registrations.
 2. **Policy extraction with human verification**: write `config/route-access-manifest.json` with one *reviewed* rule per registration. No automatic `allow`, Admin, or Developer fallback for unknown routes. Preserve exact webhook/public/service authentication and denial semantics; do not guess permissions from URL paths or `<anonymous>`.
 3. **Single access boundary**: implement centralized dispatch that resolves the registered route's manifest declaration, effective live company role, permission and company scope; default deny on unknown entries. Ensure Express registration timing and `next('route')` fallthrough cannot bypass the boundary.
 4. **Incremental route cutover**: replace only scope/role/permission guards proven equivalent to the centralized boundary. Keep independent business invariant checks, database row ownership and RLS in place.
 5. **Certification**: run backend suites, route snapshot test, 403/401/404 authorization matrix for every role and company mode, negative-company tests, duplicate/fallthrough tests, webhooks, uploads, and production boot. Verify deleting any one access rule makes CI fail. Merge only when fully green.
+
+## Phase 1 implementation evidence
+
+- `scripts/audit-manifest-access-baseline.mjs` dynamically inventories policy-related modules from `server/middleware`, exported functions, and the full route snapshot. This avoids pretending that the claim of 38 corresponds to 38 independently removable files; some are business-invariant or database isolation boundaries.
+- `scripts/verify-route-access-coverage.mjs` validates registration-specific policy entries, including guard chains, duplicate route registrations, invalid company scope, missing role and permission, and stale declarations.
+- `tests/route-access-coverage.test.ts` supplies negative tests for missing declarations, duplicate registrations, malformed rules, and guard-chain drift.
+- **Phase 2 gate:** review each actual access decision before producing the 2,439 production declarations. A structurally complete but guessed authorization table is prohibited.
+- Test commands: `node scripts/audit-manifest-access-baseline.mjs` and `npm run test:backend -- tests/route-access-coverage.test.ts`.
+- The Phase 1 checker does **not** yet pass against the entire live route set: `config/route-access-manifest.json` intentionally does not exist until Phase 2 review. No runtime behavior has changed.
 
 ## Access manifest contract (planned)
 
@@ -25,7 +34,7 @@ Branch: `refactor/manifest-driven-access-layer`. **Work in progress — not prod
   "formatVersion": 1,
   "rules": [
     {
-      "id": "REGISTRATION_ORDINAL:METHOD /api/example",
+      "id": "REGISTRATION_ORDINAL:METHOD /api/example [exact > handler > chain]",
       "companyScope": "active-company",
       "permission": "exact.named.permission",
       "roles": ["Admin"]
