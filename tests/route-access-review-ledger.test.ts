@@ -43,8 +43,18 @@ describe("Phase 2 route access review ledger", () => {
     ).toBe(true);
   });
 
+  it("promotes only independently verified service and public route decisions", () => {
+    const reviewed = review.entries.filter((entry: { status: string }) => entry.status === "reviewed");
+    expect(reviewed).toHaveLength(2);
+    expect(reviewed.map((entry: { id: string }) => entry.id)).toEqual([
+      "0:POST /api/stock-transfer-order/wa-approval/webhook [stockTransferOrderWaWebhookHandler]",
+      "1085:GET /api/health [<anonymous>]",
+    ]);
+    expect(reviewed.every((entry: { verifiedRule: { evidence: string[] } }) => entry.verifiedRule.evidence.length > 0)).toBe(true);
+  });
+
   it("does not present unreviewed candidates as approved authorization", () => {
-    expect(review.entries.every((entry: { status: string }) => entry.status === "unreviewed")).toBe(true);
+    expect(review.entries.filter((entry: { status: string }) => entry.status === "unreviewed")).toHaveLength(2437);
     for (const entry of review.entries) {
       expect(Array.isArray(entry.existingGuards)).toBe(true);
       expect(entry.existingGuards.length).toBeGreaterThan(0);
@@ -60,6 +70,7 @@ describe("Phase 2 route access review ledger", () => {
       /:\s*(POST|PUT|PATCH|DELETE)\s/.test(entry.id)
     );
     expect(mutations.length).toBeGreaterThan(0);
-    expect(mutations.every((entry: { status: string }) => entry.status === "unreviewed")).toBe(true);
+    expect(mutations.every((entry: { status: string }) => ["unreviewed", "reviewed"].includes(entry.status))).toBe(true);
+    expect(mutations.filter((entry: { status: string }) => entry.status === "reviewed")).toHaveLength(1);
   });
 });
