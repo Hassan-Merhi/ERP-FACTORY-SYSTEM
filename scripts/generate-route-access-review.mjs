@@ -41,20 +41,18 @@ const definitionsBody = operationalSource.split("export const OPERATIONAL_PERMIS
 if (!definitionsBody) throw new Error("Operational policy definitions have changed");
 const definitions = new Map();
 for (const [, name, objectBody] of definitionsBody.matchAll(/(?:^|\n)\s{2}(\w+):\s*\{([\s\S]*?)\},/g)) {
-  const readString = (key) => new RegExp(key + ':\\s*"([^"]+)"').exec(objectBody)?.[1];
-  const readRoles = (key) => {
-    const bracket = new RegExp(key + ':\\s*\\[([^\\]]*)\\]').exec(objectBody)?.[1];
-    return bracket ? [...bracket.matchAll(/"([^"]+)"/g)].map((match) => match[1]) : undefined;
-  };
-  const permissionKey = readString("permissionKey");
-  const permissionType = readString("permissionType");
-  if (!permissionKey || !permissionType) throw new Error(`Missing policy definition for ${name}`);
+  const permissionKey = /permissionKey:\s*"([^"]+)"/.exec(objectBody)?.[1];
+  const permissionType = /permissionType:\s*"([^"]+)"/.exec(objectBody)?.[1];
+  const deniedRoles = /deniedRoles:\s*\[([^\]]*)\]/.exec(objectBody)?.[1];
+  const permissionBypassRoles = /permissionBypassRoles:\s*\[([^\]]*)\]/.exec(objectBody)?.[1];
+  const extractRoles = (body) => [...body.matchAll(/"([^"]+)"/g)].map((match) => match[1]);
+  if (!permissionKey || !permissionType) throw new Error("Missing policy definition for " + name);
   definitions.set(name, {
     permissionKey,
     permissionType,
     ...(objectBody.includes("developerOnly: true") ? { developerOnly: true } : {}),
-    ...(readRoles("deniedRoles") ? { deniedRoles: readRoles("deniedRoles") } : {}),
-    ...(readRoles("permissionBypassRoles") ? { permissionBypassRoles: readRoles("permissionBypassRoles") } : {}),
+    ...(deniedRoles !== undefined ? { deniedRoles: extractRoles(deniedRoles) } : {}),
+    ...(permissionBypassRoles !== undefined ? { permissionBypassRoles: extractRoles(permissionBypassRoles) } : {}),
   });
 }
 if (definitions.size < 5) throw new Error("Operational permission definition extraction incomplete");
@@ -82,8 +80,15 @@ for (const [, policyName, declarations] of policyGroups) {
 // These are tenancy exceptions, not grants. Do not interpret a context-optional
 // endpoint as an anonymous/public endpoint or a cross-company read as unrestricted.
 const tenantSource = fs.readFileSync(path.join(root, "server/middleware/tenantIsolationBoundary.ts"), "utf8");
+const TENANT_SET_PATTERNS = {
+  CONTEXT_OPTIONAL_PATHS: /const CONTEXT_OPTIONAL_PATHS = new Set\(\[([\s\S]*?)\]\);/,
+  CROSS_COMPANY_REFERENCE_READ_PATHS: /const CROSS_COMPANY_REFERENCE_READ_PATHS = new Set\(\[([\s\S]*?)\]\);/,
+  AUTHORIZED_CROSS_COMPANY_PATHS: /const AUTHORIZED_CROSS_COMPANY_PATHS = new Set\(\[([\s\S]*?)\]\);/,
+};
 function extractExactPathSet(name) {
-  const match = new RegExp("const " + name + " = new Set\\(\\[([\\s\\S]*?)\\]\\);").exec(tenantSource);
+  const pattern = TENANT_SET_PATTERNS[name];
+  if (!pattern) throw new Error("Unknown tenant policy set: " + name);
+  const match = pattern.exec(tenantSource);
   if (!match) throw new Error("Tenant policy set " + name + " changed; cannot extract safe route evidence");
   return new Set([...match[1].replace(/\/\/[^\n]*/g, "").matchAll(/"([^"]+)"/g)].map((item) => item[1]));
 }
