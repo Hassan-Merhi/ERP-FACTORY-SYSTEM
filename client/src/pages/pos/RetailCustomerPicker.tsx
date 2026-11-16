@@ -10,7 +10,7 @@ import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAc
 import { useCompany } from "@/contexts/CompanyContext";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { money } from "./retailPosTypes";
-import { createRetailCustomer, searchRetailCustomers } from "./retailWave2Api";
+import { createRetailCustomer, searchRetailCustomers } from "./retailPosApi";
 import type { RetailCustomerSummary as Customer } from "./retailWave2Types";
 
 /**

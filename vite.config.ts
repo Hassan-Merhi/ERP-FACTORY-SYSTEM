@@ -6,7 +6,7 @@ import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 import { heavyListPaginationPlugin } from "./build/viteHeavyListPaginationPlugin.ts";
 import { salesReportBandwidthPlugin } from "./build/viteSalesReportBandwidthPlugin.ts";
 import { salesReportInvalidationPlugin } from "./build/viteSalesReportInvalidationPlugin.ts";
-import { phase1PaginationPlugin } from "./build/vitePhase1PaginationGuardPlugin.ts";
+import { phase1PaginationPlugin } from "./build/vitePaginationGuardPlugin.ts";
 import { lazyHeavyImportsPlugin } from "./build/viteLazyHeavyImportsPlugin.ts";
 import { labelAssetExtractionPlugin } from "./build/viteLabelAssetExtractionPlugin.ts";
 import { cssColorMixPlugin } from "./build/viteCssColorMixPlugin.ts";

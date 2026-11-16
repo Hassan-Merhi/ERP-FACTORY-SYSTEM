@@ -1,5 +1,5 @@
 import type { Plugin } from "vite";
-import { phase1PaginationPlugin as createLegacyPhase1PaginationPlugin } from "./vitePhase1PaginationPlugin.ts";
+import { phase1PaginationPlugin as createLegacyPhase1PaginationPlugin } from "./vitePaginationPlugin.ts";
 
 const DAYBOOK_SUFFIX = "/client/src/pages/Daybook.tsx";
 

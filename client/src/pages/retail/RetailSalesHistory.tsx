@@ -13,7 +13,7 @@ import {
   fetchRetailCustomerHistory,
   searchRetailCustomers,
   searchRetailSalesHistory,
-} from "@/pages/pos/retailWave2Api";
+} from "@/pages/pos/retailPosApi";
 import type { RetailCustomerSummary } from "@/pages/pos/retailWave2Types";
 import type { RetailSale } from "@/pages/pos/retailPosTypes";
 

@@ -215,7 +215,7 @@ describe("Retail Wave 2 — client UI", () => {
   });
 
   it("keeps manager credentials out of the offline queue", () => {
-    const api = read("client/src/pages/pos/retailWave2Api.ts");
+    const api = read("client/src/pages/pos/retailPosApi.ts");
     expect(api).toContain("apiRequestPrivileged");
     expect(api).not.toContain('apiRequest("POST", "/api/pos/retail/discount-approvals"');
 

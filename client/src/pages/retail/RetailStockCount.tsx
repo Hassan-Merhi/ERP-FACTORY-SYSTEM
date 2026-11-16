@@ -26,7 +26,7 @@ import {
   scanRetailStockCount,
   transitionRetailStockCount,
   updateRetailStockCountLine,
-} from "@/pages/pos/retailWave2Api";
+} from "@/pages/pos/retailPosApi";
 import type {
   RetailStockCountLineStatus,
   RetailStockCountSession,
