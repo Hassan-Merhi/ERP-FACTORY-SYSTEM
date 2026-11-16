@@ -34,6 +34,8 @@ export interface LiveMount {
   /** Mount path, `/` for unprefixed middleware, `re:<source>` for a RegExp. */
   path: string;
   name: string;
+  /** The RegExp the middleware was mounted with, when it was not a string path. */
+  pattern?: RegExp;
   /** Set when the mounted middleware is a `requirePermission` guard. */
   requiredPermission?: string;
 }
@@ -84,13 +86,13 @@ function stackOf(app: Express): StackLayer[] {
 }
 
 /** Express does not keep the source path of `app.use()` mounts, so record it as they are added. */
-export function captureMountPaths(app: Express): WeakMap<object, string> {
-  const mountPaths = new WeakMap<object, string>();
+export function captureMountPaths(app: Express): WeakMap<object, string | RegExp> {
+  const mountPaths = new WeakMap<object, string | RegExp>();
   const captured = app as unknown as CapturedApp;
   const originalUse = captured.use.bind(app);
   captured.use = (...args: unknown[]) => {
     const first = args[0];
-    const mountPath = typeof first === "string" ? first : first instanceof RegExp ? `re:${first.source}` : "/";
+    const mountPath = typeof first === "string" || first instanceof RegExp ? first : "/";
     const before = (captured.router?.stack ?? captured._router?.stack ?? []).length;
     const result = originalUse(...args);
     for (const layer of stackOf(app).slice(before)) mountPaths.set(layer, mountPath);
@@ -99,7 +101,7 @@ export function captureMountPaths(app: Express): WeakMap<object, string> {
   return mountPaths;
 }
 
-export function extractLiveRouteStack(app: Express, mountPaths: WeakMap<object, string>): LiveStackEntry[] {
+export function extractLiveRouteStack(app: Express, mountPaths: WeakMap<object, string | RegExp>): LiveStackEntry[] {
   const entries: LiveStackEntry[] = [];
   const occurrences = new Map<string, number>();
 
@@ -145,11 +147,13 @@ export function extractLiveRouteStack(app: Express, mountPaths: WeakMap<object, 
     const name = handlerName(layer.handle ?? { name: layer.name });
     if (EXPRESS_INTERNAL.has(name) || EXPRESS_INTERNAL.has(layer.name ?? "")) continue;
     const requiredPermission = layer.handle?.[REQUIRED_PERMISSION_METADATA];
+    const mountedAt = mountPaths.get(layer) ?? "/";
     entries.push({
       kind: "mount",
       index: entries.length,
-      path: mountPaths.get(layer) ?? "/",
+      path: typeof mountedAt === "string" ? mountedAt : `re:${mountedAt.source}`,
       name,
+      ...(typeof mountedAt === "string" ? {} : { pattern: mountedAt }),
       ...(typeof requiredPermission === "string" ? { requiredPermission } : {}),
     });
   }
@@ -164,15 +168,11 @@ export function samplePath(routePath: string, value = "1"): string {
     .replace(/[{}]/g, "");
 }
 
-/** Whether a mount at `mountPath` runs for the concrete URL `path`. */
-export function mountCovers(mountPath: string, path: string): boolean {
-  if (mountPath === "/") return true;
-  if (mountPath.startsWith("re:")) {
-    // The source comes from a RegExp literal in server code, never from input.
-    // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp
-    return new RegExp(mountPath.slice(3)).test(path);
-  }
-  const mountSegments = mountPath.split("/").filter(Boolean);
+/** Whether a mount runs for the concrete URL `path`. */
+export function mountCovers(mount: Pick<LiveMount, "path" | "pattern">, path: string): boolean {
+  if (mount.pattern) return mount.pattern.test(path);
+  if (mount.path === "/") return true;
+  const mountSegments = mount.path.split("/").filter(Boolean);
   const pathSegments = path.split("/").filter(Boolean);
   if (mountSegments.length > pathSegments.length) return false;
   return mountSegments.every((segment, position) => segment.startsWith(":") || segment === pathSegments[position]);

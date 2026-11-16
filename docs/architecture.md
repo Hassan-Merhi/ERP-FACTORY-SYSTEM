@@ -92,7 +92,7 @@ shared/   → Types and schema shared by both sides
 | `server/inventoryHelper.ts` | `adjustInventory()` — all inventory mutations; `reverseInventoryByExactValue()` |
 | `server/netPositionHelper.ts` | Net position calculation helpers |
 | `server/lib/permissionHelpers.ts` | Advanced restriction lookup |
-| `server/lib/permissionMiddleware.ts` | `requireModuleAccess`, `requireActionAccess`, `requireExportAccess` |
+| `server/lib/permissionMiddleware.ts` | `enforcePermissionKey` (used by the access boundary) and the route-level `requirePageAccess`, `requireActionAccess`, `requireExportAccess` guards |
 | `server/lib/dateUtils.ts` | Fiscal date helpers |
 
 **Services** (`server/services/`): container tracking scheduler, export job manager, email service, WhatsApp service, scheduler service.

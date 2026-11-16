@@ -58,7 +58,6 @@ beforeAll(async () => {
   if (shouldUpdate) {
     const refreshed = refreshManifest(readManifest(), stack);
     fs.writeFileSync(MANIFEST_PATH, serializeManifest(refreshed.manifest));
-    // eslint-disable-next-line no-console
     console.log(
       `route access manifest refreshed: ${refreshed.added.length} added, ${refreshed.removed.length} removed.` +
         (refreshed.added.length ? `\nReview the new rules:\n  ${refreshed.added.join("\n  ")}` : "")

@@ -168,10 +168,6 @@ export function requirePermission(key: string, permType: PermMiddlewareType = "m
   );
 }
 
-export function requireModuleAccess(moduleKey: string) {
-  return requirePermission(moduleKey, "module");
-}
-
 export function requirePageAccess(pageKey: string) {
   return requirePermission(pageKey, "page");
 }

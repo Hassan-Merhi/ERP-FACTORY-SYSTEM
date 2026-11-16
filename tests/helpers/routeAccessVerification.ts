@@ -104,7 +104,7 @@ export function liveMounts(stack: readonly LiveStackEntry[]): LiveMount[] {
 function mountsBefore(route: LiveRoute, stack: readonly LiveStackEntry[], name: string): boolean {
   const path = samplePath(route.path);
   return liveMounts(stack).some(
-    (mount) => mount.index < route.index && mount.name === name && mountCovers(mount.path, path)
+    (mount) => mount.index < route.index && mount.name === name && mountCovers(mount, path)
   );
 }
 

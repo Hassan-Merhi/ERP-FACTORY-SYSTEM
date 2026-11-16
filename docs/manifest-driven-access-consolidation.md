@@ -231,6 +231,10 @@ Kept as they behaved and listed for the owner to decide:
   were registered ahead of the operational middleware.
 - Five import-template downloads and `POST /api/user-presence/leave` have no
   session guard. They are declared `public`, as they behave.
+- `GET /api/locations` and `GET /api/ledger-accounts` declare the
+  `reference-read` allowance, and the boundary honours it, but the route's own
+  `requireAuth` explicit-company check still refuses an Admin reading another
+  member company. That was already the case before this change.
 - `/api/git/agent-*/:companyId/...` handlers read `companyId` from the URL
   without their own check. The boundary now covers them; the handlers should
   also resolve the company from the session.
@@ -255,5 +259,6 @@ company-role rule, 1,359 at least one policy, 25 a cross-company allowance.
 | `tests/route-access-manifest.test.ts` | Coverage, order, chain drift, schema, conventions, boundary mount, and rejection of deliberately broken manifests. |
 | `tests/operational-permission-declarations.test.ts` | Import/export/maintenance declarations and the reviewed exemptions. |
 | `tests/access-boundary-company-scope.test.ts` | Company binding, caller-supplied IDs, each cross-company allowance, `:companyId`, context errors. |
+| `tests/access-boundary-http.test.ts` | End to end against the real route stack and database: 401/404, company isolation, record ownership, module and operational permissions, role rules, Factory company, privileged maintenance. |
 | `tests/manifest-access-boundary.test.ts` | Resolution (duplicates, specificity, HEAD, undeclared), role and permission stages, policy order, fail-closed behaviour. |
 | `tests/operational-permission-scope-http.test.ts`, `tests/access-control-v2-effective-permissions.test.ts`, `tests/privileged-maintenance-route-policy.test.ts` and the module suites | End-to-end behaviour against the database. |
