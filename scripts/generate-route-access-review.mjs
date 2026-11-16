@@ -13,6 +13,16 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const load = name => JSON.parse(fs.readFileSync(path.join(root, name), "utf8"));
 const source = load("config/route-manifest.json");
 const v2 = load("config/access-control-v2-route-review.json");
+const reviewed = load("config/route-access-reviewed.json");
+const reviewedRules = new Map();
+for (const rule of reviewed.rules) {
+  if (reviewedRules.has(rule.id)) throw new Error("Duplicate verified route access decision: " + rule.id);
+  if (rule.status !== "reviewed" || !rule.evidence?.length || !rule.companyScope || !rule.permission || !rule.roles?.length) {
+    throw new Error("Incomplete or unverified route access decision: " + rule.id);
+  }
+  reviewedRules.set(rule.id, rule);
+}
+
 const outputPath = path.join(root, "config/route-access-review.json");
 
 // Read explicit, source-authored operational policies as evidence, without
@@ -100,9 +110,12 @@ const rows = source.routes.map((registration, index) => {
     source: "server/middleware/tenantIsolationBoundary.ts",
     status: "source-evidence-only",
   }));
+  const id = `${index}:${registration}`;
+  const verifiedRule = reviewedRules.get(id);
   return {
-    id: `${index}:${registration}`,
-    status: "unreviewed",
+    id,
+    status: verifiedRule ? "reviewed" : "unreviewed",
+    ...(verifiedRule ? { verifiedRule } : {}),
     existingGuards: guards.split(" > "),
     ...(policyEvidence ? { policyEvidence } : {}),
     ...(tenantEvidence.length ? { tenantEvidence } : {}),
@@ -117,6 +130,10 @@ const rows = source.routes.map((registration, index) => {
   };
 });
 
+const expectedIds = new Set(rows.map((row) => row.id));
+for (const id of reviewedRules.keys()) {
+  if (!expectedIds.has(id)) throw new Error("Stale verified route access decision: " + id);
+}
 const review = {
   formatVersion: 1,
   description: "Non-enforcing review ledger. NO authorization is implied by an entry. Each registration must be inspected before declaring companyScope, permission and roles in config/route-access-manifest.json.",
@@ -140,5 +157,6 @@ if (process.argv.includes("--write")) {
     candidateMappings: rows.filter(row => row.candidate).length,
     operationalPolicyMatches: rows.filter(row => row.policyEvidence).length,
     awaitingReview: rows.filter(row => row.status === "unreviewed").length,
+    verified: rows.filter(row => row.status === "reviewed").length,
   }, null, 2));
 }
