@@ -13,13 +13,7 @@ import { parseVerifiedPaddleSubscription } from "./paddleVerification.mjs";
  *
  * No HTTP registration, payment charges, or production database effects.
  */
-export async function processPaddleSubscriptionNotification({
-  rawBody,
-  signature,
-  secret,
-  nowMs,
-  repository,
-}) {
+export async function processPaddleSubscriptionNotification({ rawBody, signature, secret, nowMs, repository }) {
   if (!repository || typeof repository.transaction !== "function") {
     throw new TypeError("Transactional subscription repository required");
   }
@@ -39,10 +33,7 @@ export async function processPaddleSubscriptionNotification({
       throw new TypeError("Incomplete transaction repository");
     }
     // A trusted pre-existing mapping is the only account lookup authority.
-    const current = await tx.lockSubscriptionByProviderId(
-      "paddle",
-      verified.providerSubscriptionId,
-    );
+    const current = await tx.lockSubscriptionByProviderId("paddle", verified.providerSubscriptionId);
     if (!current || !current.tenantId || current.provider !== "paddle") {
       return { processed: false, reason: "unknown_subscription" };
     }
@@ -70,7 +61,7 @@ export async function processPaddleSubscriptionNotification({
         sequence: verified.occurredAtMs,
         status: verified.status,
         plan: current.plan,
-      },
+      }
     );
     if (state.ignored) {
       await tx.markWebhookReceipt("paddle", verified.eventId, "ignored");
