@@ -116,6 +116,27 @@ export function registerSpReportRoutes(app: Express) {
         totalSharedCharges = parseNum(sr?.total);
       }
 
+      // Container transport/duty advances remain assets until offload. Show their
+      // outstanding balance beside Shared Charges for visibility, but never deduct
+      // it again: offloaded charges already flow into stock and eventual COGS.
+      const prepaidExpensesAcct = await getSpAccount(companyId, "sp_prepaid_expenses");
+      let prepaidContainerChargesBalance = 0;
+      if (prepaidExpensesAcct) {
+        const prepaidRows = await db.execute(sql`
+          SELECT
+            COALESCE(SUM(CAST(ve.debit_amount AS DECIMAL)), 0)
+            - COALESCE(SUM(CAST(ve.credit_amount AS DECIMAL)), 0) AS balance
+          FROM voucher_entries ve
+          JOIN vouchers v ON ve.voucher_id = v.id
+          WHERE ve.ledger_account_id = ${prepaidExpensesAcct.id}
+            AND v.company_id = ${companyId}
+            AND v.deleted_at IS NULL
+            AND v.optional = false
+            ${endDate ? sql`AND v.voucher_date <= ${endDate}` : sql``}
+        `);
+        prepaidContainerChargesBalance = parseNum(resultRows(prepaidRows)[0]?.balance);
+      }
+
       let approvedNetProfit: string | null = null;
       // Only a whole calendar-month report may use a developer-approved target.
       // Partial date ranges retain their original source-ledger arithmetic.
@@ -153,6 +174,7 @@ export function registerSpReportRoutes(app: Express) {
         totalCogs,
         grossProfit,
         totalSharedCharges,
+        prepaidContainerChargesBalance,
         netProfit,
         splitPct,
         ourShare,
