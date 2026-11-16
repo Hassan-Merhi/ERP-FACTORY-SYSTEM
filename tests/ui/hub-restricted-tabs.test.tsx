@@ -156,4 +156,36 @@ describe("useHubQueryState URL canonicalization", () => {
     });
     expect(result.current[0]).toBe("gamma");
   });
+
+  it("follows in-app navigation to another tab of the mounted hub", () => {
+    const { result } = renderHook(() =>
+      useHubQueryState<Tab>({ key: "tab", allowedValues: known, defaultValue: "alpha" })
+    );
+
+    act(() => {
+      // wouter's navigate() calls pushState and then dispatches a "pushState" event.
+      window.history.pushState({}, "", "/hub?tab=beta");
+      window.dispatchEvent(new Event("pushState"));
+    });
+    expect(result.current[0]).toBe("beta");
+  });
+
+  it("keeps a deep-linked tab while the permitted set is still loading", () => {
+    window.history.replaceState({}, "", "/hub?section=gamma");
+    const { result, rerender } = renderHook(
+      ({ ready }: { ready: boolean }) =>
+        useHubQueryState<Tab>({
+          key: "section",
+          allowedValues: ready ? ["alpha", "gamma"] : known,
+          knownValues: known,
+          defaultValue: "alpha",
+        }),
+      { initialProps: { ready: false } }
+    );
+    expect(window.location.search).toBe("?section=gamma");
+
+    rerender({ ready: true });
+    expect(result.current[0]).toBe("gamma");
+    expect(window.location.search).toBe("?section=gamma");
+  });
 });

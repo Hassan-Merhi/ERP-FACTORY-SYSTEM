@@ -7,6 +7,8 @@ import { useSearch } from "wouter";
 import { BarChart3, GitCompareArrows, PackageMinus, RotateCcw } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { LoadingSkeleton } from "@/components/LoadingSkeleton";
+import { RestrictedTabsState } from "@/components/RestrictedTabsState";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import { useFactoryNavigationAccess } from "@/hooks/useFactoryNavigationAccess";
 import ProductionComparison from "./ProductionComparison";
@@ -48,9 +50,9 @@ export default function FactoryOthers() {
     }
   }, [search, ready, visibleTabsKey, activeTab, setActiveTab]);
 
-  if (!ready) return <div className="p-5 text-sm text-muted-foreground">Loading access...</div>;
+  if (!ready) return <LoadingSkeleton variant="page" className="p-4" />;
   if (visibleTabs.length === 0) {
-    return <div className="p-5 text-sm text-muted-foreground">No comparison tabs are available for this user.</div>;
+    return <RestrictedTabsState />;
   }
 
   return (

@@ -22,7 +22,7 @@ function fallbackValue<T extends string>(allowedValues: readonly T[], defaultVal
 function readLegacyHash<T extends string>(
   url: URL,
   key: "section" | "tab" | "mode",
-  knownValues: readonly T[],
+  knownValues: readonly T[]
 ): T | null {
   if (!url.hash) return null;
 
@@ -54,8 +54,7 @@ export function canonicalizeHubLocation<T extends string>(options: HubQueryState
   const legacyHashValue = readLegacyHash(url, options.key, knownValues);
   const requestedValue = rawQueryValue ?? legacyHashValue;
 
-  const requestedAllowed =
-    requestedValue !== null && options.allowedValues.includes(requestedValue as T);
+  const requestedAllowed = requestedValue !== null && options.allowedValues.includes(requestedValue as T);
   const nextValue = requestedAllowed ? (requestedValue as T) : fallback;
   let changed = false;
 
@@ -103,7 +102,7 @@ export function useHubQueryState<T extends string>(options: HubQueryStateOptions
   const clearKeysKey = clearKeys.join("\u0000");
 
   const [value, setValue] = useState<T>(() =>
-    canonicalizeHubLocation({ key, allowedValues, knownValues, defaultValue, clearKeys, omitDefault }),
+    canonicalizeHubLocation({ key, allowedValues, knownValues, defaultValue, clearKeys, omitDefault })
   );
 
   useEffect(() => {
@@ -119,15 +118,16 @@ export function useHubQueryState<T extends string>(options: HubQueryStateOptions
           defaultValue,
           clearKeys: effectClearKeys,
           omitDefault,
-        }),
+        })
       );
 
     syncFromLocation();
-    window.addEventListener("popstate", syncFromLocation);
-    window.addEventListener("hashchange", syncFromLocation);
+    // wouter dispatches "pushState" for in-app navigation, so a sidebar or
+    // command-palette link to another tab of the mounted hub switches it.
+    const events = ["popstate", "hashchange", "pushState"] as const;
+    for (const event of events) window.addEventListener(event, syncFromLocation);
     return () => {
-      window.removeEventListener("popstate", syncFromLocation);
-      window.removeEventListener("hashchange", syncFromLocation);
+      for (const event of events) window.removeEventListener(event, syncFromLocation);
     };
   }, [key, defaultValue, allowedValuesKey, knownValuesKey, clearKeysKey, omitDefault]);
 
@@ -164,7 +164,7 @@ export function useHubQueryState<T extends string>(options: HubQueryStateOptions
 
       replaceBrowserUrl(url);
     },
-    [key, allowedValuesKey, knownValuesKey, defaultValue, clearKeysKey, omitDefault],
+    [key, allowedValuesKey, knownValuesKey, defaultValue, clearKeysKey, omitDefault]
   );
 
   return [value, updateValue] as const;

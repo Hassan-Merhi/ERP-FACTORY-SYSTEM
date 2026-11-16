@@ -7,6 +7,8 @@ import FactoryAttendance from "@/pages/factory/FactoryAttendance";
 import FactoryAdvancesTab from "@/pages/factory/FactoryAdvancesTab";
 import FactoryWorkerBonusesTab from "@/pages/factory/FactoryWorkerBonusesTab";
 import FactoryWorkerAttendanceReport from "@/pages/factory/FactoryWorkerAttendanceReport";
+import { LoadingSkeleton } from "@/components/LoadingSkeleton";
+import { RestrictedTabsState } from "@/components/RestrictedTabsState";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import type { FactoryMyAccess } from "@shared/apiTypes";
 import { FACTORY_WORKERS_HUB_TABS } from "@/factory/config/navigationPresentation";
@@ -72,10 +74,15 @@ export default function FactoryWorkersHub() {
     staleTime: 60000,
   });
 
-  const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id), enabled: Boolean(selectedCompany?.id), staleTime: 5 * 60000 });
-  const hiddenTabs = myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
-    ? myAccess.hiddenCostFields
-    : Object.values(FACTORY_WORKERS_HUB_TABS);
+  const { data: myAccess } = useQuery<FactoryMyAccess>({
+    queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
+    staleTime: 5 * 60000,
+  });
+  const hiddenTabs =
+    myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
+      ? myAccess.hiddenCostFields
+      : Object.values(FACTORY_WORKERS_HUB_TABS);
 
   const visibleOptions = ALL_TAB_OPTIONS.filter(({ settingKey, hiddenKey }) => {
     if (hiddenKey && hiddenTabs.includes(hiddenKey)) return false;
@@ -84,33 +91,32 @@ export default function FactoryWorkersHub() {
   });
   const visibleValues = visibleOptions.map((option) => option.value);
 
+  const accessReady = myAccess?.companyId === selectedCompany?.id;
   const [tab, setTab] = useHubQueryState<TabValue>({
     key: "tab",
-    allowedValues: visibleValues,
+    // Until access loads, keep a deep-linked tab instead of stripping it.
+    allowedValues: accessReady ? visibleValues : ALL_TAB_OPTIONS.map((option) => option.value),
     knownValues: ALL_TAB_OPTIONS.map((option) => option.value),
     defaultValue: visibleOptions[0]?.value ?? "workers",
     clearKeys: ["mode"],
   });
 
+  if (!accessReady) return <LoadingSkeleton variant="page" className="p-4" />;
+
   if (visibleOptions.length === 0) {
-    return <div className="p-4 text-sm text-muted-foreground">No Workers tabs are available for this user.</div>;
+    return <RestrictedTabsState />;
   }
 
   return (
     <Tabs value={tab} onValueChange={(value) => setTab(value as TabValue)}>
       <div className="erp-mobile-scroll-tabs mb-4 pb-1">
         <TabsList
-          className="w-max min-w-full border-border/60 bg-muted/35 p-1.5 shadow-sm sm:min-w-0 sm:w-fit"
+          className="w-max min-w-full sm:min-w-0 sm:w-fit"
           aria-label="Worker sections"
           data-testid="tabs-workers-section"
         >
           {visibleOptions.map(({ value, label, icon: ItemIcon }) => (
-            <TabsTrigger
-              key={value}
-              value={value}
-              className="rounded-full px-4 data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-blue-500 data-[state=active]:text-white data-[state=active]:shadow-md"
-              data-testid={`tab-workers-${value}`}
-            >
+            <TabsTrigger key={value} value={value} data-testid={`tab-workers-${value}`}>
               <ItemIcon className="h-4 w-4 shrink-0" />
               {label}
             </TabsTrigger>

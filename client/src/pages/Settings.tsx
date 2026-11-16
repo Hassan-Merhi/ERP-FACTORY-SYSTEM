@@ -1,4 +1,5 @@
 import type { ClientErrorLike } from "@/lib/clientError";
+import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import { PageHeader } from "@/components/PageHeader";
 import { useState } from "react";
 import { useLocation } from "wouter";
@@ -87,7 +88,6 @@ export default function Settings() {
   const { dateFormat, setDateFormat, isPending: isDateFormatPending } = useDateFormat();
   const appMode = useAppMode();
   const modeApiRequest = getApiRequest(appMode);
-  const [activeSection, setActiveSection] = useState("users-permissions");
   const [userToDelete, setUserToDelete] = useState<SettingsUserToDelete | null>(null);
   const { prefs, updatePref, isPending: prefsPending } = useUserPreferences();
 
@@ -197,6 +197,25 @@ export default function Settings() {
       (item) => (!item.devOnly || currentUser?.role === "Developer") && (!item.adminOnly || canManageSessions)
     );
   const canManageTrackingDefaults = ["Admin", "Owner", "Developer"].includes(currentUser?.role ?? "");
+
+  // The open section lives in ?section= so a reload or shared link reopens it.
+  // Until the signed-in user loads, role-gated sections are kept, not stripped.
+  const knownSectionKeys = sidebarGroups.flatMap((group) =>
+    (group.items as SettingsSidebarItem[]).filter((item) => !item.href).map((item) => item.key)
+  );
+  const allowedSectionKeys = sidebarGroups.flatMap((group) =>
+    allowedItems(group.items)
+      .filter((item) => !item.href)
+      .map((item) => item.key)
+  );
+  const [activeSection, setActiveSection] = useHubQueryState<string>({
+    key: "section",
+    allowedValues: currentUser ? allowedSectionKeys : knownSectionKeys,
+    knownValues: knownSectionKeys,
+    defaultValue: "users-permissions",
+    clearKeys: ["tab"],
+    omitDefault: true,
+  });
 
   const openSection = (key: string) => {
     const item = sidebarGroups.flatMap((group) => allowedItems(group.items)).find((entry) => entry.key === key);
