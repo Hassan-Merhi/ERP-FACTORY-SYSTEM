@@ -5,6 +5,9 @@ on:
     paths:
       - .github/workflows/backend-phase2-apply.yml
   workflow_dispatch:
+concurrency:
+  group: backend-phase2-apply-refactor
+  cancel-in-progress: true
 jobs:
   refactor:
     runs-on: ubuntu-latest
@@ -14,6 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: refactor/phase-wave-semantic-names
           persist-credentials: true
       - uses: actions/setup-node@v4
         with:
