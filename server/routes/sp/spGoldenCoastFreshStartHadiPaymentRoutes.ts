@@ -37,11 +37,11 @@ import {
   type GoldenCoastFreshStartHadiPaymentAccounts,
   type GoldenCoastFreshStartHadiPaymentInput,
 } from "../../services/accounting/goldenCoastFreshStartHadiPayment";
-import { GOLDEN_COAST_PHASE7_SOURCE_TYPE } from "../../services/accounting/goldenCoastPhase7HadiTransfer";
+import { GOLDEN_COAST_PHASE7_SOURCE_TYPE } from "../../services/accounting/goldenCoastHadiTransfer";
 import { getCompanyRequestRuntimeContext } from "../../services/security/companyRequestRuntimeContext";
 import { assertTransactionCompanyScope } from "../../services/security/transactionCompanyScope";
 import { getCurrentExchangeRate } from "../helpers/exchangeRateHelpers";
-import { isGoldenCoastCompany } from "./spGoldenCoastPhase4CutoverFifoRoutes";
+import { isGoldenCoastCompany } from "./spGoldenCoastCutoverFifoRoutes";
 import { requireSpCompany } from "./spHelpers";
 
 const postingDependencies = createDatabasePostingDependencies();

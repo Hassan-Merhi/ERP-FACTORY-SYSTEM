@@ -12,7 +12,7 @@ vi.mock("../server/edge/edgeRuntimePolicy.mjs", () => ({
   readFactoryEdgeConfiguration: () => env,
 }));
 
-import { capturePhase9PressingTx, ensurePhase9PressingOutboxSchema } from "../server/edge/phase9PressingOutbox";
+import { capturePhase9PressingTx, ensurePhase9PressingOutboxSchema } from "../server/edge/pressingOutbox";
 
 const databaseUrl = process.env.PHASE8_TEST_DATABASE_URL;
 const base = {

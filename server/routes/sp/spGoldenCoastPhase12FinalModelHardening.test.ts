@@ -1,19 +1,19 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const phase6RouteSource = readFileSync(new URL("./spGoldenCoastPhase6PosSaleRoutes.ts", import.meta.url), "utf8");
-const phase6AutoHadiSource = readFileSync(new URL("./goldenCoastPhase6AutoHadi.ts", import.meta.url), "utf8");
-const phase7RouteSource = readFileSync(new URL("./spGoldenCoastPhase7HadiTransferRoutes.ts", import.meta.url), "utf8");
+const phase6RouteSource = readFileSync(new URL("./spGoldenCoastPosSaleDeductionsRoutes.ts", import.meta.url), "utf8");
+const phase6AutoHadiSource = readFileSync(new URL("./goldenCoastAutoHadi.ts", import.meta.url), "utf8");
+const phase7RouteSource = readFileSync(new URL("./spGoldenCoastHadiTransferRoutes.ts", import.meta.url), "utf8");
 const phase7ServiceSource = readFileSync(
-  new URL("../../services/accounting/goldenCoastPhase7HadiTransfer.ts", import.meta.url),
+  new URL("../../services/accounting/goldenCoastHadiTransfer.ts", import.meta.url),
   "utf8"
 );
 const phase10RouteSource = readFileSync(
-  new URL("./spGoldenCoastPhase10SalesCashSettlementRoutes.ts", import.meta.url),
+  new URL("./spGoldenCoastSalesCashSettlementRoutes.ts", import.meta.url),
   "utf8"
 );
 const phase11RouteSource = readFileSync(
-  new URL("./spGoldenCoastPhase11MonthlyCloseRoutes.ts", import.meta.url),
+  new URL("./spGoldenCoastMonthlyCloseRoutes.ts", import.meta.url),
   "utf8"
 );
 const legacySalesGuardSource = readFileSync(new URL("./spGoldenCoastLegacySalesGuard.ts", import.meta.url), "utf8");

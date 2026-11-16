@@ -106,7 +106,7 @@ staging factory server.
    in, open the cloud epoch N+2 with the cloud still fenced for users, then run
    `node scripts/edge/relay-event-outbox.mjs` **twice** and save both outputs.
    The second run must send nothing new.
-10. **Apply:** on the cloud, `node --import tsx server/edge/phase9OperatorApply.ts apply <stream>`
+10. **Apply:** on the cloud, `node --import tsx server/edge/eventStreamOperatorApply.ts apply <stream>`
     for each stream the batch uses. It stops at each conflict.
 11. **Decide conflicts** on the cloud operator console (Offline panel, **Held
     offline records**) as `drill_admin`, following the batch script: approve

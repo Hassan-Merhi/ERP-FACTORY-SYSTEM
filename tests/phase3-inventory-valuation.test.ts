@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyPhase3InventoryMovement } from "../server/services/accounting/phase3InventoryValuation";
+import { applyPhase3InventoryMovement } from "../server/services/accounting/inventoryValuation";
 
 function state(quantity: string, averageRate: string, totalValue: string) {
   return {

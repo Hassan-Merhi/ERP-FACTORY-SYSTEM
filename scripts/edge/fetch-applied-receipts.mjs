@@ -13,7 +13,7 @@ import {
   PHASE8_RECEIPT_QUERY_PATH,
   PHASE8_RECEIPT_PROTOCOL,
   PHASE8_RECEIPT_QUERY_PROTOCOL,
-} from "../../server/edge/phase8AppliedReceipts.mjs";
+} from "../../server/edge/appliedReceipts.mjs";
 
 const POS = /^[1-9][0-9]{0,18}$/;
 const SHA = /^[0-9a-f]{64}$/;

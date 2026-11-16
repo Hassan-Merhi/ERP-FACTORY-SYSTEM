@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const routeSource = readFileSync(new URL("./spGoldenCoastPhase4CutoverFifoRoutes.ts", import.meta.url), "utf8");
+const routeSource = readFileSync(new URL("./spGoldenCoastCutoverFifoRoutes.ts", import.meta.url), "utf8");
 const spIndexSource = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
 const accessControlSource = readFileSync(new URL("./spAccessControl.ts", import.meta.url), "utf8");
 const legacyRetirementSource = readFileSync(

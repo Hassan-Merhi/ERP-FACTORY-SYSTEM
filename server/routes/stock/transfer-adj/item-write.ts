@@ -5,8 +5,8 @@
  * first-match, so that order is behaviour.
  */
 import { offlineEdgeText } from "../../../i18n/offlineEdgeMessages";
-import { isPhase9LanPrimary } from "../../../edge/phase9PosOutbox";
-import { capturePhase9StockItemDeleteTx } from "../../../edge/phase9StockOutbox";
+import { isPhase9LanPrimary } from "../../../edge/posOutbox";
+import { capturePhase9StockItemDeleteTx } from "../../../edge/stockOutbox";
 import { stockItemDeleteEvidence } from "../../../services/inventory/stockItemLifecycleCapture";
 import type { Express } from "express";
 import { getErrorMessage } from "../../../lib/httpHandlers";

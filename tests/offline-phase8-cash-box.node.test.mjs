@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { phase8CashBoxRefusal } from "../server/edge/phase8CashBoxPolicy.mjs";
-import { supportsPhase8LanVoucherCapture } from "../server/edge/phase8CapturePolicy.mjs";
+import { phase8CashBoxRefusal } from "../server/edge/cashBoxPolicy.mjs";
+import { supportsPhase8LanVoucherCapture } from "../server/edge/capturePolicy.mjs";
 
 // 1 = factory cash box, 2 = fuel expense, 3 = scrap income, 4 = bank,
 // 5 = supplier payable, 6 = second cash box.

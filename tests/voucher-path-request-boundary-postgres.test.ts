@@ -8,7 +8,7 @@ import {
   completeVoucherPathRequest,
   ensureVoucherPathGuardTable,
   voucherPathRequestFingerprint,
-} from "../server/services/accounting/voucherPathPhase5to6Boundary";
+} from "../server/services/accounting/voucherPathTransitionBoundary";
 
 const describePostgres = process.env.DATABASE_URL ? describe : describe.skip;
 const companyA = 1_900_000_001;

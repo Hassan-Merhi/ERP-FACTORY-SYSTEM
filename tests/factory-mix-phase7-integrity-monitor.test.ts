@@ -79,7 +79,7 @@ import {
   persistMixMonitorSnapshot,
   getMixMonitorStatus,
   type MixMonitorFinding,
-} from "../server/services/factory/mixPhase7IntegrityMonitor";
+} from "../server/services/factory/mixIntegrityMonitor";
 
 const summary = (companyId = 12) => ({
   companyId,

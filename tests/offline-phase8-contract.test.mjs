@@ -1,12 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { supportsPhase8LanVoucherCapture } from "../server/edge/phase8CapturePolicy.mjs";
-import { validatePhase8OperatorApproval } from "../server/edge/phase8ApplyStore.mjs";
+import { supportsPhase8LanVoucherCapture } from "../server/edge/capturePolicy.mjs";
+import { validatePhase8OperatorApproval } from "../server/edge/applyStore.mjs";
 import {
   validateAppliedReceiptQuery,
   PHASE8_RECEIPT_QUERY_PROTOCOL,
   PHASE8_RECEIPT_PROTOCOL,
-} from "../server/edge/phase8AppliedReceipts.mjs";
+} from "../server/edge/appliedReceipts.mjs";
 import { verifyAppliedReceiptResponse } from "../scripts/edge/fetch-applied-receipts.mjs";
 
 const siteId = "027d7472-4a29-4bb3-a4aa-5b30e4ad631f";

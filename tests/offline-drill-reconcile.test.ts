@@ -18,9 +18,9 @@ vi.mock("../server/edge/edgeRuntimePolicy.mjs", async (importOriginal) => ({
 }));
 
 import { pool } from "../server/db";
-import { ensurePhase9StockOutboxSchema } from "../server/edge/phase9StockOutbox";
-import { ensurePhase9StockItemMapSchema } from "../server/edge/phase9StockItemMap.mjs";
-import { ensurePhase9CloudEventSchema } from "../server/edge/phase9CloudEventStore.mjs";
+import { ensurePhase9StockOutboxSchema } from "../server/edge/stockOutbox";
+import { ensurePhase9StockItemMapSchema } from "../server/edge/stockItemMap.mjs";
+import { ensurePhase9CloudEventSchema } from "../server/edge/cloudEventStore.mjs";
 import {
   assertStagingUrl,
   compareBalances,

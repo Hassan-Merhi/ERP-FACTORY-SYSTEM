@@ -56,7 +56,7 @@ import {
 import type { VoucherAuditState } from "../../../routes/helpers/voucherAuditTrail";
 import { rebalanceVoucherRoundingTx } from "../../accounting/engineRounding";
 import { PosZmwRateError, assertZmwImportPrices } from "../posZmwRatePolicy";
-import { isPhase9LanPrimary } from "../../../edge/phase9PosOutbox";
+import { isPhase9LanPrimary } from "../../../edge/posOutbox";
 import { capturePosSaleEditOfflineTx } from "./posSaleEditOfflineCapture";
 
 function err(result: HandlerErrorResult): { status: number; body: PosSaleUpdateResponseBody } {

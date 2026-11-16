@@ -10,7 +10,7 @@ import {
   planGoldenCoastPhase8Funding,
   planGoldenCoastPhase8Offload,
   type GoldenCoastPhase8FundedContainerState,
-} from "./goldenCoastPhase8ContainerOffload";
+} from "./goldenCoastContainerOffload";
 
 const accounts = {
   stockOtwAccountId: 10,

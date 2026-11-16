@@ -12,7 +12,7 @@ import { requireAuth, requireRole } from "../../auth";
 import { db } from "../../db";
 import { getErrorMessage, errorStatus } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
-import { isPhase9LanPrimary } from "../../edge/phase9PosOutbox";
+import { isPhase9LanPrimary } from "../../edge/posOutbox";
 import { offlineEdgeText } from "../../i18n/offlineEdgeMessages";
 import { intercompanyTransferOfVoucher } from "../../services/accounting/intercompanyTransferLegGuard";
 import { voucherMutationBlockReason } from "../../lib/migratedVoucherGuard";

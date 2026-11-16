@@ -15,7 +15,7 @@
 import { Client } from "pg";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
-import { summarizeLanEvidence } from "../../server/edge/phase10Handover.mjs";
+import { summarizeLanEvidence } from "../../server/edge/handover.mjs";
 
 export { summarizeLanEvidence };
 

@@ -6,7 +6,7 @@ import {
   goldenCoastPhase15IdempotencyKey,
   goldenCoastPhase15SalesPayableDigest,
   type GoldenCoastPhase15SalesPayableInput,
-} from "./goldenCoastPhase15SalesPayable";
+} from "./goldenCoastSalesPayable";
 
 function sale(overrides: Partial<GoldenCoastPhase15SalesPayableInput> = {}): GoldenCoastPhase15SalesPayableInput {
   return {

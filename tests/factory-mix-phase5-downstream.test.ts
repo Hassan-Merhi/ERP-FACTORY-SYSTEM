@@ -86,13 +86,13 @@ import {
   getPhase5MixDownstreamReconciliation,
   phase5MixDownstreamCsv,
   summarizePhase5MixDownstream,
-} from "../server/services/factory/mixPhase5DownstreamAudit";
+} from "../server/services/factory/mixDownstreamAudit";
 import {
   Phase5ReplayDownstreamBlockedError,
   assertPhase5ReplayScopeSafe,
   evaluatePhase5ReplaySafety,
   inspectPhase5ReplayScopeSafety,
-} from "../server/services/factory/historical-replay/downstreamGatePhase5";
+} from "../server/services/factory/historical-replay/downstreamGate";
 
 const batch = (x: Record<string, unknown> = {}) => ({
   id: 231,

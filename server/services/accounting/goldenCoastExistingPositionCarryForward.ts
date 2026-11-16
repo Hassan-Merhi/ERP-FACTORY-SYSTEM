@@ -1,5 +1,5 @@
 import Decimal from "decimal.js";
-import { GOLDEN_COAST_CUTOVER_DATE, GOLDEN_COAST_CUTOVER_FIFO_SOURCE } from "./goldenCoastPhase4CutoverFifo";
+import { GOLDEN_COAST_CUTOVER_DATE, GOLDEN_COAST_CUTOVER_FIFO_SOURCE } from "./goldenCoastCutoverFifo";
 import { goldenCoastExistingPositionCarryForwardVoucherNumber } from "./goldenCoastCutoverMarkers";
 
 export interface ExistingPositionInventoryRow {

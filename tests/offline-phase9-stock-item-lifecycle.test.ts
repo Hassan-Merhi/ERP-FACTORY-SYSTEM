@@ -24,27 +24,27 @@ vi.mock("../server/edge/edgeRuntimePolicy.mjs", async (importOriginal) => ({
 }));
 
 import { pool } from "../server/db";
-import { ensurePhase9StockOutboxSchema } from "../server/edge/phase9StockOutbox";
+import { ensurePhase9StockOutboxSchema } from "../server/edge/stockOutbox";
 import { hashEvidence } from "../server/edge/edgeSyncStageProtocol.mjs";
-import { validatePhase9Event } from "../server/edge/phase9EventProtocol.mjs";
+import { validatePhase9Event } from "../server/edge/eventProtocol.mjs";
 import {
   ensurePhase9CloudEventSchema,
   Phase9EventConflict,
   stagePhase9Events,
-} from "../server/edge/phase9CloudEventStore.mjs";
-import { EDGE_EVENT_STAGE_PROTOCOL } from "../server/edge/phase9EventProtocol.mjs";
+} from "../server/edge/cloudEventStore.mjs";
+import { EDGE_EVENT_STAGE_PROTOCOL } from "../server/edge/eventProtocol.mjs";
 import {
   PHASE9_LAN_ITEM_ID_BASE,
   phase9StockItemCreateEnvelope,
   phase9StockItemDeleteEnvelope,
-} from "../server/edge/phase9StockItemLifecycleEnvelope.mjs";
-import { ensurePhase9StockItemMapSchema, translatePhase9LanStockItems } from "../server/edge/phase9StockItemMap.mjs";
+} from "../server/edge/stockItemLifecycleEnvelope.mjs";
+import { ensurePhase9StockItemMapSchema, translatePhase9LanStockItems } from "../server/edge/stockItemMap.mjs";
 import {
   phase9StockItemCreateApplyHandler,
   phase9StockItemDeleteApplyHandler,
   type Phase9StockItemCreateEvent,
   type Phase9StockItemDeleteEvent,
-} from "../server/edge/phase9StockItemLifecycleApply";
+} from "../server/edge/stockItemLifecycleApply";
 import {
   createTenantDatabaseScope,
   runWithDatabaseScopeRuntimeContext,

@@ -5,7 +5,7 @@ import {
   exactInventoryValue,
   latestCutoverBlocksCompany,
   numbersDiffer,
-} from "../spMigrationPhase4Policy";
+} from "../spMigrationPolicy";
 
 describe("Supplier Partner Phase 4 policy", () => {
   it("classifies blockers as FAIL", () => {

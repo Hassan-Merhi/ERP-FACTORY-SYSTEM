@@ -7,7 +7,7 @@ import {
   buildLocationSaleVoucher,
   calculateSaleEconomics,
   type PostingAccount,
-} from "./partnerAccountingPhase1";
+} from "./partnerAccounting";
 
 // Phase 1 acceptance examples are intentionally kept as explicit regression cases.
 const ledger = (id: number, name: string): PostingAccount => ({ kind: "ledger", id, name });

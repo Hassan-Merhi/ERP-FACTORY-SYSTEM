@@ -8,7 +8,7 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const failures = [];
 
 const applicationRoutes = read("server/routes/applicationRoutes.ts");
-const phase4Routes = read("server/routes/renderPhase4LazyRoutes.ts");
+const phase4Routes = read("server/routes/renderLazyRoutes.ts");
 
 function assert(condition, message) {
   if (!condition) failures.push(message);
@@ -65,7 +65,7 @@ function assertRegistrationOrder(before, target, after, label) {
 }
 
 assert(
-  applicationRoutes.includes('import { phase4LazyRoutes } from "./renderPhase4LazyRoutes";'),
+  applicationRoutes.includes('import { phase4LazyRoutes } from "./renderLazyRoutes";'),
   "applicationRoutes.ts must use the Phase 4 lazy-route boundary"
 );
 

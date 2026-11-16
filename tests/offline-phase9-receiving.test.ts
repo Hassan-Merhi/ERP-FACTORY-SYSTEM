@@ -22,12 +22,12 @@ import {
   offlineReceivingCapture,
   offlineReceivingInputs,
 } from "../server/routes/containers/containerOffloadOfflinePolicy";
-import { ensurePhase9ReceivingOutboxSchema } from "../server/edge/phase9ReceivingOutbox";
+import { ensurePhase9ReceivingOutboxSchema } from "../server/edge/receivingOutbox";
 import { hashEvidence } from "../server/edge/edgeSyncStageProtocol.mjs";
-import { validatePhase9Event } from "../server/edge/phase9EventProtocol.mjs";
-import { Phase9EventConflict } from "../server/edge/phase9CloudEventStore.mjs";
-import { phase9ReceivingLineDigest } from "../server/edge/phase9ReceivingEnvelope.mjs";
-import { phase9ReceivingApplyHandler, type Phase9ReceivingEvent } from "../server/edge/phase9ReceivingApply";
+import { validatePhase9Event } from "../server/edge/eventProtocol.mjs";
+import { Phase9EventConflict } from "../server/edge/cloudEventStore.mjs";
+import { phase9ReceivingLineDigest } from "../server/edge/receivingEnvelope.mjs";
+import { phase9ReceivingApplyHandler, type Phase9ReceivingEvent } from "../server/edge/receivingApply";
 import {
   createTenantDatabaseScope,
   runWithDatabaseScopeRuntimeContext,

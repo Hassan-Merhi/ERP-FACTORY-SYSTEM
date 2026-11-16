@@ -11,8 +11,8 @@ import {
   validatePhase9Event,
   validatePhase9EventStageEnvelope,
   validatePhase9ReceiptQuery,
-} from "../server/edge/phase9EventProtocol.mjs";
-import { phase9PressingEnvelope } from "../server/edge/phase9PressingEnvelope.mjs";
+} from "../server/edge/eventProtocol.mjs";
+import { phase9PressingEnvelope } from "../server/edge/pressingEnvelope.mjs";
 import {
   eventEnvelope,
   verifyAppliedEventReceipts,

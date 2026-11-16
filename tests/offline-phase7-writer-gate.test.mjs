@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { hasVerifiedPhase7WriterAuthority, isVerifiedPhase7WriterRow } from "../server/edge/phase7WriterGate.mjs";
+import { hasVerifiedPhase7WriterAuthority, isVerifiedPhase7WriterRow } from "../server/edge/writerGate.mjs";
 import { readFactoryEdgeConfiguration } from "../server/edge/edgeRuntimePolicy.mjs";
 
 const siteId = "027d7472-4a29-4bb3-a4aa-5b30e4ad631f";

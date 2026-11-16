@@ -5,7 +5,7 @@ import { db } from "../../db";
 import { releaseDebtEnglish } from "../../i18n/finalCloseoutEnglish";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
-import { isGoldenCoastCompany } from "./spGoldenCoastPhase4CutoverFifoRoutes";
+import { isGoldenCoastCompany } from "./spGoldenCoastCutoverFifoRoutes";
 import { requireSpCompany } from "./spHelpers";
 
 /**

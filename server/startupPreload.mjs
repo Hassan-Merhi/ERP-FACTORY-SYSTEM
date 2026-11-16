@@ -37,7 +37,7 @@ if (
 }
 // Indexes and audit tables used by hot request paths.
 await import("./customerOrderBaleScanAuditBridge.mjs");
-await import("./wave3SalesHotpathIndexBridge.mjs");
+await import("./salesHotpathIndexRepair.mjs");
 // Bounds outbound FX-rate fetches so a slow provider cannot stall requests.
 await import("./fxFetchTimeoutBridge.mjs");
 // Columns the factory container routes read through full-row selects.

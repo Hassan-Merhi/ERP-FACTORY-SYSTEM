@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { Client } from "pg";
 import { randomUUID } from "node:crypto";
-import { applyStagedVoucherOnce, ensurePhase8ApplySchema } from "../server/edge/phase8ApplyStore.mjs";
+import { applyStagedVoucherOnce, ensurePhase8ApplySchema } from "../server/edge/applyStore.mjs";
 import { hashEvidence } from "../server/edge/edgeSyncStageProtocol.mjs";
 
 const url = process.env.PHASE8_TEST_DATABASE_URL;

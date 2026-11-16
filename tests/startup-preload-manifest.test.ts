@@ -35,7 +35,7 @@ describe("startup preload manifest", () => {
     expect(awaitedImports("server/startupPreload.mjs")).toEqual([
       "deploymentPreflight.mjs",
       "customerOrderBaleScanAuditBridge.mjs",
-      "wave3SalesHotpathIndexBridge.mjs",
+      "salesHotpathIndexRepair.mjs",
       "fxFetchTimeoutBridge.mjs",
       "factoryContainerSchemaBridge.mjs",
       "schemaPreload.mjs",

@@ -3,7 +3,7 @@ import { sql } from "drizzle-orm";
 import { db } from "../../db";
 import { logger } from "../../lib/logger";
 import { requireAuth, requireRole } from "../../auth";
-import { validateMigrationPair, pn } from "./spMigrationPhase2Common";
+import { validateMigrationPair, pn } from "./spMigrationCommon";
 import { ensureCutoverSchema, installCutoverWriteGuard } from "./spMigrationCutoverState";
 import { firstRow } from "../../lib/queryResult";
 

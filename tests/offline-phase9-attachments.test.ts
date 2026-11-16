@@ -21,8 +21,8 @@ vi.mock("../server/edge/edgeRuntimePolicy.mjs", async (importOriginal) => ({
 }));
 
 import { pool, type DbTransaction } from "../server/db";
-import { capturePhase9AttachmentTx, ensurePhase9AttachmentOutboxSchema } from "../server/edge/phase9AttachmentOutbox";
-import { ensurePhase9PressingOutboxSchema } from "../server/edge/phase9PressingOutbox";
+import { capturePhase9AttachmentTx, ensurePhase9AttachmentOutboxSchema } from "../server/edge/attachmentOutbox";
+import { ensurePhase9PressingOutboxSchema } from "../server/edge/pressingOutbox";
 import {
   ensurePhase9CloudEventSchema,
   getPhase9AppliedReceipts,
@@ -31,11 +31,11 @@ import {
   Phase9StageConflict,
   stagePhase9AttachmentFile,
   stagePhase9Events,
-} from "../server/edge/phase9CloudEventStore.mjs";
-import { EDGE_EVENT_STAGE_PATH, EDGE_FILE_STAGE_PATH } from "../server/edge/phase9EventProtocol.mjs";
-import { phase9AttachmentApplyHandler, type Phase9AttachmentEvent } from "../server/edge/phase9AttachmentApply";
+} from "../server/edge/cloudEventStore.mjs";
+import { EDGE_EVENT_STAGE_PATH, EDGE_FILE_STAGE_PATH } from "../server/edge/eventProtocol.mjs";
+import { phase9AttachmentApplyHandler, type Phase9AttachmentEvent } from "../server/edge/attachmentApply";
 import { relayAttachmentFilesOnce, relayEventStreamOnce } from "../scripts/edge/relay-event-outbox.mjs";
-import { capturePhase9AttachmentUpdateTx, phase9AttachmentFileRefTx } from "../server/edge/phase9AttachmentOutbox";
+import { capturePhase9AttachmentUpdateTx, phase9AttachmentFileRefTx } from "../server/edge/attachmentOutbox";
 import {
   createTenantDatabaseScope,
   runWithDatabaseScopeRuntimeContext,

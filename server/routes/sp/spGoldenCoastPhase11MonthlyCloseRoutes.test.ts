@@ -1,11 +1,11 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const routeSource = readFileSync(new URL("./spGoldenCoastPhase11MonthlyCloseRoutes.ts", import.meta.url), "utf8");
+const routeSource = readFileSync(new URL("./spGoldenCoastMonthlyCloseRoutes.ts", import.meta.url), "utf8");
 const indexSource = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
 const accessSource = readFileSync(new URL("./spAccessControl.ts", import.meta.url), "utf8");
 const serviceSource = readFileSync(
-  new URL("../../services/accounting/goldenCoastPhase11MonthlyClose.ts", import.meta.url),
+  new URL("../../services/accounting/goldenCoastMonthlyClose.ts", import.meta.url),
   "utf8"
 );
 

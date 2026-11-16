@@ -1,12 +1,12 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const routeSource = readFileSync(new URL("./spGoldenCoastPhase6PosSaleRoutes.ts", import.meta.url), "utf8");
-const autoHadiSource = readFileSync(new URL("./goldenCoastPhase6AutoHadi.ts", import.meta.url), "utf8");
+const routeSource = readFileSync(new URL("./spGoldenCoastPosSaleDeductionsRoutes.ts", import.meta.url), "utf8");
+const autoHadiSource = readFileSync(new URL("./goldenCoastAutoHadi.ts", import.meta.url), "utf8");
 const spIndexSource = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
-const phase5RouteSource = readFileSync(new URL("./spGoldenCoastPhase5PosSaleRoutes.ts", import.meta.url), "utf8");
+const phase5RouteSource = readFileSync(new URL("./spGoldenCoastPosSalePostingRoutes.ts", import.meta.url), "utf8");
 const phase6ServiceSource = readFileSync(
-  new URL("../../services/accounting/goldenCoastPhase6SpecialLocationDeduction.ts", import.meta.url),
+  new URL("../../services/accounting/goldenCoastSpecialLocationDeduction.ts", import.meta.url),
   "utf8"
 );
 
@@ -86,6 +86,6 @@ describe("Golden Coast Phase 6 POS sale route", () => {
 
   it("keeps old Phase 5 code present for history while making it unreachable", () => {
     expect(phase5RouteSource).toContain("registerSpGoldenCoastPhase5PosSaleRoutes");
-    expect(spIndexSource).not.toContain('from "./spGoldenCoastPhase5PosSaleRoutes"');
+    expect(spIndexSource).not.toContain('from "./spGoldenCoastPosSalePostingRoutes"');
   });
 });

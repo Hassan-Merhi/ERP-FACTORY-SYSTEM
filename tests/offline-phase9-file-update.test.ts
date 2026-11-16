@@ -24,16 +24,16 @@ vi.mock("../server/edge/edgeRuntimePolicy.mjs", async (importOriginal) => ({
 }));
 
 import { pool } from "../server/db";
-import { ensurePhase9AttachmentOutboxSchema } from "../server/edge/phase9AttachmentOutbox";
+import { ensurePhase9AttachmentOutboxSchema } from "../server/edge/attachmentOutbox";
 import { hashEvidence } from "../server/edge/edgeSyncStageProtocol.mjs";
-import { phase9OverridableConflicts, validatePhase9Event } from "../server/edge/phase9EventProtocol.mjs";
-import { ensurePhase9CloudEventSchema, Phase9EventConflict } from "../server/edge/phase9CloudEventStore.mjs";
+import { phase9OverridableConflicts, validatePhase9Event } from "../server/edge/eventProtocol.mjs";
+import { ensurePhase9CloudEventSchema, Phase9EventConflict } from "../server/edge/cloudEventStore.mjs";
 import {
   PHASE9_ATTACHMENT_FILE_CHANGED,
   phase9AttachmentUpdateEnvelope,
   type Phase9AttachmentPlacement,
-} from "../server/edge/phase9AttachmentEnvelope.mjs";
-import { phase9AttachmentUpdateApplyHandler } from "../server/edge/phase9AttachmentUpdateApply";
+} from "../server/edge/attachmentEnvelope.mjs";
+import { phase9AttachmentUpdateApplyHandler } from "../server/edge/attachmentUpdateApply";
 import {
   createTenantDatabaseScope,
   runWithDatabaseScopeRuntimeContext,

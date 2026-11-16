@@ -14,13 +14,13 @@ import { requireAuth } from "../../../auth";
 import { storedFiles, fileFolders } from "@shared/schema";
 import { eq, and, desc, asc } from "drizzle-orm";
 import { createHash, randomUUID } from "node:crypto";
-import { isPhase9LanPrimary } from "../../../edge/phase9PosOutbox";
+import { isPhase9LanPrimary } from "../../../edge/posOutbox";
 import {
   capturePhase9AttachmentTx,
   capturePhase9AttachmentUpdateTx,
   phase9AttachmentFileRefTx,
-} from "../../../edge/phase9AttachmentOutbox";
-import { PHASE9_ATTACHMENT_MAX_BYTES } from "../../../edge/phase9AttachmentEnvelope.mjs";
+} from "../../../edge/attachmentOutbox";
+import { PHASE9_ATTACHMENT_MAX_BYTES } from "../../../edge/attachmentEnvelope.mjs";
 
 export function registerFileRoutes(app: Express) {
   app.get("/api/file-folders", requireAuth, async (req: import("express").Request, res) => {

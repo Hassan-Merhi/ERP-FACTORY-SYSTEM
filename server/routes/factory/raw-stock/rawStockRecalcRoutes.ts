@@ -1,9 +1,9 @@
 import type { Express } from "express";
 import { pool } from "../../../db";
 import { registerHistoricalReplayFullCompanyScopeRoutes } from "./historicalReplayFullCompanyScopeRoutes";
-import { registerHistoricalReplayPhase6GuardRoutes } from "./historicalReplayPhase6GuardRoutes";
-import { registerHistoricalReplayPhase8ReadinessRoutes } from "./historicalReplayPhase8ReadinessRoutes";
-import { registerHistoricalReplayPhase8VerificationRoutes } from "./historicalReplayPhase8VerificationRoutes";
+import { registerHistoricalReplayPhase6GuardRoutes } from "./historicalReplayGuardRoutes";
+import { registerHistoricalReplayPhase8ReadinessRoutes } from "./historicalReplayReadinessRoutes";
+import { registerHistoricalReplayPhase8VerificationRoutes } from "./historicalReplayVerificationRoutes";
 import { registerHistoricalReplayRoutesV4 } from "./historicalReplayRoutesV4";
 import { registerRawStockRecalcRoutes as registerPreservedRawStockRecalcRoutes } from "./recalc";
 

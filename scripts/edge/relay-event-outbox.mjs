@@ -38,8 +38,8 @@ import {
   EDGE_EVENT_STAGE_RECEIPT_PROTOCOL,
   EVENT_APPLY_OUTCOMES,
   validatePhase9Event,
-} from "../../server/edge/phase9EventProtocol.mjs";
-import { readPhase10SyncControl } from "../../server/edge/phase10SyncControl.mjs";
+} from "../../server/edge/eventProtocol.mjs";
+import { readPhase10SyncControl } from "../../server/edge/syncControl.mjs";
 import { readSenderConfiguration } from "./send-voucher-outbox.mjs";
 
 /** Each stream names its immutable LAN outbox and local reference column. */

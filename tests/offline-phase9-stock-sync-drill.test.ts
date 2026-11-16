@@ -26,9 +26,9 @@ vi.mock("../server/edge/edgeRuntimePolicy.mjs", async (importOriginal) => ({
   readFactoryEdgeConfiguration: () => ({ mode: "lan", primary: true, siteId: SITE }),
 }));
 
-import { capturePhase9StockAdjustTx, ensurePhase9StockOutboxSchema } from "../server/edge/phase9StockOutbox";
-import { ensurePhase9PressingOutboxSchema } from "../server/edge/phase9PressingOutbox";
-import { ensurePhase8ApplySchema } from "../server/edge/phase8ApplyStore.mjs";
+import { capturePhase9StockAdjustTx, ensurePhase9StockOutboxSchema } from "../server/edge/stockOutbox";
+import { ensurePhase9PressingOutboxSchema } from "../server/edge/pressingOutbox";
+import { ensurePhase8ApplySchema } from "../server/edge/applyStore.mjs";
 import {
   applyPendingStagedEvents,
   ensurePhase9CloudEventSchema,
@@ -37,11 +37,11 @@ import {
   recordPhase9ConflictDecision,
   stagePhase9Events,
   summarizePhase9CloudStreams,
-} from "../server/edge/phase9CloudEventStore.mjs";
-import { EDGE_EVENT_STAGE_PATH } from "../server/edge/phase9EventProtocol.mjs";
+} from "../server/edge/cloudEventStore.mjs";
+import { EDGE_EVENT_STAGE_PATH } from "../server/edge/eventProtocol.mjs";
 import { EVENT_STAGE_SIGNATURE_DOMAIN, verifyStageSignature } from "../server/edge/edgeSyncStageProtocol.mjs";
-import { PHASE9_STOCK_ADJUST_KIND, PHASE9_STOCK_NEGATIVE_CONFLICT } from "../server/edge/phase9StockEnvelope.mjs";
-import { assertPhase9Reviewer } from "../server/edge/phase9OperatorApply";
+import { PHASE9_STOCK_ADJUST_KIND, PHASE9_STOCK_NEGATIVE_CONFLICT } from "../server/edge/stockEnvelope.mjs";
+import { assertPhase9Reviewer } from "../server/edge/eventStreamOperatorApply";
 import { summarizeLanEvidence } from "../scripts/edge/factory-handover-preflight.mjs";
 import { relayEventStreamOnce } from "../scripts/edge/relay-event-outbox.mjs";
 

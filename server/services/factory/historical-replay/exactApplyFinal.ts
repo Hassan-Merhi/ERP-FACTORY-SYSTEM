@@ -16,7 +16,7 @@ import {
   replayBaleIdsForScope,
   type ExactReplaySnapshot,
 } from "./exactSnapshot";
-import { assertPhase5ReplayScopeSafe } from "./downstreamGatePhase5";
+import { assertPhase5ReplayScopeSafe } from "./downstreamGate";
 import { assertExactReplayNonCostInvariants, assertPersistedReplaySourceTotals } from "./exactInvariants";
 
 function sortNumbers(values: number[]): number[] {

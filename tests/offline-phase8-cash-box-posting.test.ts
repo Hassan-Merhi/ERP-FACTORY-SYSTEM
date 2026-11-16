@@ -9,7 +9,7 @@ import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 
 import { pool } from "../server/db";
-import { postApprovedPhase8Journal } from "../server/edge/phase8VoucherPosting";
+import { postApprovedPhase8Journal } from "../server/edge/voucherPosting";
 import {
   createTenantDatabaseScope,
   runWithDatabaseScopeRuntimeContext,

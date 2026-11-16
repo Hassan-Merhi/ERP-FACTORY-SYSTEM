@@ -71,7 +71,7 @@ vi.mock("../server/edge/edgeSyncReceiver", () => ({
 vi.mock("../server/edge/edgeDatabaseProof.mjs", () => ({
   hasFactoryEdgeData: async () => true,
 }));
-vi.mock("../server/edge/phase7WriterGate.mjs", () => ({
+vi.mock("../server/edge/writerGate.mjs", () => ({
   hasVerifiedPhase7WriterAuthority: async () => false,
 }));
 

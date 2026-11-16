@@ -11,8 +11,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
 import request from "supertest";
 import { pool } from "../server/db";
-import { ensurePhase9CloudEventSchema } from "../server/edge/phase9CloudEventStore.mjs";
-import { ensurePhase9StockItemMapSchema } from "../server/edge/phase9StockItemMap.mjs";
+import { ensurePhase9CloudEventSchema } from "../server/edge/cloudEventStore.mjs";
+import { ensurePhase9StockItemMapSchema } from "../server/edge/stockItemMap.mjs";
 import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
 
 const PREFIX = "brwsync";

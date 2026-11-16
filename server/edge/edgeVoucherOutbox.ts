@@ -11,7 +11,7 @@ import { readFactoryEdgeConfiguration } from "./edgeRuntimePolicy.mjs";
 import { EdgeRefusal } from "./edgeRefusal";
 import { resultRows } from "../lib/queryResult";
 import { PostingValidationError } from "../services/accounting/postingValidationError";
-import { PHASE8_CASH_BOX_VOUCHER_TYPES, phase8CashBoxRefusal } from "./phase8CashBoxPolicy.mjs";
+import { PHASE8_CASH_BOX_VOUCHER_TYPES, phase8CashBoxRefusal } from "./cashBoxPolicy.mjs";
 
 export async function ensureEdgeVoucherOutboxSchema(queryable: Pick<Pool, "query">): Promise<void> {
   const config = readFactoryEdgeConfiguration();

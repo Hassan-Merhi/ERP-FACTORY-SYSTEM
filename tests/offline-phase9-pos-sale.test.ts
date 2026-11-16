@@ -17,17 +17,17 @@ vi.mock("../server/edge/edgeRuntimePolicy.mjs", async (importOriginal) => ({
 
 import { pool } from "../server/db";
 import { createPosSale } from "../server/services/pos/createSaleService";
-import { ensurePhase9PosOutboxSchema } from "../server/edge/phase9PosOutbox";
+import { ensurePhase9PosOutboxSchema } from "../server/edge/posOutbox";
 import { hashEvidence } from "../server/edge/edgeSyncStageProtocol.mjs";
-import { validatePhase9Event } from "../server/edge/phase9EventProtocol.mjs";
-import { Phase9EventConflict } from "../server/edge/phase9CloudEventStore.mjs";
-import { phase9PosSaleApplyHandler, type Phase9PosSaleEvent } from "../server/edge/phase9PosSaleApply";
-import { phase9PosSaleEditApplyHandler, type Phase9PosSaleEditEvent } from "../server/edge/phase9PosSaleEditApply";
+import { validatePhase9Event } from "../server/edge/eventProtocol.mjs";
+import { Phase9EventConflict } from "../server/edge/cloudEventStore.mjs";
+import { phase9PosSaleApplyHandler, type Phase9PosSaleEvent } from "../server/edge/posSaleApply";
+import { phase9PosSaleEditApplyHandler, type Phase9PosSaleEditEvent } from "../server/edge/posSaleEditApply";
 import { updatePosSale } from "../server/services/pos/edit/updateSaleService";
 import {
   phase9PosSaleCancelApplyHandler,
   type Phase9PosSaleCancelEvent,
-} from "../server/edge/phase9PosSaleCancelApply";
+} from "../server/edge/posSaleCancelApply";
 import request from "supertest";
 import {
   createTenantDatabaseScope,

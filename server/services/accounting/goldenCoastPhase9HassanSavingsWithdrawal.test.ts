@@ -8,7 +8,7 @@ import {
   goldenCoastPhase9WithdrawalDigest,
   parseGoldenCoastPhase9WithdrawalInput,
   planGoldenCoastPhase9Withdrawal,
-} from "./goldenCoastPhase9HassanSavingsWithdrawal";
+} from "./goldenCoastHassanSavingsWithdrawal";
 
 function withdrawal(overrides: Record<string, unknown> = {}) {
   return parseGoldenCoastPhase9WithdrawalInput({

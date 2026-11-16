@@ -107,7 +107,7 @@ The unified development branch contains an **operator-only** cloud apply path fo
 
 This initial scope is **only active USD Journal vouchers with two or more balanced, ledger-account-only lines**, no linked party/employee, non-USD, POS, inventory, files, or stock side effects. The LAN write boundary now rejects unsupported with-entries requests rather than promising sync for them. The protected central generic route captures vouchers in the same transaction as the local accounting posting. Other modules remain blocked for Phase 9.
 
-**Default is OFF.** The cloud-apply CLI `server/edge/phase8OperatorApply.ts` has no HTTP apply endpoint, no scheduler and no automatic invocation. It refuses without a separately approved company/baseline/positive cloud epoch, the exact `LAN_FROZEN_AND_CLOUD_EPOCH_APPROVED` acknowledgment, an already-installed `phase7_writer` PostgreSQL fence, restricted (non-owner, non-DDL) runtime database role, signed staging receiver, DBA-controlled time-limited actor approval, currently active Admin/Owner company role and committed immutable staging evidence. A DBA must explicitly install the Phase 8 tables using `ensurePhase8ApplySchema` during a reviewed **fenced cloud maintenance window**; never let the restricted runtime role create or own those objects. It must have SELECT but **no modification privileges** on `factory_edge_apply_approvals` or `phase7_writer.state`, and only the narrow table privileges needed for the posting and cursor.
+**Default is OFF.** The cloud-apply CLI `server/edge/stagedVoucherOperatorApply.ts` has no HTTP apply endpoint, no scheduler and no automatic invocation. It refuses without a separately approved company/baseline/positive cloud epoch, the exact `LAN_FROZEN_AND_CLOUD_EPOCH_APPROVED` acknowledgment, an already-installed `phase7_writer` PostgreSQL fence, restricted (non-owner, non-DDL) runtime database role, signed staging receiver, DBA-controlled time-limited actor approval, currently active Admin/Owner company role and committed immutable staging evidence. A DBA must explicitly install the Phase 8 tables using `ensurePhase8ApplySchema` during a reviewed **fenced cloud maintenance window**; never let the restricted runtime role create or own those objects. It must have SELECT but **no modification privileges** on `factory_edge_apply_approvals` or `phase7_writer.state`, and only the narrow table privileges needed for the posting and cursor.
 
 Only in a **disposable rehearsal with independent cutover oversight**, after freezing LAN writes and verifying no in-flight writers, the authorized operator can set these cloud process variables:
 
@@ -129,7 +129,7 @@ FACTORY_PHASE8_COMPANY_ID=<approved-single-company-id>
 Then, using that environment on an isolated operator host with the exact audited build and its restricted PostgreSQL connection, run one sequence at a time:
 
 ```bash
-node --import tsx server/edge/phase8OperatorApply.ts 1
+node --import tsx server/edge/stagedVoucherOperatorApply.ts 1
 # Verify the returned cloud voucher ID and ledger rows independently.
 # On the factory LAN, after signed staging and successful cloud COMMIT:
 node scripts/edge/fetch-applied-receipts.mjs

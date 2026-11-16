@@ -57,7 +57,7 @@ describe("Phase 6 mix quantity writer guards", () => {
   });
 
   it("has a read-only, tenant-scoped exception report and CSV in the existing mix endpoint", () => {
-    const source = read("server/services/factory/mixPhase6LifecycleAudit.ts");
+    const source = read("server/services/factory/mixLifecycleAudit.ts");
     const route = read("server/routes/factory/mix-batches/reads.ts");
     expect(source).toContain("REPEATABLE READ READ ONLY");
     expect(source).toContain("app.current_company_id");

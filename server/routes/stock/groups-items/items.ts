@@ -4,8 +4,8 @@
  * Registered by ./index.ts in the original order; Express resolves
  * first-match, so that order is behaviour.
  */
-import { isPhase9LanPrimary } from "../../../edge/phase9PosOutbox";
-import { capturePhase9StockItemCreateTx, nextPhase9LanStockItemIdTx } from "../../../edge/phase9StockOutbox";
+import { isPhase9LanPrimary } from "../../../edge/posOutbox";
+import { capturePhase9StockItemCreateTx, nextPhase9LanStockItemIdTx } from "../../../edge/stockOutbox";
 import { stockItemCreateEvidence } from "../../../services/inventory/stockItemLifecycleCapture";
 import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../../../lib/httpHandlers";

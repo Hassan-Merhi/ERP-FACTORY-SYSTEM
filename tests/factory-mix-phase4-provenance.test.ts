@@ -9,7 +9,7 @@ import {
   buildPhase4ProvenanceReport,
   classifySupplierStockCoverage,
   phase4MixProvenanceCsv,
-} from "../server/services/factory/mixPhase4ProvenanceAudit";
+} from "../server/services/factory/mixProvenanceAudit";
 
 describe("Phase 4 Factory supplier ADD and raw-stock integrity", () => {
   it("covers a negative receipt row only when a corresponding ADD stock pool exists", () => {

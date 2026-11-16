@@ -48,7 +48,7 @@ describe("Historical Replay V8 production readiness", () => {
 
   it("binds apply authorization to release, company, user, algorithm, and exact token hash", () => {
     const route = read(
-      "server/routes/factory/raw-stock/historicalReplayPhase8ReadinessRoutes.ts"
+      "server/routes/factory/raw-stock/historicalReplayReadinessRoutes.ts"
     );
     expect(route).toContain("HISTORICAL_REPLAY_V8_APPLY_AUTHORIZATION");
     expect(route).toContain("confirmationTokenHash");
@@ -94,7 +94,7 @@ describe("Historical Replay V8 production readiness", () => {
 
   it("does not add migration, replay, startup, or autonomous execution", () => {
     const route = read(
-      "server/routes/factory/raw-stock/historicalReplayPhase8ReadinessRoutes.ts"
+      "server/routes/factory/raw-stock/historicalReplayReadinessRoutes.ts"
     );
     const service = read(
       "server/services/factory/historical-replay/productionReadinessV8.ts"

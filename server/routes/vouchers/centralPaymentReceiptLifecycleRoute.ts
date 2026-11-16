@@ -26,7 +26,7 @@ type CentralPaymentReceiptBody = Omit<
   "companyId" | "voucherNumber" | "actor" | "resolveTarget"
 > & { optional?: unknown };
 import { checkAccountWhatsAppRule } from "../factoryWhatsappRoutes";
-import { isPhase9LanPrimary } from "../../edge/phase9PosOutbox";
+import { isPhase9LanPrimary } from "../../edge/posOutbox";
 import { offlineEdgeText } from "../../i18n/offlineEdgeMessages";
 import {
   assertVoucherEditableTx,

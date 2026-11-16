@@ -20,7 +20,7 @@ describe("Historical Replay V8 exact verification", () => {
 
   it("uses one repeatable-read read-only snapshot and exact stored invariants", () => {
     const verification = read(
-      "server/routes/factory/raw-stock/historicalReplayPhase8VerificationRoutes.ts"
+      "server/routes/factory/raw-stock/historicalReplayVerificationRoutes.ts"
     );
     expect(verification).toContain("REPEATABLE READ READ ONLY");
     expect(verification).toContain("captureExactReplaySnapshot");
@@ -33,7 +33,7 @@ describe("Historical Replay V8 exact verification", () => {
 
   it("contains no replay, undo, schema, or accounting write statement", () => {
     const verification = read(
-      "server/routes/factory/raw-stock/historicalReplayPhase8VerificationRoutes.ts"
+      "server/routes/factory/raw-stock/historicalReplayVerificationRoutes.ts"
     );
     expect(verification).not.toMatch(/\bUPDATE\b|\bINSERT\b|\bDELETE\b|\bALTER\b|\bCREATE\b/i);
     expect(verification).not.toContain("applyHistoricalCostReplay(");

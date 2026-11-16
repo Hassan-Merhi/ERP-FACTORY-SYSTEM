@@ -20,8 +20,8 @@ import { sendTransferWhatsApp } from "../../helpers/sendTransferWhatsApp";
 import { getActiveCompanyPermissionContext } from "../../services/security/activeCompanyPermissionContext";
 import { DuplicateStockTransferError, StockTransferPolicyError } from "../../storage/stock-ops/transfers-create";
 import { createStockTransferTx } from "../../services/inventory/createStockTransfer";
-import { isPhase9LanPrimary } from "../../edge/phase9PosOutbox";
-import { capturePhase9StockTransferTx } from "../../edge/phase9StockOutbox";
+import { isPhase9LanPrimary } from "../../edge/posOutbox";
+import { capturePhase9StockTransferTx } from "../../edge/stockOutbox";
 import { stockTransferEvidence } from "./stockTransferOfflineEvidence";
 import { sendBaleMirrorMovementRefusal } from "../../services/accounting/perpetualInventory/cutoverRefusal";
 import {

@@ -17,7 +17,7 @@ import {
   hashEvidence,
   makeStageSignature,
 } from "../../server/edge/edgeSyncStageProtocol.mjs";
-import { readPhase10SyncControl } from "../../server/edge/phase10SyncControl.mjs";
+import { readPhase10SyncControl } from "../../server/edge/syncControl.mjs";
 
 export function readSenderConfiguration(env = process.env) {
   if (env.FACTORY_EDGE_MODE !== "lan" || env.FACTORY_SYNC_SENDER_ENABLED !== "1") {

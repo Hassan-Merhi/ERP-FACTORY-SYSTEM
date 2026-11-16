@@ -3,7 +3,7 @@ import {
   auditPhase3Accounting,
   type Phase3AccountingAuditInput,
   type SaleAuditSnapshot,
-} from "../server/services/accounting/phase3AccountingAudit";
+} from "../server/services/accounting/accountingAudit";
 
 function cleanInput(): Phase3AccountingAuditInput {
   return {

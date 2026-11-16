@@ -5,7 +5,7 @@ import {
   goldenCoastPhase11CloseDigest,
   parseGoldenCoastPhase11CloseInput,
   planGoldenCoastPhase11MonthlyClose,
-} from "./goldenCoastPhase11MonthlyClose";
+} from "./goldenCoastMonthlyClose";
 
 const accounts = {
   salesAccountId: 11,

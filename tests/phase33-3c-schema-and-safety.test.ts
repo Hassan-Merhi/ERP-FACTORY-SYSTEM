@@ -16,7 +16,7 @@ import {
   InvalidPostOffloadPhase6TokenError,
   StalePostOffloadPhase6TokenError,
   phase6ErrorStatus,
-} from "../server/services/factory/postOffloadPhase6SafetyImpl";
+} from "../server/services/factory/postOffloadSafetyImpl";
 import { RepairTokenConfigurationError } from "../server/services/factory/repairToken";
 
 describe("Phase 33 3C schema validation", () => {

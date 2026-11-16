@@ -12,7 +12,7 @@ import {
   getGoldenCoastPhase1LedgerRoleRequirements,
   GOLDEN_COAST_PHASE1_LEDGER_SUBTYPES,
   GoldenCoastPhase1InputError,
-} from "../server/services/accounting/goldenCoastPhase1Posting";
+} from "../server/services/accounting/goldenCoastPosting";
 
 const ledger = (id: number) => ({ kind: "ledger" as const, id });
 const bank = (id: number) => ({ kind: "bank" as const, id, name: " Main bank " });

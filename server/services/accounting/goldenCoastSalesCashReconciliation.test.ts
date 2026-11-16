@@ -15,21 +15,21 @@ import Decimal from "decimal.js";
 import {
   buildGoldenCoastPhase6SpecialLocationDeductionPosting,
   planGoldenCoastPhase6SpecialLocationDeduction,
-} from "./goldenCoastPhase6SpecialLocationDeduction";
-import type { GoldenCoastPhase5SalePlan } from "./goldenCoastPhase5PosSale";
+} from "./goldenCoastSpecialLocationDeduction";
+import type { GoldenCoastPhase5SalePlan } from "./goldenCoastPosSale";
 import {
   buildGoldenCoastPhase7TransferPostings,
   goldenCoastPhase7TransferDigest,
   parseGoldenCoastPhase7TransferInput,
   planGoldenCoastPhase7Transfer,
-} from "./goldenCoastPhase7HadiTransfer";
+} from "./goldenCoastHadiTransfer";
 import {
   GoldenCoastPhase10SettlementError,
   buildGoldenCoastPhase10SettlementPosting,
   goldenCoastPhase10SettlementDigest,
   parseGoldenCoastPhase10SettlementInput,
   planGoldenCoastPhase10Settlement,
-} from "./goldenCoastPhase10SalesCashSettlement";
+} from "./goldenCoastSalesCashSettlement";
 import { gcSalesCashPayableBalance, gcSalesCashSettleablePayable } from "./goldenCoastSalesCashPayable";
 
 const COMPANY_ID = 7;

@@ -25,7 +25,7 @@ const targets=[
   "server/criticalSecuritySchemaBridge.mjs",
   "server/startupWarningRepair.mjs",
   "server/fixedProductionPlannerSchemaBridge.mjs",
-  "server/wave3SalesHotpathIndexBridge.mjs",
+  "server/salesHotpathIndexRepair.mjs",
   "server/inventoryValuationGuardedRepair.mjs"
 ];
 // Include every ordered startup-schema statement module, not just bridge file

@@ -20,13 +20,13 @@ import {
 import {
   getPhase4MixProvenanceReport,
   phase4MixProvenanceCsv,
-} from "../../../services/factory/mixPhase4ProvenanceAudit";
+} from "../../../services/factory/mixProvenanceAudit";
 import {
   getPhase5MixDownstreamReconciliation,
   phase5MixDownstreamCsv,
-} from "../../../services/factory/mixPhase5DownstreamAudit";
-import { getPhase6MixLifecycleReport, phase6MixLifecycleCsv } from "../../../services/factory/mixPhase6LifecycleAudit";
-import { getMixMonitorStatus } from "../../../services/factory/mixPhase7IntegrityMonitor";
+} from "../../../services/factory/mixDownstreamAudit";
+import { getPhase6MixLifecycleReport, phase6MixLifecycleCsv } from "../../../services/factory/mixLifecycleAudit";
+import { getMixMonitorStatus } from "../../../services/factory/mixIntegrityMonitor";
 
 export function registerFactoryMixBatchReadRoutes(app: Express) {
   app.get("/api/factory/mix-batches", requireAuth, async (req: Request, res: Response) => {

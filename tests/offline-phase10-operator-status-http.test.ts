@@ -49,8 +49,8 @@ vi.mock("../server/edge/edgeRuntimePolicy.mjs", () => ({
 }));
 vi.mock("../server/edge/edgeSyncReceiver", () => ({ registerCloudEdgeSyncReceiver: () => undefined }));
 vi.mock("../server/edge/edgeDatabaseProof.mjs", () => ({ hasFactoryEdgeData: async () => true }));
-vi.mock("../server/edge/phase7WriterGate.mjs", () => ({ hasVerifiedPhase7WriterAuthority: async () => false }));
-vi.mock("../server/edge/phase10Handover.mjs", () => ({
+vi.mock("../server/edge/writerGate.mjs", () => ({ hasVerifiedPhase7WriterAuthority: async () => false }));
+vi.mock("../server/edge/handover.mjs", () => ({
   summarizeLanEvidence: async (...args: unknown[]) => {
     state.summaryCalls.push(args);
     return { siteId: SITE, pendingTotal: 3, handoverReady: false, relayPaused: false, streams: [] };

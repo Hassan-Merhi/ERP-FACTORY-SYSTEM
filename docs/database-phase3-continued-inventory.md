@@ -23,7 +23,7 @@ Each source bridge retains its legacy compatibility startup behavior by default.
 | `server/companyScopeRlsBridge.mjs` | Tenant RLS policies, functions, triggers, voucher-entry company backfill | Read-only verification option added; migrate historical backfill and reconcile legacy migration separately |
 | `server/supplierCompanyScopeBridge.mjs` | Legacy supplier scope migration SQL on every startup | Read-only verification option added; historical supplier reassignment must remain independently approved |
 | `server/customerOrderBaleScanAuditBridge.mjs` | Scan-history table, functions/triggers/columns | Migration 007 extracted, read-only verification added; full scan-history parity outstanding |
-| `server/wave3SalesHotpathIndexBridge.mjs` | Conditionally creates indexes concurrently | Non-transactional, separately authorized online migration required |
+| `server/salesHotpathIndexRepair.mjs` | Conditionally creates indexes concurrently | Non-transactional, separately authorized online migration required |
 | `server/inventoryValuationWave6RepairBridge.mjs` | Conditional repair of inventory data | Explicit financial/stock approval required |
 | `server/startup/runServerStartupMigrations.ts` | Large legacy DDL loop, insurance-member insertion, sequence updates | Strict mode now blocks unversioned statements and refuses healthy readiness; all statements and operational DML still require extraction |
 | Other `ensureRuntimeSchema` / lazily invoked service schema creators | Dynamic DDL and historical repairs | Full import/call-graph inventory and staged integration |

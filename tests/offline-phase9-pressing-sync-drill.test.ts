@@ -19,8 +19,8 @@ vi.mock("../server/edge/edgeRuntimePolicy.mjs", async (importOriginal) => ({
   readFactoryEdgeConfiguration: () => ({ mode: "lan", primary: true, siteId: SITE }),
 }));
 
-import { capturePhase9PressingTx, ensurePhase9PressingOutboxSchema } from "../server/edge/phase9PressingOutbox";
-import { ensurePhase8ApplySchema } from "../server/edge/phase8ApplyStore.mjs";
+import { capturePhase9PressingTx, ensurePhase9PressingOutboxSchema } from "../server/edge/pressingOutbox";
+import { ensurePhase8ApplySchema } from "../server/edge/applyStore.mjs";
 import {
   applyPendingStagedEvents,
   applyStagedEventOnce,
@@ -29,11 +29,11 @@ import {
   recordPhase9ConflictDecision,
   stagePhase9Events,
   summarizePhase9CloudStreams,
-} from "../server/edge/phase9CloudEventStore.mjs";
-import { EDGE_EVENT_STAGE_PATH, validatePhase9Event } from "../server/edge/phase9EventProtocol.mjs";
+} from "../server/edge/cloudEventStore.mjs";
+import { EDGE_EVENT_STAGE_PATH, validatePhase9Event } from "../server/edge/eventProtocol.mjs";
 import { EVENT_STAGE_SIGNATURE_DOMAIN, verifyStageSignature } from "../server/edge/edgeSyncStageProtocol.mjs";
-import { phase9PressingApplyHandler } from "../server/edge/phase9PressingApply";
-import { ensurePhase10SyncControlSchema, recordPhase10SyncControl } from "../server/edge/phase10SyncControl.mjs";
+import { phase9PressingApplyHandler } from "../server/edge/pressingApply";
+import { ensurePhase10SyncControlSchema, recordPhase10SyncControl } from "../server/edge/syncControl.mjs";
 import { summarizeLanEvidence } from "../scripts/edge/factory-handover-preflight.mjs";
 import {
   eventEnvelope,

@@ -7,7 +7,7 @@ import { ledgerAccounts, locations, bankAccounts } from "@shared/schema";
 import { requireSpCompany, getSpAccount, SP_ACCOUNTS } from "./spHelpers";
 import { ensureSpSupplierVoucherSyncTrigger, getSpSupplierVoucherLinkGapCount } from "./spSupplierVoucherSync";
 import { loadGoldenCoastAccounts, loadGoldenCoastSettings, loadCompanyAccountNames } from "./spGoldenCoastSetupRoutes";
-import { summarizeGoldenCoastAccountSetup } from "../../services/accounting/goldenCoastPhase2Accounts";
+import { summarizeGoldenCoastAccountSetup } from "../../services/accounting/goldenCoastAccounts";
 
 // ── Setup ─────────────────────────────────────────────────────────────────
 

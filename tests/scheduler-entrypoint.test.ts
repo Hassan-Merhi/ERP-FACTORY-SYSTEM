@@ -32,7 +32,7 @@ vi.mock("../server/services/propertiesAccountStatementWhatsApp", () => ({
 vi.mock("../server/services/accounting/perpetualInventory/factoryStockJournal", () => ({
   runFactoryStockJournals: () => h.factoryStock(),
 }));
-vi.mock("../server/services/factory/mixPhase7IntegrityMonitor", () => ({
+vi.mock("../server/services/factory/mixIntegrityMonitor", () => ({
   runScheduledFactoryMixIntegrityMonitoring: () => h.mixIntegrity(),
 }));
 vi.mock("../server/services/scheduler/daily-export-state", () => ({

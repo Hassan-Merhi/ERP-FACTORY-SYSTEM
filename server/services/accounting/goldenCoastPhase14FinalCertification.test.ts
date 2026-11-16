@@ -1,23 +1,23 @@
 import { describe, expect, it } from "vitest";
 
-import { buildGoldenCoastPhase3CutoverPlan, type GoldenCoastPhase3CutoverInput } from "./goldenCoastPhase3Cutover";
+import { buildGoldenCoastPhase3CutoverPlan, type GoldenCoastPhase3CutoverInput } from "./goldenCoastCutover";
 import {
   buildGoldenCoastPhase5SalePostings,
   goldenCoastPhase5SaleDigest,
   parseGoldenCoastPhase5SaleInput,
   planGoldenCoastPhase5Sale,
   type GoldenCoastFifoLot,
-} from "./goldenCoastPhase5PosSale";
+} from "./goldenCoastPosSale";
 import {
   buildGoldenCoastPhase6SpecialLocationDeductionPosting,
   planGoldenCoastPhase6SpecialLocationDeduction,
-} from "./goldenCoastPhase6SpecialLocationDeduction";
+} from "./goldenCoastSpecialLocationDeduction";
 import {
   buildGoldenCoastPhase7TransferPostings,
   goldenCoastPhase7TransferDigest,
   parseGoldenCoastPhase7TransferInput,
   planGoldenCoastPhase7Transfer,
-} from "./goldenCoastPhase7HadiTransfer";
+} from "./goldenCoastHadiTransfer";
 import {
   buildGoldenCoastPhase8FundingPosting,
   buildGoldenCoastPhase8OffloadPosting,
@@ -26,26 +26,26 @@ import {
   planGoldenCoastPhase8Funding,
   planGoldenCoastPhase8Offload,
   type GoldenCoastPhase8FundedContainerState,
-} from "./goldenCoastPhase8ContainerOffload";
+} from "./goldenCoastContainerOffload";
 import {
   GOLDEN_COAST_PHASE9_CONFIRMATION,
   buildGoldenCoastPhase9WithdrawalPosting,
   goldenCoastPhase9WithdrawalDigest,
   parseGoldenCoastPhase9WithdrawalInput,
   planGoldenCoastPhase9Withdrawal,
-} from "./goldenCoastPhase9HassanSavingsWithdrawal";
+} from "./goldenCoastHassanSavingsWithdrawal";
 import {
   buildGoldenCoastPhase10SettlementPosting,
   goldenCoastPhase10SettlementDigest,
   parseGoldenCoastPhase10SettlementInput,
   planGoldenCoastPhase10Settlement,
-} from "./goldenCoastPhase10SalesCashSettlement";
+} from "./goldenCoastSalesCashSettlement";
 import {
   buildGoldenCoastPhase11MonthlyClosePosting,
   goldenCoastPhase11CloseDigest,
   parseGoldenCoastPhase11CloseInput,
   planGoldenCoastPhase11MonthlyClose,
-} from "./goldenCoastPhase11MonthlyClose";
+} from "./goldenCoastMonthlyClose";
 
 interface PostingEntryLike {
   ledgerAccountId?: number | null;

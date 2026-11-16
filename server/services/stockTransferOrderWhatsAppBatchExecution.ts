@@ -25,11 +25,11 @@ import {
 import { runWithDatabaseMaintenanceScope } from "./security/databaseScopeRuntimeContext";
 import { runWithAuditActor } from "./audit/auditActorContext";
 import { chooseStockTransferOrderWaApprovalLeaders, stockTransferOrderWaBusinessConflictCode, type StockTransferOrderWaFrozenRevision } from "./stockTransferOrderWhatsAppDecisionPolicy";
-import { isPhase9LanPrimary } from "../edge/phase9PosOutbox";
+import { isPhase9LanPrimary } from "../edge/posOutbox";
 import {
   capturePhase9StockTransferRevisionReviewTx,
   phase9RevisionRefTx,
-} from "../edge/phase9StockOutbox";
+} from "../edge/stockOutbox";
 
 type Header = {
   id: number | string;

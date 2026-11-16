@@ -12,7 +12,7 @@ const productionBalanceOnTable = readFileSync(
   "utf8"
 );
 const baleLedger = readFileSync(
-  resolve(process.cwd(), "server/routes/performance/bandwidthPhase3FactoryReads.ts"),
+  resolve(process.cwd(), "server/routes/performance/bandwidthFactoryReads.ts"),
   "utf8"
 );
 const snapshotRoutes = readFileSync(

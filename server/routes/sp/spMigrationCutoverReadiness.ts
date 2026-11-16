@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { db } from "../../db";
-import { ensurePhase2Schema, getSuspenseReview, loadStockItemMap, pn } from "./spMigrationPhase2Common";
+import { ensurePhase2Schema, getSuspenseReview, loadStockItemMap, pn } from "./spMigrationCommon";
 import { ensureCutoverSchema } from "./spMigrationCutoverState";
 import { resultRows, firstRow } from "../../lib/queryResult";
 

@@ -49,7 +49,7 @@ import {
   MixLifecycleRefusal,
   requireMixDeletionSafe,
   requireMixLifecycleAvailable,
-} from "../../../services/factory/mixLifecyclePhase6";
+} from "../../../services/factory/mixLifecycle";
 import { isPerpetualInventoryActive } from "../../../services/accounting/perpetualInventory/cutover";
 import {
   isRetiredVoucherNumber,

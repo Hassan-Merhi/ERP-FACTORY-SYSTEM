@@ -6,7 +6,7 @@ import {
   type Phase3AccountingAuditInput,
   type Phase3AccountingAuditReport,
   type Phase3AuditIssue,
-} from "./phase3AccountingAudit";
+} from "./accountingAudit";
 
 export interface DuplicateVoucherEvidence {
   signature: string;

@@ -40,7 +40,7 @@ The absence of an active `gl_inventory_cutovers` row explains why an automatic p
 
 ### 1. Read-only downstream reconciliation
 
-`server/services/factory/mixPhase5DownstreamAudit.ts` evaluates **every** saved mix (active and deleted), direct and pressing-linked bales, daily usages, rates and totals of any *actually linked* bales, saved FINISHED STOCK amounts, sold/dispatched exposure, customer-order and invoice-loading coverage, prior recost runs, replay undo records, and perpetual cutover state. It uses one tenant-scoped `REPEATABLE READ READ ONLY` PostgreSQL transaction. No lazy backfills, no re-pricing, no vouchers and no inferred links.
+`server/services/factory/mixDownstreamAudit.ts` evaluates **every** saved mix (active and deleted), direct and pressing-linked bales, daily usages, rates and totals of any *actually linked* bales, saved FINISHED STOCK amounts, sold/dispatched exposure, customer-order and invoice-loading coverage, prior recost runs, replay undo records, and perpetual cutover state. It uses one tenant-scoped `REPEATABLE READ READ ONLY` PostgreSQL transaction. No lazy backfills, no re-pricing, no vouchers and no inferred links.
 
 **Factory Mode:** `Audit Bale & GL` button and downloadable per-batch `Bale/GL CSV`, next to the existing historical audit controls. Admin/Owner/Developer only.
 
@@ -52,7 +52,7 @@ No new route path, permission manifest or migrations.
 
 ### 2. Historical Replay preflight and apply guard
 
-`server/services/factory/historical-replay/downstreamGatePhase5.ts` validates the **specific signed write scope**, not all unrelated Factory batches. Before allowing any future historical source/batch/bale cost write, it rejects:
+`server/services/factory/historical-replay/downstreamGate.ts` validates the **specific signed write scope**, not all unrelated Factory batches. Before allowing any future historical source/batch/bale cost write, it rejects:
 
 - A corrected batch with **used kg and no directly linked bale records**. A pressing sheet or daily usage alone is insufficient proof of the bale-specific cost basis; bona fide waste must be resolved through a separate reviewed process.
 - Any scope that would impact **finalized, sold, dispatched, invoiced, POS-sold, or sale-ledger-posted bales**, including frozen invoice documents. `factory_bales.finalized_at` alone is *not* used to identify a sale, since physically pressed IN_STOCK bales can have that timestamp.

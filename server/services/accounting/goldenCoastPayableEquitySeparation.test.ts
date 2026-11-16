@@ -21,11 +21,11 @@ import {
   planGoldenCoastAccountProvisioning,
   type GoldenCoastAccountRole,
   type GoldenCoastLedgerRow,
-} from "./goldenCoastPhase2Accounts";
+} from "./goldenCoastAccounts";
 import {
   buildGoldenCoastPhase11MonthlyClosePosting,
   planGoldenCoastPhase11MonthlyClose,
-} from "./goldenCoastPhase11MonthlyClose";
+} from "./goldenCoastMonthlyClose";
 
 /** Roles that record what Golden Coast owes someone else. */
 const OBLIGATION_ROLES: readonly GoldenCoastAccountRole[] = ["gc_sales_cash", "hassan_savings"];

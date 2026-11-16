@@ -123,7 +123,7 @@
       "reason": "Cutover readiness is computed only for the authorized Supplier Partner company pair."
     },
     {
-      "path": "server/routes/sp/spMigrationPhase2Charges.ts",
+      "path": "server/routes/sp/spMigrationCharges.ts",
       "reason": "Supplier Partner charge migration uses the authorized source/target company pair."
     },
     {

@@ -10,7 +10,7 @@ import {
   planGoldenCoastPhase7Transfer,
   type GoldenCoastPhase7RoleAccounts,
   type GoldenCoastPhase7TransferInput,
-} from "./goldenCoastPhase7HadiTransfer";
+} from "./goldenCoastHadiTransfer";
 
 const accounts: GoldenCoastPhase7RoleAccounts = {
   gcSalesCashAccountId: 101,

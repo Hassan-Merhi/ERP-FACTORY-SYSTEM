@@ -59,13 +59,13 @@ import {
   requireMixFinalizeDecision,
   requireMixDeletionSafe,
   validateMixLifecycleUsageRequest,
-} from "../server/services/factory/mixLifecyclePhase6";
+} from "../server/services/factory/mixLifecycle";
 import {
   classifyMixLifecycleEvidence,
   summarizePhase6MixLifecycle,
   getPhase6MixLifecycleReport,
   phase6MixLifecycleCsv,
-} from "../server/services/factory/mixPhase6LifecycleAudit";
+} from "../server/services/factory/mixLifecycleAudit";
 
 const openBatch = (overrides: Record<string, unknown> = {}) => ({
   id: 50,

@@ -10,7 +10,7 @@
 import { randomUUID } from "node:crypto";
 import type { Request } from "express";
 import { db } from "../../db";
-import { capturePhase9StockTransferTx } from "../../edge/phase9StockOutbox";
+import { capturePhase9StockTransferTx } from "../../edge/stockOutbox";
 import { stockTransferEvidence } from "../../routes/fiscal-transfers/stockTransferOfflineEvidence";
 import type { Decimal } from "../../routes/stockTransferImportQuantity";
 import { createStockTransferTx } from "./createStockTransfer";

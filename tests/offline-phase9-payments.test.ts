@@ -18,11 +18,11 @@ vi.mock("../server/edge/edgeRuntimePolicy.mjs", async (importOriginal) => ({
 }));
 
 import { pool } from "../server/db";
-import { ensurePhase9PaymentOutboxSchema } from "../server/edge/phase9PaymentOutbox";
+import { ensurePhase9PaymentOutboxSchema } from "../server/edge/paymentOutbox";
 import { hashEvidence } from "../server/edge/edgeSyncStageProtocol.mjs";
-import { validatePhase9Event } from "../server/edge/phase9EventProtocol.mjs";
-import { Phase9EventConflict } from "../server/edge/phase9CloudEventStore.mjs";
-import { phase9PaymentApplyHandler, type Phase9PaymentEvent } from "../server/edge/phase9PaymentApply";
+import { validatePhase9Event } from "../server/edge/eventProtocol.mjs";
+import { Phase9EventConflict } from "../server/edge/cloudEventStore.mjs";
+import { phase9PaymentApplyHandler, type Phase9PaymentEvent } from "../server/edge/paymentApply";
 import {
   createTenantDatabaseScope,
   runWithDatabaseScopeRuntimeContext,

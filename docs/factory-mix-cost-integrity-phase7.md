@@ -9,7 +9,7 @@
 
 ## What runs automatically
 
-A new, lightweight scheduler registration in `server/services/scheduler/index.ts` fires **daily 01:35 UTC**, with dynamic import only when due, within the existing `createSchedulerTick` process in-flight guard and application writer-fence policy. The source module `server/services/factory/mixPhase7IntegrityMonitor.ts` discovers all Factory company IDs with active mixes; it does **not** hardcode company #12.
+A new, lightweight scheduler registration in `server/services/scheduler/index.ts` fires **daily 01:35 UTC**, with dynamic import only when due, within the existing `createSchedulerTick` process in-flight guard and application writer-fence policy. The source module `server/services/factory/mixIntegrityMonitor.ts` discovers all Factory company IDs with active mixes; it does **not** hardcode company #12.
 
 The four existing read-only Phase 3–6 audits run per company, **sequentially** to avoid concurrent reporting load:
 

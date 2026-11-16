@@ -6,8 +6,8 @@ vi.mock("../server/edge/edgeRuntimePolicy.mjs", () => ({
   readFactoryEdgeConfiguration: () => env,
 }));
 
-import { capturePhase9PressingTx, ensurePhase9PressingOutboxSchema } from "../server/edge/phase9PressingOutbox";
-import { Phase9PressingRefusal } from "../server/edge/phase9PressingEnvelope.mjs";
+import { capturePhase9PressingTx, ensurePhase9PressingOutboxSchema } from "../server/edge/pressingOutbox";
+import { Phase9PressingRefusal } from "../server/edge/pressingEnvelope.mjs";
 
 const evidence = {
   companyId: 5,

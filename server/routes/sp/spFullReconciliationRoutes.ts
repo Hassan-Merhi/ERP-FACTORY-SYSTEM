@@ -5,7 +5,7 @@ import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { requireSpCompany } from "./spHelpers";
 import { resultRows } from "../../lib/queryResult";
-import { buildFinalMigrationVerification } from "./spMigrationPhase4Verification";
+import { buildFinalMigrationVerification } from "./spMigrationVerification";
 
 function num(value: unknown): number {
   const parsed = Number(value ?? 0);

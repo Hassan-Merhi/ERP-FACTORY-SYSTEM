@@ -4,7 +4,7 @@ import { replayAuthorizationContext } from "../server/services/accounting/replay
 import {
   resolveVoucherPathCompanyId,
   voucherPathRequestFingerprint,
-} from "../server/services/accounting/voucherPathPhase5to6Boundary";
+} from "../server/services/accounting/voucherPathTransitionBoundary";
 import { isPhase5OperationalVoucherRequest } from "../shared/voucherPathIdentityPolicy";
 
 describe("Phase 5 endpoint-level voucher coverage", () => {

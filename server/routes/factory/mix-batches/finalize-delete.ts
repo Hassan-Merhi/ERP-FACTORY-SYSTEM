@@ -26,7 +26,7 @@ import {
   MixLifecycleRefusal,
   requireMixFinalizeDecision,
   requireMixDeletionSafe,
-} from "../../../services/factory/mixLifecyclePhase6";
+} from "../../../services/factory/mixLifecycle";
 
 export function registerFactoryMixBatchFinalizeDeleteRoutes(app: Express) {
   // ── Finalize a mix batch (mark as fully consumed/completed) ──

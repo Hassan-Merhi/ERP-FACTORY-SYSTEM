@@ -1,21 +1,21 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const routeSource = readFileSync(new URL("./spGoldenCoastPhase8ContainerOffloadRoutes.ts", import.meta.url), "utf8");
+const routeSource = readFileSync(new URL("./spGoldenCoastContainerOffloadRoutes.ts", import.meta.url), "utf8");
 const spIndexSource = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
 const accessControlSource = readFileSync(new URL("./spAccessControl.ts", import.meta.url), "utf8");
-const phase4RouteSource = readFileSync(new URL("./spGoldenCoastPhase4CutoverFifoRoutes.ts", import.meta.url), "utf8");
+const phase4RouteSource = readFileSync(new URL("./spGoldenCoastCutoverFifoRoutes.ts", import.meta.url), "utf8");
 const phase4ServiceSource = readFileSync(
-  new URL("../../services/accounting/goldenCoastPhase4CutoverFifo.ts", import.meta.url),
+  new URL("../../services/accounting/goldenCoastCutoverFifo.ts", import.meta.url),
   "utf8"
 );
-const migrationReconcileSource = readFileSync(new URL("./spMigrationPhase4Reconcile.ts", import.meta.url), "utf8");
+const migrationReconcileSource = readFileSync(new URL("./spMigrationReconcile.ts", import.meta.url), "utf8");
 const phase8ServiceSource = readFileSync(
-  new URL("../../services/accounting/goldenCoastPhase8ContainerOffload.ts", import.meta.url),
+  new URL("../../services/accounting/goldenCoastContainerOffload.ts", import.meta.url),
   "utf8"
 );
 const phase5ServiceSource = readFileSync(
-  new URL("../../services/accounting/goldenCoastPhase5PosSale.ts", import.meta.url),
+  new URL("../../services/accounting/goldenCoastPosSale.ts", import.meta.url),
   "utf8"
 );
 

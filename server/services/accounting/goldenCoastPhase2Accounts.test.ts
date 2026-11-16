@@ -9,7 +9,7 @@ import {
   summarizeGoldenCoastAccountSetup,
   type GoldenCoastAccountRole,
   type GoldenCoastLedgerRow,
-} from "./goldenCoastPhase2Accounts";
+} from "./goldenCoastAccounts";
 
 const COMPANY_ID = 7;
 

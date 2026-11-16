@@ -27,10 +27,10 @@ vi.mock("../server/edge/edgeRuntimePolicy.mjs", async (importOriginal) => ({
 }));
 
 import { pool } from "../server/db";
-import { ensurePhase9StockOutboxSchema } from "../server/edge/phase9StockOutbox";
+import { ensurePhase9StockOutboxSchema } from "../server/edge/stockOutbox";
 import { hashEvidence } from "../server/edge/edgeSyncStageProtocol.mjs";
-import { phase9OverridableConflicts, validatePhase9Event } from "../server/edge/phase9EventProtocol.mjs";
-import { ensurePhase9CloudEventSchema, Phase9EventConflict } from "../server/edge/phase9CloudEventStore.mjs";
+import { phase9OverridableConflicts, validatePhase9Event } from "../server/edge/eventProtocol.mjs";
+import { ensurePhase9CloudEventSchema, Phase9EventConflict } from "../server/edge/cloudEventStore.mjs";
 import {
   PHASE9_STOCK_TRANSFER_CHANGED_CONFLICT,
   phase9StockTransferEditEnvelope,
@@ -39,14 +39,14 @@ import {
   phase9StockTransferRevisionReviewEnvelope,
   type Phase9TransferRef,
   type Phase9TransferSnapshot,
-} from "../server/edge/phase9StockTransferWorkflowEnvelope.mjs";
-import { phase9StockTransferApplyHandler } from "../server/edge/phase9StockTransferApply";
+} from "../server/edge/stockTransferWorkflowEnvelope.mjs";
+import { phase9StockTransferApplyHandler } from "../server/edge/stockTransferApply";
 import {
   phase9StockTransferEditApplyHandler,
   phase9StockTransferFinalizeApplyHandler,
   phase9StockTransferRevisionApplyHandler,
   phase9StockTransferRevisionReviewApplyHandler,
-} from "../server/edge/phase9StockTransferWorkflowApply";
+} from "../server/edge/stockTransferWorkflowApply";
 import {
   createTenantDatabaseScope,
   runWithDatabaseScopeRuntimeContext,

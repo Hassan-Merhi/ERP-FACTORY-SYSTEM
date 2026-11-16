@@ -5,7 +5,7 @@ const requiredFiles = [
   "server/services/pos/createSaleService.ts",
   "server/services/pos/edit/updateSaleService.ts",
   "server/routes/sp-migration",
-  "server/routes/sp/spMigrationPhase4Routes.ts",
+  "server/routes/sp/spMigrationFinalCutoverRoutes.ts",
   "docs/archive/program-2-phase-6-supplier-partner.md",
 ];
 for (const file of requiredFiles) if (!fs.existsSync(file)) throw new Error(`Program 2 Phase 6 missing required file: ${file}`);

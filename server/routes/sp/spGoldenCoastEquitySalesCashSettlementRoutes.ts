@@ -22,7 +22,7 @@ import { createDatabasePostingDependencies } from "../../services/accounting/dat
 import {
   getGoldenCoastAccountDefinition,
   type GoldenCoastAccountRole,
-} from "../../services/accounting/goldenCoastPhase2Accounts";
+} from "../../services/accounting/goldenCoastAccounts";
 import {
   GOLDEN_COAST_EQUITY_SALES_CASH_SOURCE_TYPE,
   GoldenCoastEquitySalesCashError,
@@ -41,7 +41,7 @@ import {
   gcSalesCashPayableBalance,
   gcSalesCashSettleablePayable,
 } from "../../services/accounting/goldenCoastSalesCashPayable";
-import { isGoldenCoastCompany, type DbLike } from "./spGoldenCoastPhase4CutoverFifoRoutes";
+import { isGoldenCoastCompany, type DbLike } from "./spGoldenCoastCutoverFifoRoutes";
 import { requireSpCompany } from "./spHelpers";
 
 /**

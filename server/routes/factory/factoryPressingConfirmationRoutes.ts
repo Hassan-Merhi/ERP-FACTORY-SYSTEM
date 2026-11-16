@@ -23,7 +23,7 @@ import {
   getActiveCompanyPermissionContext,
 } from "../../services/security/activeCompanyPermissionContext";
 import { logAudit } from "../helpers/auditHelpers";
-import { capturePhase9PressingTx } from "../../edge/phase9PressingOutbox";
+import { capturePhase9PressingTx } from "../../edge/pressingOutbox";
 import { logger } from "../../lib/logger";
 import { factoryLocalDate } from "../../services/factory/pressingShiftTime";
 import { PRESSING_TIME_ZONE } from "@shared/pressingTimeZone";

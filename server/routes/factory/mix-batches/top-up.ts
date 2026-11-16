@@ -43,7 +43,7 @@ import {
   MixLifecycleRefusal,
   mixKilograms,
   requireMixLifecycleAvailable,
-} from "../../../services/factory/mixLifecyclePhase6";
+} from "../../../services/factory/mixLifecycle";
 
 export function registerFactoryMixBatchTopUpRoutes(app: Express) {
   // Top-up an existing mix batch with additional sources

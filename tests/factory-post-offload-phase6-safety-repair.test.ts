@@ -6,7 +6,7 @@ const read = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8"
 
 describe("Phase 6 post-offload safety and repair", () => {
   it("exposes a read-only readiness endpoint and a protected prepare/apply endpoint", () => {
-    const routes = read("server/routes/factory/raw-stock/postOffloadPhase6SafetyRoutes.ts");
+    const routes = read("server/routes/factory/raw-stock/postOffloadSafetyRoutes.ts");
 
     expect(routes).toContain('const READINESS_PATH = "/api/factory/raw-stock/post-offload/readiness"');
     expect(routes).toContain('const REPAIR_PATH = "/api/factory/raw-stock/post-offload/repair"');
@@ -21,7 +21,7 @@ describe("Phase 6 post-offload safety and repair", () => {
   });
 
   it("binds a short-lived approval to company, user, release, algorithm, state, scope, and row count", () => {
-    const service = read("server/services/factory/postOffloadPhase6SafetyImpl.ts");
+    const service = read("server/services/factory/postOffloadSafetyImpl.ts");
 
     for (const field of [
       "companyId",
@@ -45,7 +45,7 @@ describe("Phase 6 post-offload safety and repair", () => {
   });
 
   it("uses the existing exact replay engine with one-use token, exact undo, and atomic apply audit", () => {
-    const service = read("server/services/factory/postOffloadPhase6SafetyImpl.ts");
+    const service = read("server/services/factory/postOffloadSafetyImpl.ts");
     const exactApply = read("server/services/factory/historical-replay/exactApplyFinal.ts");
 
     expect(service).toContain("applyHistoricalCostReplay({");
@@ -62,8 +62,8 @@ describe("Phase 6 post-offload safety and repair", () => {
   });
 
   it("persists readiness, preview, blocked, failed, and post-apply verification audit outcomes", () => {
-    const routes = read("server/routes/factory/raw-stock/postOffloadPhase6SafetyRoutes.ts");
-    const audit = read("server/services/factory/postOffloadPhase6Audit.ts");
+    const routes = read("server/routes/factory/raw-stock/postOffloadSafetyRoutes.ts");
+    const audit = read("server/services/factory/postOffloadAudit.ts");
 
     expect(routes).toContain("persistPostOffloadPhase6Audit");
     for (const action of [
@@ -80,7 +80,7 @@ describe("Phase 6 post-offload safety and repair", () => {
   });
 
   it("includes completed batches but always excludes finalized and sold bales from automatic repair", () => {
-    const service = read("server/services/factory/postOffloadPhase6SafetyImpl.ts");
+    const service = read("server/services/factory/postOffloadSafetyImpl.ts");
 
     expect(service).toContain("const INCLUDE_COMPLETED_BATCHES = true");
     expect(service).toContain("const INCLUDE_FINALIZED_BALES = false");
@@ -90,7 +90,7 @@ describe("Phase 6 post-offload safety and repair", () => {
   });
 
   it("diagnoses accounting, FX, reversal, raw-stock, safety, schema, and production control state", () => {
-    const service = read("server/services/factory/postOffloadPhase6SafetyImpl.ts");
+    const service = read("server/services/factory/postOffloadSafetyImpl.ts");
 
     expect(service).toContain("unresolved_fx_charges");
     expect(service).toContain("missing_daybook_links");
@@ -107,7 +107,7 @@ describe("Phase 6 post-offload safety and repair", () => {
   });
 
   it("does not introduce quantity, payment, customer balance, or finalized-bale writes", () => {
-    const service = read("server/services/factory/postOffloadPhase6SafetyImpl.ts");
+    const service = read("server/services/factory/postOffloadSafetyImpl.ts");
 
     expect(service).not.toMatch(/SET\s+received_kg\s*=/i);
     expect(service).not.toMatch(/SET\s+used_kg\s*=/i);

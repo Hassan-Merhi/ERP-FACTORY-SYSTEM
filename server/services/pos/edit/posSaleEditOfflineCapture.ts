@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { vouchers } from "@shared/schema";
 import type { DbTransaction } from "../../../db";
-import { capturePhase9PosSaleEditTx } from "../../../edge/phase9PosOutbox";
+import { capturePhase9PosSaleEditTx } from "../../../edge/posOutbox";
 import { inventoryMoney, inventoryQuantity } from "../../../lib/inventoryMath";
 import type { UpdatePosSaleParams } from "./posEditSaleTypes";
 

@@ -10,7 +10,7 @@ import { db, pool } from "../server/db";
 import {
   ensurePhase3InventoryValuationBaselines,
   loadPhase3InventoryValuationSnapshot,
-} from "../server/services/accounting/phase3InventoryValuation";
+} from "../server/services/accounting/inventoryValuation";
 import { withRolledBackPool } from "./helpers/routedPoolClient";
 
 const PREFIX = `P3V${Date.now().toString(36).toUpperCase()}`;

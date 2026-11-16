@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { companies } from "@shared/schema";
 
 import { db } from "../../db";
-import { capturePhase9StockAdjustTx } from "../../edge/phase9StockOutbox";
+import { capturePhase9StockAdjustTx } from "../../edge/stockOutbox";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { storage } from "../../storage";
 import { InventoryRouteError } from "./inventoryErrors";

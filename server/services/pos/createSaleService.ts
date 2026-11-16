@@ -47,7 +47,7 @@ import { baleMirrorMovementRefusal } from "../accounting/perpetualInventory/cuto
 import { MoneyDecimal } from "../../lib/money";
 import { spDeductionAmount, spPayableAfterDeduction } from "./spDeduction";
 import { PosZmwRateError, resolveLockedZmwPosCurrency, assertZmwImportPrices } from "./posZmwRatePolicy";
-import { allocatePhase9PosInvoiceTx, capturePhase9PosSaleTx, isPhase9LanPrimary } from "../../edge/phase9PosOutbox";
+import { allocatePhase9PosInvoiceTx, capturePhase9PosSaleTx, isPhase9LanPrimary } from "../../edge/posOutbox";
 import { phase9PosSaleRefusal } from "./posSaleOfflinePolicy";
 
 /** The rate a cashier entered for a non-USD sale on the factory LAN server. */

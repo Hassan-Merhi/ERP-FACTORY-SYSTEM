@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { readPhase9OperationStatus, validPhase9OperationScope } from "../server/edge/phase9OperationStatus.mjs";
+import { readPhase9OperationStatus, validPhase9OperationScope } from "../server/edge/operationStatus.mjs";
 
 const scope = {
   siteId: "027d7472-4a29-4bb3-a4aa-5b30e4ad631f",

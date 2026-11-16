@@ -21,13 +21,13 @@ import {
   readFactoryEdgeConfiguration,
 } from "./edgeRuntimePolicy.mjs";
 import { hasFactoryEdgeData } from "./edgeDatabaseProof.mjs";
-import { hasVerifiedPhase7WriterAuthority } from "./phase7WriterGate.mjs";
-import { supportsPhase8LanVoucherCapture } from "./phase8CapturePolicy.mjs";
-import { Phase9StatusRefusal, readPhase9OperationStatus } from "./phase9OperationStatus.mjs";
+import { hasVerifiedPhase7WriterAuthority } from "./writerGate.mjs";
+import { supportsPhase8LanVoucherCapture } from "./capturePolicy.mjs";
+import { Phase9StatusRefusal, readPhase9OperationStatus } from "./operationStatus.mjs";
 import { registerCloudEdgeSyncReceiver } from "./edgeSyncReceiver";
-import { registerPhase10OperatorRoutes } from "./phase10OperatorRoutes";
+import { registerPhase10OperatorRoutes } from "./operatorRoutes";
 import { edgeStatusRateLimit } from "./edgeRateLimit";
-import { summarizeLanEvidence } from "./phase10Handover.mjs";
+import { summarizeLanEvidence } from "./handover.mjs";
 import {
   ActiveCompanyPermissionContextError,
   getActiveCompanyPermissionContext,

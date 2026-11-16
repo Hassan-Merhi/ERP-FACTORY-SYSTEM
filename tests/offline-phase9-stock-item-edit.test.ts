@@ -19,18 +19,18 @@ vi.mock("../server/edge/edgeRuntimePolicy.mjs", async (importOriginal) => ({
 }));
 
 import { pool } from "../server/db";
-import { ensurePhase9StockOutboxSchema } from "../server/edge/phase9StockOutbox";
+import { ensurePhase9StockOutboxSchema } from "../server/edge/stockOutbox";
 import { hashEvidence } from "../server/edge/edgeSyncStageProtocol.mjs";
-import { validatePhase9Event } from "../server/edge/phase9EventProtocol.mjs";
-import { Phase9EventConflict } from "../server/edge/phase9CloudEventStore.mjs";
+import { validatePhase9Event } from "../server/edge/eventProtocol.mjs";
+import { Phase9EventConflict } from "../server/edge/cloudEventStore.mjs";
 import {
   phase9StockItemEditEnvelope,
   type Phase9StockItemChange,
-} from "../server/edge/phase9StockItemEditEnvelope.mjs";
+} from "../server/edge/stockItemEditEnvelope.mjs";
 import {
   phase9StockItemEditApplyHandler,
   type Phase9StockItemEditEvent,
-} from "../server/edge/phase9StockItemEditApply";
+} from "../server/edge/stockItemEditApply";
 import {
   createTenantDatabaseScope,
   runWithDatabaseScopeRuntimeContext,

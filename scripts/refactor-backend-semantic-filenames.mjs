@@ -12,15 +12,15 @@ const allPaths = new Set(tracked);
 const phaseMarker = /(?:[Pp]hase|[Ww]ave)[-_ ]?\d+[a-z]?(?=[^a-z]|[A-Z]|$)/g;
 const hasPhase = name => /(?:wave|phase)[-_ ]?\d+/i.test(name);
 const overrides = new Map(Object.entries({
-  "server/edge/phase8OperatorApply.ts": "server/edge/stagedVoucherOperatorApply.ts",
-  "server/edge/phase9OperatorApply.ts": "server/edge/eventStreamOperatorApply.ts",
-  "server/routes/sp/spGoldenCoastPhase5PosSaleRoutes.ts": "server/routes/sp/spGoldenCoastPosSalePostingRoutes.ts",
-  "server/routes/sp/spGoldenCoastPhase6PosSaleRoutes.ts": "server/routes/sp/spGoldenCoastPosSaleDeductionsRoutes.ts",
-  "server/routes/sp/spMigrationPhase2Routes.ts": "server/routes/sp/spMigrationRehearsalRoutes.ts",
-  "server/routes/sp/spMigrationPhase4Routes.ts": "server/routes/sp/spMigrationFinalCutoverRoutes.ts",
-  "server/services/accounting/voucherPathPhase5to6Boundary.ts": "server/services/accounting/voucherPathTransitionBoundary.ts",
-  "server/wave3SalesHotpathIndexBridge.mjs": "server/salesHotpathIndexRepair.mjs",
-  "server/types/session-data-phase4.d.ts": "server/types/session-data.d.ts",
+  "server/edge/stagedVoucherOperatorApply.ts": "server/edge/stagedVoucherOperatorApply.ts",
+  "server/edge/eventStreamOperatorApply.ts": "server/edge/eventStreamOperatorApply.ts",
+  "server/routes/sp/spGoldenCoastPosSalePostingRoutes.ts": "server/routes/sp/spGoldenCoastPosSalePostingRoutes.ts",
+  "server/routes/sp/spGoldenCoastPosSaleDeductionsRoutes.ts": "server/routes/sp/spGoldenCoastPosSaleDeductionsRoutes.ts",
+  "server/routes/sp/spMigrationRehearsalRoutes.ts": "server/routes/sp/spMigrationRehearsalRoutes.ts",
+  "server/routes/sp/spMigrationFinalCutoverRoutes.ts": "server/routes/sp/spMigrationFinalCutoverRoutes.ts",
+  "server/services/accounting/voucherPathTransitionBoundary.ts": "server/services/accounting/voucherPathTransitionBoundary.ts",
+  "server/salesHotpathIndexRepair.mjs": "server/salesHotpathIndexRepair.mjs",
+  "server/types/session-data.d.ts": "server/types/session-data.d.ts",
 }));
 function newName(file) {
   if (overrides.has(file)) return overrides.get(file);

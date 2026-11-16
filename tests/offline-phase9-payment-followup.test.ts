@@ -29,24 +29,24 @@ vi.mock("../server/edge/edgeRuntimePolicy.mjs", async (importOriginal) => ({
 }));
 
 import { pool, type DbTransaction } from "../server/db";
-import { ensurePhase9PaymentOutboxSchema } from "../server/edge/phase9PaymentOutbox";
+import { ensurePhase9PaymentOutboxSchema } from "../server/edge/paymentOutbox";
 import { hashEvidence } from "../server/edge/edgeSyncStageProtocol.mjs";
-import { phase9OverridableConflicts, validatePhase9Event } from "../server/edge/phase9EventProtocol.mjs";
-import { ensurePhase9CloudEventSchema, Phase9EventConflict } from "../server/edge/phase9CloudEventStore.mjs";
-import { phase9PaymentApplyHandler, type Phase9PaymentEvent } from "../server/edge/phase9PaymentApply";
+import { phase9OverridableConflicts, validatePhase9Event } from "../server/edge/eventProtocol.mjs";
+import { ensurePhase9CloudEventSchema, Phase9EventConflict } from "../server/edge/cloudEventStore.mjs";
+import { phase9PaymentApplyHandler, type Phase9PaymentEvent } from "../server/edge/paymentApply";
 import {
   PHASE9_PAYMENT_CHANGED_CONFLICT,
   phase9PaymentDeleteEnvelope,
   phase9PaymentEditEnvelope,
   type Phase9PaymentVoucherInputs,
   type Phase9PaymentVoucherRef,
-} from "../server/edge/phase9PaymentEnvelope.mjs";
+} from "../server/edge/paymentEnvelope.mjs";
 import {
   phase9PaymentDeleteApplyHandler,
   phase9PaymentEditApplyHandler,
-} from "../server/edge/phase9PaymentFollowUpApply";
-import { phase9PaymentSnapshotTx } from "../server/edge/phase9PaymentSnapshot";
-import { PHASE9_PERIOD_CLOSED } from "../server/edge/phase9ClosedPeriod";
+} from "../server/edge/paymentFollowUpApply";
+import { phase9PaymentSnapshotTx } from "../server/edge/paymentSnapshot";
+import { PHASE9_PERIOD_CLOSED } from "../server/edge/closedPeriod";
 import {
   createTenantDatabaseScope,
   runWithDatabaseScopeRuntimeContext,

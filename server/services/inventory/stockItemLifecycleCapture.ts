@@ -1,12 +1,12 @@
 /**
  * Plan batch 2 (owner-approved 2026-11-05): evidence for stock items created
  * or deleted on the factory LAN server, recorded on the "stock" stream in the
- * same transaction as the item itself (server/edge/phase9StockOutbox.ts).
+ * same transaction as the item itself (server/edge/stockOutbox.ts).
  */
 import { randomUUID } from "node:crypto";
 import type { Request } from "express";
 import type { StockItem } from "@shared/schema";
-import type { Phase9StockItemFields } from "../../edge/phase9StockItemLifecycleEnvelope.mjs";
+import type { Phase9StockItemFields } from "../../edge/stockItemLifecycleEnvelope.mjs";
 import { getClientDate } from "../../lib/dateUtils";
 
 function actor(req: Request) {

@@ -6,9 +6,9 @@ import {
   paymentFollowUpActor,
   phase9PaymentSnapshotTx,
   phase9PaymentVoucherRefTx,
-} from "../../edge/phase9PaymentOutbox";
+} from "../../edge/paymentOutbox";
 import { sessionRetirementActor, type VoucherRetirementActor } from "../../services/accounting/voucherRetirement";
-import { isPhase9LanPrimary } from "../../edge/phase9PosOutbox";
+import { isPhase9LanPrimary } from "../../edge/posOutbox";
 import { capturePosSaleCancelOfflineTx } from "../../services/pos/posSaleCancelOfflineCapture";
 import { getClientDate } from "../../lib/dateUtils";
 /**

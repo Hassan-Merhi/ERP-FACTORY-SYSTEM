@@ -13,7 +13,7 @@
  * alone.
  */
 import { describe, expect, it } from "vitest";
-import { buildGoldenCoastPhase3CutoverPlan } from "./goldenCoastPhase3Cutover";
+import { buildGoldenCoastPhase3CutoverPlan } from "./goldenCoastCutover";
 import {
   buildGoldenCoastPhase5SalePostings,
   goldenCoastPhase5SaleDigest,
@@ -22,17 +22,17 @@ import {
   type GoldenCoastFifoLot,
   type GoldenCoastPhase5RoleAccounts,
   type GoldenCoastPhase5SalePlan,
-} from "./goldenCoastPhase5PosSale";
+} from "./goldenCoastPosSale";
 import {
   buildGoldenCoastPhase6SpecialLocationDeductionPosting,
   planGoldenCoastPhase6SpecialLocationDeduction,
-} from "./goldenCoastPhase6SpecialLocationDeduction";
+} from "./goldenCoastSpecialLocationDeduction";
 import {
   buildGoldenCoastPhase7TransferPostings,
   goldenCoastPhase7TransferDigest,
   parseGoldenCoastPhase7TransferInput,
   planGoldenCoastPhase7Transfer,
-} from "./goldenCoastPhase7HadiTransfer";
+} from "./goldenCoastHadiTransfer";
 import {
   buildGoldenCoastEquitySalesCashPosting,
   goldenCoastEquitySalesCashDigest,
@@ -44,7 +44,7 @@ import {
   goldenCoastPhase10SettlementDigest,
   parseGoldenCoastPhase10SettlementInput,
   planGoldenCoastPhase10Settlement,
-} from "./goldenCoastPhase10SalesCashSettlement";
+} from "./goldenCoastSalesCashSettlement";
 
 const COMPANY_ID = 7;
 const HADI_COMPANY_ID = 8;

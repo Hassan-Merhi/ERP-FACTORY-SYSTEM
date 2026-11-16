@@ -88,7 +88,7 @@ reject_runtime 2 'INSERT INTO public.phase7_test_business(id) VALUES (7)'
 # A mocked JS row cannot catch missing catalog functions or role grants.
 authority_file="$(mktemp)"
 trap 'rm -f "$authority_file"; docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
-node --input-type=module -e 'import { PHASE7_AUTHORITY_SQL } from "./server/edge/phase7WriterGate.mjs"; process.stdout.write(PHASE7_AUTHORITY_SQL)' > "$authority_file"
+node --input-type=module -e 'import { PHASE7_AUTHORITY_SQL } from "./server/edge/writerGate.mjs"; process.stdout.write(PHASE7_AUTHORITY_SQL)' > "$authority_file"
 docker cp "$authority_file" "$container":/tmp/phase7-authority.sql
 proof="$(docker exec -e PGPASSWORD=phase7-test-app-password "$container" psql -X -At -v ON_ERROR_STOP=1 -h 127.0.0.1 -U phase7_app -d postgres -f /tmp/phase7-authority.sql)"
 if [[ "$proof" != *"cloud-primary|1|"* || "$proof" != *"|t|0" ]]; then

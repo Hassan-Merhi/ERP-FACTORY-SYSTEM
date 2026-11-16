@@ -10,10 +10,10 @@ import type { PoolClient } from "pg";
 
 import { pool } from "../server/db";
 import { hashEvidence } from "../server/edge/edgeSyncStageProtocol.mjs";
-import { validatePhase9Event } from "../server/edge/phase9EventProtocol.mjs";
-import { Phase9EventConflict } from "../server/edge/phase9CloudEventStore.mjs";
-import { phase9StockApplyHandler, type Phase9StockEvent } from "../server/edge/phase9StockApply";
-import { phase9StockAdjustEnvelope } from "../server/edge/phase9StockEnvelope.mjs";
+import { validatePhase9Event } from "../server/edge/eventProtocol.mjs";
+import { Phase9EventConflict } from "../server/edge/cloudEventStore.mjs";
+import { phase9StockApplyHandler, type Phase9StockEvent } from "../server/edge/stockApply";
+import { phase9StockAdjustEnvelope } from "../server/edge/stockEnvelope.mjs";
 import {
   createTenantDatabaseScope,
   runWithDatabaseScopeRuntimeContext,

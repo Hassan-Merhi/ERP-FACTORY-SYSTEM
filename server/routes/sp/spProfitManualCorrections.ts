@@ -2,7 +2,7 @@ import type { Request } from "express";
 import { sql } from "drizzle-orm";
 import { db } from "../../db";
 import { resultRows } from "../../lib/queryResult";
-import type { DbLike } from "./spGoldenCoastPhase4CutoverFifoRoutes";
+import type { DbLike } from "./spGoldenCoastCutoverFifoRoutes";
 
 /**
  * Append-only, company/month-scoped developer profit corrections.

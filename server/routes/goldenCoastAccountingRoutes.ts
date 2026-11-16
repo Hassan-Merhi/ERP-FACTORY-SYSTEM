@@ -23,8 +23,8 @@ import {
   buildGoldenCoastPhase1Preview,
   getGoldenCoastPhase1CashRoleRequirements,
   getGoldenCoastPhase1LedgerRoleRequirements,
-} from "../services/accounting/goldenCoastPhase1Posting";
-import { buildGoldenCoastPhase1PostingBatch } from "../services/accounting/goldenCoastPhase1PostingBatch";
+} from "../services/accounting/goldenCoastPosting";
+import { buildGoldenCoastPhase1PostingBatch } from "../services/accounting/goldenCoastPostingBatch";
 import { buildVoucherChangesForCreate, getCurrentExchangeRate, logAudit, snapshotVoucherEntries } from "./_helpers";
 
 const postingDependencies = createDatabasePostingDependencies();

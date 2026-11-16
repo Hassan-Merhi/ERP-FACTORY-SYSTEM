@@ -12,7 +12,7 @@
  */
 import type { Response } from "express";
 import { describe, expect, it } from "vitest";
-import { captureResponse } from "./voucherPathPhase5to6Boundary";
+import { captureResponse } from "./voucherPathTransitionBoundary";
 
 /** Minimal stand-in for Express's json/send delegation. */
 function fakeResponse(): Response {

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
-import { stagePhase9AttachmentFile } from "../server/edge/phase9CloudEventStore.mjs";
+import { stagePhase9AttachmentFile } from "../server/edge/cloudEventStore.mjs";
 
 const SITE = "027d7472-4a29-4bb3-a4aa-5b30e4ad631f";
 const BYTES = Buffer.from("phase9-verified-upload");

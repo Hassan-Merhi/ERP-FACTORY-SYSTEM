@@ -16,7 +16,7 @@ import {
   finalizeStockTransferWithCapture,
   saveStockTransferWithCapture,
 } from "../../services/inventory/stockTransferWorkflowCapture";
-import { isPhase9LanPrimary } from "../../edge/phase9PosOutbox";
+import { isPhase9LanPrimary } from "../../edge/posOutbox";
 import { offlineEdgeText } from "../../i18n/offlineEdgeMessages";
 
 const lifecycleItemSchema = z.object({

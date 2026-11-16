@@ -18,7 +18,7 @@ import {
   type GoldenCoastSettingsSnapshot,
   planGoldenCoastAccountProvisioning,
   summarizeGoldenCoastAccountSetup,
-} from "../../services/accounting/goldenCoastPhase2Accounts";
+} from "../../services/accounting/goldenCoastAccounts";
 import {
   GoldenCoastPhase13IntercompanyError,
   goldenCoastPhase13IntercompanyDefinitions,
@@ -26,7 +26,7 @@ import {
   summarizeGoldenCoastPhase13IntercompanyAccount,
   type GoldenCoastPhase13IntercompanyDefinition,
   type GoldenCoastPhase13LedgerRow,
-} from "../../services/accounting/goldenCoastPhase13Intercompany";
+} from "../../services/accounting/goldenCoastIntercompany";
 import { getCompanyRequestRuntimeContext } from "../../services/security/companyRequestRuntimeContext";
 import { assertTransactionCompanyScope } from "../../services/security/transactionCompanyScope";
 import { requireSpCompany } from "./spHelpers";

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { Phase9PressingRefusal, phase9PressingEnvelope } from "../server/edge/phase9PressingEnvelope.mjs";
+import { Phase9PressingRefusal, phase9PressingEnvelope } from "../server/edge/pressingEnvelope.mjs";
 
 const valid = {
   companyId: 5,

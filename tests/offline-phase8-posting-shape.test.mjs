@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { approvedPhase8JournalShape } from "../server/edge/phase8VoucherPolicy.mjs";
+import { approvedPhase8JournalShape } from "../server/edge/voucherPolicy.mjs";
 
 const voucher = {
   id: 88,

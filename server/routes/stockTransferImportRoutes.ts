@@ -29,7 +29,7 @@ import {
   type ProvisionalRateBasis,
 } from "./stockTransferImportPosting";
 import { sendBaleMirrorMovementRefusal } from "../services/accounting/perpetualInventory/cutoverRefusal";
-import { isPhase9LanPrimary } from "../edge/phase9PosOutbox";
+import { isPhase9LanPrimary } from "../edge/posOutbox";
 import { importStockTransferOnLan } from "../services/inventory/stockTransferImportOfflineCapture";
 
 /** Sends a wave 11/15 refusal (bale mirror, missing source after the cut-over); returns whether it did. */

@@ -21,7 +21,7 @@ import {
 import {
   deterministicPhase6RequestIdentity,
   resolveVoucherPathCompanyId,
-} from "../server/services/accounting/voucherPathPhase5to6Boundary";
+} from "../server/services/accounting/voucherPathTransitionBoundary";
 
 const PHASE5_WRITERS = [
   "server/routes/containers/offload/create.ts",
