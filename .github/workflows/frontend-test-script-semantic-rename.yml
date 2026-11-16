@@ -35,8 +35,7 @@ jobs:
         run: node scripts/refactor-ui-tests-scripts-filenames.mjs > phase3-rename-plan.json
       - name: Reconcile lockfile and install dependencies
         run: |
-          npm install --package-lock-only --ignore-scripts --no-audit
-          npm ci --ignore-scripts
+          npm install --ignore-scripts --no-audit --no-fund
       - name: Apply semantic renames with tracked references
         run: |
           node scripts/refactor-ui-tests-scripts-filenames.mjs --apply > phase3-renames-applied.json
