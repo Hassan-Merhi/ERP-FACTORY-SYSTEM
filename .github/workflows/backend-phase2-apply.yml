@@ -28,6 +28,10 @@ jobs:
           node -e "const r=require('./backend-phase2-renames.json');if(r.renameCount<100)throw Error('Expected >100 remaining backend files');console.log('Renamed',r.renameCount,'backend modules; modified',r.modifiedReferenceFiles,'references')"
       - name: Compile and check imports
         run: npm run check
+      - name: Build and verify deployable backend bundle
+        run: |
+          npm run build
+          npm run verify:runtime-dependencies
       - name: Focused backend semantic rename regression checks
         run: |
           node scripts/verify-phase6-chat-report-domains.mjs
