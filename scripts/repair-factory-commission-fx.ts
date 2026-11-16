@@ -341,9 +341,9 @@ async function main() {
           });
         });
         report.appliedOk = true;
-      } catch (err: any) {
+      } catch (err: unknown) {
         report.appliedOk = false;
-        report.skippedReason = `Apply error: ${err.message}`;
+        report.skippedReason = `Apply error: ${err instanceof Error ? err.message : String(err)}`;
       }
     }
   }
