@@ -43,6 +43,7 @@ interface SpProfitReport {
   totalCogs?: number;
   grossProfit?: number;
   totalSharedCharges?: number;
+  prepaidContainerChargesBalance?: number;
   netProfit?: number;
 }
 
@@ -369,6 +370,15 @@ export default function SpReports() {
                         </span>
                       </div>
                     ))}
+                    <div
+                      className="flex items-center justify-between gap-3 text-xs text-muted-foreground py-1"
+                      data-testid="row-sp-prepaid-container-charges"
+                    >
+                      <span>Prepaid container charges (asset; not deducted again)</span>
+                      <span className="tabular-nums whitespace-nowrap">
+                        {fmt(profit.prepaidContainerChargesBalance ?? 0)}
+                      </span>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
