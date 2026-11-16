@@ -227,6 +227,9 @@ export function registerFactoryWorkerCrudRoutes(app: Express, requireAuth: Reque
       const becomingInactive = previousWorker.active && updateData.active === false;
       const becomingActive = !previousWorker.active && updateData.active === true;
       if (becomingInactive && !updateData.contractEndDate) updateData.contractEndDate = todayForStatus;
+      if (!previousWorker.active && !becomingActive && !updateData.contractEndDate) {
+        updateData.contractEndDate = previousWorker.contractEndDate;
+      }
       if (becomingActive) updateData.contractEndDate = null;
       for (const f of [
         "dateOfBirth",
