@@ -4,6 +4,9 @@ on:
     branches:
       - refactor/phase-wave-semantic-names
   workflow_dispatch:
+concurrency:
+  group: phase-wave-inventory-latest
+  cancel-in-progress: true
 jobs:
   audit:
     runs-on: ubuntu-latest
