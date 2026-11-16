@@ -914,7 +914,7 @@ export async function postScheduledGroup(
     const lockedMonths = (await tx.execute(sql`
       SELECT ml.id,ml.year,ml.month,ml.expected_amount
       FROM property_monthly_ledger ml
-      WHERE ml.id IN (${sql.raw(monthIds.join(","))})
+      WHERE ml.id IN (${sql.join(monthIds.map((id) => sql`${id}`), sql`, `)})
         AND ml.company_id=${contractCompanyId}
         AND ml.contract_id=${contract.id}
       ORDER BY ml.id FOR UPDATE OF ml
@@ -934,7 +934,7 @@ export async function postScheduledGroup(
         AND p.contract_id=${contract.id}
         AND p.posting_status='POSTED'
         AND (v.id IS NOT NULL OR (${approvedLegacyNonCashBillingAdjustment}))
-        AND p.ledger_row_id IN (${sql.raw(monthIds.join(","))})
+        AND p.ledger_row_id IN (${sql.join(monthIds.map((id) => sql`${id}`), sql`, `)})
       GROUP BY p.ledger_row_id
     `)).rows as Array<{ ledger_row_id: number; paid: string }>;
     const paidByMonth = new Map(bookedAmounts.map((row) => [Number(row.ledger_row_id), toMoney(row.paid)]));
