@@ -1,102 +1,126 @@
 #!/usr/bin/env node
 /**
- * Raw SQL review gate. Intentionally fails closed: each remaining dynamic SQL
- * escape hatch must carry a manual, source-bound security review.
+ * Raw SQL review gate (npm run check:raw-sql). Fails closed.
  *
- * To approve a finding, add its fingerprint to docs/security/raw-sql-allowlist.json
- * with a specific reason and provenance of all dynamic inputs. Never bulk-approve.
+ * Scans every TypeScript / JavaScript / SQL source under the scan roots with
+ * scripts/lib/raw-sql-scanner.mjs. Every SQL construction site whose dynamic
+ * parts cannot be mechanically proven static or numeric must carry a manual,
+ * source-bound review entry in docs/security/raw-sql-allowlist.json.
+ *
+ * The gate fails on:
+ *   - an unreviewed site (new code, or an existing site whose normalized
+ *     expression / enclosing function changed -> new fingerprint);
+ *   - a stale approval (site removed or changed) or an approval for a site that
+ *     no longer needs one (now provably static);
+ *   - duplicate ids, malformed entries, unknown classifications, generic or
+ *     short justifications, and approvals whose documented dynamic inputs do
+ *     not exactly match the dynamic parts the scanner extracted;
+ *   - a register (docs/security/raw-sql-audit-findings.json) that is out of
+ *     date with the source tree;
+ *   - a missing / empty scan root.
+ *
+ * Modes:
+ *   node scripts/verify-raw-sql-allowlist.mjs                 check (CI)
+ *   node scripts/verify-raw-sql-allowlist.mjs --inventory     print raw inventory JSON
+ *   node scripts/verify-raw-sql-allowlist.mjs --write-register  regenerate the register
+ *   --root <dir>  scan a different repository root (used by the checker's tests)
  */
-import ts from "typescript";
-import { createHash } from "node:crypto";
-import { readFile, readdir } from "node:fs/promises";
-import { join, relative } from "node:path";
+import { readFile, readdir, writeFile, stat } from "node:fs/promises";
+import { join, relative, resolve } from "node:path";
+import { scanSource } from "./lib/raw-sql-scanner.mjs";
+import { validateAllowlist, buildRegister, SCAN_ROOTS, ROOT_FILES } from "./lib/raw-sql-allowlist.mjs";
 
-const roots = ["server", "shared", "scripts"];
-const extensions = /\.(?:ts|tsx|js|mjs|cjs)$/;
-const skip = new Set(["node_modules", "dist", "build", "coverage", ".git"]);
-const allowlistPath = "docs/security/raw-sql-allowlist.json";
-const fingerprint = (path, source) =>
-  createHash("sha256").update(path + "\n" + source).digest("hex").slice(0, 20);
-const inventoryOnly = process.argv.includes("--inventory");
+const args = process.argv.slice(2);
+const rootArg = args.indexOf("--root");
+const repoRoot = resolve(rootArg >= 0 ? args[rootArg + 1] : ".");
+const allowlistPath = join(repoRoot, "docs/security/raw-sql-allowlist.json");
+const registerPath = join(repoRoot, "docs/security/raw-sql-audit-findings.json");
+
+const SCANNED = /\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs|sql)$/;
+const IGNORED_EXT = /\.(?:d\.ts|json|md|txt|png|jpe?g|gif|svg|webp|ico|csv|xlsx|snap|html|css|ya?ml|map|lock|sh|ps1|bat|pdf|woff2?|ttf|mp4|webm|mp3|wav|zip|gz|tsbuildinfo|example|env|sample|log|controlled|meta)$/i;
+const SKIP_DIRS = new Set(["node_modules", "dist", "build", "coverage", ".git", "__snapshots__"]);
+
+async function exists(p) { try { await stat(p); return true; } catch { return false; } }
+
 const files = [];
+const unknownExtensions = new Map();
 async function walk(folder) {
   for (const item of await readdir(folder, { withFileTypes: true })) {
-    if (skip.has(item.name)) continue;
+    if (SKIP_DIRS.has(item.name)) continue;
     const path = join(folder, item.name);
     if (item.isDirectory()) await walk(path);
-    else if (extensions.test(item.name)) files.push(path);
+    else if (item.name.endsWith(".d.ts")) continue;
+    else if (SCANNED.test(item.name)) files.push(path);
+    else if (!IGNORED_EXT.test(item.name)) {
+      const ext = item.name.includes(".") ? item.name.slice(item.name.lastIndexOf(".")) : "(none)";
+      unknownExtensions.set(ext, (unknownExtensions.get(ext) ?? 0) + 1);
+    }
   }
 }
-for (const root of roots) await walk(root);
+
+const rootErrors = [];
+const perRoot = {};
+for (const root of SCAN_ROOTS) {
+  const abs = join(repoRoot, root);
+  if (!(await exists(abs))) { rootErrors.push(`SCAN ROOT MISSING ${root}`); continue; }
+  const before = files.length;
+  await walk(abs);
+  perRoot[root] = files.length - before;
+  if (perRoot[root] === 0) rootErrors.push(`SCAN ROOT EMPTY ${root}`);
+}
+for (const f of ROOT_FILES) if (await exists(join(repoRoot, f))) files.push(join(repoRoot, f));
 
 const findings = [];
-const occurrences = new Map();
 for (const file of files.sort()) {
   const source = await readFile(file, "utf8");
-  const path = relative(".", file).replaceAll("\\", "/");
-  const ast = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true,
-    path.endsWith("tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
-  function visit(node) {
-    let kind = null;
-    if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
-      const receiver = node.expression.expression.getText(ast);
-      const method = node.expression.name.text;
-      if (receiver === "sql" && method === "raw") kind = "sql.raw";
-      // Direct SQL string templates skip the parameter binder entirely.
-      if (["query", "execute"].includes(method) &&
-          node.arguments.some(a => ts.isTemplateExpression(a) ||
-            (ts.isBinaryExpression(a) && a.operatorToken.kind === ts.SyntaxKind.PlusToken)))
-        kind = "interpolated-query";
-    }
-    // A text template can be assembled before being handed to pool.query,
-    // client.query, or a wrapper. Track query-shaped declarations separately
-    // so those sites cannot disappear behind identifier arguments.
-    if (ts.isVariableDeclaration(node) && node.initializer &&
-        /^[A-Za-z_$][\w$]*(?:query|sql|statement|ddl|text)[\w$]*$/i.test(node.name.getText(ast)) &&
-        (ts.isTemplateExpression(node.initializer) ||
-         (ts.isBinaryExpression(node.initializer) &&
-          node.initializer.operatorToken.kind === ts.SyntaxKind.PlusToken))) {
-      const value = node.initializer.getText(ast);
-      if (/\b(?:SELECT|INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|WITH|FROM|WHERE)\b/i.test(value))
-        kind = "assembled-sql-text";
-    }
-    if (kind) {
-      const expression = node.getText(ast);
-      const repeatKey = path + "\\n" + expression;
-      const occurrence = (occurrences.get(repeatKey) ?? 0) + 1;
-      occurrences.set(repeatKey, occurrence);
-      const id = fingerprint(path, expression + "\\n#" + occurrence);
-      const line = ast.getLineAndCharacterOfPosition(node.getStart(ast)).line + 1;
-      findings.push({ id, path, line, kind, expression: expression.slice(0, 160) });
-    }
-    ts.forEachChild(node, visit);
-  }
-  visit(ast);
+  const path = relative(repoRoot, file).replaceAll("\\", "/");
+  findings.push(...scanSource(path, source));
 }
-if (inventoryOnly) {
-  console.log(JSON.stringify({ scannedFiles: files.length, found: findings.length, findings }, null, 2));
-  process.exit(0);
+
+const summarize = (list) => {
+  const byKind = {};
+  for (const f of list) byKind[f.kind] = (byKind[f.kind] ?? 0) + 1;
+  return byKind;
+};
+
+if (args.includes("--inventory")) {
+  console.log(JSON.stringify({
+    scannedFiles: files.length, perRoot, unknownExtensions: Object.fromEntries(unknownExtensions),
+    found: findings.length, byKind: summarize(findings),
+    autoVerified: findings.filter((f) => f.autoVerified).length,
+    requiresReview: findings.filter((f) => !f.autoVerified).length,
+    findings,
+  }, null, 2));
+  process.exit(rootErrors.length ? 1 : 0);
 }
-const approved = JSON.parse(await readFile(allowlistPath, "utf8"));
-if (!Array.isArray(approved)) throw new Error("Raw SQL allowlist must be an array");
-const used = new Set();
-const errors = [];
-const byId = new Map();
-for (const item of approved) {
-  if (!item || typeof item.id !== "string" || byId.has(item.id)) {
-    errors.push("Duplicate or malformed reviewed allowlist entry"); continue;
-  }
-  if (typeof item.reason !== "string" || item.reason.trim().length < 30 ||
-      typeof item.inputProvenance !== "string" || item.inputProvenance.trim().length < 20) {
-    errors.push(item.id + ": review reason and input provenance required");
-  }
-  byId.set(item.id, item);
+
+let allowlist;
+try {
+  allowlist = JSON.parse(await readFile(allowlistPath, "utf8"));
+} catch (error) {
+  console.error(`Cannot read ${allowlistPath}: ${error.message}`);
+  process.exit(1);
 }
-for (const item of findings) {
-  if (!byId.has(item.id)) errors.push("UNREVIEWED " + item.kind + " " + item.path + ":" + item.line + " [" + item.id + "]");
-  else used.add(item.id);
+const result = validateAllowlist(findings, allowlist);
+const register = buildRegister(findings, allowlist, { scannedFiles: files.length, perRoot });
+
+if (args.includes("--write-register")) {
+  await writeFile(registerPath, JSON.stringify(register, null, 2) + "\n");
+  console.log(`Wrote ${relative(repoRoot, registerPath)} (${register.summary.totalSites} sites)`);
 }
-for (const id of byId.keys()) if (!used.has(id)) errors.push("STALE APPROVAL " + id);
-console.log(JSON.stringify({ scannedFiles: files.length, found: findings.length,
-  reviewed: used.size, outstanding: findings.length - used.size, errors }, null, 2));
+
+const errors = [...rootErrors, ...result.errors];
+if (!args.includes("--write-register")) {
+  let committed = null;
+  try { committed = JSON.parse(await readFile(registerPath, "utf8")); } catch { /* missing */ }
+  const want = JSON.stringify(register.findings.map((f) => [f.id, f.disposition]));
+  const have = committed ? JSON.stringify((committed.findings ?? []).map((f) => [f.id, f.disposition])) : null;
+  if (want !== have) errors.push("REGISTER OUT OF DATE docs/security/raw-sql-audit-findings.json — run: node scripts/verify-raw-sql-allowlist.mjs --write-register");
+}
+
+console.log(JSON.stringify({
+  scannedFiles: files.length, perRoot, found: findings.length, byKind: summarize(findings),
+  autoVerified: result.autoVerified, reviewed: result.reviewed, outstanding: result.outstanding,
+  unknownExtensions: Object.fromEntries(unknownExtensions), errors,
+}, null, 2));
 if (errors.length) process.exitCode = 1;
