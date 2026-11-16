@@ -31,8 +31,10 @@ import type { ActiveCompanyPermissionContext } from "../../services/security/act
 import { ACCESS_POLICIES, type AccessPolicy } from "./accessPolicies";
 import { establishCompanyScope } from "./companyScopeStage";
 import {
+  ACCESS_POLICY_NAMES,
   POLICIES_AFTER_PERMISSIONS,
   POLICIES_BEFORE_MODULE_PERMISSIONS,
+  RouteAccessManifestError,
   RouteAccessResolver,
   type AccessPolicyName,
   type EffectiveRouteAccess,
@@ -154,6 +156,11 @@ export function createManifestAccessBoundary(options: ManifestAccessBoundaryOpti
     options.manifest ?? (routeAccessManifestJson as unknown as RouteAccessManifest)
   );
   const policies = options.policies ?? ACCESS_POLICIES;
+  // Every policy a rule can name must have a resolver before the first request.
+  const unresolved = ACCESS_POLICY_NAMES.filter((name) => typeof policies[name] !== "function");
+  if (unresolved.length) {
+    throw new RouteAccessManifestError(unresolved.map((name) => `policy "${name}" has no resolver`));
+  }
 
   async function runPolicies(
     req: Request,
@@ -163,10 +170,7 @@ export function createManifestAccessBoundary(options: ManifestAccessBoundaryOpti
   ): Promise<boolean> {
     for (const name of access.policies) {
       if (!include(name)) continue;
-      const policy = policies[name];
-      // Unreachable for a validated manifest; refuse rather than skip a check.
-      if (!policy) throw new Error(`Access policy "${name}" has no resolver`);
-      if (!(await policy(req, res))) return false;
+      if (!(await policies[name](req, res))) return false;
     }
     return true;
   }
@@ -182,7 +186,8 @@ export function createManifestAccessBoundary(options: ManifestAccessBoundaryOpti
       if (finished) return;
       finished = true;
       // A resolver that throws must never fall through to the handler.
-      next(error ?? new Error("Access boundary failed"));
+      // Always hand Express an error object, so a bare rejection cannot be read as "continue".
+      next(error instanceof Error ? error : new Error(String(error)));
     };
 
     const access = resolver.resolve(req.method, req.path);

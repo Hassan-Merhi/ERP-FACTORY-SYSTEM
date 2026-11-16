@@ -570,25 +570,10 @@ describe("named policies", () => {
     expect(outcome.policyCalls).not.toContain("factory-page-access");
   });
 
-  it("refuses rather than skips when a declared policy has no resolver", async () => {
-    const boundary = createManifestAccessBoundary({
-      manifest,
-      policies: {} as Record<AccessPolicyName, AccessPolicy>,
-    });
-    harness.getActiveCompanyPermissionContext.mockResolvedValue(contextFor("Admin"));
-    const error = await new Promise<unknown>((resolve) => {
-      const req: any = {
-        method: "POST",
-        path: "/api/factory/things/5",
-        originalUrl: "/api/factory/things/5",
-        query: {},
-        body: {},
-        session: { userId: "user-1", currentCompanyId: 10, currentRole: "Admin", factoryCompanyId: 10 },
-      };
-      boundary(req, {} as never, resolve);
-    });
-    expect(error).toBeInstanceOf(Error);
-    expect(String(error)).toMatch(/has no resolver/);
+  it("refuses to start when a policy has no resolver", () => {
+    expect(() =>
+      createManifestAccessBoundary({ manifest, policies: {} as Record<AccessPolicyName, AccessPolicy> })
+    ).toThrow(/has no resolver/);
   });
 
   it("refuses a request whose URL contradicts its declared company scope", async () => {
