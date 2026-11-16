@@ -21,7 +21,7 @@ jobs:
       - name: Generate raw SQL source inventory
         run: |
           node scripts/verify-raw-sql-allowlist.mjs --inventory > raw-sql-inventory.json
-          node -e 'const r=require("./raw-sql-inventory.json");const kinds={};for(const f of r.findings)kinds[f.kind]=(kinds[f.kind]||0)+1; console.log(JSON.stringify({scannedFiles:r.scannedFiles,found:r.found,byKind:kinds}))'
+          node -e 'const r=require("./raw-sql-inventory.json");const kinds={};for(const f of r.findings)kinds[f.kind]=(kinds[f.kind]||0)+1; console.log(JSON.stringify({scannedFiles:r.scannedFiles,found:r.found,byKind:kinds})); for(const f of r.findings)console.log(JSON.stringify({id:f.id,path:f.path,line:f.line,kind:f.kind,expression:f.expression}))'
       - uses: actions/upload-artifact@v4
         with:
           name: raw-sql-inventory
