@@ -15,6 +15,8 @@ const validRule = (id: string) => ({
   companyScope: "active-company",
   permission: "example.read",
   roles: ["Admin"],
+  status: "reviewed",
+  evidence: ["tests/route-access-coverage.test.ts"],
 });
 const identities = routeSnapshot.routes.map(routeIdentity);
 
