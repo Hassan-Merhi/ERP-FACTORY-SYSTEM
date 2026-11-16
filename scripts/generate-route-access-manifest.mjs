@@ -64,7 +64,8 @@ const manifest = {
 };
 const errors = validateRouteAccessCoverage(snapshot, manifest);
 if (errors.length) throw new Error(errors.slice(0, 15).join("\n"));
-const serialized = JSON.stringify(manifest, null, 2) + "\n";
+// Keep under GitHub Contents API 1 MiB limit while preserving exact stable ordering.
+const serialized = JSON.stringify(manifest) + "\n";
 
 if (process.argv.includes("--write")) {
   fs.writeFileSync(output, serialized);
