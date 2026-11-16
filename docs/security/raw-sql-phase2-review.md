@@ -93,3 +93,29 @@ For the acceptance criterion, run `npm run check:raw-sql` and the
 a source-specific approval plus adversarial tests. The allowlist stays empty,
 rather than pretending uncertain cases are reviewed. Never merge this draft
 until the full inventory is complete.
+
+## Continued review — additional verified code paths
+
+- `server/services/accounting/monetaryFxValuation.ts`: bank/ledger table
+  chosen by a literal `account.accountKind` branch; now quoted with
+  `sql.identifier(k.table)`. IDs and company scope already bound.
+- `server/services/accounting/partyOpenItemService.ts`: table chosen by
+  `customer`/`supplier`/`factory_supplier` domain lookup; now uses
+  `sql.identifier(table)`, with scoped parameters unchanged.
+- `server/services/accounting/cashBankReconciliationService.ts`: the source
+  table is chosen only from bank/ledger kinds; now a quoted identifier.
+- `server/services/accounting/accountHistoryPolicy.ts`: column is checked
+  against `LINE_COLUMNS`, table against `LOCKABLE_TABLES`; both paths
+  now use `sql.identifier` rather than SQL text concatenation.
+- `server/services/factory/netPositionHistoricalPipeline.ts`: a voucher
+  lookup formerly accepted untyped SQL expression strings passed into
+  `sql.raw(number)`. The helper now requires a typed `SQL` fragment.
+  Both observed expressions are constant tagged-SQL expressions, not
+  externally supplied voucher numbers.
+
+A GitHub recursive tree query for this branch returned `truncated=false`
+and approximately 6,470 JavaScript/TypeScript source files overall,
+including 2,311 under `server`, 263 under `scripts`, 151 under
+`shared`, and 1,623 under `tests`. The tree is **path inventory only**;
+it does not establish that the contents of all those files were inspected.
+The Phase 2 review cannot be certified as exhaustive from GitHub search.
