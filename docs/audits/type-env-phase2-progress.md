@@ -34,3 +34,22 @@ npm run check
 npm run lint
 npm test
 ```
+
+## Continued Phase 2 cleanup (2026-11-16)
+
+Additional commits remove explicit `any` from these maintenance scripts:
+
+- `scripts/create-admin.ts`: error narrowed using `instanceof Error`.
+- `scripts/init-db-manual.ts`: database error code narrowed structurally, messages narrowed safely.
+- `scripts/repair-rental-payment-accounting.ts`: three catch variables use `unknown` with safe message extraction.
+- `scripts/smoke-test-csrf.ts`: standard Headers `getSetCookie()` and unknown JSON response token guard.
+- `scripts/repair-post-offload-cost-cascade.ts`: infer container/charge/commission types from Drizzle selections, remove update assertion.
+- `scripts/repair-factory-commission-fx.ts`: infer commission and container types, remove update assertions and transaction cast; reject missing refreshed container; omit unsupported cascade params.
+
+The 45 tracked `scripts/**/*.ts` paths were individually inspected using the GitHub repository file API and text-pattern searches for `as any`, `catch (...: any)`, `any[]`, and obvious annotations. That is **not** an AST scan and may miss uncommon syntaxes. **Do not represent this as a verified zero count.**
+
+The 1,593 tracked `tests/**/*.{ts,tsx,mts,cts}` files were not exhaustively audited; targeted GitHub search demonstrates explicit `any` in multiple test harnesses. Scope must be explicitly resolved against the stated "last 21" goal before repo-wide Phase 2 can be closed.
+
+**No tests, typecheck, lint or CI have been run**, as requested. Some removed casts may expose legitimate TypeScript schema mismatches which must be fixed before merge.
+
+**Status: In progress, not certified.**
