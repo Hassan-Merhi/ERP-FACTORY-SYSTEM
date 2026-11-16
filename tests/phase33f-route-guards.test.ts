@@ -239,6 +239,33 @@ describe("Phase 33F auth, import, export and integration route guards", () => {
     expect(res.body).toEqual({ message: "No company selected" });
   });
 
+  it("restricts the all-company WhatsApp export trigger to Admin/Owner and validates its date range", async () => {
+    registerWhatsAppRoutes(fakeApp());
+    const route = harness.registrations.find(
+      (entry) => entry.method === "POST" && entry.path === "/api/daily-export/trigger-whatsapp"
+    );
+    expect(route?.handlers).toHaveLength(3);
+    const roleGuard = route!.handlers[1];
+    for (const role of ["Manager", "Accountant", "Viewer", "ERP Tester"]) {
+      const res = responseDouble();
+      const next = vi.fn();
+      await roleGuard({ user: { role } }, res, next);
+      expect(next, role).not.toHaveBeenCalled();
+      expect(res.statusCode, role).toBe(403);
+    }
+    for (const role of ["Admin", "Owner", "Developer"]) {
+      const next = vi.fn();
+      await roleGuard({ user: { role } }, responseDouble(), next);
+      expect(next, role).toHaveBeenCalledTimes(1);
+    }
+    const res = await invoke("POST", "/api/daily-export/trigger-whatsapp", {
+      user: { role: "Admin" },
+      body: { fromDate: "2026-01-01' OR '1'='1" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toEqual({ message: "Invalid fromDate: expected YYYY-MM-DD" });
+  });
+
   it("requires company scope on WhatsApp recipient mutations", async () => {
     registerWhatsAppRoutes(fakeApp());
 

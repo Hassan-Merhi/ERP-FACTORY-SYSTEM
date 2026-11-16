@@ -13,7 +13,7 @@
 
 import type { Express } from "express";
 import { getErrorMessage } from "../lib/httpHandlers";
-import { requireAuth } from "../auth";
+import { requireAuth, requireRole } from "../auth";
 import { pool } from "../db";
 import { logger } from "../lib/logger";
 import { storage } from "../storage";
@@ -513,7 +513,8 @@ export function registerWhatsAppRoutes(app: Express) {
 
   // ── Send Net Position (all companies) to group + email NOW ──────────────────
 
-  app.post("/api/daily-export/trigger-whatsapp", requireAuth, async (req, res) => {
+  // Full export of every company: owners/administrators only (Developer is always admitted by requireRole).
+  app.post("/api/daily-export/trigger-whatsapp", requireAuth, requireRole("Admin", "Owner"), async (req, res) => {
     const { fromDate, toDate } = req.body as { fromDate?: string; toDate?: string };
     const invalidDate = invalidExportDateRange(fromDate, toDate);
     if (invalidDate) return res.status(400).json({ message: invalidDate });

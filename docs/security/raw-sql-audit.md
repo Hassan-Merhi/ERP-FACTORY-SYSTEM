@@ -147,7 +147,7 @@ documented `configFragment` remains for the frozen bilingual target config).
   parts change, forcing a new review.
 * `scripts/wipe-company12-data.ts` interpolates information_schema names
   without quoting (operator-only script, catalog names); recorded, not changed.
-* `/api/daily-export/trigger-whatsapp` is reachable by any authenticated user;
-  the injection is fixed but the authorization level was not changed by this
-  audit (out of scope — flagged for a separate decision).
+* `/api/daily-export/trigger-whatsapp` was reachable by any authenticated
+  user; it now also requires the Admin or Owner role (Developer is admitted by
+  `requireRole`), matching `/api/export/start`.
 * No production database was read or modified by this work.
