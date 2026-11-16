@@ -19,7 +19,16 @@ The `canDeleteRecords` flag is a per-user-company-role boolean that grants delet
 
 ## Route Auth Pattern
 
-Every protected route applies middleware in this order:
+Every API request first passes the access boundary, which is mounted once
+ahead of all routes. It reads the route's rule from
+`config/route-access-manifest.json` and enforces the bound company, the
+company-role rule, the `mod_*` / `act_*` / `exp_*` / `pos_perm_*` permission
+keys and the named policies that rule declares. Module, action and export
+permissions are declared there, per route; they are not mounted per URL prefix.
+See [manifest-driven-access-consolidation.md](manifest-driven-access-consolidation.md)
+for the declaration format and how to add a route.
+
+The route's own chain then applies, in this order:
 
 ```
 requireAuth          → verifies session, populates req.user + req.user.role
@@ -28,9 +37,9 @@ requireRole(...)     → (optional) allows only specific roles
 canDelete            → (optional) used on DELETE routes
 checkPOSLocation     → (optional) used on location-scoped POS routes
 canModifyDate        → (optional) used on routes that accept a date field
-requireModuleAccess  → (optional) checks mod_* permission key
-requireActionAccess  → (optional) checks act_* permission key
-requireExportAccess  → (optional) checks exp_* permission key
+requirePageAccess / requireActionAccess / requireExportAccess
+                     → (optional) route-level permission key; must also be
+                       listed in the route's manifest rule
 ```
 
 Example:
