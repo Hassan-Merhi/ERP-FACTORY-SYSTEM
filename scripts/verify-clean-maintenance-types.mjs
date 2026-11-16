@@ -6,6 +6,7 @@
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { countFileEscapes } from "./audit-type-escapes.mjs";
 
 export const CLEAN_MAINTENANCE_SCRIPTS = Object.freeze([
@@ -38,7 +39,7 @@ export function inspectCleanMaintenanceScripts(read = (file) => readFileSync(res
   return failures;
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === resolve(new URL(import.meta.url).pathname)) {
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const failures = inspectCleanMaintenanceScripts();
   if (failures.length) {
     console.error("Clean maintenance script type gate failed:\n" + failures.join("\n"));
