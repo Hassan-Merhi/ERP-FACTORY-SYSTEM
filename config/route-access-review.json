@@ -11096,6 +11096,13 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "scopeEvidence": [
+        {
+          "kind": "user-location-company-resource",
+          "source": "server/services/security/userLocationConfigurationPolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -11105,6 +11112,13 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "scopeEvidence": [
+        {
+          "kind": "user-location-company-resource",
+          "source": "server/services/security/userLocationConfigurationPolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -11113,6 +11127,13 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "scopeEvidence": [
+        {
+          "kind": "user-location-company-resource",
+          "source": "server/services/security/userLocationConfigurationPolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -11122,6 +11143,13 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "scopeEvidence": [
+        {
+          "kind": "user-location-company-resource",
+          "source": "server/services/security/userLocationConfigurationPolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -20299,6 +20327,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "scopeEvidence": [
+        {
+          "kind": "global-maintenance-classifier",
+          "operation": "parent-company-setting",
+          "source": "server/services/security/globalMaintenanceRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -20307,6 +20343,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "scopeEvidence": [
+        {
+          "kind": "global-maintenance-classifier",
+          "operation": "parent-company-setting",
+          "source": "server/services/security/globalMaintenanceRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -20334,6 +20378,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "scopeEvidence": [
+        {
+          "kind": "global-maintenance-classifier",
+          "operation": "deployment-diagnostics",
+          "source": "server/services/security/globalMaintenanceRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -20343,6 +20395,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "scopeEvidence": [
+        {
+          "kind": "global-maintenance-classifier",
+          "operation": "runtime-schema-migration",
+          "source": "server/services/security/globalMaintenanceRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -20352,6 +20412,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "scopeEvidence": [
+        {
+          "kind": "global-maintenance-classifier",
+          "operation": "account-migration",
+          "source": "server/services/security/globalMaintenanceRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -20361,6 +20429,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "scopeEvidence": [
+        {
+          "kind": "global-maintenance-classifier",
+          "operation": "account-migration",
+          "source": "server/services/security/globalMaintenanceRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -20370,6 +20446,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "scopeEvidence": [
+        {
+          "kind": "global-maintenance-classifier",
+          "operation": "account-migration",
+          "source": "server/services/security/globalMaintenanceRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -20379,6 +20463,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "scopeEvidence": [
+        {
+          "kind": "global-maintenance-classifier",
+          "operation": "account-migration",
+          "source": "server/services/security/globalMaintenanceRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -20649,6 +20741,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "scopeEvidence": [
+        {
+          "kind": "global-maintenance-classifier",
+          "operation": "account-migration",
+          "source": "server/services/security/globalMaintenanceRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -20658,6 +20758,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "scopeEvidence": [
+        {
+          "kind": "global-maintenance-classifier",
+          "operation": "account-migration",
+          "source": "server/services/security/globalMaintenanceRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -20667,6 +20775,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "scopeEvidence": [
+        {
+          "kind": "global-maintenance-classifier",
+          "operation": "account-migration",
+          "source": "server/services/security/globalMaintenanceRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -20676,6 +20792,14 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>"
+      ],
+      "scopeEvidence": [
+        {
+          "kind": "global-maintenance-classifier",
+          "operation": "account-migration",
+          "source": "server/services/security/globalMaintenanceRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -20716,6 +20840,14 @@
             "Create Only"
           ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
+      ],
+      "scopeEvidence": [
+        {
+          "kind": "global-maintenance-classifier",
+          "operation": "historical-po-intercompany-repair",
+          "source": "server/services/security/globalMaintenanceRoutePolicy.ts",
           "status": "source-evidence-only"
         }
       ]
@@ -20790,6 +20922,14 @@
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
+      ],
+      "scopeEvidence": [
+        {
+          "kind": "global-maintenance-classifier",
+          "operation": "recalculate-equity-all",
+          "source": "server/services/security/globalMaintenanceRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -20812,6 +20952,14 @@
             "Create Only"
           ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
+      ],
+      "scopeEvidence": [
+        {
+          "kind": "global-maintenance-classifier",
+          "operation": "fix-unattributable-pos-data",
+          "source": "server/services/security/globalMaintenanceRoutePolicy.ts",
           "status": "source-evidence-only"
         }
       ]
@@ -21098,6 +21246,13 @@
         "requireAuth",
         "requireNonPOS",
         "<anonymous>"
+      ],
+      "scopeEvidence": [
+        {
+          "kind": "deleted-item-company-resource",
+          "source": "server/services/security/deletedItemScopePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -21157,6 +21312,14 @@
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
           "status": "source-evidence-only"
         }
+      ],
+      "scopeEvidence": [
+        {
+          "kind": "global-maintenance-classifier",
+          "operation": "cleanup-orphaned-charges",
+          "source": "server/services/security/globalMaintenanceRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -21175,6 +21338,13 @@
         "requireAuth",
         "requireNonPOS",
         "<anonymous>"
+      ],
+      "scopeEvidence": [
+        {
+          "kind": "deleted-item-company-resource",
+          "source": "server/services/security/deletedItemScopePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -21184,6 +21354,13 @@
         "requireAuth",
         "requireNonPOS",
         "<anonymous>"
+      ],
+      "scopeEvidence": [
+        {
+          "kind": "deleted-item-company-resource",
+          "source": "server/services/security/deletedItemScopePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -21249,6 +21426,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "scopeEvidence": [
+        {
+          "kind": "global-maintenance-classifier",
+          "operation": "schema-diagnostic",
+          "source": "server/services/security/globalMaintenanceRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -21270,6 +21455,14 @@
             "Create Only"
           ],
           "source": "server/services/security/operationalPermissionRoutePolicy.ts",
+          "status": "source-evidence-only"
+        }
+      ],
+      "scopeEvidence": [
+        {
+          "kind": "global-maintenance-classifier",
+          "operation": "schema-fix",
+          "source": "server/services/security/globalMaintenanceRoutePolicy.ts",
           "status": "source-evidence-only"
         }
       ]
