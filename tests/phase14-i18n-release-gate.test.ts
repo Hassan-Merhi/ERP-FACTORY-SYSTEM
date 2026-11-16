@@ -28,8 +28,8 @@ describe("Phase 14 trilingual release gate", () => {
 
     expect(audit).toContain("compatibility-covered");
     expect(audit).toContain("applicationTranslations.ts");
-    expect(audit).toContain("reportsExportsPhase6Translations.part4.ts");
-    expect(audit).toContain("backendMessagesPhase7Translations.part8.ts");
+    expect(audit).toContain("reportsExportsTranslations.part4.ts");
+    expect(audit).toContain("backendMessagesTranslations.part8.ts");
     expect(audit).toContain("enforceBaseline");
     expect(audit).toContain("process.exit(1)");
     expect(classifier).toContain("I18n audit classifier contract verified");
