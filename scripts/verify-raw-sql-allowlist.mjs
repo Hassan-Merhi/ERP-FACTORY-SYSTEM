@@ -17,6 +17,7 @@ const skip = new Set(["node_modules", "dist", "build", "coverage", ".git"]);
 const allowlistPath = "docs/security/raw-sql-allowlist.json";
 const fingerprint = (path, source) =>
   createHash("sha256").update(path + "\n" + source).digest("hex").slice(0, 20);
+const inventoryOnly = process.argv.includes("--inventory");
 const files = [];
 async function walk(folder) {
   for (const item of await readdir(folder, { withFileTypes: true })) {
@@ -29,6 +30,7 @@ async function walk(folder) {
 for (const root of roots) await walk(root);
 
 const findings = [];
+const occurrences = new Map();
 for (const file of files.sort()) {
   const source = await readFile(file, "utf8");
   const path = relative(".", file).replaceAll("\\", "/");
@@ -46,13 +48,20 @@ for (const file of files.sort()) {
     }
     if (kind) {
       const expression = node.getText(ast);
-      const id = fingerprint(path, expression);
+      const repeatKey = path + "\\n" + expression;
+      const occurrence = (occurrences.get(repeatKey) ?? 0) + 1;
+      occurrences.set(repeatKey, occurrence);
+      const id = fingerprint(path, expression + "\\n#" + occurrence);
       const line = ast.getLineAndCharacterOfPosition(node.getStart(ast)).line + 1;
       findings.push({ id, path, line, kind, expression: expression.slice(0, 160) });
     }
     ts.forEachChild(node, visit);
   }
   visit(ast);
+}
+if (inventoryOnly) {
+  console.log(JSON.stringify({ scannedFiles: files.length, found: findings.length, findings }, null, 2));
+  process.exit(0);
 }
 const approved = JSON.parse(await readFile(allowlistPath, "utf8"));
 if (!Array.isArray(approved)) throw new Error("Raw SQL allowlist must be an array");
