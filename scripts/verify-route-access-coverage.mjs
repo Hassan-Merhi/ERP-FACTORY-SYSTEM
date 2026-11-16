@@ -26,7 +26,7 @@ export function validateRouteAccessCoverage(routeSnapshot, accessSnapshot) {
   const expected = routeSnapshot.routes.map(routeIdentity);
   if (new Set(expected).size !== expected.length) errors.push("Duplicate route identities in snapshot");
   const seen = new Set();
-  const allowedScopes = new Set(["active-company", "explicit-company", "global", "public", "service"]);
+  const allowedScopes = new Set(["active-company", "explicit-company", "global", "public", "service", "delegated"]);
   for (const rule of accessSnapshot.rules) {
     if (!rule || typeof rule !== "object" || typeof rule.id !== "string") {
       errors.push("Invalid access rule: missing string id");
@@ -42,8 +42,30 @@ export function validateRouteAccessCoverage(routeSnapshot, accessSnapshot) {
     if (typeof rule.permission !== "string" || !rule.permission.trim()) {
       errors.push(`Missing permission declaration: ${rule.id}`);
     }
+    if (rule.companyScope === "delegated") {
+      if (
+        rule.permission !== "delegated" ||
+        rule.enforcement !== "legacy-delegated" ||
+        rule.status !== "unreviewed" ||
+        !Array.isArray(rule.roles) ||
+        rule.roles.length !== 1 ||
+        rule.roles[0] !== "delegated"
+      ) errors.push(`Invalid legacy delegation: ${rule.id}`);
+    } else if (rule.status === "unreviewed" || rule.enforcement === "legacy-delegated") {
+      errors.push(`Unreviewed rule cannot declare direct authorization: ${rule.id}`);
+    }
+    if (rule.status === "reviewed" && (!Array.isArray(rule.evidence) || rule.evidence.length === 0)) {
+      errors.push(`Reviewed rule lacks evidence: ${rule.id}`);
+    }
   }
 
+  if (accessSnapshot.routeCount !== undefined && accessSnapshot.routeCount !== expected.length) {
+    errors.push("Declared route count does not match registered routes");
+  }
+  if (accessSnapshot.reviewedCount !== undefined &&
+      accessSnapshot.reviewedCount !== accessSnapshot.rules.filter((rule) => rule?.status === "reviewed").length) {
+    errors.push("Declared reviewed count does not match reviewed rules");
+  }
   const expectedSet = new Set(expected);
   for (const id of expected) if (!seen.has(id)) errors.push(`Missing access declaration: ${id}`);
   for (const id of seen) if (!expectedSet.has(id)) errors.push(`Stale access declaration: ${id}`);
@@ -63,7 +85,7 @@ if (invokedPath === fileURLToPath(import.meta.url)) {
       console.error(`Route access coverage failed (${errors.length} errors):\n${errors.slice(0, 30).join("\n")}`);
       process.exitCode = 1;
     } else {
-      console.log("All registered routes have explicit, structurally valid access declarations.");
+      console.log("All registered routes have explicit access records; legacy-delegated records are NOT approved policies.");
     }
   } catch (error) {
     console.error(`Route access coverage failed: ${error.message}`);
