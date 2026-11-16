@@ -14,7 +14,7 @@
  */
 import { readFileSync, readdirSync, statSync } from "fs";
 import { join, resolve } from "path";
-import { checkEnvExamplePolicy } from "./lib/env-example-policy.mjs";
+import { checkEnvExamplePolicy, RETIRED_ENV_KEYS } from "./lib/env-example-policy.mjs";
 
 const ROOT = resolve(process.cwd());
 const SERVER_DIR = join(ROOT, "server");
@@ -70,6 +70,13 @@ for (const file of collectSourceFiles(SERVER_DIR)) {
       if (!used.has(name)) used.set(name, file.replace(ROOT + "/", ""));
     }
   }
+}
+
+// Retiring the documentation is not sufficient: no live server consumer may reactivate a finished repair.
+const retiredConsumerFailures = RETIRED_ENV_KEYS.filter((name) => used.has(name));
+if (retiredConsumerFailures.length) {
+  console.error("RETIRED ENVIRONMENT FLAGS STILL CONSUMED:\n" + retiredConsumerFailures.map((name) => `${name} in ${used.get(name)}`).join("\n"));
+  process.exit(1);
 }
 
 const exampleSources = Object.fromEntries(ENV_EXAMPLES.map((file) => [file, readFileSync(file, "utf8")]));
