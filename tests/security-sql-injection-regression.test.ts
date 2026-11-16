@@ -78,13 +78,13 @@ describe("remediated SQL builders keep hostile input out of SQL text", () => {
         expect(invalidExportDateRange(payload, undefined)).toBeNull(); // empty = no filter
         continue;
       }
-      expect(() => assertExportDate(payload, "fromDate")).toThrow(/Invalid fromDate/);
-      expect(invalidExportDateRange(payload, "2024-01-31")).toMatch(/Invalid fromDate/);
-      expect(invalidExportDateRange("2024-01-01", payload)).toMatch(/Invalid toDate/);
+      expect(() => assertExportDate(payload, "fromDate")).toThrow(/Invalid date format/);
+      expect(invalidExportDateRange(payload, "2024-01-31")).toMatch(/Invalid date format/);
+      expect(invalidExportDateRange("2024-01-01", payload)).toMatch(/Invalid date format/);
     }
     expect(invalidExportDateRange("2024-01-01", "2024-01-31")).toBeNull();
     expect(invalidExportDateRange(undefined, null)).toBeNull();
-    expect(invalidExportDateRange(20240101, undefined)).toMatch(/Invalid fromDate/); // numeric coercion
+    expect(invalidExportDateRange(20240101, undefined)).toMatch(/Invalid date format/); // numeric coercion
   });
 
   it("account history: untrusted column names and non-integer ids are rejected before SQL", async () => {
@@ -131,19 +131,21 @@ describe("remediated SQL builders keep hostile input out of SQL text", () => {
 
   it("SQL-text helpers refuse untrusted aliases, column references and placeholders", () => {
     for (const payload of [...PAYLOADS, "V", "v.id", "", "1v", "v--", 'v"']) {
-      expect(() => assertSqlAlias(payload)).toThrow(/unsafe/);
-      expect(() => liveVoucherPredicate(payload, "$1")).toThrow(/unsafe/);
-      expect(() => noNonCustomerTarget(payload)).toThrow(/unsafe/);
-      expect(() => customerOwnedLinePredicate(payload, "$1", "$2")).toThrow(/unsafe/);
-      expect(() => reversalPairSql(payload)).toThrow(/unsafe/);
-      expect(() => assertBindPlaceholder(payload)).toThrow(/unsafe/);
-      expect(() => buildPaginationIntegrityConditions(payload)).toThrow(/unsafe/);
-      expect(() => consolidatedHadiRentLedgerPredicate("ve.ledger_account_id", payload, 1, 1)).toThrow(/unsafe/);
+      expect(() => assertSqlAlias(payload)).toThrow(/SQL_TEXT_UNSAFE/);
+      expect(() => liveVoucherPredicate(payload, "$1")).toThrow(/SQL_TEXT_UNSAFE/);
+      expect(() => noNonCustomerTarget(payload)).toThrow(/SQL_TEXT_UNSAFE/);
+      expect(() => customerOwnedLinePredicate(payload, "$1", "$2")).toThrow(/SQL_TEXT_UNSAFE/);
+      expect(() => reversalPairSql(payload)).toThrow(/SQL_TEXT_UNSAFE/);
+      expect(() => assertBindPlaceholder(payload)).toThrow(/SQL_TEXT_UNSAFE/);
+      expect(() => buildPaginationIntegrityConditions(payload)).toThrow(/SQL_TEXT_UNSAFE/);
+      expect(() => consolidatedHadiRentLedgerPredicate("ve.ledger_account_id", payload, 1, 1)).toThrow(
+        /SQL_TEXT_UNSAFE/
+      );
     }
     for (const payload of PAYLOADS) {
-      expect(() => assertSqlColumnRef(payload)).toThrow(/unsafe/);
-      expect(() => stockItemHistorySqlText([], payload)).toThrow(/unsafe/);
-      expect(() => consolidatedHadiRentLedgerPredicate(payload, "$1", 1, 1)).toThrow(/unsafe/);
+      expect(() => assertSqlColumnRef(payload)).toThrow(/SQL_TEXT_UNSAFE/);
+      expect(() => stockItemHistorySqlText([], payload)).toThrow(/SQL_TEXT_UNSAFE/);
+      expect(() => consolidatedHadiRentLedgerPredicate(payload, "$1", 1, 1)).toThrow(/SQL_TEXT_UNSAFE/);
     }
     // The legitimate call shapes keep working.
     expect(liveVoucherPredicate("v", "$1")).toBe("v.company_id = $1 AND v.optional = false AND v.deleted_at IS NULL");
@@ -320,8 +322,8 @@ databaseDescribe("SQL injection and tenant isolation against a disposable databa
     expect(scoped.updated).toBe(0);
     const propagated = await propagateFactoryArabicCatalogChange(987654321, 5);
     expect(propagated.updated).toBe(0);
-    await expect(buildFactoryBilingualSnapshotPlan(Number("1 OR 1=1"))).rejects.toThrow(/Invalid companyId/);
-    await expect(propagateFactoryArabicCatalogChange(1, 1.5)).rejects.toThrow(/Invalid productId/);
+    await expect(buildFactoryBilingualSnapshotPlan(Number("1 OR 1=1"))).rejects.toThrow(/FACTORY_BILINGUAL_ID_INVALID/);
+    await expect(propagateFactoryArabicCatalogChange(1, 1.5)).rejects.toThrow(/FACTORY_BILINGUAL_ID_INVALID/);
   });
 
   it("the guarded account-history helpers reject payloads against the real database", async () => {

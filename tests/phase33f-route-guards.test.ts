@@ -263,7 +263,7 @@ describe("Phase 33F auth, import, export and integration route guards", () => {
       body: { fromDate: "2026-01-01' OR '1'='1" },
     });
     expect(res.statusCode).toBe(400);
-    expect(res.body).toEqual({ message: "Invalid fromDate: expected YYYY-MM-DD" });
+    expect(res.body).toEqual({ message: "Invalid date format. Use YYYY-MM-DD" });
   });
 
   it("requires company scope on WhatsApp recipient mutations", async () => {

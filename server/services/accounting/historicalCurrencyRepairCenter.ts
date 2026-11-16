@@ -225,7 +225,7 @@ async function loadOpeningCase(
   id: number,
   client: Pool | PoolClient = pool
 ): Promise<HistoricalRepairCase | null> {
-  if (!ownKey(OPENING_CONFIG, kind)) throw new Error("historical_repair_unknown_kind");
+  if (!ownKey(OPENING_CONFIG, kind)) throw new Error("HISTORICAL_REPAIR_KIND_INVALID");
   const config = OPENING_CONFIG[kind];
   const clauses = ["target.id = $1"];
   if (config.companyColumn) clauses.push(`target.${config.companyColumn} = $2`);
@@ -434,7 +434,7 @@ async function applyPlanItem(client: PoolClient, companyId: number, item: Histor
     );
     return;
   }
-  if (!ownKey(OPENING_CONFIG, item.input.kind)) throw new Error("historical_repair_unknown_kind");
+  if (!ownKey(OPENING_CONFIG, item.input.kind)) throw new Error("HISTORICAL_REPAIR_KIND_INVALID");
   const config = OPENING_CONFIG[item.input.kind];
   const assignments = [
     `${config.amountColumn} = $1`,

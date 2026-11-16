@@ -295,7 +295,8 @@ function scalarResolver(item: FactoryBilingualSnapshotTarget, column: "name_ar" 
 
 /** Company / product ids are bound parameters; still refuse anything that is not a positive safe integer. */
 function requirePositiveId(value: number, label: string): number {
-  if (!Number.isSafeInteger(value) || value <= 0) throw new Error(`Invalid ${label} for factory bilingual snapshot`);
+  if (!Number.isSafeInteger(value) || value <= 0)
+    throw Object.assign(new Error("FACTORY_BILINGUAL_ID_INVALID"), { label });
   return value;
 }
 

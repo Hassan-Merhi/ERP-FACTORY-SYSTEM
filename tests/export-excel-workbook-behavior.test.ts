@@ -122,9 +122,9 @@ describe("full company workbook export behavior", () => {
   it("rejects a malformed or hostile date range before running any query", async () => {
     const before = harness.poolQuery.mock.calls.length;
     await expect(streamCompanyWorkbookDirect(4, "2026-08-01' OR '1'='1", undefined)).rejects.toThrow(
-      /Invalid fromDate/
+      /Invalid date format/
     );
-    await expect(streamCompanyWorkbookDirect(4, undefined, "2026-02-30")).rejects.toThrow(/Invalid toDate/);
+    await expect(streamCompanyWorkbookDirect(4, undefined, "2026-02-30")).rejects.toThrow(/Invalid date format/);
     expect(harness.poolQuery.mock.calls.length).toBe(before);
   });
 });

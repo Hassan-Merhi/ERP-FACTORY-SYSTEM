@@ -237,12 +237,17 @@ async function qStream(sql: string, params: readonly string[] = []) {
 
 const EXPORT_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-/** Accepts only a real YYYY-MM-DD calendar date; anything else is rejected before SQL. */
+/** User-facing message (already translated in the client catalogs). */
+export const EXPORT_DATE_INVALID_MESSAGE = "Invalid date format. Use YYYY-MM-DD";
+
+/**
+ * Accepts only a real YYYY-MM-DD calendar date; anything else is rejected before SQL.
+ * `field` names the offending input on the thrown error for logs.
+ */
 export function assertExportDate(value: string, field: string): string {
-  if (typeof value !== "string" || !EXPORT_DATE.test(value)) throw new Error(`Invalid ${field}: expected YYYY-MM-DD`);
-  const parsed = new Date(`${value}T00:00:00Z`);
-  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) {
-    throw new Error(`Invalid ${field}: not a calendar date`);
+  const parsed = typeof value === "string" && EXPORT_DATE.test(value) ? new Date(`${value}T00:00:00Z`) : null;
+  if (!parsed || Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) {
+    throw Object.assign(new Error(EXPORT_DATE_INVALID_MESSAGE), { field });
   }
   return value;
 }
@@ -257,7 +262,7 @@ export function invalidExportDateRange(fromDate: unknown, toDate: unknown): stri
     try {
       assertExportDate(value as string, field);
     } catch (error) {
-      return error instanceof Error ? error.message : `Invalid ${field}`;
+      return error instanceof Error ? error.message : EXPORT_DATE_INVALID_MESSAGE;
     }
   }
   return null;
@@ -269,7 +274,7 @@ export async function streamCompanyWorkbookDirect(
   toDate: string | undefined
 ): Promise<Buffer> {
   const cid = Number(companyId);
-  if (!Number.isSafeInteger(cid) || cid <= 0) throw new Error("Invalid company id for export");
+  if (!Number.isSafeInteger(cid) || cid <= 0) throw new Error("EXPORT_COMPANY_INVALID");
   // The date range arrives from request bodies (POST /api/export/start, the
   // WhatsApp manual send). It is validated as a calendar date and travels as a
   // bound parameter; `df` only emits the `$n` placeholder text and a column
