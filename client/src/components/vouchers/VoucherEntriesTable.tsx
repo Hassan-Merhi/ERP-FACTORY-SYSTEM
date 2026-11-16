@@ -1,475 +1,77 @@
-import { useState, useRef, useEffect } from "react";
-import { UseFormReturn, UseFieldArrayReturn } from "react-hook-form";
-import type { VoucherFormData } from "@/pages/vouchers/voucherTypes";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Plus, X, Search, Check } from "lucide-react";
-import type { Account } from "@/components/AccountSidebar";
-import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { cn } from "@/lib/utils";
-import { focusScopedTestId } from "@/lib/scopedFocus";
+import { ENTRY_TYPE_BADGE, type VoucherEntriesTableProps } from "./VoucherEntriesTableTypes";
+import { useVoucherEntriesTableState } from "./useVoucherEntriesTableState";
+import { VoucherEntriesTableSection } from "./VoucherEntriesTableSection";
+export type { VoucherEntry } from "./VoucherEntriesTableTypes";
 
-const ENTRY_TYPE_BADGE: Record<string, { label: string; cls: string }> = {
-  bank: { label: "Bank", cls: "bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300" },
-  ledger: { label: "Ledger", cls: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300" },
-  supplier: { label: "Supplier", cls: "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300" },
-  employee: { label: "Staff", cls: "bg-purple-100 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300" },
-  fixedAsset: { label: "Asset", cls: "bg-orange-100 text-orange-700 dark:bg-orange-950/60 dark:text-orange-300" },
-  customer: { label: "Customer", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300" },
-  factorySupplier: { label: "F.Supp", cls: "bg-teal-100 text-teal-700 dark:bg-teal-950/60 dark:text-teal-300" },
-};
-
-/**
- * One row of the entries table, derived from the voucher form's own Zod schema
- * so the table and the form cannot drift apart.
- */
-export type VoucherEntry = VoucherFormData["entries"][number];
-
-interface VoucherEntriesTableProps {
-  form: UseFormReturn<VoucherFormData>;
-  fieldArray: UseFieldArrayReturn<VoucherFormData, "entries", "id">;
-  entries: VoucherEntry[];
-  total: number;
-  /** Native EUR voucher amounts must never pass through the USD display conversion. */
-  amountCurrencyOverride?: "EUR";
-  mode: "payment" | "receipt";
-  onAmountCommit?: (rowIndex: number) => void;
-  activeRow: number | null;
-  filteredSidebarAccounts: Account[];
-  sidebarHighlightedIndex: number;
-  setSidebarHighlightedIndex: (index: number) => void;
-  setSidebarSearchValue: (value: string) => void;
-  handleSidebarAccountSelect: (account: Account) => void;
-  sidebarAccounts?: Account[];
-  onRowFocus: (rowIndex: number, fieldName: string) => void;
-  onRowBlur: () => void;
-  isFactoryCompany?: boolean;
-  onAutoCreateAccount?: (name: string) => Promise<Account | null>;
-  isAutoCreating?: boolean;
-}
-
-export function VoucherEntriesTable({
-  form,
-  fieldArray,
-  entries,
-  total,
-  amountCurrencyOverride,
-  mode,
-  onAmountCommit,
-  activeRow,
-  filteredSidebarAccounts,
-  sidebarHighlightedIndex,
-  setSidebarHighlightedIndex,
-  setSidebarSearchValue,
-  handleSidebarAccountSelect,
-  sidebarAccounts = [],
-  onRowFocus,
-  onRowBlur,
-  isFactoryCompany = false,
-  onAutoCreateAccount,
-}: VoucherEntriesTableProps) {
-  const { fields, append, remove } = fieldArray;
-  const { formatAmount, selectedCurrency, convertToUSD } = useCurrencyContext();
-  const formatEntryAmount = (value: number) =>
-    amountCurrencyOverride === "EUR" ? `EUR ${value.toFixed(2)}` : formatAmount(value);
-
-  const [mobileEditIndex, setMobileEditIndex] = useState<number | null>(null);
-  const [mobileEditOpen, setMobileEditOpen] = useState(false);
-  const [mobileSearch, setMobileSearch] = useState("");
-  const [mobileAmountStr, setMobileAmountStr] = useState("");
-  const [mobileNarration, setMobileNarration] = useState("");
-  const mobileAmountInputRef = useRef<HTMLInputElement>(null);
-  const mobileSearchInputRef = useRef<HTMLInputElement>(null);
-  const initializedMobileEditIndexRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    if (!mobileEditOpen || mobileEditIndex === null) {
-      initializedMobileEditIndexRef.current = null;
-      return;
-    }
-
-    // PaymentReceiptTab passes onRowFocus inline, so its identity changes whenever
-    // sidebar search state changes. Do not re-initialize this sheet on those
-    // rerenders or every keystroke in the mobile search box gets cleared.
-    if (initializedMobileEditIndexRef.current === mobileEditIndex) return;
-    initializedMobileEditIndexRef.current = mobileEditIndex;
-
-    const current = form.getValues(`entries.${mobileEditIndex}.amount`) || "";
-    setMobileAmountStr(current);
-    setMobileNarration(form.getValues(`entries.${mobileEditIndex}.narration`) || "");
-    onRowFocus(mobileEditIndex, "account");
-    setSidebarSearchValue("");
-    setMobileSearch("");
-    const timer = setTimeout(() => mobileSearchInputRef.current?.focus(), 150);
-    return () => clearTimeout(timer);
-  }, [mobileEditOpen, mobileEditIndex, form, onRowFocus, setSidebarSearchValue]);
-
-  const openMobileEdit = (index: number) => {
-    setMobileEditIndex(index);
-    setMobileEditOpen(true);
-  };
-
-  const handleMobileAddRow = () => {
-    const newIndex = fields.length;
-    append({ accountType: "ledger", accountId: 0, accountName: "", amount: "" });
-    setTimeout(() => {
-      setMobileEditIndex(newIndex);
-      setMobileEditOpen(true);
-    }, 50);
-  };
-
-  const handleMobileAccountSelect = (account: Account) => {
-    handleSidebarAccountSelect(account);
-    setMobileSearch("");
-    setSidebarSearchValue("");
-    setTimeout(() => mobileAmountInputRef.current?.focus(), 120);
-  };
-
-  const handleMobileDone = () => {
-    if (mobileEditIndex !== null) {
-      const numVal = parseFloat(mobileAmountStr);
-      const isPositive = !isNaN(numVal) && numVal > 0;
-      const finalAmount = isPositive
-        ? selectedCurrency !== "USD" && !amountCurrencyOverride
-          ? convertToUSD(numVal).toFixed(2)
-          : numVal.toFixed(2)
-        : "";
-      form.setValue(`entries.${mobileEditIndex}.amount`, finalAmount);
-      form.setValue(`entries.${mobileEditIndex}.narration`, mobileNarration);
-      if (isPositive && onAmountCommit) onAmountCommit(mobileEditIndex);
-    }
-    setMobileEditOpen(false);
-  };
-
-  const getEntryBalance = (index: number): number | null => {
-    const entry = entries[index];
-    if (!entry || !entry.accountId || !sidebarAccounts.length) return null;
-    const found = sidebarAccounts.find((account) => {
-      if (account.type !== entry.accountType) return false;
-      if (entry.accountType === "employee") {
-        return (account as unknown as Account & { accountId: number }).accountId === entry.accountId;
-      }
-      return account.id === entry.accountId;
-    });
-    if (!found || found.balance == null) return null;
-    return typeof found.balance === "string" ? parseFloat(found.balance) : found.balance;
-  };
-
-  const handleAddRow = () => {
-    append({ accountType: "ledger", accountId: 0, accountName: "", amount: "" });
-  };
-
-  const focusField = (
-    field: "account" | "amount",
-    index: number,
-    select = true,
-    anchor?: Element | null,
-    delay = 0
-  ) => {
-    focusScopedTestId(`input-${field}-${index}`, { select, anchor, delay });
-  };
-
-  const handleAccountKeyDown = async (e: React.KeyboardEvent, index: number) => {
-    const anchor = e.currentTarget as Element;
-    if (e.key === "Tab" && !e.shiftKey) {
-      e.preventDefault();
-      const hasAccount = (entries[index]?.accountId ?? 0) > 0;
-      if (!hasAccount && filteredSidebarAccounts.length > 0 && sidebarHighlightedIndex >= 0) {
-        const highlighted = filteredSidebarAccounts[sidebarHighlightedIndex];
-        if (highlighted) handleSidebarAccountSelect(highlighted);
-      }
-      focusField("amount", index, true, anchor);
-      return;
-    }
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      if (filteredSidebarAccounts.length === 0) return;
-      setSidebarHighlightedIndex(
-        Math.min(sidebarHighlightedIndex < 0 ? 0 : sidebarHighlightedIndex + 1, filteredSidebarAccounts.length - 1)
-      );
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      if (filteredSidebarAccounts.length === 0) return;
-      setSidebarHighlightedIndex(Math.max(sidebarHighlightedIndex - 1, 0));
-    } else if (e.key === "Enter") {
-      e.preventDefault();
-      const currentName = form.getValues(`entries.${index}.accountName`)?.trim() || "";
-      if (isFactoryCompany && onAutoCreateAccount && currentName) {
-        const exactMatch = filteredSidebarAccounts.find(
-          (account) => account.name.toLowerCase() === currentName.toLowerCase()
-        );
-        if (exactMatch) handleSidebarAccountSelect(exactMatch);
-        else {
-          const newAccount = await onAutoCreateAccount(currentName);
-          if (newAccount) handleSidebarAccountSelect(newAccount);
-        }
-      } else if (filteredSidebarAccounts.length > 0 && sidebarHighlightedIndex >= 0) {
-        const highlightedAccount = filteredSidebarAccounts[sidebarHighlightedIndex];
-        if (highlightedAccount) handleSidebarAccountSelect(highlightedAccount);
-      }
-    }
-  };
-
-  const handleAmountKeyDown = (e: React.KeyboardEvent, index: number) => {
-    const anchor = e.currentTarget as Element;
-    if (e.key === "Tab" && !e.shiftKey) {
-      e.preventDefault();
-      const amount = Number(entries[index]?.amount);
-      if (!isNaN(amount) && amount > 0 && onAmountCommit) onAmountCommit(index);
-      const isLastRow = index === fields.length - 1;
-      const rowHasContent = (entries[index]?.accountId ?? 0) > 0 || (!isNaN(amount) && amount > 0);
-      if (isLastRow) {
-        if (!rowHasContent) return;
-        handleAddRow();
-      }
-      focusField("account", index + 1, false, anchor);
-      return;
-    }
-    if (e.key === "ArrowLeft") {
-      e.preventDefault();
-      focusField("account", index, false, anchor);
-      return;
-    }
-    if (e.key === "ArrowRight") {
-      e.preventDefault();
-      if (index < fields.length - 1) focusField("account", index + 1, false, anchor);
-      return;
-    }
-    if (e.key === "Enter") {
-      e.preventDefault();
-      const amount = Number(entries[index]?.amount);
-      if (!isNaN(amount) && amount > 0) {
-        if (onAmountCommit) onAmountCommit(index);
-        handleAddRow();
-        focusField("account", entries.length, true, anchor);
-      }
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      if (index > 0) focusField("amount", index - 1, true, anchor);
-    } else if (e.key === "ArrowDown") {
-      e.preventDefault();
-      if (index < entries.length - 1) focusField("amount", index + 1, true, anchor);
-    }
-  };
-
-  const handleAmountBlur = (e: React.FocusEvent<HTMLInputElement>, index: number) => {
-    const enteredAmount = Number(e.target.value);
-    if (!isNaN(enteredAmount) && enteredAmount > 0) {
-      if (selectedCurrency !== "USD" && !amountCurrencyOverride) {
-        const usdAmount = convertToUSD(enteredAmount);
-        form.setValue(`entries.${index}.amount`, usdAmount.toFixed(2));
-      }
-      if (onAmountCommit) onAmountCommit(index);
-    }
-  };
-
-  const renderBalanceLine = (index: number) => {
-    const balance = getEntryBalance(index);
-    if (balance == null) return null;
-    return (
-      <p
-        className={`text-[11px] font-mono tabular-nums mt-0.5 ${
-          balance < 0
-            ? "text-red-500 dark:text-red-400"
-            : balance > 0
-              ? "text-emerald-600 dark:text-emerald-400"
-              : "text-muted-foreground"
-        }`}
-      >
-        bal {formatAmount(balance)}
-      </p>
-    );
-  };
-
-  const runningTotals: number[] = [];
-  let running = 0;
-  for (let index = 0; index < fields.length; index++) {
-    const value = parseFloat(entries[index]?.amount || "0");
-    if (!isNaN(value) && value > 0) running += value;
-    runningTotals.push(running);
-  }
-  const hasAnyAmount = runningTotals.length > 0 && runningTotals[runningTotals.length - 1] > 0;
+export function VoucherEntriesTable(props: VoucherEntriesTableProps) {
+  const {
+    activeRow,
+    amountCurrencyOverride,
+    entries,
+    fields,
+    filteredSidebarAccounts,
+    form,
+    formatAmount,
+    formatEntryAmount,
+    handleAccountKeyDown,
+    handleAddRow,
+    handleAmountBlur,
+    handleAmountKeyDown,
+    handleMobileAccountSelect,
+    handleMobileAddRow,
+    handleMobileDone,
+    hasAnyAmount,
+    mobileAmountInputRef,
+    mobileAmountStr,
+    mobileEditIndex,
+    mobileEditOpen,
+    mobileNarration,
+    mobileSearch,
+    mobileSearchInputRef,
+    mode,
+    onRowBlur,
+    onRowFocus,
+    openMobileEdit,
+    remove,
+    renderBalanceLine,
+    runningTotals,
+    setMobileAmountStr,
+    setMobileEditOpen,
+    setMobileNarration,
+    setMobileSearch,
+    setSidebarSearchValue,
+    total,
+  } = useVoucherEntriesTableState(props);
 
   return (
     <>
       {/* Scrolls sideways below ~22rem rather than squeezing the inputs to a few characters. */}
-      <div className="voucher-entries-table hidden sm:block border rounded-md overflow-x-auto">
-        <table className="w-full">
-          {/* Below the form's sticky save footer (z-20), which it otherwise paints over on short screens. */}
-          <thead className="bg-muted sticky top-0 z-10">
-            <tr className="text-[11px] uppercase tracking-wider text-muted-foreground">
-              <th className="text-center px-2 py-2 font-semibold w-8">#</th>
-              <th className="text-left px-2 py-2 font-semibold min-w-[10rem]">Account</th>
-              <th className="text-left px-2 py-2 font-semibold w-24 hidden lg:table-cell">Type</th>
-              <th className="text-right px-2 py-2 font-semibold w-[22%] min-w-[6.5rem]">{amountCurrencyOverride === "EUR" ? "Amount (EUR)" : "Amount"}</th>
-              <th className="text-left px-2 py-2 font-semibold w-[24%] hidden md:table-cell">Narration</th>
-              <th className="text-right px-2 py-2 font-semibold w-28 hidden lg:table-cell">Running</th>
-              <th className="w-10"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {fields.map((field, index) => {
-              const entry = entries[index];
-              const isEmpty = !entry?.accountId || entry.accountId === 0;
-              const typeBadge = entry?.accountType ? ENTRY_TYPE_BADGE[entry.accountType] : null;
-              return (
-                <tr
-                  key={field.id}
-                  className={cn(
-                    "border-t hover-elevate",
-                    activeRow === index &&
-                      (mode === "payment"
-                        ? "bg-amber-50/60 dark:bg-amber-950/20 shadow-[inset_2px_0_0_#f59e0b]"
-                        : "bg-emerald-50/60 dark:bg-emerald-950/20 shadow-[inset_2px_0_0_#10b981]")
-                  )}
-                >
-                  <td className="px-2 py-1.5 text-center text-[11px] font-mono text-muted-foreground tabular-nums align-top pt-3">
-                    {index + 1}
-                  </td>
-                  <td className="px-2 py-1.5">
-                    <FormField
-                      control={form.control}
-                      name={`entries.${index}.accountName`}
-                      render={({ field: accountField }) => (
-                        <FormItem>
-                          <FormControl>
-                            <Input
-                              {...accountField}
-                              placeholder="Type to search..."
-                              className="text-sm h-8"
-                              data-testid={`input-account-${index}`}
-                              onChange={(event) => {
-                                accountField.onChange(event);
-                                setSidebarSearchValue(event.target.value);
-                              }}
-                              onFocus={() => onRowFocus(index, "account")}
-                              onKeyDown={(event) => handleAccountKeyDown(event, index)}
-                              onBlur={() => setTimeout(() => onRowBlur(), 200)}
-                            />
-                          </FormControl>
-                          {!isEmpty && typeBadge && (
-                            <span
-                              className={`lg:hidden inline-block text-[11px] font-medium px-1.5 py-0 rounded-sm mt-0.5 ${typeBadge.cls}`}
-                            >
-                              {typeBadge.label}
-                            </span>
-                          )}
-                          {renderBalanceLine(index)}
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </td>
-                  <td className="px-2 py-1.5 align-top pt-3 hidden lg:table-cell">
-                    {!isEmpty && typeBadge && (
-                      <span className={`inline-block text-[11px] font-medium px-1.5 py-0 rounded-sm ${typeBadge.cls}`}>
-                        {typeBadge.label}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-2 py-1.5">
-                    <FormField
-                      control={form.control}
-                      name={`entries.${index}.amount`}
-                      render={({ field: amountField }) => (
-                        <FormItem>
-                          <FormControl>
-                            <Input
-                              {...amountField}
-                              type="number"
-                              step="0.01"
-                              placeholder="0.00"
-                              className="font-mono tabular-nums text-right h-8"
-                              data-testid={`input-amount-${index}`}
-                              onKeyDown={(event) => handleAmountKeyDown(event, index)}
-                              onBlur={(event) => handleAmountBlur(event, index)}
-                              onFocus={() => onRowFocus(index, "amount")}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </td>
-                  <td className="px-2 py-1.5 hidden md:table-cell">
-                    <FormField
-                      control={form.control}
-                      name={`entries.${index}.narration`}
-                      render={({ field: narrationField }) => (
-                        <FormItem>
-                          <FormControl>
-                            <Input
-                              {...narrationField}
-                              placeholder="Optional note"
-                              className="text-sm h-8"
-                              data-testid={`input-narration-${index}`}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </td>
-                  <td className="px-2 py-1.5 align-top pt-3 text-right hidden lg:table-cell">
-                    <span
-                      className="text-xs font-mono tabular-nums text-muted-foreground"
-                      data-testid={`text-running-${index}`}
-                    >
-                      {runningTotals[index] > 0 ? formatEntryAmount(runningTotals[index]) : "—"}
-                    </span>
-                  </td>
-                  <td className="px-1 py-1.5 align-top pt-2">
-                    {fields.length > 1 && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => remove(index)}
-                        data-testid={`button-remove-${index}`}
-                      >
-                        <X className="h-4 w-4 text-muted-foreground" />
-                      </Button>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-          <tfoot className="bg-muted/30 border-t">
-            <tr>
-              <td colSpan={7} className="px-2 py-2">
-                <div className="flex items-center justify-between gap-3 flex-wrap">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-8"
-                    onClick={handleAddRow}
-                    data-testid="button-add-row"
-                  >
-                    <Plus className="h-3.5 w-3.5 mr-1.5" />
-                    Add Row
-                  </Button>
-                  <p className="text-[11px] text-muted-foreground hidden xl:block">
-                    <kbd className="px-1 py-0.5 bg-muted rounded-sm text-[11px]">Tab</kbd> next field
-                    <kbd className="px-1 py-0.5 bg-muted rounded-sm text-[11px] ml-2">↵</kbd> new row
-                    <kbd className="px-1 py-0.5 bg-muted rounded-sm text-[11px] ml-2">↑↓</kbd> move
-                  </p>
-                  {hasAnyAmount && (
-                    <div className="text-right xl:hidden">
-                      <div className="text-[11px] text-muted-foreground uppercase tracking-wider">Subtotal</div>
-                      <div className="text-sm font-semibold font-mono tabular-nums">{formatEntryAmount(total)}</div>
-                    </div>
-                  )}
-                </div>
-              </td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
+      <VoucherEntriesTableSection
+        activeRow={activeRow}
+        amountCurrencyOverride={amountCurrencyOverride}
+        entries={entries}
+        fields={fields}
+        form={form}
+        formatEntryAmount={formatEntryAmount}
+        handleAccountKeyDown={handleAccountKeyDown}
+        handleAddRow={handleAddRow}
+        handleAmountBlur={handleAmountBlur}
+        handleAmountKeyDown={handleAmountKeyDown}
+        hasAnyAmount={hasAnyAmount}
+        mode={mode}
+        onRowBlur={onRowBlur}
+        onRowFocus={onRowFocus}
+        remove={remove}
+        renderBalanceLine={renderBalanceLine}
+        runningTotals={runningTotals}
+        setSidebarSearchValue={setSidebarSearchValue}
+        total={total}
+      />
 
       <div className="sm:hidden space-y-2">
         {fields.map((field, index) => {

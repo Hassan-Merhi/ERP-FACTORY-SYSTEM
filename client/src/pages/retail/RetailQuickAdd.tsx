@@ -1,300 +1,54 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { useLocation } from "wouter";
 import { Camera, CheckCircle2, Copy, ImagePlus, Loader2, Minus, Palette, Plus, Printer, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { useCompany } from "@/contexts/CompanyContext";
-import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
 import { RetailNav } from "./RetailNav";
-import { RetailLabelPrintDialog, type RetailLabelRequestItem } from "./retailLabels";
-import { uploadRetailPhoto } from "./retailPhotoUpload";
-import {
-  getJson,
-  MAX_VARIANT_IMAGES,
-  money,
-  NO_BRAND,
-  type Brand,
-  type Location,
-  type RetailCatalogFacets,
-} from "./retailInventoryTypes";
-import { makeRetailIdempotencyKey } from "./retailIdempotency";
-
-const QUICK_SIZES = ["XS", "S", "M", "L", "XL", "XXL"];
-const COMMON_COLORS = ["Black", "White", "Beige", "Navy", "Grey", "Brown", "Blue", "Red", "Green", "Pink", "Cream"];
-const LOCATION_STORAGE_KEY = "retail-quick-add-location";
-
-interface QuickVariant {
-  key: string;
-  color: string;
-  size: string;
-  quantity: number;
-  cost: string;
-  sellingPrice: string;
-  sku: string;
-  barcode: string;
-  imageUrls: string[];
-  pendingPreviews: string[];
-}
-
-interface QuickAddResult {
-  replayed: boolean;
-  productId: number;
-  createdProduct: boolean;
-  variants: Array<{
-    variantId: number;
-    name: string;
-    brand: string | null;
-    color: string;
-    size: string;
-    barcode: string;
-    barcodeSource: string;
-    sellingPrice: number;
-    receivedQuantity?: number;
-  }>;
-}
-
-let keyCounter = 0;
-const nextKey = () => `v${Date.now()}-${(keyCounter += 1)}`;
-
-const blankQuickVariant = (patch: Partial<QuickVariant> = {}): QuickVariant => ({
-  key: nextKey(),
-  color: "",
-  size: "",
-  quantity: 1,
-  cost: "",
-  sellingPrice: "",
-  sku: "",
-  barcode: "",
-  imageUrls: [],
-  pendingPreviews: [],
-  ...patch,
-});
-
-const variantKey = (variant: Pick<QuickVariant, "color" | "size">) =>
-  `${variant.color.trim().toLowerCase().replace(/\s+/g, " ")}|${variant.size.trim().toLowerCase().replace(/\s+/g, " ")}`;
-
-const makeIdempotencyKey = () => makeRetailIdempotencyKey("retail-quick-add");
-
-function readStoredLocation(): number | "" {
-  try {
-    const value = Number(window.localStorage.getItem(LOCATION_STORAGE_KEY));
-    return Number.isInteger(value) && value > 0 ? value : "";
-  } catch {
-    return "";
-  }
-}
+import { RetailLabelPrintDialog } from "./retailLabels";
+import { MAX_VARIANT_IMAGES, money, NO_BRAND } from "./retailInventoryTypes";
+import { QUICK_SIZES, blankQuickVariant, variantKey, type QuickAddResult } from "./blankQuickVariant";
+import { useRetailQuickAddState } from "./useRetailQuickAddState";
+import { RetailQuickAddCardSection } from "./RetailQuickAddCardSection";
 
 export default function RetailQuickAdd() {
-  const { selectedCompany } = useCompany();
-  const [, navigate] = useLocation();
-  const { toast } = useToast();
-  const retailEnabled = selectedCompany?.companyType === "retail";
-  const companyKey = selectedCompany?.id ?? 0;
-
-  const [brandChoice, setBrandChoice] = useState<string>("");
-  const [newBrandName, setNewBrandName] = useState("");
-  const [name, setName] = useState("");
-  const [category, setCategory] = useState("");
-  const [description, setDescription] = useState("");
-  const [showDetails, setShowDetails] = useState(false);
-  const [locationId, setLocationId] = useState<number | "">(() => readStoredLocation());
-  const [variants, setVariants] = useState<QuickVariant[]>(() => [blankQuickVariant()]);
-  const [uploadingKeys, setUploadingKeys] = useState<Set<string>>(new Set());
-  const [result, setResult] = useState<QuickAddResult | null>(null);
-  const [labelItems, setLabelItems] = useState<RetailLabelRequestItem[]>([]);
-  const [labelOpen, setLabelOpen] = useState(false);
-  const attemptRef = useRef<{ fingerprint: string; key: string } | null>(null);
-
-  const { data: brands = [] } = useQuery<Brand[]>({
-    queryKey: ["retail-brands", companyKey],
-    queryFn: () => getJson("/api/retail/brands"),
-    enabled: retailEnabled,
-  });
-  const { data: locations = [] } = useQuery<Location[]>({
-    queryKey: ["retail-locations", companyKey],
-    queryFn: () => getJson("/api/locations"),
-    enabled: retailEnabled,
-  });
-  const { data: facets } = useQuery<RetailCatalogFacets>({
-    queryKey: ["retail-catalog-facets", companyKey],
-    queryFn: () => getJson("/api/retail/catalog-facets"),
-    enabled: retailEnabled,
-    staleTime: 60_000,
-  });
-  const selectedBrandId = brandChoice && brandChoice !== "new" ? Number(brandChoice) : null;
-  const { data: styles = [] } = useQuery<Array<{ id: number; name: string; category: string | null }>>({
-    queryKey: ["retail-styles", companyKey, selectedBrandId],
-    queryFn: () => getJson(`/api/retail/styles${selectedBrandId ? `?brandId=${selectedBrandId}` : ""}`),
-    enabled: retailEnabled && Boolean(selectedBrandId),
-  });
-
-  const activeLocations = locations.filter((location) => location.id > 0 && location.active !== false);
-  useEffect(() => {
-    if (locationId === "" && activeLocations.length) setLocationId(activeLocations[0].id);
-    if (locationId !== "" && activeLocations.length && !activeLocations.some((entry) => entry.id === locationId)) {
-      setLocationId(activeLocations[0].id);
-    }
-  }, [activeLocations, locationId]);
-
-  const existingStyle = useMemo(
-    () => styles.find((style) => style.name.trim().toLowerCase() === name.trim().toLowerCase()),
-    [styles, name]
-  );
-  const colorSuggestions = useMemo(
-    () => [...new Set([...(facets?.colors ?? []), ...COMMON_COLORS])].filter((color) => color !== "Default"),
-    [facets]
-  );
-  const duplicateKeys = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const variant of variants) {
-      if (!variant.color.trim() || !variant.size.trim()) continue;
-      counts.set(variantKey(variant), (counts.get(variantKey(variant)) ?? 0) + 1);
-    }
-    return new Set([...counts].filter(([, count]) => count > 1).map(([key]) => key));
-  }, [variants]);
-
-  const updateVariant = (key: string, patch: Partial<QuickVariant>) =>
-    setVariants((current) => current.map((variant) => (variant.key === key ? { ...variant, ...patch } : variant)));
-
-  const addPhotos = async (key: string, files: FileList | null) => {
-    const variant = variants.find((entry) => entry.key === key);
-    if (!variant || !files?.length) return;
-    const room = MAX_VARIANT_IMAGES - variant.imageUrls.length - variant.pendingPreviews.length;
-    if (room <= 0) {
-      toast({ title: "Variant image limit reached", description: `Up to ${MAX_VARIANT_IMAGES} photos per variant.` });
-      return;
-    }
-    const selected = Array.from(files).slice(0, room);
-    const previews = selected.map((file) => URL.createObjectURL(file));
-    setVariants((current) =>
-      current.map((entry) =>
-        entry.key === key ? { ...entry, pendingPreviews: [...entry.pendingPreviews, ...previews] } : entry
-      )
-    );
-    setUploadingKeys((current) => new Set(current).add(key));
-    try {
-      for (const [index, file] of selected.entries()) {
-        const url = await uploadRetailPhoto(file);
-        const preview = previews[index];
-        setVariants((current) =>
-          current.map((entry) =>
-            entry.key === key
-              ? {
-                  ...entry,
-                  imageUrls: [...entry.imageUrls, url].slice(0, MAX_VARIANT_IMAGES),
-                  pendingPreviews: entry.pendingPreviews.filter((value) => value !== preview),
-                }
-              : entry
-          )
-        );
-        URL.revokeObjectURL(preview);
-      }
-    } catch (error) {
-      setVariants((current) =>
-        current.map((entry) =>
-          entry.key === key
-            ? { ...entry, pendingPreviews: entry.pendingPreviews.filter((value) => !previews.includes(value)) }
-            : entry
-        )
-      );
-      toast({
-        title: "Photo upload failed",
-        description: error instanceof Error ? error.message : String(error),
-        variant: "destructive",
-      });
-    } finally {
-      setUploadingKeys((current) => {
-        const next = new Set(current);
-        next.delete(key);
-        return next;
-      });
-    }
-  };
-
-  const reset = (keepContext: boolean) => {
-    setName("");
-    setDescription("");
-    if (!keepContext) {
-      setBrandChoice("");
-      setCategory("");
-    }
-    setVariants([blankQuickVariant()]);
-    setResult(null);
-    attemptRef.current = null;
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-
-  const saveMutation = useMutation({
-    mutationFn: async () => {
-      if (!name.trim()) throw new Error("Style / product name is required");
-      if (brandChoice === "new" && !newBrandName.trim()) throw new Error("Enter the new brand name");
-      if (!locationId) throw new Error("Choose a location");
-      if (variants.some((variant) => !variant.color.trim() || !variant.size.trim())) {
-        throw new Error("Every variant needs a color and a size");
-      }
-      if (variants.some((variant) => variant.sellingPrice === "" || Number(variant.sellingPrice) < 0)) {
-        throw new Error("Every variant needs a selling price");
-      }
-      if (duplicateKeys.size) throw new Error("The same color and size is entered twice");
-      if (uploadingKeys.size) throw new Error("Wait for photos to finish uploading");
-
-      const payload = {
-        brandId: selectedBrandId ?? undefined,
-        brandName: brandChoice === "new" ? newBrandName.trim() : brandChoice === "" ? NO_BRAND : undefined,
-        name: name.trim(),
-        category: category.trim() || null,
-        description: description.trim() || null,
-        locationId: Number(locationId),
-        variants: variants.map((variant) => ({
-          color: variant.color.trim(),
-          size: variant.size.trim(),
-          quantity: Math.max(0, Number(variant.quantity) || 0),
-          cost: Number(variant.cost) || 0,
-          sellingPrice: Number(variant.sellingPrice) || 0,
-          sku: variant.sku.trim() || null,
-          barcode: variant.barcode.trim(),
-          imageUrls: variant.imageUrls,
-        })),
-      };
-      const fingerprint = JSON.stringify(payload);
-      if (!attemptRef.current || attemptRef.current.fingerprint !== fingerprint) {
-        attemptRef.current = { fingerprint, key: makeIdempotencyKey() };
-      }
-      const response = await apiRequest("POST", "/api/retail/quick-add", {
-        ...payload,
-        idempotencyKey: attemptRef.current.key,
-      });
-      return (await response.json()) as QuickAddResult;
-    },
-    onSuccess: async (data) => {
-      attemptRef.current = null;
-      setResult(data);
-      try {
-        window.localStorage.setItem(LOCATION_STORAGE_KEY, String(locationId));
-      } catch {
-        // Remembering the location is a convenience only.
-      }
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["retail-products"] }),
-        queryClient.invalidateQueries({ queryKey: ["retail-catalog-navigation"] }),
-        queryClient.invalidateQueries({ queryKey: ["retail-product"] }),
-        queryClient.invalidateQueries({ queryKey: ["retail-brands"] }),
-        queryClient.invalidateQueries({ queryKey: ["retail-styles"] }),
-        queryClient.invalidateQueries({ queryKey: ["retail-catalog-facets"] }),
-        queryClient.invalidateQueries({ queryKey: ["retail-pos-items"] }),
-      ]);
-      toast({ title: "Item saved", description: `${data.variants.length} variant(s) added to stock` });
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    },
-    onError: (error: Error) =>
-      toast({ title: "Could not save item", description: error.message, variant: "destructive" }),
-  });
+  const {
+    activeLocations,
+    addPhotos,
+    brandChoice,
+    brands,
+    category,
+    colorSuggestions,
+    description,
+    duplicateKeys,
+    existingStyle,
+    facets,
+    labelItems,
+    labelOpen,
+    locationId,
+    name,
+    navigate,
+    newBrandName,
+    reset,
+    result,
+    retailEnabled,
+    saveMutation,
+    setBrandChoice,
+    setCategory,
+    setDescription,
+    setLabelItems,
+    setLabelOpen,
+    setLocationId,
+    setName,
+    setNewBrandName,
+    setShowDetails,
+    setVariants,
+    showDetails,
+    styles,
+    updateVariant,
+    uploadingKeys,
+    variants,
+  } = useRetailQuickAddState();
 
   if (!retailEnabled) {
     return (
@@ -372,110 +126,27 @@ export default function RetailQuickAdd() {
         </Card>
       )}
 
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">Style</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="space-y-1">
-            <Label htmlFor="qa-brand">Brand</Label>
-            <select
-              id="qa-brand"
-              className="h-11 w-full rounded-md border bg-background px-3 text-base"
-              value={brandChoice}
-              onChange={(event) => setBrandChoice(event.target.value)}
-            >
-              <option value="">{NO_BRAND}</option>
-              {brands
-                .filter((brand) => !brand.isNoBrand)
-                .map((brand) => (
-                  <option key={brand.id} value={brand.id}>
-                    {brand.name}
-                  </option>
-                ))}
-              <option value="new">+ New brand…</option>
-            </select>
-            {brandChoice === "new" && (
-              <Input
-                autoFocus
-                className="h-11 text-base"
-                placeholder="New brand name"
-                value={newBrandName}
-                onChange={(event) => setNewBrandName(event.target.value)}
-              />
-            )}
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="qa-name">Style / model *</Label>
-            <Input
-              id="qa-name"
-              className="h-11 text-base"
-              list="qa-styles"
-              placeholder="e.g. Wide Leg Trouser"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-            />
-            <datalist id="qa-styles">
-              {styles.map((style) => (
-                <option key={style.id} value={style.name} />
-              ))}
-            </datalist>
-            {existingStyle && (
-              <p className="text-xs text-primary" data-i18n-ui>
-                Adding new colors/sizes to an existing style.
-              </p>
-            )}
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1">
-              <Label htmlFor="qa-location">Location *</Label>
-              <select
-                id="qa-location"
-                className="h-11 w-full rounded-md border bg-background px-3 text-base"
-                value={locationId}
-                onChange={(event) => setLocationId(event.target.value ? Number(event.target.value) : "")}
-              >
-                <option value="">Select location</option>
-                {activeLocations.map((location) => (
-                  <option key={location.id} value={location.id}>
-                    {location.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="qa-category">Category</Label>
-              <Input
-                id="qa-category"
-                className="h-11 text-base"
-                list="qa-categories"
-                value={category}
-                onChange={(event) => setCategory(event.target.value)}
-              />
-              <datalist id="qa-categories">
-                {(facets?.categories ?? []).map((value) => (
-                  <option key={value} value={value} />
-                ))}
-              </datalist>
-            </div>
-          </div>
-          {showDetails ? (
-            <div className="space-y-1">
-              <Label htmlFor="qa-description">Description</Label>
-              <Textarea
-                id="qa-description"
-                rows={2}
-                value={description}
-                onChange={(event) => setDescription(event.target.value)}
-              />
-            </div>
-          ) : (
-            <Button type="button" variant="ghost" size="sm" onClick={() => setShowDetails(true)}>
-              + Add description
-            </Button>
-          )}
-        </CardContent>
-      </Card>
+      <RetailQuickAddCardSection
+        activeLocations={activeLocations}
+        brandChoice={brandChoice}
+        brands={brands}
+        category={category}
+        description={description}
+        existingStyle={existingStyle}
+        facets={facets}
+        locationId={locationId}
+        name={name}
+        newBrandName={newBrandName}
+        setBrandChoice={setBrandChoice}
+        setCategory={setCategory}
+        setDescription={setDescription}
+        setLocationId={setLocationId}
+        setName={setName}
+        setNewBrandName={setNewBrandName}
+        setShowDetails={setShowDetails}
+        showDetails={showDetails}
+        styles={styles}
+      />
 
       <datalist id="qa-colors">
         {colorSuggestions.map((color) => (
@@ -680,7 +351,10 @@ export default function RetailQuickAdd() {
                     value={variant.barcode}
                     onChange={(event) => updateVariant(variant.key, { barcode: event.target.value })}
                   />
-                  <MobileBarcodeScanner onScan={(code) => updateVariant(variant.key, { barcode: code })} className="mt-2" />
+                  <MobileBarcodeScanner
+                    onScan={(code) => updateVariant(variant.key, { barcode: code })}
+                    className="mt-2"
+                  />
                 </div>
                 <div className="space-y-1">
                   <Label>SKU</Label>

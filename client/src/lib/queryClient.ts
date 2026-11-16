@@ -1,15 +1,7 @@
-import { offlineError } from "./offline/offlineError";
-import { CreateOnlyActionNotAvailableError, isCreateOnlyClientWriteBlocked } from "./createOnlyRequestGuard";
-import {
-  installPermissionRevalidationListener,
-  isPermissionDenial,
-  requestPermissionRevalidation,
-} from "./permissionRevalidation";
-import type { ClientErrorLike } from "@/lib/clientError";
+import { installPermissionRevalidationListener } from "./permissionRevalidation";
 import { getErrorDetails } from "@shared/errorUtils";
-import { QueryClient, QueryFunction, MutationCache, QueryCache } from "@tanstack/react-query";
+import { QueryClient } from "@tanstack/react-query";
 import { OFFLINE_MODE_ENABLED } from "@/lib/featureFlags";
-import { toast } from "@/hooks/use-toast";
 import {
   ACCESS_API_ENDPOINTS,
   STABLE_REFERENCE_API_ENDPOINTS,
@@ -17,205 +9,58 @@ import {
   accessQueryPolicy,
   stableReferenceQueryPolicy,
   stableSettingsQueryPolicy,
-  staleTimeForQueryKey,
 } from "./queryPolicies";
 import { applyReferenceMutationResponse } from "./referenceMutationCache";
-import { isAbortError } from "./abortError";
 import { getRealtimeClientId } from "./realtimeClientIdentity";
 import { factoryPageOwnsAccountsAllRead, factoryPageOwnsSharedAccountingRead } from "./factoryClientAccess";
 import { coldStartReadOnlyActive, coldStartReadOnlyResponse } from "./offline/coldStartState";
-import { isKnownOffline } from "./offline/connectivityState";
+import {
+  AUTH_PATHS,
+  _CAPACITOR_API_BASE,
+  emptyAccountsEnvelopeResponse,
+  emptyJsonArrayResponse,
+  ensureCsrfToken,
+  expiredSessionResponse,
+  factoryAccountingModuleAccess,
+  isCsrfTokenMismatch,
+  isFactoryAccountingRead,
+  isFactoryAccountsAllRead,
+  prepareApiRequest,
+  resetCsrfToken,
+} from "./queryClientGetAppDate";
+import {
+  _sessionExpiredHandled,
+  assertCreateOnlyRequestAllowed,
+  handlePossibleSessionExpiry,
+  queryClient,
+  throwIfResNotOk,
+} from "./queryClientGetQueryFn";
+export {
+  _testOnly_setRedirectFn,
+  getAppDate,
+  resetCsrfToken,
+  setAppTimezone,
+  setFactoryAccountingModuleAccess,
+} from "./queryClientGetAppDate";
+export {
+  _testOnly_resetSessionExpired,
+  getQueryFn,
+  handlePossibleSessionExpiry,
+  queryClient,
+  verifySessionExpired,
+} from "./queryClientGetQueryFn";
+export { apiRequest } from "./queryClientApiRequest";
 
 /** Session writes a read-only cold-start viewer may still make (sign in / out). */
 const COLD_START_ALLOWED_WRITES = new Set(["/api/auth/login", "/api/auth/logout", "/api/csrf-token"]);
-
-/* ── Timezone-aware date utility ───────────────────────────────────────────── */
-// Stores the configured timezone for the current company.
-// Defaults to the browser's local timezone so behaviour is unchanged until a
-// company timezone is explicitly saved.
-let _appTimezone: string | null = null;
-
-/** Call this whenever company settings are loaded to configure the app timezone. */
-export function setAppTimezone(tz: string | null | undefined) {
-  _appTimezone = tz || null;
-}
-
-/* ── CSRF token plumbing ─────────────────────────────────────────────────── */
-// Synchronizer-token CSRF protection. The token is fetched from the server
-// once per session and attached to every state-changing request as
-// X-CSRF-Token. Enforcement is on by default; set CSRF_ENFORCE=0 to
-// switch to warn-only mode (logs mismatches but does not block requests).
-let _csrfToken: string | null = null;
-let _csrfFetchPromise: Promise<string | null> | null = null;
-
-async function fetchCsrfToken(): Promise<string | null> {
-  try {
-    const res = await fetch("/api/csrf-token", { credentials: "include" });
-    if (!res.ok) return null;
-    const data = await res.json();
-    return typeof data?.csrfToken === "string" ? data.csrfToken : null;
-  } catch {
-    return null;
-  }
-}
-
-async function ensureCsrfToken(): Promise<string | null> {
-  if (_csrfToken) return _csrfToken;
-  if (!_csrfFetchPromise) {
-    _csrfFetchPromise = fetchCsrfToken().then((tok) => {
-      _csrfToken = tok;
-      _csrfFetchPromise = null;
-      return tok;
-    });
-  }
-  return _csrfFetchPromise;
-}
-
-/** Reset the cached CSRF token (call on logout or auth state change). */
-export function resetCsrfToken() {
-  _csrfToken = null;
-  _csrfFetchPromise = null;
-}
-
-/* ── Capacitor API base URL ──────────────────────────────────────────────── */
-// Set VITE_API_BASE_URL at Capacitor build time, e.g. "https://your-server.com".
-// Empty string in all web builds — every code path below falls back unchanged.
-const _CAPACITOR_API_BASE: string = (import.meta.env?.VITE_API_BASE_URL as string) || "";
-
-/* ── Session-expiry redirect ─────────────────────────────────────────────── */
-// Single-fire: only after /api/auth/me confirms the session is truly gone do
-// we redirect to /login. This prevents false logouts caused by business
-// endpoints that legitimately return 401 (permission-based, POS-gated, etc.)
-// while the user's session is still perfectly valid.
-let _sessionExpiredHandled = false;
-/** @internal – injected by unit tests to observe redirects without a browser */
-let _redirectFn: ((href: string) => void) | null = null;
-
-function scheduleSessionExpiredRedirect() {
-  if (_sessionExpiredHandled) return;
-  if (typeof window !== "undefined") {
-    // Don't redirect when already on the login page — avoids loops from
-    // wrong-password 401s and initial unauthenticated loads.
-    const path = window.location.pathname;
-    if (path === "/login" || path.startsWith("/login/")) return;
-  }
-
-  // Flip the gate before doing any async cleanup. From this point onward the
-  // global fetch interceptor rejects protected API work locally, so mounted
-  // pollers/heartbeats cannot keep generating 401 traffic while navigation
-  // to the login page is still settling.
-  _sessionExpiredHandled = true;
-  void import("./offline/offlineReadCache").then(({ revokeOfflineReadScope }) => revokeOfflineReadScope());
-  resetCsrfToken();
-  void queryClient.cancelQueries();
-
-  // Test hook: avoids needing a browser environment.
-  if (_redirectFn) {
-    _redirectFn("/login");
-    return;
-  }
-  if (typeof window === "undefined") return;
-  window.location.replace("/login");
-}
-
-// ── Session verification (prevents false logout on business 401s) ──────────
-// A shared promise ensures multiple simultaneous 401 responses only trigger
-// ONE /api/auth/me check. Uses originalFetch directly to bypass the patched
-// window.fetch and avoid an infinite interception loop.
-let _sessionVerificationPromise: Promise<boolean> | null = null;
-
-export async function verifySessionExpired(originalFetch: typeof window.fetch): Promise<boolean> {
-  if (_sessionVerificationPromise) return _sessionVerificationPromise;
-  _sessionVerificationPromise = (async () => {
-    try {
-      const res = await originalFetch("/api/auth/me", {
-        method: "GET",
-        credentials: "include",
-        cache: "no-store",
-        headers: { Accept: "application/json" },
-      });
-      // Only treat a confirmed 401 as session expiry.
-      // 5xx / network errors / 502 proxy restarts → do NOT log the user out.
-      return res.status === 401;
-    } catch {
-      // Network failure or timeout — never log the user out speculatively.
-      return false;
-    } finally {
-      _sessionVerificationPromise = null;
-    }
-  })();
-  return _sessionVerificationPromise;
-}
-
-// Routes that must never trigger session verification to avoid recursion or
-// interfering with the login flow itself.
-const AUTH_PATHS = new Set(["/api/auth/me", "/api/auth/login", "/api/auth/logout", "/api/csrf-token"]);
 
 function shouldBlockExpiredSessionRequest(pathname: string | null): boolean {
   return _sessionExpiredHandled && !!pathname?.startsWith("/api/") && !AUTH_PATHS.has(pathname);
 }
 
-function expiredSessionResponse(): Response {
-  return new Response(JSON.stringify({ message: "Session expired", code: "SESSION_EXPIRED" }), {
-    status: 401,
-    headers: { "Content-Type": "application/json" },
-  });
-}
-
 let referenceMutationQueryClient: QueryClient | null = null;
-let factoryAccountingModuleAccess: boolean | null = null;
-
-export function setFactoryAccountingModuleAccess(allowed: boolean | null): void {
-  factoryAccountingModuleAccess = allowed;
-}
-
-function isFactoryAccountingRead(pathname: string | null, method: string): boolean {
-  if (method !== "GET" || !pathname) return false;
-  return pathname === "/api/ledger-accounts" || pathname === "/api/bank-accounts";
-}
-
-function isFactoryAccountsAllRead(pathname: string | null, method: string): boolean {
-  return method === "GET" && pathname === "/api/accounts/all";
-}
-
-function emptyJsonArrayResponse(): Response {
-  return new Response("[]", {
-    status: 200,
-    headers: { "Content-Type": "application/json" },
-  });
-}
-
-function emptyAccountsEnvelopeResponse(): Response {
-  return new Response(JSON.stringify({ accounts: [], asOfDate: null }), {
-    status: 200,
-    headers: { "Content-Type": "application/json" },
-  });
-}
-
-export async function handlePossibleSessionExpiry(
-  response: Response,
-  pathname: string | null,
-  originalFetch: typeof window.fetch
-): Promise<void> {
-  if (response.status !== 401) return;
-  if (!pathname?.startsWith("/api/")) return;
-  if (AUTH_PATHS.has(pathname)) return;
-  if (_sessionExpiredHandled) return;
-  const expired = await verifySessionExpired(originalFetch);
-  if (expired) scheduleSessionExpiredRedirect();
-}
-
-/** @internal – reset state between tests only */
-export function _testOnly_resetSessionExpired() {
-  _sessionExpiredHandled = false;
-  _sessionVerificationPromise = null;
-}
 export function _testOnly_isSessionTrafficBlocked() {
   return _sessionExpiredHandled;
-}
-/** @internal – inject a redirect observer for unit tests (no browser required) */
-export function _testOnly_setRedirectFn(fn: ((href: string) => void) | null) {
-  _redirectFn = fn;
 }
 
 /* ── Global fetch interceptor ────────────────────────────────────────────── */
@@ -419,226 +264,6 @@ if (
 }
 
 /**
- * Returns today's date string (YYYY-MM-DD) in the configured company timezone.
- * Falls back to the browser's local timezone if no company timezone is set.
- */
-export function getAppDate(): string {
-  const tz = _appTimezone;
-  if (tz) {
-    try {
-      return new Intl.DateTimeFormat("en-CA", {
-        timeZone: tz,
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-      }).format(new Date());
-    } catch {
-      // Invalid timezone string — fall through to browser local
-    }
-  }
-  return new Date().toLocaleDateString("en-CA");
-}
-
-async function throwIfResNotOk(res: Response) {
-  if (!res.ok) {
-    const text = await res.text();
-    let errorData;
-    try {
-      errorData = JSON.parse(text);
-    } catch {
-      // If the body is an HTML page (e.g. a Render/proxy 502 error page) don't
-      // dump raw markup into the toast — show a clean status-code message instead.
-      const isHtml = text.trimStart().startsWith("<");
-      const fallback = isHtml
-        ? `Server error (${res.status}${res.statusText ? ` – ${res.statusText}` : ""}). Please try again.`
-        : text || res.statusText;
-      errorData = { message: fallback };
-    }
-
-    // Preserve structured API error fields without mass-assigning response data.
-    const error: Error &
-      ClientErrorLike & {
-        status?: number;
-        requiresConfirmation?: unknown;
-        employeeBalance?: unknown;
-        ledgerBalance?: unknown;
-        notInProforma?: unknown;
-        overloaded?: unknown;
-        previous?: unknown;
-      } = new Error(errorData.message || res.statusText);
-    error.status = res.status;
-    error.code = errorData.code;
-    // A role or permission refusal means this tab's access data may be stale;
-    // refresh it here and in the other open tabs.
-    if (isPermissionDenial(res.status, errorData.code, errorData.message)) {
-      requestPermissionRevalidation(queryClient);
-    }
-    error.requiresConfirmation = errorData.requiresConfirmation;
-    error.employeeBalance = errorData.employeeBalance;
-    error.ledgerBalance = errorData.ledgerBalance;
-    error.notInProforma = errorData.notInProforma;
-    error.overloaded = errorData.overloaded;
-    // Keep structured prior-confirmation data for pressing duplicate feedback.
-    error.previous = errorData.previous;
-    throw error;
-  }
-}
-
-function isNetworkError(error: unknown): boolean {
-  if (error instanceof TypeError) return true;
-  if (error instanceof DOMException && error.name === "NetworkError") return true;
-  const msg = getErrorDetails(error).optionalMessage ?? "";
-  return (
-    msg.includes("Load failed") ||
-    msg.includes("Failed to fetch") ||
-    msg.includes("Network request failed") ||
-    msg.includes("NetworkError") ||
-    msg.includes("network error")
-  );
-}
-
-interface PreparedApiRequest {
-  /** Capacitor: resolved absolute URL when VITE_API_BASE_URL is set; unchanged on web. */
-  url: string;
-  init: RequestInit;
-  timeoutId: ReturnType<typeof setTimeout>;
-  didTimeout: () => boolean;
-}
-
-/** Shared request preparation for both the queueable and the privileged fetch paths. */
-async function prepareApiRequest(
-  method: string,
-  url: string,
-  data: unknown,
-  timeoutMs: number
-): Promise<PreparedApiRequest> {
-  const controller = new AbortController();
-  let intentionalAbort = false;
-  const timeoutId = setTimeout(() => {
-    intentionalAbort = true;
-    controller.abort();
-  }, timeoutMs);
-
-  let body: string | undefined;
-  if (data) {
-    body = JSON.stringify(data);
-  }
-
-  // Attach CSRF token for state-changing methods.
-  const upMethod = method.toUpperCase();
-  const isStateChanging = upMethod !== "GET" && upMethod !== "HEAD" && upMethod !== "OPTIONS";
-  const csrfToken = isStateChanging ? await ensureCsrfToken() : null;
-
-  const _apiUrl = _CAPACITOR_API_BASE && url.startsWith("/") ? `${_CAPACITOR_API_BASE}${url}` : url;
-  const init: RequestInit = {
-    method,
-    headers: {
-      ...(data ? { "Content-Type": "application/json" } : {}),
-      "X-Client-Date": getAppDate(),
-      ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
-    },
-    body,
-    credentials: "include",
-    signal: controller.signal,
-    // Logout must survive an immediate tab/browser close after the click.
-    // keepalive asks the browser to finish this tiny request during unload.
-    keepalive: upMethod === "POST" && url === "/api/auth/logout",
-  };
-  return { url: _apiUrl, init, timeoutId, didTimeout: () => intentionalAbort };
-}
-
-/**
- * True when the server rejected a stale CSRF token (after a server restart / session
- * regeneration on Render). The caller clears the cached token and retries exactly once.
- */
-async function isCsrfTokenMismatch(res: Response): Promise<boolean> {
-  if (res.status !== 403) return false;
-  try {
-    const errBody = await res.clone().json();
-    return errBody?.code === "CSRF_TOKEN_MISMATCH";
-  } catch {
-    return false;
-  }
-}
-
-/** Active company role from the cached session, for the Create Only request guard. */
-function cachedActiveRole(): string | null {
-  const me = queryClient.getQueryData<{ role?: string | null; currentRole?: string | null }>(["/api/auth/me"]);
-  return me?.currentRole ?? me?.role ?? null;
-}
-
-function assertCreateOnlyRequestAllowed(method: string, url: string): void {
-  if (isCreateOnlyClientWriteBlocked(cachedActiveRole(), method, url)) {
-    throw new CreateOnlyActionNotAvailableError();
-  }
-}
-
-export async function apiRequest(
-  method: string,
-  url: string,
-  data?: unknown | undefined,
-  _isRetry = false,
-  timeoutMs = 300000
-): Promise<Response> {
-  assertCreateOnlyRequestAllowed(method, url);
-  if (OFFLINE_MODE_ENABLED && method.toUpperCase() === "POST" && url === "/api/vouchers/with-entries") {
-    // The existing authenticated query cache holds the user identity. The
-    // selected company is only a proposed scope: the sync transport always
-    // revalidates it against the active server session before delivery.
-    const user = queryClient.getQueryData<{ id?: string | number }>(["/api/auth/me"]);
-    const companyId = Number(localStorage.getItem("selectedCompanyId"));
-    if (!user?.id || !Number.isSafeInteger(companyId) || companyId <= 0) {
-      throw offlineError("OFFLINE_ACTOR_NOT_PREPARED");
-    }
-    const { submitDurableVoucherWithEntries } = await import("./offline/voucherCapture");
-    return submitDurableVoucherWithEntries({ companyId, userId: String(user.id) }, data, getAppDate());
-  }
-  if (
-    OFFLINE_MODE_ENABLED &&
-    !["GET", "HEAD", "OPTIONS"].includes(method.toUpperCase()) &&
-    (isKnownOffline() || coldStartReadOnlyActive())
-  ) {
-    // Standalone offline mode: known to be offline BEFORE sending. Supported
-    // writes are saved on this device for later delivery to the cloud; every
-    // other write is refused with its reason. Never after a send was cut off.
-    const { captureOfflineWriteForSignedInUser } = await import("./offline/browserCapture");
-    return captureOfflineWriteForSignedInUser(queryClient.getQueryData(["/api/auth/me"]), method, url, data);
-  }
-  const prepared = await prepareApiRequest(method, url, data, timeoutMs);
-
-  try {
-    const res = await fetch(prepared.url, prepared.init);
-
-    clearTimeout(prepared.timeoutId);
-
-    if (!_isRetry && (await isCsrfTokenMismatch(res))) {
-      resetCsrfToken();
-      return apiRequest(method, url, data, true);
-    }
-
-    await throwIfResNotOk(res);
-    return res;
-  } catch (error) {
-    clearTimeout(prepared.timeoutId);
-    if (getErrorDetails(error).name === "AbortError" && prepared.didTimeout()) {
-      throw new Error(`Request timeout after ${Math.round(timeoutMs / 1000)} seconds for ${method} ${url}`, {
-        cause: error,
-      });
-    }
-    const networkFail = getErrorDetails(error).name === "AbortError" ? true : isNetworkError(error);
-    if (OFFLINE_MODE_ENABLED && networkFail) {
-      // Phase 1: a generic failed request cannot be made safe by replaying its
-      // raw HTTP body. Only explicitly registered operations saved BEFORE
-      // transport may use the durable outbox; never fall back to localStorage.
-      const rejectedWrite = Object.assign(offlineError("OFFLINE_WRITE_NOT_REGISTERED"), { cause: error });
-      rejectedWrite.name = "OfflineWriteNotRegistered";
-      throw rejectedWrite;
-    }
-    throw error;
-  }
-}
-
-/**
  * Credential-bearing writes — manager discount approvals, password changes — use this
  * variant. It deliberately has no offline-queue fallback: the secret in `data` is never
  * written to localStorage, and an offline device fails fast with the network error the
@@ -678,106 +303,6 @@ export async function apiRequestPrivileged(
     throw error;
   }
 }
-
-type UnauthorizedBehavior = "returnNull" | "throw";
-export const getQueryFn: <T>(options: { on401: UnauthorizedBehavior }) => QueryFunction<T> =
-  ({ on401: unauthorizedBehavior }) =>
-  async ({ queryKey, signal: querySignal }) => {
-    // The queryKey is expected to be a single URL string as the first element
-    const url = queryKey[0] as string;
-    // Callers that genuinely need hidden system accounts request
-    // ?includeHidden=true explicitly. Do not globally upgrade every Factory
-    // ledger request: restricted Factory pages may legitimately have no Accounts
-    // access, and the global rewrite caused avoidable 403s.
-    const requestUrl = url;
-
-    // Apply a 5-minute hard timeout so queries never hang indefinitely.
-    // We race the caller's own signal (query cancellation) against our timeout.
-    const controller = new AbortController();
-    let timedOut = false;
-    const timeoutId = setTimeout(() => {
-      timedOut = true;
-      controller.abort();
-    }, 300000);
-
-    // Forward query-level cancellation (e.g. component unmount) into our controller
-    querySignal?.addEventListener("abort", () => controller.abort(), { once: true });
-
-    try {
-      // Capacitor: resolve to absolute URL when VITE_API_BASE_URL is set; no-op on web.
-      const _apiUrl =
-        _CAPACITOR_API_BASE && requestUrl.startsWith("/") ? `${_CAPACITOR_API_BASE}${requestUrl}` : requestUrl;
-      const res = await fetch(_apiUrl, {
-        credentials: "include",
-        signal: controller.signal,
-        headers: { "X-Client-Date": getAppDate() },
-      });
-
-      clearTimeout(timeoutId);
-
-      if (unauthorizedBehavior === "returnNull" && res.status === 401) {
-        return null;
-      }
-
-      await throwIfResNotOk(res);
-      return await res.json();
-    } catch (error) {
-      clearTimeout(timeoutId);
-      if (timedOut && getErrorDetails(error).name === "AbortError") {
-        throw new Error(`Request timed out after 30 seconds: GET ${requestUrl}`, { cause: error });
-      }
-      throw error;
-    }
-  };
-
-// ── Global query error handler ────────────────────────────────────────────
-// TQ v5 is supposed to suppress AbortErrors when signal.aborted === true, but
-// a race condition in our custom AbortController forwarding (controller wrapping
-// querySignal) means the AbortError can reach query.state.error and permanently
-// show error UI on every page.
-//
-// Fix: intercept AbortErrors in QueryCache.onError. If the query still has
-// active observers (component is mounted), reset it back to pending and schedule
-// a fresh fetch so the component recovers silently. If there are no observers
-// (component unmounted), just remove the error so it doesn't flash on remount.
-const globalQueryCache = new QueryCache({
-  onError: (error: ClientErrorLike, query) => {
-    // NOTE: 401 handling is intentionally NOT here. The global fetch interceptor
-    // is the single source of session-expiry detection; it verifies /api/auth/me
-    // before redirecting. Handling 401 here too would bypass that check and cause
-    // false logouts on business endpoints that return 401 for non-session reasons.
-    if (error?.name !== "AbortError") return;
-    // A confirmed expired session intentionally cancels active queries. Do not
-    // convert those cancellations back into refetches while the login redirect
-    // is in progress.
-    if (_sessionExpiredHandled) return;
-    // Swallow — schedule a transparent recovery refetch if the component is still mounted
-    const observerCount = query.getObserversCount();
-    setTimeout(() => {
-      if (observerCount > 0 && query.state.status === "error") {
-        query.fetch();
-      }
-    }, 50);
-  },
-});
-
-// Global mutation error handler — catches OfflineQueued for every mutation
-// so individual pages don't need to duplicate the offline toast logic.
-// Pages that need extra offline behaviour (BaleStockEntry, Vouchers) still
-// run their own onError AFTER this; they should skip another toast by checking
-// error._handledGlobally.
-const globalMutationCache = new MutationCache({
-  onError: (error: ClientErrorLike) => {
-    if (error?.name === "OfflineQueued") {
-      error._handledGlobally = true;
-      const label = error.description ? `${error.description} saved` : "Action saved";
-      toast({
-        title: "Saved offline",
-        description: `${label} — will sync automatically when connected`,
-      });
-    }
-  },
-});
 
 /**
  * Returns a TanStack Query predicate that matches any query whose first key
@@ -820,33 +345,6 @@ export function invalidateCustomerBalances(customerId?: number | string) {
     });
   }
 }
-
-export const queryClient = new QueryClient({
-  queryCache: globalQueryCache,
-  mutationCache: globalMutationCache,
-  defaultOptions: {
-    queries: {
-      queryFn: getQueryFn({ on401: "throw" }),
-      refetchInterval: false,
-      refetchOnWindowFocus: false,
-      refetchOnMount: false,
-      refetchOnReconnect: false,
-      staleTime: (query) => staleTimeForQueryKey(query.queryKey),
-      gcTime: 30 * 60 * 1000,
-      // Failures are not retried — a 4xx/5xx is real and the page should say so.
-      // An abort is different: the request was cancelled, by a page the user has
-      // already left or by a request guard reclaiming a shared fetch, and
-      // rendering it as a failure asks the user to act on something that never
-      // failed. Retry those once so the query resolves instead of settling into
-      // an error state nobody can clear without a page reload.
-      retry: (failureCount, error) => isAbortError(error) && failureCount < 1,
-      retryDelay: 250,
-    },
-    mutations: {
-      retry: false,
-    },
-  },
-});
 
 referenceMutationQueryClient = queryClient;
 installPermissionRevalidationListener(queryClient);

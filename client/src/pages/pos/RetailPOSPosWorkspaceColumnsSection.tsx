@@ -1,0 +1,282 @@
+// Extracted from ./RetailPOS.tsx to keep that module under the source-size cap.
+import { Percent } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { PosWorkspaceColumns } from "./pos-components/PosWorkspaceColumns";
+import { RetailErpPosItemPicker, RetailErpPosSaleGrid } from "./RetailErpPosWorkspace";
+import { RetailPaymentPanel } from "./RetailPaymentPanel";
+import { RetailLastSaleSummary } from "./RetailPOSPanels";
+import { money, scanBeep } from "./retailPosTypes";
+import { useRetailPOSState } from "./useRetailPOSState";
+
+export function RetailPOSPosWorkspaceColumnsSection({
+  addItem,
+  canCompleteSale,
+  cart,
+  currentShift,
+  customer,
+  focusScan,
+  isPosRole,
+  itemsQuery,
+  ladder,
+  lastSale,
+  lastScan,
+  notes,
+  orderDiscount,
+  orderDiscountOpen,
+  paymentAccounts,
+  payments,
+  printReceipt,
+  receiptPaperWidth,
+  requiresApproval,
+  saleMutation,
+  scanBarcode,
+  scanInputRef,
+  scanText,
+  selectedLocation,
+  setAdjustLine,
+  setCart,
+  setLastScan,
+  setNotes,
+  setOrderDiscount,
+  setOrderDiscountOpen,
+  setPayments,
+  setReceiptPaperWidth,
+  setScanText,
+  settings,
+  total,
+  units,
+}: Pick<
+  ReturnType<typeof useRetailPOSState>,
+  | "addItem"
+  | "canCompleteSale"
+  | "cart"
+  | "currentShift"
+  | "customer"
+  | "focusScan"
+  | "isPosRole"
+  | "itemsQuery"
+  | "ladder"
+  | "lastSale"
+  | "lastScan"
+  | "notes"
+  | "orderDiscount"
+  | "orderDiscountOpen"
+  | "paymentAccounts"
+  | "payments"
+  | "printReceipt"
+  | "receiptPaperWidth"
+  | "requiresApproval"
+  | "saleMutation"
+  | "scanBarcode"
+  | "scanInputRef"
+  | "scanText"
+  | "selectedLocation"
+  | "setAdjustLine"
+  | "setCart"
+  | "setLastScan"
+  | "setNotes"
+  | "setOrderDiscount"
+  | "setOrderDiscountOpen"
+  | "setPayments"
+  | "setReceiptPaperWidth"
+  | "setScanText"
+  | "settings"
+  | "total"
+  | "units"
+>) {
+  return (
+    <PosWorkspaceColumns layout="retail">
+      <div className="flex min-w-0 flex-col gap-3">
+        <RetailErpPosSaleGrid
+          cart={cart}
+          pricingLines={ladder?.lines ?? []}
+          units={units}
+          total={total}
+          onDecrease={(variantId) =>
+            setCart((current) =>
+              current.map((line) =>
+                line.variantId === variantId ? { ...line, cartQuantity: Math.max(1, line.cartQuantity - 1) } : line
+              )
+            )
+          }
+          onIncrease={(line) => {
+            const outcome = addItem(line);
+            setLastScan(outcome);
+            if (outcome.status !== "added") scanBeep(false);
+          }}
+          onAdjust={setAdjustLine}
+          onRemove={(variantId) => setCart((current) => current.filter((line) => line.variantId !== variantId))}
+        />
+        <Textarea
+          placeholder="Notes (optional)"
+          value={notes}
+          maxLength={2000}
+          onChange={(event) => setNotes(event.target.value)}
+          className="min-h-12 resize-y text-sm"
+          aria-label="Sale notes"
+          data-testid="retail-pos-notes"
+        />
+        <div className="rounded-lg border p-3" aria-label="Retail checkout">
+          <div className="space-y-2 border-t pt-3">
+            <div className="rounded-lg border p-2">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between text-sm"
+                onClick={() => setOrderDiscountOpen((value) => !value)}
+                data-testid="retail-order-discount-toggle"
+              >
+                <span className="flex items-center gap-1.5">
+                  <Percent className="h-3.5 w-3.5" /> Whole-sale discount
+                </span>
+                <span className="text-muted-foreground">
+                  {orderDiscount.type === "none"
+                    ? "None"
+                    : orderDiscount.type === "percent"
+                      ? `${orderDiscount.value}%`
+                      : money(orderDiscount.value)}
+                </span>
+              </button>
+              {orderDiscountOpen && (
+                <div className="mt-2 space-y-2">
+                  <div className="flex gap-2">
+                    <select
+                      className="h-9 flex-1 rounded-md border bg-background px-2 text-sm"
+                      value={orderDiscount.type}
+                      onChange={(event) =>
+                        setOrderDiscount((current) => ({
+                          ...current,
+                          type: event.target.value as "none" | "percent" | "fixed",
+                        }))
+                      }
+                      data-testid="retail-order-discount-type"
+                    >
+                      <option value="none">No discount</option>
+                      <option value="percent">Percent</option>
+                      <option value="fixed">Fixed amount</option>
+                    </select>
+                    {orderDiscount.type !== "none" && (
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        className="h-9 w-28"
+                        value={Number.isFinite(orderDiscount.value) && orderDiscount.value ? orderDiscount.value : ""}
+                        onChange={(event) =>
+                          setOrderDiscount((current) => ({ ...current, value: Number(event.target.value) }))
+                        }
+                        data-testid="retail-order-discount-value"
+                      />
+                    )}
+                  </div>
+                  {orderDiscount.type !== "none" && (
+                    <Input
+                      className="h-9"
+                      placeholder="Reason (required)"
+                      value={orderDiscount.reason}
+                      onChange={(event) => setOrderDiscount((current) => ({ ...current, reason: event.target.value }))}
+                      data-testid="retail-order-discount-reason"
+                    />
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="space-y-1 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Subtotal</span>
+                <span data-testid="cart-list-subtotal">
+                  {money(ladder?.listSubtotal ?? cart.reduce((sum, line) => sum + line.price * line.cartQuantity, 0))}
+                </span>
+              </div>
+              {Boolean(ladder && ladder.discountTotal > 0) && (
+                <>
+                  <div className="flex justify-between text-destructive" data-testid="cart-discount-total">
+                    <span>Discount</span>
+                    <span>-{money(ladder!.discountTotal)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Net</span>
+                    <span>{money(ladder!.subtotal)}</span>
+                  </div>
+                </>
+              )}
+              {settings?.taxEnabled && (
+                <div className="flex justify-between" data-testid="cart-tax">
+                  <span className="text-muted-foreground">
+                    {settings.taxLabel}
+                    {settings.taxRatePercent
+                      ? ` (${settings.taxRatePercent}%${settings.taxInclusive ? ", incl." : ""})`
+                      : ""}
+                  </span>
+                  <span>{money(ladder?.taxAmount ?? 0)}</span>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center justify-between border-t pt-2 text-lg font-semibold">
+              <span>Total</span>
+              <span data-testid="cart-total">{money(total)}</span>
+            </div>
+            {requiresApproval && (
+              <div
+                className="rounded-md border border-amber-400 bg-amber-50 p-2 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+                data-testid="retail-approval-hint"
+              >
+                Manager approval will be requested when the sale is completed.
+              </div>
+            )}
+          </div>
+
+          {cart.length > 0 && (
+            <RetailPaymentPanel
+              total={total}
+              value={payments}
+              onChange={setPayments}
+              canUseCredit={Boolean(customer?.id)}
+              accounts={paymentAccounts}
+              customerName={customer?.legalName}
+            />
+          )}
+          {isPosRole && !currentShift && cart.length > 0 && (
+            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-sm">
+              Open a cashier shift before completing this sale.
+            </div>
+          )}
+          <Button
+            type="button"
+            size="lg"
+            className="mt-3 h-11 w-full"
+            disabled={!canCompleteSale}
+            onClick={() => saleMutation.mutate()}
+          >
+            {saleMutation.isPending ? "Completing sale…" : "Complete Sale"}
+          </Button>
+          {lastSale && (
+            <RetailLastSaleSummary
+              sale={lastSale}
+              onPrint={() => printReceipt(lastSale)}
+              paperWidth={receiptPaperWidth}
+              onPaperWidthChange={setReceiptPaperWidth}
+            />
+          )}
+        </div>
+      </div>
+      <RetailErpPosItemPicker
+        items={itemsQuery.data ?? []}
+        loading={itemsQuery.isLoading}
+        hasLocation={Boolean(selectedLocation?.id)}
+        searchText={scanText}
+        onSearchChange={setScanText}
+        onBarcodeSubmit={(barcode) => void scanBarcode(barcode)}
+        scanInputRef={scanInputRef}
+        lastScan={lastScan}
+        onPick={(item) => {
+          const outcome = addItem(item);
+          setLastScan(outcome);
+          if (outcome.status !== "added") scanBeep(false);
+          focusScan();
+        }}
+      />
+    </PosWorkspaceColumns>
+  );
+}

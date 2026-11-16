@@ -1,223 +1,51 @@
 import { TabsList, PillTabButton } from "@/components/ui/tabs";
-import type { ClientErrorLike } from "@/lib/clientError";
-import { getErrorDetails } from "@shared/errorUtils";
-import { useState, useRef } from "react";
-import { Redirect, useLocation } from "wouter";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { Redirect } from "wouter";
 import { PageHeader } from "@/components/PageHeader";
-import {
-  Upload,
-  CheckCircle,
-  AlertCircle,
-  RefreshCw,
-  Printer,
-  Download,
-  ChevronDown,
-  ChevronUp,
-  Tag,
-  FileSpreadsheet,
-  Eye,
-} from "lucide-react";
+import { CheckCircle, RefreshCw, Printer, Download, ChevronDown, ChevronUp, Tag, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useToast } from "@/hooks/use-toast";
-import { queryClient } from "@/lib/queryClient";
-import { factoryApiRequest } from "@/lib/factoryApi";
-import { useDateFormat } from "@/contexts/DateFormatContext";
-import {
-  generateCombinedLabelsHtml,
-  generateA5LabelsHtml,
-  generateStickerLabelsHtml,
-  prefetchBannersForPrint,
-  type A4DesignColor,
-  type LabelData,
-} from "@/lib/labelHtml";
-import { useLabelDesignColors } from "@/hooks/useLabelDesignColors";
-import { preparePriorityPrintLabels } from "@/lib/priorityPrintPreflight";
 
-import type { ApplyItem, ParsedRow, RelabelSession, Step, ValidationResult } from "./factorybalerelabeling/types";
-import { downloadCsv, downloadExcelTemplate, parseExcelFile } from "./factorybalerelabeling/utils";
+import type { Step } from "./factorybalerelabeling/types";
+import { downloadCsv } from "./factorybalerelabeling/utils";
 import { LabelPreviewCard } from "./factorybalerelabeling/components/LabelPreviewCard";
-import type { FactoryMyAccess } from "@shared/apiTypes";
-import { useCompany } from "@/contexts/CompanyContext";
-import { companyQueryKey } from "@/lib/companyQueryScope";
+import { useFactoryBaleRelabelingState } from "./useFactoryBaleRelabelingState";
+import { FactoryBaleRelabelingSection } from "./FactoryBaleRelabelingSection";
+import { FactoryBaleRelabelingCardSection } from "./FactoryBaleRelabelingCardSection";
 
 export default function FactoryBaleRelabeling() {
-  const { selectedCompany } = useCompany();
-  const { toast } = useToast();
-  const { formatDisplayDate } = useDateFormat();
-  const fileRef = useRef<HTMLInputElement>(null);
-
-  const [step, setStep] = useState<Step>("upload");
-  const [fileName, setFileName] = useState("");
-  const [parsedRows, setParsedRows] = useState<ParsedRow[]>([]);
-  const [parseError, setParseError] = useState("");
-
-  const [validationResults, setValidationResults] = useState<ValidationResult[]>([]);
-  const [printFormats, setPrintFormats] = useState<Set<"A4" | "A5" | "STICKER">>(new Set(["A4"]));
-  const [designColor, setDesignColor] = useState<A4DesignColor>("purple");
-  const { colors } = useLabelDesignColors();
-  const { data: myAccess } = useQuery<FactoryMyAccess>({
-    queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
-    enabled: Boolean(selectedCompany?.id),
-    staleTime: 5 * 60000,
-  });
-  const hiddenTabs = myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
-    ? myAccess.hiddenCostFields
-    : ["hide_tab_relabeling_main", "hide_tab_relabeling_wipers"];
-  const showRelabeling = !hiddenTabs.includes("hide_tab_relabeling_main");
-  const showWipersReEntry = !hiddenTabs.includes("hide_tab_relabeling_wipers");
-
-  const toggleFormat = (fmt: "A4" | "A5" | "STICKER") => {
-    setPrintFormats((prev) => {
-      const next = new Set(prev);
-      if (next.has(fmt)) {
-        if (next.size === 1) return prev;
-        next.delete(fmt);
-      } else {
-        next.add(fmt);
-      }
-      return next;
-    });
-  };
-
-  const printFormatLabel = Array.from(printFormats).join("+");
-
-  const [applyResult, setApplyResult] = useState<{ sessionId: number; items: ApplyItem[] } | null>(null);
-  const [showHistory, setShowHistory] = useState(false);
-  const [showLabelPreview, setShowLabelPreview] = useState(true);
-
-  const validRows = validationResults.filter((r) => r.valid);
-  const invalidRows = validationResults.filter((r) => !r.valid);
-
-  const { data: sessions = [] } = useQuery<RelabelSession[]>({
-    queryKey: companyQueryKey("/api/factory/bales/relabel/sessions", selectedCompany?.id),
-    enabled: Boolean(selectedCompany?.id),
-    queryFn: async () => {
-      const res = await factoryApiRequest("GET", "/api/factory/bales/relabel/sessions");
-      return res.json();
-    },
-    refetchOnWindowFocus: false,
-  });
-
-  const validateMutation = useMutation({
-    mutationFn: async (rows: ParsedRow[]) => {
-      const res = await factoryApiRequest("POST", "/api/factory/bales/relabel/validate", {
-        rows: rows.map((r) => ({ currentRef: r.currentRef })),
-      });
-      if (!res.ok) {
-        const e = await res.json();
-        throw new Error(e.message);
-      }
-      return res.json();
-    },
-    onSuccess: (data) => {
-      setValidationResults(data.results);
-      setStep("validate");
-    },
-    onError: (e: ClientErrorLike) => {
-      if (e?._handledGlobally) return;
-      toast({ title: "Validation failed", description: e.message, variant: "destructive" });
-    },
-  });
-
-  const applyMutation = useMutation({
-    mutationFn: async () => {
-      const res = await factoryApiRequest("POST", "/api/factory/bales/relabel/apply", {
-        rows: validRows.map((r) => ({ currentRef: r.currentRef })),
-        printFormat: printFormatLabel,
-        designColor: printFormats.has("A4") ? designColor : undefined,
-        filename: fileName,
-      });
-      if (!res.ok) {
-        const e = await res.json();
-        throw new Error(e.message);
-      }
-      return res.json();
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/bales"], refetchType: "active" });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/bales/relabel/sessions"], refetchType: "active" });
-      setApplyResult(data);
-      setStep("done");
-      toast({ title: "Relabeling applied", description: `${data.items.length} bales recoded successfully` });
-    },
-    onError: (e: ClientErrorLike) => {
-      if (e?._handledGlobally) return;
-      toast({ title: "Apply failed", description: e.message, variant: "destructive" });
-    },
-  });
-
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setFileName(file.name);
-    setParseError("");
-    setParsedRows([]);
-    try {
-      const rows = await parseExcelFile(file);
-      setParsedRows(rows);
-    } catch (err) {
-      setParseError(getErrorDetails(err).message);
-    }
-    if (fileRef.current) fileRef.current.value = "";
-  };
-
-  const handlePrint = async () => {
-    if (!applyResult) return;
-    const labels: LabelData[] = applyResult.items.map((item) => ({
-      referenceNumber: item.newRef,
-      articleCode: item.articleCode || "",
-      pieces: 1,
-      approxWeightKg: item.weightKg || "0",
-      productName: item.productName || "",
-    }));
-
-    let preparedLabels: LabelData[];
-    try {
-      preparedLabels = await preparePriorityPrintLabels(labels, factoryApiRequest);
-    } catch (error) {
-      toast({ title: "Priority printing failed", description: getErrorDetails(error).message, variant: "destructive" });
-      return;
-    }
-
-    prefetchBannersForPrint();
-    let opened = 0;
-    const formatsToOpen = Array.from(printFormats);
-    for (const fmt of formatsToOpen) {
-      let html: string;
-      if (fmt === "A4") html = generateCombinedLabelsHtml(preparedLabels, designColor);
-      else if (fmt === "A5") html = generateA5LabelsHtml(preparedLabels);
-      else html = generateStickerLabelsHtml(preparedLabels);
-
-      const win = window.open("", "_blank");
-      if (!win) {
-        toast({ title: "Popup blocked", description: "Allow popups to print labels", variant: "destructive" });
-        return;
-      }
-      win.document.write(html);
-      win.document.close();
-      const delay = opened * 600;
-      setTimeout(() => win.print(), 500 + delay);
-      opened++;
-    }
-  };
-
-  const handleReset = () => {
-    setStep("upload");
-    setFileName("");
-    setParsedRows([]);
-    setParseError("");
-    setValidationResults([]);
-    setApplyResult(null);
-  };
-
-  const [, navigate] = useLocation();
+  const {
+    applyMutation,
+    applyResult,
+    colors,
+    designColor,
+    fileName,
+    fileRef,
+    formatDisplayDate,
+    handleFileSelect,
+    handlePrint,
+    handleReset,
+    invalidRows,
+    navigate,
+    parseError,
+    parsedRows,
+    printFormatLabel,
+    printFormats,
+    sessions,
+    setDesignColor,
+    setShowHistory,
+    setShowLabelPreview,
+    showHistory,
+    showLabelPreview,
+    showRelabeling,
+    showWipersReEntry,
+    step,
+    toggleFormat,
+    validRows,
+    validateMutation,
+    validationResults,
+  } = useFactoryBaleRelabelingState();
 
   if (!showRelabeling && showWipersReEntry) {
     return <Redirect to="/factory/bale-relabeling/wipers-re-entry" />;
@@ -287,275 +115,31 @@ export default function FactoryBaleRelabeling() {
 
         {/* ── STEP 1: Upload ── */}
         {step === "upload" && (
-          <Card>
-            <CardHeader>
-              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-2">
-                <CardTitle className="flex items-center gap-2">
-                  <Upload className="h-4 w-4" />
-                  Upload Excel File
-                </CardTitle>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={downloadExcelTemplate}
-                  className="w-full sm:w-auto"
-                  data-testid="button-download-template"
-                >
-                  <FileSpreadsheet className="h-4 w-4 mr-2" />
-                  Download Template
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <p className="wrap-break-word text-sm text-muted-foreground">
-                Upload a <code>.xlsx</code>, <code>.xls</code>, or <code>.csv</code> file with a column containing
-                current bale reference codes. Accepted column names: <code>current_reference_code</code>,{" "}
-                <code>reference_code</code>, <code>barcode</code>, <code>ref</code>, etc.
-              </p>
-
-              {/* Template hint */}
-              <div className="flex items-start gap-2 rounded-md bg-muted/50 border p-3 text-sm text-muted-foreground">
-                <FileSpreadsheet className="h-4 w-4 mt-0.5 shrink-0 text-primary" />
-                <span className="min-w-0 wrap-break-word">
-                  Not sure of the format? Click <strong>Download Template</strong> above to get a pre-formatted Excel
-                  file. Fill in your bale reference codes in the <code>current_reference_code</code> column and upload
-                  it here.
-                </span>
-              </div>
-
-              <div
-                className="cursor-pointer rounded-md border-2 border-dashed p-5 text-center hover-elevate sm:p-8"
-                onClick={() => fileRef.current?.click()}
-                data-testid="drop-zone-upload"
-              >
-                <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                <p className="break-all text-sm font-medium">{fileName || "Click to select a file"}</p>
-                {fileName && <p className="text-xs text-muted-foreground mt-1">{parsedRows.length} row(s) parsed</p>}
-              </div>
-              <input
-                ref={fileRef}
-                type="file"
-                accept=".xlsx,.csv"
-                className="hidden"
-                onChange={handleFileSelect}
-                data-testid="input-file-upload"
-              />
-
-              {parseError && (
-                <div className="flex items-start gap-2 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
-                  <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
-                  <span className="min-w-0 wrap-break-word">{parseError}</span>
-                </div>
-              )}
-
-              {parsedRows.length > 0 && (
-                <div className="space-y-3">
-                  <div className="flex items-start gap-2 text-sm text-muted-foreground sm:items-center">
-                    <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-green-600 sm:mt-0" />
-                    <span>{parsedRows.length} reference code(s) found in file</span>
-                  </div>
-                  <div className="max-h-48 overflow-auto rounded-md border">
-                    <Table>
-                      <TableHeader className="sticky top-0 z-30 bg-background">
-                        <TableRow>
-                          <TableHead className="w-16">Row</TableHead>
-                          <TableHead>Current Reference Code</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {parsedRows.slice(0, 20).map((r) => (
-                          <TableRow key={r.rowNum} data-testid={`row-preview-${r.rowNum}`}>
-                            <TableCell className="text-muted-foreground text-xs">{r.rowNum}</TableCell>
-                            <TableCell className="font-mono text-sm">{r.currentRef}</TableCell>
-                          </TableRow>
-                        ))}
-                        {parsedRows.length > 20 && (
-                          <TableRow>
-                            <TableCell colSpan={2} className="text-center text-xs text-muted-foreground py-2">
-                              +{parsedRows.length - 20} more rows
-                            </TableCell>
-                          </TableRow>
-                        )}
-                      </TableBody>
-                    </Table>
-                  </div>
-                  <Button
-                    onClick={() => validateMutation.mutate(parsedRows)}
-                    disabled={validateMutation.isPending}
-                    className="w-full sm:w-auto"
-                    data-testid="button-validate"
-                  >
-                    {validateMutation.isPending ? "Validating..." : "Validate References"}
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <FactoryBaleRelabelingCardSection
+            fileName={fileName}
+            fileRef={fileRef}
+            handleFileSelect={handleFileSelect}
+            parseError={parseError}
+            parsedRows={parsedRows}
+            validateMutation={validateMutation}
+          />
         )}
 
         {/* ── STEP 2: Validate ── */}
         {step === "validate" && (
-          <div className="space-y-4">
-            {/* Summary */}
-            <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 sm:grid-cols-4">
-              {[
-                { label: "Total Rows", value: validationResults.length, color: "" },
-                { label: "Valid", value: validRows.length, color: "text-green-600" },
-                {
-                  label: "Invalid",
-                  value: invalidRows.length,
-                  color: invalidRows.length > 0 ? "text-destructive" : "",
-                },
-                { label: "File", value: fileName, color: "text-muted-foreground" },
-              ].map(({ label, value, color }) => (
-                <Card key={label}>
-                  <CardContent className="pt-4 pb-3">
-                    <p className="text-xs text-muted-foreground">{label}</p>
-                    <p className={`truncate text-lg font-bold ${color}`} title={String(value)}>
-                      {value}
-                    </p>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-
-            {/* Validation table */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Validation Results</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                <div className="max-h-80 overflow-auto">
-                  <Table>
-                    <TableHeader className="sticky top-0 z-30 bg-background">
-                      <TableRow>
-                        <TableHead>Current Reference</TableHead>
-                        <TableHead>Product</TableHead>
-                        <TableHead>Weight (kg)</TableHead>
-                        <TableHead>Stock Status</TableHead>
-                        <TableHead>Valid</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {validationResults.map((r, i) => (
-                        <TableRow
-                          key={i}
-                          className={r.valid ? "" : "bg-destructive/5"}
-                          data-testid={`row-validation-${i}`}
-                        >
-                          <TableCell className="font-mono text-sm">{r.currentRef}</TableCell>
-                          <TableCell className="text-sm">
-                            {r.productName || <span className="text-muted-foreground">—</span>}
-                          </TableCell>
-                          <TableCell className="text-sm">
-                            {r.weightKg ? parseFloat(r.weightKg).toFixed(1) : "—"}
-                          </TableCell>
-                          <TableCell>
-                            {r.status ? (
-                              <Badge variant={r.status === "IN_STOCK" ? "secondary" : "outline"} className="text-xs">
-                                {r.status}
-                              </Badge>
-                            ) : (
-                              "—"
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {r.valid ? (
-                              <CheckCircle className="h-4 w-4 text-green-600" />
-                            ) : (
-                              <div className="flex items-center gap-1 text-destructive text-xs">
-                                <AlertCircle className="h-3.5 w-3.5" />
-                                {r.error}
-                              </div>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Print format */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Printer className="h-4 w-4" />
-                  Label Format
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label className="text-sm font-medium mb-2 block">Print Formats (select one or more)</Label>
-                  <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 sm:flex sm:flex-wrap sm:gap-4">
-                    {(["A4", "A5", "STICKER"] as const).map((fmt) => (
-                      <label
-                        key={fmt}
-                        className="flex cursor-pointer select-none items-center gap-2"
-                        data-testid={`checkbox-format-${fmt}`}
-                      >
-                        <Checkbox checked={printFormats.has(fmt)} onCheckedChange={() => toggleFormat(fmt)} />
-                        <span className="text-sm font-medium">
-                          {fmt === "A4" ? "A4 (Full Page)" : fmt === "A5" ? "A5 (Half Page)" : 'Sticker (3"×2")'}
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                  {printFormats.size > 1 && (
-                    <p className="text-xs text-muted-foreground mt-2">
-                      {printFormats.size} formats selected — each will open in a separate print window.
-                    </p>
-                  )}
-                </div>
-                {printFormats.has("A4") && (
-                  <div className="space-y-1.5">
-                    <Label>A4 Label Design</Label>
-                    <Select
-                      value={designColor}
-                      onValueChange={(v) => setDesignColor(v as A4DesignColor)}
-                      data-testid="select-design-color"
-                    >
-                      <SelectTrigger className="w-full sm:max-w-xs">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {colors.map((opt) => (
-                          <SelectItem key={opt.value} value={opt.value}>
-                            <div className="flex items-center gap-2">
-                              <div className="h-3 w-3 rounded-full border" style={{ backgroundColor: opt.color }} />
-                              {opt.label}
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {validRows.length === 0 && (
-              <div className="flex items-start gap-2 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive sm:items-center">
-                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 sm:mt-0" />
-                No valid rows found. Please fix your file and start over.
-              </div>
-            )}
-
-            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-              <Button
-                onClick={() => applyMutation.mutate()}
-                disabled={validRows.length === 0 || applyMutation.isPending}
-                className="w-full sm:w-auto"
-                data-testid="button-apply"
-              >
-                {applyMutation.isPending ? "Applying..." : `Generate New Codes & Apply (${validRows.length} bales)`}
-              </Button>
-              <Button variant="outline" onClick={handleReset} className="w-full sm:w-auto" data-testid="button-cancel">
-                Cancel
-              </Button>
-            </div>
-          </div>
+          <FactoryBaleRelabelingSection
+            applyMutation={applyMutation}
+            colors={colors}
+            designColor={designColor}
+            fileName={fileName}
+            handleReset={handleReset}
+            invalidRows={invalidRows}
+            printFormats={printFormats}
+            setDesignColor={setDesignColor}
+            toggleFormat={toggleFormat}
+            validRows={validRows}
+            validationResults={validationResults}
+          />
         )}
 
         {/* ── STEP 3: Done ── */}

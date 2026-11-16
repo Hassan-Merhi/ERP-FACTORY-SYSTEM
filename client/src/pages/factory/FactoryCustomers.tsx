@@ -1,288 +1,70 @@
-import { downloadBlob } from "@/lib/downloadBlob";
-import { searchAny } from "@shared/searchNormalization";
-import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
-import { queryClient } from "@/lib/queryClient";
-import { drCrClass } from "@/lib/formatNumber";
-import { factoryApiRequest } from "@/lib/factoryApi";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useState } from "react";
-import { useLocation } from "wouter";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import {
-  Plus,
-  Pencil,
-  Trash2,
-  FileText,
-  RotateCcw,
-  History,
-  Eye,
-  EyeOff,
-  Users,
-  Wallet,
-  Scale,
-  SlidersHorizontal,
-  Columns3,
-  Download,
-  RefreshCw,
-  ChevronDown,
-} from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { Plus, RotateCcw, History, Eye, EyeOff, Users, Wallet, Scale } from "lucide-react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { useSingleFlightAction } from "@/hooks/use-single-flight-action";
-import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { PageHeader } from "@/components/PageHeader";
 import { ErrorState } from "@/components/ui/page-state";
 import { DataTableToolbar } from "@/components/DataTableToolbar";
 import { PaginationBar } from "@/components/PaginationBar";
-import { useTablePrefs } from "@/hooks/use-table-prefs";
-import { useClientTablePagination } from "@/hooks/use-client-table-pagination";
-import { useCompany } from "@/contexts/CompanyContext";
-import { companyQueryKey } from "@/lib/companyQueryScope";
-import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { FactoryCustomerFormDialogs } from "./factorycustomers/FactoryCustomerFormDialogs";
-import type { Customer } from "./factorycustomers/types";
+import { useFactoryCustomersState } from "./useFactoryCustomersState";
+import { FactoryCustomersSection, FactoryCustomersSection2 } from "./FactoryCustomersSection";
 
 export default function FactoryCustomers() {
-  const { toast } = useToast();
-  const { execute: executeSave, pending: saving } = useSingleFlightAction();
-  const { formatCashAmount } = useCurrencyContext();
-  const [, navigate] = useLocation();
-  const { selectedCompany } = useCompany();
-  const recordChanges = useExistingRecordChangeAccess();
-  const { prefs, setPrefs } = useTablePrefs("factory-customers", { companyId: selectedCompany?.id });
-
-  const pageSize = prefs.pageSize ?? 25;
-  const [search, setSearch] = useState("");
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
-  const [deletingCustomer, setDeletingCustomer] = useState<Customer | null>(null);
-  const [showDeleted] = useState(false);
-  const [showZeroBalance, setShowZeroBalance] = useState(false);
-  const [balanceFilter, setBalanceFilter] = useState<"all" | "Dr" | "Cr">("all");
-  const showBalanceColumn = prefs.columns?.balance !== false;
-  const showActionsColumn = prefs.columns?.actions !== false;
-  const setColumnVisible = (column: "balance" | "actions", visible: boolean) => {
-    setPrefs({ columns: { ...prefs.columns, [column]: visible } });
-  };
-  const [formData, setFormData] = useState({
-    legalName: "",
-    phone: "",
-    openingBalance: "",
-    openingBalanceSide: "Dr",
-    paymentTermsDays: "" as string,
-  });
-
   const {
-    data: customers = [],
-    isLoading,
-    isError,
+    balanceFilter,
+    createMutation,
+    customers,
+    deleteMutation,
+    deletedCustomers,
+    deletingCustomer,
+    editingCustomer,
     error,
-    refetch: refetchCustomers,
-  } = useQuery<Customer[]>({
-    queryKey: companyQueryKey("/api/factory/customers", selectedCompany?.id),
-    enabled: Boolean(selectedCompany?.id),
-  });
-
-  const createMutation = useMutation({
-    mutationFn: async (data: {
-      legalName: string;
-      phone?: string;
-      openingBalance?: string;
-      openingBalanceSide?: string;
-      paymentTermsDays?: number;
-    }) => {
-      return await factoryApiRequest("POST", "/api/factory/customers", data);
-    },
-    onSuccess: () => {
-      toast({ title: "Success", description: "Customer created" });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/customers"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/accounts/all"] });
-      setIsCreateOpen(false);
-      resetForm();
-    },
-    onError: (error: Error) => {
-      if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    },
-  });
-
-  const updateMutation = useMutation({
-    mutationFn: async ({
-      id,
-      data,
-    }: {
-      id: number;
-      data: { legalName: string; phone: string | null; paymentTermsDays: number | null };
-    }) => {
-      return await factoryApiRequest("PUT", `/api/factory/customers/${id}`, data);
-    },
-    onSuccess: () => {
-      toast({ title: "Success", description: "Customer updated" });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/customers"] });
-      setEditingCustomer(null);
-      resetForm();
-    },
-    onError: (error: Error) => {
-      if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: async (id: number) => {
-      return await factoryApiRequest("DELETE", `/api/factory/customers/${id}`, {});
-    },
-    onSuccess: () => {
-      toast({ title: "Customer deleted", description: "You can restore them from the deleted customers list." });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/customers"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/customers/deleted"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/accounts/all"] });
-      setDeletingCustomer(null);
-    },
-    onError: (error: Error) => {
-      if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    },
-  });
-
-  const { data: deletedCustomers = [] } = useQuery<Customer[]>({
-    queryKey: companyQueryKey("/api/factory/customers/deleted", selectedCompany?.id),
-    enabled: Boolean(selectedCompany?.id) && showDeleted,
-  });
-
-  const restoreMutation = useMutation({
-    mutationFn: async (id: number) => {
-      return await factoryApiRequest("POST", `/api/factory/customers/${id}/restore`, {});
-    },
-    onSuccess: () => {
-      toast({ title: "Customer restored", description: "The customer is now active again." });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/customers"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/customers/deleted"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/accounts/all"] });
-    },
-    onError: (error: Error) => {
-      if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    },
-  });
-
-  const resetForm = () => {
-    setFormData({ legalName: "", phone: "", openingBalance: "", openingBalanceSide: "Dr", paymentTermsDays: "" });
-  };
-
-  const openCreate = () => {
-    resetForm();
-    setIsCreateOpen(true);
-  };
-
-  const openEdit = (customer: Customer) => {
-    setEditingCustomer(customer);
-    setFormData({
-      legalName: customer.legalName,
-      phone: customer.phone || "",
-      openingBalance: customer.openingBalance || "",
-      openingBalanceSide: customer.openingBalanceSide || "Dr",
-      paymentTermsDays: customer.paymentTermsDays != null ? String(customer.paymentTermsDays) : "",
-    });
-  };
-
-  const handleCreate = () => {
-    if (!formData.legalName.trim() || saving || createMutation.isPending) return;
-    const days = formData.paymentTermsDays ? parseInt(formData.paymentTermsDays) : undefined;
-    void executeSave(() =>
-      createMutation.mutateAsync({
-        legalName: formData.legalName.trim(),
-        phone: formData.phone.trim() || undefined,
-        openingBalance: formData.openingBalance || undefined,
-        openingBalanceSide: formData.openingBalanceSide || undefined,
-        paymentTermsDays: days || undefined,
-      })
-    ).catch(() => {
-      // Existing mutation.onError provides feedback.
-    });
-  };
-
-  const handleUpdate = () => {
-    if (!editingCustomer || !formData.legalName.trim() || saving || updateMutation.isPending) return;
-    const days = formData.paymentTermsDays ? parseInt(formData.paymentTermsDays) : null;
-    void executeSave(() =>
-      updateMutation.mutateAsync({
-        id: editingCustomer.id,
-        data: {
-          legalName: formData.legalName.trim(),
-          phone: formData.phone.trim() || null,
-          paymentTermsDays: days,
-        },
-      })
-    ).catch(() => {
-      // Existing mutation.onError provides feedback.
-    });
-  };
-
-  const filtered = customers.filter((c) => {
-    if (!search) return true;
-    return searchAny(search, c.legalName, c.code, c.phone);
-  });
-  const zeroBalanceCount = filtered.filter((customer) => Math.abs(customer.balance ?? 0) <= 0.001).length;
-  const visibleCustomers = (
-    showZeroBalance ? filtered : filtered.filter((customer) => Math.abs(customer.balance ?? 0) > 0.001)
-  ).filter(
-    (customer) => balanceFilter === "all" || customer.balanceSide?.toUpperCase() === balanceFilter.toUpperCase()
-  );
-  const { page: safePage, setPage, totalPages, paginate } = useClientTablePagination(visibleCustomers.length, pageSize);
-  const pagedCustomers = paginate(visibleCustomers);
-
-  // Display-only summaries of the existing API amounts. The API supplies an
-  // unsigned magnitude and a separate debit/credit side; never infer the
-  // accounting side from the amount's sign or use these sums for posting.
-  const { totalDebit, totalCredit } = customers.reduce(
-    (totals, customer) => {
-      const amount = Number(customer.balance);
-      if (!Number.isFinite(amount) || Math.abs(amount) <= 0.001) return totals;
-      if (customer.balanceSide?.toUpperCase() === "DR") totals.totalDebit += Math.abs(amount);
-      if (customer.balanceSide?.toUpperCase() === "CR") totals.totalCredit += Math.abs(amount);
-      return totals;
-    },
-    { totalDebit: 0, totalCredit: 0 }
-  );
-  const netBalance = totalDebit - totalCredit;
-
-  const exportVisibleCustomers = () => {
-    // Export the current client-side view without touching accounting data.
-    // Escape spreadsheet formulas in user-provided text to avoid CSV injection.
-    const csvCell = (value: string | number) => {
-      const raw = String(value ?? "");
-      const safe = /^[\s]*[=+@-]/.test(raw) ? `'${raw}` : raw;
-      return `"${safe.replace(/"/g, '""')}"`;
-    };
-    const rows = [
-      ["Customer Name", "Code", "Phone", "Balance", "Balance Type"],
-      ...visibleCustomers.map((customer) => [
-        customer.legalName,
-        customer.code,
-        customer.phone ?? "",
-        customer.balance == null ? "" : String(customer.balance),
-        customer.balanceSide?.toUpperCase() === "CR"
-          ? "Credit"
-          : customer.balanceSide?.toUpperCase() === "DR"
-            ? "Debit"
-            : "",
-      ]),
-    ];
-    const csv = rows.map((row) => row.map(csvCell).join(",")).join("\r\n");
-    downloadBlob(new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }), "factory-customers.csv");
-  };
+    exportVisibleCustomers,
+    formData,
+    formatCashAmount,
+    handleCreate,
+    handleUpdate,
+    isCreateOpen,
+    isError,
+    isLoading,
+    navigate,
+    netBalance,
+    openCreate,
+    openEdit,
+    pageSize,
+    pagedCustomers,
+    prefs,
+    recordChanges,
+    refetchCustomers,
+    resetForm,
+    restoreMutation,
+    safePage,
+    saving,
+    search,
+    setBalanceFilter,
+    setColumnVisible,
+    setDeletingCustomer,
+    setEditingCustomer,
+    setFormData,
+    setIsCreateOpen,
+    setPage,
+    setPrefs,
+    setSearch,
+    setShowZeroBalance,
+    showActionsColumn,
+    showBalanceColumn,
+    showDeleted,
+    showZeroBalance,
+    totalCredit,
+    totalDebit,
+    totalPages,
+    updateMutation,
+    visibleCustomers,
+    zeroBalanceCount,
+  } = useFactoryCustomersState();
 
   if (isLoading) {
     return (
@@ -430,233 +212,33 @@ export default function FactoryCustomers() {
         searchTestId="input-search-customers"
         className="mb-0"
         actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-9 gap-2 rounded-xl"
-                  data-testid="button-customer-balance-filter"
-                >
-                  <SlidersHorizontal className="h-4 w-4" /> Filters <ChevronDown className="h-3.5 w-3.5" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuLabel>Balance side</DropdownMenuLabel>
-                <DropdownMenuItem
-                  onSelect={() => {
-                    setBalanceFilter("all");
-                    setPage(1);
-                  }}
-                >
-                  All balances {balanceFilter === "all" ? "✓" : ""}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onSelect={() => {
-                    setBalanceFilter("Dr");
-                    setPage(1);
-                  }}
-                >
-                  Debit balances {balanceFilter === "Dr" ? "✓" : ""}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onSelect={() => {
-                    setBalanceFilter("Cr");
-                    setPage(1);
-                  }}
-                >
-                  Credit balances {balanceFilter === "Cr" ? "✓" : ""}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-9 gap-2 rounded-xl"
-                  data-testid="button-customer-columns"
-                >
-                  <Columns3 className="h-4 w-4" /> Columns <ChevronDown className="h-3.5 w-3.5" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuLabel>Visible columns (saved)</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuCheckboxItem checked disabled>
-                  Name
-                </DropdownMenuCheckboxItem>
-                <DropdownMenuCheckboxItem
-                  checked={showBalanceColumn}
-                  onCheckedChange={(checked) => setColumnVisible("balance", checked)}
-                >
-                  Balance
-                </DropdownMenuCheckboxItem>
-                <DropdownMenuCheckboxItem
-                  checked={showActionsColumn}
-                  onCheckedChange={(checked) => setColumnVisible("actions", checked)}
-                >
-                  Actions
-                </DropdownMenuCheckboxItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-9 gap-2 rounded-xl"
-              onClick={exportVisibleCustomers}
-              data-testid="button-export-customers"
-            >
-              <Download className="h-4 w-4" /> Export
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-9 w-9 rounded-xl"
-              onClick={() => void refetchCustomers()}
-              title="Refresh customers"
-              aria-label="Refresh customers"
-              data-testid="button-refresh-customers"
-            >
-              <RefreshCw className="h-4 w-4" />
-            </Button>
-          </div>
+          <FactoryCustomersSection2
+            balanceFilter={balanceFilter}
+            exportVisibleCustomers={exportVisibleCustomers}
+            refetchCustomers={refetchCustomers}
+            setBalanceFilter={setBalanceFilter}
+            setColumnVisible={setColumnVisible}
+            setPage={setPage}
+            showActionsColumn={showActionsColumn}
+            showBalanceColumn={showBalanceColumn}
+          />
         }
       />
 
-      <div className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm dark:border-blue-400/20 dark:bg-slate-950/40">
-        <div className="table-responsive">
-          <Table mobileLayout="cards" density={prefs.density} wrapperClassName="border-0 rounded-none dark:border-0">
-            <TableHeader className="sticky top-0 z-30">
-              <TableRow className="bg-muted/65 hover:bg-muted/65 dark:bg-blue-900/25 dark:hover:bg-blue-900/25">
-                <TableHead className="py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Name
-                </TableHead>
-                {showBalanceColumn && (
-                  <TableHead className="py-3 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Balance
-                  </TableHead>
-                )}
-                {showActionsColumn && (
-                  <TableHead className="w-[144px] py-3 text-right">
-                    <span className="sr-only">Actions</span>
-                  </TableHead>
-                )}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {visibleCustomers.length === 0 ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={1 + Number(showBalanceColumn) + Number(showActionsColumn)}
-                    className="text-center py-8 text-muted-foreground"
-                  >
-                    {search
-                      ? "No customers match your search"
-                      : zeroBalanceCount > 0
-                        ? "All customers currently have a zero balance"
-                        : "No customers yet"}
-                  </TableCell>
-                </TableRow>
-              ) : (
-                pagedCustomers.map((customer) => (
-                  <TableRow
-                    key={customer.id}
-                    className="hover:bg-blue-500/5 dark:hover:bg-blue-500/10"
-                    data-testid={`row-customer-${customer.id}`}
-                  >
-                    <TableCell className="py-3 font-medium sm:py-3" data-testid={`text-customer-name-${customer.id}`}>
-                      <div className="flex items-center gap-3">
-                        <div
-                          aria-hidden="true"
-                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-600/10 text-xs font-bold text-blue-600 dark:bg-blue-400/15 dark:text-blue-300"
-                        >
-                          {(customer.legalName ?? "")
-                            .trim()
-                            .split(/\s+/)
-                            .slice(0, 2)
-                            .map((part) => part.charAt(0))
-                            .join("")
-                            .toUpperCase()}
-                        </div>
-                        <div className="min-w-0">
-                          <button
-                            className="text-left font-semibold text-foreground hover:underline"
-                            onClick={() => navigate(`/factory/customers/${customer.id}`)}
-                            data-testid={`button-open-statement-${customer.id}`}
-                          >
-                            {customer.legalName}
-                          </button>
-                          {customer.phone && <p className="mt-0.5 text-xs text-muted-foreground">{customer.phone}</p>}
-                        </div>
-                      </div>
-                    </TableCell>
-                    {showBalanceColumn && (
-                      <TableCell className="py-3 text-right font-mono sm:py-3">
-                        {customer.balance !== undefined ? (
-                          <span
-                            className={`text-sm font-bold tabular-nums ${Math.abs(customer.balance) <= 0.001 ? "text-muted-foreground" : drCrClass(customer.balanceSide)}`}
-                            data-testid={`text-customer-balance-${customer.id}`}
-                            title={customer.balanceSide?.toUpperCase() === "CR" ? "Credit balance" : "Debit balance"}
-                            aria-label={`${formatCashAmount(customer.balance)} ${customer.balanceSide?.toUpperCase() === "CR" ? "credit" : "debit"} balance`}
-                          >
-                            {formatCashAmount(customer.balance)}
-                          </span>
-                        ) : (
-                          "—"
-                        )}
-                      </TableCell>
-                    )}
-                    {showActionsColumn && (
-                      <TableCell className="py-3 sm:py-3">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => navigate(`/factory/invoicing?tab=proformas&customerId=${customer.id}`)}
-                            title="View Proformas"
-                            aria-label={`View proformas for ${customer.legalName}`}
-                            className="h-9 w-9 rounded-xl border border-border/60 hover:border-blue-400/60 hover:text-blue-500"
-                            data-testid={`button-proformas-customer-${customer.id}`}
-                          >
-                            <FileText className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => openEdit(customer)}
-                            disabled={!recordChanges.allowed}
-                            title={recordChanges.reason ?? "Edit Customer"}
-                            aria-label={recordChanges.reason ?? `Edit ${customer.legalName}`}
-                            className="h-9 w-9 rounded-xl border border-border/60 hover:border-blue-400/60 hover:text-blue-500"
-                            data-testid={`button-edit-customer-${customer.id}`}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <div className="w-px h-5 bg-border mx-0.5" />
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setDeletingCustomer(customer)}
-                            disabled={!recordChanges.allowed}
-                            title={recordChanges.reason ?? "Delete Customer"}
-                            aria-label={recordChanges.reason ?? `Delete ${customer.legalName}`}
-                            className="h-9 w-9 rounded-xl border border-destructive/20 text-destructive hover:border-destructive/50 hover:bg-destructive/10"
-                            data-testid={`button-delete-customer-${customer.id}`}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    )}
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </div>
+      <FactoryCustomersSection
+        formatCashAmount={formatCashAmount}
+        navigate={navigate}
+        openEdit={openEdit}
+        pagedCustomers={pagedCustomers}
+        prefs={prefs}
+        recordChanges={recordChanges}
+        search={search}
+        setDeletingCustomer={setDeletingCustomer}
+        showActionsColumn={showActionsColumn}
+        showBalanceColumn={showBalanceColumn}
+        visibleCustomers={visibleCustomers}
+        zeroBalanceCount={zeroBalanceCount}
+      />
       <PaginationBar
         page={safePage}
         totalPages={totalPages}

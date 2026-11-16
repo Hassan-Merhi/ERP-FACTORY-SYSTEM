@@ -1,56 +1,15 @@
-import { searchIncludes } from "@shared/searchNormalization";
-import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { useToast } from "@/hooks/use-toast";
-import { queryClient } from "@/lib/queryClient";
-import { customersApi } from "@/api/customersApi";
-import { fetchRetailCustomerHistory } from "./pos/retailWave2Api";
-import type { RetailCustomerHistory } from "./pos/retailWave2Types";
 import { drCrClass } from "@/lib/formatNumber";
 import { useCompany } from "@/contexts/CompanyContext";
-import { useCurrencyContext } from "@/contexts/CurrencyContext";
-import { Plus, Building2, Pencil, Users, Wallet, TrendingUp, TrendingDown, EyeOff, Eye, Printer } from "lucide-react";
-import { format } from "date-fns";
+import { Plus, Building2, Pencil, Users, Wallet, TrendingUp, TrendingDown, EyeOff, Eye } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useState, useEffect } from "react";
 import { PageHeader } from "@/components/PageHeader";
-import { ErpListFilters, ErpListTable, ErpFormActions, ErpPendingButton, ErpRecordAction, useErpRecordChangeAccess as useExistingRecordChangeAccess } from "@/erp-core";
-import { erpCompanyDataKey, invalidateErpDataFamilies } from "@/erp-core/erpData";
+import { ErpListFilters, ErpListTable, ErpRecordAction } from "@/erp-core";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { insertCustomerSchema, type Customer } from "@shared/schema";
-import { useForm } from "react-hook-form";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-  FormDescription,
-} from "@/components/ui/form";
-import { zodResolver } from "@/lib/form-resolver";
-
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { z } from "zod";
-import { usePaginatedFilterState } from "@/hooks/use-paginated-filter-state";
-
-
-const formSchema = insertCustomerSchema.extend({
-  legalName: z.string().min(1, "Legal name is required"),
-});
-
-const typeBadgeClass: Record<string, string> = {
-  Payment: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300",
-  Receipt: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300",
-  Journal: "bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300",
-  "Credit Note": "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
-  "Debit Note": "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
-  Transfer: "bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300",
-  Adjustment: "bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300",
-};
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useCompanyCustomersState } from "./useCompanyCustomersState";
+import { CompanyCustomersDialogSection } from "./CompanyCustomersDialogSection";
 
 type CustomerCurrencyBalances = Record<string, { debit: number; credit: number; net: number }>;
 
@@ -68,278 +27,37 @@ export default function Customers() {
 }
 
 function CompanyCustomers() {
-  const { toast } = useToast();
-  const { selectedCompany } = useCompany();
-  const { formatHistoricalBaseAmount } = useCurrencyContext();
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [isEditOpen, setIsEditOpen] = useState(false);
-  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
-  const recordChanges = useExistingRecordChangeAccess();
   const {
-    filters: { searchQuery, hideZero },
-    setFilter,
-    resetFilters,
+    CustomerForm,
+    filteredCustomers,
+    form,
+    formatHistoricalBaseAmount,
+    handleEditClick,
     hasActiveFilters,
-  } = usePaginatedFilterState<{ searchQuery: string; hideZero: boolean }>({
-    // Retail customers are often first created with zero balance at checkout;
-    // show them in Parties immediately, while preserving the optional Hide Zero control.
-    createInitialFilters: () => ({ searchQuery: "", hideZero: selectedCompany?.companyType !== "retail" }),
-    storageKey: selectedCompany?.id
-      ? `${selectedCompany.companyType === "retail" ? "erp-retail-customers-filters-v1" : "erp-customers-filters-v1"}:${selectedCompany.id}`
-      : undefined,
-  });
-  const [statementCustomer, setStatementCustomer] = useState<
-    (Customer & { balance: number; balanceSide: string }) | null
-  >(null);
-
-  const statementUrl = `/api/customers/${statementCustomer?.id ?? "no-customer"}/transactions`;
-  const { data: ledgerTxns = [], isLoading: txnsLoading } = useQuery({
-    queryKey: erpCompanyDataKey(statementUrl, selectedCompany?.id),
-    queryFn: () => fetch(statementUrl).then((r) => r.json()),
-    enabled: selectedCompany?.id != null && statementCustomer?.id != null,
-  });
-
-  // Paid retail sales do not generate customer receivables, but they are
-  // still linked purchases. Show them separately from the account ledger.
-  const {
-    data: retailHistory,
-    isLoading: retailHistoryLoading,
-    isError: retailHistoryError,
-  } = useQuery<RetailCustomerHistory>({
-    queryKey: ["retail-accounting-customer-history", selectedCompany?.id, statementCustomer?.id],
-    queryFn: () => fetchRetailCustomerHistory(statementCustomer!.id, 100),
-    enabled: selectedCompany?.companyType === "retail" && Boolean(statementCustomer?.id),
-    staleTime: 15_000,
-  });
-
-  const { data: customers = [], isLoading } = useQuery<(Customer & { balance: number; balanceSide: string })[]>({
-    queryKey: erpCompanyDataKey("/api/customers/stats", selectedCompany?.id),
-    enabled: !!selectedCompany?.id,
-  });
-
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      companyId: selectedCompany?.id || 0,
-      legalName: "",
-      phone: "",
-      openingBalance: "0",
-      openingBalanceSide: "Dr",
-    },
-  });
-
-  useEffect(() => {
-    if (selectedCompany?.id) {
-      form.reset({
-        companyId: selectedCompany.id,
-        legalName: "",
-        phone: "",
-        openingBalance: "0",
-        openingBalanceSide: "Dr",
-      });
-    }
-  }, [selectedCompany?.id, form]);
-
-  const createMutation = useMutation({
-    mutationFn: async (data: z.infer<typeof formSchema>) => {
-      return await customersApi.create(data);
-    },
-    onSuccess: () => {
-      toast({ title: "Success", description: "Customer created successfully" });
-      void invalidateErpDataFamilies(queryClient, [
-        "/api/customers",
-        "/api/accounts/all",
-        "/api/ledger-accounts",
-      ]);
-      setIsCreateOpen(false);
-      form.reset({
-        companyId: selectedCompany?.id || 0,
-        legalName: "",
-        phone: "",
-        openingBalance: "0",
-        openingBalanceSide: "Dr",
-      });
-    },
-    onError: (error: Error) => {
-      if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    },
-  });
-
-  const updateMutation = useMutation({
-    mutationFn: async (data: z.infer<typeof formSchema> & { id: number }) => {
-      return await customersApi.update(data.id, data);
-    },
-    onSuccess: () => {
-      toast({ title: "Success", description: "Customer updated successfully" });
-      void invalidateErpDataFamilies(queryClient, [
-        "/api/customers",
-        "/api/accounts/all",
-        "/api/ledger-accounts",
-      ]);
-      setIsEditOpen(false);
-      setEditingCustomer(null);
-      form.reset({
-        companyId: selectedCompany?.id || 0,
-        legalName: "",
-        phone: "",
-        openingBalance: "0",
-        openingBalanceSide: "Dr",
-      });
-    },
-    onError: (error: Error) => {
-      if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    },
-  });
-
-  const onSubmit = (data: z.infer<typeof formSchema>) => {
-    if (editingCustomer) {
-      updateMutation.mutate({ ...data, id: editingCustomer.id });
-    } else {
-      createMutation.mutate(data);
-    }
-  };
-
-  const handleEditClick = (customer: Customer) => {
-    setEditingCustomer(customer);
-    form.reset({
-      companyId: customer.companyId,
-      legalName: customer.legalName,
-      phone: customer.phone || "",
-      openingBalance: customer.openingBalance || "0",
-      openingBalanceSide:
-        customer.openingBalanceSide === "Dr" || customer.openingBalanceSide === "Cr"
-          ? customer.openingBalanceSide
-          : "Dr",
-    });
-    setIsEditOpen(true);
-  };
-
-  const filteredCustomers = customers.filter((customer) => {
-    const matchesSearch = searchIncludes(customer.legalName, searchQuery);
-    const hasBalance = (customer.balance || 0) !== 0;
-    if (!matchesSearch) return false;
-    if (hideZero && !hasBalance && !searchQuery) return false;
-    return true;
-  });
-
-  // Stats
-  const totalCustomers = customers.length;
-  const withBalance = customers.filter((c) => (c.balance || 0) !== 0).length;
-  const totalReceivable = customers
-    .filter((c) => c.balanceSide === "Dr" && (c.balance || 0) > 0)
-    .reduce((s, c) => s + (c.balance || 0), 0);
-  const totalPayable = customers
-    .filter((c) => c.balanceSide === "Cr" && (c.balance || 0) > 0)
-    .reduce((s, c) => s + (c.balance || 0), 0);
-
-  const CustomerForm = ({ isEdit }: { isEdit: boolean }) => (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4" noValidate>
-        <FormField
-          control={form.control}
-          name="legalName"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Legal Name *</FormLabel>
-              <FormControl>
-                <Input
-                  {...field}
-                  placeholder="ABC Company Ltd."
-                  data-testid={isEdit ? "input-edit-legal-name" : "input-legal-name"}
-                />
-              </FormControl>
-              {!isEdit && <FormDescription>Customer code will be auto-generated</FormDescription>}
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="phone"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Phone Number</FormLabel>
-              <FormControl>
-                <Input
-                  {...field}
-                  value={field.value || ""}
-                  placeholder="+1234567890"
-                  data-testid={isEdit ? "input-edit-phone" : "input-phone"}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        {/* Create Only adds customers without an opening balance (refused by the server). */}
-        {!recordChanges.isCreateOnly && (
-          <div className="grid grid-cols-2 gap-4">
-            <FormField
-              control={form.control}
-              name="openingBalance"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Opening Balance</FormLabel>
-                  <FormControl>
-                    <Input
-                      {...field}
-                      value={field.value || "0"}
-                      type="number"
-                      step="0.01"
-                      placeholder="0.00"
-                      data-testid={isEdit ? "input-edit-opening-balance" : "input-opening-balance"}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="openingBalanceSide"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Balance Side</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value || "Dr"}>
-                    <FormControl>
-                      <SelectTrigger data-testid={isEdit ? "select-edit-balance-side" : "select-balance-side"}>
-                        <SelectValue placeholder="Select side" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="Dr">Dr (Debit)</SelectItem>
-                      <SelectItem value="Cr">Cr (Credit)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
-        )}
-        <ErpFormActions>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => (isEdit ? setIsEditOpen(false) : setIsCreateOpen(false))}
-            data-testid={isEdit ? "button-edit-cancel" : "button-cancel"}
-          >
-            Cancel
-          </Button>
-          <ErpPendingButton
-            type="submit"
-            pending={isEdit ? updateMutation.isPending : createMutation.isPending}
-            pendingLabel={isEdit ? "Updating..." : "Creating..."}
-            data-testid={isEdit ? "button-submit-edit-customer" : "button-submit-customer"}
-          >
-            {isEdit ? "Update Customer" : "Create Customer"}
-          </ErpPendingButton>
-        </ErpFormActions>
-      </form>
-    </Form>
-  );
+    hideZero,
+    isCreateOpen,
+    isEditOpen,
+    isLoading,
+    ledgerTxns,
+    recordChanges,
+    resetFilters,
+    retailHistory,
+    retailHistoryError,
+    retailHistoryLoading,
+    searchQuery,
+    selectedCompany,
+    setEditingCustomer,
+    setFilter,
+    setIsCreateOpen,
+    setIsEditOpen,
+    setStatementCustomer,
+    statementCustomer,
+    totalCustomers,
+    totalPayable,
+    totalReceivable,
+    txnsLoading,
+    withBalance,
+  } = useCompanyCustomersState();
 
   return (
     <div className="flex flex-col h-full gap-5 py-3 sm:p-6">
@@ -428,7 +146,12 @@ function CompanyCustomers() {
 
       {/* Table */}
       <div className="border rounded-xl overflow-hidden">
-        <ErpListTable pageKey="customers" companyId={selectedCompany?.id} mobileLayout="cards" scrollLabel="Customer accounts">
+        <ErpListTable
+          pageKey="customers"
+          companyId={selectedCompany?.id}
+          mobileLayout="cards"
+          scrollLabel="Customer accounts"
+        >
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
               <TableHead className="text-xs h-9 font-semibold">Customer</TableHead>
@@ -555,224 +278,17 @@ function CompanyCustomers() {
       </Dialog>
 
       {/* Statement Dialog */}
-      <Dialog open={!!statementCustomer} onOpenChange={(open) => !open && setStatementCustomer(null)}>
-        <DialogContent className="max-w-3xl w-[95vw] max-h-[85vh] overflow-hidden flex flex-col gap-4">
-          <DialogHeader className="pb-0">
-            <DialogTitle className="flex items-center gap-2 text-base">
-              <Building2 className="h-4 w-4 text-muted-foreground" />
-              {statementCustomer?.legalName}
-            </DialogTitle>
-            <div className="flex flex-wrap items-center gap-2 pt-2">
-              <div className="flex items-center gap-2 rounded-lg border bg-muted/40 px-3 py-1.5 text-sm">
-                <Wallet className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="text-muted-foreground">Balance</span>
-                <span className={`font-mono font-semibold ${drCrClass(statementCustomer?.balanceSide || "Dr")}`}>
-                  {formatHistoricalBaseAmount(statementCustomer?.balance || 0)}
-                </span>
-                <Badge variant="secondary" className={`text-xs ${drCrClass(statementCustomer?.balanceSide || "Dr")}`}>
-                  {statementCustomer?.balanceSide || "Dr"}
-                </Badge>
-              </div>
-              {!txnsLoading && (
-                <span className="rounded-full border bg-muted/40 px-2.5 py-0.5 text-xs text-muted-foreground font-medium">
-                  {ledgerTxns.length} transaction{ledgerTxns.length !== 1 ? "s" : ""}
-                </span>
-              )}
-            </div>
-          </DialogHeader>
-
-          <div className="flex-1 overflow-y-auto min-h-0">
-            {txnsLoading ? (
-              <div className="space-y-2">
-                {[...Array(5)].map((_, i) => (
-                  <Skeleton key={i} className="h-10 w-full" />
-                ))}
-              </div>
-            ) : (
-              (() => {
-                const sorted = [...ledgerTxns].sort(
-                  (a, b) => new Date(a.voucherDate).getTime() - new Date(b.voucherDate).getTime()
-                );
-                const totalDr = sorted.reduce((s, t) => s + parseFloat(t.debitAmount || "0"), 0);
-                const totalCr = sorted.reduce((s, t) => s + parseFloat(t.creditAmount || "0"), 0);
-                const closingBalance = statementCustomer?.balance || 0;
-                const openingBalance = closingBalance - totalDr + totalCr;
-                let running = openingBalance;
-
-                return sorted.length === 0 ? (
-                  <div className="flex flex-col items-center gap-2 py-10 text-center">
-                    <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
-                      <Building2 className="h-5 w-5 text-muted-foreground" />
-                    </div>
-                    <p className="text-sm font-medium">No transactions</p>
-                    <p className="text-xs text-muted-foreground">No ledger entries found for this customer</p>
-                  </div>
-                ) : (
-                  <div className="border rounded-xl overflow-hidden">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="bg-muted/40 hover:bg-muted/40">
-                          <TableHead className="text-xs h-9 font-semibold">Date</TableHead>
-                          <TableHead className="text-xs h-9 font-semibold">Type</TableHead>
-                          <TableHead className="text-xs h-9 font-semibold">Description</TableHead>
-                          <TableHead className="text-xs h-9 font-semibold text-right">Debit</TableHead>
-                          <TableHead className="text-xs h-9 font-semibold text-right">Credit</TableHead>
-                          <TableHead className="text-xs h-9 font-semibold text-right">Balance</TableHead>
-                          <TableHead className="text-xs h-9 w-8"></TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {openingBalance !== 0 && (
-                          <TableRow className="text-muted-foreground text-xs italic">
-                            <TableCell className="py-2">—</TableCell>
-                            <TableCell className="py-2"></TableCell>
-                            <TableCell className="py-2">Opening Balance</TableCell>
-                            <TableCell className="py-2"></TableCell>
-                            <TableCell className="py-2"></TableCell>
-                            <TableCell className="py-2 text-right font-mono font-medium">
-                              {formatHistoricalBaseAmount(Math.abs(openingBalance))}
-                            </TableCell>
-                            <TableCell className="py-2"></TableCell>
-                          </TableRow>
-                        )}
-                        {sorted.map((t, i) => {
-                          const dr = parseFloat(t.debitAmount || "0");
-                          const cr = parseFloat(t.creditAmount || "0");
-                          running = running + dr - cr;
-                          const isSale = t.voucherType === "Sales" && t.voucherId;
-                          return (
-                            <TableRow key={t.entryId ?? i} className="text-xs hover:bg-muted/40">
-                              <TableCell className="py-2 font-mono whitespace-nowrap">
-                                {t.voucherDate ? format(new Date(t.voucherDate), "yyyy-MM-dd") : "—"}
-                              </TableCell>
-                              <TableCell className="py-2">
-                                {t.voucherType ? (
-                                  <Badge
-                                    variant="secondary"
-                                    className={`text-xs ${typeBadgeClass[t.voucherType] || ""}`}
-                                  >
-                                    {t.voucherType}
-                                  </Badge>
-                                ) : (
-                                  <span className="text-muted-foreground">—</span>
-                                )}
-                              </TableCell>
-                              <TableCell className="py-2 text-muted-foreground max-w-[160px] truncate">
-                                {t.narration || t.voucherDescription || "—"}
-                              </TableCell>
-                              <TableCell className="py-2 text-right font-mono">
-                                {dr > 0 ? formatHistoricalBaseAmount(dr) : ""}
-                              </TableCell>
-                              <TableCell className="py-2 text-right font-mono">
-                                {cr > 0 ? formatHistoricalBaseAmount(cr) : ""}
-                              </TableCell>
-                              <TableCell className="py-2 text-right font-mono font-medium">
-                                {formatHistoricalBaseAmount(Math.abs(running))}
-                                <span className={`text-xs font-semibold ml-1 ${drCrClass(running >= 0 ? "Dr" : "Cr")}`}>
-                                  {running >= 0 ? "Dr" : "Cr"}
-                                </span>
-                              </TableCell>
-                              <TableCell className="py-2">
-                                {isSale ? (
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className="h-6 w-6"
-                                    title="Print Invoice"
-                                    data-testid={`btn-print-invoice-${t.voucherId}`}
-                                    onClick={() => window.open(`/api/pos/invoice/${t.voucherId}/pdf`, "_blank")}
-                                  >
-                                    <Printer className="h-3 w-3" />
-                                  </Button>
-                                ) : null}
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                      <TableFooter className="bg-muted/40">
-                        <TableRow className="font-semibold text-xs">
-                          <TableCell colSpan={3}>Total</TableCell>
-                          <TableCell className="text-right font-mono">{formatHistoricalBaseAmount(totalDr)}</TableCell>
-                          <TableCell className="text-right font-mono">{formatHistoricalBaseAmount(totalCr)}</TableCell>
-                          <TableCell className="text-right font-mono">
-                            {formatHistoricalBaseAmount(Math.abs(closingBalance))}
-                            <span
-                              className={`text-xs font-semibold ml-1 ${drCrClass(statementCustomer?.balanceSide || "Dr")}`}
-                            >
-                              {statementCustomer?.balanceSide || "Dr"}
-                            </span>
-                          </TableCell>
-                          <TableCell></TableCell>
-                        </TableRow>
-                      </TableFooter>
-                    </Table>
-                  </div>
-                );
-              })()
-            )}
-            {selectedCompany?.companyType === "retail" && statementCustomer && (
-              <section className="mt-4 space-y-2 border-t pt-3" data-testid="retail-customer-purchases">
-                <div>
-                  <h3 className="text-sm font-semibold">Retail POS purchases and returns</h3>
-                  <p className="text-xs text-muted-foreground">
-                    Paid purchases appear here as sales history, not extra receivables. On-account sales and payments
-                    affect the accounting ledger above.
-                  </p>
-                </div>
-                {retailHistoryLoading ? (
-                  <Skeleton className="h-12 w-full" />
-                ) : retailHistoryError ? (
-                  <p className="text-xs text-destructive">Could not load Retail POS purchase history.</p>
-                ) : !retailHistory?.sales.length && !retailHistory?.returns.length ? (
-                  <p className="text-xs text-muted-foreground">No Retail POS purchases or returns yet.</p>
-                ) : (
-                  <div className="overflow-x-auto rounded-lg border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="text-xs">Date</TableHead>
-                          <TableHead className="text-xs">Transaction</TableHead>
-                          <TableHead className="text-xs">Status</TableHead>
-                          <TableHead className="text-xs text-right">Amount</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {retailHistory?.sales.map((sale) => (
-                          <TableRow key={`sale-${sale.id}`} data-testid={`retail-customer-sale-${sale.id}`}>
-                            <TableCell className="text-xs whitespace-nowrap">
-                              {format(new Date(sale.createdAt), "dd/MM/yyyy")}
-                            </TableCell>
-                            <TableCell className="text-xs">Sale #{sale.id}</TableCell>
-                            <TableCell className="text-xs">{sale.status}</TableCell>
-                            <TableCell className="text-xs text-right font-mono">
-                              {formatHistoricalBaseAmount(sale.totalAmount)}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                        {retailHistory?.returns.map((entry) => (
-                          <TableRow key={`return-${entry.id}`} data-testid={`retail-customer-return-${entry.id}`}>
-                            <TableCell className="text-xs whitespace-nowrap">
-                              {format(new Date(entry.createdAt), "dd/MM/yyyy")}
-                            </TableCell>
-                            <TableCell className="text-xs">
-                              Return #{entry.id} (sale #{entry.saleId ?? "—"})
-                            </TableCell>
-                            <TableCell className="text-xs">Refund</TableCell>
-                            <TableCell className="text-xs text-right font-mono">
-                              {formatHistoricalBaseAmount(entry.refundAmount)}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </section>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
+      <CompanyCustomersDialogSection
+        formatHistoricalBaseAmount={formatHistoricalBaseAmount}
+        ledgerTxns={ledgerTxns}
+        retailHistory={retailHistory}
+        retailHistoryError={retailHistoryError}
+        retailHistoryLoading={retailHistoryLoading}
+        selectedCompany={selectedCompany}
+        setStatementCustomer={setStatementCustomer}
+        statementCustomer={statementCustomer}
+        txnsLoading={txnsLoading}
+      />
     </div>
   );
 }

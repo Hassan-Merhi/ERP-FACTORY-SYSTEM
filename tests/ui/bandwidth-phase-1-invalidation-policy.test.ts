@@ -1,5 +1,4 @@
 // Regression contract for the production bandwidth hotspots observed on August 5, 2026.
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import {
@@ -7,6 +6,7 @@ import {
   invalidateBandwidthReadCaches,
   shouldClearBandwidthEntry,
 } from "../../client/src/lib/bandwidthInvalidationPolicy";
+import { readModuleFamily } from "../../scripts/lib/readModuleFamily.mjs";
 
 describe("Bandwidth Phase 1 invalidation policy", () => {
   it("preserves reference snapshots for ordinary live workflow writes", () => {
@@ -47,7 +47,7 @@ describe("Bandwidth Phase 1 invalidation policy", () => {
   });
 
   it("contains the canonical production hotspots identified in the August bandwidth snapshots", () => {
-    const source = readFileSync(resolve("client/src/lib/bandwidthPhase1HotspotGuard.ts"), "utf8");
+    const source = readModuleFamily(resolve("client/src/lib/bandwidthPhase1HotspotGuard.ts"));
     const requiredRoutes = [
       "shipping-container-rows",
       "invoice-container-tracking",
@@ -67,8 +67,8 @@ describe("Bandwidth Phase 1 invalidation policy", () => {
   });
 
   it("keeps reference generations reusable across ordinary live writes", () => {
-    const requestGuard = readFileSync(resolve("client/src/lib/requestStormGuard.ts"), "utf8");
-    const hotspotGuard = readFileSync(resolve("client/src/lib/bandwidthPhase1HotspotGuard.ts"), "utf8");
+    const requestGuard = readModuleFamily(resolve("client/src/lib/requestStormGuard.ts"));
+    const hotspotGuard = readModuleFamily(resolve("client/src/lib/bandwidthPhase1HotspotGuard.ts"));
 
     for (const source of [requestGuard, hotspotGuard]) {
       expect(source).toContain("generationForScope");

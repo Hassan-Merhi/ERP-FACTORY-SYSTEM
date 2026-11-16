@@ -1,185 +1,43 @@
-import {
-  Warehouse,
-  Download,
-  List,
-  Eye,
-  Printer,
-  Trash2,
-  Layers,
-  FileSpreadsheet,
-  MessageCircle,
-  Pencil,
-  Package,
-  Search,
-  ChevronDown,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { List, Eye, Printer, Trash2, FileSpreadsheet, MessageCircle, Pencil } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import type { InventoryLocation as Location, StockGroupSummary } from "./locationInventoryTypes";
-import type { AuthMe } from "@shared/apiTypes";
-import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
 import {
   ErpMobileActionsMenu,
   ErpMobileRecordCard,
   ErpMobileRecordList,
   ErpMobileSummaryGrid,
 } from "@/components/ui/erp-mobile-records";
+import { useStockGroupsViewState, type StockGroupsViewProps } from "./useStockGroupsViewState";
+import { StockGroupsViewSection, StockGroupsViewSection2 } from "./StockGroupsViewSection";
 
-interface StockGroupsViewProps {
-  selectedLocationLocal: Location;
-  posUser?: AuthMe;
-  canViewCost: boolean;
-  canManageWhatsapp: boolean;
-  /** False for read-only roles: hides rename, WhatsApp settings and delete. */
-  canChangeExistingRecords?: boolean;
-  openRenameDialog: (loc: Location, e?: { stopPropagation: () => void }) => void;
-  openWaGroupDialog: (loc: Location, e?: { stopPropagation: () => void }) => void;
-  activeInventoryLoading: boolean;
-  stockGroups: StockGroupSummary[];
-  totalItems: number;
-  totalQty: number;
-  totalValue: number;
-  formatAmount: (n: number) => string;
-  handleExportInventory: () => void;
-  handlePrintWithOption: (withCost: boolean) => void;
-  handlePrintGroup: (group: { groupId: number | null; groupName: string }, withCost: boolean) => void;
-  setViewAllItems: (v: boolean) => void;
-  setItemSearchTerm: (s: string) => void;
-  showZeroStock: boolean;
-  setShowZeroStock: (v: boolean) => void;
-  setDeleteDialogOpen: (v: boolean) => void;
-  groupSearchTerm: string;
-  setGroupSearchTerm: (s: string) => void;
-  groupCategoryFilter: string;
-  setGroupCategoryFilter: (s: string) => void;
-  categoriesList: { id: number; name: string; active: boolean }[];
-  filteredStockGroups: StockGroupSummary[];
-  setSelectedGroup: (g: StockGroupSummary | null) => void;
-  setItemCategoryFilter: (cats: string[]) => void;
-}
-
-export function StockGroupsView({
-  selectedLocationLocal,
-  posUser,
-  canViewCost,
-  canManageWhatsapp,
-  canChangeExistingRecords = true,
-  openRenameDialog,
-  openWaGroupDialog,
-  activeInventoryLoading,
-  stockGroups,
-  totalItems,
-  totalQty,
-  totalValue,
-  formatAmount,
-  handleExportInventory,
-  handlePrintWithOption,
-  handlePrintGroup,
-  setViewAllItems,
-  setItemSearchTerm,
-  showZeroStock,
-  setShowZeroStock,
-  setDeleteDialogOpen,
-  groupSearchTerm,
-  setGroupSearchTerm,
-  groupCategoryFilter,
-  setGroupCategoryFilter,
-  categoriesList,
-  filteredStockGroups,
-  setSelectedGroup,
-  setItemCategoryFilter,
-}: StockGroupsViewProps) {
-  const canManageLocation = !posUser && canChangeExistingRecords;
-  const whatsappTitle =
-    selectedLocationLocal.whatsappGroupChatId && selectedLocationLocal.whatsappStockReportsEnabled
-      ? `WhatsApp stock reports enabled${selectedLocationLocal.whatsappGroupName ? `: ${selectedLocationLocal.whatsappGroupName}` : ""}`
-      : selectedLocationLocal.whatsappGroupChatId
-        ? `WhatsApp group linked but stock reports disabled${selectedLocationLocal.whatsappGroupName ? `: ${selectedLocationLocal.whatsappGroupName}` : ""}`
-        : "Link WhatsApp group for stock reports";
-  const isPhone = useErpPhoneLayout();
-
-  const openGroup = (g: StockGroupSummary) => {
-    setSelectedGroup(g);
-    setItemSearchTerm("");
-    setItemCategoryFilter([]);
-  };
-
-  const groupExportMenu = (g: StockGroupSummary) => (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-7 w-7" data-testid={`button-export-group-${g.groupId}`}>
-          <Printer className="h-3.5 w-3.5" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        {canViewCost && (
-          <DropdownMenuItem
-            onClick={() => handlePrintGroup({ groupId: g.groupId, groupName: g.groupName }, true)}
-            data-testid={`menu-export-group-pdf-cost-${g.groupId}`}
-          >
-            <Printer className="h-4 w-4 mr-2" /> Export PDF (with cost)
-          </DropdownMenuItem>
-        )}
-        <DropdownMenuItem
-          onClick={() => handlePrintGroup({ groupId: g.groupId, groupName: g.groupName }, false)}
-          data-testid={`menu-export-group-pdf-nocost-${g.groupId}`}
-        >
-          <Printer className="h-4 w-4 mr-2" /> Export PDF (without cost)
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-
-  const groupSearchControls = (
-    <div className="flex items-center gap-2 flex-wrap">
-      <div className={isPhone ? "relative w-full" : "relative min-w-[220px] flex-[1_1_320px] max-w-xl"}>
-        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Search stock groups by name..."
-          value={groupSearchTerm}
-          onChange={(e) => setGroupSearchTerm(e.target.value)}
-          className="h-10 rounded-xl border-violet-200/80 bg-background/90 pl-10 shadow-sm focus-visible:ring-violet-500/30 dark:border-violet-500/25 dark:bg-slate-950/40"
-          data-testid="input-group-search"
-        />
-      </div>
-      <Select value={groupCategoryFilter || "all"} onValueChange={(v) => setGroupCategoryFilter(v === "all" ? "" : v)}>
-        <SelectTrigger
-          className={
-            isPhone
-              ? "h-10 w-full rounded-xl"
-              : "h-10 w-52 rounded-xl border-violet-200/80 bg-background/90 shadow-sm dark:border-violet-500/25 dark:bg-slate-950/40"
-          }
-          data-testid="select-category-filter"
-        >
-          <SelectValue placeholder="All Categories" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All Categories</SelectItem>
-          <SelectItem value="none">Uncategorized</SelectItem>
-          {categoriesList.map((cat) => (
-            <SelectItem key={cat.id} value={String(cat.id)}>
-              {cat.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
-  );
-
-  const emptyMessage = groupSearchTerm
-    ? "No groups match your search."
-    : showZeroStock
-      ? "No stock items found for this location."
-      : 'No items with stock. Toggle "Show zero stock" to see all items.';
+export function StockGroupsView(props: StockGroupsViewProps) {
+  const {
+    activeInventoryLoading,
+    canManageLocation,
+    canManageWhatsapp,
+    canViewCost,
+    emptyMessage,
+    filteredStockGroups,
+    formatAmount,
+    groupExportMenu,
+    groupSearchControls,
+    handleExportInventory,
+    handlePrintWithOption,
+    isPhone,
+    openGroup,
+    openRenameDialog,
+    openWaGroupDialog,
+    selectedLocationLocal,
+    setDeleteDialogOpen,
+    setItemSearchTerm,
+    setShowZeroStock,
+    setViewAllItems,
+    showZeroStock,
+    stockGroups,
+    totalItems,
+    totalQty,
+    totalValue,
+    whatsappTitle,
+  } = useStockGroupsViewState(props);
 
   // Phones: compact title with one Actions menu, a two-column summary and a card per stock group.
   if (isPhone) {
@@ -326,170 +184,38 @@ export function StockGroupsView({
   return (
     <section className="space-y-4" data-testid="stock-groups-desktop">
       {/* Location summary — a restrained gradient works in light and dark themes. */}
-      <div className="relative flex flex-col gap-5 overflow-hidden rounded-2xl border border-violet-200/80 bg-gradient-to-r from-violet-50 via-background to-indigo-50/80 p-4 shadow-sm dark:border-violet-500/25 dark:from-[#171035] dark:via-[#111a36] dark:to-[#0c142c] sm:p-5 xl:flex-row xl:items-center xl:justify-between">
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-lg shadow-violet-500/20">
-            <Warehouse className="h-6 w-6" />
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <h2 className="truncate text-xl font-bold tracking-tight sm:text-2xl">{selectedLocationLocal.name}</h2>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Stock Groups
-              </span>
-              {canManageLocation && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => openRenameDialog(selectedLocationLocal)}
-                  data-testid="button-rename-location"
-                >
-                  <Pencil className="h-4 w-4" />
-                </Button>
-              )}
-              {canManageLocation && canManageWhatsapp && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => openWaGroupDialog(selectedLocationLocal)}
-                  data-testid="button-wa-location"
-                  title={whatsappTitle}
-                  aria-label={`Configure WhatsApp stock reports for ${selectedLocationLocal.name}`}
-                >
-                  <MessageCircle
-                    className={`h-4 w-4 ${
-                      selectedLocationLocal.whatsappGroupChatId && selectedLocationLocal.whatsappStockReportsEnabled
-                        ? "text-green-500"
-                        : selectedLocationLocal.whatsappGroupChatId
-                          ? "text-amber-500"
-                          : ""
-                    }`}
-                  />
-                </Button>
-              )}
-            </div>
-            <p className="mt-1 text-xs font-medium tracking-wide text-muted-foreground">
-              Location: {selectedLocationLocal.name}
-            </p>
-          </div>
-        </div>
-
-        {/* Stats pills */}
-        {!activeInventoryLoading && (
-          <div className="flex flex-wrap items-center gap-2 text-xs" data-testid="stock-groups-summary">
-            <span className="inline-flex h-10 items-center gap-2 rounded-xl border border-violet-200/80 bg-background/80 px-3 font-semibold shadow-sm dark:border-white/10 dark:bg-white/5">
-              <Layers className="h-4 w-4 text-violet-600 dark:text-violet-300" />
-              {stockGroups.length} {stockGroups.length === 1 ? "Group" : "Groups"}
-            </span>
-            <span className="inline-flex h-10 items-center gap-2 rounded-xl border border-violet-200/80 bg-background/80 px-3 font-semibold shadow-sm dark:border-white/10 dark:bg-white/5">
-              <Package className="h-3 w-3" />
-              {totalItems} Items
-            </span>
-            <span className="inline-flex h-10 items-center gap-2 rounded-xl border border-violet-200/80 bg-background/80 px-3 font-semibold shadow-sm dark:border-white/10 dark:bg-white/5">
-              {Math.floor(totalQty).toLocaleString()} BL total
-            </span>
-            {canViewCost && (
-              <span className="inline-flex h-10 items-center gap-2 rounded-xl border border-violet-200/80 bg-background/80 px-3 font-semibold shadow-sm dark:border-white/10 dark:bg-white/5">
-                {formatAmount(totalValue)} total value
-              </span>
-            )}
-          </div>
-        )}
-      </div>
+      <StockGroupsViewSection2
+        activeInventoryLoading={activeInventoryLoading}
+        canManageLocation={canManageLocation}
+        canManageWhatsapp={canManageWhatsapp}
+        canViewCost={canViewCost}
+        formatAmount={formatAmount}
+        openRenameDialog={openRenameDialog}
+        openWaGroupDialog={openWaGroupDialog}
+        selectedLocationLocal={selectedLocationLocal}
+        stockGroups={stockGroups}
+        totalItems={totalItems}
+        totalQty={totalQty}
+        totalValue={totalValue}
+        whatsappTitle={whatsappTitle}
+      />
 
       {/* Action buttons */}
-      <div className="flex flex-wrap items-center gap-2">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-10 gap-2 rounded-xl border-violet-200/80 bg-background/80 px-4 shadow-sm dark:border-violet-500/25"
-              data-testid="button-export-dropdown"
-            >
-              <Download className="h-4 w-4" /> Export <ChevronDown className="h-3 w-3" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
-            <DropdownMenuItem onClick={handleExportInventory} data-testid="menu-export-excel">
-              <FileSpreadsheet className="h-4 w-4 mr-2" /> Export to Excel
-            </DropdownMenuItem>
-            {canViewCost && (
-              <DropdownMenuItem onClick={() => handlePrintWithOption(true)} data-testid="menu-export-pdf-cost">
-                <Printer className="h-4 w-4 mr-2" /> Export to PDF (with cost)
-              </DropdownMenuItem>
-            )}
-            <DropdownMenuItem onClick={() => handlePrintWithOption(false)} data-testid="menu-export-pdf-nocost">
-              <Printer className="h-4 w-4 mr-2" /> Export to PDF (without cost)
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-10 gap-2 rounded-xl border-violet-200/80 bg-background/80 px-4 shadow-sm dark:border-violet-500/25"
-          onClick={() => {
-            setViewAllItems(true);
-            setItemSearchTerm("");
-          }}
-          data-testid="button-view-all-items"
-        >
-          <List className="h-4 w-4" /> View All Stock Items
-        </Button>
-
-        <Button
-          variant="outline"
-          size="sm"
-          className={`h-10 gap-2 rounded-xl px-4 shadow-sm ${showZeroStock ? "border-violet-400/60 bg-violet-500/10 text-violet-700 dark:text-violet-200" : "border-violet-200/80 bg-background/80 dark:border-violet-500/25"}`}
-          aria-pressed={showZeroStock}
-          onClick={() => setShowZeroStock(!showZeroStock)}
-          data-testid="button-show-zero"
-        >
-          <Eye className="h-4 w-4" /> Show Zero Stock{" "}
-          <span
-            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${showZeroStock ? "bg-violet-600" : "bg-slate-300 dark:bg-slate-600"}`}
-            aria-hidden="true"
-          >
-            <span
-              className={`h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform ${showZeroStock ? "translate-x-4" : "translate-x-1"}`}
-            />
-          </span>
-        </Button>
-
-        {canManageLocation && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="ml-auto h-10 gap-2 rounded-xl border-violet-200/80 bg-background/80 px-4 shadow-sm dark:border-violet-500/25"
-                data-testid="button-location-menu"
-              >
-                Location <ChevronDown className="h-3 w-3" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => openRenameDialog(selectedLocationLocal)}>
-                <Pencil className="h-4 w-4 mr-2" /> Edit / Rename
-              </DropdownMenuItem>
-              {canManageWhatsapp && (
-                <DropdownMenuItem onClick={() => openWaGroupDialog(selectedLocationLocal)}>
-                  <MessageCircle className="h-4 w-4 mr-2" /> WhatsApp Stock Reports
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className="text-destructive focus:text-destructive"
-                onClick={() => setDeleteDialogOpen(true)}
-                data-testid="menu-delete-location"
-              >
-                <Trash2 className="h-4 w-4 mr-2" /> Delete Location
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
-      </div>
+      <StockGroupsViewSection
+        canManageLocation={canManageLocation}
+        canManageWhatsapp={canManageWhatsapp}
+        canViewCost={canViewCost}
+        handleExportInventory={handleExportInventory}
+        handlePrintWithOption={handlePrintWithOption}
+        openRenameDialog={openRenameDialog}
+        openWaGroupDialog={openWaGroupDialog}
+        selectedLocationLocal={selectedLocationLocal}
+        setDeleteDialogOpen={setDeleteDialogOpen}
+        setItemSearchTerm={setItemSearchTerm}
+        setShowZeroStock={setShowZeroStock}
+        setViewAllItems={setViewAllItems}
+        showZeroStock={showZeroStock}
+      />
 
       {/* Search + categories */}
       <div className="rounded-2xl border border-violet-200/80 bg-gradient-to-r from-violet-50/80 to-background p-3 shadow-sm dark:border-violet-500/20 dark:from-[#10182f] dark:to-[#0d152b] sm:p-4">

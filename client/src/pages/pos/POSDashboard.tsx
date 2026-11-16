@@ -1,13 +1,7 @@
-import type { AuthMe } from "@shared/apiTypes";
-import type { ClientErrorLike } from "@/lib/clientError";
-import { useState, useEffect } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { useLocation } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -18,7 +12,6 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   ShoppingCart,
   Clock,
@@ -33,205 +26,47 @@ import {
   WifiOff,
   Wifi,
 } from "lucide-react";
-import { format } from "date-fns";
-import { useDateFormat } from "@/contexts/DateFormatContext";
-
-import { apiRequest, queryClient } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
-import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { PageHeader } from "@/components/PageHeader";
 import { ErrorState } from "@/components/ui/page-state";
+import { safeFmtTime, usePOSDashboardState, type POSDashboardProps } from "./usePOSDashboardState";
+import { POSDashboardDialogSection, POSDashboardSection } from "./POSDashboardDialogSection";
 
-/** Safely format a date-time value as "hh:mm a". Returns "—" for null/invalid values. */
-function safeFmtTime(dt: string | null | undefined): string {
-  if (!dt) return "—";
-  const d = new Date(dt);
-  if (isNaN(d.getTime())) return "—";
-  return format(d, "hh:mm a");
-}
-
-interface PosShift {
-  id: number;
-  companyId: number;
-  locationId: number;
-  userId: string;
-  username: string;
-  cashAccountId: number | null;
-  posStation: number | null;
-  status: string;
-  openedAt: string;
-  closedAt: string | null;
-  openingCash: string;
-  closingCash: string | null;
-  expectedCash: string | null;
-  variance: string | null;
-  salesCount: number | null;
-  salesTotal: string | null;
-  notes: string | null;
-}
-
-interface PosTodayVoucher {
-  voucherType?: string | null;
-  totalAmount?: string | number | null;
-}
-
-interface Location {
-  id: number;
-  code: string;
-  name: string;
-}
-
-interface POSDashboardProps {
-  posUser?: AuthMe;
-}
-
-export default function POSDashboard({ posUser }: POSDashboardProps) {
-  const [, navigate] = useLocation();
-  const { toast } = useToast();
-  const { formatAmount } = useCurrencyContext();
-  const { formatDisplayDate } = useDateFormat();
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [openShiftDialog, setOpenShiftDialog] = useState(false);
-  const [closeShiftDialog, setCloseShiftDialog] = useState(false);
-  const [openingCash, setOpeningCash] = useState("");
-  const [closingCash, setClosingCash] = useState("");
-  const [closeNotes, setCloseNotes] = useState("");
-  const [showHistory, setShowHistory] = useState(false);
-
-  // Monitor online/offline status
-  useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
-
-    return () => {
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
-    };
-  }, []);
-
-  // Get POS user's assigned location
+export default function POSDashboard(props: POSDashboardProps) {
   const {
-    data: location,
-    isError: locationError,
-    refetch: refetchLocation,
-  } = useQuery<Location>({
-    queryKey: posUser?.assignedLocationId ? [`/api/locations/${posUser.assignedLocationId}`] : [],
-    enabled: !!posUser?.assignedLocationId,
-  });
-
-  const locationId = posUser?.assignedLocationId;
-
-  // Fetch current shift
-  const {
-    data: currentShift,
-    isLoading: shiftLoading,
-    isError: shiftError,
-    refetch: refetchShift,
-  } = useQuery<PosShift | null>({
-    queryKey: locationId ? ["/api/pos/shifts/current", { locationId }] : [],
-    queryFn: async () => {
-      if (!locationId) return null;
-      const res = await fetch(`/api/pos/shifts/current?locationId=${locationId}`, { credentials: "include" });
-      if (!res.ok) return null;
-      return res.json();
-    },
-    enabled: !!locationId,
-  });
-
-  // Fetch today's sales data
-  const {
-    data: todayVouchers = [],
-    isLoading: salesLoading,
-    isError: salesError,
-    refetch: refetchSales,
-  } = useQuery<PosTodayVoucher[]>({
-    queryKey: locationId ? [`/api/locations/${locationId}/vouchers/today`] : [],
-    enabled: !!locationId,
-  });
-
-  // Calculate today's sales from vouchers
-  const todaySales = (() => {
-    const salesVouchers = todayVouchers?.filter((v) => v.voucherType === "Sales") || [];
-    const totalRaw = salesVouchers.reduce((sum: number, v) => sum + Number(v.totalAmount ?? 0), 0);
-    return {
-      count: salesVouchers.length,
-      total: totalRaw,
-      average: salesVouchers.length > 0 ? totalRaw / salesVouchers.length : 0,
-    };
-  })();
-
-  // Fetch shift history
-  const { data: shiftHistory = [] } = useQuery<PosShift[]>({
-    queryKey: locationId ? ["/api/pos/shifts/history", { locationId }] : [],
-    enabled: !!locationId && showHistory,
-  });
-
-  // Open shift mutation
-  const openShiftMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/pos/shifts/open", {
-        locationId,
-        cashAccountId: posUser?.cashAccountId,
-        openingCash,
-        posStation: posUser?.posStation,
-      });
-      return await res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/pos/shifts/current", { locationId }] });
-      setOpenShiftDialog(false);
-      setOpeningCash("");
-      toast({
-        title: "Shift Started",
-        description: "Your shift has been opened successfully.",
-      });
-    },
-    onError: (error: ClientErrorLike) => {
-      if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({
-        title: "Error",
-        description: error.message || "Failed to open shift",
-        variant: "destructive",
-      });
-    },
-  });
-
-  // Close shift mutation
-  const closeShiftMutation = useMutation({
-    mutationFn: async () => {
-      if (!currentShift) throw new Error("No active shift");
-      const res = await apiRequest("POST", `/api/pos/shifts/${currentShift.id}/close`, {
-        closingCash,
-        notes: closeNotes,
-      });
-      return await res.json();
-    },
-    onSuccess: (data: PosShift) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/pos/shifts/current", { locationId }] });
-      queryClient.invalidateQueries({ queryKey: ["/api/pos/shifts/history", { locationId }] });
-      setCloseShiftDialog(false);
-      setClosingCash("");
-      setCloseNotes("");
-
-      const variance = parseFloat(data.variance || "0");
-      toast({
-        title: "Shift Closed",
-        description: `Your shift has been closed. ${variance !== 0 ? `Variance: ${formatAmount(variance)}` : "Cash balanced!"}`,
-        variant: variance !== 0 ? "destructive" : "default",
-      });
-    },
-    onError: (error: ClientErrorLike) => {
-      if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({
-        title: "Error",
-        description: error.message || "Failed to close shift",
-        variant: "destructive",
-      });
-    },
-  });
+    closeNotes,
+    closeShiftDialog,
+    closeShiftMutation,
+    closingCash,
+    currentShift,
+    formatAmount,
+    formatDisplayDate,
+    isOnline,
+    location,
+    locationError,
+    locationId,
+    navigate,
+    openShiftDialog,
+    openShiftMutation,
+    openingCash,
+    posUser,
+    refetchLocation,
+    refetchSales,
+    refetchShift,
+    salesError,
+    salesLoading,
+    setCloseNotes,
+    setCloseShiftDialog,
+    setClosingCash,
+    setOpenShiftDialog,
+    setOpeningCash,
+    setShowHistory,
+    shiftError,
+    shiftHistory,
+    shiftLoading,
+    showHistory,
+    toast,
+    todaySales,
+  } = usePOSDashboardState(props);
 
   if (!posUser || !locationId) {
     return (
@@ -414,76 +249,11 @@ export default function POSDashboard({ posUser }: POSDashboardProps) {
 
       {/* Shift History */}
       {showHistory && (
-        <div>
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">Recent Shifts</p>
-          <div className="border rounded-xl overflow-hidden">
-            <div className="table-responsive">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/40 hover:bg-muted/40">
-                    <TableHead className="text-xs">Date</TableHead>
-                    <TableHead className="text-xs hidden sm:table-cell">Duration</TableHead>
-                    <TableHead className="text-xs text-right">Opening</TableHead>
-                    <TableHead className="text-xs text-right">Closing</TableHead>
-                    <TableHead className="text-xs text-right">Sales</TableHead>
-                    <TableHead className="text-xs hidden sm:table-cell text-right">Variance</TableHead>
-                    <TableHead className="text-xs">Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {shiftHistory.slice(0, 10).map((shift) => {
-                    const variance = parseFloat(shift.variance || "0");
-                    return (
-                      <TableRow key={shift.id} data-testid={`row-shift-${shift.id}`}>
-                        <TableCell className="text-sm">{formatDisplayDate(shift.openedAt)}</TableCell>
-                        <TableCell className="text-sm hidden sm:table-cell text-muted-foreground">
-                          {shift.closedAt ? (
-                            <>
-                              {safeFmtTime(shift.openedAt)} – {safeFmtTime(shift.closedAt)}
-                            </>
-                          ) : (
-                            safeFmtTime(shift.openedAt) + " – Active"
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right font-mono text-sm">
-                          {formatAmount(parseFloat(shift.openingCash))}
-                        </TableCell>
-                        <TableCell className="text-right font-mono text-sm">
-                          {shift.closingCash ? formatAmount(parseFloat(shift.closingCash)) : "—"}
-                        </TableCell>
-                        <TableCell className="text-right font-mono text-sm">
-                          {shift.salesTotal ? formatAmount(parseFloat(shift.salesTotal)) : "—"}
-                          {shift.salesCount ? (
-                            <span className="text-muted-foreground text-xs ml-1">({shift.salesCount})</span>
-                          ) : (
-                            ""
-                          )}
-                        </TableCell>
-                        <TableCell
-                          className={`hidden sm:table-cell text-right font-mono text-sm ${variance !== 0 ? "text-destructive" : "text-green-600 dark:text-green-400"}`}
-                        >
-                          {shift.variance ? formatAmount(variance) : "—"}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={shift.status === "open" ? "default" : "secondary"} className="capitalize">
-                            {shift.status}
-                          </Badge>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                  {shiftHistory.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-center text-muted-foreground py-10">
-                        No shift history found
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          </div>
-        </div>
+        <POSDashboardSection
+          formatAmount={formatAmount}
+          formatDisplayDate={formatDisplayDate}
+          shiftHistory={shiftHistory}
+        />
       )}
 
       {/* Open Shift Dialog */}
@@ -533,73 +303,18 @@ export default function POSDashboard({ posUser }: POSDashboardProps) {
       </Dialog>
 
       {/* Close Shift Dialog */}
-      <Dialog open={closeShiftDialog} onOpenChange={setCloseShiftDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>End Shift</DialogTitle>
-            <DialogDescription>Count your cash drawer and enter the closing amount.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            {currentShift && (
-              <div className="bg-muted p-4 rounded-lg space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span>Opening Cash:</span>
-                  <span className="font-mono">{formatAmount(parseFloat(currentShift.openingCash))}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span>Shift Started:</span>
-                  <span>{safeFmtTime(currentShift.openedAt)}</span>
-                </div>
-              </div>
-            )}
-            <div className="space-y-2">
-              <Label htmlFor="closingCash">Closing Cash Amount</Label>
-              <Input
-                id="closingCash"
-                type="number"
-                step="0.01"
-                placeholder="0"
-                value={closingCash}
-                onChange={(e) => setClosingCash(e.target.value)}
-                data-testid="input-closing-cash"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="closeNotes">Notes (optional)</Label>
-              <Textarea
-                id="closeNotes"
-                placeholder="Any notes about this shift..."
-                value={closeNotes}
-                onChange={(e) => setCloseNotes(e.target.value)}
-                data-testid="input-close-notes"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCloseShiftDialog(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => {
-                if (!navigator.onLine) {
-                  toast({
-                    title: "Not available offline",
-                    description: "Shift operations require a connection",
-                    variant: "destructive",
-                  });
-                  return;
-                }
-                closeShiftMutation.mutate();
-              }}
-              disabled={closeShiftMutation.isPending || !closingCash}
-              data-testid="button-confirm-end-shift"
-            >
-              {closeShiftMutation.isPending ? "Closing..." : "End Shift"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <POSDashboardDialogSection
+        closeNotes={closeNotes}
+        closeShiftDialog={closeShiftDialog}
+        closeShiftMutation={closeShiftMutation}
+        closingCash={closingCash}
+        currentShift={currentShift}
+        formatAmount={formatAmount}
+        setCloseNotes={setCloseNotes}
+        setCloseShiftDialog={setCloseShiftDialog}
+        setClosingCash={setClosingCash}
+        toast={toast}
+      />
     </div>
   );
 }

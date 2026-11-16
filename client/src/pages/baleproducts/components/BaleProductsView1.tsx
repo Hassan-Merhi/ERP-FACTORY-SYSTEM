@@ -1,356 +1,88 @@
-import { useFactoryMhdView } from "@/hooks/use-factory-mhd-view";
-import { ChevronDown, ChevronRight, Pencil, X, EyeOff, Eye, AlertCircle, Palette, Search, Layers3 } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { ChevronDown, ChevronRight, Pencil, EyeOff, Eye } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmptyState } from "../components/EmptyState";
-import type { useBaleProductsModel } from "../useBaleProductsModel";
+import {
+  BaleProductsView1TableHeaderSection,
+  ProductColorPills,
+  useBaleProductsView1State,
+  type Model,
+} from "./useBaleProductsView1State";
+import { BaleProductsView1Section } from "./BaleProductsView1Section";
 
-type Model = ReturnType<typeof useBaleProductsModel>;
-type BaleProduct = NonNullable<Model["activeProducts"]>[number];
-
-function ProductColorPills({
-  product,
-  designColors,
-  colorUpdateMutation,
-  canEdit,
-}: {
-  product: BaleProduct;
-  designColors: Model["designColors"];
-  colorUpdateMutation: Model["colorUpdateMutation"];
-  canEdit: boolean;
-}) {
-  const selectedColor = designColors.find((color) => color.value === product.labelDesignColor);
-  const isUpdating = colorUpdateMutation.isPending && colorUpdateMutation.variables?.id === product.id;
-
-  if (!canEdit) {
-    return (
-      <span
-        className="inline-flex items-center gap-1 text-xs text-muted-foreground"
-        title={selectedColor?.label ?? product.labelDesignColor ?? "No Design"}
-      >
-        <span
-          className="h-4 w-4 rounded-full border border-foreground/30"
-          style={selectedColor ? { backgroundColor: selectedColor.color } : undefined}
-        />
-        {!selectedColor && !product.labelDesignColor ? "No Design" : null}
-      </span>
-    );
-  }
-
-  return (
-    <div
-      className="inline-flex flex-wrap items-center gap-1.5"
-      role="group"
-      aria-label={`Label design color for ${product.name}`}
-      data-testid={`product-color-pills-${product.id}`}
-    >
-      <button
-        type="button"
-        className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-foreground/30 bg-background text-muted-foreground hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${!product.labelDesignColor ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}`}
-        title="No Design"
-        aria-label={`No Design for ${product.name}`}
-        aria-pressed={!product.labelDesignColor}
-        disabled={colorUpdateMutation.isPending}
-        onClick={() => {
-          if (product.labelDesignColor) colorUpdateMutation.mutate({ id: product.id, labelDesignColor: null });
-        }}
-        data-testid={`quick-label-color-none-${product.id}`}
-      >
-        <X className="h-3 w-3" />
-      </button>
-      {designColors.map((color) => (
-        <button
-          key={color.value}
-          type="button"
-          className={`h-5 w-5 shrink-0 rounded-full border border-foreground/30 hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${product.labelDesignColor === color.value ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}`}
-          style={{ backgroundColor: color.color }}
-          title={color.label}
-          aria-label={`Set ${product.name} label design to ${color.label}`}
-          aria-pressed={product.labelDesignColor === color.value}
-          disabled={colorUpdateMutation.isPending}
-          onClick={() => {
-            if (product.labelDesignColor !== color.value) {
-              colorUpdateMutation.mutate({ id: product.id, labelDesignColor: color.value });
-            }
-          }}
-          data-testid={`quick-label-color-${product.id}-${color.value}`}
-        />
-      ))}
-      {isUpdating && <span className="text-xs text-muted-foreground">Saving...</span>}
-      {product.labelDesignColor && !selectedColor && (
-        <span className="text-xs text-muted-foreground" title="Saved design is not in the current color palette">
-          {product.labelDesignColor}
-        </span>
-      )}
-    </div>
-  );
-}
-
-export function BaleProductsView1({ model }: { model: Model }) {
-  const mhd = useFactoryMhdView();
+export function BaleProductsView1(props: { model: Model }) {
   const {
-    setCreateDialogOpen,
-    designColors,
+    activeProducts,
+    bulkToggleActiveMutation,
+    canChangeExistingRecords,
+    canEditProducts,
+    categories,
+    categoryMap,
     colorUpdateMutation,
     condensedView,
+    designColors,
+    distinctWeights,
     expandedGroups,
-    setEditingProduct,
-    selectedIds,
-    setSelectedIds,
-    showHidden,
-    setShowHidden,
-    showZeroPrice,
-    setShowZeroPrice,
-    showNoColor,
-    setShowNoColor,
     filterCategoryId,
-    setFilterCategoryId,
     filterWeight,
-    setFilterWeight,
-    searchQuery,
-    setSearchQuery,
-    isAdmin,
+    groupedProducts,
+    hiddenProducts,
     hideAvgRate,
     hideSellingPriceBP,
     isLoading,
-    categories,
-    categoryMap,
+    mhd,
     noColorCount,
-    distinctWeights,
-    activeProducts,
-    hiddenProducts,
-    toggleSelectId,
-    toggleSelectAll,
+    openCreateDialog,
+    searchQuery,
     selectedActiveIds,
     selectedHiddenIds,
-    bulkToggleActiveMutation,
+    selectedIds,
+    setEditingProduct,
+    setFilterCategoryId,
+    setFilterWeight,
+    setSearchQuery,
+    setSelectedIds,
+    setShowHidden,
+    setShowNoColor,
+    setShowZeroPrice,
+    showHidden,
+    showNoColor,
+    showZeroPrice,
     toggleGroup,
-    groupedProducts,
-    canChangeExistingRecords,
-    canCreate,
-  } = model;
-  const canEditProducts = isAdmin && canChangeExistingRecords;
-  const openCreateDialog = canCreate("POST", "/api/factory/bale-products")
-    ? () => setCreateDialogOpen(true)
-    : undefined;
+    toggleSelectAll,
+    toggleSelectId,
+  } = useBaleProductsView1State(props);
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-blue-400/20 dark:bg-[#111c2e]">
       {/* Toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/70 bg-gradient-to-r from-slate-50 via-white to-blue-50/60 px-4 py-4 dark:border-blue-300/15 dark:from-[#142444] dark:via-[#111e36] dark:to-[#101b31]">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="flex items-center gap-2.5 text-base font-bold tracking-tight text-slate-900 dark:text-white">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-100 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400">
-              <Layers3 className="h-5 w-5" />
-            </span>
-            Product List
-          </span>
-          {selectedIds.size > 0 && (
-            <>
-              <span className="text-xs text-muted-foreground border-l pl-2">{selectedIds.size} selected</span>
-              {canChangeExistingRecords && selectedActiveIds.length > 0 && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => bulkToggleActiveMutation.mutate({ ids: selectedActiveIds, active: false })}
-                  disabled={bulkToggleActiveMutation.isPending}
-                  data-testid="button-bulk-hide"
-                >
-                  <EyeOff className="h-3.5 w-3.5 mr-1" />
-                  Hide ({selectedActiveIds.length})
-                </Button>
-              )}
-              {canChangeExistingRecords && selectedHiddenIds.length > 0 && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => bulkToggleActiveMutation.mutate({ ids: selectedHiddenIds, active: true })}
-                  disabled={bulkToggleActiveMutation.isPending}
-                  data-testid="button-bulk-unhide"
-                >
-                  <Eye className="h-3.5 w-3.5 mr-1" />
-                  Unhide ({selectedHiddenIds.length})
-                </Button>
-              )}
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={() => setSelectedIds(new Set())}
-                data-testid="button-clear-selection"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </>
-          )}
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-            <Input
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                setSelectedIds(new Set());
-              }}
-              placeholder="Search by name or code..."
-              className="h-9 w-56 rounded-xl border-slate-300 bg-white/90 pl-9 text-sm shadow-sm focus-visible:ring-blue-500 dark:border-blue-300/20 dark:bg-[#0d192c]"
-              data-testid="input-search-products"
-            />
-            {searchQuery && (
-              <button
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                onClick={() => {
-                  setSearchQuery("");
-                  setSelectedIds(new Set());
-                }}
-                data-testid="button-clear-search"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
-          </div>
-          {categories && categories.length > 0 && (
-            <Select
-              value={filterCategoryId === null ? "all" : String(filterCategoryId)}
-              onValueChange={(val) => {
-                setFilterCategoryId(val === "all" ? null : Number(val));
-                setSelectedIds(new Set());
-              }}
-            >
-              <SelectTrigger
-                className="h-9 w-40 rounded-xl border-slate-300 bg-white/90 text-sm shadow-sm dark:border-blue-300/20 dark:bg-[#0d192c]"
-                data-testid="select-filter-category"
-              >
-                <SelectValue placeholder="All categories" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All categories</SelectItem>
-                {categories.map((cat) => (
-                  <SelectItem key={cat.id} value={String(cat.id)}>
-                    {cat.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-          {distinctWeights.length > 0 && (
-            <Select
-              value={filterWeight === null ? "all" : filterWeight}
-              onValueChange={(val) => {
-                setFilterWeight(val === "all" ? null : val);
-                setSelectedIds(new Set());
-              }}
-            >
-              <SelectTrigger
-                className="h-9 w-32 rounded-xl border-slate-300 bg-white/90 text-sm shadow-sm dark:border-blue-300/20 dark:bg-[#0d192c]"
-                data-testid="select-filter-weight"
-              >
-                <SelectValue placeholder="All weights" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All weights</SelectItem>
-                {distinctWeights.map((w) => (
-                  <SelectItem key={w} value={w}>
-                    {w} kg
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-          {(() => {
-            const activeFilterCount =
-              (showZeroPrice && !hideSellingPriceBP ? 1 : 0) +
-              (showNoColor && noColorCount > 0 ? 1 : 0) +
-              (showHidden && hiddenProducts && hiddenProducts.length > 0 ? 1 : 0);
-            const hasAnyFilter =
-              !hideSellingPriceBP || noColorCount > 0 || (hiddenProducts && hiddenProducts.length > 0);
-            if (!hasAnyFilter) return null;
-            return (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    size="sm"
-                    variant={activeFilterCount > 0 ? "default" : "outline"}
-                    className="h-9 rounded-xl shadow-sm"
-                    data-testid="button-filters-dropdown"
-                  >
-                    <AlertCircle className="h-3.5 w-3.5 mr-1.5" />
-                    Filters
-                    {activeFilterCount > 0 && (
-                      <Badge variant="secondary" className="ml-1.5 px-1.5 py-0 text-xs no-default-active-elevate">
-                        {activeFilterCount}
-                      </Badge>
-                    )}
-                    <ChevronDown className="h-3 w-3 ml-1" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-52">
-                  <DropdownMenuLabel className="text-xs text-muted-foreground">Show in list</DropdownMenuLabel>
-                  {!hideSellingPriceBP && (
-                    <DropdownMenuItem
-                      onClick={() => {
-                        setShowZeroPrice((v) => !v);
-                        setSelectedIds(new Set());
-                      }}
-                      data-testid="menu-filter-unpriced"
-                      className="flex items-center justify-between"
-                    >
-                      <span className="flex items-center gap-2">
-                        <AlertCircle className="h-4 w-4 text-muted-foreground" />
-                        Unpriced products
-                      </span>
-                      {showZeroPrice && <span className="text-xs text-primary font-medium">On</span>}
-                    </DropdownMenuItem>
-                  )}
-                  {noColorCount > 0 && (
-                    <DropdownMenuItem
-                      onClick={() => {
-                        setShowNoColor((v) => !v);
-                        setSelectedIds(new Set());
-                      }}
-                      data-testid="menu-filter-no-color"
-                      className="flex items-center justify-between"
-                    >
-                      <span className="flex items-center gap-2">
-                        <Palette className="h-4 w-4 text-muted-foreground" />
-                        No color ({noColorCount})
-                      </span>
-                      {showNoColor && <span className="text-xs text-primary font-medium">On</span>}
-                    </DropdownMenuItem>
-                  )}
-                  {hiddenProducts && hiddenProducts.length > 0 && (
-                    <DropdownMenuItem
-                      onClick={() => {
-                        setShowHidden(!showHidden);
-                        setSelectedIds(new Set());
-                      }}
-                      data-testid="menu-filter-hidden"
-                      className="flex items-center justify-between"
-                    >
-                      <span className="flex items-center gap-2">
-                        <EyeOff className="h-4 w-4 text-muted-foreground" />
-                        Hidden products ({hiddenProducts.length})
-                      </span>
-                      {showHidden && <span className="text-xs text-primary font-medium">On</span>}
-                    </DropdownMenuItem>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            );
-          })()}
-        </div>
-      </div>
+      <BaleProductsView1Section
+        bulkToggleActiveMutation={bulkToggleActiveMutation}
+        canChangeExistingRecords={canChangeExistingRecords}
+        categories={categories}
+        distinctWeights={distinctWeights}
+        filterCategoryId={filterCategoryId}
+        filterWeight={filterWeight}
+        hiddenProducts={hiddenProducts}
+        hideSellingPriceBP={hideSellingPriceBP}
+        noColorCount={noColorCount}
+        searchQuery={searchQuery}
+        selectedActiveIds={selectedActiveIds}
+        selectedHiddenIds={selectedHiddenIds}
+        selectedIds={selectedIds}
+        setFilterCategoryId={setFilterCategoryId}
+        setFilterWeight={setFilterWeight}
+        setSearchQuery={setSearchQuery}
+        setSelectedIds={setSelectedIds}
+        setShowHidden={setShowHidden}
+        setShowNoColor={setShowNoColor}
+        setShowZeroPrice={setShowZeroPrice}
+        showHidden={showHidden}
+        showNoColor={showNoColor}
+        showZeroPrice={showZeroPrice}
+      />
       <div>
         {isLoading ? (
           <div className="space-y-2">
@@ -365,38 +97,7 @@ export function BaleProductsView1({ model }: { model: Model }) {
               wrapperClassName="rounded-none border-x-0 border-b-0 border-t-0 shadow-inner shadow-slate-200/20 dark:shadow-blue-400/5"
               className="[&_tbody_tr:hover]:bg-blue-50/70 dark:[&_tbody_tr:hover]:bg-blue-500/10 [&_td]:border-slate-200/70 dark:[&_td]:border-blue-200/10 [&_th]:border-slate-200/80 dark:[&_th]:border-blue-200/10"
             >
-              <TableHeader className="sticky top-0 z-30 bg-slate-100 dark:bg-[#1b2c4d]">
-                <TableRow className="border-b border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-100 dark:border-blue-300/20 dark:bg-[#1b2c4d] dark:text-blue-100 dark:hover:bg-[#1b2c4d]">
-                  <TableHead className="w-8"></TableHead>
-                  <TableHead className="w-8"></TableHead>
-                  <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    Article Code
-                  </TableHead>
-                  <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    Name
-                  </TableHead>
-                  <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    Category
-                  </TableHead>
-                  <TableHead className="text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    Wt/Bale (kg)
-                  </TableHead>
-                  {!hideAvgRate && (
-                    <TableHead className="text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                      Prod. Price
-                    </TableHead>
-                  )}
-                  {!hideSellingPriceBP && (
-                    <TableHead className="text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                      Sell Price
-                    </TableHead>
-                  )}
-                  <TableHead className="text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    Count
-                  </TableHead>
-                  <TableHead className="w-[60px]"></TableHead>
-                </TableRow>
-              </TableHeader>
+              <BaleProductsView1TableHeaderSection hideAvgRate={hideAvgRate} hideSellingPriceBP={hideSellingPriceBP} />
               <TableBody>
                 {mhd
                   .sortRows(groupedProducts, (group) => group.articleCode)

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { discoverDuoRouteInventory } from "./lib/iphone-duo-route-inventory.mjs";
+import { readModuleFamily } from "./lib/readModuleFamily.mjs";
 
 const root = process.cwd();
 const requirements = [
@@ -77,7 +78,7 @@ const testFiles = [
 ];
 const violations = [];
 for (const [relative, snippets] of requirements) {
-  const source = await fs.readFile(path.join(root, relative), "utf8");
+  const source = await readModuleFamily(path.join(root, relative));
   for (const snippet of snippets) {
     if (!source.includes(snippet)) violations.push(relative + ": missing " + snippet);
   }

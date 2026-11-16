@@ -1,10 +1,3 @@
-import type { ClientErrorLike } from "@/lib/clientError";
-import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
-import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { useAdminOverride } from "@/hooks/use-admin-override";
-import { useRoute, useLocation } from "wouter";
-import { useEscapeToParent } from "@/hooks/use-escape-to-parent";
 import {
   ArrowLeft,
   DollarSign,
@@ -17,291 +10,62 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useToast } from "@/hooks/use-toast";
-import { queryClient } from "@/lib/queryClient";
-import { useCompany } from "@/contexts/CompanyContext";
-import { companyQueryKey } from "@/lib/companyQueryScope";
-import { factoryApiRequest } from "@/lib/factoryApi";
-import { useDateFormat } from "@/contexts/DateFormatContext";
-
-interface Employee {
-  id: number;
-  code: string;
-  firstName: string;
-  lastName: string;
-  phone: string | null;
-  department: string | null;
-  monthlySalary: string;
-  currentBalance: string;
-  totalDeposits: string;
-  totalWithdrawals: string;
-  active: boolean;
-  joinDate: string;
-  employeeType: string;
-}
-
-interface StatementRow {
-  id: number;
-  voucherId: number;
-  voucherNumber: string;
-  voucherDate: string;
-  voucherType: string;
-  description: string;
-  narration: string;
-  credit: number;
-  debit: number;
-  balance: number;
-}
-
-interface LedgerAccount {
-  id: number;
-  name: string;
-  code: string;
-  accountType: string;
-}
-
-const AVATAR_COLORS = [
-  "bg-blue-100 text-blue-700",
-  "bg-purple-100 text-purple-700",
-  "bg-emerald-100 text-emerald-700",
-  "bg-amber-100 text-amber-700",
-  "bg-rose-100 text-rose-700",
-  "bg-cyan-100 text-cyan-700",
-];
-
-function getAvatarColor(name: string) {
-  let hash = 0;
-  for (const c of name) hash = c.charCodeAt(0) + ((hash << 5) - hash);
-  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
-}
-
-function getInitials(name: string) {
-  return name
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase();
-}
-
-function fmt(val: string | number | null | undefined) {
-  const n = parseFloat(String(val || 0));
-  return isNaN(n) ? "$0.00" : `$${n.toFixed(2)}`;
-}
+import { fmt, getAvatarColor, getInitials } from "./FactoryEmployeeDetailTypes";
+import { useFactoryEmployeeDetailState } from "./useFactoryEmployeeDetailState";
+import { FactoryEmployeeDetailDialogSection, FactoryEmployeeDetailSection } from "./FactoryEmployeeDetailDialogSection";
 
 export default function FactoryEmployeeDetail() {
-  const { wrapAdminAction, AdminDialog } = useAdminOverride();
-  const { data: currentUser } = useQuery<{ role?: string }>({ queryKey: ["/api/auth/me"] });
-  const isDeveloper = currentUser?.role === "Developer";
-  const [, navigate] = useLocation();
-  useEscapeToParent("/factory/payroll-hub?tab=employees");
-  const [, params] = useRoute("/factory/employees/:id");
-  const employeeId = params?.id ? parseInt(params.id) : null;
-  const { toast } = useToast();
-  const { selectedCompany } = useCompany();
-  const recordChanges = useExistingRecordChangeAccess();
-  const { formatDisplayDate } = useDateFormat();
-
-  const formatDate = (val: string | Date | null | undefined) => {
-    if (!val) return "—";
-    try {
-      return formatDisplayDate(val instanceof Date ? val : new Date(val));
-    } catch {
-      return "—";
-    }
-  };
-
-  // State for dialogs
-  const [editOpen, setEditOpen] = useState(false);
-  const [editForm, setEditForm] = useState({
-    firstName: "",
-    lastName: "",
-    department: "",
-    phone: "",
-    monthlySalary: "",
-  });
-
-  // Deposit form
-  const [depositOpen, setDepositOpen] = useState(false);
-  const [depositAmount, setDepositAmount] = useState("");
-  const [depositDate, setDepositDate] = useState(new Date().toLocaleDateString("en-CA"));
-  const [depositNotes, setDepositNotes] = useState("");
-  const [depositEffectiveDate, setDepositEffectiveDate] = useState("");
-
-  // Withdrawal form
-  const [withdrawOpen, setWithdrawOpen] = useState(false);
-  const [withdrawAmount, setWithdrawAmount] = useState("");
-  const [withdrawDate, setWithdrawDate] = useState(new Date().toLocaleDateString("en-CA"));
-  const [withdrawNotes, setWithdrawNotes] = useState("");
-  const [withdrawCashAccountId, setWithdrawCashAccountId] = useState("");
-
-  // Queries
   const {
-    data: employee,
-    isLoading: empLoading,
-    error: empError,
-  } = useQuery<Employee>({
-    queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id, employeeId),
-    queryFn: async () => {
-      const res = await factoryApiRequest("GET", `/api/factory/employees/${employeeId}`);
-      if (!res.ok) throw new Error("Employee not found");
-      return res.json();
-    },
-    enabled: Boolean(selectedCompany?.id) && !!employeeId,
-  });
-
-  const { data: statement, isLoading: stmtLoading } = useQuery<{ employee: Employee; rows: StatementRow[] }>({
-    queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id, employeeId, "statement"),
-    queryFn: async () => {
-      const res = await factoryApiRequest("GET", `/api/factory/employees/${employeeId}/statement`);
-      if (!res.ok) throw new Error("Failed to fetch statement");
-      return res.json();
-    },
-    enabled: Boolean(selectedCompany?.id) && !!employeeId,
-  });
-
-  const { data: cashAccounts = [] } = useQuery<LedgerAccount[]>({
-    queryKey: companyQueryKey("/api/ledger-accounts?includeHidden=true&profile=picker", selectedCompany?.id),
-    enabled: Boolean(selectedCompany?.id),
-    queryFn: async () => {
-      const res = await fetch("/api/ledger-accounts?includeHidden=true&profile=picker", { credentials: "include" });
-      if (!res.ok) return [];
-      const data = await res.json();
-      return (data || []).filter(
-        (a: LedgerAccount) => a.accountType === "Cash" || a.accountType?.toLowerCase().includes("cash")
-      );
-    },
-    staleTime: 60_000,
-    refetchOnWindowFocus: false,
-  });
-
-  // Mutations
-  const updateMutation = useMutation({
-    mutationFn: async (data: typeof editForm) => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
-      const res = await factoryApiRequest("PATCH", `/api/factory/employees/${employeeId}`, data);
-      if (!res.ok) {
-        const e = await res.json();
-        throw new Error(e.message);
-      }
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id, employeeId),
-      });
-      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id) });
-      toast({ title: "Employee updated" });
-      setEditOpen(false);
-    },
-    onError: (e: ClientErrorLike) => {
-      if (e?._handledGlobally) return;
-      toast({ variant: "destructive", title: e.message });
-    },
-  });
-
-  const recalcMutation = useMutation({
-    mutationFn: async () => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
-      const res = await factoryApiRequest("POST", `/api/factory/employees/${employeeId}/recalculate-balance`);
-      if (!res.ok) {
-        const e = await res.json();
-        throw new Error(e.message);
-      }
-      return res.json();
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({
-        queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id, employeeId),
-      });
-      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id) });
-      toast({ title: "Balance recalculated", description: `New balance: $${data.newBalance?.toFixed(2)}` });
-    },
-    onError: (e: ClientErrorLike) => {
-      if (e?._handledGlobally) return;
-      toast({ variant: "destructive", title: e.message });
-    },
-  });
-
-  const depositMutation = useMutation({
-    mutationFn: async () => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
-      const res = await factoryApiRequest("POST", `/api/factory/employees/${employeeId}/deposit`, {
-        amount: depositAmount,
-        date: depositDate,
-        notes: depositNotes,
-        effectiveDate: depositEffectiveDate || null,
-      });
-      if (!res.ok) {
-        const e = await res.json();
-        throw new Error(e.message);
-      }
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id, employeeId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id, employeeId, "statement"),
-      });
-      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id) });
-      toast({ title: "Deposit recorded" });
-      setDepositOpen(false);
-      setDepositAmount("");
-      setDepositNotes("");
-      setDepositEffectiveDate("");
-    },
-    onError: (e: ClientErrorLike) => {
-      if (e?._handledGlobally) return;
-      toast({ variant: "destructive", title: e.message });
-    },
-  });
-
-  const withdrawMutation = useMutation({
-    mutationFn: async () => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
-      const res = await factoryApiRequest("POST", `/api/factory/employees/${employeeId}/withdraw`, {
-        amount: withdrawAmount,
-        date: withdrawDate,
-        notes: withdrawNotes,
-        cashAccountId: withdrawCashAccountId,
-      });
-      if (!res.ok) {
-        const e = await res.json();
-        throw new Error(e.message);
-      }
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id, employeeId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id, employeeId, "statement"),
-      });
-      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id) });
-      toast({ title: "Withdrawal recorded" });
-      setWithdrawOpen(false);
-      setWithdrawAmount("");
-      setWithdrawNotes("");
-      setWithdrawCashAccountId("");
-    },
-    onError: (e: ClientErrorLike) => {
-      if (e?._handledGlobally) return;
-      toast({ variant: "destructive", title: e.message });
-    },
-  });
+    AdminDialog,
+    cashAccounts,
+    depositAmount,
+    depositDate,
+    depositEffectiveDate,
+    depositMutation,
+    depositNotes,
+    depositOpen,
+    editForm,
+    editOpen,
+    empError,
+    empLoading,
+    employee,
+    employeeId,
+    formatDate,
+    isDeveloper,
+    navigate,
+    recalcMutation,
+    recordChanges,
+    setDepositAmount,
+    setDepositDate,
+    setDepositEffectiveDate,
+    setDepositNotes,
+    setDepositOpen,
+    setEditForm,
+    setEditOpen,
+    setWithdrawAmount,
+    setWithdrawCashAccountId,
+    setWithdrawDate,
+    setWithdrawNotes,
+    setWithdrawOpen,
+    statement,
+    stmtLoading,
+    updateMutation,
+    withdrawAmount,
+    withdrawCashAccountId,
+    withdrawDate,
+    withdrawMutation,
+    withdrawNotes,
+    withdrawOpen,
+    wrapAdminAction,
+  } = useFactoryEmployeeDetailState();
 
   if (!employeeId) return <div className="p-8 text-muted-foreground">Invalid employee ID</div>;
 
@@ -469,136 +233,18 @@ export default function FactoryEmployeeDetail() {
         </div>
 
         {/* Statement */}
-        <div className="flex-1 min-w-0">
-          <Card>
-            <CardHeader className="pb-2 pt-4 px-5">
-              <CardTitle className="text-sm text-muted-foreground">Running Statement</CardTitle>
-            </CardHeader>
-            <CardContent className="px-5 pb-4 overflow-x-auto">
-              {stmtLoading ? (
-                <div className="space-y-2">
-                  {[...Array(5)].map((_, i) => (
-                    <Skeleton key={i} className="h-10 w-full" />
-                  ))}
-                </div>
-              ) : !statement?.rows || statement.rows.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-8 text-center">No transactions yet</p>
-              ) : (
-                <Table mobileLayout="cards">
-                  <TableHeader className="sticky top-0 z-30 bg-background">
-                    <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Voucher</TableHead>
-                      <TableHead>Description</TableHead>
-                      <TableHead className="text-right">Deposit</TableHead>
-                      <TableHead className="text-right">Withdrawal</TableHead>
-                      <TableHead className="text-right">Balance</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {statement.rows.map((row) => (
-                      <TableRow key={row.id} data-testid={`row-stmt-${row.id}`}>
-                        <TableCell className="text-sm">{formatDate(row.voucherDate)}</TableCell>
-                        <TableCell className="font-mono text-xs text-muted-foreground">{row.voucherNumber}</TableCell>
-                        <TableCell className="text-sm" dir="ltr">
-                          {row.narration || row.description || "—"}
-                        </TableCell>
-                        <TableCell className="text-right font-mono text-sm">
-                          {row.credit > 0 ? (
-                            <span className="text-green-600 dark:text-green-400">{fmt(row.credit)}</span>
-                          ) : (
-                            "—"
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right font-mono text-sm">
-                          {row.debit > 0 ? (
-                            <span className="text-red-600 dark:text-red-400">{fmt(row.debit)}</span>
-                          ) : (
-                            "—"
-                          )}
-                        </TableCell>
-                        <TableCell
-                          className={`text-right font-mono text-sm font-semibold ${row.balance < 0 ? "text-red-600 dark:text-red-400" : ""}`}
-                        >
-                          {fmt(row.balance)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+        <FactoryEmployeeDetailSection formatDate={formatDate} statement={statement} stmtLoading={stmtLoading} />
       </div>
 
       {/* Edit Employee Dialog */}
-      <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Edit Employee</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <Label>First Name</Label>
-                <Input
-                  value={editForm.firstName}
-                  onChange={(e) => setEditForm((f) => ({ ...f, firstName: e.target.value }))}
-                  data-testid="input-edit-first-name"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label>Last Name</Label>
-                <Input
-                  value={editForm.lastName}
-                  onChange={(e) => setEditForm((f) => ({ ...f, lastName: e.target.value }))}
-                  data-testid="input-edit-last-name"
-                />
-              </div>
-            </div>
-            <div className="space-y-1">
-              <Label>Department</Label>
-              <Input
-                value={editForm.department}
-                onChange={(e) => setEditForm((f) => ({ ...f, department: e.target.value }))}
-                data-testid="input-edit-department"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Phone</Label>
-              <Input
-                value={editForm.phone}
-                onChange={(e) => setEditForm((f) => ({ ...f, phone: e.target.value }))}
-                data-testid="input-edit-phone"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Monthly Salary</Label>
-              <Input
-                type="number"
-                min="0"
-                step="0.01"
-                value={editForm.monthlySalary}
-                onChange={(e) => setEditForm((f) => ({ ...f, monthlySalary: e.target.value }))}
-                data-testid="input-edit-salary"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={() => wrapAdminAction(() => updateMutation.mutate(editForm), "Save Employee")}
-              disabled={updateMutation.isPending}
-              data-testid="button-save-edit"
-            >
-              {updateMutation.isPending ? "Saving..." : "Save"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <FactoryEmployeeDetailDialogSection
+        editForm={editForm}
+        editOpen={editOpen}
+        setEditForm={setEditForm}
+        setEditOpen={setEditOpen}
+        updateMutation={updateMutation}
+        wrapAdminAction={wrapAdminAction}
+      />
 
       {/* Deposit Dialog */}
       <Dialog open={depositOpen} onOpenChange={setDepositOpen}>
