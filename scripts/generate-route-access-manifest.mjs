@@ -41,6 +41,11 @@ const rules = snapshot.routes.map((registration, index) => {
     roles: ["delegated"],
     enforcement: "legacy-delegated",
     status: "unreviewed",
+    originalGuardChain: reviewEntry.existingGuards,
+    ...(reviewEntry.policyEvidence ? { operationalPolicyEvidence: reviewEntry.policyEvidence } : {}),
+    ...(reviewEntry.tenantEvidence ? { tenantEvidence: reviewEntry.tenantEvidence } : {}),
+    ...(reviewEntry.scopeEvidence ? { scopeEvidence: reviewEntry.scopeEvidence } : {}),
+    ...(reviewEntry.candidate ? { v2Candidate: reviewEntry.candidate } : {}),
     // The exact registered chain is captured in id to detect guard loss.
     // This is not evidence that the chain itself is sufficient.
   };
