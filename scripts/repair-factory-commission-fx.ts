@@ -314,7 +314,7 @@ async function main() {
               commissionFxRateToUsd: correctFxStr,
               commissionFxRateConfirmed: true,
               commissionFxRateDate: offloadDate,
-            } as any)
+            })
             .where(eq(factoryContainers.id, containerId));
 
           // 3. Recompute and cascade
