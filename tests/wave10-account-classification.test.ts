@@ -23,7 +23,7 @@ import {
 import { classifyNetPositionAccounts, getAccountNetBalance } from "../server/netPositionHelper";
 import { getProfitLoss } from "../server/services/reports/financialReportsService";
 import { calculateIncomeStatementForPeriod } from "../server/helpers/calculateIncomeStatementForPeriod";
-import { phase5ReportShard } from "../server/chat/reports/implementations/phase5ReportShard";
+import { accountingDetailReportShard } from "../server/chat/reports/implementations/accountingDetailReportShard";
 import { closeFiscalPeriod } from "../server/storage/accounting/fiscal-periods";
 import { ensureClosedPeriodGuard } from "../server/services/accounting/closedPeriodGuard";
 import { insertLedgerAccountSchema } from "../shared/schema";
@@ -300,7 +300,7 @@ describe("ledger reports", () => {
   });
 
   it("the chat trial balance sums only live, non-optional lines in the date range", async () => {
-    const result = await phase5ReportShard.run({
+    const result = await accountingDetailReportShard.run({
       companyId: ctx.companyId,
       params: { queryType: "trial_balance" },
       dateFrom: "2026-03-01",
@@ -310,7 +310,7 @@ describe("ledger reports", () => {
       rowLimit: 100,
       fmt: (value: number) => value.toFixed(2),
       fmtDec: (value: number) => value.toFixed(2),
-    } as unknown as Parameters<typeof phase5ReportShard.run>[0]);
+    } as unknown as Parameters<typeof accountingDetailReportShard.run>[0]);
     const rows = result.table?.rows ?? [];
     const probe = rows.find((row) => row[1] === `${TEST_PREFIX} TBA`);
     const liability = rows.find((row) => row[1] === `${TEST_PREFIX} TBL`);

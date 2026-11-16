@@ -7,7 +7,7 @@ vi.mock("../server/chat/reports/implementations/reportShardSupport", () => ({
   sql: (strings: TemplateStringsArray, ...values: unknown[]) => ({ strings: Array.from(strings), values }),
 }));
 
-import { phase5QueryTypes, phase5ReportShard } from "../server/chat/reports/implementations/phase5ReportShard";
+import { phase5QueryTypes, accountingDetailReportShard } from "../server/chat/reports/implementations/accountingDetailReportShard";
 
 function ctx(queryType: string, extraParams: Record<string, unknown> = {}) {
   return {
@@ -29,7 +29,7 @@ describe("Phase 33F phase 5 report shard", () => {
   });
 
   it("registers the full phase-5 query family", () => {
-    expect(phase5ReportShard.name).toBe("phase-5");
+    expect(accountingDetailReportShard.name).toBe("phase-5");
     expect(phase5QueryTypes).toEqual([
       "trial_balance",
       "purchase_order_detail",
@@ -42,11 +42,11 @@ describe("Phase 33F phase 5 report shard", () => {
       "profit_by_location",
       "debit_note_summary",
     ]);
-    expect(phase5ReportShard.queryTypes).toBe(phase5QueryTypes);
+    expect(accountingDetailReportShard.queryTypes).toBe(phase5QueryTypes);
   });
 
   it("returns actionable prompts before querying for missing PO/container identifiers", async () => {
-    const po = await phase5ReportShard.run(ctx("purchase_order_detail"));
+    const po = await accountingDetailReportShard.run(ctx("purchase_order_detail"));
     expect(po).toEqual(
       expect.objectContaining({
         queryType: "purchase_order_detail",
@@ -55,7 +55,7 @@ describe("Phase 33F phase 5 report shard", () => {
       })
     );
 
-    const container = await phase5ReportShard.run(ctx("container_cost_breakdown"));
+    const container = await accountingDetailReportShard.run(ctx("container_cost_breakdown"));
     expect(container).toEqual(
       expect.objectContaining({
         queryType: "container_cost_breakdown",
@@ -74,7 +74,7 @@ describe("Phase 33F phase 5 report shard", () => {
       ],
     });
 
-    const result = await phase5ReportShard.run(ctx("trial_balance"));
+    const result = await accountingDetailReportShard.run(ctx("trial_balance"));
     expect(result.queryType).toBe("trial_balance");
     expect(result.noData).toBe(false);
     expect(result.table?.rows).toHaveLength(3);
@@ -90,7 +90,7 @@ describe("Phase 33F phase 5 report shard", () => {
 
   it("reports a clean no-match result for unknown purchase orders", async () => {
     harness.execute.mockResolvedValueOnce({ rows: [] });
-    const result = await phase5ReportShard.run(ctx("purchase_order_detail", { containerNumber: "PO-MISSING" }));
+    const result = await accountingDetailReportShard.run(ctx("purchase_order_detail", { containerNumber: "PO-MISSING" }));
     expect(result.summary).toBe('No PO found matching "PO-MISSING".');
     expect(harness.execute).toHaveBeenCalledOnce();
   });

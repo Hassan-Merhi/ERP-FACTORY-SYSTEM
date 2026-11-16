@@ -11,11 +11,11 @@
       "reason": "Reviewed 2026-11-10: the flagged query in assertHardenedFinancialSchemaTx reads pg_class and pg_trigger catalog metadata to verify RLS and guard triggers; public.vouchers is only a to_regclass relation name, not a SELECT from tenant voucher rows. The service separately scopes order/trip financial reads by scope.companyId. Do not treat this file-level review as permission for future unscoped tenant SQL."
     },
     {
-      "path": "server/chat/reports/implementations/phase3ReportShard.ts",
+      "path": "server/chat/reports/implementations/salesAndAssetsReportShard.ts",
       "reason": "Report shard receives the already-authorized company context from the chat report orchestrator."
     },
     {
-      "path": "server/chat/reports/implementations/phase5ReportShard.ts",
+      "path": "server/chat/reports/implementations/accountingDetailReportShard.ts",
       "reason": "Report shard receives the already-authorized company context from the chat report orchestrator."
     },
     {
