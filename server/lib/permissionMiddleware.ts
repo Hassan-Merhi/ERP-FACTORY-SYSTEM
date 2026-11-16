@@ -8,7 +8,7 @@ import {
   type ActiveCompanyPermissionContext,
 } from "../services/security/activeCompanyPermissionContext";
 
-export type PermMiddlewareType = "module" | "page" | "action" | "sensitive" | "export" | "pos";
+export type PermMiddlewareType = "module" | "page" | "tab" | "action" | "sensitive" | "export" | "pos";
 
 interface PermissionState {
   context: ActiveCompanyPermissionContext;
@@ -117,26 +117,55 @@ function sendLookupFailure(
   });
 }
 
-export function requirePermission(key: string, permType: PermMiddlewareType = "module") {
-  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    // Preserve the existing middleware composition: unauthenticated requests pass
-    // through so the route's requireAuth middleware returns the canonical 401.
-    if (!req.session?.userId) {
-      next();
-      return;
+/**
+ * Check one permission key for the signed-in caller. Returns true when the
+ * request may continue; otherwise the refusal (403, or 503 when permissions
+ * cannot be read) has already been sent.
+ */
+export async function enforcePermissionKey(
+  req: Request,
+  res: Response,
+  key: string,
+  permType: PermMiddlewareType = "module"
+): Promise<boolean> {
+  try {
+    const state = await getPermissionState(req);
+    if (!canAccess(state.context.role, key, state.permissionMap)) {
+      sendDenied(req, res, key, permType, state.context);
+      return false;
     }
+    return true;
+  } catch (error) {
+    sendLookupFailure(req, res, key, permType, error);
+    return false;
+  }
+}
 
-    try {
-      const state = await getPermissionState(req);
-      if (!canAccess(state.context.role, key, state.permissionMap)) {
-        sendDenied(req, res, key, permType, state.context);
+/** Permission key attached to `requirePermission` guards so the route access manifest can verify it. */
+export const REQUIRED_PERMISSION_METADATA = "requiredPermission";
+
+/**
+ * Route-level permission guard. A route that uses one must also list the key
+ * under `permission` in config/route-access-manifest.json, where the access
+ * boundary enforces it for every request; tests/route-access-manifest.test.ts
+ * fails when the two disagree. Do not mount this with `app.use()`: per-prefix
+ * permission mounts were replaced by the manifest.
+ */
+export function requirePermission(key: string, permType: PermMiddlewareType = "module") {
+  // Anonymous on purpose: the handler name is part of config/route-manifest.json.
+  return Object.assign(
+    async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+      // Preserve the existing middleware composition: unauthenticated requests pass
+      // through so the route's requireAuth middleware returns the canonical 401.
+      if (!req.session?.userId) {
+        next();
         return;
       }
-      next();
-    } catch (error) {
-      sendLookupFailure(req, res, key, permType, error);
-    }
-  };
+
+      if (await enforcePermissionKey(req, res, key, permType)) next();
+    },
+    { [REQUIRED_PERMISSION_METADATA]: key }
+  );
 }
 
 export function requireModuleAccess(moduleKey: string) {
