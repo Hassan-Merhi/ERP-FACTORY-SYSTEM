@@ -13,6 +13,8 @@ const marker=/(?:[Ww]ave|[Pp]hase)[-_ ]?\d+(?:[a-z](?=[A-Z._-]|$))?/g;
 const qualifies=p=>/^(?:client\/|tests\/|scripts\/|build\/)/.test(p)&&/(?:wave|phase)[-_ ]?\d+/i.test(path.posix.basename(p))&&!p.startsWith("scripts/repairs/");
 const candidates=files.filter(qualifies);
 const overrides={
+"tests/retail-wave1-contract.test.ts":"tests/retail-company-type-contract.test.ts",
+"tests/retail-wave2-contract.test.ts":"tests/retail-pos-money-contract.test.ts",
 "scripts/verify-phase11-12-observability-disaster-recovery.mjs":"scripts/verify-observability-disaster-recovery.mjs",
 "tests/phase31-32-weekly-bale-export-helpers.test.ts":"tests/weekly-bale-export-helpers.test.ts",
 "tests/phase33-3c-purchase-order-items-update.test.ts":"tests/purchase-order-items-update.test.ts",
