@@ -42,56 +42,6 @@ export const DEFAULT_PROPERTIES_WA_SCHEDULE = {
   periodMode: "previous_month" as PropertiesWaPeriod,
 };
 
-const statements = [
-  `CREATE TABLE IF NOT EXISTS properties_account_wa_schedules (
-    company_id integer NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
-    account_id integer NOT NULL REFERENCES ledger_accounts(id) ON DELETE CASCADE,
-    chat_id text NOT NULL,
-    enabled boolean NOT NULL DEFAULT false,
-    frequency text NOT NULL DEFAULT 'monthly'
-      CHECK (frequency IN ('daily','weekly','monthly')),
-    send_time varchar(5) NOT NULL DEFAULT '09:00'
-      CHECK (send_time ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'),
-    day_of_week integer NOT NULL DEFAULT 1 CHECK (day_of_week BETWEEN 0 AND 6),
-    day_of_month integer NOT NULL DEFAULT 1 CHECK (day_of_month BETWEEN 1 AND 28),
-    timezone text NOT NULL DEFAULT 'Asia/Beirut',
-    period_mode text NOT NULL DEFAULT 'previous_month'
-      CHECK (period_mode IN ('current_month','previous_month')),
-    updated_at timestamptz NOT NULL DEFAULT now(),
-    PRIMARY KEY (company_id, account_id)
-  )`,
-  `CREATE TABLE IF NOT EXISTS properties_account_wa_deliveries (
-    id bigserial PRIMARY KEY,
-    company_id integer NOT NULL REFERENCES companies(id),
-    account_id integer NOT NULL REFERENCES ledger_accounts(id),
-    attempt_key text NOT NULL,
-    mode text NOT NULL CHECK (mode IN ('manual','scheduled')),
-    chat_id text NOT NULL,
-    statement_from date,
-    statement_to date,
-    status text NOT NULL DEFAULT 'sending'
-      CHECK (status IN ('sending','accepted','failed','uncertain')),
-    error text,
-    created_at timestamptz NOT NULL DEFAULT now(),
-    completed_at timestamptz,
-    UNIQUE (company_id, account_id, attempt_key)
-  )`,
-  "CREATE INDEX IF NOT EXISTS properties_account_wa_deliveries_lookup_idx ON properties_account_wa_deliveries(company_id, account_id, created_at DESC)",
-];
-
-let ensurePromise: Promise<void> | undefined;
-export function ensurePropertiesWaStatementSchema(): Promise<void> {
-  if (!ensurePromise) {
-    ensurePromise = (async () => {
-      for (const statement of statements) await pool.query(statement);
-    })().catch((error) => {
-      ensurePromise = undefined;
-      throw error;
-    });
-  }
-  return ensurePromise;
-}
-
 export function propertiesWaLocalParts(now: Date, timezone: string) {
   const parts = new Intl.DateTimeFormat("en-GB", {
     timeZone: timezone,
@@ -146,7 +96,6 @@ export interface PropertiesWaSendInput {
 }
 
 export async function sendPropertiesWaStatement(input: PropertiesWaSendInput) {
-  await ensurePropertiesWaStatementSchema();
   const { companyId, accountId, chatId, attemptKey, mode, startDate, endDate } = input;
   const claim = await pool.query<{ id: string }>(
     `INSERT INTO properties_account_wa_deliveries
@@ -210,7 +159,6 @@ export async function sendPropertiesWaStatement(input: PropertiesWaSendInput) {
 }
 
 export async function runScheduledPropertiesWaStatements(now = new Date()) {
-  await ensurePropertiesWaStatementSchema();
   const active = await pool.query<PropertiesWaSchedule>(
     "SELECT * FROM properties_account_wa_schedules WHERE enabled = true"
   );

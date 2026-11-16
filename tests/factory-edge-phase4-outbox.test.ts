@@ -20,7 +20,6 @@ const lan = {
   PGSSLMODE: "disable",
   SESSION_SECRET: "test-only-key-".repeat(6),
   ENABLE_SCHEDULERS: "false",
-  RUN_STARTUP_MIGRATIONS: "true",
   CSRF_ENFORCE: "1",
 };
 

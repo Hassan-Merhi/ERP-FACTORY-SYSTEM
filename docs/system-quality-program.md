@@ -19,7 +19,7 @@ audit fails instead of allowing the reference to drift.
 |---|---|---|
 | Type escapes (AST) | 0 total | `npm run audit:type-escapes` |
 | ESLint warnings | 0 total | `npm run lint` |
-| Startup migration failures | 0 on a fresh database | `npm run verify:startup-migrations` |
+| Runtime DDL statements | 0 in server/ and shared/ | `npm run audit:runtime-ddl` |
 | Backend coverage floor (lines) | 71% | `config/coverage-thresholds.json` |
 | Write routes with no test at all | 0 of 331 | `npm run audit:write-routes` |
 | Write routes covered only by the guard sweep | 0 of 331 | `npm run audit:write-routes` |
@@ -116,48 +116,16 @@ missing an authorised per-rule ceiling.
 
 ---
 
-### Startup migration ratchet
+### Schema owned by migrations
 
-`.github/workflows/ci.yml` gates the entire backend suite on the startup step:
-`node dist/index.js` runs, CI polls `/api/health/db`, and the tests only run
-`if: steps.runtime_migrations.outcome == 'success'`. That endpoint reported
-`{"status":"ok","message":"Database ready"}` as soon as the migration pass
-*finished*, whether or not migrations inside it had failed — so eleven failed
-migrations on a fresh database passed the gate every run, and the suite tested
-whatever schema survived.
-
-`server/startupMigrationReport.ts` now records the outcome and
-`server/health/dbHealthRoute.ts` publishes it, so the endpoint carries a
-`migrations` block with the failure count and the failing statements. Readiness
-semantics are unchanged: the response is still 200 with `status: "ok"` once the
-pass completes, because CI uses it to learn that startup is done and Render's
-own check is `/api/health/ready`.
-
-`scripts/verify-startup-migrations.mjs` turns that report into a gate against
-`config/startup-migration-baseline.json`. The known set is frozen,
-`totals.failureCeiling` may only fall, and any failure not already recorded
-fails the build.
-
-The ceiling is **0**: any startup migration failure fails the build. It did not
-start there. The first measurement on a fresh database found eleven failures,
-which were frozen as a baseline so the gate was real immediately rather than
-permanently red — a gate that is always red is one that gets switched off. All
-eleven were then fixed and the ceiling lowered to zero:
-
-- Nine were seed `INSERT`s pinning `company_id` values that do not exist on a
-  fresh database. Each is now a guarded `SELECT` checking that both the company
-  and the referenced ledger account exist, so they no-op on an empty database
-  and still seed once the target company is created.
-- Two were foreign keys targeting schema that no longer exists:
-  `supplier_containers`, which is defined neither here nor in `shared/schema`,
-  and `bales.erp_location_id`, a column only `factory_bales` still carries.
-  Both statements are guarded on the object being present rather than deleted,
-  so a long-lived database that still has them still gains the key.
-
-Three `factory_container_receipts` constraints were fixed in the same change:
-they lacked the `DO`/`duplicate_object` guard the rest of that file uses, so
-they failed on every startup after the first. A re-run against an
-already-migrated database now produces the same eleven rather than fourteen.
+Startup no longer runs migrations. The schema is defined only by the numbered
+files in `migrations/` and applied explicitly with `npm run db:migrate`; the
+server verifies the database read-only at startup and refuses to start on a
+mismatch (see [database-migrations.md](database-migrations.md)). CI builds the
+test database with the runner, checks the committed manifest, audits runtime
+code for DDL (`npm run audit:runtime-ddl`) and boots the built server under a
+PostgreSQL event trigger to prove it executes no DDL
+(`.github/workflows/database-migration-tests.yml`).
 
 ---
 

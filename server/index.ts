@@ -2,7 +2,8 @@
  * Server entry point: composes middleware, routes, static serving, and the
  * startup sequence. Individual concerns live in focused modules:
  *   - server/startup/sessionMiddleware.ts   session config + PG store
- *   - server/startup/ensureRuntimeSchema.ts always-running schema repairs
+ *   - server/startup/startupDataOperations / approved repairs  boot-time DML
+ *   (The schema is owned by migrations/; startupPreload verifies it read-only.)
  *   - server/startup/postStartupJobs.ts     post-listen background jobs
  *   - server/startup/staticServing.ts       production SPA serving
  *   - server/startup/listenWithRetry.ts     listen + graceful shutdown
@@ -13,9 +14,6 @@
 import express from "express";
 import { createHttpApp } from "./httpApp";
 import { registerFactoryEdgeBoundary } from "./edge/edgeBoundary";
-import { ensureEdgeVoucherOutboxSchema } from "./edge/edgeVoucherOutbox";
-import { ensureCloudEdgeStageSchema } from "./edge/edgeCloudStaging";
-import { readCloudSyncStageConfiguration } from "./edge/edgeSyncStageProtocol.mjs";
 import { readFactoryEdgeConfiguration, shouldStartEdgeBackgroundJobs } from "./edge/edgeRuntimePolicy.mjs";
 import compression from "compression";
 import { securityHeadersMiddleware } from "./security/securityHeaders";
@@ -40,40 +38,19 @@ import { registerErrorHandler } from "./middleware/errorHandler";
 import { capacitorCors } from "./middleware/capacitorCors";
 import { buildVersionHeader, apiNoCache, slowRequestLogger } from "./middleware/httpConventions";
 import { buildSessionMiddleware } from "./startup/sessionMiddleware";
-import { ensureRuntimeSchema } from "./startup/ensureRuntimeSchema";
-import { ensureClosedPeriodGuard } from "./services/accounting/closedPeriodGuard";
-import { ensureLedgerIntegrityGuard } from "./services/accounting/ledgerIntegrityGuard";
-import { ensureInventoryCutoverSchema } from "./services/accounting/perpetualInventory/cutover";
-import { ensureInventoryFidelitySchema } from "./services/inventory/inventoryFidelitySchema";
-import { ensureFactoryCostBasisSchema } from "./services/factory/factoryCostBasisSchema";
-import { ensureVoucherBalanceGuard } from "./services/accounting/voucherBalanceGuard";
-import { ensureAuditLogAppendOnlyGuard } from "./services/audit/auditLogAppendOnlyGuard";
-import { ensureVoucherAuditTrigger } from "./services/audit/voucherAuditTrigger";
-import { ensureFactoryRowHistory } from "./services/audit/factoryRowHistory";
-import { ensureOpeningBalanceLock } from "./services/accounting/openingBalanceLock";
-import { ensureCurrencyNormalizationGuard } from "./services/accounting/currencyNormalizationGuard";
+import { recordFactoryRowHistoryBaselines } from "./services/audit/factoryRowHistory";
 import { ensureRequiredSystemAccountsForAllCompanies } from "./services/accounting/systemAccounts";
 import { runPostStartupJobs } from "./startup/postStartupJobs";
 import { serveProductionClient } from "./startup/staticServing";
 import { listenWithRetry, registerGracefulShutdown } from "./startup/listenWithRetry";
 import { registerProcessErrorHandlers } from "./startup/registerProcessErrorHandlers";
-import { runStartupMigrations, warmupDb } from "./startup/runServerStartupMigrations";
-import { ensureFactoryStaffTrackingSchema } from "./startup/factoryStaffTrackingSchema";
-import { ensureFactoryTargetBonusPaymentSchema } from "./startup/ensureFactoryTargetBonusPaymentSchema";
 import { inspectHistoricalProductionBonusExpenseAccounts } from "./services/factory/productionBonusExpenseReclassification";
 import { applyApprovedZakariaOpeningCredit } from "./startup/applyApprovedZakariaOpeningCredit";
 import { applyApprovedEmployeeOpeningCredits } from "./startup/applyApprovedEmployeeOpeningCredits";
-import { ensureSupplierTrackingShopDutyDefaults } from "./startup/ensureSupplierTrackingShopDutyDefaults";
-import { ensureZambiaHistoricalPurchaseCost } from "./startup/ensureZambiaHistoricalPurchaseCost";
-import { ensureFactoryContainerPlannerSchemaOnBoot } from "./startup/factoryContainerPlannerSchema";
-import { ensurePriorityScanSchema } from "./startup/priorityScanSchema";
-import { ensureContainerExtraExpectedLines } from "./startup/ensureContainerExtraExpectedLines";
-import { ensureFactoryLoadingDispatchSchema } from "./startup/ensureFactoryLoadingDispatchSchema";
-import { ensureStockTransferOrderWhatsAppApprovalSchema } from "./startup/ensureStockTransferOrderWhatsAppApprovalSchema";
 import { startStockTransferOrderWaApprovalWorker } from "./services/stockTransferOrderWhatsAppApprovalWorker";
 import { startStockTransferOrderWaDeliveryWorker } from "./services/stockTransferOrderWaDeliveryWorker";
-import { ensureDispatchLoadingBaleScanGuard } from "./startup/ensureDispatchLoadingBaleScanGuard";
-import { ensureFactoryBaleOrderIntegrity } from "./startup/ensureFactoryBaleOrderIntegrity";
+import { repairCompletedOrderBaleStatuses } from "./startup/repairCompletedOrderBaleStatuses";
+import { warmupDb } from "./startup/warmupDb";
 import { runApprovedLegacyBaleUnitCostRepair } from "./startup/runApprovedLegacyBaleUnitCostRepair";
 import { runApprovedLegacySoldBaleUnitCostRepair } from "./startup/runApprovedLegacySoldBaleUnitCostRepair";
 import { runApprovedCustomerLoadingDateRepair } from "./startup/runApprovedCustomerLoadingDateRepair";
@@ -91,16 +68,7 @@ import { runApprovedNoCashAdvanceSourceRepair } from "./startup/runApprovedNoCas
 import { runApprovedFactoryWorkerAdvanceNonCashGLRepair } from "./startup/runApprovedFactoryWorkerAdvanceNonCashGLRepair";
 import { inspectOctoberPayrollJournalIntegrity20261103 } from "./startup/inspectOctoberPayrollJournalIntegrity20261103";
 import { applyApprovedOctoberPayrollOverlapReclass20261103 } from "./startup/applyApprovedOctoberPayrollOverlapReclass20261103";
-import { ensureFactorySheetsSacksSchema } from "./startup/factorySheetsSacksSchema";
-import { ensureSpGitTracking } from "./lib/spGitTracking";
-import { ensureRecurringJournalSchema } from "./services/accounting/ensureRecurringJournalSchema";
 import { bootstrapRecurringJournalFromEnvironment } from "./services/accounting/recurringJournalBootstrap";
-import { ensureFactoryInvoiceDocumentSnapshotStore } from "./services/factoryInvoiceDocumentService";
-import {
-  startupMigrations,
-  ensureCanonicalStockMovementJournal,
-  ensureFinancialOperationRequests,
-} from "./startup-schema";
 
 registerProcessErrorHandlers();
 
@@ -216,14 +184,13 @@ registerCsrfProtection(app);
 registerCspReportRoute(app);
 
 // Flag used by /api/health/db to signal readiness to Render's health check.
-// Port opens immediately; migrations run in background. Render holds traffic
-// on the old instance (via health check 503) until this flips to true.
-let migrationsDone = false;
+// The schema was already verified read-only before this module loaded
+// (server/startupPreload.mjs); this flips once the boot-time data operations
+// below have finished. Render holds traffic on the old instance until then.
+let startupDataReady = false;
 
 (async () => {
-  const migrations = startupMigrations;
-
-  registerDbHealthRoute(app, () => migrationsDone);
+  registerDbHealthRoute(app, () => startupDataReady);
 
   // Build info endpoint for frontend version checking (must be before registerRoutes)
   app.get("/api/build-info", async (req, res) => {
@@ -292,11 +259,6 @@ let migrationsDone = false;
   // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || "5000", 10);
 
-  const runMigrations = () =>
-    runStartupMigrations(migrations, () => {
-      migrationsDone = true;
-    });
-
   // Keep Puppeteer/Chrome out of production baseline RSS. Development keeps
   // the old convenience pre-warm so a missing local Chromium can still be
   // installed automatically; production can opt back in explicitly if needed.
@@ -310,99 +272,37 @@ let migrationsDone = false;
 
   registerGracefulShutdown();
 
-  // ── Startup sequence: warmup → migrations → listen ────────────────────────
-  // Migrations run to completion BEFORE the port opens. This guarantees:
-  //   1. The schema is always up-to-date before any request reaches new code.
-  //   2. A failed migration aborts startup, keeping the old deployment alive
-  //      instead of serving requests against a stale or broken schema.
-  // Set RUN_STARTUP_MIGRATIONS=false to skip migrations entirely (emergency
-  // kill-switch for severe lock contention).
-  const migrationsEnabled = process.env.RUN_STARTUP_MIGRATIONS !== "false";
-  if (!migrationsEnabled) {
-    logger.info("⚠ Startup migrations DISABLED via RUN_STARTUP_MIGRATIONS=false");
-    migrationsDone = true;
-    markStartupMigrationsComplete({ skipped: true });
-  }
-
+  // ── Startup sequence: warmup → boot data operations → listen ─────────────
+  // No schema work happens here. migrations/ owns the schema; the preload gate
+  // already refused to start unless the database is at exactly this release's
+  // migration level. The steps below only read and write business data, and
+  // run to completion BEFORE the port opens so a failure keeps the previous
+  // deployment serving.
   warmupDb()
     .then(async () => {
-      // Always-running schema repairs (exchange-rate index, multi-currency
-      // columns, fiscal/factory tables) — see startup/ensureRuntimeSchema.ts.
-      await ensureCanonicalStockMovementJournal(pool);
-      await ensureRuntimeSchema(pool);
-      await ensureEdgeVoucherOutboxSchema(pool);
-      await ensureCloudEdgeStageSchema(pool, readCloudSyncStageConfiguration().enabled);
-      // Needs fiscal_period_closures from ensureRuntimeSchema. Fatal on failure:
-      // serving writes without the closed-period lock would let closed books change.
-      await ensureClosedPeriodGuard(pool);
-      // Opening balances locked once a fiscal period is closed (wave 12); fatal on failure.
-      await ensureOpeningBalanceLock(pool);
-      await ensureLedgerIntegrityGuard(pool);
-      // Voucher-entry currency normalization (migrations/20260720_005, as production has it;
-      // wave 14). Fatal on failure; skipped with a warning only if a column is missing.
-      await ensureCurrencyNormalizationGuard(pool);
-      await ensureInventoryCutoverSchema(pool);
-      // Wave 11 columns read by full-row selects of sales and stock lines (fatal on failure);
-      // the average_rate widening is retried on the next boot if it cannot get its lock.
-      await ensureInventoryFidelitySchema(pool);
-      // Wave 11 factory cost basis tables (POS sale bales, stock value events, re-cost runs); fatal on failure.
-      await ensureFactoryCostBasisSchema(pool);
-      // Needs gl_inventory_cutovers and the ledger guard's bypass function. Fatal on
-      // failure (wave 12): serving writes without it would let unbalanced vouchers commit.
-      await ensureVoucherBalanceGuard(pool);
-      // audit_log append-only (wave 12 B); fatal on failure.
-      await ensureAuditLogAppendOnlyGuard(pool);
-      // Phase 21 (A): voucher/line audit trigger, actor columns, audit_log hash chain; fatal on failure.
-      await ensureVoucherAuditTrigger(pool);
-      // Factory row history and its baseline snapshot (historical Net Position);
-      // a table it cannot lock is retried on the next boot, never fatal.
-      await ensureFactoryRowHistory(pool);
+      // Data operations formerly embedded in the (removed) runtime schema
+      // repairs, kept in their original order. None changes the schema.
+      // The payroll daybook pass rewrites the factory daybook mirror only (no
+      // voucher, line or account).
+      const { runPhase3PayrollDaybookRepair } = await import("./services/accounting/phase3PayrollDaybookRepair");
+      await runPhase3PayrollDaybookRepair();
+      // Immutable inventory valuation cutover snapshots, captured after the
+      // daybook pass while startup still blocks traffic to the new instance.
+      const { ensurePhase3InventoryValuationBaselines } = await import("./services/accounting/phase3InventoryValuation");
+      const baselinesCreated = await ensurePhase3InventoryValuationBaselines(pool);
+      logger.info("[startup] ✓ Phase 3 inventory valuation cutovers ensured", { baselinesCreated });
+      // Disabled by default: an explicitly reviewed one-shot historical-sales repair.
+      const { maybeRunHistoricalSalesCostRepairFromEnv } = await import("./services/inventory/historicalSalesCostRepairStartup");
+      await maybeRunHistoricalSalesCostRepairFromEnv();
+      // Factory row history baseline snapshots (historical Net Position). Data
+      // only; the history triggers are part of the schema. Never fatal.
+      await recordFactoryRowHistoryBaselines(pool);
       await ensureRequiredSystemAccountsForAllCompanies().catch((error: unknown) => {
         logger.error("[startup] ✗ System account provisioning failed", { error: getErrorMessage(error) });
       });
-      await ensureFinancialOperationRequests(pool);
-      await ensureSupplierTrackingShopDutyDefaults(pool);
-      logger.info("[startup] ✓ Supplier Tracking Shop/Duty defaults ensured");
-      // Zambia Phase 8: native Kwacha purchase evidence columns (startup stage 036
-      // mirrored for production, which disables the bulk startup pass); fatal on failure.
-      await ensureZambiaHistoricalPurchaseCost(pool);
-      await ensureRecurringJournalSchema(pool);
-      await ensurePriorityScanSchema(pool);
-      logger.info("[startup] ✓ Priority Scan schema ensured");
-      // Loading-only expected items must exist even when bulk migrations are disabled.
-      await ensureContainerExtraExpectedLines(pool);
-      await ensureFactoryLoadingDispatchSchema(pool);
-      // Replace the overbroad Phase 4 guard before the new server accepts scans.
-      // Fatal on failure: never report healthy while normal loading is blocked.
-      await ensureDispatchLoadingBaleScanGuard(pool);
-      logger.info("[startup] ✓ Factory loading dispatch schema and scan guard ensured");
-      // Stock Transfer Orders require the verified, idempotent approval schema before service.
-      await ensureStockTransferOrderWhatsAppApprovalSchema(pool);
-      logger.info("[startup] ✓ Stock Transfer Order WhatsApp approval foundation ensured");
-      await ensureFactoryInvoiceDocumentSnapshotStore(pool);
-      logger.info("[startup] ✓ Factory invoice document snapshot store ensured");
-      try {
-        await ensureFactorySheetsSacksSchema(pool);
-        logger.info("[startup] ✓ Sheets & Sacks schema ensured");
-      } catch (err: unknown) {
-        logger.error("[startup] Sheets & Sacks schema ensure failed", { error: String(err) });
-      }
       if (shouldStartEdgeBackgroundJobs(readFactoryEdgeConfiguration())) {
         await bootstrapRecurringJournalFromEnvironment();
       }
-      try {
-        // Factory Production Targets and Attendance Register must be available
-        // even when production skips the bulk startup migration pass.
-        await ensureFactoryStaffTrackingSchema(pool);
-        logger.info("[startup] ✓ Factory staff tracking schema ensured");
-      } catch (staffTrackingSchemaErr: unknown) {
-        logger.error("[startup] ✗ Could not ensure Factory staff tracking schema:", {
-          error: getErrorMessage(staffTrackingSchemaErr),
-        });
-      }
-      // Financial payout table must exist before any posting route becomes reachable.
-      // Fatal on error: never serve a deployment with accounting schema missing.
-      await ensureFactoryTargetBonusPaymentSchema(pool);
       // Owner-confirmed: HADI L'SHI Zakaria El Ali #103's $9,930.12
       // opening is Cr, not Dr. Scoped, audited and idempotent; never alters
       // salary/bonus postings or other employees.
@@ -446,15 +346,9 @@ let migrationsDone = false;
           );
         }
       }
-      // The Container Planner's registered migrations are never applied by
-      // production's boot path, so ensure its tables here unconditionally. A
-      // failure after retries is fatal: the previous deployment stays live rather
-      // than a new one reporting healthy with the planner broken.
-      await ensureFactoryContainerPlannerSchemaOnBoot(pool);
-      logger.info("[startup] ✓ Factory container planner schema ensured");
-      // Before accepting requests, repair old completed-order bales and install
-      // the DB guard even when bulk migrations are disabled.
-      await ensureFactoryBaleOrderIntegrity(pool);
+      // Before accepting requests, reconcile old completed-order bales still
+      // marked IN_STOCK (audited; the guard trigger is part of the schema).
+      await repairCompletedOrderBaleStatuses(pool);
       // Explicitly owner-approved, one-time monetary correction. Disabled by
       // default and guarded against repeat execution or accounting cutover.
       // Startup repair writers are forbidden on independently authoritative LAN
@@ -531,29 +425,8 @@ let migrationsDone = false;
           });
         }
       }
-      if (migrationsEnabled) {
-        try {
-          await runMigrations();
-        } catch (err: unknown) {
-          if (process.env.LEGACY_STARTUP_MIGRATION_MODE === "verify-only") {
-            // A strict migration cutover must never fall back to the old
-            // nonfatal readiness behavior. Keep prior Render instance alive.
-            logger.error("Strict legacy migration verification blocked boot", {
-              error: getErrorMessage(err) ?? err,
-            });
-            throw err;
-          }
-          logger.error("Migration error (non-fatal — server will still start):", {
-            error: getErrorMessage(err) ?? err,
-          });
-          migrationsDone = true;
-          markStartupMigrationsComplete();
-        }
-      }
-      // Initialize isolated GIT metadata before production accepts requests.
-      // Financial SP containers and Goods OTW vouchers remain untouched.
-      await ensureSpGitTracking();
-      logger.info("[startup] ✓ Supplier Partner GIT tracking schema ensured");
+      startupDataReady = true;
+      markStartupMigrationsComplete();
     })
     .then(() => {
       listenWithRetry(server, port, () => {

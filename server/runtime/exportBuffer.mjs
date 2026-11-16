@@ -157,7 +157,7 @@ if (!globalThis[BRIDGE_FLAG]) {
       .split("\n")
       .slice(2);
     const caller = stackLines.find(
-      (line) => !line.includes("exportBufferBridge.mjs") && !line.includes("node:internal")
+      (line) => !/[\\/]runtime[\\/]exportBuffer\.mjs/.test(line) && !line.includes("node:internal")
     );
     if (!caller || caller.includes("node_modules")) return false;
     return (

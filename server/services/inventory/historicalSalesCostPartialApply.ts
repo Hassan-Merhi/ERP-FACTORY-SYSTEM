@@ -2,7 +2,6 @@ import type { PoolClient } from "pg";
 
 import { pool } from "../../db";
 import { logger } from "../../lib/logger";
-import { ensureHistoricalSalesCostRepairSchema } from "./ensureHistoricalSalesCostRepairSchema";
 import {
   assertSalesItemsUpdateHasNoSideEffectTriggers,
   enableMaintenanceScope,
@@ -661,7 +660,6 @@ export async function verifyHistoricalSalesCostPartialApplyWithClient(client: Po
 }
 
 async function withReadOnlyClient<T>(fn: (client: PoolClient) => Promise<T>): Promise<T> {
-  await ensureHistoricalSalesCostRepairSchema(pool);
   const client = await pool.connect();
   try {
     await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
@@ -683,7 +681,6 @@ export function verifyHistoricalSalesCostPartialApply(runId: number) {
 
 export async function applyHistoricalSalesCostPartial(input: PartialApplyInput): Promise<PartialApplyResult> {
   validatePartialApplyInput(input);
-  await ensureHistoricalSalesCostRepairSchema(pool);
   const client = await pool.connect();
   try {
     return await applyHistoricalSalesCostPartialWithClient(client, input);
@@ -694,7 +691,6 @@ export async function applyHistoricalSalesCostPartial(input: PartialApplyInput):
 
 export async function rollbackHistoricalSalesCostPartial(input: PartialRollbackInput): Promise<PartialRollbackResult> {
   validatePartialRollbackInput(input);
-  await ensureHistoricalSalesCostRepairSchema(pool);
   const client = await pool.connect();
   try {
     return await rollbackHistoricalSalesCostPartialWithClient(client, input);

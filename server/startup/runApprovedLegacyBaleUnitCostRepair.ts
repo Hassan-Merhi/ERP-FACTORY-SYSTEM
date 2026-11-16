@@ -127,22 +127,6 @@ export async function runApprovedLegacyBaleUnitCostRepair(pool: Pool): Promise<v
       throw new Error("Legacy unit-cost repair refused: candidate was assigned to a completed order");
     }
 
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS factory_legacy_bale_cost_repairs (
-        bale_id INTEGER PRIMARY KEY,
-        company_id INTEGER NOT NULL,
-        article_code TEXT,
-        reference_number TEXT,
-        old_status TEXT NOT NULL,
-        weight_kg NUMERIC(20,7) NOT NULL,
-        old_cost_per_kg NUMERIC(20,7) NOT NULL,
-        new_cost_per_kg NUMERIC(20,7) NOT NULL,
-        old_total_cost NUMERIC(20,7) NOT NULL,
-        new_total_cost NUMERIC(20,7) NOT NULL,
-        repair_run_id INTEGER,
-        repaired_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      )
-    `);
     const duplicates = await client.query(`
       SELECT 1 FROM factory_legacy_bale_cost_repairs r
       JOIN legacy_bale_cost_candidates c ON c.bale_id=r.bale_id LIMIT 1

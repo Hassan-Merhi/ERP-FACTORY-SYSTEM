@@ -1284,6 +1284,13 @@ CREATE FUNCTION public.erp_audit_log_append_only() RETURNS trigger
 
 
 --
+-- Name: FUNCTION erp_audit_log_append_only(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.erp_audit_log_append_only() IS '2026-10-audit-log-append-only-v3';
+
+
+--
 -- Name: erp_audit_log_before_insert(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -1458,6 +1465,13 @@ CREATE FUNCTION public.erp_closed_period_guard_bypassed() RETURNS boolean
 
 
 --
+-- Name: FUNCTION erp_closed_period_guard_bypassed(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.erp_closed_period_guard_bypassed() IS '2026-10-closed-period-v2';
+
+
+--
 -- Name: erp_company_scope_maintenance_enabled(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -1594,6 +1608,13 @@ CREATE FUNCTION public.erp_factory_row_history() RETURNS trigger
      RETURN NULL;
    END
    $$;
+
+
+--
+-- Name: FUNCTION erp_factory_row_history(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.erp_factory_row_history() IS '2026-10-factory-row-history-v6-audit-write-scope';
 
 
 --
@@ -1804,6 +1825,13 @@ CREATE FUNCTION public.erp_ledger_row_audit() RETURNS trigger
 
 
 --
+-- Name: FUNCTION erp_ledger_row_audit(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.erp_ledger_row_audit() IS '2026-10-audit-trail-v1';
+
+
+--
 -- Name: erp_opening_balance_lock_guard(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -1843,6 +1871,13 @@ CREATE FUNCTION public.erp_opening_balance_lock_guard() RETURNS trigger
      END IF;
      RETURN NEW;
    END $$;
+
+
+--
+-- Name: FUNCTION erp_opening_balance_lock_guard(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.erp_opening_balance_lock_guard() IS '2026-10-opening-balance-lock-v3';
 
 
 --
@@ -1927,6 +1962,13 @@ CREATE FUNCTION public.erp_voucher_balance_check(p_voucher_id integer) RETURNS v
    BEGIN
      PERFORM erp_voucher_balance_check(p_voucher_id, false);
    END $$;
+
+
+--
+-- Name: FUNCTION erp_voucher_balance_check(p_voucher_id integer); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.erp_voucher_balance_check(p_voucher_id integer) IS '2026-10-voucher-balance-v6';
 
 
 --
@@ -2215,6 +2257,13 @@ CREATE FUNCTION public.erp_voucher_entry_target_guard() RETURNS trigger
      RETURN NEW;
    END
    $$;
+
+
+--
+-- Name: FUNCTION erp_voucher_entry_target_guard(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.erp_voucher_entry_target_guard() IS '2026-10-ledger-integrity-v4';
 
 
 --
@@ -3693,6 +3742,13 @@ BEGIN
     USING ERRCODE = '23514';
 END;
 $$;
+
+
+--
+-- Name: FUNCTION normalize_voucher_entry_currency_amounts(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.normalize_voucher_entry_currency_amounts() IS '2026-10-09-001-currency-normalization-v2';
 
 
 --
@@ -22144,6 +22200,55 @@ CREATE TABLE public.voucher_entries (
 );
 
 ALTER TABLE ONLY public.voucher_entries FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: COLUMN voucher_entries.base_credit_amount; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.voucher_entries.base_credit_amount IS 'Historical company-base-currency credit amount at posting time.';
+
+
+--
+-- Name: COLUMN voucher_entries.base_debit_amount; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.voucher_entries.base_debit_amount IS 'Historical company-base-currency debit amount at posting time.';
+
+
+--
+-- Name: COLUMN voucher_entries.historical_exchange_rate; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.voucher_entries.historical_exchange_rate IS 'Historical rate locked when the entry was posted.';
+
+
+--
+-- Name: COLUMN voucher_entries.rate_convention; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.voucher_entries.rate_convention IS 'IDENTITY, TRANSACTION_PER_BASE, or BASE_PER_TRANSACTION.';
+
+
+--
+-- Name: COLUMN voucher_entries.transaction_credit_amount; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.voucher_entries.transaction_credit_amount IS 'Original transaction-currency credit amount.';
+
+
+--
+-- Name: COLUMN voucher_entries.transaction_currency; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.voucher_entries.transaction_currency IS 'Original transaction currency. The project stores CFA rather than XOF.';
+
+
+--
+-- Name: COLUMN voucher_entries.transaction_debit_amount; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.voucher_entries.transaction_debit_amount IS 'Original transaction-currency debit amount.';
 
 
 --

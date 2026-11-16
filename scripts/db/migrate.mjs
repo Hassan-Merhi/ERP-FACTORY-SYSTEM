@@ -64,9 +64,13 @@ const log = (message, detail) =>
 class UsageError extends Error {}
 
 function connectionString() {
-  const url = process.env.DATABASE_URL;
-  if (!url) throw new UsageError("DATABASE_URL is required for this command");
-  return url;
+  if (process.env.DATABASE_URL) return process.env.DATABASE_URL;
+  // Factory-edge LAN servers configure PostgreSQL with PG* variables only.
+  const { PGHOST, PGPORT, PGUSER, PGPASSWORD, PGDATABASE } = process.env;
+  if (PGHOST && PGUSER && PGPASSWORD && PGDATABASE) {
+    return `postgresql://${encodeURIComponent(PGUSER)}:${encodeURIComponent(PGPASSWORD)}@${PGHOST}:${PGPORT || "5432"}/${PGDATABASE}`;
+  }
+  throw new UsageError("DATABASE_URL (or PGHOST/PGUSER/PGPASSWORD/PGDATABASE) is required for this command");
 }
 
 async function connect() {

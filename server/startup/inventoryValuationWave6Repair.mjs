@@ -1,6 +1,6 @@
 import process from "node:process";
 import pg from "pg";
-import { resolveDatabaseSsl } from "./lib/databaseSsl.mjs";
+import { resolveDatabaseSsl } from "../lib/databaseSsl.mjs";
 
 const { Client } = pg;
 const INSTALL_KEY = Symbol.for("erp.inventory-valuation-wave6-repair.applied");
@@ -277,7 +277,9 @@ export async function applyInventoryValuationWave6Repair(rawConfig = process.env
   }
 }
 
-if (!globalThis[INSTALL_KEY]) {
+/** Run once per process; invoked by server/startup/startupDataOperations.mjs. */
+export async function runInventoryValuationWave6RepairOnce() {
+  if (globalThis[INSTALL_KEY]) return;
   globalThis[INSTALL_KEY] = true;
   await applyInventoryValuationWave6Repair();
 }

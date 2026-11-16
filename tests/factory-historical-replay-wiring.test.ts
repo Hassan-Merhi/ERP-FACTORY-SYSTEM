@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { functionDefinition, hasColumn } from "./helpers/schemaManifest";
 
 const read = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
 
@@ -47,10 +48,10 @@ describe("Historical Replay final wiring", () => {
   });
 
   it("ships the schema migration and database-boundary ownership guard", () => {
-    const migration = read("migrations/20260721_001_factory_mix_batch_sources_inventory_supplier.sql");
-    expect(migration).toContain("inventory_supplier_id");
-    expect(migration).toContain("valuation_basis");
-    expect(migration).toContain("factory_resolve_mix_source_inventory_supplier");
-    expect(migration).toContain("INVENTORY_SUPPLIER_UNRESOLVED");
+    expect(hasColumn("factory_mix_batch_sources", "inventory_supplier_id")).toBe(true);
+    expect(hasColumn("factory_raw_material_adjustments", "valuation_basis")).toBe(true);
+    expect(functionDefinition("factory_resolve_mix_source_inventory_supplier")).toContain(
+      "INVENTORY_SUPPLIER_UNRESOLVED"
+    );
   });
 });

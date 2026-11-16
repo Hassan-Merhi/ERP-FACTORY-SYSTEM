@@ -14,117 +14,14 @@ export type ActiveCutoverLock = {
   rollbackDeadline: string | null;
 };
 
-let schemaPromise: Promise<void> | null = null;
 let guardInstalled = false;
 let lockCache: { expiresAt: number; locks: ActiveCutoverLock[] } | null = null;
-
-export function ensureCutoverSchema(): Promise<void> {
-  if (!schemaPromise) {
-    schemaPromise = (async () => {
-      await db.execute(
-        sql.raw(`
-        CREATE TABLE IF NOT EXISTS sp_migration_cutovers (
-          id BIGSERIAL PRIMARY KEY,
-          source_company_id INTEGER NOT NULL,
-          target_company_id INTEGER NOT NULL,
-          status VARCHAR(24) NOT NULL,
-          prepared_by VARCHAR(255),
-          activated_by VARCHAR(255),
-          rolled_back_by VARCHAR(255),
-          source_company_name TEXT NOT NULL,
-          target_company_name TEXT NOT NULL,
-          readiness_snapshot JSONB,
-          final_readiness_snapshot JSONB,
-          delta_summary JSONB,
-          role_summary JSONB,
-          prepared_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-          activated_at TIMESTAMPTZ,
-          rollback_deadline TIMESTAMPTZ,
-          rolled_back_at TIMESTAMPTZ,
-          cancelled_at TIMESTAMPTZ,
-          failure_message TEXT,
-          notes TEXT,
-          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-          updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-        )
-      `)
-      );
-      await db.execute(
-        sql.raw(`
-        CREATE UNIQUE INDEX IF NOT EXISTS sp_migration_cutovers_one_live_pair
-        ON sp_migration_cutovers(source_company_id, target_company_id)
-        WHERE status IN ('prepared', 'active')
-      `)
-      );
-      await db.execute(
-        sql.raw(`
-        CREATE INDEX IF NOT EXISTS sp_migration_cutovers_source_status_idx
-        ON sp_migration_cutovers(source_company_id, status)
-      `)
-      );
-      await db.execute(
-        sql.raw(`
-        CREATE INDEX IF NOT EXISTS sp_migration_cutovers_target_status_idx
-        ON sp_migration_cutovers(target_company_id, status)
-      `)
-      );
-
-      await db.execute(
-        sql.raw(`
-        CREATE TABLE IF NOT EXISTS sp_migration_cutover_role_changes (
-          id BIGSERIAL PRIMARY KEY,
-          cutover_id BIGINT NOT NULL REFERENCES sp_migration_cutovers(id) ON DELETE CASCADE,
-          user_id VARCHAR(255) NOT NULL,
-          source_role_id INTEGER,
-          target_role_id INTEGER,
-          created_target_role BOOLEAN NOT NULL DEFAULT false,
-          source_role_snapshot JSONB,
-          target_role_snapshot_before JSONB,
-          mapped_location_id INTEGER,
-          mapped_cash_account_id INTEGER,
-          sessions_switched INTEGER NOT NULL DEFAULT 0,
-          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-          UNIQUE (cutover_id, user_id)
-        )
-      `)
-      );
-
-      await db.execute(
-        sql.raw(`
-        CREATE TABLE IF NOT EXISTS sp_migration_cutover_stock_deltas (
-          id BIGSERIAL PRIMARY KEY,
-          cutover_id BIGINT NOT NULL REFERENCES sp_migration_cutovers(id) ON DELETE CASCADE,
-          source_inventory_id INTEGER NOT NULL,
-          target_inventory_id INTEGER,
-          source_stock_item_id INTEGER NOT NULL,
-          target_stock_item_id INTEGER NOT NULL,
-          source_location_id INTEGER,
-          target_location_id INTEGER NOT NULL,
-          before_quantity NUMERIC(20,4) NOT NULL DEFAULT 0,
-          before_average_rate NUMERIC(20,6) NOT NULL DEFAULT 0,
-          before_total_value NUMERIC(20,4) NOT NULL DEFAULT 0,
-          after_quantity NUMERIC(20,4) NOT NULL DEFAULT 0,
-          after_average_rate NUMERIC(20,6) NOT NULL DEFAULT 0,
-          after_total_value NUMERIC(20,4) NOT NULL DEFAULT 0,
-          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-          UNIQUE (cutover_id, source_inventory_id)
-        )
-      `)
-      );
-    })().catch((error) => {
-      schemaPromise = null;
-      throw error;
-    });
-  }
-  return schemaPromise;
-}
 
 export function invalidateCutoverLockCache(): void {
   lockCache = null;
 }
 
 async function loadActiveLocks(): Promise<ActiveCutoverLock[]> {
-  await ensureCutoverSchema();
   if (lockCache && lockCache.expiresAt > Date.now()) return lockCache.locks;
   const result = await db.execute(sql`
     SELECT id, source_company_id, target_company_id, status,
@@ -238,7 +135,6 @@ export async function getLiveCutover(
   sourceId: number,
   targetId: number
 ): Promise<Record<string, unknown> | null> {
-  await ensureCutoverSchema();
   const result = await db.execute(sql`
     SELECT * FROM sp_migration_cutovers
     WHERE source_company_id = ${sourceId}

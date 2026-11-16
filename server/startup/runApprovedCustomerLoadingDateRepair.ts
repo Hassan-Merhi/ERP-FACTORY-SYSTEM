@@ -47,22 +47,6 @@ export async function runApprovedCustomerLoadingDateRepair(pool: Pool): Promise<
     await client.query("SELECT set_config('app.current_company_id', '12', true)");
     await client.query("SELECT pg_advisory_xact_lock(hashtext('customer_loading_date_repair'), $1)", [COMPANY_ID]);
 
-    stage = "create-before-image-audit-table";
-    // Durable before-image. Must be written in the SAME transaction as the changes.
-    await client.query(`CREATE TABLE IF NOT EXISTS factory_customer_loading_date_repair_audit (
-      company_id INTEGER NOT NULL,
-      order_id INTEGER NOT NULL,
-      run_key TEXT NOT NULL,
-      source_daybook_entry_id INTEGER NOT NULL,
-      old_loading_finalized_at TIMESTAMP WITHOUT TIME ZONE NOT NULL,
-      new_loading_finalized_at TIMESTAMP WITHOUT TIME ZONE NOT NULL,
-      selected_loading_date DATE NOT NULL,
-      old_status TEXT NOT NULL,
-      invoice_number TEXT,
-      container_number TEXT,
-      repaired_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      PRIMARY KEY (company_id, order_id)
-    )`);
 
     stage = "read-existing-repair";
     const existing = await client.query(
@@ -89,7 +73,6 @@ export async function runApprovedCustomerLoadingDateRepair(pool: Pool): Promise<
       return;
     }
 
-    stage = "create-temporary-plan";
     await client.query(`CREATE TEMP TABLE customer_loading_date_plan (
       order_id INTEGER PRIMARY KEY,
       daybook_entry_id INTEGER NOT NULL,

@@ -25,8 +25,6 @@ type GuardRow = {
 export type VoucherPathClaimResult =
   { kind: "owner" } | { kind: "replay"; status: number; body: unknown } | { kind: "conflict" } | { kind: "uncertain" };
 
-let ensureTablePromise: Promise<void> | null = null;
-
 function canonicalize(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonicalize);
   if (!value || typeof value !== "object") return value;
@@ -105,38 +103,6 @@ export function voucherPathRequestFingerprint(
   return sha256({ method: method.toUpperCase(), pathname, body, authorization: authorization ?? null });
 }
 
-export async function ensureVoucherPathGuardTable(): Promise<void> {
-  if (!ensureTablePromise) {
-    ensureTablePromise = (async () => {
-      await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS voucher_path_request_guards (
-          id BIGSERIAL PRIMARY KEY,
-          company_id INTEGER NOT NULL,
-          idempotency_key TEXT NOT NULL,
-          request_kind TEXT NOT NULL,
-          request_path TEXT NOT NULL,
-          request_fingerprint TEXT NOT NULL,
-          state TEXT NOT NULL DEFAULT 'processing',
-          response_status INTEGER,
-          response_body JSONB,
-          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-          CONSTRAINT voucher_path_request_guards_state_check CHECK (state IN ('processing', 'completed')),
-          CONSTRAINT voucher_path_request_guards_company_key_unique UNIQUE (company_id, idempotency_key)
-        )
-      `);
-      await db.execute(sql`
-        CREATE INDEX IF NOT EXISTS voucher_path_request_guards_lookup_idx
-        ON voucher_path_request_guards (company_id, idempotency_key, state)
-      `);
-    })().catch((error) => {
-      ensureTablePromise = null;
-      throw error;
-    });
-  }
-  return ensureTablePromise;
-}
-
 async function readGuard(companyId: number, idempotencyKey: string): Promise<GuardRow | null> {
   const result = await db.execute(sql`
     SELECT id, request_fingerprint, state, response_status, response_body
@@ -171,8 +137,6 @@ export async function claimVoucherPathRequest(
   pathname: string,
   fingerprint: string
 ): Promise<VoucherPathClaimResult> {
-  await ensureVoucherPathGuardTable();
-
   const inserted = await db.execute(sql`
     INSERT INTO voucher_path_request_guards
       (company_id, idempotency_key, request_kind, request_path, request_fingerprint, state)

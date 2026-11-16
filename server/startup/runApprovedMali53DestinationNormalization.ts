@@ -40,9 +40,6 @@ export async function runApprovedMali53DestinationNormalization(pool: Pool): Pro
     await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [RUN_KEY]);
 
     step = "audit";
-    await client.query(
-      "CREATE TABLE IF NOT EXISTS factory_destination_normalization_audit (company_id integer NOT NULL, customer_id integer NOT NULL, order_id integer NOT NULL, run_key text NOT NULL, old_destination text NOT NULL, new_destination text NOT NULL, changed_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (company_id, order_id, run_key))"
-    );
     const previouslyApplied = await client.query<{
       old_destination: string;
       new_destination: string;

@@ -16,45 +16,6 @@ export const SP_GIT_FIELDS = [
 ] as const;
 export type SpGitField = (typeof SP_GIT_FIELDS)[number];
 
-/** Exactly one small logistics table; this does not change stock/accounting. */
-let ensurePromise: Promise<void> | null = null;
-export function ensureSpGitTracking(): Promise<void> {
-  if (!ensurePromise) {
-    ensurePromise = (async () => {
-      await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS sp_container_git_tracking (
-          container_id integer PRIMARY KEY REFERENCES sp_containers(id) ON DELETE CASCADE,
-          company_id integer NOT NULL,
-          status varchar(24),
-          shop_name text,
-          eta date,
-          transporter text,
-          transport_fee numeric(20,4),
-          number_plate text,
-          tracking_location text,
-          border_date date,
-          agent text,
-          duty_fee numeric(20,4),
-          doc_received boolean,
-          tracking_description text,
-          bl_docs text,
-          docs_sent_date date,
-          tracking_link text,
-          freight_status text,
-          updated_at timestamptz NOT NULL DEFAULT now()
-        )
-      `);
-      await db.execute(sql`ALTER TABLE sp_container_git_tracking ADD COLUMN IF NOT EXISTS freight_status text`);
-      await db.execute(sql`CREATE INDEX IF NOT EXISTS sp_container_git_tracking_company_idx
-        ON sp_container_git_tracking(company_id)`);
-    })().catch((error) => {
-      ensurePromise = null;
-      throw error;
-    });
-  }
-  return ensurePromise;
-}
-
 const str = (value: unknown): string | null =>
   value === null || value === undefined || value === "" ? null : String(value);
 const isoDate = (value: unknown): string | null =>
@@ -78,13 +39,12 @@ export async function fetchSpGitContainers(
 ): Promise<RawContainerRow[]> {
   if (companyIds.length === 0 || (options.containerId !== undefined && options.containerId > 0)) return [];
   const ids = sql.join(companyIds.map((id) => sql`${id}`), sql`, `);
-  // Do not run SP schema DDL in ordinary ERP tracking requests that have
-  // zero Supplier Partner containers. Legacy ERP queries stay read-only.
+  // Skip the SP query entirely for ERP tracking requests that have zero
+  // Supplier Partner containers.
   const presence = await db.execute(sql`
     SELECT 1 FROM sp_containers WHERE company_id IN (${ids}) LIMIT 1
   `);
   if (resultRows(presence).length === 0) return [];
-  await ensureSpGitTracking();
   const idCondition = options.containerId && options.containerId < 0
     ? sql`AND s.id = ${-options.containerId}`
     : sql``;

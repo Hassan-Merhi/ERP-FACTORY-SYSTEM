@@ -94,7 +94,8 @@ const QUERIES = {
     SELECT format('%I.%I', n.nspname, c.relname) AS identity,
            json_build_object('kind', c.relkind, 'unlogged', c.relpersistence = 'u',
              'rls', c.relrowsecurity, 'forceRls', c.relforcerowsecurity,
-             'partitionKey', pg_get_partkeydef(c.oid)) AS definition
+             'partitionKey', pg_get_partkeydef(c.oid),
+             'comment', obj_description(c.oid, 'pg_class')) AS definition
       FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
      WHERE ${SYSTEM_SCHEMA_FILTER} AND c.relkind IN ('r','p')
        AND c.relname NOT IN ${RUNNER_TABLES}
@@ -107,7 +108,8 @@ const QUERIES = {
              'generated', CASE WHEN a.attgenerated <> '' THEN pg_get_expr(d.adbin, d.adrelid) END,
              'collation', CASE WHEN a.attcollation <> 0 AND a.attcollation <> t.typcollation
                                THEN (SELECT quote_ident(collname) FROM pg_collation WHERE oid = a.attcollation)
-                          END) AS definition
+                          END,
+             'comment', col_description(c.oid, a.attnum)) AS definition
       FROM pg_attribute a JOIN pg_class c ON c.oid = a.attrelid
       JOIN pg_namespace n ON n.oid = c.relnamespace
       JOIN pg_type t ON t.oid = a.atttypid
@@ -151,7 +153,10 @@ const QUERIES = {
              -- Role-independent privilege fact: can PUBLIC execute it? Matters for
              -- SECURITY DEFINER functions that must only be callable by a granted role.
              'publicExecute', p.proacl IS NULL OR EXISTS (
-               SELECT 1 FROM aclexplode(p.proacl) a WHERE a.grantee = 0 AND a.privilege_type = 'EXECUTE')
+               SELECT 1 FROM aclexplode(p.proacl) a WHERE a.grantee = 0 AND a.privilege_type = 'EXECUTE'),
+             -- Guard installers' version markers live in function comments and are
+             -- read at runtime (installed*Version readers, integrity diagnostic).
+             'comment', obj_description(p.oid, 'pg_proc')
            ) AS definition
       FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
      WHERE ${SYSTEM_SCHEMA_FILTER} AND ${notExtensionMember("pg_proc", "p.oid")}`,
@@ -272,16 +277,16 @@ function isStricter(expected, actual) {
   const a = actual.def;
   switch (expected.kind) {
     case "function":
-      return e.def === a.def && e.kind === a.kind && e.publicExecute !== false && a.publicExecute === false;
+      return e.def === a.def && e.kind === a.kind && e.comment === a.comment && e.publicExecute !== false && a.publicExecute === false;
     case "table":
       return (
-        e.kind === a.kind && e.unlogged === a.unlogged && e.partitionKey === a.partitionKey &&
+        e.kind === a.kind && e.unlogged === a.unlogged && e.partitionKey === a.partitionKey && e.comment === a.comment &&
         (a.rls || !e.rls) && (a.forceRls || !e.forceRls)
       );
     case "column":
       return (
         e.type === a.type && e.default === a.default && e.identity === a.identity &&
-        e.generated === a.generated && e.collation === a.collation && !e.notNull && a.notNull
+        e.generated === a.generated && e.collation === a.collation && e.comment === a.comment && !e.notNull && a.notNull
       );
     default:
       return false;

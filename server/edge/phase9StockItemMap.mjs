@@ -19,36 +19,6 @@ export class Phase9StockItemNotYetSynced extends Error {
   }
 }
 
-export async function ensurePhase9StockItemMapSchema(queryable) {
-  await queryable.query(`
-    CREATE TABLE IF NOT EXISTS factory_edge_stock_item_map (
-      site_id UUID NOT NULL,
-      lan_item_id INTEGER NOT NULL CHECK (lan_item_id >= ${PHASE9_LAN_ITEM_ID_BASE}),
-      cloud_item_id INTEGER NOT NULL REFERENCES stock_items(id) ON DELETE RESTRICT,
-      operation_id UUID NOT NULL,
-      mapped_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
-      PRIMARY KEY (site_id, lan_item_id),
-      UNIQUE (cloud_item_id),
-      UNIQUE (site_id, operation_id)
-    )
-  `);
-  await queryable.query(`
-    CREATE OR REPLACE FUNCTION factory_edge_stock_item_map_immutable()
-    RETURNS trigger LANGUAGE plpgsql AS $fn$
-    BEGIN
-      RAISE EXCEPTION 'PHASE9_STOCK_ITEM_MAP_IMMUTABLE' USING ERRCODE = '23514';
-    END $fn$
-  `);
-  await queryable.query(
-    "DROP TRIGGER IF EXISTS factory_edge_stock_item_map_no_mutation ON factory_edge_stock_item_map"
-  );
-  await queryable.query(`
-    CREATE TRIGGER factory_edge_stock_item_map_no_mutation
-    BEFORE UPDATE OR DELETE ON factory_edge_stock_item_map
-    FOR EACH ROW EXECUTE FUNCTION factory_edge_stock_item_map_immutable()
-  `);
-}
-
 export function isPhase9LanItemId(value) {
   return Number.isSafeInteger(value) && value >= PHASE9_LAN_ITEM_ID_BASE;
 }

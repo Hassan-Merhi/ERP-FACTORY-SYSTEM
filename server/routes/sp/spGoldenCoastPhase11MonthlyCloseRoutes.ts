@@ -2,7 +2,7 @@ import type { Express, NextFunction, Request, Response } from "express";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { accountingPostingRequests, ledgerAccounts, spProfitSplits, vouchers } from "@shared/schema";
-import { getLatestSpProfitCorrection, ensureSpProfitManualCorrectionStorage, isDeveloperForProfitCorrection, GC_MANUAL_PROFIT_SUSPENSE_SUBTYPE } from "./spProfitManualCorrections";
+import { getLatestSpProfitCorrection, isDeveloperForProfitCorrection, GC_MANUAL_PROFIT_SUSPENSE_SUBTYPE } from "./spProfitManualCorrections";
 import { requireAuth, requireNonPOS } from "../../auth";
 import { db } from "../../db";
 import { releaseDebtEnglish } from "../../i18n/finalCloseoutEnglish";
@@ -572,7 +572,6 @@ async function writeProfitCorrection(req: Request, res: Response): Promise<void>
       });
       return;
     }
-    await ensureSpProfitManualCorrectionStorage();
     const target = new Decimal(rawTarget).toFixed(2);
     const actorId = String(req.user?.id ?? req.session.userId ?? "");
     if (!actorId) {

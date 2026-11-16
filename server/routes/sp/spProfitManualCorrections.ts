@@ -1,6 +1,5 @@
 import type { Request } from "express";
 import { sql } from "drizzle-orm";
-import { db } from "../../db";
 import { resultRows } from "../../lib/queryResult";
 import type { DbLike } from "./spGoldenCoastPhase4CutoverFifoRoutes";
 
@@ -8,34 +7,6 @@ import type { DbLike } from "./spGoldenCoastPhase4CutoverFifoRoutes";
  * Append-only, company/month-scoped developer profit corrections.
  * The underlying POS source sales and stock costs are never rewritten.
  */
-let storageReady: Promise<void> | null = null;
-export function ensureSpProfitManualCorrectionStorage(): Promise<void> {
-  if (!storageReady) {
-    storageReady = db.execute(sql`
-      CREATE TABLE IF NOT EXISTS sp_profit_manual_corrections (
-        id bigserial PRIMARY KEY,
-        company_id integer NOT NULL,
-        period_month varchar(7) NOT NULL,
-        target_net_profit numeric(20,2) NOT NULL,
-        original_net_profit numeric(20,2) NOT NULL,
-        reason text NOT NULL,
-        actor_id text NOT NULL,
-        actor_name text,
-        created_at timestamptz NOT NULL DEFAULT now(),
-        CONSTRAINT sp_manual_profit_period CHECK (period_month ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'),
-        CONSTRAINT sp_manual_profit_reason CHECK (char_length(reason) BETWEEN 5 AND 500)
-      )
-    `).then(() => db.execute(sql`
-      CREATE INDEX IF NOT EXISTS sp_profit_manual_corrections_period_idx
-        ON sp_profit_manual_corrections(company_id, period_month, id DESC)
-    `)).then(() => {}).catch((error) => {
-      storageReady = null;
-      throw error;
-    });
-  }
-  return storageReady;
-}
-
 export interface ManualProfitCorrection {
   id: number;
   periodMonth: string;
@@ -52,7 +23,6 @@ export async function getLatestSpProfitCorrection(
   companyId: number,
   periodMonth: string
 ): Promise<ManualProfitCorrection | null> {
-  await ensureSpProfitManualCorrectionStorage();
   const rows = resultRows(await conn.execute(sql`
     SELECT id, period_month, target_net_profit, original_net_profit,
            reason, actor_id, actor_name, created_at

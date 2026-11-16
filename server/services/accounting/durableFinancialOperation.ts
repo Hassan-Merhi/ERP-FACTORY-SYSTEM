@@ -1,8 +1,7 @@
 import { createHash } from "node:crypto";
 import { sql } from "drizzle-orm";
 
-import { db, pool, type DbTransaction } from "../../db";
-import { ensureFinancialOperationRequests } from "./ensureFinancialOperationRequests";
+import { db, type DbTransaction } from "../../db";
 
 const MAX_OPERATION_NAME = 160;
 const MAX_IDEMPOTENCY_KEY = 180;
@@ -211,8 +210,6 @@ export async function withDurableFinancialOperation<T>(
   rawInput: DurableFinancialOperationInput,
   operation: (tx: DbTransaction) => Promise<{ value: T; resultReference?: string | number | null; resultStatus?: number }>
 ): Promise<DurableFinancialOperationResult<T>> {
-  await ensureFinancialOperationRequests(pool);
-
   return db.transaction(async (tx) => {
     const claim = await reserveFinancialOperationTx<T>(tx, rawInput);
     if (claim.kind === "replay") {

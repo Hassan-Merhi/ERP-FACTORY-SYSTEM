@@ -101,6 +101,14 @@ function rlsSql(entry) {
 
 const revokePublicExecuteSql = (entry) => `REVOKE ALL ON FUNCTION ${entry.identity} FROM PUBLIC;`;
 
+const quoteLiteral = (text) => `'${String(text).replace(/'/g, "''")}'`;
+const COMMENT_TARGET = { table: "TABLE", column: "COLUMN", function: "FUNCTION" };
+/** COMMENT ON for an entry whose definition carries a comment (or NULL to clear). */
+export function commentSql(entry) {
+  const value = entry.def.comment === null || entry.def.comment === undefined ? "NULL" : quoteLiteral(entry.def.comment);
+  return `COMMENT ON ${COMMENT_TARGET[entry.kind]} ${entry.identity} IS ${value};`;
+}
+
 const withSemicolon = (sql) => (sql.trimEnd().endsWith(";") ? sql.trimEnd() : `${sql.trimEnd()};`);
 
 /** Constraint creation; foreign keys are emitted after every other constraint. */
@@ -182,6 +190,9 @@ export function compileCreatePhases(entries) {
   }
   for (const t of byKind.table) out.push(...rlsSql(t));
   for (const p of byKind.policy) out.push(policySql(p));
+  for (const kind of ["table", "column", "function"]) {
+    for (const e of byKind[kind]) if (e.def.comment !== null && e.def.comment !== undefined) out.push(commentSql(e));
+  }
   return { pre, tables, post: out };
 }
 
@@ -285,6 +296,7 @@ export function planAdoption(comparison) {
           );
         }
         if (e.notNull && !a.notNull) changeStatements.push(`ALTER TABLE ${table} ALTER COLUMN ${col} SET NOT NULL;`);
+        if ((e.comment ?? null) !== (a.comment ?? null)) changeStatements.push(commentSql(expected));
         if (!e.notNull && a.notNull) {
           notes.push(`${where}: database is NOT NULL where the baseline allows NULL; kept (stricter)`);
         }
@@ -296,6 +308,7 @@ export function planAdoption(comparison) {
           break;
         }
         if (expected.def.def !== actual.def.def) changeStatements.push(withSemicolon(expected.def.def));
+        if ((expected.def.comment ?? null) !== (actual.def.comment ?? null)) changeStatements.push(commentSql(expected));
         if (expected.def.publicExecute === false && actual.def.publicExecute !== false) {
           changeStatements.push(revokePublicExecuteSql(expected));
         } else if (expected.def.publicExecute !== false && actual.def.publicExecute === false) {
@@ -323,6 +336,7 @@ export function planAdoption(comparison) {
           blockers.push(`${where}: table kind/persistence/partitioning differs`);
           break;
         }
+        if ((e.comment ?? null) !== (a.comment ?? null)) changeStatements.push(commentSql(expected));
         if (e.rls && !a.rls) changeStatements.push(`ALTER TABLE ${expected.identity} ENABLE ROW LEVEL SECURITY;`);
         if (e.forceRls && !a.forceRls) changeStatements.push(`ALTER TABLE ${expected.identity} FORCE ROW LEVEL SECURITY;`);
         if ((!e.rls && a.rls) || (!e.forceRls && a.forceRls)) {

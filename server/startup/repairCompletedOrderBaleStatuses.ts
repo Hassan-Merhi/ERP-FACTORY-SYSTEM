@@ -6,68 +6,20 @@
  * Physical stock is already excluded from Inventory via order links; changing
  * these stale statuses therefore does NOT post a second sale or mutate any
  * invoice, voucher, customer balance, cost, or stock movement.
+ *
+ * Data only. The audit table factory_bale_order_status_repairs and the guard
+ * trigger factory_bale_completed_order_stock_guard (which refuses restoring such
+ * bales to IN_STOCK) are defined by migrations/0001_baseline_schema.sql.
  */
 import type { Pool } from "pg";
 import { logger } from "../lib/logger";
 
-export async function ensureFactoryBaleOrderIntegrity(pool: Pool): Promise<void> {
+export async function repairCompletedOrderBaleStatuses(pool: Pool): Promise<void> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
     await client.query("SET LOCAL lock_timeout = '15s'");
     await client.query("SET LOCAL statement_timeout = '90s'");
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS factory_bale_order_status_repairs (
-        bale_id INTEGER PRIMARY KEY,
-        company_id INTEGER NOT NULL,
-        completed_order_id INTEGER NOT NULL,
-        old_status TEXT NOT NULL,
-        new_status TEXT NOT NULL,
-        repaired_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      )
-    `);
-
-    // Refuse later attempts to put completed or verified order bales back in
-    // stock. The legitimate return/cancellation workflow must release the order
-    // linkage or change its status BEFORE restoring the physical bale.
-    await client.query(`
-      CREATE OR REPLACE FUNCTION factory_reject_completed_order_stock_restore()
-      RETURNS TRIGGER LANGUAGE plpgsql AS $guard$
-      BEGIN
-        IF NEW.status = 'IN_STOCK' AND OLD.status IS DISTINCT FROM NEW.status
-           AND NEW.deleted_at IS NULL
-           AND EXISTS (
-             SELECT 1
-               FROM customer_order_bales cob
-               JOIN customer_orders co ON co.id = cob.order_id
-              WHERE cob.bale_id = NEW.id
-                AND co.company_id = NEW.company_id
-                AND co.deleted_at IS NULL
-                AND co.status IN ('VERIFIED', 'FINALIZED', 'DISPATCHED', 'SOLD')
-           )
-        THEN
-          RAISE EXCEPTION 'BALE_ON_COMPLETED_ORDER: return or reverse its customer order before restoring stock'
-            USING ERRCODE = '23514';
-        END IF;
-        RETURN NEW;
-      END $guard$
-    `);
-    await client.query(`
-      DO $create_guard$
-      BEGIN
-        IF NOT EXISTS (
-          SELECT 1 FROM pg_trigger
-          WHERE tgname = 'factory_bale_completed_order_stock_guard'
-            AND tgrelid = 'factory_bales'::regclass
-            AND NOT tgisinternal
-        ) THEN
-          CREATE TRIGGER factory_bale_completed_order_stock_guard
-            BEFORE UPDATE OF status ON factory_bales
-            FOR EACH ROW EXECUTE FUNCTION factory_reject_completed_order_stock_restore();
-        END IF;
-      END $create_guard$
-    `);
-
     // Exclude any bale also assigned to an unfinished order. Such a conflict
     // needs human review rather than guessing which order owns the bale.
     const repaired = await client.query<{ bale_id: number }>(`
@@ -130,7 +82,7 @@ export async function ensureFactoryBaleOrderIntegrity(pool: Pool): Promise<void>
     }
   } catch (error) {
     await client.query("ROLLBACK").catch(() => undefined);
-    throw error; // Prevent new deployment from serving stock with an absent guard.
+    throw error; // Prevent a new deployment from serving with unreconciled bale statuses.
   } finally {
     client.release();
   }

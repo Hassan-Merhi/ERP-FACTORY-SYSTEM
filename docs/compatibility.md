@@ -36,10 +36,9 @@ PDF exports and print layouts are optimized for A4 paper.
 
 ## Database
 
-- **PostgreSQL 16** is the certified production and CI baseline.
-- Versioned SQL and idempotent startup migrations manage persistent databases.
-- `drizzle-kit push` is limited to disposable CI/test databases; never use it to
-  update a persistent or production database.
+- **PostgreSQL 18** is the production and CI baseline (both Render databases run 18.x; CI uses `postgres:18`).
+- Numbered SQL migrations in `migrations/` (applied with `npm run db:migrate`) are the only schema authority; startup only verifies.
+- `drizzle-kit push` is not used; `shared/schema` is a typed query layer only.
 
 ---
 
