@@ -1,3 +1,4 @@
+import { useCompany } from "@/contexts/CompanyContext";
 import { useState, useMemo, useCallback, useRef } from "react";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -51,6 +52,8 @@ type AttendanceReportSavePayload = {
 export default function FactoryWorkerAttendanceReport() {
   const qc = useQueryClient();
   const { toast } = useToast();
+  const { selectedCompany } = useCompany();
+  const canEditPastWithoutPassword = selectedCompany?.role === "Admin" || selectedCompany?.role === "Developer";
 
   /* Date mode state */
   const [mode, setMode] = useState<DateMode>("today");
@@ -201,7 +204,7 @@ export default function FactoryWorkerAttendanceReport() {
           return { workerId: Number(workerId), attendanceDate, status: status ?? "" };
         });
         const priorDates = attendancePastDates(records.map((record) => record.attendanceDate));
-        if (priorDates.length > 0) {
+        if (priorDates.length > 0 && !canEditPastWithoutPassword) {
           setApprovalDates(priorDates);
           setApprovalRecords(records);
           setApprovalOpen(true);
@@ -210,7 +213,7 @@ export default function FactoryWorkerAttendanceReport() {
         }
       }, 800);
     },
-    [saveMutation]
+    [saveMutation, canEditPastWithoutPassword]
   );
 
   const cycleCell = useCallback(
