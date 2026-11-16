@@ -25,6 +25,29 @@ const operationalBody = operationalSource.split("export const OPERATIONAL_ROUTE_
   "export const OPERATIONAL_PERMISSION_FREE_ROUTES"
 )[0];
 if (!operationalBody) throw new Error("Operational permission source has changed: review extraction must be updated");
+const definitionsBody = operationalSource.split("export const OPERATIONAL_PERMISSIONS = {")[1]?.split(
+  "} as const satisfies"
+)[0];
+if (!definitionsBody) throw new Error("Operational policy definitions have changed");
+const definitions = new Map();
+for (const [, name, objectBody] of definitionsBody.matchAll(/(?:^|\n)\s{2}(\w+):\s*\{([\s\S]*?)\},/g)) {
+  const readString = (key) => new RegExp(key + ':\\s*"([^"]+)"').exec(objectBody)?.[1];
+  const readRoles = (key) => {
+    const bracket = new RegExp(key + ':\\s*\\[([^\\]]*)\\]').exec(objectBody)?.[1];
+    return bracket ? [...bracket.matchAll(/"([^"]+)"/g)].map((match) => match[1]) : undefined;
+  };
+  const permissionKey = readString("permissionKey");
+  const permissionType = readString("permissionType");
+  if (!permissionKey || !permissionType) throw new Error(`Missing policy definition for ${name}`);
+  definitions.set(name, {
+    permissionKey,
+    permissionType,
+    ...(objectBody.includes("developerOnly: true") ? { developerOnly: true } : {}),
+    ...(readRoles("deniedRoles") ? { deniedRoles: readRoles("deniedRoles") } : {}),
+    ...(readRoles("permissionBypassRoles") ? { permissionBypassRoles: readRoles("permissionBypassRoles") } : {}),
+  });
+}
+if (definitions.size < 5) throw new Error("Operational permission definition extraction incomplete");
 const operationalEvidence = new Map();
 const policyGroups = [...operationalBody.matchAll(/(?:^|\n)\s{2}(\w+):\s*\[([\s\S]*?)\],/g)];
 if (policyGroups.length < 5) throw new Error("Operational permission extraction lost most groups");
@@ -33,9 +56,12 @@ for (const [, policyName, declarations] of policyGroups) {
   for (const match of withoutComments.matchAll(/"((?:GET|POST|PUT|PATCH|DELETE) \/[^"]+)"/g)) {
     const routeKey = match[1];
     const list = operationalEvidence.get(routeKey) ?? [];
+    const policyDefinition = definitions.get(policyName);
+    if (!policyDefinition) throw new Error(`Unknown operational permission: ${policyName}`);
     list.push({
       kind: "operational-permission-policy",
       policyName,
+      ...policyDefinition,
       source: "server/services/security/operationalPermissionRoutePolicy.ts",
       status: "source-evidence-only",
     });
