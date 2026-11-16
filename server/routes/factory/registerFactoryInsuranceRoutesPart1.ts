@@ -26,7 +26,7 @@ import {
   findOrCreateLedger,
   insuranceExtraChargeSchema,
   sendRouteError,
-} from "./factoryInsuranceRoutesFindOrCreateLedgerTx";
+} from "./factoryInsuranceRoutesHelpers";
 
 export function registerFactoryInsuranceRoutesPart1(app: Express) {
   // Payroll & Benefits > Insurance owns this action, not the Vouchers page.

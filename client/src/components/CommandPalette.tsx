@@ -39,7 +39,7 @@ import {
   PROPERTIES_EXTRAS,
   adminPages,
   factoryAdminPages,
-} from "./CommandPaletteFACTORY_HUB_TABS";
+} from "./commandPaletteHubTabs";
 import { posPages } from "./CommandPalettePosPages";
 
 const intercompanyPages: PageEntry[] = [

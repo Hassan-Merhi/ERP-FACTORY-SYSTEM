@@ -1,11 +1,11 @@
-import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { stockTransferOrderWaApprovalFoundation } from "../server/startup-schema/039-stock-transfer-order-wa-approval";
 import { stockTransferOrderWaWebhookIntegrity } from "../server/startup-schema/040-stock-transfer-order-wa-webhook";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
 const root = process.cwd();
-const file = (name: string) => fs.readFileSync(path.join(root, name), "utf8");
+const file = (name: string) => readModuleFamily(path.join(root, name));
 const sqlMigration = file("migrations/20261111_001_stock_transfer_order_whatsapp_approval_phase1.sql");
 const startupSql = stockTransferOrderWaApprovalFoundation.join(";\n");
 
@@ -78,7 +78,8 @@ describe("Stock Transfer Order WhatsApp approval — Phase 1 contract", () => {
   });
 
   it("ensures the additive foundation even when bulk startup migrations are disabled", () => {
-    const boot = file("server/index.ts");
+    // Phase 3 moved the always-on pre-listen schema guards out of server/index.ts.
+    const boot = file("server/startup/runCoreStartupSchemaGuards.ts");
     const ensure = file("server/startup/ensureStockTransferOrderWhatsAppApprovalSchema.ts");
     expect(boot).toContain("await ensureStockTransferOrderWhatsAppApprovalSchema(pool);");
     expect(ensure).toContain("...stockTransferOrderWaApprovalFoundation, ...stockTransferOrderWaWebhookIntegrity");

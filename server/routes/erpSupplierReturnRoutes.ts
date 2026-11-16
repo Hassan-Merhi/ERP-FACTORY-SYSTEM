@@ -39,7 +39,6 @@ async function refuseWhenHistorySchemaPending(res: Response): Promise<boolean> {
   if (missing.length === 0) return false;
   res.status(503).json({
     code: "ERP_SUPPLIER_RETURN_SCHEMA_PENDING",
-    message: "Supplier-return history tables are not installed yet",
     missing,
   });
   return true;

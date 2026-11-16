@@ -11,7 +11,7 @@ import { infrastructurePostingIdentity } from "../../services/accounting/infrast
 import { resolveRequestCompanyId } from "../../services/security/requestCompanyScope";
 import type Decimal from "decimal.js";
 import { sumMoney, toMoney } from "../../lib/money";
-import { findOrCreateLedger, sendRouteError } from "./factoryInsuranceRoutesFindOrCreateLedgerTx";
+import { findOrCreateLedger, sendRouteError } from "./factoryInsuranceRoutesHelpers";
 import { registerFactoryInsuranceRoutesPart1 } from "./registerFactoryInsuranceRoutesPart1";
 import { registerFactoryInsuranceRoutesPart2 } from "./registerFactoryInsuranceRoutesPart2";
 
