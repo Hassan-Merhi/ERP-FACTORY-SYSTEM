@@ -4,6 +4,7 @@ on:
     branches: [refactor/phase-wave-semantic-names]
     paths:
       - .github/workflows/frontend-test-script-semantic-rename.yml
+      - server/edge/**
   workflow_dispatch:
 concurrency:
   group: phase3-semantic-rename
