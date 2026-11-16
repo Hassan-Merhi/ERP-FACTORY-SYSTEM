@@ -10,16 +10,17 @@ const apply = process.argv.includes("--apply");
 const tracked = execFileSync("git", ["ls-files", "-z"], { cwd: root, encoding: "utf8", maxBuffer: 32 * 1024 * 1024 }).split("\0").filter(Boolean);
 const allPaths = new Set(tracked);
 const phaseMarker = /(?:[Pp]hase|[Ww]ave)[-_ ]?\d+[a-z]?(?=[^a-z]|[A-Z]|$)/g;
-const hasPhase = name => { phaseMarker.lastIndex = 0; return phaseMarker.test(name); };
+const hasPhase = name => /(?:wave|phase)[-_ ]?\d+/i.test(name);
 const overrides = new Map(Object.entries({
   "server/edge/phase8OperatorApply.ts": "server/edge/stagedVoucherOperatorApply.ts",
   "server/edge/phase9OperatorApply.ts": "server/edge/eventStreamOperatorApply.ts",
   "server/routes/sp/spGoldenCoastPhase5PosSaleRoutes.ts": "server/routes/sp/spGoldenCoastPosSalePostingRoutes.ts",
   "server/routes/sp/spGoldenCoastPhase6PosSaleRoutes.ts": "server/routes/sp/spGoldenCoastPosSaleDeductionsRoutes.ts",
   "server/routes/sp/spMigrationPhase2Routes.ts": "server/routes/sp/spMigrationRehearsalRoutes.ts",
-  "server/routes/sp/spMigrationPhase4Routes.ts": "server/routes/sp/spMigrationCutoverRoutes.ts",
+  "server/routes/sp/spMigrationPhase4Routes.ts": "server/routes/sp/spMigrationFinalCutoverRoutes.ts",
   "server/services/accounting/voucherPathPhase5to6Boundary.ts": "server/services/accounting/voucherPathTransitionBoundary.ts",
   "server/wave3SalesHotpathIndexBridge.mjs": "server/salesHotpathIndexRepair.mjs",
+  "server/types/session-data-phase4.d.ts": "server/types/session-data.d.ts",
 }));
 function newName(file) {
   if (overrides.has(file)) return overrides.get(file);
