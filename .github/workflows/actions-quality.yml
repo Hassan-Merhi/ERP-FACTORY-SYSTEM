@@ -86,7 +86,7 @@ jobs:
       - name: Audit GitHub Actions security
         # Pinned action resolves its own verified tool version; do not override it
         # with a zizmor release that is not in the pinned action's digest list.
-        uses: zizmorcore/zizmor-action@85b2b9fb8e3325e7a23d7d0a9d7ba5ae0f999e3e
+        uses: zizmorcore/zizmor-action@45d7276c9ca790aabd705e31ca99c6185c3e76dd
         with:
           inputs: .github
           version: "latest"
