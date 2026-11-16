@@ -26,7 +26,10 @@ describe("route access declaration coverage", () => {
     const declarations = JSON.parse(fs.readFileSync("config/route-access-manifest.json", "utf8"));
     expect(validateRouteAccessCoverage(routeSnapshot, declarations)).toEqual([]);
     expect(declarations.rules.length).toBe(routeSnapshot.routes.length);
-    expect(declarations.rules.filter((rule: { status: string }) => rule.status === "reviewed")).toHaveLength(2);
+    const authoritative = JSON.parse(fs.readFileSync("config/route-access-reviewed.json", "utf8"));
+    expect(declarations.rules.filter((rule: { status: string }) => rule.status === "reviewed")).toHaveLength(
+      authoritative.rules.length
+    );
     expect(() =>
       execFileSync(process.execPath, ["scripts/generate-route-access-manifest.mjs", "--check"], {
         stdio: "pipe",
