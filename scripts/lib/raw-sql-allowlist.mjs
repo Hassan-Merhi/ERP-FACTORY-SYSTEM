@@ -14,6 +14,7 @@ export const CLASSIFICATIONS = new Map([
   ["validated-numeric", "Value validated as a safe integer / finite number (or coerced through Number()) before it is rendered into SQL text."],
   ["placeholder-text", "Only the SQL text for `$n` bind placeholders or fixed column lists is generated; every value travels as a bound parameter."],
   ["developer-script", "Maintenance / CI script input that comes from the operator's command line or a code constant, never from an application user."],
+  ["not-sql-text", "Scanner false positive: SQL-shaped text that never reaches a database (log line, error message, HTTP query string, regex); recorded so it cannot silently become SQL later."],
   ["test-fixture", "Test-only SQL against a disposable database; dynamic parts are test constants or generated fixture ids."],
 ]);
 
