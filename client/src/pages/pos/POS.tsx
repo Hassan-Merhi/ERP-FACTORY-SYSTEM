@@ -1,21 +1,11 @@
 import { downloadBlob } from "@/lib/downloadBlob";
 import { exportFileName } from "@/lib/exportFile";
 import { getErrorDetails } from "@shared/errorUtils";
-import { useEffect, useMemo, useRef } from "react";
-import { useLocation as useLocationContext } from "@/contexts/LocationContext";
-import { useCompany } from "@/contexts/CompanyContext";
-import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
-import { useLocation } from "wouter";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/PageHeader";
 import { Textarea } from "@/components/ui/textarea";
 import { ShoppingCart, NotebookPen } from "lucide-react";
 import "@/styles/pos-workspace-premium.css";
-import { useCurrencyContext, type Currency } from "@/contexts/CurrencyContext";
-import { isSupportedAccountingCurrency } from "@shared/currencyCatalog";
-import { useToast } from "@/hooks/use-toast";
-
-import { usePosZmwSaleRate } from "./hooks/usePosZmwSaleRate";
 import { SaleGrid } from "./pos-components/SaleGrid";
 import { InventoryPicker } from "./pos-components/InventoryPicker";
 import type { AuthMe } from "@shared/apiTypes";
@@ -26,429 +16,121 @@ import { PosCheckoutStrip } from "./pos-components/PosCheckoutStrip";
 import { PosMobileLayout } from "./pos-components/PosMobileLayout";
 import { PosWorkspaceColumns } from "./pos-components/PosWorkspaceColumns";
 
-import { usePosState } from "./hooks/usePosState";
-import { usePosQueries } from "./hooks/usePosQueries";
-import { usePosWhatsApp } from "./hooks/usePosWhatsApp";
-import { usePosMutations } from "./hooks/usePosMutations";
-import { usePosAutosave } from "./hooks/usePosAutosave";
-import { usePosHandlers } from "./hooks/usePosHandlers";
-import { usePosEditVoucherHydration } from "./usePosEditVoucherHydration";
-
-import {
-  POS_COLUMNS,
-  formatDisplayAmount,
-  getPosPickerInventory,
-  getPosKeyboardHighlightedIndex,
-} from "./utils/posCalculations";
+import { POS_COLUMNS } from "./utils/posCalculations";
 import { ErrorState } from "@/components/ui/page-state";
 import { GoldenCoastPosReadinessAlert } from "./pos-components/GoldenCoastPosReadinessAlert";
+import { POS_PICKER_LIST_ID } from "./POSUsePOSStatePart1Part1";
+import { usePOSState } from "./POSUsePOSState";
 
-const POS_PICKER_LIST_ID = "pos-desktop-item-options";
-
-export default function POS({ posUser, editVoucherId }: { posUser?: AuthMe; editVoucherId?: string } = {}) {
-  const { selectedLocation, setSelectedLocation } = useLocationContext();
-  const { selectedCompany } = useCompany();
-  const { t } = useApplicationLanguage();
-  const [, navigate] = useLocation();
-  const { toast } = useToast();
-  const { selectedCurrency, exchangeRate: dailyExchangeRate, displayCurrency } = useCurrencyContext();
-
-  // ── All state & refs ───────────────────────────────────────────────────────
+export default function POS(props: { posUser?: AuthMe; editVoucherId?: string }) {
   const {
-    posSelectedLocation,
-    setPosSelectedLocation,
-    rows,
-    setRows,
-    selectedCell,
-    setSelectedCell,
-    paymentAccountType,
-    setPaymentAccountType,
-    paymentAccountId,
-    setPaymentAccountId,
-    isCreditSale,
-    setIsCreditSale,
-    selectedCustomerId,
-    setSelectedCustomerId,
-    notes,
-    setNotes,
-    saleDate,
-    setSaleDate,
-    searchTerm,
-    setSearchTerm,
+    activeCurrency,
+    activeLocation,
     activeRow,
-    setActiveRow,
-    highlightedIndex,
-    setHighlightedIndex,
-    zeroStockAlert,
-    setZeroStockAlert,
-    zeroStockItem,
-    setZeroStockItem,
-    savedSale,
-    setSavedSale,
-    showPrintDialog,
-    setShowPrintDialog,
-    showDraftDialog,
-    setShowDraftDialog,
-    currentDraftId,
-    setCurrentDraftId,
-    customerComboOpen,
-    setCustomerComboOpen,
-    mobileCustomerComboOpen,
-    setMobileCustomerComboOpen,
-    setSaleJustCompleted,
-    showStockPrompt,
-    setShowStockPrompt,
-    invoiceWaStatus,
-    setInvoiceWaStatus,
-    stockWaStatus,
-    setStockWaStatus,
-    setSendingInvoiceWhatsApp,
-    sendingInvoiceWhatsApp,
-    setSendingWhatsApp,
-    sendingWhatsApp,
-    lastAutosaved,
-    setLastAutosaved,
-    pendingAutoSend,
-    setPendingAutoSend,
-    pendingStockSend,
-    setPendingStockSend,
-    setMobileTab,
-    inputRefs,
-    itemListRef,
-    printRef,
-    stockPrintRef,
+    allLocations,
+    authUser,
+    bankAccounts,
+    canSellNegativeStock,
+    canSendWhatsApp,
+    cashLedgerAccounts,
     clearActiveRowTimerRef,
-    clientSaleIdRef,
-    lastSavedFingerprintRef,
-    autoSaveInProgressRef,
-    mobileSearchInputRef,
-    autoSaveStateRef,
-  } = usePosState();
-  const inventoryPickerSearchRef = useRef<HTMLInputElement>(null);
-
-  const activeLocation = posUser ? posSelectedLocation : selectedLocation;
-  // Zambia posting uses the approved rate of the sale date, never the
-  // browser's current rate for an earlier sale date (cash and credit alike).
-  const { datedZmwRate, isFetchingDatedZmwRate } = usePosZmwSaleRate({
-    companyId: selectedCompany?.id,
-    displayCurrency,
-    saleDate,
+    companySettings,
+    customerAccounts,
+    customerComboOpen,
+    deleteDraftMutation,
+    drafts,
+    editVoucher,
     editVoucherId,
-  });
-  // Supplier Partner companies share this exact POS UI but sell from SP stock
-  // (sp_stock_movements) and post through the SP-specific accounting endpoint.
-  const isSpCompany = selectedCompany?.companyType === "supplier_partner";
-
-  // ── Queries ────────────────────────────────────────────────────────────────
-  const {
+    ensureItemSellable,
+    exchangeRate,
+    fmtAmount,
+    focusCell,
+    goldenCoastPosBlocked,
+    goldenCoastPosSaveDisabled,
+    goldenCoastReadiness,
+    handleDetailedExport,
+    handleExportInventory,
+    handleKeyDown,
+    handleLoadDraft,
+    handleNewSale,
+    handlePrint,
+    handleSaveSale,
+    handleSendInvoiceWhatsApp,
+    handleSendWhatsAppReport,
+    handleStockPrint,
+    handleSummaryExport,
+    hasValidItems,
+    highlightedIndex,
+    inputRefs,
+    inventory,
+    inventoryError,
+    inventoryLoading,
+    inventoryPickerSearchRef,
+    invoiceWaStatus,
+    isCreditSale,
+    isSpCompany,
+    itemListRef,
+    lastAutosaved,
+    matchingItemCount,
+    mobileCustomerComboOpen,
+    mobileSearchInputRef,
+    navigate,
+    notes,
+    paymentAccountId,
+    paymentAccountType,
     posAssignedLocations,
     posLocationsLoading,
-    allLocations,
-    companySettings,
-    apiInventory,
-    inventory,
-    bankAccounts,
-    allLedgerAccounts,
-    cashLedgerAccounts,
-    customerAccounts,
-    drafts,
-    refetchDrafts,
-    currentShift,
-    authUser,
-    goldenCoastPhase6,
-    goldenCoastReadinessLoading,
-    goldenCoastReadiness,
-    lastSoldPrices,
-    editVoucher,
-    editVoucherViewEntries,
-    stockInventory,
-    stockInventoryLoading,
-    inventoryLoading,
-    inventoryError,
-    refetchInventory,
-  } = usePosQueries({
+    posSelectedLocation,
     posUser,
-    activeLocation,
-    companyId: selectedCompany?.id,
-    isCreditSale,
-    editVoucherId,
-    showPrintDialog,
-    showStockPrompt,
-    isSpCompany,
-  });
-
-  const editedCurrency = editVoucherId && editVoucher?.currency;
-  const activeCurrency: Currency = displayCurrency
-    ? (editedCurrency === displayCurrency || editedCurrency === "USD") &&
-      typeof editedCurrency === "string" &&
-      isSupportedAccountingCurrency(editedCurrency)
-      ? editedCurrency
-      : selectedCurrency
-    : "USD";
-  const editLockedRate = editVoucherId && editVoucher?.exchangeRate ? Number(editVoucher.exchangeRate) : null;
-  const approvedZmwRate = displayCurrency === "ZMW" && !editVoucherId ? Number(datedZmwRate?.rate) : null;
-  const exchangeRate =
-    displayCurrency === "ZMW"
-      ? editVoucherId
-        ? editLockedRate && editLockedRate > 0
-          ? editLockedRate
-          : null
-        : !isFetchingDatedZmwRate && approvedZmwRate && Number.isFinite(approvedZmwRate) && approvedZmwRate > 0
-          ? approvedZmwRate
-          : null
-      : dailyExchangeRate;
-
-  // Keep a line's display price and canonical USD rate synchronized when
-  // switching USD/ZMW or selecting a different sale date. A date change while
-  // entering K preserves the typed K price and recalculates its USD equivalent.
-  // Do not reinterpret the rows until a valid dated FX rate has resolved.
-  const lastDisplayedFx = useRef<{ companyId: number; currency: Currency; rate: number | null } | null>(null);
-  useEffect(() => {
-    if (editVoucherId || !selectedCompany?.id) return;
-    if (activeCurrency !== "USD" && (!exchangeRate || !Number.isFinite(exchangeRate))) return;
-    const next = { companyId: selectedCompany.id, currency: activeCurrency, rate: exchangeRate };
-    const old = lastDisplayedFx.current;
-    if (!old || old.companyId !== next.companyId) {
-      lastDisplayedFx.current = next;
-      return;
-    }
-    if (old.currency === next.currency && old.rate === next.rate) return;
-    setRows((oldRows) =>
-      oldRows.map((row) => {
-        if (!row.stockItemId || !Number.isFinite(row.rateUSD)) return row;
-        const newUsd = old.currency === next.currency && next.currency !== "USD" ? row.rate / next.rate! : row.rateUSD;
-        const displayRate =
-          next.currency === "USD"
-            ? newUsd
-            : next.currency === "CFA"
-              ? Math.round(newUsd * next.rate!)
-              : Number((newUsd * next.rate!).toFixed(2));
-        return { ...row, rateUSD: newUsd, rate: displayRate, amount: Number((row.quantity * displayRate).toFixed(2)) };
-      })
-    );
-    lastDisplayedFx.current = next;
-  }, [activeCurrency, exchangeRate, editVoucherId, selectedCompany?.id, setRows]);
-
-  // POS view-only is a real write boundary, not just a server-side fallback.
-  // Keep every client mutation path quiet so expected denials do not become
-  // repeated production ERROR logs.
-  const posWritesDisabled = posUser?.posViewOnly === true || authUser?.posViewOnly === true;
-
-  // Supplier Partner sales support cash or bank settlement, same as normal
-  // ERP POS — but never credit: /api/sp/sales has no credit-sale support.
-  // Enforce only the credit restriction in state (not just hidden UI) so a
-  // lingering credit toggle from a prior company can never leak through.
-  useEffect(() => {
-    if (!isSpCompany) return;
-    setIsCreditSale(false);
-  }, [isSpCompany, setIsCreditSale]);
-
-  // Keep autoSaveStateRef in sync
-  autoSaveStateRef.current.activeLocation = activeLocation;
-  autoSaveStateRef.current.rows = rows;
-  autoSaveStateRef.current.notes = notes;
-  autoSaveStateRef.current.isCreditSale = isCreditSale;
-  autoSaveStateRef.current.paymentAccountType = paymentAccountType;
-  autoSaveStateRef.current.paymentAccountId = paymentAccountId;
-  autoSaveStateRef.current.selectedCustomerId = selectedCustomerId;
-  autoSaveStateRef.current.currentDraftId = currentDraftId;
-
-  // ── Effects ────────────────────────────────────────────────────────────────
-
-  // Auto-select first POS location
-  useEffect(() => {
-    if (posUser && posAssignedLocations.length > 0 && !posSelectedLocation) {
-      setPosSelectedLocation(posAssignedLocations[0]);
-    }
-  }, [posUser, posAssignedLocations, posSelectedLocation, setPosSelectedLocation]);
-
-  // Set default cash account for POS users from location mapping — applies to
-  // Supplier Partner companies too, same as normal ERP POS.
-  useEffect(() => {
-    if (editVoucherId) return;
-    const locCashId = posSelectedLocation?.cashAccountId;
-    if (posUser && locCashId) {
-      setPaymentAccountType("cash");
-      setPaymentAccountId(String(locCashId));
-    }
-  }, [posUser, posSelectedLocation, editVoucherId, setPaymentAccountType, setPaymentAccountId]);
-
-  // Auto-attach to today's draft
-  useEffect(() => {
-    if (currentDraftId !== null) return;
-    if (!Array.isArray(drafts) || drafts.length === 0) return;
-    const todayUTC = new Date().toISOString().slice(0, 10);
-    const todayDraft = drafts.find((d) => {
-      const rawDate = d.updatedAt || d.createdAt;
-      if (!rawDate) return false;
-      const dateObj = new Date(rawDate);
-      if (isNaN(dateObj.getTime())) return false;
-      return dateObj.toISOString().slice(0, 10) === todayUTC;
-    });
-    if (todayDraft) setCurrentDraftId(todayDraft.id);
-  }, [currentDraftId, drafts, setCurrentDraftId]);
-
-  // Edit mode: select the voucher's location, populate rows once, infer payment type.
-  usePosEditVoucherHydration({
-    editVoucherId,
-    editVoucher,
-    editVoucherViewEntries,
-    allLocations,
-    allLedgerAccounts,
-    selectedLocation,
-    setSelectedLocation,
-    setRows,
-    setNotes,
-    setSaleDate,
-    setPaymentAccountType,
-    setPaymentAccountId,
-    setIsCreditSale,
-    setSelectedCustomerId,
-  });
-
-  // ── WhatsApp / mutations / autosave ───────────────────────────────────────
-  const { handleSendInvoiceWhatsApp, handleSendWhatsAppReport, canSendWhatsApp } = usePosWhatsApp({
-    pendingAutoSend,
-    setPendingAutoSend,
-    pendingStockSend,
-    setPendingStockSend,
-    activeLocation,
-    savedSale,
-    setInvoiceWaStatus,
-    setStockWaStatus,
-    setSendingInvoiceWhatsApp,
-    setSendingWhatsApp,
-    toast,
-  });
-
-  const hasValidItems = useMemo(() => rows.some((row) => row.stockItemId && row.quantity > 0), [rows]);
-
-  const { saveMutation, deleteDraftMutation, saveDraftMutation } = usePosMutations({
-    activeLocation,
-    editVoucherId,
-    editVoucher,
-    isSpCompany,
-    isGoldenCoastPhase6: goldenCoastPhase6,
-    goldenCoastParentCompanyId: goldenCoastReadiness?.parentCompanyId,
-    clientSaleIdRef,
-    rows,
-    isCreditSale,
-    paymentAccountType,
-    paymentAccountId,
-    selectedCustomerId,
-    currentDraftId,
-    notes,
-    writesDisabled: posWritesDisabled,
-    lastSavedFingerprintRef,
-    setSavedSale,
-    setSaleJustCompleted,
-    setShowPrintDialog,
-    setCurrentDraftId,
-    setLastAutosaved,
-    setPendingAutoSend,
-    setPendingStockSend,
-    setStockWaStatus,
-    toast,
-    refetchDrafts,
-  });
-
-  // Keep saveDraftIsPending in sync
-  autoSaveStateRef.current.saveDraftIsPending = saveDraftMutation.isPending;
-
-  usePosAutosave({
-    autoSaveStateRef,
-    autoSaveInProgressRef,
-    lastSavedFingerprintRef,
-    setCurrentDraftId,
-    setLastAutosaved,
-    refetchDrafts,
-    disabled: posWritesDisabled,
-  });
-
-  // ── Handlers ──────────────────────────────────────────────────────────────
-  const {
-    focusCell,
-    handlePrint,
-    handleStockPrint,
-    handleSaveSale,
-    handleNewSale,
-    selectItem,
-    updateRow,
-    ensureItemSellable,
+    posWritesDisabled,
+    printRef,
+    refetchInventory,
     resolveItemRate,
-    handleLoadDraft,
-    handleExportInventory,
-    handleSummaryExport,
-    handleDetailedExport,
-    makeHandleKeyDown,
-  } = usePosHandlers({
-    savedSale,
     rows,
-    isCreditSale,
-    paymentAccountType,
-    paymentAccountId,
-    selectedCustomerId,
-    currentDraftId,
-    notes,
     saleDate,
-    activeRow,
-    highlightedIndex,
-    setRows,
-    setSelectedCell,
-    setNotes,
-    setPaymentAccountType,
-    setPaymentAccountId,
+    saveDraftMutation,
+    saveMutation,
+    savedSale,
+    searchTerm,
+    selectItem,
+    selectedCell,
+    selectedCompany,
+    selectedCustomerId,
+    selectedItemIndex,
+    sendingInvoiceWhatsApp,
+    sendingWhatsApp,
+    setActiveRow,
+    setCustomerComboOpen,
+    setHighlightedIndex,
     setIsCreditSale,
+    setMobileCustomerComboOpen,
+    setNotes,
+    setPaymentAccountId,
+    setPaymentAccountType,
+    setPosSelectedLocation,
+    setRows,
+    setSaleDate,
+    setSearchTerm,
+    setSelectedCell,
     setSelectedCustomerId,
-    setCurrentDraftId,
+    setSelectedLocation,
     setShowDraftDialog,
     setShowPrintDialog,
-    setSavedSale,
-    setSaleJustCompleted,
-    setLastAutosaved,
-    setMobileTab,
-    setPendingStockSend,
-    setStockWaStatus,
-    setInvoiceWaStatus,
-    setZeroStockItem,
+    setShowStockPrompt,
     setZeroStockAlert,
-    setSearchTerm,
-    setHighlightedIndex,
-    lastSavedFingerprintRef,
-    inputRefs,
-    focusInventoryPicker: () => inventoryPickerSearchRef.current?.focus(),
-    printRef,
+    showDraftDialog,
+    showPrintDialog,
+    showStockPrompt,
+    stockInventory,
+    stockInventoryLoading,
     stockPrintRef,
-    clientSaleIdRef,
-    activeCurrency,
-    exchangeRate,
-    dailyExchangeRate: exchangeRate,
-    activeLocation,
-    editVoucherId,
-    editVoucher,
-    isSpCompany,
-    isGoldenCoastPhase6: goldenCoastPhase6,
-    goldenCoastReadinessLoading,
-    goldenCoastReadinessBlocked: goldenCoastReadiness?.canPost === false,
-    goldenCoastReadinessBlockers: goldenCoastReadiness?.blockers,
-    inventory,
-    apiInventory,
-    lastSoldPrices,
-    currentShift,
-    authUser,
-    posUser,
-    saveMutation,
+    stockWaStatus,
+    t,
     toast,
-  });
-
-  const handleKeyDown = makeHandleKeyDown(searchTerm);
-  const matchingItems = useMemo(() => getPosPickerInventory(inventory, searchTerm), [inventory, searchTerm]);
-  const matchingItemCount = matchingItems.length;
-  const canSellNegativeStock = authUser?.canSellNegativeStock ?? posUser?.canSellNegativeStock ?? false;
-  const selectedItemIndex = getPosKeyboardHighlightedIndex(matchingItems, highlightedIndex, canSellNegativeStock);
-  const fmtAmount = (v: number) => formatDisplayAmount(activeCurrency, v);
-  const goldenCoastPosBlocked = isSpCompany && goldenCoastPhase6 && goldenCoastReadiness?.canPost === false;
-  const goldenCoastPosSaveDisabled = isSpCompany && (goldenCoastReadinessLoading || goldenCoastPosBlocked);
+    updateRow,
+    zeroStockAlert,
+    zeroStockItem,
+  } = usePOSState(props);
 
   // ── Admin/dev: export the current edit-mode transaction to Excel ───────────
   async function handleExportTransaction() {

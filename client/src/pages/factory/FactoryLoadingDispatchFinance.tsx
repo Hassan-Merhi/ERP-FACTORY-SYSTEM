@@ -1,221 +1,45 @@
-/**
- * Phase 3 — charge drafting and a read-only financial preview for a closed truck.
- * Phase 4 will add the separate financial-post/reversal workflow.
- */
-import { useState, type FormEvent } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
 import { DollarSign, FileWarning, Loader2, Pencil, Plus, RefreshCw, Trash2, Wallet } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
-import { companyQueryKey } from "@/lib/companyQueryScope";
 import { confirmAction } from "@/components/ConfirmHost";
-
-type Kind = "BILLABLE" | "INTERNAL" | "DISCOUNT";
-type ErpType = "" | "freight" | "surcharge" | "fumigation" | "documentCharges";
-interface Account {
-  id: number;
-  code: string;
-  name: string;
-  accountType: string;
-}
-interface Charge {
-  id: number;
-  name: string;
-  kind: Kind;
-  amount: string;
-  currency: string;
-  ledgerAccountId: number;
-  offsetLedgerAccountId: number | null;
-  erpChargeType: ErpType | null;
-  notes: string | null;
-  revision: number;
-  lockedAt?: string | null;
-}
-interface SignedSource {
-  sourceFingerprint: string;
-  baleCount: number;
-  totalWeightKg: string;
-  goodsSubtotal: string;
-  closureRevision: number;
-  bales: Array<{ baleId: number; articleCode: string; lineTotal: string }>;
-}
-interface Preview {
-  status: string;
-  currency: string;
-  revision: number;
-  source: SignedSource | null;
-  sourceError: { code: string; message: string } | null;
-  totals: {
-    goodsSubtotal: string;
-    billableChargesTotal: string;
-    discountTotal: string;
-    internalExpenseTotal: string;
-    customerTotal: string;
-    chargeCount: number;
-  } | null;
-  charges: Charge[];
-  chargeFingerprint: string;
-  accounts: Account[];
-  canEdit: boolean;
-  postingEnabled: boolean;
-  postingNotice: string;
-}
-interface Props {
-  orderId: number;
-  dispatchId: number;
-  companyId: number | null | undefined;
-  status: string;
-  role: string;
-}
-
-interface ChargeForm {
-  name: string;
-  kind: Kind;
-  amount: string;
-  ledgerAccountId: string;
-  offsetLedgerAccountId: string;
-  erpChargeType: ErpType;
-  notes: string;
-}
-const emptyForm = (): ChargeForm => ({
-  name: "",
-  kind: "BILLABLE",
-  amount: "",
-  ledgerAccountId: "",
-  offsetLedgerAccountId: "",
-  erpChargeType: "",
-  notes: "",
-});
+import {
+  errorMessage,
+  roleCanManage,
+  useFactoryLoadingDispatchFinanceState,
+  type Props,
+} from "./useFactoryLoadingDispatchFinanceState";
+import { FactoryLoadingDispatchFinanceDispatchTripChargeForm } from "./FactoryLoadingDispatchFinanceDispatchTripChargeForm";
 const money = (value: string | undefined) => {
   const parsed = Number(value ?? 0);
   return Number.isFinite(parsed)
     ? parsed.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     : "—";
 };
-const roleCanManage = (role: string) => ["admin", "owner", "developer"].includes(role.trim().toLowerCase());
-const acceptsOffset = (type: string) => /liability|payable|accrual|clearing/i.test(type);
-async function readJson<T>(url: string): Promise<T> {
-  const response = await fetch(url, {
-    credentials: "include",
-    cache: "no-store",
-    headers: { Accept: "application/json" },
-  });
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(body.message || "Unable to load trip charges");
-  return body as T;
-}
-function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : "Unable to save financial charge";
-}
 
-export default function FactoryLoadingDispatchFinance({ orderId, dispatchId, companyId, status, role }: Props) {
-  const { toast } = useToast();
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [formOpen, setFormOpen] = useState(false);
-  const [form, setForm] = useState<ChargeForm>(emptyForm());
-  const base = "/api/factory/customer-orders/" + orderId + "/loading-dispatches/" + dispatchId;
-  const url = base + "/financial-preview";
-  const enabled = Boolean(companyId) && status === "CLOSED" && roleCanManage(role);
-  const preview = useQuery<Preview>({
-    queryKey: companyQueryKey(url, companyId),
-    queryFn: () => readJson<Preview>(url),
+export default function FactoryLoadingDispatchFinance(props: Props) {
+  const {
+    beginCreate,
+    beginEdit,
+    busy,
+    canEdit,
+    data,
+    editingId,
     enabled,
-    staleTime: 5000,
-    refetchInterval: formOpen ? false : 15000,
-  });
-  const data = preview.data;
-  const canEdit = enabled && Boolean(data?.canEdit) && data?.status !== "POSTED" && data?.status !== "CONSOLIDATED";
-  // The API already scopes these to active, visible accounts in the selected
-  // Factory company. Let the operator select any ledger account type instead
-  // of silently restricting customer charges to income accounts.
-  const mainAccounts = data?.accounts ?? [];
-  const offsetAccounts = (data?.accounts ?? []).filter((a) => acceptsOffset(a.accountType));
-  const validForm =
-    form.name.trim().length > 0 &&
-    form.name.trim().length <= 160 &&
-    /^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,2})?$/.test(form.amount.trim()) &&
-    Number(form.amount) > 0 &&
-    Number(form.ledgerAccountId) > 0 &&
-    (form.kind !== "INTERNAL" || Number(form.offsetLedgerAccountId) > 0);
-
-  function invalidate() {
-    void queryClient.invalidateQueries({ queryKey: companyQueryKey(url, companyId) });
-  }
-  function beginCreate() {
-    setEditingId(null);
-    setForm(emptyForm());
-    setFormOpen(true);
-  }
-  function beginEdit(c: Charge) {
-    setEditingId(c.id);
-    setForm({
-      name: c.name,
-      kind: c.kind,
-      amount: c.amount,
-      ledgerAccountId: String(c.ledgerAccountId),
-      offsetLedgerAccountId: c.offsetLedgerAccountId ? String(c.offsetLedgerAccountId) : "",
-      erpChargeType: (c.erpChargeType ?? "") as ErpType,
-      notes: c.notes ?? "",
-    });
-    setFormOpen(true);
-  }
-  const save = useMutation({
-    mutationFn: async (payload: ChargeForm) => {
-      if (!data?.source || !data.canEdit) throw new Error("Refresh the signed financial preview before saving");
-      const path = editingId === null ? base + "/financial-charges" : base + "/financial-charges/" + editingId;
-      const response = await apiRequest(editingId === null ? "POST" : "PATCH", path, {
-        expectedChargeFingerprint: data.chargeFingerprint,
-        expectedSourceFingerprint: data.source.sourceFingerprint,
-        charge: {
-          name: payload.name.trim(),
-          kind: payload.kind,
-          amount: payload.amount,
-          ledgerAccountId: Number(payload.ledgerAccountId),
-          offsetLedgerAccountId: payload.kind === "INTERNAL" ? Number(payload.offsetLedgerAccountId) : null,
-          erpChargeType:
-            payload.kind === "INTERNAL" || payload.kind === "DISCOUNT" ? null : payload.erpChargeType || null,
-          notes: payload.notes.trim() || null,
-        },
-      });
-      return response.json();
-    },
-    onSuccess: () => {
-      setFormOpen(false);
-      setEditingId(null);
-      setForm(emptyForm());
-      invalidate();
-      toast({ title: "Trip charge saved", description: "Draft only — no voucher or balance posted." });
-    },
-    onError: (error) => {
-      invalidate();
-      toast({ title: "Could not save charge", description: errorMessage(error), variant: "destructive" });
-    },
-  });
-  const remove = useMutation({
-    mutationFn: async (chargeId: number) => {
-      if (!data?.source || !data.canEdit) throw new Error("Refresh financial preview before deleting");
-      const response = await apiRequest("DELETE", base + "/financial-charges/" + chargeId, {
-        expectedChargeFingerprint: data.chargeFingerprint,
-        expectedSourceFingerprint: data.source.sourceFingerprint,
-      });
-      return response.json();
-    },
-    onSuccess: () => {
-      invalidate();
-      toast({ title: "Draft charge removed" });
-    },
-    onError: (error) => {
-      invalidate();
-      toast({ title: "Could not delete charge", description: errorMessage(error), variant: "destructive" });
-    },
-  });
-  const busy = save.isPending || remove.isPending;
+    form,
+    formOpen,
+    mainAccounts,
+    offsetAccounts,
+    preview,
+    remove,
+    role,
+    save,
+    setEditingId,
+    setForm,
+    setFormOpen,
+    status,
+    validForm,
+  } = useFactoryLoadingDispatchFinanceState(props);
 
   return (
     <Card
@@ -384,157 +208,18 @@ export default function FactoryLoadingDispatchFinance({ orderId, dispatchId, com
             </div>
 
             {canEdit && formOpen && (
-              <form
-                onSubmit={(event: FormEvent<HTMLFormElement>) => {
-                  event.preventDefault();
-                  if (validForm && !busy) save.mutate(form);
-                }}
-                className="space-y-3 rounded-lg border border-blue-200 bg-blue-50/30 p-3 dark:border-blue-900 dark:bg-blue-950/20"
-                data-testid="dispatch-trip-charge-form"
-              >
-                <p className="text-sm font-semibold">{editingId ? "Edit draft charge" : "New trip charge"}</p>
-                <div className="space-y-1">
-                  <Label htmlFor="dispatch-charge-kind">Type</Label>
-                  <select
-                    id="dispatch-charge-kind"
-                    className="h-9 w-full rounded-md border bg-background px-2 text-sm"
-                    value={form.kind}
-                    onChange={(e) =>
-                      setForm({
-                        ...form,
-                        kind: e.target.value as Kind,
-                        ledgerAccountId: "",
-                        offsetLedgerAccountId: "",
-                        erpChargeType: "",
-                      })
-                    }
-                  >
-                    <option value="BILLABLE">Customer-billable charge</option>
-                    <option value="INTERNAL">Internal expense (not billed)</option>
-                    <option value="DISCOUNT">Customer discount</option>
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="dispatch-charge-name">Name</Label>
-                  <Input
-                    id="dispatch-charge-name"
-                    maxLength={160}
-                    required
-                    value={form.name}
-                    onChange={(e) => setForm({ ...form, name: e.target.value })}
-                    placeholder="Transport, freight, handling…"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="dispatch-charge-amount">Amount (USD)</Label>
-                  <Input
-                    id="dispatch-charge-amount"
-                    required
-                    inputMode="decimal"
-                    placeholder="0.00"
-                    value={form.amount}
-                    onChange={(e) => setForm({ ...form, amount: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="dispatch-charge-account">Ledger account</Label>
-                  <select
-                    id="dispatch-charge-account"
-                    required
-                    className="h-9 w-full rounded-md border bg-background px-2 text-sm"
-                    value={form.ledgerAccountId}
-                    onChange={(e) => setForm({ ...form, ledgerAccountId: e.target.value })}
-                  >
-                    <option value="">Select account</option>
-                    {mainAccounts.map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.code} — {a.name} ({a.accountType})
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-[11px] text-muted-foreground">
-                    All active ledger account types are available. Billable charges credit this account, discounts debit
-                    it, and internal expenses debit it. Confirm the intended accounting treatment before posting.
-                  </p>
-                </div>
-                {form.kind === "INTERNAL" && (
-                  <div className="space-y-1">
-                    <Label htmlFor="dispatch-charge-offset">Payable / offset account</Label>
-                    <select
-                      id="dispatch-charge-offset"
-                      required
-                      className="h-9 w-full rounded-md border bg-background px-2 text-sm"
-                      value={form.offsetLedgerAccountId}
-                      onChange={(e) => setForm({ ...form, offsetLedgerAccountId: e.target.value })}
-                    >
-                      <option value="">Select offset</option>
-                      {offsetAccounts
-                        .filter((a) => String(a.id) !== form.ledgerAccountId)
-                        .map((a) => (
-                          <option key={a.id} value={a.id}>
-                            {a.code} — {a.name}
-                          </option>
-                        ))}
-                    </select>
-                    <p className="text-[11px] text-muted-foreground">
-                      Recording this expense does not imply a cash payment.
-                    </p>
-                  </div>
-                )}
-                {form.kind === "BILLABLE" && (
-                  <div className="space-y-1">
-                    <Label htmlFor="dispatch-charge-erp-type">ERP PO charge mapping (optional)</Label>
-                    <select
-                      id="dispatch-charge-erp-type"
-                      className="h-9 w-full rounded-md border bg-background px-2 text-sm"
-                      value={form.erpChargeType}
-                      onChange={(e) => setForm({ ...form, erpChargeType: e.target.value as ErpType })}
-                    >
-                      <option value="">Not mapped to ERP PO</option>
-                      <option value="freight">Freight</option>
-                      <option value="surcharge">Surcharge</option>
-                      <option value="fumigation">Fumigation</option>
-                      <option value="documentCharges">Document charges</option>
-                    </select>
-                    <p className="text-[11px] text-muted-foreground">
-                      Unmapped charges will require explicit review before PO export in Phase 5.
-                    </p>
-                  </div>
-                )}
-                {form.kind === "DISCOUNT" && (
-                  <p className="text-[11px] text-muted-foreground">
-                    Discounts are tracked separately and will map to the ERP PO Discount column.
-                  </p>
-                )}
-                <div className="space-y-1">
-                  <Label htmlFor="dispatch-charge-notes">Notes (optional)</Label>
-                  <Textarea
-                    id="dispatch-charge-notes"
-                    rows={2}
-                    maxLength={1000}
-                    value={form.notes}
-                    onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                  />
-                </div>
-                <div className="flex justify-end gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={busy}
-                    onClick={() => {
-                      setFormOpen(false);
-                      setEditingId(null);
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                  <Button type="submit" size="sm" disabled={!validForm || busy}>
-                    {save.isPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
-                    Save draft charge
-                  </Button>
-                </div>
-              </form>
+              <FactoryLoadingDispatchFinanceDispatchTripChargeForm
+                busy={busy}
+                editingId={editingId}
+                form={form}
+                mainAccounts={mainAccounts}
+                offsetAccounts={offsetAccounts}
+                save={save}
+                setEditingId={setEditingId}
+                setForm={setForm}
+                setFormOpen={setFormOpen}
+                validForm={validForm}
+              />
             )}
             <p className="flex items-start gap-2 border-t pt-3 text-[11px] text-muted-foreground">
               <DollarSign className="h-3.5 w-3.5 shrink-0" />

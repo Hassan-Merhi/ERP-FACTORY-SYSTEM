@@ -1,31 +1,11 @@
 import { TabsList, PillTabButton } from "@/components/ui/tabs";
-import { getErrorDetails } from "@shared/errorUtils";
-import { useState, useRef, useEffect } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { Redirect, useLocation } from "wouter";
+import { Redirect } from "wouter";
 import { PageHeader } from "@/components/PageHeader";
-import {
-  CalendarDays,
-  Trash2,
-  Plus,
-  Minus,
-  Printer,
-  Package,
-  ChevronDown,
-  ChevronUp,
-  CheckSquare,
-  Square,
-  AlertTriangle,
-  Tag,
-} from "lucide-react";
+import { Printer, AlertTriangle, Tag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ExportButton } from "@/components/export/ReportExportMenu";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   Dialog,
@@ -35,284 +15,72 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Skeleton } from "@/components/ui/skeleton";
-import { useToast } from "@/hooks/use-toast";
-import { queryClient } from "@/lib/queryClient";
-import { useAppMode } from "@/contexts/AppModeContext";
-import { getApiRequest } from "@/lib/factoryApi";
-import { isZebraMode, printRawZpl } from "@/lib/zebraPrint";
-import { buildZplBatch } from "@/lib/zplBuilder";
-import { LabelPrintSettings, getPaperFormat } from "@/components/LabelPrintSettings";
-import { type LabelData, type A4DesignColor, formatLabelNum } from "@/lib/labelHtml";
-import { useLabelDesignColors } from "@/hooks/useLabelDesignColors";
-import type { FactoryBale, FactoryBaleProduct, Location, FactoryCategory } from "@shared/schema";
-import type { CartItem, CreatedBale } from "./wipersreentry/types";
-import { exportCreatedBalesWorkbook } from "./wipersreentry/exportWorkbook";
-import { isWipers, isWipersBale } from "./wipersreentry/utils";
-import { preparePriorityWipersLabels, printLabelsInBrowser } from "./wipersreentry/printUtils";
-import { productMatchesSearch } from "@shared/factoryProductSearch";
-import type { FactoryMyAccess } from "@shared/apiTypes";
-import { useCompany } from "@/contexts/CompanyContext";
-import { companyQueryKey } from "@/lib/companyQueryScope";
+import { LabelPrintSettings } from "@/components/LabelPrintSettings";
+import { formatLabelNum } from "@/lib/labelHtml";
+import { useWipersReEntryState } from "./useWipersReEntryState";
+import { WipersReEntryCardSection } from "./WipersReEntryCardSection";
+import { WipersReEntryCardSection2, WipersReEntryCardSection3 } from "./WipersReEntryCardSection2";
+
 export default function WipersReEntry() {
-  const { selectedCompany } = useCompany();
-  const [, navigate] = useLocation();
-  const { toast } = useToast();
-  const { colors } = useLabelDesignColors();
-  const appMode = useAppMode();
-  const modeApiRequest = getApiRequest(appMode);
-  const { data: myAccess } = useQuery<FactoryMyAccess>({
-    queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
-    enabled: Boolean(selectedCompany?.id),
-    staleTime: 5 * 60000,
-  });
-  const accessReady = Boolean(
-    selectedCompany?.id && myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
-  );
-  const hiddenTabs = accessReady ? (myAccess?.hiddenCostFields ?? []) : [];
-  const showRelabeling = accessReady && !hiddenTabs.includes("hide_tab_relabeling_main");
-  const showWipersReEntry = accessReady && !hiddenTabs.includes("hide_tab_relabeling_wipers");
-  const [entryDate, setEntryDate] = useState<string>(new Date().toLocaleDateString("en-CA"));
-  const [selectedLocationId, setSelectedLocationId] = useState<string>("");
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [searchInput, setSearchInput] = useState("");
-  const [showDropdown, setShowDropdown] = useState(false);
-  const [searchError, setSearchError] = useState("");
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [createdBales, setCreatedBales] = useState<CreatedBale[] | null>(null);
-  const [cleanupOpen, setCleanupOpen] = useState(false);
-  const [cleanupSelectedIds, setCleanupSelectedIds] = useState<Set<number>>(new Set());
-  const [supervisorUsername, setSupervisorUsername] = useState("");
-  const [supervisorPassword, setSupervisorPassword] = useState("");
-  const [designPickerOpen, setDesignPickerOpen] = useState(false);
-  const [pendingLabels, setPendingLabels] = useState<LabelData[] | null>(null);
-  const scanRef = useRef<HTMLInputElement>(null);
-  const { data: baleProducts, isLoading: productsLoading } = useQuery<FactoryBaleProduct[]>({
-    queryKey: companyQueryKey("/api/factory/bale-products?profile=picker", selectedCompany?.id),
-    enabled: Boolean(selectedCompany?.id),
-  });
-  const { data: locations } = useQuery<Location[]>({
-    queryKey: companyQueryKey("/api/locations", selectedCompany?.id),
-    enabled: Boolean(selectedCompany?.id),
-  });
-  const { data: categories = [] } = useQuery<FactoryCategory[]>({
-    queryKey: companyQueryKey("/api/factory/categories", selectedCompany?.id),
-    enabled: Boolean(selectedCompany?.id),
-  });
-  interface WorkerOption {
-    id: number;
-    fullName?: string;
-    name?: string;
-  }
-  const { data: workers = [] } = useQuery<WorkerOption[]>({
-    queryKey: companyQueryKey("/api/factory/workers?profile=picker", selectedCompany?.id),
-    enabled: Boolean(selectedCompany?.id),
-  });
-  interface BaleListRow {
-    bale: FactoryBale;
-    product: FactoryBaleProduct;
-  }
-  const { data: allBalesData = [], isLoading: balesLoading } = useQuery<BaleListRow[]>({
-    queryKey: companyQueryKey("/api/factory/bales", selectedCompany?.id),
-    enabled: cleanupOpen && Boolean(selectedCompany?.id),
-  });
-  useEffect(() => {
-    setSelectedLocationId("");
-    setCart([]);
-    setCleanupSelectedIds(new Set());
-    setCreatedBales(null);
-    setConfirmOpen(false);
-    setCleanupOpen(false);
-    setSupervisorUsername("");
-    setSupervisorPassword("");
-    setPendingLabels(null);
-  }, [selectedCompany?.id]);
-  const activeLocations = locations?.filter((l) => l.active) ?? [];
-  const wiperProducts = baleProducts?.filter((p) => p.active && isWipers(p, categories)) ?? [];
-  const currentWipersBales = allBalesData
-    .filter((row) => isWipersBale(row))
-    .map((row) => ({ ...row.bale, _product: row.product }));
-  const filteredProducts =
-    searchInput.trim().length > 0
-      ? wiperProducts.filter((p) => productMatchesSearch(p, searchInput)).slice(0, 20)
-      : wiperProducts.slice(0, 20);
-  const totalQty = cart.reduce((s, i) => s + i.qty, 0);
-  const totalKg = cart.reduce((s, i) => s + i.qty * i.weightPerBaleKg, 0);
-  const cleanupTotalKg = currentWipersBales.reduce((s, b) => s + parseFloat(b.weightKg || "0"), 0);
-  const addToCart = (product: FactoryBaleProduct) => {
-    const defaultWeight = product.weightPerBaleKg ? parseFloat(product.weightPerBaleKg) : 25;
-    setCart((prev) => {
-      const existing = prev.find((i) => i.productId === product.id);
-      if (existing) return prev.map((i) => (i.productId === product.id ? { ...i, qty: i.qty + 1 } : i));
-      return [...prev, { productId: product.id, product, qty: 1, weightPerBaleKg: defaultWeight, finalizedBy: null }];
-    });
-    setSearchInput("");
-    setShowDropdown(false);
-    setSearchError("");
-    setTimeout(() => scanRef.current?.focus(), 50);
-  };
-  const updateQty = (productId: number, delta: number) => {
-    setCart((prev) => prev.map((i) => (i.productId === productId ? { ...i, qty: Math.max(1, i.qty + delta) } : i)));
-  };
-  const setQtyDirect = (productId: number, val: string) => {
-    const n = parseInt(val);
-    if (!isNaN(n) && n >= 1) {
-      setCart((prev) => prev.map((i) => (i.productId === productId ? { ...i, qty: n } : i)));
-    }
-  };
-  const updateWeight = (productId: number, val: string) => {
-    const n = parseFloat(val);
-    if (!isNaN(n) && n > 0) {
-      setCart((prev) => prev.map((i) => (i.productId === productId ? { ...i, weightPerBaleKg: n } : i)));
-    }
-  };
-
-  const removeItem = (productId: number) => {
-    setCart((prev) => prev.filter((i) => i.productId !== productId));
-  };
-
-  const assignWorker = (productId: number, workerId: number | null) => {
-    setCart((prev) => prev.map((i) => (i.productId === productId ? { ...i, finalizedBy: workerId } : i)));
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && filteredProducts.length > 0) {
-      e.preventDefault();
-      addToCart(filteredProducts[0]);
-    }
-  };
-
-  const toggleCleanupSelect = (id: number) => {
-    setCleanupSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const toggleSelectAll = () => {
-    if (cleanupSelectedIds.size === currentWipersBales.length) {
-      setCleanupSelectedIds(new Set());
-    } else {
-      setCleanupSelectedIds(new Set(currentWipersBales.map((b) => b.id)));
-    }
-  };
-
-  const stockEntryMutation = useMutation({
-    mutationFn: async () => {
-      const items = cart.map((item) => ({
-        productId: item.productId,
-        quantity: item.qty,
-        weightPerBale: item.weightPerBaleKg.toString(),
-        finalizedBy: item.finalizedBy,
-      }));
-      const body = { items, erpLocationId: parseInt(selectedLocationId), entryDate };
-      const response = await modeApiRequest("POST", "/api/factory/stock-entry", body);
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.message || "Failed to create bales");
-      }
-      return await response.json();
-    },
-    onSuccess: (data) => {
-      setCreatedBales(data.bales || []);
-      setCart([]);
-      setConfirmOpen(false);
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/bales"], refetchType: "active" });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/bale-products?profile=picker"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/stock-entry/in-stock"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/mix-batches"] });
-      toast({ title: "Bales Created", description: `${data.bales?.length || 0} bales entered under ${entryDate}` });
-    },
-    onError: (err: Error) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
-    },
-  });
-
-  const cleanupMutation = useMutation({
-    mutationFn: async () => {
-      const baleIds = Array.from(cleanupSelectedIds);
-      const response = await modeApiRequest("POST", "/api/factory/stock-entry/remove", {
-        baleIds,
-        supervisorUsername,
-        supervisorPassword,
-        reason: "Wipers stock cleanup before re-entry",
-      });
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.message || "Failed to remove bales");
-      }
-      return await response.json();
-    },
-    onSuccess: (data) => {
-      setCleanupSelectedIds(new Set());
-      setSupervisorUsername("");
-      setSupervisorPassword("");
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/bales"], refetchType: "active" });
-      toast({
-        title: "Bales Removed",
-        description: `${data.removed} bales removed from stock`,
-      });
-    },
-    onError: (err: Error) => {
-      toast({ title: "Removal Failed", description: err.message, variant: "destructive" });
-    },
-  });
-
-  const openBrowserPrint = (labels: LabelData[], format: "A4" | "A5" | "sticker", designColor?: A4DesignColor) => {
-    if (printLabelsInBrowser(labels, format, designColor)) return;
-    setPendingLabels(labels);
-    setDesignPickerOpen(true);
-  };
-
-  const handlePrint = async (format: "A4" | "A5" | "sticker") => {
-    if (!createdBales || createdBales.length === 0) return;
-    const labels = await preparePriorityWipersLabels(createdBales, modeApiRequest, toast);
-    if (!labels) return;
-
-    if (isZebraMode() && format === "sticker" && !labels.some((label) => label.priorityColor)) {
-      try {
-        const zpl = buildZplBatch(labels, true);
-        await printRawZpl(zpl);
-        toast({ title: "Labels sent to Zebra printer" });
-        return;
-      } catch (err) {
-        toast({
-          title: "Zebra failed",
-          description: getErrorDetails(err).message + " — using browser print",
-          variant: "destructive",
-        });
-      }
-    }
-    openBrowserPrint(labels, format);
-  };
-
-  const handlePrintAll = async () => {
-    if (!createdBales || createdBales.length === 0) return;
-    const labels = await preparePriorityWipersLabels(createdBales, modeApiRequest, toast);
-    if (!labels) return;
-    const paperFormat = getPaperFormat();
-    if (paperFormat === "A4") {
-      setPendingLabels(labels);
-      setDesignPickerOpen(true);
-    } else {
-      openBrowserPrint(labels, "sticker");
-    }
-  };
-
-  const exportCsv = async () => {
-    if (!createdBales) return;
-    try {
-      await exportCreatedBalesWorkbook(createdBales, entryDate);
-    } catch (err) {
-      toast({
-        title: "Export failed",
-        description: getErrorDetails(err).optionalMessage || "Could not generate Excel file.",
-        variant: "destructive",
-      });
-    }
-  };
+  const {
+    activeLocations,
+    addToCart,
+    assignWorker,
+    balesLoading,
+    cart,
+    cleanupMutation,
+    cleanupOpen,
+    cleanupSelectedIds,
+    cleanupTotalKg,
+    colors,
+    confirmOpen,
+    createdBales,
+    currentWipersBales,
+    designPickerOpen,
+    entryDate,
+    exportCsv,
+    filteredProducts,
+    handleKeyDown,
+    handlePrint,
+    handlePrintAll,
+    navigate,
+    openBrowserPrint,
+    pendingLabels,
+    productsLoading,
+    removeItem,
+    scanRef,
+    searchError,
+    searchInput,
+    selectedLocationId,
+    setCart,
+    setCleanupOpen,
+    setConfirmOpen,
+    setDesignPickerOpen,
+    setEntryDate,
+    setPendingLabels,
+    setQtyDirect,
+    setSearchError,
+    setSearchInput,
+    setSelectedLocationId,
+    setShowDropdown,
+    setSupervisorPassword,
+    setSupervisorUsername,
+    showDropdown,
+    showRelabeling,
+    showWipersReEntry,
+    stockEntryMutation,
+    supervisorPassword,
+    supervisorUsername,
+    toast,
+    toggleCleanupSelect,
+    toggleSelectAll,
+    totalKg,
+    totalQty,
+    updateQty,
+    updateWeight,
+    wiperProducts,
+    workers,
+  } = useWipersReEntryState();
 
   if (!showWipersReEntry && showRelabeling) {
     return <Redirect to="/factory/bale-relabeling" />;
@@ -353,400 +121,61 @@ export default function WipersReEntry() {
         </div>
 
         {/* Controls */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <CalendarDays className="h-4 w-4" />
-              Entry Settings
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="space-y-1">
-              <Label htmlFor="entry-date">
-                Entry Date <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="entry-date"
-                type="date"
-                value={entryDate}
-                onChange={(e) => setEntryDate(e.target.value)}
-                data-testid="input-entry-date"
-              />
-              <p className="text-xs text-muted-foreground">Bales will be recorded under this date</p>
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="location">
-                Warehouse Location <span className="text-destructive">*</span>
-              </Label>
-              <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
-                <SelectTrigger id="location" data-testid="select-location">
-                  <SelectValue placeholder="Select location..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {activeLocations.map((l) => (
-                    <SelectItem key={l.id} value={l.id.toString()} data-testid={`option-location-${l.id}`}>
-                      {l.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label>Default Worker (optional)</Label>
-              <Select
-                value=""
-                onValueChange={(workerId) => {
-                  const id = workerId === "none" ? null : parseInt(workerId);
-                  setCart((prev) => prev.map((i) => ({ ...i, finalizedBy: id })));
-                }}
-              >
-                <SelectTrigger data-testid="select-default-worker">
-                  <SelectValue placeholder="Apply worker to all rows..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">— None —</SelectItem>
-                  {workers.map((w) => (
-                    <SelectItem key={w.id} value={w.id.toString()}>
-                      {w.fullName || w.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
+        <WipersReEntryCardSection3
+          activeLocations={activeLocations}
+          entryDate={entryDate}
+          selectedLocationId={selectedLocationId}
+          setCart={setCart}
+          setEntryDate={setEntryDate}
+          setSelectedLocationId={setSelectedLocationId}
+          workers={workers}
+        />
 
         {/* Cart */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Package className="h-4 w-4" />
-              Wipers Products
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Product search */}
-            <div className="relative">
-              <Input
-                ref={scanRef}
-                placeholder="Search wipers / garbage product by name or article code..."
-                value={searchInput}
-                onChange={(e) => {
-                  setSearchInput(e.target.value);
-                  setShowDropdown(true);
-                  setSearchError("");
-                }}
-                onFocus={() => setShowDropdown(true)}
-                onBlur={() => setTimeout(() => setShowDropdown(false), 150)}
-                onKeyDown={handleKeyDown}
-                data-testid="input-product-search"
-              />
-              <MobileBarcodeScanner
-                onScan={(code) => {
-                  const match = wiperProducts.find((product) => productMatchesSearch(product, code));
-                  if (match) addToCart(match);
-                  else {
-                    setSearchInput(code);
-                    setSearchError(`Unknown product: ${code}`);
-                  }
-                }}
-                className="mt-2"
-              />
-              {searchError && <p className="text-xs text-destructive mt-1">{searchError}</p>}
-              {showDropdown && filteredProducts.length > 0 && (
-                <div className="absolute z-50 left-0 right-0 mt-1 bg-popover border rounded-md shadow-md max-h-60 overflow-y-auto">
-                  {filteredProducts.map((p) => (
-                    <button
-                      key={p.id}
-                      className="w-full text-left px-3 py-2 text-sm hover-elevate flex items-center justify-between gap-2"
-                      onMouseDown={() => addToCart(p)}
-                      data-testid={`option-product-${p.id}`}
-                    >
-                      <span>{p.name}</span>
-                      <span className="text-xs text-muted-foreground">{p.articleCode}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-              {productsLoading && <p className="text-xs text-muted-foreground mt-1">Loading products...</p>}
-              {!productsLoading && wiperProducts.length === 0 && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  No wipers/garbage products found. Ensure products are categorized as Wipers or Garbage.
-                </p>
-              )}
-            </div>
-
-            {/* Cart table */}
-            {cart.length > 0 ? (
-              <div className="table-responsive">
-                <Table>
-                  <TableHeader className="sticky top-0 z-30 bg-background">
-                    <TableRow>
-                      <TableHead>Product</TableHead>
-                      <TableHead>Article Code</TableHead>
-                      <TableHead className="w-32 text-right">Qty</TableHead>
-                      <TableHead className="w-32 text-right">Weight/Bale (kg)</TableHead>
-                      <TableHead className="text-right">Total Weight</TableHead>
-                      <TableHead>Worker</TableHead>
-                      <TableHead className="w-10"></TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {cart.map((item) => (
-                      <TableRow key={item.productId} data-testid={`row-cart-${item.productId}`}>
-                        <TableCell className="font-medium">{item.product.name}</TableCell>
-                        <TableCell className="text-muted-foreground text-sm">
-                          {item.product.articleCode || item.product.code}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              onClick={() => updateQty(item.productId, -1)}
-                              data-testid={`button-qty-minus-${item.productId}`}
-                            >
-                              <Minus className="h-3 w-3" />
-                            </Button>
-                            <Input
-                              className="w-14 text-center font-mono"
-                              value={item.qty}
-                              onChange={(e) => setQtyDirect(item.productId, e.target.value)}
-                              data-testid={`input-qty-${item.productId}`}
-                            />
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              onClick={() => updateQty(item.productId, 1)}
-                              data-testid={`button-qty-plus-${item.productId}`}
-                            >
-                              <Plus className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Input
-                            className="w-24 text-right font-mono ml-auto"
-                            defaultValue={item.weightPerBaleKg}
-                            onBlur={(e) => updateWeight(item.productId, e.target.value)}
-                            data-testid={`input-weight-${item.productId}`}
-                          />
-                        </TableCell>
-                        <TableCell className="text-right font-mono">
-                          {formatLabelNum(item.qty * item.weightPerBaleKg)} kg
-                        </TableCell>
-                        <TableCell>
-                          <Select
-                            value={item.finalizedBy?.toString() || "none"}
-                            onValueChange={(v) => assignWorker(item.productId, v === "none" ? null : parseInt(v))}
-                          >
-                            <SelectTrigger className="h-8 w-28" data-testid={`select-worker-${item.productId}`}>
-                              <SelectValue placeholder="None" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">None</SelectItem>
-                              {workers.map((w) => (
-                                <SelectItem key={w.id} value={w.id.toString()}>
-                                  {w.fullName || w.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => removeItem(item.productId)}
-                            data-testid={`button-remove-${item.productId}`}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            ) : (
-              <div className="py-8 text-center text-muted-foreground text-sm">
-                Search and add wipers / garbage products above
-              </div>
-            )}
-
-            {/* Cart summary + submit */}
-            {cart.length > 0 && (
-              <div className="flex flex-wrap items-center justify-between gap-4 pt-2 border-t">
-                <div className="flex gap-4 text-sm">
-                  <span>
-                    Total bales:{" "}
-                    <span className="font-semibold font-mono" data-testid="text-total-qty">
-                      {totalQty}
-                    </span>
-                  </span>
-                  <span>
-                    Total weight:{" "}
-                    <span className="font-semibold font-mono" data-testid="text-total-kg">
-                      {formatLabelNum(totalKg)} kg
-                    </span>
-                  </span>
-                </div>
-                <Button
-                  onClick={() => {
-                    if (!entryDate) {
-                      toast({ title: "Error", description: "Entry date is required", variant: "destructive" });
-                      return;
-                    }
-                    if (!selectedLocationId) {
-                      toast({ title: "Error", description: "Warehouse location is required", variant: "destructive" });
-                      return;
-                    }
-                    setConfirmOpen(true);
-                  }}
-                  data-testid="button-submit"
-                >
-                  Create {totalQty} Bale{totalQty !== 1 ? "s" : ""}
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <WipersReEntryCardSection
+          addToCart={addToCart}
+          assignWorker={assignWorker}
+          cart={cart}
+          entryDate={entryDate}
+          filteredProducts={filteredProducts}
+          handleKeyDown={handleKeyDown}
+          productsLoading={productsLoading}
+          removeItem={removeItem}
+          scanRef={scanRef}
+          searchError={searchError}
+          searchInput={searchInput}
+          selectedLocationId={selectedLocationId}
+          setConfirmOpen={setConfirmOpen}
+          setQtyDirect={setQtyDirect}
+          setSearchError={setSearchError}
+          setSearchInput={setSearchInput}
+          setShowDropdown={setShowDropdown}
+          showDropdown={showDropdown}
+          toast={toast}
+          totalKg={totalKg}
+          totalQty={totalQty}
+          updateQty={updateQty}
+          updateWeight={updateWeight}
+          wiperProducts={wiperProducts}
+          workers={workers}
+        />
 
         {/* Cleanup panel */}
-        <Card>
-          <CardHeader className="pb-3 cursor-pointer" onClick={() => setCleanupOpen((o) => !o)}>
-            <CardTitle className="text-base flex items-center justify-between gap-2">
-              <span className="flex items-center gap-2">
-                <Trash2 className="h-4 w-4 text-destructive" />
-                Current Wipers Stock Cleanup
-                {currentWipersBales.length > 0 && <Badge variant="secondary">{currentWipersBales.length} bales</Badge>}
-              </span>
-              {cleanupOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-            </CardTitle>
-          </CardHeader>
-          {cleanupOpen && (
-            <CardContent className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                Use this panel to remove current wipers / garbage bales before re-entering with the new date. Supervisor
-                credentials are required.
-              </p>
-              {balesLoading ? (
-                <Skeleton className="h-32 w-full" />
-              ) : currentWipersBales.length === 0 ? (
-                <div className="py-6 text-center text-muted-foreground text-sm">
-                  No wipers / garbage bales currently in stock
-                </div>
-              ) : (
-                <>
-                  <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-                    <div className="flex gap-3">
-                      <span>{currentWipersBales.length} bales</span>
-                      <span>{formatLabelNum(cleanupTotalKg)} kg total</span>
-                    </div>
-                    <Button variant="ghost" size="sm" onClick={toggleSelectAll} data-testid="button-select-all-cleanup">
-                      {cleanupSelectedIds.size === currentWipersBales.length ? (
-                        <>
-                          <CheckSquare className="h-4 w-4 mr-1" />
-                          Deselect All
-                        </>
-                      ) : (
-                        <>
-                          <Square className="h-4 w-4 mr-1" />
-                          Select All
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                  <div className="overflow-x-auto max-h-64 overflow-y-auto">
-                    <Table>
-                      <TableHeader className="sticky top-0 z-30 bg-background">
-                        <TableRow>
-                          <TableHead className="w-10"></TableHead>
-                          <TableHead>Reference</TableHead>
-                          <TableHead>Product</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead className="text-right">Weight (kg)</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {currentWipersBales.map((bale) => (
-                          <TableRow
-                            key={bale.id}
-                            className="cursor-pointer"
-                            onClick={() => toggleCleanupSelect(bale.id)}
-                            data-testid={`row-cleanup-bale-${bale.id}`}
-                          >
-                            <TableCell>
-                              <div className="flex items-center justify-center">
-                                {cleanupSelectedIds.has(bale.id) ? (
-                                  <CheckSquare className="h-4 w-4 text-primary" />
-                                ) : (
-                                  <Square className="h-4 w-4 text-muted-foreground" />
-                                )}
-                              </div>
-                            </TableCell>
-                            <TableCell className="font-mono text-sm">{bale.referenceNumber}</TableCell>
-                            <TableCell className="text-sm">{bale.productName || bale.category || "-"}</TableCell>
-                            <TableCell className="text-sm text-muted-foreground">
-                              {(bale.status || "-").replace(/_/g, " ")}
-                            </TableCell>
-                            <TableCell className="text-right font-mono text-sm">
-                              {formatLabelNum(parseFloat(bale.weightKg || "0"))}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-
-                  {cleanupSelectedIds.size > 0 && (
-                    <div className="border rounded-md p-4 space-y-3 bg-destructive/5">
-                      <p className="text-sm font-medium text-destructive flex items-center gap-2">
-                        <AlertTriangle className="h-4 w-4" />
-                        Removing {cleanupSelectedIds.size} bale{cleanupSelectedIds.size !== 1 ? "s" : ""} — supervisor
-                        authorization required
-                      </p>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div className="space-y-1">
-                          <Label htmlFor="sup-user">Supervisor Username</Label>
-                          <Input
-                            id="sup-user"
-                            value={supervisorUsername}
-                            onChange={(e) => setSupervisorUsername(e.target.value)}
-                            placeholder="Username"
-                            data-testid="input-supervisor-username"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <Label htmlFor="sup-pass">Supervisor Password</Label>
-                          <Input
-                            id="sup-pass"
-                            type="password"
-                            value={supervisorPassword}
-                            onChange={(e) => setSupervisorPassword(e.target.value)}
-                            placeholder="Password"
-                            data-testid="input-supervisor-password"
-                          />
-                        </div>
-                      </div>
-                      <Button
-                        variant="destructive"
-                        disabled={!supervisorUsername || !supervisorPassword || cleanupMutation.isPending}
-                        onClick={() => cleanupMutation.mutate()}
-                        data-testid="button-remove-selected"
-                      >
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        {cleanupMutation.isPending
-                          ? "Removing..."
-                          : `Remove ${cleanupSelectedIds.size} Bale${cleanupSelectedIds.size !== 1 ? "s" : ""}`}
-                      </Button>
-                    </div>
-                  )}
-                </>
-              )}
-            </CardContent>
-          )}
-        </Card>
+        <WipersReEntryCardSection2
+          balesLoading={balesLoading}
+          cleanupMutation={cleanupMutation}
+          cleanupOpen={cleanupOpen}
+          cleanupSelectedIds={cleanupSelectedIds}
+          cleanupTotalKg={cleanupTotalKg}
+          currentWipersBales={currentWipersBales}
+          setCleanupOpen={setCleanupOpen}
+          setSupervisorPassword={setSupervisorPassword}
+          setSupervisorUsername={setSupervisorUsername}
+          supervisorPassword={supervisorPassword}
+          supervisorUsername={supervisorUsername}
+          toggleCleanupSelect={toggleCleanupSelect}
+          toggleSelectAll={toggleSelectAll}
+        />
 
         {/* Results section */}
         {createdBales && createdBales.length > 0 && (

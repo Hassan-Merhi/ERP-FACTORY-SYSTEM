@@ -1,385 +1,150 @@
-import type { ClientErrorLike } from "@/lib/clientError";
-import { getErrorDetails } from "@shared/errorUtils";
-import { useState, useRef, useEffect, useCallback } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { useParams, useLocation, useSearch } from "wouter";
-import { useEscapeToParent } from "@/hooks/use-escape-to-parent";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
-import { queryClient, apiRequest } from "@/lib/queryClient";
 import { ExternalLink, FileCheck, List, Star } from "lucide-react";
 import { ExportButton } from "@/components/export/ReportExportMenu";
-import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
-import * as XLSX from "@/lib/excelHelper";
 import { PageHeader } from "@/components/PageHeader";
 
 import { AliasConflictAlert, ComparisonCards } from "./containerverification/ComparisonCards";
 import { LoadedItemsCard } from "./containerverification/LoadedItemsCard";
 import { SummaryCards } from "./containerverification/SummaryCards";
-import type { LoadedItem, LoadedItemDraft, VerificationResult } from "./containerverification/types";
-import type { ContainerDetailData } from "./containers/types";
-import type { Supplier, SupplierProforma } from "@shared/schema";
-import type { AuthMe } from "@shared/apiTypes";
+import type { LoadedItemDraft } from "./containerverification/types";
+import { useContainerVerificationStatePart1 } from "./useContainerVerificationStatePart1";
+import { useContainerVerificationStatePart2 } from "./useContainerVerificationStatePart2";
 
-type SupplierIdentity = {
-  id?: number;
-  legalName?: string | null;
-  name?: string | null;
-  code?: string | null;
-};
-
-type SupplierDetailResponse = SupplierIdentity & {
-  supplier?: SupplierIdentity;
-};
-
-type LoadedItemSyncResult = {
-  imported: number;
-  skipped: number;
-  replaced: number;
-  items: LoadedItem[];
-};
+function useContainerVerificationState() {
+  const {
+    addItemMutation,
+    autoCompare,
+    autoCompareTriggered,
+    autoPopulateMutation,
+    autoSupplierId,
+    containerData,
+    containerId,
+    deleteItemMutation,
+    fileInputRef,
+    generateComparison,
+    handleFileImport,
+    isDeveloper,
+    loadedItems,
+    navigate,
+    proformas,
+    selectedProformaId,
+    selectedSupplierData,
+    selectedSupplierId,
+    setAutoCompareTriggered,
+    setSelectedProformaId,
+    setSelectedSupplierId,
+    setVerificationResult,
+    setViewMode,
+    suppliers,
+    toast,
+    updateItemMutation,
+    verificationResult,
+    viewMode,
+  } = useContainerVerificationStatePart1();
+  const {
+    container,
+    exportSummaryExcel,
+    exportToExcel,
+    lessLoaded,
+    notRequested,
+    openSelectedProforma,
+    overloaded,
+    priceDiffs,
+    requestAutoPopulate,
+    selectedSupplier,
+    selectedSupplierMissingFromList,
+  } = useContainerVerificationStatePart2({
+    autoCompare,
+    autoCompareTriggered,
+    autoPopulateMutation,
+    autoSupplierId,
+    containerData,
+    containerId,
+    generateComparison,
+    proformas,
+    selectedProformaId,
+    selectedSupplierData,
+    selectedSupplierId,
+    setAutoCompareTriggered,
+    setSelectedProformaId,
+    setSelectedSupplierId,
+    suppliers,
+    toast,
+    verificationResult,
+  });
+  return {
+    addItemMutation,
+    autoPopulateMutation,
+    container,
+    containerId,
+    deleteItemMutation,
+    exportSummaryExcel,
+    exportToExcel,
+    fileInputRef,
+    generateComparison,
+    handleFileImport,
+    isDeveloper,
+    lessLoaded,
+    loadedItems,
+    navigate,
+    notRequested,
+    openSelectedProforma,
+    overloaded,
+    priceDiffs,
+    proformas,
+    requestAutoPopulate,
+    selectedProformaId,
+    selectedSupplier,
+    selectedSupplierId,
+    selectedSupplierMissingFromList,
+    setSelectedProformaId,
+    setSelectedSupplierId,
+    setVerificationResult,
+    setViewMode,
+    suppliers,
+    updateItemMutation,
+    verificationResult,
+    viewMode,
+  };
+}
 
 export default function ContainerVerification() {
-  const { toast } = useToast();
-  const [, navigate] = useLocation();
-  const searchString = useSearch();
-  const autoCompare = new URLSearchParams(searchString).get("autoCompare") === "true";
-  const autoSupplierId = new URLSearchParams(searchString).get("supplierId") || "";
-  const params = useParams<{ containerId: string }>();
-  useEscapeToParent();
-  const containerId = parseInt(params.containerId);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Keep barcode-conflict diagnostics visible only to the Developer role.
-  const { data: currentUser } = useQuery<AuthMe>({ queryKey: ["/api/auth/me"] });
-  const isDeveloper = currentUser?.role === "Developer";
-
-  const [selectedSupplierId, setSelectedSupplierId] = useState<string>("");
-  const [selectedProformaId, setSelectedProformaId] = useState<string>("");
-  const [verificationResult, setVerificationResult] = useState<VerificationResult | null>(null);
-  const [autoCompareTriggered, setAutoCompareTriggered] = useState(false);
-  const [viewMode, setViewMode] = useState<"detailed" | "summary">("detailed");
-
-  const { data: containerData } = useQuery<ContainerDetailData>({
-    queryKey: [`/api/containers/${containerId}`],
-    enabled: !!containerId,
-  });
-
-  const { data: suppliers = [] } = useQuery<Supplier[]>({
-    queryKey: ["/api/suppliers", "allowParentFallback"],
-    queryFn: async () => {
-      const res = await fetch("/api/suppliers?allowParentFallback=true", { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch suppliers");
-      return res.json();
-    },
-  });
-
-  const { data: selectedSupplierData } = useQuery<SupplierDetailResponse | null>({
-    queryKey: ["/api/suppliers", selectedSupplierId],
-    queryFn: async () => {
-      if (!selectedSupplierId) return null;
-      const res = await fetch(`/api/suppliers/${selectedSupplierId}`, { credentials: "include" });
-      if (!res.ok) return null;
-      return res.json();
-    },
-    enabled: !!selectedSupplierId && !suppliers.some((s) => String(s.id) === selectedSupplierId),
-  });
-
-  const { data: proformas = [] } = useQuery<SupplierProforma[]>({
-    queryKey: ["/api/suppliers", selectedSupplierId, "proformas"],
-    queryFn: async () => {
-      if (!selectedSupplierId) return [];
-      const res = await fetch(`/api/suppliers/${selectedSupplierId}/proformas`, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch proformas");
-      return res.json();
-    },
-    enabled: !!selectedSupplierId,
-  });
-
-  const { data: loadedItems = [] } = useQuery<LoadedItem[]>({
-    queryKey: ["/api/containers", containerId, "loaded-items"],
-    queryFn: async () => {
-      const res = await fetch(`/api/containers/${containerId}/loaded-items`, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch loaded items");
-      return res.json();
-    },
-    enabled: !!containerId && !!containerData?.container,
-  });
-
-  const addItemMutation = useMutation({
-    mutationFn: async (data: LoadedItemDraft) => {
-      const res = await apiRequest("POST", `/api/containers/${containerId}/loaded-items`, data);
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/containers", containerId, "loaded-items"] });
-      if (verificationResult) generateComparison();
-    },
-    onError: (e: ClientErrorLike) => {
-      if (e?._handledGlobally) return;
-      toast({ title: "Error", description: e.message, variant: "destructive" });
-    },
-  });
-
-  const updateItemMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: number; data: LoadedItemDraft }) => {
-      const res = await apiRequest("PATCH", `/api/container-loaded-items/${id}`, data);
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/containers", containerId, "loaded-items"] });
-      if (verificationResult) generateComparison();
-    },
-    onError: (e: ClientErrorLike) => {
-      if (e?._handledGlobally) return;
-      toast({ title: "Error", description: e.message, variant: "destructive" });
-    },
-  });
-
-  const deleteItemMutation = useMutation({
-    mutationFn: async (id: number) => {
-      await apiRequest("DELETE", `/api/container-loaded-items/${id}`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/containers", containerId, "loaded-items"] });
-      if (verificationResult) generateComparison();
-    },
-    onError: (e: ClientErrorLike) => {
-      if (e?._handledGlobally) return;
-      toast({ title: "Error", description: e.message, variant: "destructive" });
-    },
-  });
-
-  const syncLoadedItemsFromContainer = useCallback(async (): Promise<LoadedItemSyncResult> => {
-    const res = await apiRequest("POST", `/api/containers/${containerId}/auto-populate-loaded-items?replace=true`);
-    return res.json() as Promise<LoadedItemSyncResult>;
-  }, [containerId]);
-
-  const autoPopulateMutation = useMutation({
-    mutationFn: async (_showToast: boolean) => syncLoadedItemsFromContainer(),
-    onSuccess: (data, showToast) => {
-      queryClient.setQueryData<LoadedItem[]>(["/api/containers", containerId, "loaded-items"], data.items);
-      if (!showToast) return;
-      const skippedMsg = data.skipped > 0 ? ` (${data.skipped} skipped - missing barcodes)` : "";
-      toast({
-        title: "Container items refreshed",
-        description: `${data.imported} current item lines loaded from the latest container details${skippedMsg}`,
-      });
-    },
-    onError: (e: ClientErrorLike) => {
-      if (e?._handledGlobally) return;
-      toast({ title: "Error", description: e.message, variant: "destructive" });
-    },
-  });
-
-  const importMutation = useMutation({
-    mutationFn: async (
-      items: { barcode: string; itemName: string; qty: number; weightPerBale: string; pricePerBale: string }[]
-    ) => {
-      const res = await apiRequest("POST", `/api/containers/${containerId}/import-loaded-items`, { items });
-      return res.json() as Promise<{ imported: number; items: LoadedItem[] }>;
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/containers", containerId, "loaded-items"] });
-      toast({ title: "Import complete", description: `${data.imported} items imported` });
-      if (verificationResult) generateComparison();
-    },
-    onError: (e: ClientErrorLike) => {
-      if (e?._handledGlobally) return;
-      toast({ title: "Import error", description: e.message, variant: "destructive" });
-    },
-  });
-
-  const handleFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async (evt) => {
-      try {
-        const data = new Uint8Array(evt.target?.result as ArrayBuffer);
-        const wb = await XLSX.read(data, { type: "array" });
-        const ws = wb.Sheets[wb.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json(ws);
-        const items = rows
-          .map((r) => ({
-            barcode: String(r.Barcode || r.barcode || "").trim(),
-            itemName: String(r["Item Name"] || r.itemName || r.Name || "").trim(),
-            qty: parseInt(String(r.Qty || r.qty || r.Quantity || 0), 10) || 0,
-            weightPerBale: String(r["Weight per Bale"] || r.weightPerBale || r.Weight || "0"),
-            pricePerBale: String(r["Price per Bale"] || r.pricePerBale || r.Price || "0"),
-          }))
-          .filter((l) => l.barcode);
-        if (items.length === 0) {
-          toast({ title: "No data found", variant: "destructive" });
-          return;
-        }
-        importMutation.mutate(items);
-      } catch (err) {
-        toast({ title: "Parse error", description: getErrorDetails(err).message, variant: "destructive" });
-      }
-    };
-    reader.readAsArrayBuffer(file);
-    e.target.value = "";
-  };
-
-  const generateComparison = useCallback(
-    async (supplierId?: string, proformaId?: string, refreshContainerItems = true) => {
-      const sid = supplierId ?? selectedSupplierId;
-      const pid = proformaId ?? selectedProformaId;
-      if (!sid || !pid) {
-        toast({ title: "Select supplier and proforma first", variant: "destructive" });
-        return;
-      }
-      try {
-        if (refreshContainerItems) {
-          const syncResult = await syncLoadedItemsFromContainer();
-          queryClient.setQueryData<LoadedItem[]>(["/api/containers", containerId, "loaded-items"], syncResult.items);
-        }
-
-        const res = await fetch(
-          `/api/suppliers/${sid}/containers/${containerId}/verification-summary?proformaId=${pid}`,
-          { credentials: "include", cache: "no-store" }
-        );
-        if (!res.ok) {
-          const e = await res.json();
-          throw new Error(e.message);
-        }
-        const data = await res.json();
-        setVerificationResult(data);
-      } catch (err) {
-        toast({ title: "Error", description: getErrorDetails(err).message, variant: "destructive" });
-      }
-    },
-    [selectedSupplierId, selectedProformaId, containerId, toast, syncLoadedItemsFromContainer]
-  );
-
-  const openSelectedProforma = () => {
-    if (!selectedSupplierId || !selectedProformaId) return;
-    window.open(
-      `/suppliers/${selectedSupplierId}/proformas?proformaId=${selectedProformaId}`,
-      "_blank",
-      "noopener,noreferrer"
-    );
-  };
-
-  const exportToExcel = async () => {
-    if (!selectedSupplierId || !selectedProformaId) return;
-    if (!navigator.onLine) {
-      toast({ title: "Not available offline", description: "Exports require a connection" });
-      return;
-    }
-    try {
-      await downloadFromUrl(
-        `/api/suppliers/${selectedSupplierId}/containers/${containerId}/verification-export.xlsx?proformaId=${selectedProformaId}`,
-        { fileName: exportFileName(`container verification ${containerId}`, "xlsx") }
-      );
-    } catch (error) {
-      toast({
-        title: "Export failed",
-        description: error instanceof Error ? error.message : "Please try again.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const exportSummaryExcel = async () => {
-    if (!selectedSupplierId || !selectedProformaId) return;
-    if (!navigator.onLine) {
-      toast({ title: "Not available offline", description: "Exports require a connection" });
-      return;
-    }
-    try {
-      await downloadFromUrl(
-        `/api/suppliers/${selectedSupplierId}/containers/${containerId}/verification-summary-export.xlsx?proformaId=${selectedProformaId}`,
-        { fileName: exportFileName(`container verification summary ${containerId}`, "xlsx") }
-      );
-    } catch (error) {
-      toast({
-        title: "Export failed",
-        description: error instanceof Error ? error.message : "Please try again.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const requestAutoPopulate = () => {
-    if (!navigator.onLine) {
-      toast({ title: "Not available offline", description: "Refresh requires a connection" });
-      return;
-    }
-    autoPopulateMutation.mutate(true);
-  };
-
-  useEffect(() => {
-    const supplierId = containerData?.container?.supplierId;
-    if (supplierId && !selectedSupplierId) {
-      setSelectedSupplierId(String(supplierId));
-    }
-  }, [containerData, selectedSupplierId]);
-
-  useEffect(() => {
-    if (
-      containerData?.container &&
-      !autoPopulateMutation.isPending &&
-      !autoPopulateMutation.isSuccess &&
-      !autoPopulateMutation.isError &&
-      navigator.onLine
-    ) {
-      autoPopulateMutation.mutate(false);
-    }
-  }, [containerData, autoPopulateMutation]);
-
-  // Auto-select supplier when opened via "Compare" from Daybook (supplierId URL param).
-  // Do not require the supplier to exist in the active company's list: containers can
-  // legitimately reference a supplier visible through the parent-company fallback.
-  useEffect(() => {
-    if (!autoSupplierId || selectedSupplierId) return;
-    setSelectedSupplierId(autoSupplierId);
-  }, [autoSupplierId, selectedSupplierId]);
-
-  // Auto-select proforma when opened via "Compare" button from Daybook.
-  // Prefers the starred proforma; falls back to the most recent if none is starred.
-  useEffect(() => {
-    if (!autoCompare || !selectedSupplierId || proformas.length === 0 || selectedProformaId) return;
-    const starred = proformas.find((p) => p.isStarred);
-    const pick = starred ?? proformas[proformas.length - 1];
-    if (pick) setSelectedProformaId(String(pick.id));
-  }, [autoCompare, selectedSupplierId, proformas, selectedProformaId]);
-
-  // Auto-generate only after the current container details have been refreshed.
-  useEffect(() => {
-    if (
-      !autoCompare ||
-      !selectedSupplierId ||
-      !selectedProformaId ||
-      autoCompareTriggered ||
-      !autoPopulateMutation.isSuccess
-    )
-      return;
-    setAutoCompareTriggered(true);
-    generateComparison(selectedSupplierId, selectedProformaId, false);
-  }, [
-    autoCompare,
-    selectedSupplierId,
-    selectedProformaId,
-    autoCompareTriggered,
-    autoPopulateMutation.isSuccess,
+  const {
+    addItemMutation,
+    autoPopulateMutation,
+    container,
+    containerId,
+    deleteItemMutation,
+    exportSummaryExcel,
+    exportToExcel,
+    fileInputRef,
     generateComparison,
-  ]);
-
-  const container = containerData?.container;
-  const selectedSupplier = selectedSupplierData?.supplier ?? selectedSupplierData;
-  const selectedSupplierMissingFromList =
-    !!selectedSupplierId && !suppliers.some((supplier) => String(supplier.id) === selectedSupplierId);
-  const overloaded = verificationResult?.comparison.filter((c) => c.statusQty === "OVER_LOADED") || [];
-  const lessLoaded =
-    verificationResult?.comparison.filter(
-      (c) => c.statusQty === "UNDER_LOADED" || c.statusQty === "MISSING_FROM_LOADED"
-    ) || [];
-  const notRequested = verificationResult?.comparison.filter((c) => c.statusQty === "LOADED_NOT_IN_PROFORMA") || [];
-  const priceDiffs = verificationResult?.comparison.filter((c) => c.priceStatus === "PRICE_DIFF") || [];
+    handleFileImport,
+    isDeveloper,
+    lessLoaded,
+    loadedItems,
+    navigate,
+    notRequested,
+    openSelectedProforma,
+    overloaded,
+    priceDiffs,
+    proformas,
+    requestAutoPopulate,
+    selectedProformaId,
+    selectedSupplier,
+    selectedSupplierId,
+    selectedSupplierMissingFromList,
+    setSelectedProformaId,
+    setSelectedSupplierId,
+    setVerificationResult,
+    setViewMode,
+    suppliers,
+    updateItemMutation,
+    verificationResult,
+    viewMode,
+  } = useContainerVerificationState();
 
   return (
     <div className="flex flex-col h-full overflow-y-auto sm:p-4 lg:p-6">

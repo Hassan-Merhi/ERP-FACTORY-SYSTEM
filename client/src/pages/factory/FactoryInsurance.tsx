@@ -1,4 +1,4 @@
-import { Shield, Plus, Trash2, DollarSign, Loader2, Receipt, Search, FileSpreadsheet } from "lucide-react";
+import { Plus, Trash2, DollarSign, Loader2, Receipt, Search, FileSpreadsheet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
