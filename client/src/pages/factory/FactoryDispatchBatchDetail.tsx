@@ -135,7 +135,8 @@ export default function FactoryDispatchBatchDetail() {
       setRideForm({ truckPlate: "", driverName: "", destination: "", notes: "" });
       if (d.id) navigate(`/factory/dispatch-batches/${batchId}/rides/${d.id}/scan`);
     },
-    onError: (err: ClientErrorLike) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+    onError: (err: ClientErrorLike) =>
+      toast({ title: "Save failed", description: err.message, variant: "destructive" }),
   });
 
   const cancelMutation = useMutation({
@@ -150,7 +151,8 @@ export default function FactoryDispatchBatchDetail() {
       toast({ title: "Batch cancelled", description: "All bales have been returned to stock." });
       setCancelOpen(false);
     },
-    onError: (err: ClientErrorLike) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+    onError: (err: ClientErrorLike) =>
+      toast({ title: "Cancel failed", description: err.message, variant: "destructive" }),
   });
 
   const generateMutation = useMutation({
@@ -172,7 +174,8 @@ export default function FactoryDispatchBatchDetail() {
       setPreviewOpen(false);
       refetch();
     },
-    onError: (err: ClientErrorLike) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+    onError: (err: ClientErrorLike) =>
+      toast({ title: "Generation failed", description: err.message, variant: "destructive" }),
   });
 
   const reopenRideMutation = useMutation({
@@ -187,7 +190,8 @@ export default function FactoryDispatchBatchDetail() {
       setReopenRideId(null);
       setReopenReason("");
     },
-    onError: (err: ClientErrorLike) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+    onError: (err: ClientErrorLike) =>
+      toast({ title: "Update failed", description: err.message, variant: "destructive" }),
   });
 
   if (!batchId) return null;

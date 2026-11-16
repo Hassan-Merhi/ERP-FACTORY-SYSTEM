@@ -269,7 +269,7 @@ export default function FactoryStatusBuilder() {
       setActiveIdx((prev) => prev + 1);
       queryClient.invalidateQueries({ queryKey: ["/api/factory/status-builder/sheets"] });
     },
-    onError: (e: ClientErrorLike) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: ClientErrorLike) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
   });
 
   const saveMutation = useMutation({
@@ -327,7 +327,7 @@ export default function FactoryStatusBuilder() {
       queryClient.invalidateQueries({ queryKey: ["/api/factory/status-builder/sheets"] });
       toast({ title: "Page deleted" });
     },
-    onError: (e: ClientErrorLike) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: ClientErrorLike) => toast({ title: "Delete failed", description: e.message, variant: "destructive" }),
   });
 
   const importMutation = useMutation({
