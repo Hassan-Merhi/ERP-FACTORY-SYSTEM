@@ -215,6 +215,9 @@ jobs:
       - name: Readable logging contracts
         if: always() && steps.install.outcome == 'success'
         run: node scripts/verify-readable-logging-phase-10.mjs
+      - name: Commercial subscription security contracts
+        if: always() && steps.install.outcome == 'success'
+        run: node --test tests/commercial-subscription-policy.node.test.mjs tests/commercial-paddle-verification.node.test.mjs
 
   typecheck:
     name: Type-check
