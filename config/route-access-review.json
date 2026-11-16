@@ -11146,6 +11146,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "tenantEvidence": [
+        {
+          "kind": "tenant-isolation-exception",
+          "mode": "context-optional",
+          "source": "server/middleware/tenantIsolationBoundary.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -11198,6 +11206,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "tenantEvidence": [
+        {
+          "kind": "tenant-isolation-exception",
+          "mode": "context-optional",
+          "source": "server/middleware/tenantIsolationBoundary.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -11206,6 +11222,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "tenantEvidence": [
+        {
+          "kind": "tenant-isolation-exception",
+          "mode": "context-optional",
+          "source": "server/middleware/tenantIsolationBoundary.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -11694,6 +11718,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "tenantEvidence": [
+        {
+          "kind": "tenant-isolation-exception",
+          "mode": "cross-company-reference-read",
+          "source": "server/middleware/tenantIsolationBoundary.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -12333,6 +12365,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "tenantEvidence": [
+        {
+          "kind": "tenant-isolation-exception",
+          "mode": "cross-company-reference-read",
+          "source": "server/middleware/tenantIsolationBoundary.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -12341,6 +12381,14 @@
       "existingGuards": [
         "requireAuth",
         "<anonymous>"
+      ],
+      "tenantEvidence": [
+        {
+          "kind": "tenant-isolation-exception",
+          "mode": "cross-company-reference-read",
+          "source": "server/middleware/tenantIsolationBoundary.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -12662,6 +12710,14 @@
         "requireAuth",
         "requireNonPOS",
         "<anonymous>"
+      ],
+      "tenantEvidence": [
+        {
+          "kind": "tenant-isolation-exception",
+          "mode": "authorized-cross-company",
+          "source": "server/middleware/tenantIsolationBoundary.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
@@ -12680,6 +12736,14 @@
         "requireAuth",
         "requireNonPOS",
         "<anonymous>"
+      ],
+      "tenantEvidence": [
+        {
+          "kind": "tenant-isolation-exception",
+          "mode": "authorized-cross-company",
+          "source": "server/middleware/tenantIsolationBoundary.ts",
+          "status": "source-evidence-only"
+        }
       ]
     },
     {
