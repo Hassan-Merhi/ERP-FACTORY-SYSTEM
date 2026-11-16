@@ -21,7 +21,9 @@ const event = (overrides = {}) => ({
 function signed(input) {
   const rawBody = JSON.stringify(input);
   const timestamp = String(Math.trunc(nowMs / 1000));
-  const hmac = createHmac("sha256", secret).update(timestamp + ":" + rawBody).digest("hex");
+  const hmac = createHmac("sha256", secret)
+    .update(timestamp + ":" + rawBody)
+    .digest("hex");
   return { rawBody, signature: "ts=" + timestamp + ";h1=" + hmac, secret, nowMs };
 }
 
@@ -38,22 +40,23 @@ function fakeRepository(initial = {}) {
   return {
     db,
     receipts,
-    transaction: async (fn) => fn({
-      lockSubscriptionByProviderId: async (provider, id) =>
-        provider === "paddle" && id === "sub_abcdefgh123" ? { ...db } : null,
-      insertUniqueWebhookReceipt: async ({ provider, eventId }) => {
-        const key = provider + ":" + eventId;
-        if (receipts.has(key)) return false;
-        receipts.add(key);
-        return true;
-      },
-      setSubscriptionState: async (newState) => Object.assign(db, newState),
-      markWebhookReceipt: async (provider, eventId, status) => {
-        assert.equal(provider, "paddle");
-        assert.ok(receipts.has(provider + ":" + eventId));
-        assert.ok(["ignored", "processed"].includes(status));
-      },
-    }),
+    transaction: async (fn) =>
+      fn({
+        lockSubscriptionByProviderId: async (provider, id) =>
+          provider === "paddle" && id === "sub_abcdefgh123" ? { ...db } : null,
+        insertUniqueWebhookReceipt: async ({ provider, eventId }) => {
+          const key = provider + ":" + eventId;
+          if (receipts.has(key)) return false;
+          receipts.add(key);
+          return true;
+        },
+        setSubscriptionState: async (newState) => Object.assign(db, newState),
+        markWebhookReceipt: async (provider, eventId, status) => {
+          assert.equal(provider, "paddle");
+          assert.ok(receipts.has(provider + ":" + eventId));
+          assert.ok(["ignored", "processed"].includes(status));
+        },
+      }),
   };
 }
 
@@ -106,10 +109,7 @@ test("bad signatures and absent transactions fail closed", async () => {
       signature: "ts=1111111111;h1=bad",
       repository,
     }),
-    /Unauthenticated/,
+    /Unauthenticated/
   );
-  await assert.rejects(
-    processPaddleSubscriptionNotification({ ...signed(event()), repository: {} }),
-    /Transactional/,
-  );
+  await assert.rejects(processPaddleSubscriptionNotification({ ...signed(event()), repository: {} }), /Transactional/);
 });
