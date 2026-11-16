@@ -361,7 +361,7 @@ export default function FactoryAttendance() {
           <Badge variant="outline" className="rounded-full bg-background/50 px-2.5 py-1 text-[11px] font-medium">
             {formatDate(selectedDate)}
           </Badge>
-          {selectedDate < attendanceToday() && (
+          {selectedDate < attendanceToday() && !canEditPastWithoutPassword && (
             <Badge variant="secondary" className="rounded-full">
               Earlier date — Admin approval required to save
             </Badge>
