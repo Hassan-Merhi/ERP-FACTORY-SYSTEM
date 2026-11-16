@@ -15,7 +15,7 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-      - run: npm install --package-lock-only --ignore-scripts --no-audit && npm ci --ignore-scripts
+      - run: npm install --ignore-scripts --no-audit --no-fund
       - name: Validate modified runtime imports and query contracts
         run: |
           npm run check
