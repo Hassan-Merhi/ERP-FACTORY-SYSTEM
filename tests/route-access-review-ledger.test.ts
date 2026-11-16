@@ -19,13 +19,15 @@ describe("Phase 2 route access review ledger", () => {
     ).not.toThrow();
   });
 
-  it("refuses to certify the live inventory while any rule is unreviewed", () => {
-    expect(() =>
+  it("strict certification succeeds only when all route rules are reviewed", () => {
+    const certify = () =>
       execFileSync(process.execPath, ["scripts/generate-route-access-review.mjs", "--check", "--require-reviewed"], {
         cwd: root,
         stdio: "pipe",
-      })
-    ).toThrow();
+      });
+    const incomplete = review.entries.some((entry: { status: string }) => entry.status !== "reviewed");
+    if (incomplete) expect(certify).toThrow();
+    else expect(certify).not.toThrow();
   });
 
   it("tracks every registration, including repeated method/path handlers", () => {
