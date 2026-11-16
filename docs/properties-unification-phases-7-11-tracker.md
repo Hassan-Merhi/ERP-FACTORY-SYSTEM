@@ -18,7 +18,7 @@
 2. `server/routes/rental/centralRentalPaymentDeletionRoute.ts`: Both company/module-scoped payment lookups and canonical deletion permission now apply before the payment service is invoked.
 3. `server/routes/rental/rentalPaymentsAccrualRoutes.ts`: Scheduled payment group cancellation uses the same active-company deletion guard; existing company/module/status predicates remain.
 4. `server/routes/rentalRouteFactory.ts`: Reconciliation uses the canonical selected-company role guard. Removed the separate `session.role` legacy fallback; valid authenticated sessions already require `currentRole`.
-5. `tests/properties-unification-phase7-permissions.test.ts`: Matrix tests for roles and per-company delete flags, stale-session denial, unauthorized reconciliation, missing company assignment, unexpected errors and route registration checks.
+5. `tests/properties-unification-permissions.test.ts`: Matrix tests for roles and per-company delete flags, stale-session denial, unauthorized reconciliation, missing company assignment, unexpected errors and route registration checks.
 
 ## Phase 7 invariants
 
@@ -31,7 +31,7 @@
 
 - **Completed:** Static examination of the affected route registrations and canonical permission context; GitHub branch commits and fetch-back of updated source.
 - **Not run:** Vitest, TypeScript compilation, production database checks, authenticated browser flows, CI, or runtime API calls. This workspace does not provide a checked-out executable application, so the new tests are committed for execution in the repository environment.
-- **Before production use:** Run `npx vitest run tests/properties-unification-phase7-permissions.test.ts tests/phase33e-auth-role-guards.test.ts`, TypeScript check, and an authenticated two-company API permission matrix. Do not interpret the static verification as a passing test suite.
+- **Before production use:** Run `npx vitest run tests/properties-unification-permissions.test.ts tests/auth-role-guards.test.ts`, TypeScript check, and an authenticated two-company API permission matrix. Do not interpret the static verification as a passing test suite.
 
 ## Phase 7 implementation conclusion
 
@@ -44,7 +44,7 @@ Implementation and targeted regression coverage are committed on the working bra
 3. `client/src/pages/properties/RentalPaymentsLog.tsx`: Refuses an unconverted single USD amount when selected payments include non-USD currency; clearly labels the account-balance reconciliation and posted cash basis; restricts full-history copying to USD-compatible data and preserves per-record money display.
 4. `client/src/pages/properties/PropertyRentalPage.tsx`: Refuses contract-based aggregate USD displays when any included external lease contract is non-USD; historical account-balance summaries remain separated from contract-paid values. The historical rental withdrawal is through 26 Oct 2026, but deposits and cash balances are current, so the composite figure is intentionally **not** assigned a misleading single as-of date.
 5. `client/src/pages/properties/property-rental/paymentsReceiptMath.ts`: Adds a final defense to the USD-labeled TSV export functions. Direct calls reject non-USD rows instead of producing incorrectly labeled numeric columns. No voucher, amount or posting math changes.
-6. `tests/properties-unification-phase8-presentation.test.ts`: Covers USD-only aggregation, legacy missing-currency defaults, export protection, calculation basis, month/year/30-day business-calendar boundaries, recorded-day parsing, historical voucher/cutoff criteria, and stable company identity.
+6. `tests/properties-unification-presentation.test.ts`: Covers USD-only aggregation, legacy missing-currency defaults, export protection, calculation basis, month/year/30-day business-calendar boundaries, recorded-day parsing, historical voucher/cutoff criteria, and stable company identity.
 
 ### Historical reporting policy decision
 
@@ -61,7 +61,7 @@ The Phase 3 stable-ID assignment (company id 13, code HP, company type propertie
 
 - **Completed:** GitHub writes and fetch-back source inspection; focused test file committed.
 - **Not executed:** Vitest, TypeScript, real browser or API reconciliation, actual mixed-currency financial account verification, CI and deployment.
-- **To verify in a runnable checkout:** `npx vitest run tests/properties-unification-phase8-presentation.test.ts tests/properties-payment-history-reconciliation.test.ts` and the project TypeScript checker; check a company configured in a different timezone with payments at month-end, and an isolated test company with USD and non-USD contracts.
+- **To verify in a runnable checkout:** `npx vitest run tests/properties-unification-presentation.test.ts tests/properties-payment-history-reconciliation.test.ts` and the project TypeScript checker; check a company configured in a different timezone with payments at month-end, and an isolated test company with USD and non-USD contracts.
 - **Status interpretation:** Phase 8 implementation is committed, with runtime verification pending. No production posting or historical financial data was changed.
 
 ## Phase 9 change register (2026-11-09)
@@ -71,7 +71,7 @@ The Phase 3 stable-ID assignment (company id 13, code HP, company type propertie
 3. `client/src/pages/properties/RentalPaymentsLog.tsx`: Reused the new deletion component in both rendered page layouts, removed the reconciliation-type controls and accounting displays unreachable after the Properties early return, and retained the Properties premium UI, existing search, payment query, cash/non-cash classification and account-balance reconciliation. Factory/ERP still use their standard table.
 4. `client/src/pages/properties/property-rental/components/PropertiesPaymentsPremium.tsx`: Reuses the same recorded-date and origin/read-only policy. The premium table structure, input filters, copy behavior and row-action IDs are unchanged.
 5. `client/src/properties/hooks/useRentalPaymentsFilters.ts` and `client/src/properties/config/rentalModulePolicy.ts`: Removed dead reconciliation-view state and unused `paymentsAllRecordsOnly` configuration. Properties continues to show all records; Factory and ERP continue to use the unfiltered-by-reconciliation payments list. Search, tenant, unit and period filtering remain.
-6. `tests/properties-unification-phase9-ui.test.ts`: Adds test coverage for module-specific deletion copy, origin/read-only editability, calendar date display, preserved API bases, receipt math, shared component wiring and dead-view removal.
+6. `tests/properties-unification-ui.test.ts`: Adds test coverage for module-specific deletion copy, origin/read-only editability, calendar date display, preserved API bases, receipt math, shared component wiring and dead-view removal.
 
 ### Phase 9 invariants
 
@@ -85,7 +85,7 @@ The Phase 3 stable-ID assignment (company id 13, code HP, company type propertie
 
 - **Completed:** GitHub branch commits, read-back of edited files, and static checks on removed unreachable view references; new targeted tests committed.
 - **Not executed:** Vitest, TypeScript checker, a running browser, production queries or CI. Phase 11 must execute comprehensive parity checks in a runnable checkout before merge/deployment.
-- **Recommended runnable checks:** `npx vitest run tests/properties-unification-phase9-ui.test.ts tests/properties-unification-phase8-presentation.test.ts tests/properties-payment-history-reconciliation.test.ts`, plus project typecheck, and manual smoke checks for Properties/Factory/ERP payment views and deletion confirmations.
+- **Recommended runnable checks:** `npx vitest run tests/properties-unification-ui.test.ts tests/properties-unification-presentation.test.ts tests/properties-payment-history-reconciliation.test.ts`, plus project typecheck, and manual smoke checks for Properties/Factory/ERP payment views and deletion confirmations.
 - **Status:** Phase 9 code-level implementation complete with runtime verification pending; Phase 10 remains next on this same branch.
 
 ## Phase 10 change register (2026-11-09)
@@ -94,7 +94,7 @@ The Phase 3 stable-ID assignment (company id 13, code HP, company type propertie
 2. `client/src/app/PropertiesRoutes.tsx`: The three old rental aliases now register from the canonical redirect map with `<Redirect replace>`. The hidden legacy dashboard route is explicitly preserved because its cash/payable account CRUD functions still run through real APIs.
 3. `client/src/components/PropertiesSidebar.tsx`: Six pinned route icons are mapped by path identity rather than manifest array index; labels, order, persisted drag sorting and capability policy remain unchanged.
 4. `docs/properties-navigation-registry.md`: Updated legacy and current backend role-context notes, deep-link behavior and safe dashboard disposition.
-5. `tests/properties-unification-phase10-navigation.test.ts`: Added source and policy regression checks for direct dashboard access, bookmark redirects, three hub tabs, dynamic route matching, unknown paths, selected-company permission gates, and pinned icon contract.
+5. `tests/properties-unification-navigation.test.ts`: Added source and policy regression checks for direct dashboard access, bookmark redirects, three hub tabs, dynamic route matching, unknown paths, selected-company permission gates, and pinned icon contract.
 
 ### Legacy dashboard decision
 
@@ -111,7 +111,7 @@ The Phase 3 stable-ID assignment (company id 13, code HP, company type propertie
 
 - **Completed:** GitHub commits and source read-back, route-consumer and historical usage review, focused test authorship, navigation contract update.
 - **Not executed:** Vitest, TypeScript check, browser bookmarks and Back/Forward, role-switch testing, dashboard account CRUD in an isolated test environment, CI or deployment.
-- **Required before release:** Run `npx vitest run tests/properties-unification-phase10-navigation.test.ts tests/properties-unification-regression.test.ts` and project typecheck; manually verify legacy bookmarks, selected-company roles, account-management actions and unknown-route replacement behavior.
+- **Required before release:** Run `npx vitest run tests/properties-unification-navigation.test.ts tests/properties-unification-regression.test.ts` and project typecheck; manually verify legacy bookmarks, selected-company roles, account-management actions and unknown-route replacement behavior.
 - **Status:** Code-level Phase 10 is complete on the existing branch; Phase 11 end-to-end regression verification remains pending.
 
 ### Branch-divergence notice after Phase 10
@@ -123,7 +123,7 @@ At the final Phase 10 comparison on 2026-11-09, GitHub reported `properties-unif
 - **Completed:** 27/27 live, GitHub-fetched static source checks passed for Phases 7–10; original route guards and financial/date/history invariants examined.
 - **Completed:** Integration path comparison found no overlapping filenames between the feature diff and upstream-main diff at the initial Phase 11 snapshot (feature: 22 paths; upstream: 71). This does not imply semantic compatibility or certify merge safety.
 - **Fixed:** Full-history copy action was incorrectly labeled for unverified Properties companies: now `copyIsFull = isFullHistory`; regression asserted. Positive company-permission test now uses a consistent company ID.
-- **Committed:** `scripts/verify-properties-unification-phase11.mjs` (dependency-free 27-point static check) and `docs/properties-unification-phase11-verification.md` (detailed results, test commands, API/browser accounting matrix and signoff requirements).
+- **Committed:** `scripts/verify-properties-unification.mjs` (dependency-free 27-point static check) and `docs/properties-unification-phase11-verification.md` (detailed results, test commands, API/browser accounting matrix and signoff requirements).
 - **Blocked:** No runnable repository checkout or dependencies. Container `git ls-remote` failed because the host could not resolve `github.com`. Vitest, `npm run check`, browser navigation, live API authorizations, ledger reconciliation, and integration of 149+ upstream commits were not executed.
 - **Release gate:** NOT MERGE-CERTIFIED. Do not interpret source inspections as a runtime pass. A release owner must incorporate latest main into this branch and execute the report's required checks before any merge.
 

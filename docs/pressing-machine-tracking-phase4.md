@@ -73,7 +73,7 @@ The pressing confirmation endpoint accepts any active, company-owned factory bal
 
 ## Verification required before merge or deploy
 
-Run `npx vitest run tests/pressing-machine-phase4-contract.test.ts` and `npm run test:frontend -- client/src/pages/factory/pressing-scanner/pressingConfirmClient.test.ts` on a checked-out branch, plus existing Phases 1–3 tests, TypeScript checking and migration validation. Against isolated Postgres, race two workers on different presses confirming the same bale and ensure exactly one 201; repeat the same request ID and expect original 200 with no new rows; alter identity with same ID and expect 409; attempt inactive, cross-company, non-bale and deleted bales; verify finalized and other non-deleted statuses are accepted once; assert no stock, voucher or mix changes.
+Run `npx vitest run tests/pressing-machine-contract-wires-server-confirmation-after-the-shared.test.ts` and `npm run test:frontend -- client/src/pages/factory/pressing-scanner/pressingConfirmClient.test.ts` on a checked-out branch, plus existing Phases 1–3 tests, TypeScript checking and migration validation. Against isolated Postgres, race two workers on different presses confirming the same bale and ensure exactly one 201; repeat the same request ID and expect original 200 with no new rows; alter identity with same ID and expect 409; attempt inactive, cross-company, non-bale and deleted bales; verify finalized and other non-deleted statuses are accepted once; assert no stock, voucher or mix changes.
 
 ## Eligibility update (2026-10-30): Non-bale Priority products
 

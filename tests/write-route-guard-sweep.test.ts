@@ -48,7 +48,7 @@
  * (sales-import backfill, test-data vouchers, the payroll group-expense and
  * worker-name migrations, the payroll voucher backfill, the factory voucher
  * description migration), the EMP-* account migration (now tested in
- * tests/phase19a-retired-writers.test.ts; the bulk form moved to
+ * tests/retired-writers.test.ts; the bulk form moved to
  * /api/admin/legacy-employee-accounts/migrate-all) and the container offload
  * POST/PATCH, whose last directly-writing registrant (the unreachable legacy
  * PATCH in offload/update.ts) is deleted; the central handler posts through
@@ -58,7 +58,7 @@
  * (factory/suppliers/crud/suppliers.ts) was sensitive only through the
  * permanent delete's cascade into factory_raw_stock; that delete now refuses a
  * supplier with any history and removes only the supplier row and its score
- * snapshots (tested in tests/phase19b-guards.test.ts).
+ * snapshots (tested in tests/guards.test.ts).
  *
  * The same phase 19 (A) change also removed three user-settings routes:
  * PUT /api/erp-user-hidden-costs/:userId, PUT /api/erp-user-page-access/:userId

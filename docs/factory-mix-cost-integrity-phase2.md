@@ -38,7 +38,7 @@
 ### 4. Regression coverage
 
 - `tests/mix-batch-edit-exact.test.ts`: preview doesn't write, reviewed edit succeeds for safe active batch, invalid and stale requests refused, completed/used and downstream-linked batches blocked, inventory shortages and legacy owner mismatch rejected, metadata edit remains safe.
-- `tests/mix-batch-edit-source-validation-phase2.test.ts`: valid inputs normalize to 3 decimal places, invalid and duplicate inputs fail, unchanged source payloads stay no-op, fingerprint detects changes.
+- `tests/mix-batch-edit-source-validation.test.ts`: valid inputs normalize to 3 decimal places, invalid and duplicate inputs fail, unchanged source payloads stay no-op, fingerprint detects changes.
 - Phase 1's historical-source/read cost tests are retained.
 
 ## Deferred work

@@ -39,20 +39,20 @@ transitions still need physical-device verification.
 
 ```bash
 # Test-only local database. The fixture script refuses non-local database hosts.
-ERP_DUO_CREATE_FIXTURES=1 NODE_ENV=test node scripts/prepare-phase9-browser-smoke-fixture.mjs
+ERP_DUO_CREATE_FIXTURES=1 NODE_ENV=test node scripts/prepare-browser-smoke-fixture.mjs
 
 # No app server, database or credentials required:
-node scripts/verify-iphone-duo-phase1-inventory.mjs
+node scripts/verify-iphone-duo-inventory.mjs
 
 # Start a test build at ERP_SMOKE_BASE_URL and run the Developer route inventory.
 ERP_SMOKE_REQUIRE_AUTHENTICATED=1 ERP_DUO_TRANSITIONS=1 \
 ERP_SMOKE_USERNAME="$DEV_TEST_USER" ERP_SMOKE_PASSWORD="$TEST_PASSWORD" \
-node scripts/verify-iphone-duo-phase1-browser.mjs
+node scripts/verify-iphone-duo-browser.mjs
 
 # Use the actual POS role fixture. Do not use a Developer session for POS certification.
 ERP_SMOKE_REQUIRE_AUTHENTICATED=1 ERP_DUO_ROLE=POS ERP_DUO_TRANSITIONS=1 \
 ERP_SMOKE_USERNAME="${DEV_TEST_USER}_duo_pos" ERP_SMOKE_PASSWORD="$TEST_PASSWORD" \
-node scripts/verify-iphone-duo-phase1-browser.mjs
+node scripts/verify-iphone-duo-browser.mjs
 ```
 
 Use `ERP_DUO_LANGUAGES=en,ar,fr` and `ERP_DUO_VIEWPORTS=...` to select

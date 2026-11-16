@@ -14,7 +14,7 @@ import * as esbuild from "esbuild";
 console.log("[build] accounting gate: running Phase 3 invariants...");
 const accountingGate = spawnSync(
   process.execPath,
-  ["node_modules/vitest/vitest.mjs", "run", "tests/phase3-accounting-audit.test.ts"],
+  ["node_modules/vitest/vitest.mjs", "run", "tests/accounting-audit.test.ts"],
   { stdio: "inherit", env: { ...process.env, NODE_ENV: "test" } }
 );
 if (accountingGate.error) throw accountingGate.error;

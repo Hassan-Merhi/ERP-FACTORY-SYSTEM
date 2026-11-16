@@ -6,20 +6,20 @@ import { translateSharedInterfaceText } from "@/i18n/sharedInterfaceTranslations
 import { translateTabsFiltersText } from "@/i18n/tabsFiltersTranslations";
 import { translateVoucherKpiText } from "@/i18n/voucherKpiTranslations";
 import { translateAccountingDocumentText } from "@/i18n/accountingDocumentTranslations";
-import { isPhase3SharedUiText, translatePhase3SharedUiText } from "@/i18n/sharedUiPhase3Translations";
+import { isPhase3SharedUiText, translatePhase3SharedUiText } from "@/i18n/sharedUiTranslations";
 import {
   isPhase4SupplierPartnerText,
   translatePhase4SupplierPartnerText,
-} from "@/i18n/supplierPartnerPhase4Translations";
+} from "@/i18n/supplierPartnerTranslations";
 import {
   isPhase5PropertiesRentalsText,
   translatePhase5PropertiesRentalsText,
-} from "@/i18n/propertiesRentalsPhase5Translations";
-import { isPhase6ReportsExportsText, translatePhase6ReportsExportsText } from "@/i18n/reportsExportsPhase6Translations";
+} from "@/i18n/propertiesRentalsTranslations";
+import { isPhase6ReportsExportsText, translatePhase6ReportsExportsText } from "@/i18n/reportsExportsTranslations";
 import {
   isPhase7BackendMessageText,
   translatePhase7BackendMessageText,
-} from "@/i18n/backendMessagesPhase7Translations";
+} from "@/i18n/backendMessagesTranslations";
 import { translateFactoryProductionPlannerText } from "@/i18n/factoryProductionPlannerTranslations";
 import { translateFactoryInsuranceText } from "@/i18n/factoryInsuranceTranslations";
 import { translateAutomaticPriorityPrintingText } from "@/i18n/automaticPriorityPrintingTranslations";
@@ -32,7 +32,7 @@ import { isRetailWave2Text, translateRetailWave2Text } from "@/i18n/retailPosPri
 import { isRetailWave3Text, translateRetailWave3Text } from "@/i18n/retailAnalyticsTranslations";
 import { isRetailFinancialText, translateRetailFinancialText } from "@/i18n/retailFinancialTranslations";
 import { isRetailFashionText, translateRetailFashionText } from "@/i18n/retailFashionTranslations";
-import { isWave8ReleaseText, translateWave8ReleaseText } from "@/i18n/wave8ReleaseTranslations";
+import { isWave8ReleaseText, translateWave8ReleaseText } from "@/i18n/releaseTranslations";
 import { isPayrollUiText, translatePayrollUiText } from "@/i18n/payrollUiTranslations";
 import {
   isSupplierProfitReconciliationText,

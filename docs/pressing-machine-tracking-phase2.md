@@ -48,7 +48,7 @@ All POST routes use authenticated, CSRF-protected application request helpers on
 
 ## Validation to run before merge
 
-- `npx vitest run tests/pressing-machine-phase2-access.test.ts tests/pressing-machine-schema-contract.test.ts tests/startup-schema-integrity.test.ts`
+- `npx vitest run tests/pressing-machine-access.test.ts tests/pressing-machine-schema-contract.test.ts tests/startup-schema-integrity.test.ts`
 - `npm run check` and `npm run verify:migrations` on a checked-out branch.
 - Isolated PostgreSQL 16: create two machines and two users; race two assignments to different machines for the same operator; one active assignment must remain.
 - Try managing machines with Worker/View Only/ERP Tester roles (403), and with Manager/Owner/Admin (as granted by tab permissions).

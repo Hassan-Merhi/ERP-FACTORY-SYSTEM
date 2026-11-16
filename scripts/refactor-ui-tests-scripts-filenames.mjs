@@ -13,19 +13,19 @@ const marker=/(?:[Ww]ave|[Pp]hase)[-_ ]?\d+(?:[a-z](?=[A-Z._-]|$))?/g;
 const qualifies=p=>/^(?:client\/|tests\/|scripts\/|build\/)/.test(p)&&/(?:wave|phase)[-_ ]?\d+/i.test(path.posix.basename(p))&&!p.startsWith("scripts/repairs/");
 const candidates=files.filter(qualifies);
 const overrides={
-"tests/retail-wave1-contract.test.ts":"tests/retail-company-type-contract.test.ts",
-"tests/retail-wave2-contract.test.ts":"tests/retail-pos-money-contract.test.ts",
-"scripts/verify-phase11-12-observability-disaster-recovery.mjs":"scripts/verify-observability-disaster-recovery.mjs",
-"tests/phase31-32-weekly-bale-export-helpers.test.ts":"tests/weekly-bale-export-helpers.test.ts",
-"tests/phase33-3c-purchase-order-items-update.test.ts":"tests/purchase-order-items-update.test.ts",
-"tests/phase33-3c-route-guards.test.ts":"tests/multi-domain-route-safety-guards.test.ts",
-"tests/phase33-3c-schema-and-safety.test.ts":"tests/factory-stock-schema-and-repair-safety.test.ts",
-"tests/phase33-3c-stock-allocation-v5.test.ts":"tests/stock-allocation-contract.test.ts",
-"tests/phase33-3c-stock-transfer-analysis.test.ts":"tests/stock-transfer-analysis.test.ts",
-"tests/phase33-3c-stock-transfer-drafts.test.ts":"tests/stock-transfer-drafts.test.ts",
-"tests/post-offload-charge-phase14-15.test.ts":"tests/post-offload-charge-contract.test.ts",
-"tests/remote-support-phase15-16-observability.test.ts":"tests/remote-support-observability.test.ts",
-"tests/wave8-4-factory-pos-commission.test.ts":"tests/factory-pos-commission.test.ts",
+"tests/retail-company-type-contract.test.ts":"tests/retail-company-type-contract.test.ts",
+"tests/retail-pos-money-contract.test.ts":"tests/retail-pos-money-contract.test.ts",
+"scripts/verify-observability-disaster-recovery.mjs":"scripts/verify-observability-disaster-recovery.mjs",
+"tests/weekly-bale-export-helpers.test.ts":"tests/weekly-bale-export-helpers.test.ts",
+"tests/purchase-order-items-update.test.ts":"tests/purchase-order-items-update.test.ts",
+"tests/multi-domain-route-safety-guards.test.ts":"tests/multi-domain-route-safety-guards.test.ts",
+"tests/factory-stock-schema-and-repair-safety.test.ts":"tests/factory-stock-schema-and-repair-safety.test.ts",
+"tests/stock-allocation-contract.test.ts":"tests/stock-allocation-contract.test.ts",
+"tests/stock-transfer-analysis.test.ts":"tests/stock-transfer-analysis.test.ts",
+"tests/stock-transfer-drafts.test.ts":"tests/stock-transfer-drafts.test.ts",
+"tests/post-offload-charge-contract.test.ts":"tests/post-offload-charge-contract.test.ts",
+"tests/remote-support-observability.test.ts":"tests/remote-support-observability.test.ts",
+"tests/factory-pos-commission.test.ts":"tests/factory-pos-commission.test.ts",
 
 "client/src/i18n/retailWave1Translations.ts":"client/src/i18n/retailCatalogTranslations.ts",
 "client/src/i18n/retailWave2Translations.ts":"client/src/i18n/retailPosPricingTranslations.ts",
@@ -33,14 +33,14 @@ const overrides={
 "client/src/i18n/remoteSupportPhase4Translations.ts":"client/src/i18n/remoteSupportSessionTranslations.ts",
 "client/src/i18n/remoteSupportPhase5Translations.ts":"client/src/i18n/remoteSupportMouseTranslations.ts",
 "client/src/i18n/remoteSupportPhase6Translations.ts":"client/src/i18n/remoteSupportKeyboardTranslations.ts",
-"scripts/verify-mobile-responsive-phase1-browser.mjs":"scripts/verify-mobile-responsive-foundation-browser.mjs",
-"scripts/verify-mobile-responsive-wave2-browser.mjs":"scripts/verify-mobile-responsive-factory-browser.mjs",
-"scripts/verify-mobile-responsive-wave3-browser.mjs":"scripts/verify-mobile-responsive-erp-browser.mjs",
-"scripts/verify-mobile-responsive-wave4-browser.mjs":"scripts/verify-mobile-responsive-regression-browser.mjs",
-"scripts/verify-mobile-responsive-wave4-regression.mjs":"scripts/verify-mobile-responsive-visual-regression.mjs",
-"scripts/verify-mobile-responsive-phase11-regression.mjs":"scripts/verify-mobile-responsive-release-regression.mjs",
-"client/src/styles/factory-unified-theme-phase4.test.ts":"client/src/styles/factory-unified-theme-visual-contract.test.ts",
-"tests/factory-edge-phase4-policy.test.ts":"tests/factory-edge-write-fence-policy.test.ts"
+"scripts/verify-mobile-responsive-foundation-browser.mjs":"scripts/verify-mobile-responsive-foundation-browser.mjs",
+"scripts/verify-mobile-responsive-factory-browser.mjs":"scripts/verify-mobile-responsive-factory-browser.mjs",
+"scripts/verify-mobile-responsive-erp-browser.mjs":"scripts/verify-mobile-responsive-erp-browser.mjs",
+"scripts/verify-mobile-responsive-regression-browser.mjs":"scripts/verify-mobile-responsive-regression-browser.mjs",
+"scripts/verify-mobile-responsive-visual-regression.mjs":"scripts/verify-mobile-responsive-visual-regression.mjs",
+"scripts/verify-mobile-responsive-release-regression.mjs":"scripts/verify-mobile-responsive-release-regression.mjs",
+"client/src/styles/factory-unified-theme-visual-contract.test.ts":"client/src/styles/factory-unified-theme-visual-contract.test.ts",
+"tests/factory-edge-write-fence-policy.test.ts":"tests/factory-edge-write-fence-policy.test.ts"
 };
 function strip(p) {
  const parts=p.split("/");

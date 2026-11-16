@@ -45,13 +45,13 @@ Added tests:
 - `client/src/pages/factory/pressing-scanner/continuousScanGate.test.ts`: suppression, re-arm, different-bale acceptance, manual entry and reset.
 - `client/src/pages/factory/pressing-scanner/cameraDecoder.test.ts`: native-first selection, ZXing fallback when native is absent or reports no formats, frame downscaling, NotFound handling, manual-only when neither engine starts.
 - `client/src/pages/factory/ContinuousPressingScanner.test.tsx`: stream stays open across reads, repeated frames of one barcode submit once, camera and decoder released on background/tab change/stop/unmount, manual entry submits, queued/rejected outcomes never render as confirmations.
-- `tests/pressing-machine-phase3-source.test.ts`: camera-loop, tab cleanup, status, and no unintended stock mutations.
+- `tests/pressing-machine-source.test.ts`: camera-loop, tab cleanup, status, and no unintended stock mutations.
 
 Run on a checked-out branch:
 ```sh
 npm run check
 npm run test:frontend -- client/src/pages/factory/pressing-scanner client/src/pages/factory/ContinuousPressingScanner.test.tsx
-npx vitest run tests/pressing-machine-phase3-source.test.ts
+npx vitest run tests/pressing-machine-source.test.ts
 ```
 
 Then manually verify on physical Android Chrome, iOS Safari, and at least one older device:

@@ -1,6 +1,6 @@
 import type { ApplicationLanguage } from "@shared/applicationLanguageContract";
-import { createPhase3TemplateTranslator } from "./phase3TemplateTranslationRuntime";
-import type { Phase3SharedUiEntry } from "./sharedUiPhase3TranslationTypes";
+import { createPhase3TemplateTranslator } from "./templateTranslationRuntime";
+import type { Phase3SharedUiEntry } from "./sharedUiTranslationTypes";
 
 export const retailWave1Translations: readonly Phase3SharedUiEntry[] = [
   { en: "Retail", ar: "التجزئة", fr: "Vente au détail" },

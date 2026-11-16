@@ -38,7 +38,7 @@ Other linked records: company #1 HADI L'SHI (ERP payer), company #13 Hassan Prop
 
 ## Verification state and acceptance
 
-Added `tests/hadi-lshi-rent-phase3.test.ts` with 14 pure policy regression cases covering:
+Added `tests/hadi-lshi-rent.test.ts` with 14 pure policy regression cases covering:
 - protection of the historical 2026-11 cutoff and correct access to 2026-12 onward,
 - correct $18,000 protected payable balance and discrepancies,
 - detection of posted voucher missing, per-lease positive due,

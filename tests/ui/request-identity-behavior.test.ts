@@ -7,7 +7,7 @@
  * routes are protected.
  */
 import type * as AccountingModule from "@/lib/accountingRequestIdentity";
-import type * as Phase5Module from "@/lib/phase5VoucherRequestIdentity";
+import type * as Phase5Module from "@/lib/voucherRequestIdentity";
 
 const ACCOUNTING_KEY = "erp_pending_accounting_request_ids_v2";
 const PHASE5_KEY = "erp_pending_phase5_voucher_request_ids_v1";
@@ -15,7 +15,7 @@ const PHASE5_KEY = "erp_pending_phase5_voucher_request_ids_v1";
 async function load() {
   vi.resetModules();
   const accounting: typeof AccountingModule = await import("@/lib/accountingRequestIdentity");
-  const phase5: typeof Phase5Module = await import("@/lib/phase5VoucherRequestIdentity");
+  const phase5: typeof Phase5Module = await import("@/lib/voucherRequestIdentity");
   return { accounting, phase5 };
 }
 

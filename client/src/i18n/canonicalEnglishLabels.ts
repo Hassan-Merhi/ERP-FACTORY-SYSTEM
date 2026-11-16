@@ -1,5 +1,5 @@
 import { sharedInterfaceTranslations } from "./sharedInterfaceTranslations";
-import { phase3SharedUiTranslations } from "./sharedUiPhase3Translations";
+import { phase3SharedUiTranslations } from "./sharedUiTranslations";
 
 /**
  * English labels that other dictionaries own canonically.

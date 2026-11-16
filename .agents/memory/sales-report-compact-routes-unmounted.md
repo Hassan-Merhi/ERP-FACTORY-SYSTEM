@@ -33,7 +33,7 @@ two lists cannot drift again.
 
 ## Why the existing guardrail missed it
 
-`scripts/verify-bandwidth-phase-3-sales-report.mjs` asserted the registration order **inside
+`scripts/verify-bandwidth-sales-report.mjs` asserted the registration order **inside
 `server/routes/stats/index.ts`** — the dead file — and nothing in `package.json` or CI ever ran
 that script. Both problems are fixed: the verifier now reads the mounted registry (and asserts
 `applicationRoutes.ts` imports it), and `verify:bandwidth` chains it after phases 1–2.

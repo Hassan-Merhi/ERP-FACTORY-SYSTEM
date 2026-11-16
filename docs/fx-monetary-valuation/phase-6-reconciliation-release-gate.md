@@ -10,7 +10,7 @@
 2. Added an **opening-to-book reconciliation gate** in `monetaryFxValuationService.ts`. A nonzero opening is translated only if the supplementary historical base opening agrees within three cents with the actual stored original USD opening. A zero book opening with nonzero base/native metadata is also unresolved. Mismatch sets `openingBookMismatch: true`, `unresolvedOpening: true`, `provisional: true` and blocks current USD replacement for that account.
 3. Changed the company rate resolution so one currency's invalid or conflicting saved rate cannot abort all other eligible currencies' read-time valuations. Failed currencies are flagged with `rateErrorsByCurrency`; affected nonzero foreign native balance buckets produce `currentTranslatedUsd: null` and the original USD report remains unchanged. Unexpected DB/programming exceptions still propagate instead of being silently swallowed.
 4. Exposed `rateErrorsByCurrency` in the live ERP and Factory Net Position metadata; original currencies, book bases, stock and supplier figures remain unchanged.
-5. Added reproducible **behavioral** fixtures in `tests/monetary-fx-phase6-reconciliation.test.ts`:
+5. Added reproducible **behavioral** fixtures in `tests/monetary-fx-reconciliation.test.ts`:
    - 61,200 CFA cash at 605 versus 612 CFA/USD, with native amount unchanged;
    - customer-linked ledger counted once under `customer:id`;
    - signed loan receivable/payable and a sign flip between asset and liability;
@@ -27,8 +27,8 @@
 | Gate | Status | Next step |
 | --- | --- | --- |
 | TypeScript `npm run check` | NOT RUN | Execute in actual project checkout and fix errors |
-| New focused Vitest suite | NOT RUN | `node node_modules/vitest/vitest.mjs run tests/monetary-fx-valuation-phase2.test.ts tests/fx-rate-phase3-refresh.test.ts tests/fx-phase3-save-refresh-contract.test.ts tests/fx-rate-phase5-history-cache-audit.test.ts tests/monetary-fx-phase6-reconciliation.test.ts` |
-| Legacy multi-currency and no-FX-journal tests | NOT RUN | Run `tests/multi-currency-integration.test.ts`, `tests/money-exact-batch-18.test.ts`, `tests/wave9-ledger-safety-routes.test.ts`, and `tests/exchange-rate-daily-popup.test.ts` |
+| New focused Vitest suite | NOT RUN | `node node_modules/vitest/vitest.mjs run tests/monetary-fx-valuation.test.ts tests/fx-rate-refresh.test.ts tests/fx-save-refresh-contract.test.ts tests/fx-rate-history-cache-audit.test.ts tests/monetary-fx-reconciliation.test.ts` |
+| Legacy multi-currency and no-FX-journal tests | NOT RUN | Run `tests/multi-currency-integration.test.ts`, `tests/money-exact-batch-18.test.ts`, `tests/ledger-safety-routes.test.ts`, and `tests/exchange-rate-daily-popup.test.ts` |
 | Full integration, typecheck, build | NOT RUN | `npm run test:backend`, `npm run check`, `npm run build` in an isolated runner |
 | Company Mali CFA live original vs current USD reconciliation | NOT RUN | Read-only DB, verify customer/cash/loan native buckets, rates and book values |
 | Zambia ZMW, USD-only and any non-USD functional base | NOT RUN | Read-only per-company verification; non-USD functional base remains provisional by policy |

@@ -1,0 +1,466 @@
+import type { Phase7BackendMessagesEntry } from "./backendMessagesTranslationTypes";
+
+/** Backend validation messages added after the Phase 7 audit baseline. */
+export const backendMessagesPhase7TranslationsPart13: readonly Phase7BackendMessagesEntry[] = [
+  {
+    en: "Factory fxRateToUsd for ${ccy} is required.",
+    ar: "معدل Factory fxRateToUsd للعملة {0} مطلوب.",
+    fr: "Le taux Factory fxRateToUsd pour {0} est requis.",
+  },
+  {
+    en: "Factory fxRateToUsd for ${ccy} must be numeric.",
+    ar: "يجب أن يكون معدل Factory fxRateToUsd للعملة {0} رقميًا.",
+    fr: "Le taux Factory fxRateToUsd pour {0} doit être numérique.",
+  },
+  {
+    en: "Factory fxRateToUsd for ${ccy} must be a positive finite rate.",
+    ar: "يجب أن يكون معدل Factory fxRateToUsd للعملة {0} موجبًا ومحدودًا.",
+    fr: "Le taux Factory fxRateToUsd pour {0} doit être positif et fini.",
+  },
+  {
+    en: "clientSaleId must be at most 36 characters",
+    ar: "يجب ألا يتجاوز clientSaleId 36 حرفًا",
+    fr: "clientSaleId ne doit pas dépasser 36 caractères",
+  },
+  {
+    en: "A watched user is required.",
+    ar: "يجب تحديد مستخدم للمشاهدة.",
+    fr: "Un utilisateur à surveiller est requis.",
+  },
+  {
+    en: "No company selected.",
+    ar: "لم يتم تحديد شركة.",
+    fr: "Aucune société sélectionnée.",
+  },
+  {
+    en: "No active screen feed is available for this user in the selected company.",
+    ar: "لا توجد مشاركة شاشة نشطة متاحة لهذا المستخدم في الشركة المحددة.",
+    fr: "Aucun flux d’écran actif n’est disponible pour cet utilisateur dans la société sélectionnée.",
+  },
+  {
+    en: "Service temporarily unavailable — please retry.",
+    ar: "الخدمة غير متوفرة مؤقتًا — يرجى إعادة المحاولة.",
+    fr: "Service temporairement indisponible — veuillez réessayer.",
+  },
+  {
+    en: "CSRF token missing or invalid.",
+    ar: "رمز CSRF مفقود أو غير صالح.",
+    fr: "Jeton CSRF manquant ou invalide.",
+  },
+  {
+    en: "That color is already assigned to another active priority loading.",
+    ar: "هذا اللون مخصص بالفعل لعملية تحميل أخرى ذات أولوية نشطة.",
+    fr: "Cette couleur est déjà attribuée à un autre chargement prioritaire actif.",
+  },
+  {
+    en: "That priority is already assigned to another active priority loading.",
+    ar: "هذه الأولوية مخصصة بالفعل لعملية تحميل أخرى ذات أولوية نشطة.",
+    fr: "Cette priorité est déjà attribuée à un autre chargement prioritaire actif.",
+  },
+  {
+    en: "Priority Scan configuration changed at the same time. Please try again.",
+    ar: "تم تغيير إعدادات المسح حسب الأولوية في الوقت نفسه. يرجى المحاولة مرة أخرى.",
+    fr: "La configuration du scan prioritaire a été modifiée simultanément. Veuillez réessayer.",
+  },
+  {
+    en: "Failed to load Priority Scan configuration.",
+    ar: "تعذر تحميل إعدادات المسح حسب الأولوية.",
+    fr: "Impossible de charger la configuration du scan prioritaire.",
+  },
+  {
+    en: "Invalid loading id",
+    ar: "معرّف التحميل غير صالح",
+    fr: "Identifiant de chargement non valide",
+  },
+  {
+    en: "Priority color must be one of the 11 approved HEX colors.",
+    ar: "يجب أن يكون لون الأولوية أحد الألوان الأحد عشر المعتمدة بصيغة HEX.",
+    fr: "La couleur de priorité doit être l’une des 11 couleurs HEX approuvées.",
+  },
+  {
+    en: "Only an existing active priority can be moved without choosing a new color.",
+    ar: "لا يمكن نقل سوى أولوية نشطة موجودة دون اختيار لون جديد.",
+    fr: "Seule une priorité active existante peut être déplacée sans choisir de nouvelle couleur.",
+  },
+  {
+    en: "Priority must be a whole number between 1 and 10000.",
+    ar: "يجب أن تكون الأولوية عددًا صحيحًا بين 1 و10000.",
+    fr: "La priorité doit être un nombre entier compris entre 1 et 10000.",
+  },
+  {
+    en: "enabled must be true or false.",
+    ar: "يجب أن تكون قيمة enabled إما true أو false.",
+    fr: "La valeur enabled doit être true ou false.",
+  },
+  {
+    en: "Pending loading not found.",
+    ar: "لم يتم العثور على عملية التحميل المعلقة.",
+    fr: "Chargement en attente introuvable.",
+  },
+  {
+    en: "Only pending loadings in LOADING status can use Priority Scan.",
+    ar: "يمكن فقط لعمليات التحميل المعلقة بحالة LOADING استخدام المسح حسب الأولوية.",
+    fr: "Seuls les chargements en attente au statut LOADING peuvent utiliser le scan prioritaire.",
+  },
+  {
+    en: "Link a proforma before enabling Priority Scan for this loading.",
+    ar: "اربط فاتورة أولية قبل تفعيل المسح حسب الأولوية لهذا التحميل.",
+    fr: "Associez une proforma avant d’activer le scan prioritaire pour ce chargement.",
+  },
+  {
+    en: "Failed to save Priority Scan configuration.",
+    ar: "تعذر حفظ إعدادات المسح حسب الأولوية.",
+    fr: "Impossible d’enregistrer la configuration du scan prioritaire.",
+  },
+  {
+    en: "Failed to clear Priority Scan configuration.",
+    ar: "تعذر مسح إعدادات المسح حسب الأولوية.",
+    fr: "Impossible d’effacer la configuration du scan prioritaire.",
+  },
+  {
+    en: "Priority Scan cannot bypass proforma requirements or overload limits. Use the normal Pending Loading scanner for manual exceptions.",
+    ar: "لا يمكن للمسح حسب الأولوية تجاوز متطلبات البروفرما أو حدود التحميل. استخدم ماسح التحميلات المعلقة العادي للاستثناءات اليدوية.",
+    fr: "Le scan prioritaire ne peut pas contourner les exigences de proforma ni les limites de chargement. Utilisez le scanner normal des chargements en attente pour les exceptions manuelles.",
+  },
+  {
+    en: "Priority Scan loading changed while the reference was routing. Scan again.",
+    ar: "تغيّر تحميل المسح حسب الأولوية أثناء توجيه المرجع. امسح المرجع مرة أخرى.",
+    fr: "Le chargement du scan prioritaire a changé pendant l’acheminement de la référence. Scannez à nouveau.",
+  },
+  {
+    en: "Priority Scan requires an exact bale reference or bale code.",
+    ar: "يتطلب المسح حسب الأولوية مرجع بالة أو رمز بالة مطابقًا تمامًا.",
+    fr: "Le scan prioritaire exige une référence de balle ou un code de balle exact.",
+  },
+  {
+    en: "This reference is no longer required by an active Priority Scan loading.",
+    ar: "لم يعد هذا المرجع مطلوبًا في أي تحميل نشط للمسح حسب الأولوية.",
+    fr: "Cette référence n’est plus requise par un chargement actif du scan prioritaire.",
+  },
+  {
+    en: "This reference is not required by any active Priority Scan loading. Use the normal Pending Loading scanner for overload or items not requested on the proforma.",
+    ar: "هذا المرجع غير مطلوب في أي تحميل نشط للمسح حسب الأولوية. استخدم ماسح التحميلات المعلقة العادي للتحميل الزائد أو الأصناف غير المطلوبة في البروفرما.",
+    fr: "Cette référence n’est requise par aucun chargement actif du scan prioritaire. Utilisez le scanner normal des chargements en attente pour les surcharges ou les articles non demandés sur la proforma.",
+  },
+  {
+    en: "Reference is not available in stock.",
+    ar: "المرجع غير متوفر في المخزون.",
+    fr: "La référence n’est pas disponible en stock.",
+  },
+  {
+    en: "Reference has no stock location and cannot be routed.",
+    ar: "لا يوجد موقع مخزون لهذا المرجع ولا يمكن توجيهه.",
+    fr: "La référence n’a pas d’emplacement de stock et ne peut pas être acheminée.",
+  },
+  {
+    en: "Reference has no article code and cannot be matched to a priority.",
+    ar: "لا يحتوي المرجع على رمز صنف ولا يمكن مطابقته مع أولوية.",
+    fr: "La référence n’a pas de code article et ne peut pas être associée à une priorité.",
+  },
+  {
+    en: "Failed to resolve Priority Scan destination.",
+    ar: "تعذر تحديد وجهة المسح حسب الأولوية.",
+    fr: "Impossible de déterminer la destination du scan prioritaire.",
+  },
+  {
+    en: "This loading already satisfies its linked proforma and does not need Priority Scan.",
+    ar: "هذا التحميل يحقق بالفعل متطلبات البروفرما المرتبطة ولا يحتاج إلى المسح حسب الأولوية.",
+    fr: "Ce chargement satisfait déjà sa proforma liée et n’a pas besoin du scan prioritaire.",
+  },
+  {
+    en: "Priority Scan routing changed to Loading #${authoritativeTarget.orderId}. Routing again.",
+    ar: "تغيّر توجيه المسح حسب الأولوية إلى التحميل #{0}. جارٍ إعادة التوجيه.",
+    fr: "Le routage du scan prioritaire a changé vers le chargement #{0}. Nouvel acheminement en cours.",
+  },
+  {
+    en: "Bale ${bale.referenceNumber} is already in ${orderRef} (${duplicate.status}).",
+    ar: "البالة {0} موجودة بالفعل في {1} ({2}).",
+    fr: "La balle {0} se trouve déjà dans {1} ({2}).",
+  },
+  {
+    en: "Post-offload charge requires exactly one company-owned expense account or supplier and a valid payable account.",
+    ar: "تتطلب الرسوم بعد التفريغ حساب مصروف أو مورّدًا واحدًا تابعًا للشركة، وحساب مستحقات صالحًا.",
+    fr: "Les frais après déchargement nécessitent un compte de charges ou un fournisseur de la société, ainsi qu'un compte de dettes valide.",
+  },
+  {
+    en: "Charge editing requires a valid same-company ledger destination; no unposted charge changes are permitted.",
+    ar: "يتطلب تعديل الرسوم حسابًا محاسبيًا صالحًا تابعًا للشركة نفسها. لا يُسمح بتعديلات غير مُرحّلة.",
+    fr: "La modification des frais exige un compte comptable valide de la même société. Aucune modification non comptabilisée n'est autorisée.",
+  },
+  {
+    en: "Charge #${chargeRow.id} has missing historical voucher/daybook links. Reconcile the original records before editing or undoing it.",
+    ar: "تفتقد الرسوم رقم {0} إلى روابط السند أو دفتر اليومية التاريخية. يجب تسوية السجلات الأصلية قبل تعديلها أو إلغائها.",
+    fr: "Les frais n° {0} n'ont pas de liens historiques vers la pièce ou le journal. Rapprochez les écritures originales avant modification ou annulation.",
+  },
+  {
+    en: "Cannot reverse offload while ${activePostOffloadCharges.length} post-offload charge(s) remain active. Undo those charges first so their vouchers and supplier costing are reversed safely.",
+    ar: "لا يمكن عكس التفريغ مع وجود {0} رسوم نشطة بعد التفريغ. ألغِ هذه الرسوم أولاً لضمان عكس القيود وتكاليف المورد بأمان.",
+    fr: "Impossible d'annuler le déchargement tant que {0} frais restent actifs. Annulez-les d'abord pour rétablir correctement les écritures et le coût fournisseur.",
+  },
+  {
+    en: "Each post-offload charge needs exactly one ledger account or supplier before it can be saved.",
+    ar: "يجب تحديد حساب محاسبي واحد أو مورّد واحد لكل رسم بعد التفريغ قبل الحفظ.",
+    fr: "Chaque frais après déchargement exige exactement un compte comptable ou un fournisseur avant l'enregistrement.",
+  },
+  {
+    en: "Charge ledger account must belong to the selected company.",
+    ar: "يجب أن ينتمي الحساب المحاسبي للرسوم إلى الشركة المحددة.",
+    fr: "Le compte comptable des frais doit appartenir à la société sélectionnée.",
+  },
+  {
+    en: "A post-offload charge edit requires exactly one ledger account or supplier.",
+    ar: "يتطلب تعديل رسم بعد التفريغ حسابًا محاسبيًا واحدًا أو مورّدًا واحدًا.",
+    fr: "La modification des frais après déchargement exige exactement un compte comptable ou un fournisseur.",
+  },
+  {
+    en: "Select the freight supplier or paying account before offloading.",
+    ar: "اختر مورّد الشحن أو حساب الدفع قبل التفريغ.",
+    fr: "Sélectionnez le fournisseur de fret ou le compte de paiement avant le déchargement.",
+  },
+  {
+    en: "Select the other-charges supplier or paying account before offloading.",
+    ar: "اختر مورّد الرسوم الأخرى أو حساب الدفع قبل التفريغ.",
+    fr: "Sélectionnez le fournisseur des autres frais ou le compte de paiement avant le déchargement.",
+  },
+  {
+    en: "Select the duty payment account before confirming duties and offloading.",
+    ar: "اختر حساب سداد الرسوم الجمركية قبل تأكيدها والتفريغ.",
+    fr: "Sélectionnez le compte de règlement des droits de douane avant leur confirmation et le déchargement.",
+  },
+  {
+    en: "Each positive additional charge needs exactly one paying account or supplier.",
+    ar: "تتطلب كل رسوم إضافية موجبة حساب دفع واحدًا أو مورّدًا واحدًا.",
+    fr: "Chaque frais supplémentaire positif exige exactement un compte de paiement ou un fournisseur.",
+  },
+  {
+    en: "Duty on container ${container.containerNumber}",
+    ar: "رسوم جمركية على الحاوية {0}",
+    fr: "Droits de douane du conteneur {0}",
+  },
+  {
+    en: "Duty incurred - container ${container.containerNumber}",
+    ar: "رسوم جمركية مستحقة - الحاوية {0}",
+    fr: "Droits engagés - conteneur {0}",
+  },
+  {
+    en: "Duty paid or payable through account - container ${container.containerNumber}",
+    ar: "رسوم جمركية مدفوعة أو مستحقة عبر الحساب - الحاوية {0}",
+    fr: "Droits payés ou dus via le compte - conteneur {0}",
+  },
+  {
+    en: "Cannot reverse offload while post-offload charges remain active.",
+    ar: "لا يمكن عكس التفريغ مع وجود رسوم نشطة بعد التفريغ.",
+    fr: "Impossible d'annuler le déchargement tant que des frais restent actifs.",
+  },
+  {
+    en: "Select the freight supplier before saving supplier-paid freight.",
+    ar: "اختر مورّد الشحن قبل حفظ رسوم الشحن المستحقة على المورّد.",
+    fr: "Sélectionnez le fournisseur de fret avant d'enregistrer des frais de fret à sa charge.",
+  },
+  {
+    en: "The selected freight supplier must belong to this company.",
+    ar: "يجب أن ينتمي مورّد الشحن المحدد إلى هذه الشركة.",
+    fr: "Le fournisseur de fret sélectionné doit appartenir à cette société.",
+  },
+  {
+    en: "This company has no verified parent company for intercompany credit.",
+    ar: "لا توجد شركة أم معتمدة لهذه الشركة لتحديث الرصيد بين الشركات.",
+    fr: "Cette société n'a pas de société mère vérifiée pour le crédit intersociétés.",
+  },
+  {
+    en: "Parent intercompany journal missing for this container; purchase-order edit was not saved.",
+    ar: "قيد الشركة الأم لهذا الحاوية غير موجود؛ لم يتم حفظ تعديل أمر الشراء.",
+    fr: "Le journal intersociétés de la société mère est introuvable pour ce conteneur ; la modification du bon de commande n'a pas été enregistrée.",
+  },
+  {
+    en: 'No matching parent intercompany journal for container ${poContainerRow?.containerNumber ?? "unknown"}; nothing was changed.',
+    ar: "لا يوجد قيد مطابق لدى الشركة الأم للحاوية {0}؛ لم يتم إجراء أي تعديل.",
+    fr: "Aucun journal intersociétés correspondant pour le conteneur {0} ; aucune modification effectuée.",
+  },
+  {
+    en: 'Intercompany credit not synchronized for container ${_b1ContainerRow?.containerNumber ?? "unknown"} (PO ${existingPO.poNumber}). Parent journal missing; no changes saved.',
+    ar: "لم تتم مزامنة الرصيد بين الشركات للحاوية {0} (أمر الشراء {1}). قيد الشركة الأم مفقود؛ لم تُحفظ التعديلات.",
+    fr: "Le crédit intersociétés du conteneur {0} (BC {1}) n’a pas été synchronisé. Journal de la société mère introuvable ; modifications non enregistrées.",
+  },
+  {
+    en: "Multiple legacy parent journals match container ${containerNumber}; reconcile them before editing.",
+    ar: "توجد قيود قديمة متعددة لدى الشركة الأم تطابق الحاوية {0}؛ يرجى مطابقتها قبل التعديل.",
+    fr: "Plusieurs anciens journaux de la société mère correspondent au conteneur {0} ; rapprochez-les avant de modifier.",
+  },
+  {
+    en: "Only Admin or Developer can permanently delete non-financial entries",
+    ar: "يمكن للمسؤول أو المطوّر فقط حذف القيود غير المالية نهائيًا.",
+    fr: "Seul un administrateur ou un développeur peut supprimer définitivement les écritures non financières.",
+  },
+  {
+    en: "Only Admin or Owner can delete bonus payments",
+    ar: "يمكن للمسؤول أو المالك فقط حذف مدفوعات المكافآت.",
+    fr: "Seul un administrateur ou le propriétaire peut supprimer les paiements de primes.",
+  },
+  {
+    en: "Only Admin or Owner can reverse bonuses",
+    ar: "يمكن للمسؤول أو المالك فقط عكس المكافآت.",
+    fr: "Seul un administrateur ou le propriétaire peut contrepasser les primes.",
+  },
+  {
+    en: "Posted bonus Daybook entries cannot be edited. Reverse the payment instead.",
+    ar: "لا يمكن تعديل قيود مكافآت الإنتاج المسجلة في دفتر اليومية. اعكس الدفع بدلاً من ذلك.",
+    fr: "Les écritures de primes comptabilisées dans le journal ne peuvent pas être modifiées. Contrepassez le paiement.",
+  },
+  {
+    en: "Production bonus audit entries cannot be hard-deleted",
+    ar: "لا يمكن حذف قيود تدقيق مكافآت الإنتاج نهائيًا.",
+    fr: "Les écritures d'audit des primes de production ne peuvent pas être supprimées définitivement.",
+  },
+  {
+    en: "Reversal audit entries cannot be deleted",
+    ar: "لا يمكن حذف قيود التدقيق الخاصة بالعكس.",
+    fr: "Les écritures d'audit de contrepassation ne peuvent pas être supprimées.",
+  },
+  {
+    en: "This is an accounting reversal voucher and must remain in audit history",
+    ar: "هذا سند عكس محاسبي ويجب الاحتفاظ به في سجل التدقيق.",
+    fr: "Cette pièce de contrepassation comptable doit rester dans l'historique d'audit.",
+  },
+  {
+    en: "Production ended. No WhatsApp message was sent.",
+    ar: "انتهى الإنتاج. لم يتم إرسال أي رسالة عبر واتساب.",
+    fr: "La production est terminée. Aucun message WhatsApp n'a été envoyé.",
+  },
+  // POS optional status: stock, linked settlements and activation guards
+  {
+    en: "Reactivate POS sales using PATCH /api/vouchers/:id/optional with optional=false so stock and accounting are restored together.",
+    ar: "أعد تنشيط مبيعات نقطة البيع باستخدام المسار المخصص كي يُعاد المخزون والقيد المحاسبي معًا.",
+    fr: "Réactivez les ventes PDV par l'opération dédiée afin de rétablir ensemble le stock et la comptabilité.",
+  },
+  {
+    en: "Cannot change a stocked POS sale without its original stock location",
+    ar: "لا يمكن تغيير بيع نقطة بيع مرتبط بالمخزون دون تحديد موقع المخزون الأصلي",
+    fr: "Impossible de modifier une vente PDV stockée sans son emplacement de stock d'origine",
+  },
+  {
+    en: 'Cannot reactivate POS ${voucher.voucherNumber}: insufficient stock at the original location for item ${stockItemId} (required ${required.toString()}, available ${current?.quantity ?? "0"}).',
+    ar: "تعذرت إعادة تنشيط البيع {0}: لا توجد كمية كافية من الصنف {1} في الموقع الأصلي (المطلوب {2}، المتاح {3}).",
+    fr: "Impossible de réactiver la vente {0} : stock insuffisant à l'emplacement d'origine pour l'article {1} (requis : {2}, disponible : {3}).",
+  },
+  {
+    en: "This POS sale has a supplier-partner or intercompany accounting arrangement. ",
+    ar: "ترتبط عملية بيع نقطة البيع هذه بتسوية محاسبية مع شريك مورد أو بين شركات. ",
+    fr: "Cette vente PDV comporte un règlement comptable avec un partenaire fournisseur ou intersociétés. ",
+  },
+  {
+    en: "It cannot be made optional until its linked settlements can be reversed together with the sale.",
+    ar: "لا يمكن جعلها اختيارية قبل التمكن من عكس التسويات المرتبطة مع البيع معًا.",
+    fr: "Elle ne peut pas devenir facultative tant que les règlements liés ne peuvent pas être contrepassés avec la vente.",
+  },
+  // Factory mix-cost safety diagnostics, phase 8 release.
+  {
+    en: "Factory monitoring company mismatch: cross-tenant evidence rejected",
+    ar: "بيانات مراقبة المصنع لا تطابق الشركة: رُفضت معلومات شركة أخرى",
+    fr: "Les données de surveillance de l’usine ne correspondent pas à la société : preuves d’un autre locataire rejetées",
+  },
+  {
+    en: "Too many Factory mix findings for safe monitoring",
+    ar: "عدد ملاحظات خلطات المصنع كبير جداً لإجراء مراقبة آمنة",
+    fr: "Trop d’anomalies de mélanges pour une surveillance sûre",
+  },
+  { en: "Invalid company", ar: "الشركة غير صالحة", fr: "Société invalide" },
+  {
+    en: "Existing Factory integrity monitor baseline is corrupt",
+    ar: "الخط المرجعي لمراقبة سلامة المصنع تالف",
+    fr: "La référence initiale du suivi d’intégrité de l’usine est corrompue",
+  },
+  {
+    en: "Factory integrity baseline exceeds safe size",
+    ar: "حجم الخط المرجعي لسلامة المصنع يتجاوز الحد الآمن",
+    fr: "La référence d’intégrité de l’usine dépasse la taille autorisée",
+  },
+  {
+    en: "Factory mix monitoring requires Admin, Owner or Developer access.",
+    ar: "مراقبة خلطات المصنع تتطلب صلاحية مدير أو مالك أو مطور.",
+    fr: "Le suivi des mélanges exige un accès administrateur, propriétaire ou développeur.",
+  },
+  {
+    en: "Mix lifecycle reconciliation requires Admin, Owner or Developer access.",
+    ar: "مطابقة دورة الخلطات تتطلب صلاحية مدير أو مالك أو مطور.",
+    fr: "Le rapprochement du cycle de vie des mélanges exige un accès administrateur, propriétaire ou développeur.",
+  },
+  {
+    en: "Downstream cost reconciliation requires Admin, Owner or Developer access.",
+    ar: "مطابقة التكاليف اللاحقة تتطلب صلاحية مدير أو مالك أو مطور.",
+    fr: "Le rapprochement des coûts en aval exige un accès administrateur, propriétaire ou développeur.",
+  },
+  {
+    en: "Raw-stock reconciliation requires Admin, Owner or Developer access.",
+    ar: "مطابقة المواد الخام تتطلب صلاحية مدير أو مالك أو مطور.",
+    fr: "Le rapprochement des matières premières exige un accès administrateur, propriétaire ou développeur.",
+  },
+  {
+    en: "Historical reconciliation requires Admin, Owner or Developer access.",
+    ar: "المطابقة التاريخية تتطلب صلاحية مدير أو مالك أو مطور.",
+    fr: "Le rapprochement historique exige un accès administrateur, propriétaire ou développeur.",
+  },
+  {
+    en: "Review the proposed source changes before applying them.",
+    ar: "راجع تغييرات المصادر المقترحة قبل تطبيقها.",
+    fr: "Vérifiez les changements de sources proposés avant de les appliquer.",
+  },
+  {
+    en: "Mix batch edited: ${edited.batchCode}${edited.name ?",
+    ar: "تم تعديل خلطة الإنتاج: {0}",
+    fr: "Lot de mélange modifié : {0}",
+  },
+  {
+    en: "Mix batch is no longer available",
+    ar: "خلطة الإنتاج لم تعد متاحة",
+    fr: "Le lot de mélange n’est plus disponible",
+  },
+  {
+    en: "Non-finite persisted costing value",
+    ar: "قيمة تكلفة محفوظة غير صالحة عددياً",
+    fr: "Valeur de coût enregistré non finie",
+  },
+  { en: "Company is required", ar: "يجب تحديد الشركة", fr: "La société est obligatoire" },
+  {
+    en: "Historical audit exceeded safe row bounds; run an offline paginated audit.",
+    ar: "تجاوز التدقيق التاريخي الحد الآمن للسجلات؛ نفّذ تدقيقاً مجزأً دون اتصال.",
+    fr: "L’audit historique dépasse la limite de lignes sûre ; exécutez un audit paginé hors ligne.",
+  },
+  { en: "Invalid Factory company", ar: "شركة المصنع غير صالحة", fr: "Société d’usine invalide" },
+  {
+    en: "Phase 4 report exceeds safe snapshot bounds",
+    ar: "تقرير المرحلة الرابعة يتجاوز الحد الآمن للبيانات",
+    fr: "Le rapport de phase 4 dépasse la limite sûre de l’instantané",
+  },
+  { en: "Factory company is required", ar: "يجب تحديد شركة المصنع", fr: "La société d’usine est obligatoire" },
+  {
+    en: "Phase 5 mix reconciliation exceeded safe batch bound",
+    ar: "مطابقة خلطات المرحلة الخامسة تجاوزت الحد الآمن للدفعات",
+    fr: "Le rapprochement des mélanges de phase 5 dépasse la limite sûre de lots",
+  },
+  {
+    en: "Lifecycle audit exceeds safe row bounds",
+    ar: "تدقيق دورة التشغيل يتجاوز الحد الآمن للسجلات",
+    fr: "L’audit du cycle de vie dépasse la limite sûre de lignes",
+  },
+  {
+    en: "Mix is not in Deleted Items or belongs to a different company.",
+    ar: "الخلطة ليست في العناصر المحذوفة أو تتبع شركة أخرى.",
+    fr: "Le mélange ne se trouve pas dans les éléments supprimés ou appartient à une autre société.",
+  },
+  {
+    en: "Source kg must be positive with no more than 3 decimal places.",
+    ar: "يجب أن يكون وزن المصدر موجباً وبحد أقصى ثلاث منازل عشرية.",
+    fr: "Le poids de la source doit être positif et comporter au plus trois décimales.",
+  },
+  {
+    en: "Explain the documentary evidence and original valuation basis (20–1000 characters) before classification.",
+    ar: "اشرح المستندات المؤيدة وأساس التقييم الأصلي (20 إلى 1000 حرف) قبل التصنيف.",
+    fr: "Expliquez les justificatifs et la base de valorisation initiale (20 à 1 000 caractères) avant classement.",
+  },
+  {
+    en: "Factory mix integrity scan failed for",
+    ar: "فشل فحص سلامة خلطات المصنع لـ",
+    fr: "Le contrôle d’intégrité des mélanges a échoué pour",
+  },
+];

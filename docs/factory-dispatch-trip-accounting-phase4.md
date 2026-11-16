@@ -74,8 +74,8 @@ The original order's `customer_orders.invoice_number` remains **NULL** until Pha
 
 - `docs/sql/manual/2026-11-10-factory-dispatch-trip-financial-phase2.sql` — 7 Phase 2 tables with composite FKs and immutable history.
 - `docs/sql/manual/2026-11-10-factory-dispatch-trip-financial-phase4-guards.sql` — Phase 4 posted-bale/scan/closure guards and forced company-scope RLS.
-- `tests/factory-dispatch-financial-phase4.test.ts` — staged accounting equation, idempotency, reversal, and legacy double-post protection coverage.
-- `tests/factory-dispatch-financial-phase3.test.ts` — updated to refuse pretending an unpaid internal cost was paid from bank.
+- `tests/factory-dispatch-financial-trip-finalization-accounting-contracts.test.ts` — staged accounting equation, idempotency, reversal, and legacy double-post protection coverage.
+- `tests/factory-dispatch-financial-trip-charge-previews.test.ts` — updated to refuse pretending an unpaid internal cost was paid from bank.
 
 The posting service **fails closed with HTTP 503** until both manual SQL files are installed and its required RLS and trigger safeguards are present. No TablePlus execution was performed.
 

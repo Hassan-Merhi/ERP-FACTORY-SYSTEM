@@ -31,7 +31,7 @@ import type {
   RetailStockCountLineStatus,
   RetailStockCountSession,
   RetailStockCountSessionLine,
-} from "@/pages/pos/retailWave2Types";
+} from "@/pages/pos/retailTypes";
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "Draft",

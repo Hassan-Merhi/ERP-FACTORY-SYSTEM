@@ -1,4 +1,4 @@
-import type { Phase4SupplierPartnerEntry } from "./supplierPartnerPhase4TranslationTypes";
+import type { Phase4SupplierPartnerEntry } from "./supplierPartnerTranslationTypes";
 
 /**
  * Supplier Partner messages introduced on current main after the Phase 4

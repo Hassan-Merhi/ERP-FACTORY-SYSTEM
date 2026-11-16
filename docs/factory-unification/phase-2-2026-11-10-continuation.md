@@ -22,15 +22,15 @@ The new PR branch adds company-scoped Transporters list, statement and account-p
 A connected GitHub source re-read of 11 newly hardened files checked required query-scope and access statements; **11/11 static string checks passed**. This is NOT an executed application or TypeScript test.
 
 Authored but **not executed here**:
-- `tests/factory-unification-phase2-permission-cache-followup.test.ts`
-- `tests/factory-unification-phase2-transporter-cache.test.ts`
+- `tests/factory-unification-permission-cache-followup.test.ts`
+- `tests/factory-unification-transporter-cache.test.ts`
 - Other existing Factory Phase 2 regression suites
 
 A checkout is not accessible to this session's local runtime; GitHub source access alone cannot run the repository scripts, start an authenticated Factory browser or exercise real company/role fixtures. A temporary Git clone attempt failed to resolve github.com. No manual CI workflow was launched.
 
 ## Blocking acceptance gates
 
-1. Run `node scripts/audit-factory-phase2.mjs --strict` in an actual checkout and triage all remaining findings, including dynamic `useQueries`, `fetchQuery`, local edit state and shared financial-domain screens. Github code searches still find URL-only Factory reads in other modules.
+1. Run `node scripts/audit-factory.mjs --strict` in an actual checkout and triage all remaining findings, including dynamic `useQueries`, `fetchQuery`, local edit state and shared financial-domain screens. Github code searches still find URL-only Factory reads in other modules.
 2. Run repository-approved TypeScript and Vitest checks, including the two new suites and existing Phase 2 suites. Retain actual exit codes and failures.
 3. Verify backend 200/403 outcomes with actual nonproduction selected-company sessions for View Only, Create Only, User, Admin, Owner and Developer. Test missing permission contexts and other-company IDs, not just button visibility.
 4. Exercise company A→B→A with delayed reads, active mutations, cost-hidden data, payroll balances, attendance approvals, POS drafts and saved reports.
@@ -51,7 +51,7 @@ GitHub's Focused security readiness job on an earlier PR #3122 head failed with 
 - `server/routes/import/factoryDispatchPoImportReceipt.ts` performs a global *existence-only* container-number collision check. `shared/schema/containers.ts` marks `container_number` globally unique, and the import deliberately rejects an existing number regardless of company; narrowing the query would weaken this invariant.
 - `server/services/factory/dispatchTripFinancialPosting.ts` checks PostgreSQL `pg_trigger` and `pg_class` catalog entries, referencing `public.vouchers` only via `to_regclass`. It is not an unscoped voucher-row query.
 
-These two exceptions are now recorded with precise rationale in `config/company-scope-review.json`, with a characterization test `tests/factory-unification-phase2-company-scope-exceptions.test.ts`. The existing audit's review registry is file-scoped, which is a limitation: further SQL in those files must still be examined manually, and strict scanning cannot be regarded as complete authorization certification. The new checks are not claimed as passing until a GitHub run reports their result.
+These two exceptions are now recorded with precise rationale in `config/company-scope-review.json`, with a characterization test `tests/factory-unification-company-scope-exceptions.test.ts`. The existing audit's review registry is file-scoped, which is a limitation: further SQL in those files must still be examined manually, and strict scanning cannot be regarded as complete authorization certification. The new checks are not claimed as passing until a GitHub run reports their result.
 
 Automatic checks on PR and main may run under the repository configuration; none were manually triggered in this execution. The earlier direct-main Main Certification failure included a formatting issue and frontend test-fixture failures, while Browser E2E passed. Independent changes on main repaired several fixtures, and the remaining Bales History/Wipers test fixtures were updated in PR #3122. The resulting test outcomes must be verified on the merged head.
 

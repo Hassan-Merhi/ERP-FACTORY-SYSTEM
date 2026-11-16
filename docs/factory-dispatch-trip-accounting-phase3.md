@@ -36,7 +36,7 @@
 - `client/src/pages/factory/FactoryLoadingDispatchFinance.tsx` — responsive light/dark charge list, editor, account pickers, preview, and friendly schema/source refusal messages; displays no financial-posting action.
 - `client/src/pages/factory/FactoryLoadingDispatch.tsx` — mounted financial card on trip detail, below existing physical closure review, without altering scanning.
 - `config/route-manifest.json` — added the four server routes in exact handler registration order.
-- `tests/factory-dispatch-financial-phase3.test.ts` — staged regression specifications for arithmetic, mapping, account classification, fingerprints and validation. **NOT EXECUTED**.
+- `tests/factory-dispatch-financial-trip-charge-previews.test.ts` — staged regression specifications for arithmetic, mapping, account classification, fingerprints and validation. **NOT EXECUTED**.
 
 ## Financial preview formula
 

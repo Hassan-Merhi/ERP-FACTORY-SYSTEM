@@ -28,7 +28,7 @@ No changes to ticket lifecycle, voucher processing, finance records or stock lev
 ## Verification before merge
 1. Apply and verify ticket migrations 001–003 on a disposable PostgreSQL environment.
 2. Run TypeScript and the existing migration/permission checks.
-3. Run `tests/ticket-management-phase5.test.ts` alongside Phase 1–4 regression tests.
+3. Run `tests/ticket-management-enforces-company-scope-and-never-accepts.test.ts` alongside Phase 1–4 regression tests.
 4. Test normal users, restricted managers, authorized admins and cross-company sessions; direct API calls must return 403 without `act_ticket_manage_all`.
 5. Verify exported CSV for commas, quotes, newlines, spreadsheet-formula prefixes, non-ASCII text and >10,000-record handling.
 6. Verify filters, timezone boundaries, mobile tables, overdue links and number formatting.

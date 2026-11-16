@@ -193,7 +193,7 @@ closed shift behavior and existing ERP / Factory / non-retail accounting.
 - Manager+ authorization required for damaged/non-restock and customer-account
   credit refunds. A cashier shift is optional for returns and exchanges, as for
   sales: a refund without a shift stays off every drawer (established contract,
-  covered by `tests/retail-wave2-pos-integration.test.ts`).
+  covered by `tests/retail-pos-integration.test.ts`).
 - Existing retail sale records and historic vouchers are not rewritten.
   All new return/refund/COGS/inventory postings are performed transactionally
   only when the code is later deployed and a real return is requested.

@@ -129,7 +129,7 @@ vi.mock("../server/services/inventory/stockMovementIntegrityService", () => ({
   postStockMovementTx: harness.postStockMovementTx,
 }));
 // Phase 22 (B): the transfer header's number comes from the gapless allocator
-// (database-backed coverage in tests/phase22a-engine-numbering-rounding.test.ts).
+// (database-backed coverage in tests/engine-numbering-rounding.test.ts).
 vi.mock("../server/services/accounting/voucherNumbering", () => ({
   allocateVoucherNumberTx: vi.fn(async () => "ST-4-2026-000001"),
 }));

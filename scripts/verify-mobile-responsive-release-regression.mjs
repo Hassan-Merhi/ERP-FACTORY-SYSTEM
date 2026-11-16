@@ -1,0 +1,49 @@
+#!/usr/bin/env node
+
+import { spawnSync } from "node:child_process";
+
+const checks = [
+  ["Critical mobile flows", "node", ["scripts/verify-mobile-responsive-critical-flows.mjs"]],
+  ["Phase 4 forms and dialogs", "node", ["scripts/verify-dialog-form-consistency.mjs"]],
+  ["Phase 5 tables and data lists", "node", ["scripts/verify-mobile-responsive-tables.mjs"]],
+  ["Phase 6 core ERP", "node", ["scripts/verify-mobile-responsive-core-erp.mjs"]],
+  ["Phase 7 Factory", "node", ["scripts/verify-mobile-responsive-factory.mjs"]],
+  ["Wave 2 Factory floor", "node", ["scripts/verify-mobile-responsive-factory-floor.mjs"]],
+  ["Wave 4 exhaustive responsive regression", "node", ["scripts/verify-mobile-responsive-visual-regression.mjs"]],
+  ["Phase 8 POS", "node", ["scripts/verify-mobile-responsive-pos.mjs"]],
+  ["Phase 9 dashboards and reports", "node", ["scripts/verify-mobile-responsive-reports.mjs"]],
+  ["Phase 10 performance and offline", "node", ["scripts/verify-mobile-responsive-performance.mjs"]],
+  ["Wave 3 ERP operations", "node", ["scripts/verify-mobile-responsive-erp-operations.mjs"]],
+  ["Cross-module UX consistency", "npm", ["run", "audit:ux-consistency"]],
+  ["Mobile routing", "npm", ["run", "verify:mobile-web-routing"]],
+  ["Bandwidth contracts", "npm", ["run", "verify:bandwidth"]],
+  ["Production readiness", "npm", ["run", "verify:final-production-readiness"]],
+];
+
+const failures = [];
+for (const [name, command, args] of checks) {
+  const result = spawnSync(command, args, {
+    stdio: "inherit",
+    shell: process.platform === "win32",
+  });
+  if (result.status !== 0) failures.push(name);
+}
+
+if (failures.length > 0) {
+  console.error("\nPhase 11 responsive regression verification failed:");
+  for (const failure of failures) console.error(`- ${failure}`);
+  process.exit(1);
+}
+
+console.log(
+  JSON.stringify(
+    {
+      phase: 11,
+      status: "complete",
+      checks: checks.length,
+      sqlRequired: false,
+    },
+    null,
+    2
+  )
+);

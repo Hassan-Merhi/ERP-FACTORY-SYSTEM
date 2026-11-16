@@ -1,5 +1,5 @@
-import "./bandwidthPhase1HotspotGuard";
-import "./bandwidthPhase2PayloadGuard";
+import "./bandwidthHotspotGuard";
+import "./bandwidthPayloadGuard";
 import {
   accountingResponseCode,
   attachAccountingRequestIdentity,
@@ -13,7 +13,7 @@ import {
   markPhase5VoucherRequestOutcomeUncertain,
   releasePhase5VoucherRequestIdentity,
   shouldReleasePhase5VoucherRequestIdentity,
-} from "./phase5VoucherRequestIdentity";
+} from "./voucherRequestIdentity";
 import { isPhase5OperationalVoucherRequest, type VoucherRequestPayload } from "@shared/voucherPathIdentityPolicy";
 
 function resolvePath(input: RequestInfo | URL): string | null {

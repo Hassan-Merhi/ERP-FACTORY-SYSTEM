@@ -15,7 +15,7 @@ import { getErrorMessage } from "../../lib/httpHandlers";
  * line, native/base amounts that contradict their rate, and the legacy USD/CFA
  * insert that the trigger converts). It is now installed at every boot by this
  * installer, with exactly the migration's definition (pinned by
- * tests/wave14-currency.test.ts), so CI and tests run against it. Since wave
+ * tests/currency.test.ts), so CI and tests run against it. Since wave
  * 17 D the definition is CURRENCY_NORMALIZATION_MIGRATION (v2).
  *
  * Pattern of the other guards: idempotent (skipped when the version comment

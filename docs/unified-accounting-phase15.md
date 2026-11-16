@@ -176,13 +176,13 @@ Factory page/tab View Accounts authorization boundary.
 
 ### 6. Static integration contract for Claude
 
-Added `scripts/verify-unified-accounting-phase15.mjs`. Claude can run it
+Added `scripts/verify-unified-accounting.mjs`. Claude can run it
 **during independent verification**, not as part of this stage, to check
 wiring of all module routes, permission middleware, new schema, relevant
 source files, protected report endpoints, phase docs and the
 `PERPETUAL_INVENTORY_POSTING_READY = false` constant.
 
-`node scripts/verify-unified-accounting-phase15.mjs`
+`node scripts/verify-unified-accounting.mjs`
 
 This is **only a static string/manifest consistency check**. Passing it
 does not prove TypeScript compilation, SQL validity, security isolation,

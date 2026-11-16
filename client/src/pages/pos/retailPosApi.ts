@@ -13,7 +13,7 @@ import type {
   RetailStockCountReport,
   RetailStockCountSession,
   RetailStockCountVarianceReport,
-} from "./retailWave2Types";
+} from "./retailTypes";
 import type { RetailSale } from "./retailPosTypes";
 import type { ExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 

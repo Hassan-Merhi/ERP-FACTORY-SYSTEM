@@ -141,7 +141,7 @@ Unauthorized routes must not mount hidden page content before redirecting to a s
 - **Parameterized deep links.** `findPropertiesNavigationEntry` resolves the canonical registry for concrete voucher-edit, voucher-detail, ledger-monthly and ledger-vouchers URLs, as well as `?tab=shops` and `?tab=payments`. It matches full path segments, not similar-looking prefixes, so absent or extra segments do not grant UI capability visibility.
 - **Sidebar icons.** Pinned icons are bound to canonical path identities, not array positions; the six pinned paths, labels and drag-reorder behavior remain unchanged.
 - **Unknown and forbidden links.** The existing fallback remains `/properties/daybook` with replacement navigation. Selected-company frontend role checks are maintained; server permission and tenant boundaries remain authoritative.
-- **Verification.** `tests/properties-unification-phase10-navigation.test.ts` was committed to cover redirects, deep links, gating, sidebar pins, dashboard reachability and fail-safe unknown paths. This implementation was source-inspected, **not** browser-tested or Vitest-executed. Phase 11 must test actual navigation and account-management actions before any release.
+- **Verification.** `tests/properties-unification-navigation.test.ts` was committed to cover redirects, deep links, gating, sidebar pins, dashboard reachability and fail-safe unknown paths. This implementation was source-inspected, **not** browser-tested or Vitest-executed. Phase 11 must test actual navigation and account-management actions before any release.
 
 ## Unification Phase 13 — deterministic parent routes (2026-11-09)
 

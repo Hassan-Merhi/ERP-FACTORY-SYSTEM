@@ -71,10 +71,10 @@ The following is a TEST PLAN, **not a claim these tests were executed**:
 
 ```sh
 npm run check
-npx vitest run tests/pressing-machine-phase8-contract.test.ts
-npx vitest run tests/pressing-machine-phase7-contract.test.ts server/services/factory/pressingShiftTime.test.ts
-npx vitest run tests/pressing-machine-phase6-contract.test.ts tests/pressing-machine-phase5-contract.test.ts tests/pressing-machine-phase4-contract.test.ts
-npx vitest run tests/pressing-machine-phase3-source.test.ts tests/pressing-machine-phase2-access.test.ts
+npx vitest run tests/pressing-machine-contract-requires-authenticated-supervisor-manager-role-behind.test.ts
+npx vitest run tests/pressing-machine-contract-does-not-register-shift-downtime-productivity.test.ts server/services/factory/pressingShiftTime.test.ts
+npx vitest run tests/pressing-machine-contract-rejects-invalid-dates-excessive-pagination-and.test.ts tests/pressing-machine-contract-persists-a-request-id-and-payload.test.ts tests/pressing-machine-contract-wires-server-confirmation-after-the-shared.test.ts
+npx vitest run tests/pressing-machine-source.test.ts tests/pressing-machine-access.test.ts
 npx vitest run tests/startup-schema-integrity.test.ts
 npm run verify:migrations
 ```

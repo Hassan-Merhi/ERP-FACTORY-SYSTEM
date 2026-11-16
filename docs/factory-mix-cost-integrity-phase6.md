@@ -69,7 +69,7 @@ For normal factory mix creation, the existing legacy behavior of making a comple
 
 ## 3. Regression tests added
 
-`tests/factory-mix-phase6-lifecycle.test.ts`:
+`tests/factory-mix-lifecycle.test.ts`:
 - Positive exact 3dp kg, invalid negatives/overprecision and date validation.
 - Duplicate and invalid usage requests fail rather than being silently skipped.
 - Completed, overused, deleted, closed and overdrawn batches are refused for future consumption.

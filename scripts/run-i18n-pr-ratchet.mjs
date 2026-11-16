@@ -37,7 +37,7 @@ const baseWorktree = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP || os.tmpd
 
 try {
   run(process.execPath, [
-    "scripts/audit-i18n-phase14.mjs",
+    "scripts/audit-i18n.mjs",
     "--no-enforce",
     "--json-out",
     currentJson,
@@ -50,7 +50,7 @@ try {
   run(
     process.execPath,
     [
-      "scripts/audit-i18n-phase14.mjs",
+      "scripts/audit-i18n.mjs",
       "--no-enforce",
       "--json-out",
       baseJson,

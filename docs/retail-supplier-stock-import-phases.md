@@ -258,7 +258,7 @@ were performed. Claude should verify the UI/printing workflow, especially
   not just the first 100 preview lines. The exported CSV escapes
   supplier-controlled values so spreadsheet applications cannot evaluate
   product names as formulas.
-- Added `tests/retail-supplier-import-phase6.test.ts` for partial delivery,
+- Added `tests/retail-supplier-import.test.ts` for partial delivery,
   invoice attachment, exact saved barcode/quantity and immutable fingerprint
   contracts, for Claude to execute during Phase 7.
 

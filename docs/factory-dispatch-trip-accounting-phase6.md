@@ -38,7 +38,7 @@ The operator continues to use **Normal ERP → PO Import**, not a Factory-side i
 - `server/routes/import/factoryDispatchPoImportGuard.ts` — canonical FD/FDPO identity, exact company-scoped ERP article alias and supplier code validation, positive integer quantities, reviewed USD rates and correctly reconciled totals; no name fallback.
 - `server/routes/import/factoryDispatchPoImportReceipt.ts` — fingerprint, mandatory manual TablePlus schema readiness, duplicate inspection, pre-write unique origin reservation and post-import receipt completion.
 - `docs/sql/manual/2026-11-10-factory-dispatch-erp-po-phase6-receipts.sql` — **NOT EXECUTED**, company-isolated receipt table, globally unique Factory origin and container identities, immutable completion trigger, status constraints and indexes.
-- `tests/factory-dispatch-financial-phase6.test.ts` — staged identity, supplier, exact alias, rate/charge, floating-point dust, RLS/receipt and import-at-write regressions. **NOT RUN**.
+- `tests/factory-dispatch-financial-normal-erp-po-import-compatibility.test.ts` — staged identity, supplier, exact alias, rate/charge, floating-point dust, RLS/receipt and import-at-write regressions. **NOT RUN**.
 
 ### Modified
 

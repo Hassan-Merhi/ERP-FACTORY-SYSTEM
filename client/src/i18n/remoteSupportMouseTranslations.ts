@@ -1,5 +1,5 @@
 import type { ApplicationLanguage } from "@shared/applicationLanguageContract";
-import type { Phase7BackendMessagesEntry } from "./backendMessagesPhase7TranslationTypes";
+import type { Phase7BackendMessagesEntry } from "./backendMessagesTranslationTypes";
 
 export const remoteSupportPhase5Translations: readonly Phase7BackendMessagesEntry[] = [
   { en: "Mouse control", ar: "التحكم بالماوس", fr: "Contrôle de la souris" },

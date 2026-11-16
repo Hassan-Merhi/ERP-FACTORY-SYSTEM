@@ -30,7 +30,7 @@ Operations can inspect delivery status in `support_ticket_notifications`:
 ## Verification before merge
 - `npm run check` for TypeScript.
 - `npm run verify:migrations` and `npm run verify:startup-migrations`.
-- `npm run test:backend -- tests/ticket-management-phase1.test.ts tests/ticket-management-phase2.test.ts tests/ticket-management-phase3.test.ts tests/ticket-management-phase4.test.ts`.
+- `npm run test:backend -- tests/ticket-management-denies-other-companies-unrelated-users-and.test.ts tests/ticket-management-accepts-a-valid-create-payload-and.test.ts tests/ticket-management-detects-image-pdf-bytes-rather-than.test.ts tests/ticket-management-assigns-new-and-reopened-alerts-to.test.ts`.
 - CI, UI Quality, Security, CodeQL and database migration verification.
 - Test concurrent replica workers, outbox replay, revoked opt-in/company membership, and finalized tickets.
 - Sandbox provider deliveries to opted-in test accounts before enabling in production.

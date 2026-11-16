@@ -12,7 +12,7 @@ Run:
 npm run check
 npm run verify:migrations
 npm run verify:startup-migrations
-npm run test:backend -- tests/ticket-management-phase1.test.ts tests/ticket-management-phase2.test.ts tests/ticket-management-phase3.test.ts tests/ticket-management-phase4.test.ts tests/ticket-management-phase5.test.ts tests/ticket-management-phase6.test.ts
+npm run test:backend -- tests/ticket-management-denies-other-companies-unrelated-users-and.test.ts tests/ticket-management-accepts-a-valid-create-payload-and.test.ts tests/ticket-management-detects-image-pdf-bytes-rather-than.test.ts tests/ticket-management-assigns-new-and-reopened-alerts-to.test.ts tests/ticket-management-enforces-company-scope-and-never-accepts.test.ts tests/ticket-management-fails-closed-across-company-and-role.test.ts
 npm run format:check:changed
 npm run build
 ```

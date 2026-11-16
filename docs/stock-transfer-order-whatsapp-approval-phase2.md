@@ -36,7 +36,7 @@ The request message explicitly states that `DONE` replies will not be processed 
 
 ### Verification and rollout
 
-- New `tests/stock-transfer-order-wa-phase2-contract.test.ts` checks source contracts and permission boundaries.
+- New `tests/stock-transfer-order-wa-contract-appears-only-within-the-existing-whatsapp.test.ts` checks source contracts and permission boundaries.
 - `config/route-manifest.json` records 10 additional routes (one dedicated order-create path, nine approval paths) and two inventory module mounts.
 - The Phase 1 schema remains idempotent, with startup registration required before any order-origin inserts.
 - Source-level static consistency checks were run through the GitHub connector, but **a full TypeScript/Vitest/PostgreSQL integration run has not been performed**.

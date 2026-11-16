@@ -56,9 +56,9 @@ The build-time file `shared/publishedTrainingMedia.json` is only the fallback us
 
 The **Nightly ERP Training Audit** workflow now runs a separate `transactions` job **every night**, even when no application pages changed. This job is independent of video recording and performs the existing actual application transaction tests, not mocked calculations. A temporary PostgreSQL 18 service is initialized with a fabricated dataset and unique test credentials; it is not connected to Render or a production company.
 
-The fixture generator is `scripts/prepare-phase7-browser-e2e-fixture.mjs`. It creates three fake companies (ERP, Factory, Supplier Partner), synthetic inventory, accounts, a supplier and a container. **You do not need to supply any real records.** Developers can change or expand the fake-only fixture and expected assertions through reviewed code changes; the current workflow does **not** accept user-uploaded datasets or import live company data.
+The fixture generator is `scripts/prepare-browser-e2e-fixture.mjs`. It creates three fake companies (ERP, Factory, Supplier Partner), synthetic inventory, accounts, a supplier and a container. **You do not need to supply any real records.** Developers can change or expand the fake-only fixture and expected assertions through reviewed code changes; the current workflow does **not** accept user-uploaded datasets or import live company data.
 
-The transaction runner `scripts/run-phase7-browser-e2e.mjs` executes actual local server and browser actions including:
+The transaction runner `scripts/run-browser-e2e.mjs` executes actual local server and browser actions including:
 
 - ERP POS sales and phone checkout, with inventory deduction
 - stock transfer between ERP locations

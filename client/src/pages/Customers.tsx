@@ -6,7 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { customersApi } from "@/api/customersApi";
 import { fetchRetailCustomerHistory } from "./pos/retailPosApi";
-import type { RetailCustomerHistory } from "./pos/retailWave2Types";
+import type { RetailCustomerHistory } from "./pos/retailTypes";
 import { drCrClass } from "@/lib/formatNumber";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";

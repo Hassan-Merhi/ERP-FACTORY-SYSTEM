@@ -92,7 +92,7 @@ Original order charges already posted as vouchers are included in the final comm
 
 ## Staged regression tests — NOT EXECUTED
 
-`tests/factory-dispatch-financial-phase8.test.ts` covers posted vs new customer totals, exact signed source, absence of a second receivable, clearing-to-sales, optional COGS, original charges, immutable invoice identity, customer PDF/Excel fees and final SQL constraints. All previous phase test files remain staged. CI and runtime browser/database checks are deferred by owner instruction.
+`tests/factory-dispatch-financial-keeps-exact-signed-goods-posted-charges.test.ts` covers posted vs new customer totals, exact signed source, absence of a second receivable, clearing-to-sales, optional COGS, original charges, immutable invoice identity, customer PDF/Excel fees and final SQL constraints. All previous phase test files remain staged. CI and runtime browser/database checks are deferred by owner instruction.
 
 ## Completion boundary
 

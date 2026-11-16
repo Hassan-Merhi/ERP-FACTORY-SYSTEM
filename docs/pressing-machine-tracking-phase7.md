@@ -57,14 +57,14 @@ The analytics API fails with an explicit error when more than 3,000 daily/shift 
 
 Added:
 - `server/services/factory/pressingShiftTime.test.ts` — overlaps, shift boundaries, overnight local dates, timezone and DST behavior.
-- `tests/pressing-machine-phase7-contract.test.ts` — route registration, tenant/role scope, session rollover, downtime lock/guard, accepted-only analytics and accounting isolation.
+- `tests/pressing-machine-contract-does-not-register-shift-downtime-productivity.test.ts` — route registration, tenant/role scope, session rollover, downtime lock/guard, accepted-only analytics and accounting isolation.
 
 Before merge or deployment, run (on a checked-out working tree):
 
 ```sh
 npm run check
-npx vitest run server/services/factory/pressingShiftTime.test.ts tests/pressing-machine-phase7-contract.test.ts
-npx vitest run tests/pressing-machine-phase4-contract.test.ts tests/pressing-machine-phase6-contract.test.ts
+npx vitest run server/services/factory/pressingShiftTime.test.ts tests/pressing-machine-contract-does-not-register-shift-downtime-productivity.test.ts
+npx vitest run tests/pressing-machine-contract-wires-server-confirmation-after-the-shared.test.ts tests/pressing-machine-contract-rejects-invalid-dates-excessive-pagination-and.test.ts
 npm run verify:migrations
 ```
 

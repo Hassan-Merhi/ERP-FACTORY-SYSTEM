@@ -19,7 +19,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/lib/bandwidthPhase1HotspotGuard", () => ({}));
+vi.mock("@/lib/bandwidthHotspotGuard", () => ({}));
 
 type Call = { url: string; init?: RequestInit };
 
@@ -279,7 +279,7 @@ describe("supplierPurchaseOrderPaginationClient", () => {
 describe("bandwidthPhase2PayloadGuard", () => {
   async function install() {
     const calls = installRecorder(() => jsonResponse([]));
-    await import("@/lib/bandwidthPhase2PayloadGuard");
+    await import("@/lib/bandwidthPayloadGuard");
     return calls;
   }
 

@@ -5,7 +5,7 @@ const skipTypeScript = process.env.PROGRAM6_SKIP_TYPESCRIPT === "1";
 const commands = [
   ...(skipTypeScript ? [] : [["npm", ["run", "check"]]]),
   ["node", ["scripts/audit-company-scope.mjs", "--fail-on-findings"]],
-  ["node", ["scripts/verify-security-wave3-closeout.mjs"]],
+  ["node", ["scripts/verify-security-closeout.mjs"]],
   [
     "node",
     [
@@ -15,8 +15,8 @@ const commands = [
       "tests/credential-version-service.test.ts",
       "tests/company-user-admin-scope-policy.test.ts",
       "tests/company-context-enforcement.test.ts",
-      "tests/phase3-tenant-isolation-boundary.test.ts",
-      "tests/phase33e-tenant-isolation-boundary.test.ts",
+      "tests/tenant-isolation-boundary-accepts-only-the-server-owned-active.test.ts",
+      "tests/tenant-isolation-boundary-allows-only-the-two-explicit-get.test.ts",
       "tests/global-maintenance-route-policy.test.ts",
       "tests/operational-permission-route-policy.test.ts",
       "tests/privileged-maintenance-route-policy.test.ts",
@@ -32,7 +32,7 @@ const commands = [
       "tests/ws-broadcast-company-scope.test.ts",
       "server/lib/logRedaction.test.ts",
       "tests/transaction-company-scope-request-binding.test.ts",
-      "tests/phase4-tenant-surface-regression.test.ts",
+      "tests/tenant-surface-regression.test.ts",
       "tests/database-scope-pool-binding.test.ts",
       "--maxWorkers=1",
       "--no-file-parallelism",

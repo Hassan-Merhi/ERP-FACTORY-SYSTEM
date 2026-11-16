@@ -6,8 +6,8 @@
 
 ## Verified by source review / automated test definitions
 
-- `tests/access-control-v2-phase7-middleware.test.ts`: direct denial for edit/delete/reverse/finalize/approve/void/import, create-looking existing-record edits, hard denials, company mismatch and failed membership lookups. The denied request must never dispatch to its business handler.
-- `tests/access-control-v2-phase7-release-invariants.test.ts`: registered write route inventory remains deny-by-default for Create Only, no candidate route is treated as handler verified, Create Only isn't selectable, and migration cannot rewrite vouchers, inventory or live role permissions.
+- `tests/access-control-v2-middleware.test.ts`: direct denial for edit/delete/reverse/finalize/approve/void/import, create-looking existing-record edits, hard denials, company mismatch and failed membership lookups. The denied request must never dispatch to its business handler.
+- `tests/access-control-v2-release-invariants.test.ts`: registered write route inventory remains deny-by-default for Create Only, no candidate route is treated as handler verified, Create Only isn't selectable, and migration cannot rewrite vouchers, inventory or live role permissions.
 - Earlier Phase 2 store tests assert serializable revision-checked policy writes, stale editor rejection, cross-company override denial, self-grants forbidden and append-only audit.
 - Phase 4–6 tests cover protected role decisions, company-scoped user access and legacy frontend permission parity.
 

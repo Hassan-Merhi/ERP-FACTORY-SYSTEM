@@ -64,7 +64,7 @@ These protections are intentionally strict; they will not automatically remove a
 
 ### 3. Tests
 
-`tests/factory-mix-phase5-downstream.test.ts` covers:
+`tests/factory-mix-downstream.test.ts` covers:
 - Missing lineage is blocked, *not* reported as a clean cost reconciliation;
 - Deleted/unused/linked-bale mismatches classified separately;
 - Sold and in-stock amounts kept distinct, no invented COGS delta;

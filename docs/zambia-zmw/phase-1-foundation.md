@@ -107,7 +107,7 @@ The Render production PostgreSQL metadata was inspected using read-only queries.
 - tests/exchange-rate-daily-popup.test.ts
 - tests/ui/stockInSalesReportViewSwitch.test.tsx
 - tests/account-currency-route-behavior.test.ts
-- tests/wave17c-rates.test.ts
+- tests/rates.test.ts
 - Additional new Zambia-specific tests required for transaction locking, POS/import, report semantics, cash/bank translation, company switching, intercompany and rate-direction regression.
 
 ## 4. Phase-by-phase implementation queue

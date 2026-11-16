@@ -5,7 +5,7 @@ import {
   markPhase5VoucherRequestOutcomeUncertain,
   releasePhase5VoucherRequestIdentity,
   shouldReleasePhase5VoucherRequestIdentity,
-} from "../client/src/lib/phase5VoucherRequestIdentity";
+} from "../client/src/lib/voucherRequestIdentity";
 import voucherReview from "../config/voucher-write-evidence-review.json";
 import {
   auditWriteEvidence,

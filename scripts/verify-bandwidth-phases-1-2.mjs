@@ -24,8 +24,8 @@ const labelAssetPlugin = read("build/viteLabelAssetExtractionPlugin.ts");
 const viteConfig = read("vite.config.ts");
 const bandwidthDebug = read("server/middleware/bandwidthDebug.ts");
 const operationalEvents = read("server/lib/operationalEvents.ts");
-const hotspotGuard = read("client/src/lib/bandwidthPhase1HotspotGuard.ts");
-const payloadGuard = read("client/src/lib/bandwidthPhase2PayloadGuard.ts");
+const hotspotGuard = read("client/src/lib/bandwidthHotspotGuard.ts");
+const payloadGuard = read("client/src/lib/bandwidthPayloadGuard.ts");
 const accountingGuard = read("client/src/lib/accountingRequestFetchGuard.ts");
 const apiBridge = read("server/apiPaginationBridge.mjs");
 const inventoryRoutes = [
@@ -102,12 +102,12 @@ requireText(
 
 requireText(
   accountingGuard,
-  'import "./bandwidthPhase1HotspotGuard";',
+  'import "./bandwidthHotspotGuard";',
   "The Phase 1 hotspot guard must be installed before accounting fetch protection."
 );
 requireText(
   accountingGuard,
-  'import "./bandwidthPhase2PayloadGuard";',
+  'import "./bandwidthPayloadGuard";',
   "The Phase 2 payload guard must be installed before accounting fetch protection."
 );
 requireText(hotspotGuard, "/api\\/containers\\/otw-items", "OTW container items must be request-contained.");

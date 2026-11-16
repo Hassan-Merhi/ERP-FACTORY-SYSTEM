@@ -86,7 +86,7 @@ requireMarkers(".github/workflows/main-certification.yml", [
   "context='Main Certification'",
 ]);
 
-requireMarkers("scripts/verify-phase11-12-observability-disaster-recovery.mjs", [
+requireMarkers("scripts/verify-observability-disaster-recovery.mjs", [
   "Phase 11/12 observability and disaster-recovery contracts verified.",
   "source-critical-counts.tsv",
   "resilience-evidence.json",
@@ -210,7 +210,7 @@ if (journalSource) {
   }
 }
 
-requireMarkers("scripts/run-performance-wave5-production-certification.mjs", [
+requireMarkers("scripts/run-performance-production-certification.mjs", [
   "/api/health/ready",
   "/api/health/db",
   "/api/health/performance.json",
@@ -218,7 +218,7 @@ requireMarkers("scripts/run-performance-wave5-production-certification.mjs", [
   "artifacts/performance-wave5",
 ]);
 
-requireMarkers("scripts/verify-performance-wave5-certification.mjs", [
+requireMarkers("scripts/verify-performance-certification.mjs", [
   "Wave 5 performance certification contract verified",
   "certify:performance-wave5",
 ]);
@@ -239,10 +239,10 @@ if (packageSource) {
     if (script !== "node scripts/verify-final-production-readiness.mjs") {
       failures.push("package.json is missing the exact verify:final-production-readiness script");
     }
-    if (packageJson.scripts?.["verify:performance-wave5"] !== "node scripts/verify-performance-wave5-certification.mjs") {
+    if (packageJson.scripts?.["verify:performance-wave5"] !== "node scripts/verify-performance-certification.mjs") {
       failures.push("package.json is missing the exact verify:performance-wave5 script");
     }
-    if (packageJson.scripts?.["certify:performance-wave5"] !== "node scripts/run-performance-wave5-production-certification.mjs") {
+    if (packageJson.scripts?.["certify:performance-wave5"] !== "node scripts/run-performance-production-certification.mjs") {
       failures.push("package.json is missing the exact certify:performance-wave5 script");
     }
     if (String(packageJson.scripts?.start ?? "").includes("run-versioned-migrations")) {

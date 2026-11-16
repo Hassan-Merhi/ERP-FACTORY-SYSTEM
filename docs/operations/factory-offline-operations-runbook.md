@@ -52,7 +52,7 @@ an open cloud epoch.
 | All reads covered by prepared offline reads | yes | n/a | n/a |
 | Everything else (1,140 write routes) | **refused** with HTTP 423 `EDGE_SYNC_UNSUPPORTED_OPERATION` | none | n/a |
 
-`node scripts/edge/audit-phase9-write-coverage.mjs` prints the exact current
+`node scripts/edge/audit-write-coverage.mjs` prints the exact current
 inventory and fails if any route becomes writable on the LAN without a reviewed
 capture policy.
 
@@ -464,8 +464,8 @@ no request ID or active bale appears twice. Voucher reconciliation follows
 
 ## 7. Verification evidence
 
-Automated on disposable PostgreSQL (`tests/offline-phase9-pressing-sync-drill.test.ts`,
-`tests/offline-phase8-postgres.test.mjs`, `tests/offline-phase9-pressing-postgres.test.ts`)
+Automated on disposable PostgreSQL (`tests/offline-pressing-sync-drill.test.ts`,
+`tests/offline-postgres.test.mjs`, `tests/offline-pressing-postgres.test.ts`)
 and in unit/contract suites run by the offline Phase 8/9 workflows:
 
 | Scenario | Evidence |

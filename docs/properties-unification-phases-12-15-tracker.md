@@ -17,7 +17,7 @@
 1. `client/src/properties/config/rentalReportingPresentation.ts`: added `rentalPeriodBounds` and `isRentalDayInRange`, preserving the recorded YYYY-MM-DD calendar date and company business date. Current-month, current-year and rolling 30-day periods are now **inclusive from period start through business today**; future-dated records are excluded. Existing `rentalPeriodStart` and `isRentalDayInPeriod` remain for compatibility with existing callers/tests.
 2. `client/src/properties/hooks/useRentalPaymentsFilters.ts`: uses both date bounds, fails closed on an invalid dated business-calendar boundary, and receives company ID explicitly. Company transitions reset search, period, tenant and unit selections. Invalid tenant/unit values fall back to All immediately and are cleared so they cannot reactivate when removed options return.
 3. `client/src/pages/properties/RentalPaymentsLog.tsx`: passes selected company ID to the filter hook. No change to ERP/Factory payment listing period behavior, backend payment posting, cash reconciliation, or receipt totals.
-4. `tests/ui/properties-unification-phase12-filters.test.tsx`: added tests for inclusive boundaries, future dates, invalid calendar dates, leap year, year crossing, company switching and stale selection cleanup.
+4. `tests/ui/properties-unification-filters.test.tsx`: added tests for inclusive boundaries, future dates, invalid calendar dates, leap year, year crossing, company switching and stale selection cleanup.
 
 ## Phase 12 acceptance
 
@@ -39,8 +39,8 @@ Suggested focused commands in a runnable checkout:
 
 ```bash
 npm run check
-npx vitest run --config vitest.config.frontend.ts tests/ui/properties-unification-phase12-filters.test.tsx
-npx vitest run tests/properties-unification-phase8-presentation.test.ts
+npx vitest run --config vitest.config.frontend.ts tests/ui/properties-unification-filters.test.tsx
+npx vitest run tests/properties-unification-presentation.test.ts
 ```
 
 **Phase 12 disposition:** Implementation complete at source level; runtime and integration verification must be completed before production release.
@@ -87,8 +87,8 @@ At the final Phase 13 comparison, `properties-unification-phase12` was **13 comm
 2. `client/src/properties/config/rentalCurrencyBasis.ts`: explicit `USD`, `NON_USD`, `UNKNOWN` classification. No missing currency is silently assumed USD.
 3. `client/src/properties/config/rentalReportingPresentation.ts` and `client/src/pages/properties/property-rental/paymentsReceiptMath.ts`: USD-labelled totals and TSV exports now rely on the same verified-currency policy. Historical values and account reconciliation calculations are unchanged; unknown/foreign-currency exports are withheld rather than invented.
 4. `client/src/pages/properties/PropertyRentalPage.tsx`, `RentalPaymentsLog.tsx` and `PropertiesPaymentsPremium.tsx`: show an explicit unverified-currency state rather than a fallback USD symbol for missing payment currencies. Preserve recorded numeric values, module endpoints, and read-only source records.
-5. `tests/properties-unification-phase8-presentation.test.ts`: corrected legacy assumptions that a missing currency proves USD.
-6. `tests/properties-unification-phase14-parity.test.ts`: added selected-company role matrix; USD/non-USD/unknown classification; export guard; immutable historical company ID and cutoff; voucher-backed rent, guarantee overlap and ledger-account balance separation.
+5. `tests/properties-unification-presentation.test.ts`: corrected legacy assumptions that a missing currency proves USD.
+6. `tests/properties-unification-parity.test.ts`: added selected-company role matrix; USD/non-USD/unknown classification; export guard; immutable historical company ID and cutoff; voucher-backed rent, guarantee overlap and ledger-account balance separation.
 7. `docs/properties-navigation-registry.md`: updated frontend permission contract to match the implementation.
 
 ### Source acceptance
@@ -111,8 +111,8 @@ Unknown-currency historical rows may now suppress USD-only aggregates and export
 Suggested commands:
 ```bash
 npm run check
-npx vitest run tests/properties-unification-phase14-parity.test.ts tests/properties-unification-phase8-presentation.test.ts tests/properties-unification-regression.test.ts tests/properties-payment-history-reconciliation.test.ts tests/properties-unification-phase7-permissions.test.ts
-npx vitest run --config vitest.config.frontend.ts tests/ui/properties-unification-phase12-filters.test.tsx
+npx vitest run tests/properties-unification-parity.test.ts tests/properties-unification-presentation.test.ts tests/properties-unification-regression.test.ts tests/properties-payment-history-reconciliation.test.ts tests/properties-unification-permissions.test.ts
+npx vitest run --config vitest.config.frontend.ts tests/ui/properties-unification-filters.test.tsx
 ```
 
 **Phase 14 disposition:** Targeted source work and regression artifacts complete. Runtime and independently reconciled financial parity are not certified; Phase 15 must perform release-level verification before main merge.

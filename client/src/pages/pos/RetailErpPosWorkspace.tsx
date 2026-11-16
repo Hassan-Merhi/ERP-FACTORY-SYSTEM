@@ -7,7 +7,7 @@ import { RetailPhotoGallery } from "@/pages/retail/RetailProductImage";
 import { RetailCameraScanner } from "./RetailCameraScanner";
 import { RetailScanFeedback } from "./RetailScanFeedback";
 import { money, type CartLine, type RetailPosItem, type ScanOutcome } from "./retailPosTypes";
-import type { RetailPricedLinePreview } from "./retailWave2Types";
+import type { RetailPricedLinePreview } from "./retailTypes";
 
 interface RetailErpPosSaleGridProps {
   cart: CartLine[];

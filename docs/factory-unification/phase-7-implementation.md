@@ -8,7 +8,7 @@
 1. `FactoryNetPositionDetails.tsx` now imports the **same** `shiftDate` and `formatDateLabel` already used by `FactoryNetPosition.tsx` from `factorynetposition/utils.tsx`. Removed duplicate date-shift/label implementations without changing current/historical API requests, chart values, or company-specific cache keys.
 2. New `shared/factoryReportDateRange.ts`: pure supplier report filter defaults based on the Beirut business calendar, calendar-day shifting with ISO validation and a start <= end validation predicate. Does not determine the historical accounting cutoff.
 3. `FactorySupplierReport.tsx`: supplier report initial date filter uses stable Beirut date-only strings instead of locale-dependent `toLocaleDateString("en-CA")`; export range validates real dates and ordering. Supplier query cache keys remain URL-first and are scoped to its explicitly selected report company. Report POST contract/format remains unchanged.
-4. `tests/factory-unification-phase7.test.ts`: characterization for Beirut midnight and date shifting, report range ordering, and the existing `factoryNetPositionAsOf` company's timezone and future-date rejection. Test file created but **not run**.
+4. `tests/factory-unification-builds-deterministic-beirut-supplier-report-filters.test.ts`: characterization for Beirut midnight and date shifting, report range ordering, and the existing `factoryNetPositionAsOf` company's timezone and future-date rejection. Test file created but **not run**.
 5. GitHub source files were fetched after writing to inspect committed imports, helper use and preserved backend as-of contracts.
 
 ## Accounting contracts explicitly retained

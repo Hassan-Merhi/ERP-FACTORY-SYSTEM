@@ -36,7 +36,7 @@ For every captured result, record: capture timestamp (UTC), branch commit SHA, s
 
 In a local checkout at the working branch, a developer may run these manually:
 ```bash
-npx vitest run tests/factory-unification-phase1-baseline.test.ts
+npx vitest run tests/factory-unification-baseline.test.ts
 npx vitest run tests/ui/factory-mobile-route-registry.test.ts
 ```
 These commands are documentation only; **not executed by this implementation**. The Phase 1 source fixture at `docs/factory-unification/phase-1-source-fixture.json` captures the registry/route inventory from the current unification branch. If an intentional route changes in Phase 8, update the source fixture with a documented review rather than disabling assertions.

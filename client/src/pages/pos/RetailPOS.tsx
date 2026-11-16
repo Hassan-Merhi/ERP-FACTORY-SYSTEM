@@ -22,7 +22,7 @@ import { useRetailBarcodeScanner } from "./useRetailBarcodeScanner";
 import { RetailCustomerPicker } from "./RetailCustomerPicker";
 import { RetailLineAdjustDialog, type LineAdjustment } from "./RetailLineAdjustDialog";
 import { fetchRetailCartPreview, requestRetailDiscountApproval, type CartRequestLine } from "./retailPosApi";
-import type { RetailCartPreview, RetailCustomerSummary } from "./retailWave2Types";
+import type { RetailCartPreview, RetailCustomerSummary } from "./retailTypes";
 import {
   canSellIntoNegative,
   lookupRetailBarcode,

@@ -14,7 +14,7 @@ import {
   searchRetailCustomers,
   searchRetailSalesHistory,
 } from "@/pages/pos/retailPosApi";
-import type { RetailCustomerSummary } from "@/pages/pos/retailWave2Types";
+import type { RetailCustomerSummary } from "@/pages/pos/retailTypes";
 import type { RetailSale } from "@/pages/pos/retailPosTypes";
 
 function SaleBreakdown({ sale }: { sale: RetailSale }) {
