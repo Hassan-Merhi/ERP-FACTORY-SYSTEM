@@ -107,7 +107,8 @@ describe("full company workbook export behavior", () => {
     expect(sql.some((query) => query.includes("company_id = 4"))).toBe(true);
     // The date range is bound, never spliced into the SQL text.
     const voucherQuery = calls.find(
-      ([query]) => query.includes("FROM vouchers") && query.includes("voucher_date >= $1") && query.includes("voucher_date <= $2")
+      ([query]) =>
+        query.includes("FROM vouchers") && query.includes("voucher_date >= $1") && query.includes("voucher_date <= $2")
     );
     expect(voucherQuery?.[1]).toEqual(["2026-08-01", "2026-08-12"]);
     expect(sql.some((query) => query.includes("2026-08-01"))).toBe(false);
@@ -120,7 +121,9 @@ describe("full company workbook export behavior", () => {
 
   it("rejects a malformed or hostile date range before running any query", async () => {
     const before = harness.poolQuery.mock.calls.length;
-    await expect(streamCompanyWorkbookDirect(4, "2026-08-01' OR '1'='1", undefined)).rejects.toThrow(/Invalid fromDate/);
+    await expect(streamCompanyWorkbookDirect(4, "2026-08-01' OR '1'='1", undefined)).rejects.toThrow(
+      /Invalid fromDate/
+    );
     await expect(streamCompanyWorkbookDirect(4, undefined, "2026-02-30")).rejects.toThrow(/Invalid toDate/);
     expect(harness.poolQuery.mock.calls.length).toBe(before);
   });

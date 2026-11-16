@@ -19,7 +19,11 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { db, pool } from "../server/db";
 import { assertBindPlaceholder, assertSqlAlias, assertSqlColumnRef, ownKey } from "../server/lib/sqlTextGuards";
 import { reversalPairSql } from "../server/routes/costCenterReportingRoutes";
-import { customerOwnedLinePredicate, liveVoucherPredicate, noNonCustomerTarget } from "../server/services/accounting/balances/partyLineRules";
+import {
+  customerOwnedLinePredicate,
+  liveVoucherPredicate,
+  noNonCustomerTarget,
+} from "../server/services/accounting/balances/partyLineRules";
 import { buildPaginationIntegrityConditions } from "../server/services/factory/daybookSourceIntegrity";
 import { stockItemHistorySqlText } from "../server/services/inventory/stockItemHistory";
 import { consolidatedHadiRentLedgerPredicate } from "../server/services/rental/hadiRentExpenseConsolidation";
@@ -61,7 +65,15 @@ function recordingExecutor() {
 
 describe("remediated SQL builders keep hostile input out of SQL text", () => {
   it("export date range: rejects every injection payload, malformed and impossible dates", () => {
-    for (const payload of [...PAYLOADS, "2024-13-01", "2024-02-30", "24-01-01", "2024-01-01T00:00:00", " 2024-01-01", ""]) {
+    for (const payload of [
+      ...PAYLOADS,
+      "2024-13-01",
+      "2024-02-30",
+      "24-01-01",
+      "2024-01-01T00:00:00",
+      " 2024-01-01",
+      "",
+    ]) {
       if (payload === "") {
         expect(invalidExportDateRange(payload, undefined)).toBeNull(); // empty = no filter
         continue;
@@ -78,13 +90,15 @@ describe("remediated SQL builders keep hostile input out of SQL text", () => {
   it("account history: untrusted column names and non-integer ids are rejected before SQL", async () => {
     const { seen, executor } = recordingExecutor();
     for (const payload of PAYLOADS) {
-      await expect(
-        countAccountLines(executor, [[payload as "ledger_account_id", 1]])
-      ).rejects.toThrow("account_history_invalid_target");
+      await expect(countAccountLines(executor, [[payload as "ledger_account_id", 1]])).rejects.toThrow(
+        "account_history_invalid_target"
+      );
       await expect(lockAccountRow(executor, payload, 1)).rejects.toThrow("account_history_invalid_lock");
     }
     for (const badId of [Number.NaN, 1.5, Number.MAX_SAFE_INTEGER + 2, Infinity]) {
-      await expect(countAccountLines(executor, [["ledger_account_id", badId]])).rejects.toThrow("account_history_invalid_target");
+      await expect(countAccountLines(executor, [["ledger_account_id", badId]])).rejects.toThrow(
+        "account_history_invalid_target"
+      );
       await expect(lockAccountRow(executor, "customers", badId)).rejects.toThrow("account_history_invalid_lock");
     }
     expect(seen).toHaveLength(0);
@@ -92,7 +106,10 @@ describe("remediated SQL builders keep hostile input out of SQL text", () => {
 
   it("account history: allowlisted column / table render as quoted identifiers with bound ids", async () => {
     const { seen, executor } = recordingExecutor();
-    await countAccountLines(executor, [["ledger_account_id", 7], ["customer_id", -3]]);
+    await countAccountLines(executor, [
+      ["ledger_account_id", 7],
+      ["customer_id", -3],
+    ]);
     await lockAccountRow(executor, "customers", 9);
     const [count, lock] = seen.map(render);
     expect(count.sql).toContain('ve."ledger_account_id" = $1');
@@ -103,7 +120,9 @@ describe("remediated SQL builders keep hostile input out of SQL text", () => {
   });
 
   it("sql.identifier escapes embedded quotes so a hostile alias stays one identifier", () => {
-    const scope = { mode: "asOf", asOf: new Date("2024-01-01T00:00:00Z") } as unknown as Parameters<typeof netPositionLegacyScanKnown>[3];
+    const scope = { mode: "asOf", asOf: new Date("2024-01-01T00:00:00Z") } as unknown as Parameters<
+      typeof netPositionLegacyScanKnown
+    >[3];
     const q = render(netPositionLegacyScanKnown('cob" OR 1=1 --', "o", 4, scope));
     expect(q.sql).toContain('"cob"" OR 1=1 --"');
     expect(q.sql).not.toMatch(/[^"]cob" OR 1=1/);
@@ -137,16 +156,27 @@ describe("remediated SQL builders keep hostile input out of SQL text", () => {
 
   it("code-owned lookup maps ignore prototype keys", () => {
     const columns = { name: "legal_name" };
-    for (const key of ["constructor", "__proto__", "toString", "hasOwnProperty", 1, null]) expect(ownKey(columns, key)).toBe(false);
+    for (const key of ["constructor", "__proto__", "toString", "hasOwnProperty", 1, null])
+      expect(ownKey(columns, key)).toBe(false);
     expect(ownKey(columns, "name")).toBe(true);
   });
 
   it("bound ID lists (sql.join) carry each id as a separate parameter, including huge and negative ids", () => {
     const ids = [1, -1, Number.MAX_SAFE_INTEGER];
-    const q = render(sql`SELECT id FROM t WHERE id IN (${sql.join(ids.map((id) => sql`${id}`), sql`, `)})`);
+    const q = render(
+      sql`SELECT id FROM t WHERE id IN (${sql.join(
+        ids.map((id) => sql`${id}`),
+        sql`, `
+      )})`
+    );
     expect(q.sql).toBe("SELECT id FROM t WHERE id IN ($1, $2, $3)");
     expect(q.params).toEqual(ids);
-    const hostile = render(sql`SELECT id FROM t WHERE id IN (${sql.join(PAYLOADS.map((p) => sql`${p}`), sql`, `)})`);
+    const hostile = render(
+      sql`SELECT id FROM t WHERE id IN (${sql.join(
+        PAYLOADS.map((p) => sql`${p}`),
+        sql`, `
+      )})`
+    );
     for (const p of PAYLOADS) expect(hostile.sql).not.toContain(p);
     expect(hostile.params).toEqual(PAYLOADS);
   });
@@ -165,7 +195,9 @@ databaseDescribe("SQL injection and tenant isolation against a disposable databa
   beforeAll(async () => {
     await pool.query(`CREATE TABLE ${parties} (id serial PRIMARY KEY, company_id int NOT NULL, name text NOT NULL,
       created_at date NOT NULL DEFAULT CURRENT_DATE, deleted_at timestamptz)`);
-    await pool.query(`CREATE TABLE ${ledger} (id serial PRIMARY KEY, company_id int NOT NULL, amount numeric(20,2) NOT NULL)`);
+    await pool.query(
+      `CREATE TABLE ${ledger} (id serial PRIMARY KEY, company_id int NOT NULL, amount numeric(20,2) NOT NULL)`
+    );
     await pool.query(
       `INSERT INTO ${parties} (company_id, name, created_at, deleted_at) VALUES
         (1, 'Alpha', '2024-01-05', NULL), (1, 'Beta', '2024-02-05', NULL),
@@ -183,7 +215,10 @@ databaseDescribe("SQL injection and tenant isolation against a disposable databa
 
   /** Drizzle wraps driver errors ("Failed query: ..."); the PostgreSQL reason is on `cause`. */
   async function dbError(promise: Promise<unknown>): Promise<string> {
-    const error = (await promise.then(() => null, (e: unknown) => e)) as { message?: string; cause?: { message?: string } } | null;
+    const error = (await promise.then(
+      () => null,
+      (e: unknown) => e
+    )) as { message?: string; cause?: { message?: string } } | null;
     expect(error).not.toBeNull();
     return `${error?.message ?? ""} ${error?.cause?.message ?? ""}`;
   }
@@ -192,12 +227,20 @@ databaseDescribe("SQL injection and tenant isolation against a disposable databa
   const DB_PAYLOADS = PAYLOADS.filter((p) => !p.includes("\u0000"));
 
   /** The remediated pattern: allowlisted identifier, fixed sort map, bound values. */
-  async function listParties(companyId: number, input: { table: string; search: string; sort: string; from: string; ids?: unknown[] }) {
+  async function listParties(
+    companyId: number,
+    input: { table: string; search: string; sort: string; from: string; ids?: unknown[] }
+  ) {
     if (!ALLOWED_TABLES.has(input.table)) throw new Error("Invalid table");
     if (!Number.isSafeInteger(companyId) || companyId <= 0) throw new Error("Invalid company");
     const sort = SORTS[input.sort as keyof typeof SORTS] ?? SORTS.name;
     const ids = (input.ids ?? []).filter((id): id is number => typeof id === "number" && Number.isSafeInteger(id));
-    const idFilter = ids.length ? sql`AND id IN (${sql.join(ids.map((id) => sql`${id}`), sql`, `)})` : sql``;
+    const idFilter = ids.length
+      ? sql`AND id IN (${sql.join(
+          ids.map((id) => sql`${id}`),
+          sql`, `
+        )})`
+      : sql``;
     const result = await db.execute<{ id: number; company_id: number; name: string }>(sql`
       SELECT id, company_id, name FROM ${sql.identifier(input.table)}
        WHERE company_id = ${companyId} AND deleted_at IS NULL
@@ -208,14 +251,22 @@ databaseDescribe("SQL injection and tenant isolation against a disposable databa
 
   it("hostile search terms, sort keys and id lists cannot reach other companies or deleted rows", async () => {
     for (const payload of DB_PAYLOADS) {
-      const rows = await listParties(1, { table: parties, search: payload, sort: payload, from: "2024-01-01", ids: [payload, 1, 2, 3] });
+      const rows = await listParties(1, {
+        table: parties,
+        search: payload,
+        sort: payload,
+        from: "2024-01-01",
+        ids: [payload, 1, 2, 3],
+      });
       for (const row of rows) {
         expect(row.company_id).toBe(1);
         expect(row.name).not.toBe("Other company secret");
         expect(row.name).not.toBe("Deleted");
       }
     }
-    const nul = await dbError(listParties(1, { table: parties, search: "1\u0000; SELECT pg_sleep(1)", sort: "name", from: "2024-01-01" }));
+    const nul = await dbError(
+      listParties(1, { table: parties, search: "1\u0000; SELECT pg_sleep(1)", sort: "name", from: "2024-01-01" })
+    );
     expect(nul).toMatch(/invalid byte sequence|0x00/);
     // The literal search "' OR '1'='1" matches only the row that literally stores it.
     const literal = await listParties(1, { table: parties, search: "' OR '1'='1", sort: "name", from: "2024-01-01" });
@@ -223,24 +274,40 @@ databaseDescribe("SQL injection and tenant isolation against a disposable databa
   });
 
   it("untrusted table names are refused and malformed dates fail as values, not as SQL", async () => {
-    await expect(listParties(1, { table: `${parties}; DROP TABLE ${ledger}`, search: "", sort: "name", from: "2024-01-01" })).rejects.toThrow("Invalid table");
-    await expect(listParties(1, { table: "users", search: "", sort: "name", from: "2024-01-01" })).rejects.toThrow("Invalid table");
-    expect(await dbError(listParties(1, { table: parties, search: "", sort: "name", from: "2024-01-01'; DROP TABLE x; --" }))).toMatch(/invalid input syntax for type date/);
-    await expect(listParties(Number("1 OR 1=1"), { table: parties, search: "", sort: "name", from: "2024-01-01" })).rejects.toThrow("Invalid company");
+    await expect(
+      listParties(1, { table: `${parties}; DROP TABLE ${ledger}`, search: "", sort: "name", from: "2024-01-01" })
+    ).rejects.toThrow("Invalid table");
+    await expect(listParties(1, { table: "users", search: "", sort: "name", from: "2024-01-01" })).rejects.toThrow(
+      "Invalid table"
+    );
+    expect(
+      await dbError(listParties(1, { table: parties, search: "", sort: "name", from: "2024-01-01'; DROP TABLE x; --" }))
+    ).toMatch(/invalid input syntax for type date/);
+    await expect(
+      listParties(Number("1 OR 1=1"), { table: parties, search: "", sort: "name", from: "2024-01-01" })
+    ).rejects.toThrow("Invalid company");
     const tables = await pool.query("SELECT to_regclass($1) AS t", [ledger]);
     expect(tables.rows[0].t).toBe(ledger);
   });
 
   it("second-order: a stored payload re-used in a later query stays a value", async () => {
-    const stored = await pool.query<{ name: string }>(`SELECT name FROM ${parties} WHERE name LIKE '%OR%' AND company_id = 1`);
+    const stored = await pool.query<{ name: string }>(
+      `SELECT name FROM ${parties} WHERE name LIKE '%OR%' AND company_id = 1`
+    );
     const name = stored.rows[0].name;
-    const reused = await db.execute<{ n: string }>(sql`SELECT count(*)::text AS n FROM ${sql.identifier(parties)} WHERE name = ${name}`);
+    const reused = await db.execute<{ n: string }>(
+      sql`SELECT count(*)::text AS n FROM ${sql.identifier(parties)} WHERE name = ${name}`
+    );
     expect(reused.rows[0].n).toBe("1");
   });
 
   it("stacked statements in a bound value cannot modify another company's ledger", async () => {
     const payload = `0; UPDATE ${ledger} SET amount = 0 WHERE company_id = 2; --`;
-    expect(await dbError(db.execute(sql`UPDATE ${sql.identifier(ledger)} SET amount = amount WHERE company_id = 1 AND id = ${payload}`))).toMatch(/invalid input syntax for type integer/);
+    expect(
+      await dbError(
+        db.execute(sql`UPDATE ${sql.identifier(ledger)} SET amount = amount WHERE company_id = 1 AND id = ${payload}`)
+      )
+    ).toMatch(/invalid input syntax for type integer/);
     const other = await pool.query<{ amount: string }>(`SELECT amount::text FROM ${ledger} WHERE company_id = 2`);
     expect(other.rows[0].amount).toBe("999.00");
   });
@@ -258,8 +325,12 @@ databaseDescribe("SQL injection and tenant isolation against a disposable databa
   });
 
   it("the guarded account-history helpers reject payloads against the real database", async () => {
-    await expect(lockAccountRow(db, `customers WHERE 1=1; DROP TABLE ${ledger}; --`, 1)).rejects.toThrow("account_history_invalid_lock");
-    await expect(countAccountLines(db, [["ledger_account_id", Number("1 OR 1=1")]])).rejects.toThrow("account_history_invalid_target");
+    await expect(lockAccountRow(db, `customers WHERE 1=1; DROP TABLE ${ledger}; --`, 1)).rejects.toThrow(
+      "account_history_invalid_lock"
+    );
+    await expect(countAccountLines(db, [["ledger_account_id", Number("1 OR 1=1")]])).rejects.toThrow(
+      "account_history_invalid_target"
+    );
     const counts = await countAccountLines(db, [["ledger_account_id", -987654]]);
     expect(counts).toEqual({ live: 0, any: 0 });
   });

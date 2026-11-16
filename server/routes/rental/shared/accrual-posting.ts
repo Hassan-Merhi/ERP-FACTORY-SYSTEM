@@ -45,11 +45,15 @@ export async function postAccrualPassTx(tx: DbTransaction, input: AccrualPassPos
   // concurrent runs or a reset link could generate duplicate rent expense.
   // FOR UPDATE (not SKIP LOCKED) ensures the second writer sees the first
   // writer's newly stamped voucher and refuses to post.
-  if (rowIds.length===0 || rowIds.some(id=>!Number.isSafeInteger(id)||id<=0) ||
-      new Set(rowIds).size!==rowIds.length) {
+  if (
+    rowIds.length === 0 ||
+    rowIds.some((id) => !Number.isSafeInteger(id) || id <= 0) ||
+    new Set(rowIds).size !== rowIds.length
+  ) {
     throw new Error("RENTAL_ACCRUAL_INVALID_LEDGER_ROWS");
   }
-  const locked=(await tx.execute(sql`
+  const locked = (
+    await tx.execute(sql`
     SELECT ml.id,ml.company_id,ml.module,ml.accrual_voucher_id,ml.notes,
       ml.used_prepaid_account,ml.used_advance_account,
       EXISTS(
@@ -66,7 +70,10 @@ export async function postAccrualPassTx(tx: DbTransaction, input: AccrualPassPos
     FROM property_monthly_ledger ml
     JOIN property_units u ON u.id=ml.unit_id
     JOIN property_contracts c ON c.id=ml.contract_id
-    WHERE ml.id IN (${sql.join(rowIds.map((id) => sql`${id}`), sql`, `)})
+    WHERE ml.id IN (${sql.join(
+      rowIds.map((id) => sql`${id}`),
+      sql`, `
+    )})
       AND (
         (ml.company_id=${input.companyId} AND ml.module=${input.module}
           AND c.company_id=${input.companyId} AND c.module=${input.module})
@@ -81,22 +88,32 @@ export async function postAccrualPassTx(tx: DbTransaction, input: AccrualPassPos
           AND c.linked_company_id=1 AND c.status='ACTIVE')
       )
     ORDER BY ml.id FOR UPDATE OF ml
-  `)).rows as Array<{
-    id:number; company_id:number; module:string; accrual_voucher_id:number|null;
-    used_prepaid_account:boolean; used_advance_account:boolean; prior_rent_accrual:boolean;
+  `)
+  ).rows as Array<{
+    id: number;
+    company_id: number;
+    module: string;
+    accrual_voucher_id: number | null;
+    used_prepaid_account: boolean;
+    used_advance_account: boolean;
+    prior_rent_accrual: boolean;
     notes: string | null;
   }>;
-  if(locked.length!==rowIds.length ||
-    locked.some((r,i)=>
-      Number(r.id)!==rowIds[i] ||
-      r.accrual_voucher_id!==null ||
-      isRentRecognitionHeld(r.notes) ||
-      // Catch legacy orphan journals even if somebody cleared the month link.
-      (input.pass==="accrual" && r.prior_rent_accrual===true) ||
-      (input.pass==="accrual" && (r.used_prepaid_account || r.used_advance_account)) ||
-      (input.pass==="advance-recognition" && (!r.used_advance_account || r.used_prepaid_account)) ||
-      ((input.pass==="prepaid-recognition" || input.pass==="deferred-recognition") &&
-        (!r.used_prepaid_account || r.used_advance_account)))) {
+  if (
+    locked.length !== rowIds.length ||
+    locked.some(
+      (r, i) =>
+        Number(r.id) !== rowIds[i] ||
+        r.accrual_voucher_id !== null ||
+        isRentRecognitionHeld(r.notes) ||
+        // Catch legacy orphan journals even if somebody cleared the month link.
+        (input.pass === "accrual" && r.prior_rent_accrual === true) ||
+        (input.pass === "accrual" && (r.used_prepaid_account || r.used_advance_account)) ||
+        (input.pass === "advance-recognition" && (!r.used_advance_account || r.used_prepaid_account)) ||
+        ((input.pass === "prepaid-recognition" || input.pass === "deferred-recognition") &&
+          (!r.used_prepaid_account || r.used_advance_account))
+    )
+  ) {
     throw new Error("RENTAL_ACCRUAL_ALREADY_POSTED_OR_ROW_CHANGED");
   }
   const rowsKey = createHash("sha256").update(rowIds.join(",")).digest("hex").slice(0, 24);
@@ -138,11 +155,13 @@ export async function postAccrualPassTx(tx: DbTransaction, input: AccrualPassPos
   const stamped = await tx
     .update(propertyMonthlyLedger)
     .set({ accrualVoucherId: voucher.id })
-    .where(and(
-      linkedHadiRows ? or(ownedRows, linkedHadiRows) : ownedRows,
-      inArray(propertyMonthlyLedger.id, rowIds),
-      isNull(propertyMonthlyLedger.accrualVoucherId)
-    ))
+    .where(
+      and(
+        linkedHadiRows ? or(ownedRows, linkedHadiRows) : ownedRows,
+        inArray(propertyMonthlyLedger.id, rowIds),
+        isNull(propertyMonthlyLedger.accrualVoucherId)
+      )
+    )
     .returning({ id: propertyMonthlyLedger.id });
   if (stamped.length !== rowIds.length) {
     // Fail the transaction rather than leave a posted voucher with unstamped

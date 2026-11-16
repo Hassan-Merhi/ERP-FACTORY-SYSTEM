@@ -54,7 +54,9 @@ export const SOURCE_GROUPS: SourceGroup[] = [
   {
     txTypes: ["PRODUCTION_TARGET_MANUAL_BONUS_PAYMENT", "PRODUCTION_TARGET_MANUAL_BONUS_REVERSAL"],
     sourceTable: "factory_target_bonus_manual_payments",
-    companyCol: "company_id", deletedAtCol: null, requireReferenceId: true,
+    companyCol: "company_id",
+    deletedAtCol: null,
+    requireReferenceId: true,
   },
   {
     txTypes: ["PRODUCTION_TARGET_BONUS_PAYMENT", "PRODUCTION_TARGET_BONUS_REVERSAL"],

@@ -11,12 +11,19 @@ export async function autoReallocateLoansAccounts(
   companyId: number,
   ledgerAccountIds: (number | null | undefined)[]
 ): Promise<void> {
-  const ids = [...new Set(ledgerAccountIds.filter((id): id is number => typeof id === "number" && Number.isSafeInteger(id) && id > 0))];
+  const ids = [
+    ...new Set(
+      ledgerAccountIds.filter((id): id is number => typeof id === "number" && Number.isSafeInteger(id) && id > 0)
+    ),
+  ];
   if (!ids.length) return;
 
   const result = await db.execute(
     sql`SELECT id FROM ledger_accounts
-        WHERE id = ANY(ARRAY[${sql.join(ids.map((id) => sql`${id}`), sql`, `)}]::integer[])
+        WHERE id = ANY(ARRAY[${sql.join(
+          ids.map((id) => sql`${id}`),
+          sql`, `
+        )}]::integer[])
           AND account_type = 'Loans'
           AND deleted_at IS NULL`
   );
@@ -59,8 +66,14 @@ async function runFifoAllocation(companyId: number, accountId: number): Promise<
     DELETE FROM transporter_payment_allocations
     WHERE company_id = ${companyId}
       AND (
-        credit_entry_id = ANY(ARRAY[${sql.join(allIds.map((id) => sql`${id}`), sql`, `)}]::integer[])
-        OR debit_entry_id = ANY(ARRAY[${sql.join(allIds.map((id) => sql`${id}`), sql`, `)}]::integer[])
+        credit_entry_id = ANY(ARRAY[${sql.join(
+          allIds.map((id) => sql`${id}`),
+          sql`, `
+        )}]::integer[])
+        OR debit_entry_id = ANY(ARRAY[${sql.join(
+          allIds.map((id) => sql`${id}`),
+          sql`, `
+        )}]::integer[])
       )
   `);
 

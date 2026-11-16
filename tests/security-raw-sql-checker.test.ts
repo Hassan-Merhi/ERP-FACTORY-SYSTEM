@@ -53,7 +53,9 @@ describe("raw SQL scanner — detection", () => {
   });
 
   it("flags a renamed drizzle sql import", () => {
-    const found = unproven(`import { sql as d } from "drizzle-orm"; export const q = (t: string) => d.raw("SELECT " + t);`);
+    const found = unproven(
+      `import { sql as d } from "drizzle-orm"; export const q = (t: string) => d.raw("SELECT " + t);`
+    );
     expect(found.map((f) => f.kind)).toEqual(["sql.raw"]);
   });
 
@@ -66,7 +68,9 @@ describe("raw SQL scanner — detection", () => {
   });
 
   it("flags concatenated SQL passed to a sink", () => {
-    const found = unproven(`export function f(client: any, table: string) { return client.query("SELECT * FROM " + table); }`);
+    const found = unproven(
+      `export function f(client: any, table: string) { return client.query("SELECT * FROM " + table); }`
+    );
     expect(found).toHaveLength(1);
     expect(found[0].dynamicParts).toEqual(["table"]);
   });
@@ -88,7 +92,9 @@ describe("raw SQL scanner — detection", () => {
   });
 
   it("flags SQL assembled through .replace, array join and quoted literals", () => {
-    expect(unproven(`export const f = (t: string) => "SELECT * FROM {T} WHERE x = 1".replace("{T}", t);`)).toHaveLength(1);
+    expect(unproven(`export const f = (t: string) => "SELECT * FROM {T} WHERE x = 1".replace("{T}", t);`)).toHaveLength(
+      1
+    );
     expect(unproven(`export const f = (w: string) => ["SELECT id FROM t WHERE", w].join(" ");`)).toHaveLength(1);
     expect(unproven("export const f = (d: string) => `AND created_at >= '${d}'`;")).toHaveLength(1);
   });
@@ -138,8 +144,12 @@ describe("raw SQL scanner — mechanical proofs", () => {
   });
 
   it("proves numeric coercions but not raw strings", () => {
-    expect(unproven("export const f = (pool: any, id: string) => pool.query(`SELECT * FROM t WHERE id = ${Number(id)}`);")).toHaveLength(0);
-    expect(unproven("export const f = (pool: any, n: string) => pool.query(`SELECT * FROM t LIMIT ${n}`);")).toHaveLength(1);
+    expect(
+      unproven("export const f = (pool: any, id: string) => pool.query(`SELECT * FROM t WHERE id = ${Number(id)}`);")
+    ).toHaveLength(0);
+    expect(
+      unproven("export const f = (pool: any, n: string) => pool.query(`SELECT * FROM t LIMIT ${n}`);")
+    ).toHaveLength(1);
   });
 
   it("proves placeholder lists built by push-only arrays", () => {
@@ -184,27 +194,47 @@ describe("raw SQL allowlist validation", () => {
   });
 
   it("rejects duplicate, malformed, unknown-classification and generic approvals", () => {
-    expect(validateAllowlist([finding], { entries: [entryFor(finding), entryFor(finding)] }).errors.join()).toMatch(/DUPLICATE/);
+    expect(validateAllowlist([finding], { entries: [entryFor(finding), entryFor(finding)] }).errors.join()).toMatch(
+      /DUPLICATE/
+    );
     expect(validateAllowlist([finding], { entries: [{ id: finding.id }] }).errors.join()).toMatch(/MALFORMED/);
-    expect(validateAllowlist([finding], { entries: [entryFor(finding, { classification: "trust-me" })] }).errors.join()).toMatch(/unknown classification/);
-    expect(validateAllowlist([finding], { entries: [entryFor(finding, { reason: "safe because internal" })] }).errors.join()).toMatch(/WEAK JUSTIFICATION/);
-    expect(validateAllowlist([finding], { entries: [entryFor(finding, { dynamicInputs: [{ expression: "table", source: "internal", validation: "ok" }] })] }).errors.join()).toMatch(/WEAK PROVENANCE/);
+    expect(
+      validateAllowlist([finding], { entries: [entryFor(finding, { classification: "trust-me" })] }).errors.join()
+    ).toMatch(/unknown classification/);
+    expect(
+      validateAllowlist([finding], { entries: [entryFor(finding, { reason: "safe because internal" })] }).errors.join()
+    ).toMatch(/WEAK JUSTIFICATION/);
+    expect(
+      validateAllowlist([finding], {
+        entries: [
+          entryFor(finding, { dynamicInputs: [{ expression: "table", source: "internal", validation: "ok" }] }),
+        ],
+      }).errors.join()
+    ).toMatch(/WEAK PROVENANCE/);
     expect(validateAllowlist([finding], "nope").errors.join()).toMatch(/MALFORMED ALLOWLIST/);
   });
 
   it("rejects an approval whose documented inputs no longer match the site", () => {
     const entry = entryFor(finding, {
-      dynamicInputs: [{ expression: "otherThing", source: "code-owned constant somewhere", validation: "membership test against a fixed set" }],
+      dynamicInputs: [
+        {
+          expression: "otherThing",
+          source: "code-owned constant somewhere",
+          validation: "membership test against a fixed set",
+        },
+      ],
     });
     expect(validateAllowlist([finding], { entries: [entry] }).errors.join()).toMatch(/PROVENANCE DRIFT/);
   });
 
   it("rejects approvals bound to a different file / category / function", () => {
-    expect(validateAllowlist([finding], { entries: [entryFor(finding, { path: "server/other.ts" })] }).errors.join()).toMatch(/APPROVAL MISMATCH/);
+    expect(
+      validateAllowlist([finding], { entries: [entryFor(finding, { path: "server/other.ts" })] }).errors.join()
+    ).toMatch(/APPROVAL MISMATCH/);
   });
 
   it("rejects approvals for sites that are already mechanically proven", () => {
-    const [proven] = scan("export const f = (p: any) => p.query(`SELECT * FROM ${\"t\"}`);");
+    const [proven] = scan('export const f = (p: any) => p.query(`SELECT * FROM ${"t"}`);');
     expect(proven.autoVerified).toBeTruthy();
     expect(validateAllowlist([proven], { entries: [entryFor(proven)] }).errors.join()).toMatch(/UNNECESSARY APPROVAL/);
   });
@@ -230,7 +260,12 @@ describe("check:raw-sql CLI", () => {
   }
   const run = (root: string, ...args: string[]) => {
     try {
-      return { code: 0, out: execFileSync(process.execPath, ["scripts/verify-raw-sql-allowlist.mjs", "--root", root, ...args], { encoding: "utf8" }) };
+      return {
+        code: 0,
+        out: execFileSync(process.execPath, ["scripts/verify-raw-sql-allowlist.mjs", "--root", root, ...args], {
+          encoding: "utf8",
+        }),
+      };
     } catch (error) {
       const e = error as { status: number; stdout: string };
       return { code: e.status, out: e.stdout };
@@ -238,7 +273,10 @@ describe("check:raw-sql CLI", () => {
   };
 
   it("fails on a newly introduced unsafe site and passes once reviewed + registered", () => {
-    const unsafe = { "server/new.ts": "export const f = (p: any, req: any) => p.query(`SELECT * FROM t WHERE name = '${req.body.name}'`);\n" };
+    const unsafe = {
+      "server/new.ts":
+        "export const f = (p: any, req: any) => p.query(`SELECT * FROM t WHERE name = '${req.body.name}'`);\n",
+    };
     const root = tree(unsafe);
     run(root, "--write-register");
     const failed = run(root);
@@ -247,7 +285,9 @@ describe("check:raw-sql CLI", () => {
   });
 
   it("passes on a clean tree and fails when the register is out of date", () => {
-    const root = tree({ "server/ok.ts": "export const f = (p: any) => p.query(`SELECT * FROM t WHERE id = $1`, [1]);\n" });
+    const root = tree({
+      "server/ok.ts": "export const f = (p: any) => p.query(`SELECT * FROM t WHERE id = $1`, [1]);\n",
+    });
     expect(run(root).code).toBe(1); // no register committed yet
     run(root, "--write-register");
     expect(run(root).code).toBe(0);

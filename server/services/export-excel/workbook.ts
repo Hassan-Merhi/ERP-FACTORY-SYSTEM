@@ -249,7 +249,10 @@ export function assertExportDate(value: string, field: string): string {
 
 /** Request-boundary check: returns an error message for a malformed optional date range, else null. */
 export function invalidExportDateRange(fromDate: unknown, toDate: unknown): string | null {
-  for (const [field, value] of [["fromDate", fromDate], ["toDate", toDate]] as const) {
+  for (const [field, value] of [
+    ["fromDate", fromDate],
+    ["toDate", toDate],
+  ] as const) {
     if (value === undefined || value === null || value === "") continue;
     try {
       assertExportDate(value as string, field);

@@ -366,8 +366,14 @@ export function registerTransporterStatementRoutes(app: Express) {
       // Clear existing allocations for this account
       await db.execute(
         sql`DELETE FROM transporter_payment_allocations WHERE company_id = ${companyId}
-            AND (credit_entry_id = ANY(${sql`ARRAY[${sql.join(creditEntries.map((c) => sql`${c.id}`), sql`, `)}]::integer[]`})
-              OR debit_entry_id = ANY(${sql`ARRAY[${sql.join(debitEntries.map((d) => sql`${d.id}`), sql`, `)}]::integer[]`}))`
+            AND (credit_entry_id = ANY(${sql`ARRAY[${sql.join(
+              creditEntries.map((c) => sql`${c.id}`),
+              sql`, `
+            )}]::integer[]`})
+              OR debit_entry_id = ANY(${sql`ARRAY[${sql.join(
+                debitEntries.map((d) => sql`${d.id}`),
+                sql`, `
+              )}]::integer[]`}))`
       );
 
       // FIFO: iterate debits in date order, distribute against oldest unpaid credits

@@ -25,10 +25,7 @@ export function consolidatedHadiRentLedgerPredicate(
 ): string {
   assertSqlColumnRef(column, "hadi_rent_column");
   assertBindPlaceholder(parameter, "hadi_rent_parameter");
-  if (
-    companyId !== HADI_ERP_RENT_MERGE.companyId ||
-    ledgerAccountId !== HADI_ERP_RENT_MERGE.targetLedgerId
-  ) {
+  if (companyId !== HADI_ERP_RENT_MERGE.companyId || ledgerAccountId !== HADI_ERP_RENT_MERGE.targetLedgerId) {
     return `${column} = ${parameter}`;
   }
   // The archived master stays in the same company for RLS and voucher audits.
@@ -47,11 +44,7 @@ export function consolidatedHadiRentLedgerPredicate(
 }
 
 /** Future old-name rental postings must use the surviving account. */
-export function canonicalHadiRentExpenseName(
-  companyId: number,
-  name: string,
-  codePrefix: string
-): string {
+export function canonicalHadiRentExpenseName(companyId: number, name: string, codePrefix: string): string {
   return companyId === HADI_ERP_RENT_MERGE.companyId &&
     name === HADI_ERP_RENT_MERGE.legacyName &&
     codePrefix === "SHOP-RENT-EXP"
@@ -67,7 +60,11 @@ export function isArchivedHadiRentExpenseLedger(account: {
   isHidden: boolean;
   openingBalance: string | number | null;
 }): boolean {
-  return account.companyId === HADI_ERP_RENT_MERGE.companyId &&
+  return (
+    account.companyId === HADI_ERP_RENT_MERGE.companyId &&
     account.id === HADI_ERP_RENT_MERGE.legacyLedgerId &&
-    !account.active && account.isHidden && Number(account.openingBalance ?? 0) === 0;
+    !account.active &&
+    account.isHidden &&
+    Number(account.openingBalance ?? 0) === 0
+  );
 }

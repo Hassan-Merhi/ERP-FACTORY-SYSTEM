@@ -19,7 +19,11 @@ import type { RentalModule } from "../../routes/rental/shared";
 import { postErpVoucherTx, type ErpVoucherLine } from "../accounting/erpVoucherPosting";
 import { findOrCreateLedgerAccount, maybeRunAutoTransfer } from "../../routes/rental/shared";
 import { isRentalPeriodDue, getRentalBillingDay, getRentalPeriodDueDate } from "./rentalPeriodService";
-import { approvedLegacyNonCashBillingAdjustment, buildAllocationsForPayment, findEarliestOutstandingMonth } from "./rentalPaymentAllocationService";
+import {
+  approvedLegacyNonCashBillingAdjustment,
+  buildAllocationsForPayment,
+  findEarliestOutstandingMonth,
+} from "./rentalPaymentAllocationService";
 import { recordedRentalPaymentRate } from "./rentalPaymentRate";
 import { rentalPaymentGroupIdentity, rentalPaymentVoucherSuffix } from "./rentalPostingIdentity";
 import { shouldRunRentalAutoTransfer } from "./rentalCashboxPolicy";
@@ -192,12 +196,14 @@ async function postGroupCore(
     throw error;
   }
 
-  const accountValid = (await tx.execute(sql`
+  const accountValid = (
+    await tx.execute(sql`
     SELECT id FROM ledger_accounts
     WHERE id=${cashAccountId} AND company_id=${companyId}
       AND active=TRUE AND deleted_at IS NULL
     LIMIT 1
-  `)).rows;
+  `)
+  ).rows;
   if (accountValid.length !== 1) {
     const error: RentalPostingError = new Error("RENTAL_PAYMENT_CASH_ACCOUNT_NOT_AVAILABLE_IN_COMPANY");
     error.status = 409;
@@ -232,7 +238,8 @@ async function postGroupCore(
         // debiting that account in the payment voucher.
         let wasAccrued = false;
         if (alloc.ledgerRowId) {
-          const evidence = (await tx.execute(sql`
+          const evidence = (
+            await tx.execute(sql`
             SELECT ml.id, ml.notes, ml.expected_amount, ml.paid_amount,
               ml.used_prepaid_account, ml.used_advance_account, ml.accrual_voucher_id,
               v.id IS NOT NULL AS accrual_live,
@@ -258,10 +265,16 @@ async function postGroupCore(
               AND ml.contract_id=${contract.id}
               AND ml.year=${alloc.forYear} AND ml.month=${alloc.forMonth}
             LIMIT 1
-          `)).rows as Array<{
-            id: number; notes: string | null; accrual_live: boolean;
-            credited_payable: boolean; expected_amount: string; paid_amount: string;
-            used_prepaid_account: boolean; used_advance_account: boolean;
+          `)
+          ).rows as Array<{
+            id: number;
+            notes: string | null;
+            accrual_live: boolean;
+            credited_payable: boolean;
+            expected_amount: string;
+            paid_amount: string;
+            used_prepaid_account: boolean;
+            used_advance_account: boolean;
             accrual_voucher_id: number | null;
           }>;
           if (evidence.length !== 1) {
@@ -273,10 +286,13 @@ async function postGroupCore(
             creditedAccruedPayable: evidence[0].credited_payable,
             recognitionHold: isRentRecognitionHeld(evidence[0].notes),
           });
-          if (!wasAccrued && evidence[0].used_prepaid_account &&
-              evidence[0].accrual_voucher_id === null &&
-              !isRentRecognitionHeld(evidence[0].notes) &&
-              toMoney(evidence[0].paid_amount).gt("0.005")) {
+          if (
+            !wasAccrued &&
+            evidence[0].used_prepaid_account &&
+            evidence[0].accrual_voucher_id === null &&
+            !isRentRecognitionHeld(evidence[0].notes) &&
+            toMoney(evidence[0].paid_amount).gt("0.005")
+          ) {
             // Prepaid month becomes due while another payment is being made.
             // Recognize only the original, live PRE-BILLING payment into
             // expense; establish AP for the remaining rent, then settle the
@@ -285,7 +301,8 @@ async function postGroupCore(
             const prior = toMoney(evidence[0].paid_amount).toDecimalPlaces(2);
             const expected = toMoney(evidence[0].expected_amount).toDecimalPlaces(2);
             const dueDate = getRentalPeriodDueDate(alloc.forYear, alloc.forMonth, billingDay);
-            const paidBeforeBilling = (await tx.execute(sql`
+            const paidBeforeBilling = (
+              await tx.execute(sql`
               SELECT COALESCE(SUM(p.amount::numeric),0) AS amount
               FROM property_payments p
               JOIN vouchers v ON v.id=p.voucher_id AND v.company_id=p.company_id
@@ -293,11 +310,11 @@ async function postGroupCore(
               WHERE p.ledger_row_id=${alloc.ledgerRowId} AND p.company_id=${companyId}
                 AND p.posting_status='POSTED'
                 AND p.payment_date < ${dueDate}::date
-            `)).rows as Array<{ amount: string }>;
+            `)
+            ).rows as Array<{ amount: string }>;
             const actualPrepaid = toMoney(paidBeforeBilling[0]?.amount ?? 0).toDecimalPlaces(2);
             const remainingPayable = expected.minus(actualPrepaid);
-            if (!actualPrepaid.eq(prior) || remainingPayable.lt(chunk) ||
-                !remainingPayable.gt("0.005")) {
+            if (!actualPrepaid.eq(prior) || remainingPayable.lt(chunk) || !remainingPayable.gt("0.005")) {
               const error: RentalPostingError = new Error(
                 "RENTAL_PREPAID_SOURCE_REQUIRES_REVIEW: posted prepaid vouchers and monthly rent do not agree"
               );
@@ -305,15 +322,21 @@ async function postGroupCore(
               throw error;
             }
             const expenseId = await findOrCreateLedgerAccount(
-              tx, companyId, shopExpenseAccountName, "Indirect Expense", "SHOP-RENT-EXP"
+              tx,
+              companyId,
+              shopExpenseAccountName,
+              "Indirect Expense",
+              "SHOP-RENT-EXP"
             );
-            const prepaidId = await findOrCreateLedgerAccount(
-              tx, companyId, "Prepaid Rent", "Asset", "PREP-RENT"
-            );
+            const prepaidId = await findOrCreateLedgerAccount(tx, companyId, "Prepaid Rent", "Asset", "PREP-RENT");
             const payableId = await findOrCreateLedgerAccount(
-              tx, companyId, "Accrued Rent Payable", "Liability", "ACCR-RENT-PAY"
+              tx,
+              companyId,
+              "Accrued Rent Payable",
+              "Liability",
+              "ACCR-RENT-PAY"
             );
-            const desc = `Prepaid rent recognized - ${companyId} - ${String(alloc.forMonth).padStart(2,"0")}/${alloc.forYear}`;
+            const desc = `Prepaid rent recognized - ${companyId} - ${String(alloc.forMonth).padStart(2, "0")}/${alloc.forYear}`;
             await postAccrualPassTx(tx, {
               companyId,
               module: mod,
@@ -336,11 +359,14 @@ async function postGroupCore(
             // previously paid prepaid/advance months as new rent. They need
             // existing-voucher review or normal scheduled recognition FIRST.
             const lr = evidence[0];
-            if (isRentRecognitionHeld(lr.notes) ||
-                lr.accrual_voucher_id !== null ||
-                lr.used_prepaid_account || lr.used_advance_account ||
-                toMoney(lr.paid_amount).gt("0.005") ||
-                toMoney(lr.expected_amount).lt(chunk)) {
+            if (
+              isRentRecognitionHeld(lr.notes) ||
+              lr.accrual_voucher_id !== null ||
+              lr.used_prepaid_account ||
+              lr.used_advance_account ||
+              toMoney(lr.paid_amount).gt("0.005") ||
+              toMoney(lr.expected_amount).lt(chunk)
+            ) {
               const error: RentalPostingError = new Error(
                 "RENTAL_MONTH_RECOGNITION_REQUIRES_REVIEW: cannot settle or re-accrue this existing month until its posted voucher is reconciled"
               );
@@ -423,12 +449,14 @@ async function postGroupCore(
           line(expId, "debit", advanceExpectedAmt.toFixed(2), recNarr),
           line(advId, "credit", advanceAmt.toFixed(2), recNarr),
           ...(advanceExpectedAmt.minus(advanceAmt).gt("0.005")
-            ? [line(
-                await findOrCreateLedgerAccount(tx, companyId, "Accrued Rent Payable", "Liability", "ACCR-RENT-PAY"),
-                "credit",
-                advanceExpectedAmt.minus(advanceAmt).toFixed(2),
-                recNarr
-              )]
+            ? [
+                line(
+                  await findOrCreateLedgerAccount(tx, companyId, "Accrued Rent Payable", "Liability", "ACCR-RENT-PAY"),
+                  "credit",
+                  advanceExpectedAmt.minus(advanceAmt).toFixed(2),
+                  recNarr
+                ),
+              ]
             : []),
         ],
       });
@@ -555,8 +583,7 @@ export async function createRentalPaymentGroup(opts: RentalPaymentGroupOptions) 
     isSharedPayment,
   } = opts;
 
-  if (!isValidRentalBusinessDate(paymentDate) ||
-      !isValidRentalBusinessDate(clientDate)) {
+  if (!isValidRentalBusinessDate(paymentDate) || !isValidRentalBusinessDate(clientDate)) {
     const error: RentalPostingError = new Error("RENTAL_PAYMENT_DATE_INVALID: use a real YYYY-MM-DD calendar date");
     error.status = 400;
     throw error;
@@ -642,7 +669,8 @@ export async function createRentalPaymentGroup(opts: RentalPaymentGroupOptions) 
     // voucher is missing or retired. The audited $800 historical noncash
     // billing transition is valid for allocation, not for cash.
     // All other voucherless POSTED rows must fail closed.
-    const invalidPosted = (await tx.execute(sql`
+    const invalidPosted = (
+      await tx.execute(sql`
       SELECT p.id FROM property_payments p
       LEFT JOIN vouchers v ON v.id=p.voucher_id
         AND v.company_id=p.company_id AND v.deleted_at IS NULL
@@ -652,7 +680,8 @@ export async function createRentalPaymentGroup(opts: RentalPaymentGroupOptions) 
         AND p.posting_status='POSTED' AND v.id IS NULL
         AND NOT (${approvedLegacyNonCashBillingAdjustment})
       LIMIT 1
-    `)).rows;
+    `)
+    ).rows;
     if (invalidPosted.length > 0) {
       const error: RentalPostingError = new Error("RENTAL_PAYMENT_HISTORICAL_VOUCHER_MISSING");
       error.status = 409;
@@ -682,9 +711,11 @@ export async function createRentalPaymentGroup(opts: RentalPaymentGroupOptions) 
     // Otherwise the cash voucher would disagree with the requested amount and
     // a retry could post a different set of monthly lines.
     const allocatedTotal = sumMoney(allocations.map((a) => a.chunk));
-    if (allocations.length === 0 ||
-        !allocatedTotal.eq(toMoney(totalAmountExact).toDecimalPlaces(2)) ||
-        allocations.some((a) => toMoney(a.chunk).lte(0))) {
+    if (
+      allocations.length === 0 ||
+      !allocatedTotal.eq(toMoney(totalAmountExact).toDecimalPlaces(2)) ||
+      allocations.some((a) => toMoney(a.chunk).lte(0))
+    ) {
       const error: RentalPostingError = new Error("RENTAL_PAYMENT_ALLOCATION_INCOMPLETE");
       error.status = 409;
       throw error;
@@ -877,20 +908,22 @@ export async function postScheduledGroup(
       .orderBy(propertyPayments.id)
       .for("update");
 
-    if (groupRows.length === 0 ||
-        groupRows.every((r) => r.postingStatus === "POSTED")) {
+    if (groupRows.length === 0 || groupRows.every((r) => r.postingStatus === "POSTED")) {
       groupRows = [];
       return;
     }
-    if (groupRows.some((r) =>
-      r.postingStatus !== "SCHEDULED" ||
-      r.voucherId !== null ||
-      r.contractId !== contract.id ||
-      r.paymentDate !== paymentDate ||
-      r.cashAccountId !== cashAccountId ||
-      String(r.currency ?? "USD").toUpperCase() !== String(currency ?? "USD").toUpperCase() ||
-      r.ledgerRowId === null
-    )) {
+    if (
+      groupRows.some(
+        (r) =>
+          r.postingStatus !== "SCHEDULED" ||
+          r.voucherId !== null ||
+          r.contractId !== contract.id ||
+          r.paymentDate !== paymentDate ||
+          r.cashAccountId !== cashAccountId ||
+          String(r.currency ?? "USD").toUpperCase() !== String(currency ?? "USD").toUpperCase() ||
+          r.ledgerRowId === null
+      )
+    ) {
       const error: RentalPostingError = new Error("RENTAL_PAYMENT_GROUP_CHANGED_OR_PARTIALLY_POSTED");
       error.status = 409;
       throw error;
@@ -911,21 +944,27 @@ export async function postScheduledGroup(
       error.status = 409;
       throw error;
     }
-    const lockedMonths = (await tx.execute(sql`
+    const lockedMonths = (
+      await tx.execute(sql`
       SELECT ml.id,ml.year,ml.month,ml.expected_amount
       FROM property_monthly_ledger ml
-      WHERE ml.id IN (${sql.join(monthIds.map((id) => sql`${id}`), sql`, `)})
+      WHERE ml.id IN (${sql.join(
+        monthIds.map((id) => sql`${id}`),
+        sql`, `
+      )})
         AND ml.company_id=${contractCompanyId}
         AND ml.contract_id=${contract.id}
       ORDER BY ml.id FOR UPDATE OF ml
-    `)).rows as Array<{ id: number; year: number; month: number; expected_amount: string }>;
+    `)
+    ).rows as Array<{ id: number; year: number; month: number; expected_amount: string }>;
     if (lockedMonths.length !== monthIds.length) {
       const error: RentalPostingError = new Error("RENTAL_SCHEDULED_PAYMENT_MONTH_MISSING");
       error.status = 409;
       throw error;
     }
     const lockedById = new Map(lockedMonths.map((row) => [Number(row.id), row]));
-    const bookedAmounts = (await tx.execute(sql`
+    const bookedAmounts = (
+      await tx.execute(sql`
       SELECT p.ledger_row_id,COALESCE(SUM(p.amount::numeric),0) AS paid
       FROM property_payments p
       LEFT JOIN vouchers v ON v.id=p.voucher_id AND v.company_id=p.company_id
@@ -934,14 +973,17 @@ export async function postScheduledGroup(
         AND p.contract_id=${contract.id}
         AND p.posting_status='POSTED'
         AND (v.id IS NOT NULL OR (${approvedLegacyNonCashBillingAdjustment}))
-        AND p.ledger_row_id IN (${sql.join(monthIds.map((id) => sql`${id}`), sql`, `)})
+        AND p.ledger_row_id IN (${sql.join(
+          monthIds.map((id) => sql`${id}`),
+          sql`, `
+        )})
       GROUP BY p.ledger_row_id
-    `)).rows as Array<{ ledger_row_id: number; paid: string }>;
+    `)
+    ).rows as Array<{ ledger_row_id: number; paid: string }>;
     const paidByMonth = new Map(bookedAmounts.map((row) => [Number(row.ledger_row_id), toMoney(row.paid)]));
     for (const row of groupRows) {
       const locked = lockedById.get(row.ledgerRowId as number);
-      if (!locked ||
-          locked.year !== row.forYear || locked.month !== row.forMonth) {
+      if (!locked || locked.year !== row.forYear || locked.month !== row.forMonth) {
         const error: RentalPostingError = new Error("RENTAL_SCHEDULED_PAYMENT_MONTH_CHANGED");
         error.status = 409;
         throw error;
@@ -972,9 +1014,10 @@ export async function postScheduledGroup(
         ? `${String(allocs[0].forMonth).padStart(2, "0")}/${allocs[0].forYear}–${String(allocs[allocs.length - 1].forMonth).padStart(2, "0")}/${allocs[allocs.length - 1].forYear}`
         : `${String(allocs[0].forMonth).padStart(2, "0")}/${allocs[0].forYear}`;
     const baseNarration = `Rent paid - ${unitLabel} - ${monthSpan}`;
-    const narration = module === "PROPERTIES"
-      ? (appendRentalTenantName(baseNarration, contract.tenantName) ?? baseNarration)
-      : baseNarration;
+    const narration =
+      module === "PROPERTIES"
+        ? (appendRentalTenantName(baseNarration, contract.tenantName) ?? baseNarration)
+        : baseNarration;
 
     // Phase 19 (B), PE2: the caller resolved the recorded dated rate.
     const groupExchangeRate = exchangeRate;

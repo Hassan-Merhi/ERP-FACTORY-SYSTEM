@@ -6,13 +6,7 @@ import { normalizeVoucherEntryAmounts } from "./currencyAmounts";
 import { ownKey } from "../../lib/sqlTextGuards";
 
 export type HistoricalRepairKind =
-  | "voucherEntry"
-  | "ledger"
-  | "bank"
-  | "customer"
-  | "supplier"
-  | "employee"
-  | "fixedAsset";
+  "voucherEntry" | "ledger" | "bank" | "customer" | "supplier" | "employee" | "fixedAsset";
 
 export interface HistoricalRepairInput {
   kind: HistoricalRepairKind;
