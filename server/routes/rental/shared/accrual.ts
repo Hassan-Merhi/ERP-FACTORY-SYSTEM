@@ -277,9 +277,8 @@ export async function postRentAccrualForCompany(
       try {
         await db.transaction(async (tx) => {
           // Lock ALL pending rows in one shot — SKIP LOCKED guards against races.
-          // Use IN (...) with a literal id list (all values are trusted integers from
-          // the DB) rather than ANY($n::int[]) — Drizzle does not serialize a JS
-          // array through the sql`` tag in a way pg accepts with ::int[] casting.
+          // Bind each ID through Drizzle SQL fragments rather than interpolating
+          // a comma-separated string; preserve row locks and skip-locked behavior.
           const pendingIds = pendingRows.map((r) => r.id);
           const idListSql = sql.join(pendingIds.map((id) => sql`${id}`), sql`, `);
           const lockResult = await tx.execute(
