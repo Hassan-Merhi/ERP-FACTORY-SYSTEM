@@ -1,7 +1,10 @@
 import type { NextFunction, Request, Response } from "express";
 import { sql } from "drizzle-orm";
 import { db } from "../db";
-import { commercialRouteEntitlement, commercialModulesByPlan } from "../services/commercial/commercialRouteEntitlements";
+import {
+  commercialRouteEntitlement,
+  commercialModulesByPlan,
+} from "../services/commercial/commercialRouteEntitlements";
 
 type AccountRow = {
   id: string;
@@ -91,7 +94,7 @@ export function decideCommercialAccountAdmission(params: {
   if (!Number.isSafeInteger(sessionCompanyId) || !ownedCompanyIds.includes(sessionCompanyId)) {
     return { allowed: false, reason: "session_company_mismatch" };
   }
-  if (!requestedCompanies || requestedCompanies.some(id => !ownedCompanyIds.includes(id))) {
+  if (!requestedCompanies || requestedCompanies.some((id) => !ownedCompanyIds.includes(id))) {
     return { allowed: false, reason: "cross_account_company" };
   }
   return { allowed: true, reason: "admitted" };
@@ -118,7 +121,7 @@ async function ownedCompanies(accountId: string): Promise<number[]> {
   const rows = await db.execute(sql<{ company_id: number }>`
     SELECT company_id FROM commercial_account_companies WHERE account_id = ${accountId}
   `);
-  return rows.rows.map(row => Number(row.company_id));
+  return rows.rows.map((row) => Number(row.company_id));
 }
 
 async function memberCount(accountId: string): Promise<number> {
@@ -157,7 +160,7 @@ export function makeCommercialAdmissionBoundary(
       return;
     }
     // Explicit deny until individually audited; no global Developer bypass.
-    if (UNSUPPORTED_PATHS.some(pattern => pattern.test(req.path))) {
+    if (UNSUPPORTED_PATHS.some((pattern) => pattern.test(req.path))) {
       res.status(403).json({ code: "COMMERCIAL_ROUTE_UNSUPPORTED" });
       return;
     }
@@ -185,9 +188,13 @@ export function makeCommercialAdmissionBoundary(
       const owned = await loadCompanies(records[0].id);
       const users = await loadMemberCount(records[0].id);
       const limits = planLimits[records[0].plan || ""];
-      if (!limits || !Number.isSafeInteger(users) || users < 0 ||
-          (limits.users !== null && users > limits.users) ||
-          (limits.companies !== null && owned.length > limits.companies)) {
+      if (
+        !limits ||
+        !Number.isSafeInteger(users) ||
+        users < 0 ||
+        (limits.users !== null && users > limits.users) ||
+        (limits.companies !== null && owned.length > limits.companies)
+      ) {
         res.status(403).json({ code: "COMMERCIAL_LICENSE_LIMIT" });
         return;
       }
