@@ -3002,6 +3002,18 @@ CREATE FUNCTION public.factory_edge_applied_immutable() RETURNS trigger
 
 
 --
+-- Name: factory_edge_attachment_outbox_immutable(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.factory_edge_attachment_outbox_immutable() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+    BEGIN
+      RAISE EXCEPTION 'PHASE9_ATTACHMENT_OUTBOX_IMMUTABLE' USING ERRCODE = '23514';
+    END $$;
+
+
+--
 -- Name: factory_edge_event_evidence_immutable(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -3087,6 +3099,54 @@ CREATE FUNCTION public.factory_edge_operator_sync_control(p_site uuid, p_company
 
 
 --
+-- Name: factory_edge_payment_outbox_immutable(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.factory_edge_payment_outbox_immutable() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+    BEGIN
+      RAISE EXCEPTION 'PHASE9_PAYMENT_OUTBOX_IMMUTABLE' USING ERRCODE = '23514';
+    END $$;
+
+
+--
+-- Name: factory_edge_pos_outbox_immutable(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.factory_edge_pos_outbox_immutable() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+    BEGIN
+      RAISE EXCEPTION 'PHASE9_POS_OUTBOX_IMMUTABLE' USING ERRCODE = '23514';
+    END $$;
+
+
+--
+-- Name: factory_edge_pressing_outbox_immutable(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.factory_edge_pressing_outbox_immutable() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+    BEGIN
+      RAISE EXCEPTION 'PHASE9_PRESSING_OUTBOX_IMMUTABLE' USING ERRCODE = '23514';
+    END $$;
+
+
+--
+-- Name: factory_edge_receiving_outbox_immutable(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.factory_edge_receiving_outbox_immutable() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+    BEGIN
+      RAISE EXCEPTION 'PHASE9_RECEIVING_OUTBOX_IMMUTABLE' USING ERRCODE = '23514';
+    END $$;
+
+
+--
 -- Name: factory_edge_stage_immutable(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -3111,6 +3171,18 @@ CREATE FUNCTION public.factory_edge_stock_item_map_immutable() RETURNS trigger
 
 
 --
+-- Name: factory_edge_stock_outbox_immutable(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.factory_edge_stock_outbox_immutable() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+    BEGIN
+      RAISE EXCEPTION 'PHASE9_STOCK_OUTBOX_IMMUTABLE' USING ERRCODE = '23514';
+    END $$;
+
+
+--
 -- Name: factory_edge_sync_control_immutable(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -3119,6 +3191,18 @@ CREATE FUNCTION public.factory_edge_sync_control_immutable() RETURNS trigger
     AS $$
     BEGIN
       RAISE EXCEPTION 'PHASE10_SYNC_CONTROL_IMMUTABLE' USING ERRCODE = '23514';
+    END $$;
+
+
+--
+-- Name: factory_edge_voucher_outbox_immutable(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.factory_edge_voucher_outbox_immutable() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+    BEGIN
+      RAISE EXCEPTION 'EDGE_OUTBOX_IMMUTABLE' USING ERRCODE = '23514';
     END $$;
 
 
@@ -10794,7 +10878,8 @@ CREATE TABLE public.factory_edge_attachment_outbox (
     payload jsonb NOT NULL,
     payload_sha256 character(64) NOT NULL,
     sequence bigint NOT NULL,
-    site_id uuid NOT NULL
+    site_id uuid NOT NULL,
+    CONSTRAINT factory_edge_attachment_outbox_operation_kind_check CHECK ((operation_kind = ANY (ARRAY['attachment.file.v1'::text, 'attachment.file-update.v1'::text])))
 );
 
 
@@ -10908,6 +10993,19 @@ CREATE TABLE public.factory_edge_event_stage_receipts (
 
 
 --
+-- Name: factory_edge_lan_item_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.factory_edge_lan_item_id_seq
+    AS integer
+    START WITH 1000000000
+    INCREMENT BY 1
+    MINVALUE 1000000000
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
 -- Name: factory_edge_outbox_counter; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -10941,7 +11039,8 @@ CREATE TABLE public.factory_edge_payment_outbox (
     payload jsonb NOT NULL,
     payload_sha256 character(64) NOT NULL,
     sequence bigint NOT NULL,
-    site_id uuid NOT NULL
+    site_id uuid NOT NULL,
+    CONSTRAINT factory_edge_payment_outbox_operation_kind_check CHECK ((operation_kind = ANY (ARRAY['voucher.payment-receipt.v1'::text, 'voucher.payment-receipt-edit.v1'::text, 'voucher.payment-receipt-delete.v1'::text])))
 );
 
 
@@ -11141,7 +11240,8 @@ CREATE TABLE public.factory_edge_stock_outbox (
     payload jsonb NOT NULL,
     payload_sha256 character(64) NOT NULL,
     sequence bigint NOT NULL,
-    site_id uuid NOT NULL
+    site_id uuid NOT NULL,
+    CONSTRAINT factory_edge_stock_outbox_operation_kind_check CHECK ((operation_kind = ANY (ARRAY['stock.quick-adjust.v1'::text, 'stock.transfer.v1'::text, 'stock.item-edit.v1'::text, 'stock.item-create.v1'::text, 'stock.item-delete.v1'::text, 'stock.transfer-edit.v1'::text, 'stock.transfer-finalize.v1'::text, 'stock.transfer-revision.v1'::text, 'stock.transfer-revision-review.v1'::text])))
 );
 
 
@@ -36460,6 +36560,34 @@ CREATE TRIGGER factory_edge_applied_no_modify BEFORE DELETE OR UPDATE ON public.
 
 
 --
+-- Name: factory_edge_applied_receipts factory_edge_applied_receipt_no_mutation; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER factory_edge_applied_receipt_no_mutation BEFORE DELETE OR UPDATE ON public.factory_edge_applied_receipts FOR EACH ROW EXECUTE FUNCTION public.factory_edge_voucher_outbox_immutable();
+
+
+--
+-- Name: factory_edge_attachment_file_receipts factory_edge_attachment_file_receipts_no_mutation; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER factory_edge_attachment_file_receipts_no_mutation BEFORE DELETE OR UPDATE ON public.factory_edge_attachment_file_receipts FOR EACH ROW EXECUTE FUNCTION public.factory_edge_attachment_outbox_immutable();
+
+
+--
+-- Name: factory_edge_attachment_outbox factory_edge_attachment_outbox_no_mutation; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER factory_edge_attachment_outbox_no_mutation BEFORE DELETE OR UPDATE ON public.factory_edge_attachment_outbox FOR EACH ROW EXECUTE FUNCTION public.factory_edge_attachment_outbox_immutable();
+
+
+--
+-- Name: factory_edge_event_applied_receipts factory_edge_event_applied_receipts_no_mutation; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER factory_edge_event_applied_receipts_no_mutation BEFORE DELETE OR UPDATE ON public.factory_edge_event_applied_receipts FOR EACH ROW EXECUTE FUNCTION public.factory_edge_pressing_outbox_immutable();
+
+
+--
 -- Name: factory_edge_event_conflict_decisions factory_edge_event_conflict_decisions_no_modify; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -36474,10 +36602,52 @@ CREATE TRIGGER factory_edge_event_conflicts_no_modify BEFORE DELETE OR UPDATE ON
 
 
 --
+-- Name: factory_edge_event_stage_receipts factory_edge_event_stage_receipts_no_mutation; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER factory_edge_event_stage_receipts_no_mutation BEFORE DELETE OR UPDATE ON public.factory_edge_event_stage_receipts FOR EACH ROW EXECUTE FUNCTION public.factory_edge_pressing_outbox_immutable();
+
+
+--
+-- Name: factory_edge_payment_outbox factory_edge_payment_outbox_no_mutation; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER factory_edge_payment_outbox_no_mutation BEFORE DELETE OR UPDATE ON public.factory_edge_payment_outbox FOR EACH ROW EXECUTE FUNCTION public.factory_edge_payment_outbox_immutable();
+
+
+--
+-- Name: factory_edge_pos_outbox factory_edge_pos_outbox_no_mutation; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER factory_edge_pos_outbox_no_mutation BEFORE DELETE OR UPDATE ON public.factory_edge_pos_outbox FOR EACH ROW EXECUTE FUNCTION public.factory_edge_pos_outbox_immutable();
+
+
+--
+-- Name: factory_edge_pressing_outbox factory_edge_pressing_outbox_no_mutation; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER factory_edge_pressing_outbox_no_mutation BEFORE DELETE OR UPDATE ON public.factory_edge_pressing_outbox FOR EACH ROW EXECUTE FUNCTION public.factory_edge_pressing_outbox_immutable();
+
+
+--
+-- Name: factory_edge_receiving_outbox factory_edge_receiving_outbox_no_mutation; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER factory_edge_receiving_outbox_no_mutation BEFORE DELETE OR UPDATE ON public.factory_edge_receiving_outbox FOR EACH ROW EXECUTE FUNCTION public.factory_edge_receiving_outbox_immutable();
+
+
+--
 -- Name: factory_edge_staged_vouchers factory_edge_stage_no_modify; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER factory_edge_stage_no_modify BEFORE DELETE OR UPDATE ON public.factory_edge_staged_vouchers FOR EACH ROW EXECUTE FUNCTION public.factory_edge_stage_immutable();
+
+
+--
+-- Name: factory_edge_stage_receipts factory_edge_stage_receipt_no_mutation; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER factory_edge_stage_receipt_no_mutation BEFORE DELETE OR UPDATE ON public.factory_edge_stage_receipts FOR EACH ROW EXECUTE FUNCTION public.factory_edge_voucher_outbox_immutable();
 
 
 --
@@ -36502,10 +36672,24 @@ CREATE TRIGGER factory_edge_stock_item_map_no_mutation BEFORE DELETE OR UPDATE O
 
 
 --
+-- Name: factory_edge_stock_outbox factory_edge_stock_outbox_no_mutation; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER factory_edge_stock_outbox_no_mutation BEFORE DELETE OR UPDATE ON public.factory_edge_stock_outbox FOR EACH ROW EXECUTE FUNCTION public.factory_edge_stock_outbox_immutable();
+
+
+--
 -- Name: factory_edge_sync_control_log factory_edge_sync_control_no_mutation; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER factory_edge_sync_control_no_mutation BEFORE DELETE OR UPDATE ON public.factory_edge_sync_control_log FOR EACH ROW EXECUTE FUNCTION public.factory_edge_sync_control_immutable();
+
+
+--
+-- Name: factory_edge_voucher_outbox factory_edge_voucher_outbox_no_mutation; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER factory_edge_voucher_outbox_no_mutation BEFORE DELETE OR UPDATE ON public.factory_edge_voucher_outbox FOR EACH ROW EXECUTE FUNCTION public.factory_edge_voucher_outbox_immutable();
 
 
 --
@@ -43581,6 +43765,20 @@ ALTER TABLE public.vouchers ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY vouchers_company_scope_policy ON public.vouchers USING (public.erp_company_scope_matches(company_id)) WITH CHECK (public.erp_company_scope_matches(company_id));
+
+
+--
+-- Name: FUNCTION factory_edge_operator_decide_conflict(p_site uuid, p_stream text, p_sequence bigint, p_decision text, p_user_id text, p_reason text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.factory_edge_operator_decide_conflict(p_site uuid, p_stream text, p_sequence bigint, p_decision text, p_user_id text, p_reason text) FROM PUBLIC;
+
+
+--
+-- Name: FUNCTION factory_edge_operator_sync_control(p_site uuid, p_company integer, p_user_id text, p_action text, p_reason text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.factory_edge_operator_sync_control(p_site uuid, p_company integer, p_user_id text, p_action text, p_reason text) FROM PUBLIC;
 
 
 --

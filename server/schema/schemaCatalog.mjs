@@ -147,7 +147,12 @@ const QUERIES = {
   function: `
     SELECT format('%I.%I(%s)', n.nspname, p.proname, pg_get_function_identity_arguments(p.oid)) AS identity,
            json_build_object('kind', p.prokind,
-             'def', CASE WHEN p.prokind IN ('f','p') THEN pg_get_functiondef(p.oid) END) AS definition
+             'def', CASE WHEN p.prokind IN ('f','p') THEN pg_get_functiondef(p.oid) END,
+             -- Role-independent privilege fact: can PUBLIC execute it? Matters for
+             -- SECURITY DEFINER functions that must only be callable by a granted role.
+             'publicExecute', p.proacl IS NULL OR EXISTS (
+               SELECT 1 FROM aclexplode(p.proacl) a WHERE a.grantee = 0 AND a.privilege_type = 'EXECUTE')
+           ) AS definition
       FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
      WHERE ${SYSTEM_SCHEMA_FILTER} AND ${notExtensionMember("pg_proc", "p.oid")}`,
   trigger: `
@@ -249,9 +254,36 @@ function comparisonValue(entry) {
 
 const isNamedShape = (entry) => entry.kind === "constraint" || entry.kind === "index";
 
-/** A validated constraint satisfies an expected NOT VALID one. */
+/**
+ * A database object that is strictly *safer* than the expectation satisfies it,
+ * and adoption never loosens it:
+ *   - constraint: validated where NOT VALID is expected;
+ *   - function:   PUBLIC denied EXECUTE where the baseline allows it;
+ *   - table:      row-level security enabled/forced beyond the baseline;
+ *   - column:     NOT NULL where the baseline allows NULL.
+ * Every other field must match exactly.
+ */
 function isStricter(expected, actual) {
-  return expected.kind === "constraint" && !expected.def.validated && actual.def.validated;
+  const e = expected.def;
+  const a = actual.def;
+  switch (expected.kind) {
+    case "constraint":
+      return !e.validated && a.validated;
+    case "function":
+      return e.def === a.def && e.kind === a.kind && e.publicExecute !== false && a.publicExecute === false;
+    case "table":
+      return (
+        e.kind === a.kind && e.unlogged === a.unlogged && e.partitionKey === a.partitionKey &&
+        (a.rls || !e.rls) && (a.forceRls || !e.forceRls)
+      );
+    case "column":
+      return (
+        e.type === a.type && e.default === a.default && e.identity === a.identity &&
+        e.generated === a.generated && e.collation === a.collation && !e.notNull && a.notNull
+      );
+    default:
+      return false;
+  }
 }
 
 /** `CREATE UNIQUE INDEX name ON public.t USING btree (a)` -> `UNIQUE USING btree (a)`. */

@@ -99,6 +99,8 @@ function rlsSql(entry) {
   return out;
 }
 
+const revokePublicExecuteSql = (entry) => `REVOKE ALL ON FUNCTION ${entry.identity} FROM PUBLIC;`;
+
 const withSemicolon = (sql) => (sql.trimEnd().endsWith(";") ? sql.trimEnd() : `${sql.trimEnd()};`);
 
 /** Constraint creation; foreign keys are emitted after every other constraint. */
@@ -152,7 +154,11 @@ export function compileCreatePhases(entries) {
   }
   // Functions follow tables: some take table row types as arguments. Column
   // defaults only use built-in functions, and check constraints come later.
-  for (const e of byKind.function) if (e.def.def) out.push(withSemicolon(e.def.def));
+  for (const e of byKind.function) {
+    if (!e.def.def) continue;
+    out.push(withSemicolon(e.def.def));
+    if (e.def.publicExecute === false) out.push(revokePublicExecuteSql(e));
+  }
   const tables = out.splice(0);
   for (const s of byKind.sequence) if (s.def.ownedBy) out.push(`ALTER SEQUENCE ${s.identity} OWNED BY ${s.def.ownedBy};`);
   const constraints = [...byKind.constraint].sort(
@@ -276,7 +282,12 @@ export function planAdoption(comparison) {
           blockers.push(`${where}: aggregate/window function differs`);
           break;
         }
-        changeStatements.push(withSemicolon(expected.def.def));
+        if (expected.def.def !== actual.def.def) changeStatements.push(withSemicolon(expected.def.def));
+        if (expected.def.publicExecute === false && actual.def.publicExecute !== false) {
+          changeStatements.push(revokePublicExecuteSql(expected));
+        } else if (expected.def.publicExecute !== false && actual.def.publicExecute === false) {
+          notes.push(`${where}: PUBLIC cannot execute it on the database although the baseline allows it; kept (stricter)`);
+        }
         break;
       case "trigger":
         if (/^CREATE CONSTRAINT TRIGGER/.test(expected.def.def)) {

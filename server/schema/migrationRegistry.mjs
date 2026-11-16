@@ -11,6 +11,7 @@
  * module writes to a database.
  */
 import { createHash } from "node:crypto";
+import process from "node:process";
 import { readdirSync, readFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -19,8 +20,13 @@ import { MIGRATION_HISTORY_TABLE } from "./schemaCatalog.mjs";
 
 export { MIGRATION_HISTORY_TABLE };
 
-/** Repository-relative migrations directory (works from server/ and dist/ alike). */
-export const MIGRATIONS_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../migrations");
+/**
+ * Repository migrations directory, resolved from this module so it works from
+ * the source tree in every entry point. ERP_MIGRATIONS_DIR exists only so the
+ * migration test suite can run the real runner against fixture registries.
+ */
+export const MIGRATIONS_DIR =
+  process.env.ERP_MIGRATIONS_DIR ?? path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../migrations");
 
 /** Expected-schema manifests generated from a fresh install (see migrate.mjs manifest). */
 export const MANIFEST_DIR = path.join(MIGRATIONS_DIR, "manifest");
