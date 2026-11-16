@@ -39,6 +39,14 @@ Branch: `refactor/manifest-driven-access-layer`. **Work in progress — not prod
 - Test: `npm run test:backend -- tests/route-access-review-ledger.test.ts`.
 - A route's handler names or method/path are not sufficient to infer its authorization. In particular, unreviewed privileged, upload, service-token, anonymous, conditional/fallthrough and cross-company routes must not get guessed `allow` policies.
 
+## Phase 2 transitional declaration registry
+
+- `config/route-access-manifest.json` now records **all 2,439** current Express registrations in the exact route snapshot order. Each identity includes ordinal, method, path and handler chain. This is a **coverage** milestone, **not authorization migration completion**.
+- **2** rules have individually verified `companyScope`, `permission` and `roles`. The other **2,437** explicitly specify `companyScope: "delegated"`, `permission: "delegated"` and `roles: ["delegated"]`, with `enforcement: "legacy-delegated"`. These sentinel values are **not permissions**, never grant access, and do not replace the legacy middleware.
+- `scripts/generate-route-access-manifest.mjs` must produce an identical snapshot. `npm run verify:route-access-coverage` and the Repository Audits CI job check that every registered route is declared, including handler drift and duplicates. The Node regression test removes declarations and confirms the gate fails.
+- The separate `node scripts/generate-route-access-review.mjs --check --require-reviewed` gate remains deliberately **red** while source review is incomplete; do not enable a production unified middleware or delete legacy authorization gates from this transitional manifest.
+- Phase 2 completion still requires confirming and replacing each delegated rule with a source-grounded and behavior-equivalent access declaration, particularly dynamic Factory page/tab rules, row-level ownership, impersonation, POS location, and cross-company exceptions.
+
 ## Access manifest contract (planned)
 
 ```json
