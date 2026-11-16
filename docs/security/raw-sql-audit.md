@@ -149,5 +149,6 @@ documented `configFragment` remains for the frozen bilingual target config).
   without quoting (operator-only script, catalog names); recorded, not changed.
 * `/api/daily-export/trigger-whatsapp` was reachable by any authenticated
   user; it now also requires the Admin or Owner role (Developer is admitted by
-  `requireRole`), matching `/api/export/start`.
+  `requireRole`), matching `/api/export/start`; the Export Center hides the
+  "Send to WhatsApp" button from other roles.
 * No production database was read or modified by this work.
