@@ -45,12 +45,12 @@ export type AttendanceAdminCredentials = {
   adminPassword?: unknown;
 };
 
-export type AttendanceApprover = { id: string; username: string; authorizationMethod: "admin_password" };
+export type AttendanceApprover = { id: string; username: string; authorizationMethod: "admin_password" | "authenticated_role" };
 
 /**
  * Returns undefined after sending a rejection, null for same-day records,
- * and a verifying company Admin for older dates. All roles, including Owners,
- * require a fresh Admin username and password.
+ * and the authenticated company Admin/Developer (or a separately verified
+ * company Admin) for older dates. Other roles require Admin approval.
  */
 export async function requireAttendanceEditApproval(
   req: Request,
@@ -70,6 +70,21 @@ export async function requireAttendanceEditApproval(
   }
   const olderDates = [...new Set(dates.filter((date) => (date as string) < today) as string[])];
   if (!olderDates.length) return null;
+
+  // Trust the server-authenticated identity, NOT a role supplied in the request.
+  // Company-scoped Admins and Developers may edit earlier attendance directly.
+  const requesterId = String(req.session.userId || req.user?.id || "");
+  if (requesterId) {
+    const [requester] = await db
+      .select({ id: users.id, username: users.username, active: users.active, role: userCompanyRoles.role })
+      .from(users)
+      .innerJoin(userCompanyRoles, and(eq(userCompanyRoles.userId, users.id), eq(userCompanyRoles.companyId, companyId)))
+      .where(eq(users.id, requesterId))
+      .limit(1);
+    if (requester?.active && (requester.role === "Admin" || requester.role === "Developer")) {
+      return { id: requester.id, username: requester.username, authorizationMethod: "authenticated_role" };
+    }
+  }
 
   const username = typeof credentials?.adminUsername === "string" ? credentials.adminUsername.trim() : "";
   const password = typeof credentials?.adminPassword === "string" ? credentials.adminPassword : "";
