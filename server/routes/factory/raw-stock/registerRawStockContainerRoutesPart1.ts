@@ -157,10 +157,11 @@ export function registerRawStockContainerRoutesPart1(app: Express) {
         // 4. Compute new inclusive landed cost — pure computation, no db calls.
         const next = computeCorrectContainerCost(containerSnapshot, additionalChargesRows, commissionRecord);
         if (next.fxUnresolved) {
-          throw Object.assign(
-            new Error(new UnresolvedExchangeRateError(lockedContainer.currencyCode || "USD").message),
-            { status: 400 }
+          const fxError: Error & { status?: number } = new Error(
+            new UnresolvedExchangeRateError(lockedContainer.currencyCode || "USD").message
           );
+          fxError.status = 400;
+          throw fxError;
         }
         resultCostPerKg = next.costPerKg;
 
