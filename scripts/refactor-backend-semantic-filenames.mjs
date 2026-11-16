@@ -56,6 +56,7 @@ const replacementRules = [...oldBaseToNew].sort((a,b)=>b[0].length-a[0].length).
 }));
 const isEditable = file =>
   /\.(?:[cm]?[jt]sx?|json|ya?ml|mjs|cjs|mts|cts|md|sh)$/i.test(file) &&
+  !file.startsWith(".github/") &&
   !file.startsWith("docs/archive/") &&
   !file.startsWith("migrations/") &&
   !file.startsWith("scripts/repairs/") &&
