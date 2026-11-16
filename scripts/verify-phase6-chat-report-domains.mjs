@@ -62,7 +62,7 @@ for (const file of domainFiles) {
 const implementationDirectory = "server/chat/reports/implementations";
 const shardFiles = fs
   .readdirSync(resolve(implementationDirectory))
-  .filter((name) => /^phase\d+ReportShard\.ts$/.test(name))
+  .filter((name) => /^(?:financialAndParty|inventoryOperations|salesAndAssets|retailAndFactory|accountingDetail|masterDataAndJournal|auditAndTracking)ReportShard\.ts$/.test(name))
   .sort();
 if (shardFiles.length !== 7) failures.push(`expected seven implementation shards, found ${shardFiles.length}`);
 
