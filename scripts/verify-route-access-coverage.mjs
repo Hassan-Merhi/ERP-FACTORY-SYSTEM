@@ -71,6 +71,15 @@ export function validateRouteAccessCoverage(routeSnapshot, accessSnapshot) {
       accessSnapshot.reviewedCount !== accessSnapshot.rules.filter((rule) => rule?.status === "reviewed").length) {
     errors.push("Declared reviewed count does not match reviewed rules");
   }
+  if (accessSnapshot.middlewareMounts !== undefined) {
+    if (!Array.isArray(routeSnapshot.middlewareMounts) ||
+        JSON.stringify(accessSnapshot.middlewareMounts) !== JSON.stringify(routeSnapshot.middlewareMounts)) {
+      errors.push("Inherited middleware mount snapshot differs from registered middleware");
+    }
+    if (accessSnapshot.middlewareMountCount !== routeSnapshot.middlewareMounts?.length) {
+      errors.push("Inherited middleware mount count differs from registered middleware");
+    }
+  }
   const expectedSet = new Set(expected);
   for (const id of expected) if (!seen.has(id)) errors.push(`Missing access declaration: ${id}`);
   for (const id of seen) if (!expectedSet.has(id)) errors.push(`Stale access declaration: ${id}`);
