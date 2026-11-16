@@ -57,6 +57,8 @@ const manifest = {
   formatVersion: 1,
   description: "TRANSITIONAL / NON-ENFORCING: every Express registration is declared; unreviewed entries explicitly delegate to existing runtime security and MUST NOT be used to authorize requests.",
   routeCount: rules.length,
+  middlewareMountCount: snapshot.middlewareMounts.length,
+  middlewareMounts: snapshot.middlewareMounts,
   reviewedCount: rules.filter((rule) => rule.status === "reviewed").length,
   rules,
 };
