@@ -32,7 +32,7 @@ describe("Phase 6 chat reporting architecture", () => {
   it("keeps chatService behind the stable report gateway", () => {
     // The invariant is that the chat path reaches reporting only through the
     // reports gateway and never branches on queryType itself. #1422 moved the
-    // Phase 1 data query out of chatService into chat/phase1DataQuery, so the
+    // Phase 1 data query out of chatService into chat/readOnlyDataQueryHandler, so the
     // gateway import now lives one delegation deeper — the boundary is
     // unchanged, the file holding the import is not.
     //
@@ -40,7 +40,7 @@ describe("Phase 6 chat reporting architecture", () => {
     // switch is checked over both files at once, which also widens the original
     // check so the added indirection cannot become a place to hide one.
     const source = read("server/chatService.ts");
-    const dataQuery = read("server/chat/phase1DataQuery.ts");
+    const dataQuery = read("server/chat/readOnlyDataQueryHandler.ts");
     expect(dataQuery).toContain('from "./reports"');
     expect(`${source}\n${dataQuery}`).not.toContain("switch (params.queryType)");
   });

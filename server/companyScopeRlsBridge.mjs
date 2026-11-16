@@ -369,5 +369,5 @@ if (!globalThis[INSTALL_KEY]) {
 // Wave 6 inventory repair is separately env-gated and fail-closed. It runs
 // after company-scope RLS readiness so the tenant-scoped transaction is valid.
 if (process.env.COMPANY_SCOPE_RLS_MODE !== "verify-only") {
-  await import("./inventoryValuationWave6RepairBridge.mjs");
+  await import("./inventoryValuationGuardedRepair.mjs");
 }

@@ -18,14 +18,14 @@ const registry = read("server/chat/reports/implementations/reportImplementationR
 if (lines("server/chat/reports.ts") > 30) failures.push("server/chat/reports.ts must remain a thin facade");
 if (!facade.includes("dispatchDataQuery")) failures.push("report facade must delegate to the domain dispatcher");
 // chatService was decomposed (god-file wave 8): it reaches reports through
-// chat/phase1DataQuery.ts, which is the only caller of the stable facade.
-const dataQueryGateway = read("server/chat/phase1DataQuery.ts");
-if (!chatService.includes('from "./chat/phase1DataQuery"') || !chatService.includes("runPhase1DataQuery(")) {
+// chat/readOnlyDataQueryHandler.ts, which is the only caller of the stable facade.
+const dataQueryGateway = read("server/chat/readOnlyDataQueryHandler.ts");
+if (!chatService.includes('from "./chat/readOnlyDataQueryHandler"') || !chatService.includes("runPhase1DataQuery(")) {
   failures.push("chatService must route data queries through the phase1 data-query gateway");
 }
 if (!dataQueryGateway.includes('from "./reports"')) failures.push("chat data-query gateway must use the stable report facade");
 if ((dataQueryGateway.match(/runDataQuery/g) || []).length < 2) failures.push("chatService report gateway wiring is missing");
-for (const [name, source] of [["chatService", chatService], ["phase1DataQuery", dataQueryGateway]]) {
+for (const [name, source] of [["chatService", chatService], ["readOnlyDataQueryHandler", dataQueryGateway]]) {
   if (/switch\s*\(\s*params\.queryType\s*\)/.test(source)) failures.push(`${name} must not own report dispatch logic`);
 }
 if (!dispatcher.includes("reportDomains")) failures.push("domain registry is missing");

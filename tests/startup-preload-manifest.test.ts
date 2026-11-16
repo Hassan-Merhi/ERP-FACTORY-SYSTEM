@@ -59,7 +59,7 @@ describe("startup preload manifest", () => {
     const allowed = new Map([
       // Phase 19 (A): the worker-bonus and CHARGE-PRE boot repairs are retired;
       // the RLS bridge now loads the env-gated wave 6 inventory bridge directly.
-      ["companyScopeRlsBridge.mjs", ["inventoryValuationWave6RepairBridge.mjs"]],
+      ["companyScopeRlsBridge.mjs", ["inventoryValuationGuardedRepair.mjs"]],
     ]);
     const offenders: string[] = [];
     for (const file of fs.readdirSync(path.join(root, "server"))) {

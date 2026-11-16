@@ -1,6 +1,6 @@
 /**
  * Regression tests for the Phase 1 data-query classifier extracted from
- * chatService.ts into server/chat/phase1Classifier.ts (DB-free module).
+ * chatService.ts into server/chat/dataQueryIntentClassifier.ts (DB-free module).
  *
  * The keyword matcher is a business-critical gate: only messages that match
  * it may trigger the AI-classified read-only ERP query path. The date context
@@ -11,7 +11,7 @@ import {
   isPhase1DataQuery,
   buildPhase1DateContext,
   buildPhase1ClassifierPrompt,
-} from "../server/chat/phase1Classifier";
+} from "../server/chat/dataQueryIntentClassifier";
 
 describe("isPhase1DataQuery", () => {
   it.each([

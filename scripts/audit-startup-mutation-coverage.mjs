@@ -26,7 +26,7 @@ const targets=[
   "server/startupWarningRepair.mjs",
   "server/fixedProductionPlannerSchemaBridge.mjs",
   "server/wave3SalesHotpathIndexBridge.mjs",
-  "server/inventoryValuationWave6RepairBridge.mjs"
+  "server/inventoryValuationGuardedRepair.mjs"
 ];
 // Include every ordered startup-schema statement module, not just bridge file
 // names. This is needed because server/startup-schema/index.ts imports 001–038

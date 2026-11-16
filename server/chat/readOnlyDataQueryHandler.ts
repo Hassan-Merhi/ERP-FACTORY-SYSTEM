@@ -8,7 +8,7 @@
  */
 import { callAIWithFallback, type AIProvider } from "./aiProviders";
 import { runDataQuery } from "./reports";
-import { isPhase1DataQuery, buildPhase1DateContext, buildPhase1ClassifierPrompt } from "./phase1Classifier";
+import { isPhase1DataQuery, buildPhase1DateContext, buildPhase1ClassifierPrompt } from "./dataQueryIntentClassifier";
 
 export interface Phase1DataQueryRequest {
   userMessage: string;
