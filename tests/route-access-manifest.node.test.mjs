@@ -33,6 +33,16 @@ test("deleting any one declared registration fails coverage", () => {
   }
 });
 
+test("reordering declarations fails even when every id is present", () => {
+  const rules = [...manifest.rules];
+  [rules[0], rules[1]] = [rules[1], rules[0]];
+  assert.ok(
+    validateRouteAccessCoverage(snapshot, { ...manifest, rules }).some(
+      (error) => error.startsWith("Registration-order mismatch at index 0:")
+    )
+  );
+});
+
 test("a changed route guard cannot inherit an old declaration", () => {
   const modified = { ...snapshot, routes: [...snapshot.routes] };
   modified.routes[0] = modified.routes[0].replace("[stockTransferOrderWaWebhookHandler]", "[<anonymous>]");
