@@ -1,452 +1,146 @@
 import { getErrorDetails } from "@shared/errorUtils";
-import { useState, useRef, useEffect } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { useToast } from "@/hooks/use-toast";
-import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
-import { queryClient } from "@/lib/queryClient";
-import { useCompany } from "@/contexts/CompanyContext";
-import { companyQueryKey } from "@/lib/companyQueryScope";
-import { useAppMode } from "@/contexts/AppModeContext";
-import { getApiRequest } from "@/lib/factoryApi";
-import { useLabelDesignColors } from "@/hooks/useLabelDesignColors";
-import { productMatchesSearch } from "@shared/factoryProductSearch";
-import type { FactoryBaleProduct, FactoryCategory } from "@shared/schema";
 import type { GroupedProduct, ImportPreviewRow } from "./types";
-import { downloadNoPriceBaleOrderSheet, downloadPricedBaleOrderSheet } from "./baleOrderSheetExport";
-import type { AuthMe, FactoryMyAccess } from "@shared/apiTypes";
+import { useBaleProductsModelPart1 } from "./useBaleProductsModelPart1";
+import { useBaleProductsModelPart2 } from "./useBaleProductsModelPart2";
 
 export function useBaleProductsModel() {
-  const { selectedCompany } = useCompany();
-  const { colors: designColors } = useLabelDesignColors();
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [adminAuthOpen, setAdminAuthOpen] = useState(false);
-  const [pendingAdminAuth, setPendingAdminAuth] = useState<{ username: string; password: string } | null>(null);
-  const [importDialogOpen, setImportDialogOpen] = useState(false);
-  const [importPreview, setImportPreview] = useState<ImportPreviewRow[]>([]);
-  const [importError, setImportError] = useState("");
-  const [importFile, setImportFile] = useState<File | null>(null);
-  const [condensedView] = useState(false);
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
-  const [showCategories, setShowCategories] = useState(false);
-  const [expandedCategories, setExpandedCategories] = useState<Set<number>>(new Set());
-  const [newCategoryName, setNewCategoryName] = useState("");
-  const [editingCategory, setEditingCategory] = useState<{ id: number; name: string } | null>(null);
-  const [editingProduct, setEditingProduct] = useState<FactoryBaleProduct | null>(null);
-  const [editForm, setEditForm] = useState({
-    name: "",
-    articleCode: "",
-    weightPerBaleKg: "",
-    categoryId: "",
-    description: "",
-    grade: "",
-    productionPrice: "",
-    sellingPrice: "",
-    labelDesignColor: "",
+  const {
+    activeProducts,
+    adminAuthOpen,
+    categories,
+    categoryMap,
+    condensedView,
+    createCategoryMutation,
+    createDialogOpen,
+    deleteCategoryMutation,
+    designColors,
+    distinctWeights,
+    editForm,
+    editingCategory,
+    editingProduct,
+    expandedCategories,
+    expandedGroups,
+    fileInputRef,
+    filterCategoryId,
+    filterWeight,
+    hiddenProducts,
+    hideAvgRate,
+    hideSellingPriceBP,
+    importDialogOpen,
+    importError,
+    importFile,
+    importPreview,
+    isAdmin,
+    isLoading,
+    modeApiRequest,
+    newCategoryName,
+    noColorCount,
+    pendingAdminAuth,
+    pendingDelete,
+    products,
+    recordChanges,
+    searchQuery,
+    selectedActiveIds,
+    selectedHiddenIds,
+    selectedIds,
+    setAdminAuthOpen,
+    setCreateDialogOpen,
+    setEditForm,
+    setEditingCategory,
+    setEditingProduct,
+    setExpandedCategories,
+    setExpandedGroups,
+    setFilterCategoryId,
+    setFilterWeight,
+    setImportDialogOpen,
+    setImportError,
+    setImportFile,
+    setImportPreview,
+    setNewCategoryName,
+    setPendingAdminAuth,
+    setPendingDelete,
+    setSearchQuery,
+    setSelectedIds,
+    setShowCategories,
+    setShowHidden,
+    setShowNoColor,
+    setShowZeroPrice,
+    showCategories,
+    showHidden,
+    showNoColor,
+    showZeroPrice,
+    toast,
+    toggleSelectAll,
+    toggleSelectId,
+    updateCategoryMutation,
+  } = useBaleProductsModelPart1();
+  const {
+    bulkToggleActiveMutation,
+    colorUpdateMutation,
+    deleteProductMutation,
+    editProductMutation,
+    handleEditSubmit,
+    handleExportExcel,
+    handleExportNoPrices,
+    importMutation,
+  } = useBaleProductsModelPart2({
+    activeProducts,
+    categoryMap,
+    editForm,
+    editingProduct,
+    hideAvgRate,
+    hideSellingPriceBP,
+    modeApiRequest,
+    recordChanges,
+    setEditingProduct,
+    setImportDialogOpen,
+    setImportFile,
+    setImportPreview,
+    setSelectedIds,
+    toast,
   });
-  const [pendingDelete, setPendingDelete] = useState<(() => void) | null>(null);
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const [showHidden, setShowHidden] = useState(false);
-  const [showZeroPrice, setShowZeroPrice] = useState(false);
-  const [showNoColor, setShowNoColor] = useState(false);
-  const [filterCategoryId, setFilterCategoryId] = useState<number | null>(null);
-  const [filterWeight, setFilterWeight] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const { toast } = useToast();
-  const recordChanges = useExistingRecordChangeAccess();
-  const appMode = useAppMode();
-  const modeApiRequest = getApiRequest(appMode);
-
-  useEffect(() => {
-    if (editingProduct) {
-      setEditForm({
-        name: editingProduct.name || "",
-        articleCode: editingProduct.articleCode || "",
-        weightPerBaleKg: editingProduct.weightPerBaleKg ? String(editingProduct.weightPerBaleKg) : "",
-        categoryId: editingProduct.categoryId ? String(editingProduct.categoryId) : "",
-        description: editingProduct.description || "",
-        grade: "",
-        productionPrice:
-          editingProduct.productionPrice && parseFloat(editingProduct.productionPrice) > 0
-            ? String(parseFloat(editingProduct.productionPrice))
-            : "",
-        sellingPrice:
-          editingProduct.sellingPrice && parseFloat(editingProduct.sellingPrice) > 0
-            ? String(parseFloat(editingProduct.sellingPrice))
-            : "",
-        labelDesignColor: editingProduct.labelDesignColor || "",
-      });
-    }
-  }, [editingProduct]);
-
-  const { data: currentUser } = useQuery<AuthMe>({ queryKey: ["/api/auth/me"] });
-  const isAdmin = ["Admin", "Owner", "Developer"].includes(currentUser?.currentRole ?? currentUser?.role ?? "");
-
-  const { data: myAccess } = useQuery<FactoryMyAccess>({
-    queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
-    enabled: Boolean(selectedCompany?.id),
-  });
-  const { data: factorySettingsData } = useQuery<{ hideAvgCost?: boolean; hideSellingPrice?: boolean }>({
-    queryKey: companyQueryKey("/api/factory/settings", selectedCompany?.id),
-    enabled: Boolean(selectedCompany?.id),
-    queryFn: async () => {
-      const res = await fetch("/api/factory/settings", { credentials: "include" });
-      return res.ok ? res.json() : {};
-    },
-  });
-  const accessReady = Boolean(
-    selectedCompany?.id && myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
-  );
-  const perUserHiddenBP = accessReady ? (myAccess?.hiddenCostFields ?? []) : [];
-  const hideAvgRate =
-    !accessReady ||
-    myAccess?.hideAllCosts === true ||
-    perUserHiddenBP.includes("inventory_avg_rate") ||
-    perUserHiddenBP.includes("inventory_total_value") ||
-    !!factorySettingsData?.hideAvgCost ||
-    perUserHiddenBP.includes("hide_export_cost_price");
-  const hideSellingPriceBP =
-    !accessReady ||
-    myAccess?.hideAllCosts === true ||
-    !!factorySettingsData?.hideSellingPrice ||
-    perUserHiddenBP.includes("inventory_sell_price") ||
-    perUserHiddenBP.includes("inventory_sell_value") ||
-    perUserHiddenBP.includes("hide_export_selling_price");
-
-  const { data: products, isLoading } = useQuery<FactoryBaleProduct[]>({
-    queryKey: companyQueryKey("/api/factory/bale-products", selectedCompany?.id),
-    enabled: Boolean(selectedCompany?.id),
-  });
-
-  const { data: categories } = useQuery<FactoryCategory[]>({
-    queryKey: companyQueryKey("/api/factory/categories", selectedCompany?.id),
-    enabled: Boolean(selectedCompany?.id),
-  });
-
-  const categoryMap = new Map<number, string>();
-  categories?.forEach((c) => categoryMap.set(c.id, c.name));
-
-  const allActiveProducts = products?.filter((p) => p.active !== false);
-  const noColorCount = allActiveProducts?.filter((p) => !p.labelDesignColor).length ?? 0;
-  const distinctWeights = Array.from(
-    new Set((allActiveProducts ?? []).map((p) => p.weightPerBaleKg).filter(Boolean) as string[])
-  ).sort((a, b) => parseFloat(a) - parseFloat(b));
-  const activeProducts = allActiveProducts
-    ?.filter((p) => !showZeroPrice || parseFloat(p.sellingPrice || "0") === 0)
-    ?.filter((p) => !showNoColor || !p.labelDesignColor)
-    ?.filter((p) => filterCategoryId === null || p.categoryId === filterCategoryId)
-    ?.filter((p) => filterWeight === null || String(p.weightPerBaleKg) === filterWeight)
-    ?.filter((p) => productMatchesSearch(p, searchQuery));
-  const hiddenProducts = products?.filter((p) => p.active === false);
-
-  const toggleSelectId = (id: number) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
+  const { groupedProducts, handleConfirmImport, handleDownloadTemplate, handleFileSelect, toggleGroup } =
+    useBaleProductsModelPart3({
+      activeProducts,
+      fileInputRef,
+      importFile,
+      importMutation,
+      setExpandedGroups,
+      setImportDialogOpen,
+      setImportError,
+      setImportFile,
+      setImportPreview,
+      toast,
     });
-  };
 
-  const toggleSelectAll = (list: FactoryBaleProduct[]) => {
-    const ids = list.map((p) => p.id);
-    const allSelected = ids.every((id) => selectedIds.has(id));
-    if (allSelected) {
-      setSelectedIds((prev) => {
-        const next = new Set(prev);
-        ids.forEach((id) => next.delete(id));
-        return next;
-      });
-    } else {
-      setSelectedIds((prev) => {
-        const next = new Set(prev);
-        ids.forEach((id) => next.add(id));
-        return next;
-      });
-    }
-  };
+  // prettier-ignore
+  return { designColors, createDialogOpen, setCreateDialogOpen, adminAuthOpen, setAdminAuthOpen, pendingAdminAuth, setPendingAdminAuth, importDialogOpen, setImportDialogOpen, importPreview, setImportPreview, importError, setImportFile, condensedView, expandedGroups, showCategories, setShowCategories, expandedCategories, setExpandedCategories, newCategoryName, setNewCategoryName, editingCategory, setEditingCategory, editingProduct, setEditingProduct, editForm, setEditForm, pendingDelete, setPendingDelete, selectedIds, setSelectedIds, showHidden, setShowHidden, showZeroPrice, setShowZeroPrice, showNoColor, setShowNoColor, filterCategoryId, setFilterCategoryId, filterWeight, setFilterWeight, searchQuery, setSearchQuery, fileInputRef, isAdmin, hideAvgRate, hideSellingPriceBP, products, isLoading, categories, categoryMap, noColorCount, distinctWeights, activeProducts, hiddenProducts, toggleSelectId, toggleSelectAll, selectedActiveIds, selectedHiddenIds, createCategoryMutation, updateCategoryMutation, deleteCategoryMutation, importMutation, editProductMutation, colorUpdateMutation, deleteProductMutation, bulkToggleActiveMutation, handleEditSubmit, handleExportExcel, handleExportNoPrices, handleDownloadTemplate, handleFileSelect, handleConfirmImport, toggleGroup, groupedProducts, canChangeExistingRecords: recordChanges.allowed, canCreate: recordChanges.canCreate } as const;
+}
 
-  const selectedActiveIds = Array.from(selectedIds).filter((id) => activeProducts?.some((p) => p.id === id));
-  const selectedHiddenIds = Array.from(selectedIds).filter((id) => hiddenProducts?.some((p) => p.id === id));
-
-  const createCategoryMutation = useMutation({
-    mutationFn: async (name: string) => {
-      const response = await modeApiRequest("POST", "/api/factory/categories", { name });
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/categories"] });
-      setNewCategoryName("");
-      toast({ title: "Category created" });
-    },
-    onError: (error: Error) => {
-      if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    },
-  });
-
-  const updateCategoryMutation = useMutation({
-    mutationFn: async ({ id, name }: { id: number; name: string }) => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
-      const response = await modeApiRequest("PATCH", `/api/factory/categories/${id}`, { name });
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/categories"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/bale-products"] });
-      setEditingCategory(null);
-      toast({ title: "Category updated" });
-    },
-    onError: (error: Error) => {
-      if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    },
-  });
-
-  const deleteCategoryMutation = useMutation({
-    mutationFn: async (id: number) => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
-      const response = await modeApiRequest("DELETE", `/api/factory/categories/${id}`);
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/categories"] });
-      toast({ title: "Category deleted" });
-    },
-    onError: (error: Error) => {
-      if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    },
-  });
-
-  const importMutation = useMutation({
-    mutationFn: async (file: File) => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
-      const formData = new FormData();
-      formData.append("file", file);
-      const response = await fetch("/api/factory/bale-products/import-excel", {
-        method: "POST",
-        body: formData,
-      });
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.message || "Import failed");
-      }
-      return response.json();
-    },
-    onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/bale-products"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/categories"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/location-inventory"], exact: false });
-
-      const cols = result.detectedColumns || {};
-      const detectedInfo = [
-        cols.articleCode ? `Article Code: "${cols.articleCode}"` : null,
-        cols.productionPrice ? `Cost Price: "${cols.productionPrice}"` : null,
-        cols.sellingPrice ? `Sell Price: "${cols.sellingPrice}"` : null,
-      ]
-        .filter(Boolean)
-        .join(", ");
-
-      const noPriceColsFound = !cols.productionPrice && !cols.sellingPrice;
-      const allSkipped = result.skippedNoArticleCode > 0 && result.created + result.updated === 0;
-
-      if (allSkipped || !cols.articleCode) {
-        toast({
-          title: "Import Warning",
-          description: `No products were matched — article code column not found. Your file must have a column named "Article Code". Columns seen: ${
-            Object.keys(result.detectedColumns || {})
-              .filter((k) => result.detectedColumns[k])
-              .map((k: string) => `"${result.detectedColumns[k]}"`)
-              .join(", ") || "none detected"
-          }`,
-          variant: "destructive",
-        });
-      } else if (noPriceColsFound) {
-        toast({
-          title: "Import Complete — No Prices Updated",
-          description: `${result.updated || 0} updated, ${result.created || 0} created. Column detected: ${detectedInfo}. No price columns found — add "Production Price" and/or "Selling Price" columns to your file.`,
-          variant: "destructive",
-        });
-      } else {
-        const parts = [];
-        if (result.created) parts.push(`${result.created} created`);
-        if (result.updated) parts.push(`${result.updated} updated`);
-        if (result.pricesUpdated) parts.push(`${result.pricesUpdated} with prices`);
-        if (result.categoriesCreated) parts.push(`${result.categoriesCreated} categories auto-created`);
-        toast({
-          title: "Import Complete",
-          description:
-            (parts.join(", ") || "0 products processed") + (detectedInfo ? ` | Columns: ${detectedInfo}` : ""),
-        });
-      }
-
-      setImportDialogOpen(false);
-      setImportPreview([]);
-      setImportFile(null);
-    },
-    onError: (error: Error) => {
-      if (error?._handledGlobally) return;
-      toast({ title: "Import Error", description: error.message, variant: "destructive" });
-    },
-  });
-
-  const editProductMutation = useMutation({
-    mutationFn: async (
-      data: Partial<{
-        name: string;
-        weightPerBaleKg: number | null;
-        articleCode: string;
-        description: string;
-        categoryId: number | null;
-        labelDesignColor: string | null;
-        productionPrice: string;
-        sellingPrice: string;
-        grade: string;
-      }>
-    ) => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
-      if (!editingProduct) throw new Error("Select a product before saving changes");
-      const response = await modeApiRequest(
-        "POST",
-        `/api/factory/bale-products/${editingProduct.id}/cascade-update`,
-        data
-      );
-      const result = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(result?.message || "Failed to update bale product");
-      if (!result?.product) throw new Error("The product update returned an invalid response");
-      return result;
-    },
-    onSuccess: (result: { product: FactoryBaleProduct; balesUpdated: number }) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/bale-products"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/location-inventory"], exact: false });
-      setEditingProduct(null);
-      toast({
-        title: "Product updated",
-        description: `${result.balesUpdated} bale(s) also updated`,
-      });
-    },
-    onError: (error: Error) => {
-      if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    },
-  });
-
-  const colorUpdateMutation = useMutation({
-    mutationFn: async ({ id, labelDesignColor }: { id: number; labelDesignColor: string | null }) => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
-      const response = await modeApiRequest("POST", `/api/factory/bale-products/${id}/cascade-update`, {
-        labelDesignColor,
-      });
-      if (!response.ok) {
-        const details = await response.json().catch(() => ({}));
-        throw new Error(details.message || "Failed to update label color");
-      }
-      return response.json();
-    },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["/api/factory/bale-products"] });
-      toast({ title: "Label color updated" });
-    },
-    onError: (error: Error) => {
-      if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    },
-  });
-
-  const deleteProductMutation = useMutation({
-    mutationFn: async (id: number) => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
-      const response = await modeApiRequest("DELETE", `/api/factory/bale-products/${id}`);
-      if (!response.ok) throw new Error("Failed to delete product");
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/bale-products"] });
-      setEditingProduct(null);
-      toast({ title: "Product deleted", description: "The product has been removed." });
-    },
-    onError: (error: Error) => {
-      if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    },
-  });
-
-  const bulkToggleActiveMutation = useMutation({
-    mutationFn: async ({ ids, active }: { ids: number[]; active: boolean }) => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
-      const response = await modeApiRequest("POST", "/api/factory/bale-products/bulk-toggle-active", { ids, active });
-      if (!response.ok) throw new Error("Failed to update products");
-      return response.json();
-    },
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/bale-products"] });
-      setSelectedIds(new Set());
-      toast({
-        title: variables.active ? "Products unhidden" : "Products hidden",
-        description: `${variables.ids.length} product(s) updated.`,
-      });
-    },
-    onError: (error: Error) => {
-      if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    },
-  });
-
-  const handleEditSubmit = () => {
-    if (!editForm.name.trim()) return;
-    editProductMutation.mutate({
-      name: editForm.name.trim(),
-      articleCode: editForm.articleCode.trim(),
-      weightPerBaleKg: editForm.weightPerBaleKg ? parseFloat(editForm.weightPerBaleKg) : null,
-      categoryId: editForm.categoryId ? parseInt(editForm.categoryId) : null,
-      description: editForm.description.trim(),
-      productionPrice: editForm.productionPrice,
-      sellingPrice: editForm.sellingPrice,
-      labelDesignColor: editForm.labelDesignColor || null,
-    });
-  };
-
-  const handleExportExcel = async (priceType: "selling" | "production") => {
-    if (priceType === "selling" && hideSellingPriceBP) {
-      toast({ title: "Selling price is hidden for your account", variant: "destructive" });
-      return;
-    }
-    if (priceType === "production" && hideAvgRate) {
-      toast({ title: "Production price is hidden for your account", variant: "destructive" });
-      return;
-    }
-    if (!activeProducts || activeProducts.length === 0) {
-      toast({ title: "No products to export", variant: "destructive" });
-      return;
-    }
-    try {
-      const { priceHeader } = await downloadPricedBaleOrderSheet({
-        priceType,
-        products: activeProducts,
-        categoryMap,
-      });
-      toast({ title: `Order sheet downloaded — ${priceHeader}` });
-    } catch (err) {
-      console.error("Export failed", err);
-      toast({ title: "Export failed", variant: "destructive" });
-    }
-  };
-
-  const handleExportNoPrices = async () => {
-    if (!activeProducts || activeProducts.length === 0) {
-      toast({ title: "No products to export", variant: "destructive" });
-      return;
-    }
-    try {
-      await downloadNoPriceBaleOrderSheet({ products: activeProducts, categoryMap });
-      toast({ title: "Order sheet (no prices) downloaded" });
-    } catch (err) {
-      console.error("Export failed", err);
-      toast({ title: "Export failed", variant: "destructive" });
-    }
-  };
-
+function useBaleProductsModelPart3({
+  activeProducts,
+  fileInputRef,
+  importFile,
+  importMutation,
+  setExpandedGroups,
+  setImportDialogOpen,
+  setImportError,
+  setImportFile,
+  setImportPreview,
+  toast,
+}: Pick<
+  Awaited<ReturnType<typeof useBaleProductsModelPart1>> & Awaited<ReturnType<typeof useBaleProductsModelPart2>>,
+  | "activeProducts"
+  | "fileInputRef"
+  | "importFile"
+  | "importMutation"
+  | "setExpandedGroups"
+  | "setImportDialogOpen"
+  | "setImportError"
+  | "setImportFile"
+  | "setImportPreview"
+  | "toast"
+>) {
   const handleDownloadTemplate = async () => {
     try {
       const XLSX = await import("@/lib/excelHelper");
@@ -585,7 +279,5 @@ export function useBaleProductsModel() {
     }
     return Object.values(groups).sort((a, b) => (a.items[0]?.id ?? 0) - (b.items[0]?.id ?? 0));
   })();
-
-  // prettier-ignore
-  return { designColors, createDialogOpen, setCreateDialogOpen, adminAuthOpen, setAdminAuthOpen, pendingAdminAuth, setPendingAdminAuth, importDialogOpen, setImportDialogOpen, importPreview, setImportPreview, importError, setImportFile, condensedView, expandedGroups, showCategories, setShowCategories, expandedCategories, setExpandedCategories, newCategoryName, setNewCategoryName, editingCategory, setEditingCategory, editingProduct, setEditingProduct, editForm, setEditForm, pendingDelete, setPendingDelete, selectedIds, setSelectedIds, showHidden, setShowHidden, showZeroPrice, setShowZeroPrice, showNoColor, setShowNoColor, filterCategoryId, setFilterCategoryId, filterWeight, setFilterWeight, searchQuery, setSearchQuery, fileInputRef, isAdmin, hideAvgRate, hideSellingPriceBP, products, isLoading, categories, categoryMap, noColorCount, distinctWeights, activeProducts, hiddenProducts, toggleSelectId, toggleSelectAll, selectedActiveIds, selectedHiddenIds, createCategoryMutation, updateCategoryMutation, deleteCategoryMutation, importMutation, editProductMutation, colorUpdateMutation, deleteProductMutation, bulkToggleActiveMutation, handleEditSubmit, handleExportExcel, handleExportNoPrices, handleDownloadTemplate, handleFileSelect, handleConfirmImport, toggleGroup, groupedProducts, canChangeExistingRecords: recordChanges.allowed, canCreate: recordChanges.canCreate } as const;
+  return { groupedProducts, handleConfirmImport, handleDownloadTemplate, handleFileSelect, toggleGroup };
 }

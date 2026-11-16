@@ -1,57 +1,59 @@
-import Decimal from "decimal.js";
-import { AlertTriangle, CheckCircle2, Download, PackageMinus, RefreshCw, Upload } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Download, PackageMinus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { money, useFactorySupplierReturns } from "./useFactorySupplierReturns";
+import { money } from "./useFactorySupplierReturns";
+import { useFactorySupplierReturnsState } from "./useFactorySupplierReturnsState";
+import { FactorySupplierReturnsSection } from "./FactorySupplierReturnsSection";
+import { FactorySupplierReturnsSection2 } from "./FactorySupplierReturnsSection2";
 
 export default function FactorySupplierReturns() {
   const {
-    copy,
-    downloadTemplate,
-    sourceFile,
-    upload,
-    mapRows,
-    busy,
-    rawRows,
-    suppliers,
-    supplierId,
-    receipt,
-    setSupplierId,
-    setPreview,
-    setAllocations,
-    setPreviewSupplierId,
-    setConfirm,
-    setRequestKey,
-    manualCode,
-    setManualCode,
-    addManual,
-    manualQty,
-    setManualQty,
-    setRawRows,
-    setSourceFile,
-    returnDate,
-    setReturnDate,
-    reason,
-    setReason,
-    preview,
-    combined,
-    totalBales,
-    exporting,
-    exportPreview,
-    previewSupplierId,
-    changeAllocation,
-    removeAllocation,
     addAllocation,
-    ready,
+    addManual,
+    busy,
+    changeAllocation,
+    combined,
     confirm,
-    post,
-    history,
-    selectedBatch,
-    openBatch,
-    exportingBatch,
-    exportPostedBatch,
+    copy,
     detailRows,
-  } = useFactorySupplierReturns();
+    downloadTemplate,
+    exportPostedBatch,
+    exportPreview,
+    exporting,
+    exportingBatch,
+    history,
+    manualCode,
+    manualQty,
+    mapRows,
+    openBatch,
+    post,
+    preview,
+    previewSupplierId,
+    rawRows,
+    ready,
+    reason,
+    receipt,
+    removeAllocation,
+    returnDate,
+    selectedBatch,
+    setAllocations,
+    setConfirm,
+    setManualCode,
+    setManualQty,
+    setPreview,
+    setPreviewSupplierId,
+    setRawRows,
+    setReason,
+    setRequestKey,
+    setReturnDate,
+    setSourceFile,
+    setSupplierId,
+    sourceFile,
+    supplierId,
+    suppliers,
+    totalBales,
+    upload,
+  } = useFactorySupplierReturnsState();
   return (
     <div className="space-y-5 max-w-full" data-testid="factory-supplier-returns">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -67,114 +69,34 @@ export default function FactorySupplierReturns() {
           {copy.template}
         </Button>
       </div>
-      <div className="rounded-lg border p-4 space-y-4">
-        <div className="flex items-center gap-3 flex-wrap">
-          <label className="cursor-pointer inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium">
-            <Upload className="h-4 w-4" />
-            {copy.upload}
-            <input
-              type="file"
-              accept=".xlsx,.xls"
-              className="sr-only"
-              onChange={(event) => void upload(event.currentTarget.files?.[0])}
-            />
-          </label>
-          <span className="text-sm text-muted-foreground">{sourceFile || copy.manualEntry}</span>
-          <Button onClick={() => void mapRows()} disabled={busy || !rawRows.length}>
-            <RefreshCw className="h-4 w-4 mr-2" />
-            {copy.map}
-          </Button>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <label className="text-sm space-y-1 sm:col-span-3">
-            <span>{copy.filterSupplier}</span>
-            <select
-              className="flex h-10 w-full max-w-lg rounded-md border border-input bg-background px-3 py-2 text-sm"
-              value={supplierId ?? ""}
-              disabled={busy || !!receipt}
-              onChange={(event) => {
-                setSupplierId(Number(event.target.value) || null);
-                setPreview([]);
-                setAllocations({});
-                setPreviewSupplierId(null);
-                setConfirm(false);
-                setRequestKey(crypto.randomUUID());
-              }}
-            >
-              <option value="">{copy.allSuppliers}</option>
-              {(suppliers.data?.rows ?? []).map((supplier) => (
-                <option key={supplier.id} value={supplier.id}>
-                  {supplier.name}
-                </option>
-              ))}
-            </select>
-            {suppliers.isError && <span className="text-destructive">{copy.supplierListError}</span>}
-          </label>
-          <div className="sm:col-span-3 flex flex-wrap items-end gap-3 rounded-md bg-muted/30 p-3">
-            <label className="text-sm space-y-1 min-w-52 flex-1">
-              <span>{copy.manualArticle}</span>
-              <Input
-                value={manualCode}
-                maxLength={50}
-                onChange={(event) => setManualCode(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    addManual();
-                  }
-                }}
-                placeholder={copy.manualArticlePlaceholder}
-              />
-            </label>
-            <label className="text-sm space-y-1 w-28">
-              <span>{copy.qty}</span>
-              <Input value={manualQty} onChange={(event) => setManualQty(event.target.value)} />
-            </label>
-            <Button variant="outline" type="button" onClick={addManual} disabled={busy || !!receipt}>
-              {copy.addArticle}
-            </Button>
-          </div>
-          {rawRows.length > 0 && (
-            <div className="sm:col-span-3 flex flex-wrap gap-2 items-center text-sm">
-              <span>
-                {rawRows.length} {copy.lines} {copy.staged}
-              </span>
-              <Button
-                size="sm"
-                variant="ghost"
-                disabled={busy || !!receipt}
-                onClick={() => {
-                  setRawRows([]);
-                  setPreview([]);
-                  setAllocations({});
-                  setConfirm(false);
-                  setSourceFile("");
-                  setPreviewSupplierId(null);
-                  setRequestKey(crypto.randomUUID());
-                }}
-              >
-                {copy.clearRows}
-              </Button>
-            </div>
-          )}
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <label className="text-sm space-y-1">
-            <span>{copy.date}</span>
-            <Input type="date" value={returnDate} onChange={(e) => setReturnDate(e.target.value)} />
-          </label>
-          <label className="text-sm space-y-1 sm:col-span-2">
-            <span>{copy.reason}</span>
-            <Input
-              placeholder={copy.reasonPlaceholder}
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              maxLength={1000}
-            />
-          </label>
-        </div>
-        <p className="text-xs text-muted-foreground">{copy.warning}</p>
-      </div>
+      <FactorySupplierReturnsSection2
+        addManual={addManual}
+        busy={busy}
+        copy={copy}
+        manualCode={manualCode}
+        manualQty={manualQty}
+        mapRows={mapRows}
+        rawRows={rawRows}
+        reason={reason}
+        receipt={receipt}
+        returnDate={returnDate}
+        setAllocations={setAllocations}
+        setConfirm={setConfirm}
+        setManualCode={setManualCode}
+        setManualQty={setManualQty}
+        setPreview={setPreview}
+        setPreviewSupplierId={setPreviewSupplierId}
+        setRawRows={setRawRows}
+        setReason={setReason}
+        setRequestKey={setRequestKey}
+        setReturnDate={setReturnDate}
+        setSourceFile={setSourceFile}
+        setSupplierId={setSupplierId}
+        sourceFile={sourceFile}
+        supplierId={supplierId}
+        suppliers={suppliers}
+        upload={upload}
+      />
       {preview.length > 0 && (
         <div className="rounded-lg border overflow-hidden">
           <div className="px-4 py-3 border-b flex flex-wrap gap-3 justify-between">
@@ -392,140 +314,16 @@ export default function FactorySupplierReturns() {
           {copy.batch} #{receipt.id}: {copy.successBody}
         </div>
       )}
-      <div className="rounded-lg border overflow-hidden">
-        <div className="p-4 flex items-center justify-between">
-          <strong>{copy.history}</strong>
-          <Button variant="outline" size="sm" onClick={() => void history.refetch()}>
-            {copy.refresh}
-          </Button>
-        </div>
-        {history.isLoading ? (
-          <p className="p-4 text-sm">{copy.loadingHistory}</p>
-        ) : history.isError ? (
-          <p className="p-4 text-sm text-destructive">{copy.unavailable}</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-muted">
-                <tr>
-                  {[
-                    copy.batch,
-                    copy.date,
-                    copy.fileReference,
-                    copy.by,
-                    copy.lines,
-                    copy.balesRemoved,
-                    copy.supplierCredit,
-                    copy.inventoryReduction,
-                    copy.exportPreview,
-                  ].map((x) => (
-                    <th key={x} className="p-2 text-left">
-                      {x}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {history.data?.rows?.map((r) => (
-                  <tr key={r.id} className="border-t">
-                    <td className="p-2">
-                      <Button size="sm" variant="ghost" onClick={() => void openBatch(r.id)}>
-                        #{r.id} {selectedBatch === r.id ? `(${copy.hide})` : `(${copy.view})`}
-                      </Button>
-                    </td>
-                    <td className="p-2">{r.returnDate}</td>
-                    <td className="p-2">
-                      {r.fileName || copy.manual}
-                      <div className="text-muted-foreground text-xs">{r.reason}</div>
-                    </td>
-                    <td className="p-2">{r.createdBy}</td>
-                    <td className="p-2">{r.lineCount}</td>
-                    <td className="p-2 font-mono">{r.totalQty}</td>
-                    <td className="p-2 font-mono">{money(r.supplierCreditUsd)}</td>
-                    <td className="p-2 font-mono">{money(r.inventoryReductionUsd)}</td>
-                    <td className="p-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={busy || exportingBatch !== null}
-                        onClick={() => void exportPostedBatch(r)}
-                      >
-                        <Download className="h-4 w-4 mr-1" />
-                        {exportingBatch === r.id ? copy.exporting : copy.postedExcel}
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-        {selectedBatch !== null && (
-          <div className="border-t p-4 space-y-2">
-            <strong>
-              {copy.batch} #{selectedBatch} — {copy.breakdown}
-            </strong>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-muted">
-                  <tr>
-                    {[
-                      copy.article,
-                      copy.itemName,
-                      copy.container,
-                      copy.originalOffload,
-                      copy.supplier,
-                      copy.qtyRemoved,
-                      copy.supplierCredit,
-                      copy.stockCost,
-                      copy.voucher,
-                      copy.inputRows,
-                      copy.purchasePerBale,
-                      copy.inventoryPerBale,
-                      copy.variance,
-                    ].map((x) => (
-                      <th key={x} className="p-2 text-left">
-                        {x}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {detailRows.map((r) => (
-                    <tr key={r.id} className="border-t">
-                      <td className="p-2 font-mono">{r.articleCode}</td>
-                      <td className="p-2">{r.itemName}</td>
-                      <td className="p-2">{r.containerNumber}</td>
-                      <td className="p-2">#{r.offloadId}</td>
-                      <td className="p-2">{r.supplier}</td>
-                      <td className="p-2 font-mono">{r.quantity}</td>
-                      <td className="p-2">{money(r.supplierCreditUsd)}</td>
-                      <td className="p-2">{money(r.inventoryReductionUsd)}</td>
-                      <td className="p-2">{r.voucherNumber}</td>
-                      <td className="p-2 text-xs">
-                        {r.requestedRows
-                          ?.map((a) => `#${a.inputRow}: ${a.allocatedQuantity}/${a.requestedQuantity}`)
-                          .join(", ") || "—"}
-                      </td>
-                      <td className="p-2 font-mono">
-                        {r.sourcePurchaseRate == null ? "—" : money(r.sourcePurchaseRate)}
-                      </td>
-                      <td className="p-2 font-mono">
-                        {new Decimal(r.quantity).gt(0)
-                          ? money(new Decimal(r.inventoryReductionUsd).div(r.quantity).toFixed(7))
-                          : "—"}
-                      </td>
-                      <td className="p-2 font-mono">
-                        {money(new Decimal(r.inventoryReductionUsd).minus(r.supplierCreditUsd).toFixed(2))}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-      </div>
+      <FactorySupplierReturnsSection
+        busy={busy}
+        copy={copy}
+        detailRows={detailRows}
+        exportPostedBatch={exportPostedBatch}
+        exportingBatch={exportingBatch}
+        history={history}
+        openBatch={openBatch}
+        selectedBatch={selectedBatch}
+      />
     </div>
   );
 }
