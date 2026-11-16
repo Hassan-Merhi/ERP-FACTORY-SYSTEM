@@ -105,10 +105,26 @@ export function registerFactoryAttendanceRoutes(app: Express, requireAuth: Reque
       if (approvedBy === undefined) return;
 
       const workerIds = [...new Set(records.map((record) => record.workerId))];
-      const companyWorkers = await db.select({ id: factoryWorkers.id }).from(factoryWorkers)
+      const companyWorkers = await db.select({
+        id: factoryWorkers.id,
+        active: factoryWorkers.active,
+        contractEndDate: factoryWorkers.contractEndDate,
+      }).from(factoryWorkers)
         .where(and(eq(factoryWorkers.companyId, companyId), inArray(factoryWorkers.id, workerIds)));
       if (companyWorkers.length !== workerIds.length) {
         return res.status(400).json({ message: "Attendance includes a worker outside this factory company" });
+      }
+
+      // Never allow ordinary bulk saves to overwrite an inactive period with
+      // Present. Reactivation preserves those historical Absent rows.
+      const workerById = new Map(companyWorkers.map((worker) => [worker.id, worker]));
+      for (const record of records) {
+        const worker = workerById.get(record.workerId)!;
+        if (!worker.active && worker.contractEndDate &&
+            record.attendanceDate >= String(worker.contractEndDate).slice(0, 10) &&
+            record.status !== "Absent") {
+          return res.status(409).json({ message: "Inactive worker dates must remain Absent" });
+        }
       }
 
       const now = new Date();

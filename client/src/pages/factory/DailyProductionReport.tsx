@@ -9,6 +9,8 @@ import FactoryOtwTrackingTab from "@/pages/factory/FactoryOtwTrackingTab";
 import { PageHeader } from "@/components/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BarChart3, FlaskConical, Layers, Ship, TableProperties, Truck } from "lucide-react";
+import { LoadingSkeleton } from "@/components/LoadingSkeleton";
+import { RestrictedTabsState } from "@/components/RestrictedTabsState";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import { useFactoryNavigationAccess } from "@/hooks/useFactoryNavigationAccess";
 import { useDailyProductionReport } from "./dailyproductionreport/useDailyProductionReport";
@@ -94,7 +96,7 @@ export default function DailyProductionReport() {
   const report = useDailyProductionReport(ready && activeTab === "production");
   const show = (tab: OverviewTab) => ready && visibleTabs.includes(tab);
 
-  if (!ready) return <div className="p-5 text-sm text-muted-foreground">Loading access...</div>;
+  if (!ready) return <LoadingSkeleton variant="page" className="p-4" />;
 
   return (
     <div
@@ -121,7 +123,7 @@ export default function DailyProductionReport() {
       </div>
 
       {visibleTabs.length === 0 ? (
-        <div className="p-6 text-sm text-muted-foreground">No Overview tabs are available for this user.</div>
+        <RestrictedTabsState />
       ) : (
         <Tabs
           value={activeTab}

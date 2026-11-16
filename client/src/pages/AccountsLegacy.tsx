@@ -333,23 +333,14 @@ export default function Accounts() {
           className="space-y-5"
         >
           <div className={phoneStatementOpen ? "hidden" : "erp-mobile-scroll-tabs pb-1"}>
-            <TabsList
-              className="h-auto w-max min-w-full gap-1.5 rounded-2xl border border-slate-200/90 bg-slate-100/80 p-1.5 shadow-sm sm:min-w-0 sm:w-fit dark:border-slate-700/70 dark:bg-[#152238]/90"
-              aria-label="Accounts sections"
-            >
+            <TabsList className="w-max min-w-full sm:min-w-0 sm:w-fit" aria-label="Accounts sections">
               {showViewAccounts && (
-                <TabsTrigger
-                  value="view"
-                  className="gap-2 rounded-xl px-4 py-2.5 font-semibold text-muted-foreground transition-colors data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md data-[state=active]:shadow-blue-600/20 dark:data-[state=active]:bg-blue-600"
-                >
+                <TabsTrigger value="view">
                   <Layers className="h-4 w-4" /> View Accounts
                 </TabsTrigger>
               )}
               {showFindVoucher && (
-                <TabsTrigger
-                  value="find"
-                  className="gap-2 rounded-xl px-4 py-2.5 font-semibold text-muted-foreground transition-colors data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md data-[state=active]:shadow-blue-600/20 dark:data-[state=active]:bg-blue-600"
-                >
+                <TabsTrigger value="find">
                   <FileSearch className="h-4 w-4" /> Find Voucher
                 </TabsTrigger>
               )}
