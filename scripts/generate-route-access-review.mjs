@@ -69,6 +69,21 @@ for (const [, policyName, declarations] of policyGroups) {
   }
 }
 
+// These are tenancy exceptions, not grants. Do not interpret a context-optional
+// endpoint as an anonymous/public endpoint or a cross-company read as unrestricted.
+const tenantSource = fs.readFileSync(path.join(root, "server/middleware/tenantIsolationBoundary.ts"), "utf8");
+function extractExactPathSet(name) {
+  const escaped = name.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\const rows = source.routes.map((registration, index) => {");
+  const match = new RegExp("const " + escaped + " = new Set\\\\(\\\\[([\\\\s\\\\S]*?)\\\\]\\\\);").exec(tenantSource);
+  if (!match) throw new Error(`Tenant policy set ${name} changed; cannot extract safe route evidence`);
+  return new Set([...match[1].replace(/\\/\\/[^\\n]*/g, "").matchAll(/"([^"]+)"/g)].map((item) => item[1]));
+}
+const tenantSets = {
+  contextOptional: extractExactPathSet("CONTEXT_OPTIONAL_PATHS"),
+  referenceRead: extractExactPathSet("CROSS_COMPANY_REFERENCE_READ_PATHS"),
+  authorizedCrossCompany: extractExactPathSet("AUTHORIZED_CROSS_COMPANY_PATHS"),
+};
+
 const rows = source.routes.map((registration, index) => {
   const match = /^(\S+) (\S+) \[([^\]]*)\]$/.exec(registration);
   if (!match) throw new Error(`Malformed registration at index ${index}: ${registration}`);
@@ -76,11 +91,22 @@ const rows = source.routes.map((registration, index) => {
   const key = `${method} ${routePath}`;
   const v2Candidate = v2.routes?.[key];
   const policyEvidence = operationalEvidence.get(key);
+  const tenantEvidence = [
+    ...(tenantSets.contextOptional.has(routePath) ? ["context-optional"] : []),
+    ...(method === "GET" && tenantSets.referenceRead.has(routePath) ? ["cross-company-reference-read"] : []),
+    ...(tenantSets.authorizedCrossCompany.has(routePath) ? ["authorized-cross-company"] : []),
+  ].map((mode) => ({
+    kind: "tenant-isolation-exception",
+    mode,
+    source: "server/middleware/tenantIsolationBoundary.ts",
+    status: "source-evidence-only",
+  }));
   return {
     id: `${index}:${registration}`,
     status: "unreviewed",
     existingGuards: guards.split(" > "),
     ...(policyEvidence ? { policyEvidence } : {}),
+    ...(tenantEvidence.length ? { tenantEvidence } : {}),
     ...(v2Candidate ? {
       candidate: {
         resource: v2Candidate.resource,
