@@ -469,7 +469,11 @@ export function StockEntryTab({ showHistory = false, onOpenHistory }: StockEntry
 
   const handleConfirmClick = () => {
     if (!selectedLocationId) {
-      toast({ title: "Missing information", description: "Please select a warehouse location", variant: "destructive" });
+      toast({
+        title: "Missing information",
+        description: "Please select a warehouse location",
+        variant: "destructive",
+      });
       return;
     }
     if (cart.length === 0) {

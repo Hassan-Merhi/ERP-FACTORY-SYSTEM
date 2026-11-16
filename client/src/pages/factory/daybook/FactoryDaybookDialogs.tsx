@@ -308,7 +308,8 @@ export function FactoryDaybookDialogs({ model }: { model: FactoryDaybookModel })
           <AlertDialogHeader>
             <AlertDialogTitle>
               {deleteEntry?.txType.startsWith("PRODUCTION_TARGET_")
-                ? "Remove bonus payment and reverse accounting?" : "Permanently delete this entry?"}
+                ? "Remove bonus payment and reverse accounting?"
+                : "Permanently delete this entry?"}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {deleteEntry?.txType.startsWith("PRODUCTION_TARGET_")
@@ -327,8 +328,11 @@ export function FactoryDaybookDialogs({ model }: { model: FactoryDaybookModel })
               className="bg-destructive text-destructive-foreground"
               data-testid="button-confirm-delete"
             >
-              {model.deleteMutation.isPending ? "Processing..." :
-                deleteEntry?.txType.startsWith("PRODUCTION_TARGET_") ? "Reverse & Remove" : "Delete Entry"}
+              {model.deleteMutation.isPending
+                ? "Processing..."
+                : deleteEntry?.txType.startsWith("PRODUCTION_TARGET_")
+                  ? "Reverse & Remove"
+                  : "Delete Entry"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -60,8 +60,7 @@ export function ContainerDrawer({
   })();
 
   const mutation = useMutation({
-    mutationFn: (data: Record<string, unknown>) =>
-      apiRequest("PATCH", gitTrackingPatchUrl(container!.id), data),
+    mutationFn: (data: Record<string, unknown>) => apiRequest("PATCH", gitTrackingPatchUrl(container!.id), data),
     onSuccess: () => {
       void invalidateApiFamily(queryClient, "/api/git/containers");
       toast({ title: "Saved", description: `${container?.containerNumber} updated.` });
