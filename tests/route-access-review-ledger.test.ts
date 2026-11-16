@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 import { routeIdentity } from "../scripts/verify-route-access-coverage.mjs";
 
@@ -9,6 +10,13 @@ const routes = read("config/route-manifest.json");
 const review = read("config/route-access-review.json");
 
 describe("Phase 2 route access review ledger", () => {
+  it("exactly matches deterministic source extraction", () => {
+    expect(() => execFileSync(process.execPath, ["scripts/generate-route-access-review.mjs", "--check"], {
+      cwd: root,
+      stdio: "pipe",
+    })).not.toThrow();
+  });
+
   it("tracks every registration, including repeated method/path handlers", () => {
     expect(review.routeCount).toBe(routes.routes.length);
     expect(review.entries.map((entry: { id: string }) => entry.id)).toEqual(
@@ -18,7 +26,10 @@ describe("Phase 2 route access review ledger", () => {
 
   it("records authored operational permission evidence without granting new rights", () => {
     const sourced = review.entries.filter((entry: { policyEvidence?: unknown[] }) => entry.policyEvidence);
-    expect(sourced.length).toBeGreaterThan(200);
+    expect(sourced.length).toBe(259);
+    expect(sourced.some((entry: { policyEvidence: Array<{ permissionKey: string }> }) =>
+      entry.policyEvidence.some((policy) => policy.permissionKey === "act_import_data")
+    )).toBe(true);
     expect(
       sourced.every(
         (entry: { status: string; policyEvidence: Array<{ status: string; source: string }> }) =>
