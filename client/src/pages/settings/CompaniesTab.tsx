@@ -11,7 +11,6 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ParentCreditAccountSelect } from "./ParentCreditAccountSelect";
-import { CreateErpTestCompanyDialog } from "./CreateErpTestCompanyDialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -34,6 +33,7 @@ export function CompaniesTab() {
   const [isCompanyDialogOpen, setIsCompanyDialogOpen] = useState(false);
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
   const [companySearch, setCompanySearch] = useState("");
+  const [showInactive, setShowInactive] = useState(false);
   const [companyToDelete, setCompanyToDelete] = useState<Company | null>(null);
 
   const { data: companies = [], isLoading: isLoadingCompanies } = useQuery<Company[]>({
@@ -67,6 +67,7 @@ export function CompaniesTab() {
     onSuccess: () => {
       toast({ title: "Success", description: editingCompany ? "Company updated." : "Company created." });
       queryClient.invalidateQueries({ queryKey: ["/api/companies"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/user/companies"] });
       if (editingCompany) {
         queryClient.invalidateQueries({ queryKey: [`/api/companies/${editingCompany.id}`] });
         queryClient.invalidateQueries({ queryKey: ["/api/exchange-rates"] });
@@ -109,6 +110,7 @@ export function CompaniesTab() {
     onSuccess: () => {
       toast({ title: "Deleted", description: "Company deleted successfully." });
       queryClient.invalidateQueries({ queryKey: ["/api/companies"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/user/companies"] });
       setCompanyToDelete(null);
     },
     onError: (error: ClientErrorLike) => {
@@ -164,10 +166,9 @@ export function CompaniesTab() {
             Company Management
           </h2>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {companies.length} {companies.length === 1 ? "company" : "companies"} configured
+            {companies.filter((company) => company.active).length} active companies
           </p>
         </div>
-        <CreateErpTestCompanyDialog />
         <Dialog
           open={isCompanyDialogOpen}
           onOpenChange={(open) => {
@@ -410,6 +411,7 @@ export function CompaniesTab() {
         </Dialog>
       </div>
 
+      <div className="flex flex-wrap items-center gap-4">
       {companies.length > 3 && (
         <div className="relative max-w-xs">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
@@ -422,6 +424,12 @@ export function CompaniesTab() {
           />
         </div>
       )}
+
+      <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
+        <Checkbox checked={showInactive} onCheckedChange={(checked) => setShowInactive(checked === true)} data-testid="checkbox-show-inactive-companies" />
+        Show inactive ({companies.filter((company) => !company.active).length})
+      </label>
+      </div>
 
       {isLoadingCompanies ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -441,13 +449,13 @@ export function CompaniesTab() {
         (() => {
           const q = companySearch.toLowerCase();
           const filtered = companies.filter(
-            (c) => !q || c.name?.toLowerCase().includes(q) || c.code?.toLowerCase().includes(q)
+            (c) => (showInactive ? !c.active : c.active) && (!q || c.name?.toLowerCase().includes(q) || c.code?.toLowerCase().includes(q))
           );
 
           if (filtered.length === 0) {
             return (
               <p className="text-sm text-muted-foreground text-center py-10">
-                No companies match "<span className="font-medium">{companySearch}</span>"
+                {showInactive ? "No inactive companies match the search." : "No active companies match the search."}
               </p>
             );
           }
@@ -554,7 +562,7 @@ export function CompaniesTab() {
                       >
                         <Edit className="h-4 w-4" />
                       </Button>
-                      <Button
+                      {!company.active && <Button
                         size="icon"
                         variant="ghost"
                         onClick={() => setCompanyToDelete(company)}
@@ -562,7 +570,7 @@ export function CompaniesTab() {
                         title="Delete company"
                       >
                         <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
+                      </Button>}
                     </div>
                   </div>
                 );
@@ -582,7 +590,7 @@ export function CompaniesTab() {
                   Are you sure you want to delete <strong>{companyToDelete?.name}</strong>?
                 </p>
                 <p className="text-destructive font-medium">
-                  This will permanently delete ALL data associated with this company, including:
+                  Only inactive companies without protected accounting or operational history can be deleted. Deletion removes associated configuration, including:
                 </p>
                 <ul className="list-disc list-inside text-sm space-y-1 ml-2">
                   <li>All locations and inventory</li>
