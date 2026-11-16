@@ -106,7 +106,14 @@ export function RetailCatalogList({
             const allSelected = rowIds.length > 0 && rowIds.every((id) => selected.has(id));
             const styleQuantity = rows.reduce((sum, variant) => sum + variantQuantity(variant, filters.locationId), 0);
             return (
-              <Card key={product.id} className={cn("overflow-hidden rounded-2xl border-border/70 bg-card/70 shadow-sm transition-colors hover:border-primary/35", !product.active && "opacity-70")} data-testid="style-card">
+              <Card
+                key={product.id}
+                className={cn(
+                  "overflow-hidden rounded-2xl border-border/70 bg-card/70 shadow-sm transition-colors hover:border-primary/35",
+                  !product.active && "opacity-70"
+                )}
+                data-testid="style-card"
+              >
                 <CardContent className="space-y-4 p-3 sm:p-5">
                   <div className="flex items-start gap-3 rounded-xl border border-border/50 bg-muted/20 p-3 sm:p-4">
                     <div className="min-w-0 flex-1">
@@ -199,7 +206,8 @@ export function RetailCatalogList({
                                 Barcode: {variant.barcode}
                               </div>
                               <div className="text-sm text-muted-foreground">
-                                Price: <span className="font-semibold text-foreground">{money(variant.sellingPrice)}</span>
+                                Price:{" "}
+                                <span className="font-semibold text-foreground">{money(variant.sellingPrice)}</span>
                               </div>
                             </div>
                             <StockBadge quantity={quantity} lowThreshold={variant.lowStockThreshold} />
