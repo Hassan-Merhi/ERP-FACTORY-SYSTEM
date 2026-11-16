@@ -13,6 +13,18 @@ const marker=/(?:[Ww]ave|[Pp]hase)[-_ ]?\d+(?:[a-z](?=[A-Z._-]|$))?/g;
 const qualifies=p=>/^(?:client\/|tests\/|scripts\/|build\/)/.test(p)&&/(?:wave|phase)[-_ ]?\d+/i.test(path.posix.basename(p))&&!p.startsWith("scripts/repairs/");
 const candidates=files.filter(qualifies);
 const overrides={
+"scripts/verify-phase11-12-observability-disaster-recovery.mjs":"scripts/verify-observability-disaster-recovery.mjs",
+"tests/phase31-32-weekly-bale-export-helpers.test.ts":"tests/weekly-bale-export-helpers.test.ts",
+"tests/phase33-3c-purchase-order-items-update.test.ts":"tests/purchase-order-items-update.test.ts",
+"tests/phase33-3c-route-guards.test.ts":"tests/purchase-order-route-guards.test.ts",
+"tests/phase33-3c-schema-and-safety.test.ts":"tests/purchase-order-schema-and-safety.test.ts",
+"tests/phase33-3c-stock-allocation-v5.test.ts":"tests/stock-allocation-contract.test.ts",
+"tests/phase33-3c-stock-transfer-analysis.test.ts":"tests/stock-transfer-analysis.test.ts",
+"tests/phase33-3c-stock-transfer-drafts.test.ts":"tests/stock-transfer-drafts.test.ts",
+"tests/post-offload-charge-phase14-15.test.ts":"tests/post-offload-charge-contract.test.ts",
+"tests/remote-support-phase15-16-observability.test.ts":"tests/remote-support-observability.test.ts",
+"tests/wave8-4-factory-pos-commission.test.ts":"tests/factory-pos-commission.test.ts",
+
 "client/src/i18n/retailWave1Translations.ts":"client/src/i18n/retailCatalogTranslations.ts",
 "client/src/i18n/retailWave2Translations.ts":"client/src/i18n/retailPosPricingTranslations.ts",
 "client/src/i18n/retailWave3Translations.ts":"client/src/i18n/retailAnalyticsTranslations.ts",
