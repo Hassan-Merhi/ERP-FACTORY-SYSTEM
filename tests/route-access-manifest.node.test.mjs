@@ -12,6 +12,16 @@ test("every registered route is declared, including deliberate duplicate registr
   assert.equal(new Set(manifest.rules.map((rule) => rule.id)).size, snapshot.routes.length);
 });
 
+test("inherited application middleware mount inventory cannot silently drift", () => {
+  assert.equal(manifest.middlewareMounts.length, snapshot.middlewareMounts.length);
+  const changed = { ...snapshot, middlewareMounts: [...snapshot.middlewareMounts, "USE /api/factory [unexpectedScope]"] };
+  assert.ok(
+    validateRouteAccessCoverage(changed, manifest).includes(
+      "Inherited middleware mount snapshot differs from registered middleware"
+    )
+  );
+});
+
 test("deleting any one declared registration fails coverage", () => {
   for (const index of [0, Math.floor(manifest.rules.length / 2), manifest.rules.length - 1]) {
     const id = manifest.rules[index].id;
