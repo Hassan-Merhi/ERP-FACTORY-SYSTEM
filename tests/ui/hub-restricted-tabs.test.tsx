@@ -145,7 +145,7 @@ describe("useHubQueryState URL canonicalization", () => {
     expect(result.current[0]).toBe("alpha");
   });
 
-  it("follows browser history navigation", () => {
+  it("follows browser history navigation", async () => {
     const { result } = renderHook(() =>
       useHubQueryState<Tab>({ key: "tab", allowedValues: known, defaultValue: "alpha" })
     );
@@ -154,10 +154,10 @@ describe("useHubQueryState URL canonicalization", () => {
       window.history.replaceState({}, "", "/hub?tab=gamma");
       window.dispatchEvent(new PopStateEvent("popstate"));
     });
-    expect(result.current[0]).toBe("gamma");
+    await waitFor(() => expect(result.current[0]).toBe("gamma"));
   });
 
-  it("follows in-app navigation to another tab of the mounted hub", () => {
+  it("follows in-app navigation to another tab of the mounted hub", async () => {
     const { result } = renderHook(() =>
       useHubQueryState<Tab>({ key: "tab", allowedValues: known, defaultValue: "alpha" })
     );
@@ -167,7 +167,37 @@ describe("useHubQueryState URL canonicalization", () => {
       window.history.pushState({}, "", "/hub?tab=beta");
       window.dispatchEvent(new Event("pushState"));
     });
-    expect(result.current[0]).toBe("beta");
+    await waitFor(() => expect(result.current[0]).toBe("beta"));
+  });
+
+  it("never rewrites the URL of the page being navigated to", async () => {
+    window.history.replaceState({}, "", "/hub-a?section=alpha");
+    const outgoing = renderHook(() =>
+      useHubQueryState<Tab>({ key: "section", allowedValues: ["alpha"], knownValues: known, defaultValue: "alpha" })
+    );
+
+    act(() => {
+      window.history.pushState({}, "", "/hub-b?section=gamma");
+      window.dispatchEvent(new Event("pushState"));
+    });
+    outgoing.unmount();
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(window.location.search).toBe("?section=gamma");
+  });
+
+  it("leaves a sibling section's tab alone when the parent hub switches section", async () => {
+    window.history.replaceState({}, "", "/hub?section=alpha&tab=alpha");
+    const child = renderHook(() =>
+      useHubQueryState<Tab>({ key: "tab", allowedValues: ["alpha"], knownValues: known, defaultValue: "alpha" })
+    );
+
+    act(() => {
+      window.history.pushState({}, "", "/hub?section=beta&tab=gamma");
+      window.dispatchEvent(new Event("pushState"));
+    });
+    child.unmount();
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(window.location.search).toBe("?section=beta&tab=gamma");
   });
 
   it("keeps a deep-linked tab while the permitted set is still loading", () => {

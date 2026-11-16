@@ -122,12 +122,29 @@ export function useHubQueryState<T extends string>(options: HubQueryStateOptions
       );
 
     syncFromLocation();
+
     // wouter dispatches "pushState" for in-app navigation, so a sidebar or
     // command-palette link to another tab of the mounted hub switches it.
+    // Navigation events also reach a hub that is about to unmount (another
+    // page, or a sibling section of a parent hub). Syncing is deferred until
+    // React has committed the new route, and skipped once this hub is gone or
+    // the path is no longer its own, so it never rewrites another hub's URL.
+    const ownPathname = window.location.pathname;
+    let mounted = true;
+    const timers = new Set<ReturnType<typeof setTimeout>>();
+    const onNavigate = () => {
+      const timer = setTimeout(() => {
+        timers.delete(timer);
+        if (mounted && window.location.pathname === ownPathname) syncFromLocation();
+      }, 0);
+      timers.add(timer);
+    };
     const events = ["popstate", "hashchange", "pushState"] as const;
-    for (const event of events) window.addEventListener(event, syncFromLocation);
+    for (const event of events) window.addEventListener(event, onNavigate);
     return () => {
-      for (const event of events) window.removeEventListener(event, syncFromLocation);
+      mounted = false;
+      for (const timer of timers) clearTimeout(timer);
+      for (const event of events) window.removeEventListener(event, onNavigate);
     };
   }, [key, defaultValue, allowedValuesKey, knownValuesKey, clearKeysKey, omitDefault]);
 
