@@ -23,7 +23,7 @@ export function makePostgresSubscriptionRepository(pool) {
                  FROM commercial_subscriptions
                  WHERE provider = $1 AND provider_subscription_id = $2
                  FOR UPDATE`,
-              [provider, providerSubscriptionId],
+              [provider, providerSubscriptionId]
             );
             if (query.rowCount !== 1) return null;
             const row = query.rows[0];
@@ -45,7 +45,7 @@ export function makePostgresSubscriptionRepository(pool) {
                  VALUES ($1,$2,$3,to_timestamp($4 / 1000.0),'received',$5,$6)
                  ON CONFLICT (provider,provider_event_id) DO NOTHING
                  RETURNING id`,
-              [provider, eventId, tenantId, occurredAtMs, eventType, eventHash],
+              [provider, eventId, tenantId, occurredAtMs, eventType, eventHash]
             );
             return query.rowCount === 1;
           },
@@ -56,14 +56,7 @@ export function makePostgresSubscriptionRepository(pool) {
                  canceled_at=CASE WHEN $2 = 'canceled' THEN now() ELSE canceled_at END
                  WHERE account_id=$4 AND provider=$5 AND provider_subscription_id=$6 AND sequence < $3
                  RETURNING account_id`,
-              [
-                state.plan,
-                state.status,
-                state.sequence,
-                state.tenantId,
-                state.provider,
-                state.providerSubscriptionId,
-              ],
+              [state.plan, state.status, state.sequence, state.tenantId, state.provider, state.providerSubscriptionId]
             );
             if (query.rowCount !== 1) {
               throw new Error("Concurrent subscription state conflict");
@@ -78,7 +71,7 @@ export function makePostgresSubscriptionRepository(pool) {
                  SET event_status=$3,processed_at=now()
                  WHERE provider=$1 AND provider_event_id=$2 AND event_status='received'
                  RETURNING id`,
-              [provider, eventId, state],
+              [provider, eventId, state]
             );
             if (query.rowCount !== 1) throw new Error("Webhook receipt state conflict");
           },
