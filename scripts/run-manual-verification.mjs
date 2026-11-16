@@ -33,7 +33,7 @@ const MANUAL_VERIFICATION_CATALOG = Object.freeze([
   "audit-program6c-inventory-payloads.mjs",
   "audit-program6c-stock-item-callers.mjs",
   "audit-program6d-database-query-risks.mjs",
-  "audit-realtime-wave3.mjs",
+  "audit-realtime-queries.mjs",
   "audit-script-inventory.mjs",
   "audit-source-text-assertions.mjs",
   "audit-toolchain-coherence.mjs",
@@ -129,7 +129,7 @@ const MANUAL_VERIFICATION_CATALOG = Object.freeze([
   "verify-sp-migration-rehearsal.mjs",
   "verify-startup-migrations.mjs",
   "verify-stock-transfer-revision-lifecycle.mjs",
-  "verify-wave3-api-payload-bandwidth.mjs",
+  "verify-api-payload-bandwidth.mjs",
   "verify-workspace-lockfile-hygiene.mjs"
 ]);
 

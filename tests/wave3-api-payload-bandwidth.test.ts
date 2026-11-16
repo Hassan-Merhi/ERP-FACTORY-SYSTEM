@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 describe("Wave 3 API payload and bandwidth ratchet", () => {
   it("keeps compact contracts, lazy details, caching and continuous-list invariants intact", () => {
-    const result = spawnSync(process.execPath, ["scripts/verify-wave3-api-payload-bandwidth.mjs"], {
+    const result = spawnSync(process.execPath, ["scripts/verify-api-payload-bandwidth.mjs"], {
       cwd: process.cwd(),
       encoding: "utf8",
     });

@@ -20,7 +20,7 @@ on:
       - "tests/ui/realtime-wave5-cache-policy.test.ts"
       - "tests/ui/realtime-wave6-hardening.test.ts"
       - "scripts/prepare-phase7-browser-e2e-fixture.mjs"
-      - "scripts/run-wave6-realtime-browser-e2e.mjs"
+      - "scripts/run-realtime-browser-e2e.mjs"
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/realtime-verification.yml"
@@ -145,7 +145,7 @@ jobs:
             sleep 1
           done
 
-          node scripts/run-wave6-realtime-browser-e2e.mjs
+          node scripts/run-realtime-browser-e2e.mjs
 
       - name: Show server log on failure
         if: failure()
