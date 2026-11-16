@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyWave6InventoryState, parseWave6RepairConfig } from "../server/inventoryValuationWave6RepairBridge.mjs";
+import { classifyWave6InventoryState, parseWave6RepairConfig } from "../server/inventoryValuationGuardedRepair.mjs";
 
 const REPAIR = {
   repairKey: "wave6-shmix3-20260911",
