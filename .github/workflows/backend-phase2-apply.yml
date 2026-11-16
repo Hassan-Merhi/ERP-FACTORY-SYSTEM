@@ -25,8 +25,7 @@ jobs:
           cache: npm
       - name: Reconcile existing lockfile and install dependencies
         run: |
-          npm install --package-lock-only --ignore-scripts --no-audit
-          npm ci --ignore-scripts
+          npm install --ignore-scripts --no-audit --no-fund
       - name: Apply full backend semantic rename
         run: |
           node scripts/refactor-backend-semantic-filenames.mjs --apply > backend-phase2-renames.json
