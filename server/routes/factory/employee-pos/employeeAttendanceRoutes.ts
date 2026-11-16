@@ -134,6 +134,7 @@ export function registerEmployeeAttendanceRoutes(app: Express) {
           employeeCode: factoryWorkers.employeeCode,
           fullName: factoryWorkers.fullName,
           active: factoryWorkers.active,
+          contractEndDate: factoryWorkers.contractEndDate,
           baseSalary: factoryWorkers.baseSalary,
           salaryType: factoryWorkers.salaryType,
           transportAllowance: factoryWorkers.transportAllowance,
@@ -199,10 +200,28 @@ export function registerEmployeeAttendanceRoutes(app: Express) {
         workerAttMap.get(r.workerId)!.set(r.date, r.status);
       }
 
+      // An inactive worker remains absent from their deactivation date through
+      // today, including while the worker has not yet been reactivated.
+      // Reactivation persists these days as real attendance records.
+      const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Beirut" });
+      for (const worker of workers) {
+        if (worker.active || !worker.contractEndDate) continue;
+        const inactiveFrom = String(worker.contractEndDate).slice(0, 10);
+        const dayMap = workerAttMap.get(worker.id) ?? new Map<string, string>();
+        for (const { date } of dates) {
+          if (date >= inactiveFrom && date <= today) dayMap.set(date, "Absent");
+        }
+        workerAttMap.set(worker.id, dayMap);
+      }
+      // Build the daily totals from the same effective records shown in cells.
+      const effectiveAttendance = [...workerAttMap.entries()].flatMap(([workerId, days]) =>
+        [...days.entries()].map(([date, status]) => ({ workerId, date, status }))
+      );
+
       // Build daily summary: { isoDate → { present, absent } }
       const dailySummary: Record<string, { present: number; absent: number }> = {};
       for (const { date } of dates) dailySummary[date] = { present: 0, absent: 0 };
-      for (const r of attRecords) {
+      for (const r of effectiveAttendance) {
         if (!dailySummary[r.date]) dailySummary[r.date] = { present: 0, absent: 0 };
         if (r.status === "Present") dailySummary[r.date].present++;
         else if (r.status === "Absent") dailySummary[r.date].absent++;
