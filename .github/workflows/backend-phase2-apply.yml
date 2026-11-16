@@ -1,4 +1,4 @@
-name: Apply backend semantic filename refactor (updated test linkage)
+name: Apply backend semantic filename refactor (report imports fixed)
 on:
   push:
     branches: [refactor/phase-wave-semantic-names]
