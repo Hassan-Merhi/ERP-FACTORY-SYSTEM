@@ -16,6 +16,18 @@ describe("Phase 2 route access review ledger", () => {
     );
   });
 
+  it("records authored operational permission evidence without granting new rights", () => {
+    const sourced = review.entries.filter((entry: { policyEvidence?: unknown[] }) => entry.policyEvidence);
+    expect(sourced.length).toBeGreaterThan(200);
+    expect(sourced.every((entry: { status: string; policyEvidence: Array<{ status: string; source: string }> }) =>
+      entry.status === "unreviewed" &&
+      entry.policyEvidence.every((item) =>
+        item.status === "source-evidence-only" &&
+        item.source === "server/services/security/operationalPermissionRoutePolicy.ts"
+      )
+    )).toBe(true);
+  });
+
   it("does not present unreviewed candidates as approved authorization", () => {
     expect(review.entries.every((entry: { status: string }) => entry.status === "unreviewed")).toBe(true);
     for (const entry of review.entries) {
