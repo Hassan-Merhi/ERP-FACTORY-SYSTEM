@@ -18,7 +18,11 @@ import { postStockMovementTx } from "../services/inventory/stockMovementIntegrit
 import { assertActiveCompanyAccess } from "../security/companyAccessBoundary";
 import { allocateSupplierReturnRows } from "./erpSupplierReturnAllocation";
 import { validateReturnCommitRows, type ReturnCommitRow } from "./erpSupplierReturnCommitValidation";
-import { calculateSupplierReturnFinancials, reconcileSupplierReturnBatch, type SupplierReturnFinancials } from "./erpSupplierReturnFinancials";
+import {
+  calculateSupplierReturnFinancials,
+  reconcileSupplierReturnBatch,
+  type SupplierReturnFinancials,
+} from "./erpSupplierReturnFinancials";
 
 const movementAdapter = createDatabaseStockMovementAdapter();
 const qtyPattern = /^\d+(?:\.\d{1,3})?$/;
@@ -158,7 +162,21 @@ async function byId(executor: DatabaseOrTransaction, companyId: number, itemId: 
     throw new ReturnError(409, "RETURN_SOURCE_UNAVAILABLE", "The source container is no longer an active offload");
   return selected;
 }
+// The return tables come from controlled migrations (migrations/controlled/20261113_001
+// and 20261114_001), which are applied explicitly per environment. Reads must not fail
+// with a 500 where they have not been applied yet: there is simply no return history.
+async function tableExists(name: string): Promise<boolean> {
+  const [row] = resultRows<{ present: string | null }>(
+    await db.execute(sql`SELECT to_regclass(${"public." + name}::text)::text AS present`)
+  );
+  return Boolean(row?.present);
+}
+async function returnTablesReady(): Promise<boolean> {
+  return (await tableExists("erp_supplier_return_batches")) && (await tableExists("erp_supplier_return_lines"));
+}
+
 async function readHistory(companyId: number) {
+  if (!(await returnTablesReady())) return [];
   return resultRows<Row>(
     await db.execute(sql`
     SELECT b.id, b.return_date::text AS "returnDate", b.file_name AS "fileName",
@@ -218,18 +236,24 @@ export function registerErpSupplierReturnRoutes(app: Express) {
         const code = String(row?.code ?? "").trim();
         if (!code || code.length > 50)
           throw new ReturnError(
-            400, "RETURN_CODE_INVALID",
+            400,
+            "RETURN_CODE_INVALID",
             `Row ${index + 2}: article code is required (max 50 characters)`
           );
         const qty = quantity(row?.quantity);
-        const selected = row?.offloadItemId == null || row.offloadItemId === ""
-          ? null : Number(row.offloadItemId);
+        const selected = row?.offloadItemId == null || row.offloadItemId === "" ? null : Number(row.offloadItemId);
         if (selected !== null && (!Number.isSafeInteger(selected) || selected <= 0))
           throw new ReturnError(400, "RETURN_SOURCE_INVALID", `Row ${index + 2}: invalid offload item`);
         const possible = (await candidates(db, companyId, code)).filter(
           (candidate) => supplierId === null || candidate.supplierId === supplierId
         );
-        requested.push({ row: index + 2, code, quantity: qty.toFixed(3), offloadItemId: selected, candidates: possible });
+        requested.push({
+          row: index + 2,
+          code,
+          quantity: qty.toFixed(3),
+          offloadItemId: selected,
+          candidates: possible,
+        });
       }
       const allocations = allocateSupplierReturnRows(requested);
       const preview = requested.map((row, index) => ({
@@ -239,7 +263,8 @@ export function registerErpSupplierReturnRoutes(app: Express) {
         status: allocations[index].status,
         suggestedOffloadItemId: allocations[index].suggestedOffloadItemId,
         allocations: allocations[index].allocations.map(({ offloadItemId, quantity }) => ({
-          offloadItemId, quantity,
+          offloadItemId,
+          quantity,
         })),
         allocatedQty: allocations[index].allocatedQty,
         unallocatedQty: allocations[index].unallocatedQty,
@@ -267,6 +292,20 @@ export function registerErpSupplierReturnRoutes(app: Express) {
       const batchId = Number(req.params.batchId);
       if (!Number.isInteger(batchId) || batchId < 1)
         throw new ReturnError(400, "RETURN_BATCH_ID_INVALID", "Invalid batch");
+      if (!(await returnTablesReady())) throw new ReturnError(404, "RETURN_BATCH_NOT_FOUND", "Return batch not found");
+      const allocationRowsReady = await tableExists("erp_supplier_return_allocation_rows");
+      const requestedRowsSql = allocationRowsReady
+        ? sql`LEFT JOIN LATERAL (
+            SELECT json_agg(json_build_object(
+              'inputRow', ar.input_row,
+              'requestedArticleCode', ar.requested_article_code,
+              'requestedQuantity', ar.requested_quantity::text,
+              'allocatedQuantity', ar.allocated_quantity::text
+            ) ORDER BY ar.input_row) AS input_rows
+            FROM erp_supplier_return_allocation_rows ar
+            WHERE ar.company_id=${companyId} AND ar.batch_id=l.batch_id AND ar.return_line_id=l.id
+          ) mapping ON TRUE`
+        : sql`LEFT JOIN LATERAL (SELECT NULL::json AS input_rows) mapping ON TRUE`;
       const rows = resultRows<Row>(
         await db.execute(sql`
         SELECT l.id,l.article_code AS "articleCode",l.item_name AS "itemName",
@@ -283,16 +322,7 @@ export function registerErpSupplierReturnRoutes(app: Express) {
           JOIN containers c ON c.id=l.container_id AND c.company_id=${companyId}
           JOIN suppliers s ON s.id=l.supplier_id
           LEFT JOIN vouchers v ON v.id=l.voucher_id
-          LEFT JOIN LATERAL (
-            SELECT json_agg(json_build_object(
-              'inputRow', ar.input_row,
-              'requestedArticleCode', ar.requested_article_code,
-              'requestedQuantity', ar.requested_quantity::text,
-              'allocatedQuantity', ar.allocated_quantity::text
-            ) ORDER BY ar.input_row) AS input_rows
-            FROM erp_supplier_return_allocation_rows ar
-            WHERE ar.company_id=${companyId} AND ar.batch_id=l.batch_id AND ar.return_line_id=l.id
-          ) mapping ON TRUE
+          ${requestedRowsSql}
          WHERE l.company_id=${companyId} AND l.batch_id=${batchId}
          ORDER BY l.id
       `)
@@ -417,11 +447,17 @@ export function registerErpSupplierReturnRoutes(app: Express) {
             for (const allocation of row.allocations) {
               const source = matchedById.get(allocation.offloadItemId);
               if (!source || !legal.has(source.offloadItemId))
-                throw new ReturnError(409, "RETURN_ARTICLE_SOURCE_MISMATCH",
-                  `Source does not belong to article ${row.code}`);
+                throw new ReturnError(
+                  409,
+                  "RETURN_ARTICLE_SOURCE_MISMATCH",
+                  `Source does not belong to article ${row.code}`
+                );
               if (rowSupplierId !== null && source.supplierId !== rowSupplierId)
-                throw new ReturnError(409, "RETURN_ROW_SUPPLIER_MIXED",
-                  `One article row cannot return quantities to multiple suppliers (${row.code})`);
+                throw new ReturnError(
+                  409,
+                  "RETURN_ROW_SUPPLIER_MIXED",
+                  `One article row cannot return quantities to multiple suppliers (${row.code})`
+                );
               rowSupplierId = source.supplierId;
             }
           }
@@ -438,7 +474,7 @@ export function registerErpSupplierReturnRoutes(app: Express) {
           const [rl, ri] = right.split(":").map(Number);
           return ll - rl || li - ri;
         });
-        for (const [key, needed] of orderedDemand) {
+        for (const [key] of orderedDemand) {
           const [locationId, stockItemId] = key.split(":").map(Number);
           const [stock] = resultRows<{ quantity: string; total_value: string }>(
             await tx.execute(sql`
@@ -551,8 +587,11 @@ export function registerErpSupplierReturnRoutes(app: Express) {
               newTotalValue: moved.newTotalValue,
             });
           } catch (error) {
-            throw new ReturnError(409, "RETURN_FINANCIAL_RECONCILIATION_FAILED",
-              `Cannot reconcile return for ${source.code}: ${(error as Error).message}`);
+            throw new ReturnError(
+              409,
+              "RETURN_FINANCIAL_RECONCILIATION_FAILED",
+              `Cannot reconcile return for ${source.code}: ${(error as Error).message}`
+            );
           }
           const inventoryValue = new Decimal(financials.inventoryCredit);
           const supplierCredit = new Decimal(financials.supplierDebit);
@@ -575,18 +614,22 @@ export function registerErpSupplierReturnRoutes(app: Express) {
                 narration: `Inventory shipped back: ${note}`,
               },
               ...(varianceDebit.gt(0)
-                ? [{
-                    ledgerAccountId: varianceAccountId,
-                    debit: varianceDebit,
-                    narration: "Inventory relief above supplier purchase credit",
-                  }]
+                ? [
+                    {
+                      ledgerAccountId: varianceAccountId,
+                      debit: varianceDebit,
+                      narration: "Inventory relief above supplier purchase credit",
+                    },
+                  ]
                 : []),
               ...(varianceCredit.gt(0)
-                ? [{
-                    ledgerAccountId: varianceAccountId,
-                    credit: varianceCredit,
-                    narration: "Supplier purchase credit above inventory relief",
-                  }]
+                ? [
+                    {
+                      ledgerAccountId: varianceAccountId,
+                      credit: varianceCredit,
+                      narration: "Supplier purchase credit above inventory relief",
+                    },
+                  ]
                 : []),
             ],
           });
@@ -611,8 +654,11 @@ export function registerErpSupplierReturnRoutes(app: Express) {
             for (const allocation of requested.allocations) {
               const returnLineId = returnLineIds.get(allocation.offloadItemId);
               if (!returnLineId)
-                throw new ReturnError(409, "RETURN_ALLOCATION_AUDIT_MISSING",
-                  "An allocated container has no committed source return line");
+                throw new ReturnError(
+                  409,
+                  "RETURN_ALLOCATION_AUDIT_MISSING",
+                  "An allocated container has no committed source return line"
+                );
               await tx.execute(sql`
                 INSERT INTO erp_supplier_return_allocation_rows
                   (company_id,batch_id,return_line_id,input_row,requested_article_code,
@@ -624,15 +670,23 @@ export function registerErpSupplierReturnRoutes(app: Express) {
           }
         }
         const reconciled = reconcileSupplierReturnBatch(postedFinancials);
-        if (!totalQty.eq(reconciled.totalQuantity) ||
-            !totalSupplier.eq(reconciled.supplierDebit) ||
-            !totalInventory.eq(reconciled.inventoryCredit)) {
-          throw new ReturnError(409, "RETURN_BATCH_RECONCILIATION_FAILED",
-            "Supplier return inventory, supplier and audit totals are not reconciled");
+        if (
+          !totalQty.eq(reconciled.totalQuantity) ||
+          !totalSupplier.eq(reconciled.supplierDebit) ||
+          !totalInventory.eq(reconciled.inventoryCredit)
+        ) {
+          throw new ReturnError(
+            409,
+            "RETURN_BATCH_RECONCILIATION_FAILED",
+            "Supplier return inventory, supplier and audit totals are not reconciled"
+          );
         }
         if (requestedTotal !== null && !totalQty.eq(requestedTotal))
-          throw new ReturnError(409, "RETURN_TOTAL_MISMATCH",
-            "Posted quantity does not equal the original requested return quantity");
+          throw new ReturnError(
+            409,
+            "RETURN_TOTAL_MISMATCH",
+            "Posted quantity does not equal the original requested return quantity"
+          );
         await tx.execute(sql`
           UPDATE erp_supplier_return_batches
              SET total_quantity=${totalQty.toFixed(3)},

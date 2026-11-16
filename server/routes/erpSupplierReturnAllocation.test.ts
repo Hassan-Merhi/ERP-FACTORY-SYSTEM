@@ -1,33 +1,40 @@
 import { describe, expect, it } from "vitest";
-import {
-  allocateSupplierReturnRows,
-  type ReturnAllocationCandidate,
-} from "./erpSupplierReturnAllocation";
+import { allocateSupplierReturnRows, type ReturnAllocationCandidate } from "./erpSupplierReturnAllocation";
 
 function candidate(
   offloadItemId: number,
   remainingQty: string,
   availableQty = "100",
-  overrides: Partial<ReturnAllocationCandidate> = {},
+  overrides: Partial<ReturnAllocationCandidate> = {}
 ): ReturnAllocationCandidate {
   return {
-    offloadItemId, supplierId: 7, supplierCount: 1,
-    currencyCount: 1, currency: "USD", stockItemId: 11,
-    locationId: 2, remainingQty, availableQty, ...overrides,
+    offloadItemId,
+    supplierId: 7,
+    supplierCount: 1,
+    currencyCount: 1,
+    currency: "USD",
+    stockItemId: 11,
+    locationId: 2,
+    remainingQty,
+    availableQty,
+    ...overrides,
   };
 }
 const row = (quantity: string, candidates: ReturnAllocationCandidate[], offloadItemId?: number) => ({
-  code: "HMD12034", quantity, candidates, offloadItemId,
+  code: "HMD12034",
+  quantity,
+  candidates,
+  offloadItemId,
 });
 
 describe("ERP supplier return automatic allocation", () => {
   it("splits a requested 18 into 17 + 1, keeping legacy single-source hint unset", () => {
-    const [result] = allocateSupplierReturnRows([
-      row("18", [candidate(101, "17", "18"), candidate(102, "9", "18")]),
-    ]);
+    const [result] = allocateSupplierReturnRows([row("18", [candidate(101, "17", "18"), candidate(102, "9", "18")])]);
     expect(result.status).toBe("matched");
-    expect(result.allocations.map((a) => [a.offloadItemId, a.quantity]))
-      .toEqual([[101, "17.000"], [102, "1.000"]]);
+    expect(result.allocations.map((a) => [a.offloadItemId, a.quantity])).toEqual([
+      [101, "17.000"],
+      [102, "1.000"],
+    ]);
     expect(result.allocatedQty).toBe("18.000");
     expect(result.unallocatedQty).toBe("0.000");
     expect(result.suggestedOffloadItemId).toBeNull();
@@ -42,9 +49,7 @@ describe("ERP supplier return automatic allocation", () => {
   });
 
   it("does not count the same location/item stock balance once per container", () => {
-    const [result] = allocateSupplierReturnRows([
-      row("18", [candidate(1, "17", "17.5"), candidate(2, "10", "17.5")]),
-    ]);
+    const [result] = allocateSupplierReturnRows([row("18", [candidate(1, "17", "17.5"), candidate(2, "10", "17.5")])]);
     expect(result.status).toBe("partial");
     expect(result.allocatedQty).toBe("17.500");
     expect(result.unallocatedQty).toBe("0.500");
@@ -54,7 +59,9 @@ describe("ERP supplier return automatic allocation", () => {
   it("reserves the same stock bucket and source across duplicate upload rows", () => {
     const source = candidate(1, "20", "18");
     const [first, second, third] = allocateSupplierReturnRows([
-      row("10", [source]), row("10", [source]), row("1", [source]),
+      row("10", [source]),
+      row("10", [source]),
+      row("1", [source]),
     ]);
     expect(first.status).toBe("matched");
     expect(first.suggestedOffloadItemId).toBe(1);
@@ -97,9 +104,7 @@ describe("ERP supplier return automatic allocation", () => {
 
   it("respects explicit legacy source selection and invalid selection", () => {
     const candidates = [candidate(1, "4"), candidate(2, "10")];
-    const [limited, invalid] = allocateSupplierReturnRows([
-      row("6", candidates, 1), row("2", candidates, 999),
-    ]);
+    const [limited, invalid] = allocateSupplierReturnRows([row("6", candidates, 1), row("2", candidates, 999)]);
     expect(limited.status).toBe("partial");
     expect(limited.allocations.map((a) => a.offloadItemId)).toEqual([1]);
     expect(invalid.status).toBe("invalid-selection");
@@ -111,7 +116,9 @@ describe("ERP supplier return automatic allocation", () => {
       row("4", [candidate(2, "2"), candidate(2, "2"), candidate(3, "5")]),
     ]);
     expect(missing.status).toBe("not-found");
-    expect(duplicate.allocations.map((a) => [a.offloadItemId, a.quantity]))
-      .toEqual([[2, "2.000"], [3, "2.000"]]);
+    expect(duplicate.allocations.map((a) => [a.offloadItemId, a.quantity])).toEqual([
+      [2, "2.000"],
+      [3, "2.000"],
+    ]);
   });
 });

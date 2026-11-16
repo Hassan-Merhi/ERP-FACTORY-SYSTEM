@@ -5,6 +5,7 @@ const h = vi.hoisted(() => ({
   core: vi.fn(),
   locationStock: vi.fn(),
   customMessages: vi.fn(),
+  propertiesStatements: vi.fn(),
   factoryStock: vi.fn(),
   mixIntegrity: vi.fn(),
   recover: vi.fn(),
@@ -24,6 +25,9 @@ vi.mock("../server/services/scheduler/location-stock-report", () => ({
 }));
 vi.mock("../server/services/scheduledWhatsAppMessages", () => ({
   runScheduledWhatsAppMessages: () => h.customMessages(),
+}));
+vi.mock("../server/services/propertiesAccountStatementWhatsApp", () => ({
+  runScheduledPropertiesWaStatements: () => h.propertiesStatements(),
 }));
 vi.mock("../server/services/accounting/perpetualInventory/factoryStockJournal", () => ({
   runFactoryStockJournals: () => h.factoryStock(),
@@ -45,7 +49,16 @@ const originalMixMonitor = process.env.FACTORY_MIX_INTEGRITY_MONITOR_ENABLED;
 
 beforeEach(() => {
   h.schedules = [];
-  for (const fn of [h.core, h.locationStock, h.customMessages, h.factoryStock, h.mixIntegrity, h.recover, h.manual])
+  for (const fn of [
+    h.core,
+    h.locationStock,
+    h.customMessages,
+    h.propertiesStatements,
+    h.factoryStock,
+    h.mixIntegrity,
+    h.recover,
+    h.manual,
+  ])
     fn.mockReset();
   h.mixIntegrity.mockResolvedValue({ failed: 0 });
   delete process.env.FACTORY_MIX_INTEGRITY_MONITOR_ENABLED;
@@ -83,13 +96,14 @@ describe("scheduler entrypoint", () => {
     });
   });
 
-  it("registers the core jobs and four lazy ticks once", async () => {
+  it("registers the core jobs and five lazy ticks once", async () => {
     delete process.env.ENABLE_SCHEDULERS;
     const { startScheduler } = await load();
     startScheduler();
     startScheduler();
     expect(h.core).toHaveBeenCalledTimes(2);
     expect(h.schedules.map((s) => [s.expression, s.options])).toEqual([
+      ["* * * * *", undefined],
       ["* * * * *", undefined],
       ["* * * * *", undefined],
       ["45 23 * * *", { timezone: "UTC" }],
@@ -104,6 +118,7 @@ describe("scheduler entrypoint", () => {
     for (const schedule of h.schedules) await schedule.tick();
     expect(h.locationStock).toHaveBeenCalledTimes(1);
     expect(h.customMessages).toHaveBeenCalledTimes(1);
+    expect(h.propertiesStatements).toHaveBeenCalledTimes(1);
     expect(h.factoryStock).toHaveBeenCalledTimes(1);
     expect(h.mixIntegrity).toHaveBeenCalledTimes(1);
   });
