@@ -137,7 +137,7 @@ export function RetailPhotoGallery({
         <button
           type="button"
           className={cn(
-            "group relative block shrink-0 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+            "group relative block shrink-0 overflow-hidden rounded-xl text-left shadow-sm transition-transform hover:scale-[1.015] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
             className
           )}
           aria-label={`View all photos of ${title}`}
@@ -155,18 +155,18 @@ export function RetailPhotoGallery({
       </DialogTrigger>
 
       <DialogContent
-        className="flex max-h-[96vh] w-[96vw] max-w-5xl flex-col gap-3 overflow-hidden p-3 sm:p-5"
+        className="flex max-h-[94dvh] w-[96vw] max-w-6xl flex-col gap-4 overflow-hidden rounded-2xl border border-primary/30 bg-background p-4 shadow-2xl sm:p-6"
         onKeyDown={handleKeys}
         data-testid="retail-photo-gallery"
       >
-        <DialogHeader>
-          <DialogTitle data-no-translate>{title}</DialogTitle>
+        <DialogHeader className="border-b border-border/60 pb-3 pr-8">
+          <DialogTitle className="text-xl font-bold tracking-tight" data-no-translate>{title}</DialogTitle>
           <DialogDescription>
             Photo {selectedIndex + 1} of {sources.length}. Use left and right arrow keys to browse.
           </DialogDescription>
         </DialogHeader>
-        <div className="flex items-center justify-between gap-2 pr-10">
-          <span className="text-xs text-muted-foreground" aria-live="polite">
+        <div className="flex items-center justify-between gap-2">
+          <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground" aria-live="polite">
             {selectedIndex + 1} / {sources.length}
           </span>
           <Button
@@ -181,14 +181,14 @@ export function RetailPhotoGallery({
             {zoomed ? "Fit photo" : "Zoom"}
           </Button>
         </div>
-        <div className="relative min-h-0 flex-1 rounded-lg border bg-muted/30">
-          <div className="h-[min(59vh,610px)] w-full overflow-auto overscroll-contain">
-            <div className={cn("min-h-full w-full p-2", zoomed && "w-[180%]")}>
+        <div className="relative min-h-0 flex-1 overflow-hidden rounded-xl border border-border/70 bg-muted/20">
+          <div className="h-[min(58dvh,640px)] w-full overflow-auto overscroll-contain">
+            <div className={cn("flex min-h-full w-full items-center justify-center px-12 py-3 sm:px-16", zoomed && "w-[180%]")}>
               <RetailImage
                 key={current}
                 src={current}
                 alt={`${title} — photo ${selectedIndex + 1}`}
-                className={cn("mx-auto w-full rounded-md object-contain", !zoomed && "max-h-[min(57vh,590px)]")}
+                className={cn("mx-auto w-auto max-w-full rounded-lg object-contain shadow-md", !zoomed && "max-h-[min(55dvh,610px)]")}
               />
             </div>
           </div>
@@ -198,7 +198,7 @@ export function RetailPhotoGallery({
                 type="button"
                 size="icon"
                 variant="secondary"
-                className="absolute left-2 top-1/2 h-10 w-10 -translate-y-1/2 rounded-full shadow-md"
+                className="absolute left-2 top-1/2 z-10 h-11 w-11 -translate-y-1/2 rounded-full border bg-background/90 shadow-lg backdrop-blur-sm sm:left-3"
                 onClick={() => show(selectedIndex - 1)}
                 aria-label="Previous photo"
               >
@@ -208,7 +208,7 @@ export function RetailPhotoGallery({
                 type="button"
                 size="icon"
                 variant="secondary"
-                className="absolute right-2 top-1/2 h-10 w-10 -translate-y-1/2 rounded-full shadow-md"
+                className="absolute right-2 top-1/2 z-10 h-11 w-11 -translate-y-1/2 rounded-full border bg-background/90 shadow-lg backdrop-blur-sm sm:right-3"
                 onClick={() => show(selectedIndex + 1)}
                 aria-label="Next photo"
               >
@@ -218,7 +218,7 @@ export function RetailPhotoGallery({
           )}
         </div>
         {hasMultiple && (
-          <div className="flex w-full gap-2 overflow-x-auto pb-1" role="group" aria-label="Choose product photo">
+          <div className="flex w-full justify-center gap-3 overflow-x-auto px-2 py-2" role="group" aria-label="Choose product photo">
             {sources.map((src, photoIndex) => (
               <button
                 key={src}
@@ -227,11 +227,11 @@ export function RetailPhotoGallery({
                 aria-label={`Show photo ${photoIndex + 1} of ${sources.length}`}
                 aria-current={photoIndex === selectedIndex ? "true" : undefined}
                 className={cn(
-                  "shrink-0 rounded-md p-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  "shrink-0 rounded-xl p-0.5 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   photoIndex === selectedIndex ? "ring-2 ring-primary" : "opacity-70 hover:opacity-100"
                 )}
               >
-                <RetailImage src={src} alt="" className="h-14 w-14 rounded-sm object-cover sm:h-16 sm:w-16" />
+                <RetailImage src={src} alt="" className="h-16 w-16 rounded-lg object-cover sm:h-20 sm:w-20" />
               </button>
             ))}
           </div>
