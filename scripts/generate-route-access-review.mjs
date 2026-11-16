@@ -14,15 +14,47 @@ const load = name => JSON.parse(fs.readFileSync(path.join(root, name), "utf8"));
 const source = load("config/route-manifest.json");
 const v2 = load("config/access-control-v2-route-review.json");
 const outputPath = path.join(root, "config/route-access-review.json");
+
+// Read explicit, source-authored operational policies as evidence, without
+// attempting to infer permissions from paths or silently activating them.
+const operationalSource = fs.readFileSync(
+  path.join(root, "server/services/security/operationalPermissionRoutePolicy.ts"),
+  "utf8"
+);
+const operationalBody = operationalSource.split("export const OPERATIONAL_ROUTE_PERMISSIONS:")[1]?.split(
+  "export const OPERATIONAL_PERMISSION_FREE_ROUTES"
+)[0];
+if (!operationalBody) throw new Error("Operational permission source has changed: review extraction must be updated");
+const operationalEvidence = new Map();
+const policyGroups = [...operationalBody.matchAll(/(?:^|\n)\s{2}(\w+):\s*\[([\s\S]*?)\],/g)];
+if (policyGroups.length < 5) throw new Error("Operational permission extraction lost most groups");
+for (const [, policyName, declarations] of policyGroups) {
+  const withoutComments = declarations.replace(/\/\/[^\n]*/g, "");
+  for (const match of withoutComments.matchAll(/"((?:GET|POST|PUT|PATCH|DELETE) \/[^"]+)"/g)) {
+    const routeKey = match[1];
+    const list = operationalEvidence.get(routeKey) ?? [];
+    list.push({
+      kind: "operational-permission-policy",
+      policyName,
+      source: "server/services/security/operationalPermissionRoutePolicy.ts",
+      status: "source-evidence-only",
+    });
+    operationalEvidence.set(routeKey, list);
+  }
+}
+
 const rows = source.routes.map((registration, index) => {
   const match = /^(\S+) (\S+) \[([^\]]*)\]$/.exec(registration);
   if (!match) throw new Error(`Malformed registration at index ${index}: ${registration}`);
   const [, method, routePath, guards] = match;
-  const v2Candidate = v2.routes?.[`${method} ${routePath}`];
+  const key = `${method} ${routePath}`;
+  const v2Candidate = v2.routes?.[key];
+  const policyEvidence = operationalEvidence.get(key);
   return {
     id: `${index}:${registration}`,
     status: "unreviewed",
     existingGuards: guards.split(" > "),
+    ...(policyEvidence ? { policyEvidence } : {}),
     ...(v2Candidate ? {
       candidate: {
         resource: v2Candidate.resource,
@@ -55,6 +87,7 @@ if (process.argv.includes("--write")) {
   console.log(JSON.stringify({
     registrations: rows.length,
     candidateMappings: rows.filter(row => row.candidate).length,
+    operationalPolicyMatches: rows.filter(row => row.policyEvidence).length,
     awaitingReview: rows.filter(row => row.status === "unreviewed").length,
   }, null, 2));
 }
