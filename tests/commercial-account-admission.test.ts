@@ -16,7 +16,7 @@ function fakeRequest(overrides: Record<string, unknown> = {}) {
   return {
     path: "/api/stock-items",
     method: "GET",
-    session: { userId: "user_001", currentCompanyId: 101, currentRole: "Developer" },
+    session: { userId: "user_001", currentCompanyId: 101, currentRole: "Owner" },
     query: {},
     body: {},
     params: {},
@@ -93,6 +93,25 @@ describe("commercial ERP admission gate", () => {
     const res = mockResponse();
     const boundary = makeCommercialAdmissionBoundary(vi.fn().mockResolvedValue([account, account]));
     await boundary(fakeRequest() as never, res as never, next);
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("rejects legacy global Developer access even when a session has a company", async () => {
+    const next = vi.fn();
+    const res = mockResponse();
+    const boundary = makeCommercialAdmissionBoundary(vi.fn().mockResolvedValue([account]));
+    await boundary(fakeRequest({ session: { userId: "user_001", currentCompanyId: 101, currentRole: "Developer" } }) as never, res as never, next);
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("denies unknown or unlicensed ERP routes", async () => {
+    const next = vi.fn();
+    const repository = vi.fn().mockResolvedValue([account]);
+    const boundary = makeCommercialAdmissionBoundary(repository, vi.fn().mockResolvedValue([101]));
+    const res = mockResponse();
+    await boundary(fakeRequest({ path: "/api/some-new-unsafe-route" }) as never, res as never, next);
     expect(res.status).toHaveBeenCalledWith(403);
     expect(next).not.toHaveBeenCalled();
   });
