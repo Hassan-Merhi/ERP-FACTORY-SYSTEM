@@ -5,6 +5,8 @@ import FactoryWorkersHub from "@/pages/factory/FactoryWorkersHub";
 import FactoryEmployeesHub from "@/pages/factory/FactoryEmployeesHub";
 import FactoryInsurance from "@/pages/factory/FactoryInsurance";
 import { TabsList, PillTabButton } from "@/components/ui/tabs";
+import { LoadingSkeleton } from "@/components/LoadingSkeleton";
+import { RestrictedTabsState } from "@/components/RestrictedTabsState";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { translateFactoryStaffTrackingText } from "@/i18n/factoryStaffTrackingTranslations";
@@ -39,13 +41,17 @@ export default function FactoryPayrollHub() {
   const defaultSection: Section = sections[0] ?? "workers";
   const allowedSections: readonly Section[] = sections;
 
+  const accessReady = myAccess?.companyId === selectedCompany?.id;
   const [activeSection, setActiveSection] = useHubQueryState<Section>({
     key: "section",
-    allowedValues: allowedSections,
+    // Until access loads, keep a deep-linked tab instead of stripping it.
+    allowedValues: accessReady ? allowedSections : SECTIONS,
     knownValues: SECTIONS,
     defaultValue: defaultSection,
     clearKeys: ["tab", "mode"],
   });
+
+  if (!accessReady) return <LoadingSkeleton variant="page" className="p-4" />;
 
   type TabDef = { key: Section; label: string; Icon: React.ElementType };
   const allTabs: TabDef[] = [
@@ -99,11 +105,7 @@ export default function FactoryPayrollHub() {
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto bg-gradient-to-b from-blue-500/[0.035] via-background to-background dark:from-blue-950/25 dark:via-background dark:to-background">
-        {sections.length === 0 && (
-          <div className="p-6 text-sm text-muted-foreground">
-            No Payroll & Benefits tabs are available for this user.
-          </div>
-        )}
+        {sections.length === 0 && <RestrictedTabsState />}
         {activeSection === "workers" && sections.includes("workers") && (
           <div className="p-4 sm:p-5">
             <FactoryWorkersHub />
