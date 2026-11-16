@@ -22,7 +22,6 @@ import {
   Filter,
   ChevronDown,
   Scale,
-  Download,
   Upload,
   Copy,
   RefreshCcw,
@@ -52,6 +51,7 @@ import { NotesCell } from "./factoryotwtrackingtab/components/NotesCell";
 import { useOtwCsvTools } from "./factoryotwtrackingtab/hooks/useOtwCsvTools";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import type { AuthMe } from "@shared/apiTypes";
+import { ExportButton } from "@/components/export/ReportExportMenu";
 export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = {}) {
   const { toast } = useToast();
   const { selectedCompany } = useCompany();
@@ -466,15 +466,13 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
             </div>
             {currentUser?.role === "Developer" && (
               <div className="flex flex-wrap gap-2 sm:col-span-3">
-                <Button
-                  variant="outline"
+                <ExportButton
+                  kind="csv"
                   className="h-9"
                   onClick={exportCsv}
                   disabled={filtered.length === 0}
                   data-testid="button-export-csv"
-                >
-                  <Download className="mr-1.5 h-4 w-4" /> Export CSV
-                </Button>
+                />
                 {canImport && (
                   <>
                     <Button

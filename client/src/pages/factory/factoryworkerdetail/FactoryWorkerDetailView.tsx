@@ -147,7 +147,7 @@ export function FactoryWorkerDetailView({ model }: FactoryWorkerDetailModelProps
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => navigate("/factory/payroll-hub?tab=workers")}
+          onClick={() => navigate("/factory/payroll-hub?section=workers")}
           data-testid="button-back-error"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -173,7 +173,7 @@ export function FactoryWorkerDetailView({ model }: FactoryWorkerDetailModelProps
       <Button
         variant="ghost"
         size="icon"
-        onClick={() => navigate("/factory/payroll-hub?tab=workers")}
+        onClick={() => navigate("/factory/payroll-hub?section=workers")}
         data-testid="button-back-workers"
       >
         <ArrowLeft className="h-4 w-4" />

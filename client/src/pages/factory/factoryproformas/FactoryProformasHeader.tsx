@@ -115,16 +115,8 @@ export function FactoryProformasHeader(props: FactoryProformasHeaderProps) {
         </div>
       )}
       {/* ── Top bar ──────────────────────────────────────────────────────── */}
-      <div className="flex flex-col gap-3 px-4 pb-4 pt-6 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-        <div className="flex items-center gap-3">
-          <span className="rounded-xl bg-violet-500/10 p-2.5 text-violet-700 dark:bg-violet-400/15 dark:text-violet-300">
-            <Users className="h-5 w-5" />
-          </span>
-          <div>
-            <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Customer Proformas</h1>
-            <p className="mt-0.5 text-sm text-muted-foreground">Price lists for bale sales per customer</p>
-          </div>
-        </div>
+      {/* Rendered inside the Invoicing hub, whose PageHeader already titles the page. */}
+      <div className="flex flex-col gap-3 px-4 pb-4 pt-6 sm:flex-row sm:items-center sm:justify-end sm:px-6">
         {customerId && canCreate && (
           <div className="flex items-center gap-2 flex-wrap">
             <Button

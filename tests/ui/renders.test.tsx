@@ -232,10 +232,12 @@ describe("FactoryWorkersHub", () => {
 
 // ── 10. FactoryCustomers ──────────────────────────────────────────────────────
 describe("FactoryCustomers page", () => {
-  it("renders the page title heading", async () => {
+  // Rendered only as the Parties hub "Customers" tab; the hub PageHeader owns the page title.
+  it("renders the customers directory without a second page title", async () => {
     const { default: FactoryCustomers } = await import("@/pages/factory/FactoryCustomers");
     renderWithProviders(<FactoryCustomers />);
-    expect(await screen.findByTestId("text-page-title")).toBeInTheDocument();
+    expect(await screen.findByTestId("factory-customers-directory")).toBeInTheDocument();
+    expect(screen.queryByTestId("text-page-title")).not.toBeInTheDocument();
   });
 });
 

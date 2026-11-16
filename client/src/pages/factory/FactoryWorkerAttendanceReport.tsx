@@ -1,61 +1,328 @@
+import { useState, useMemo, useCallback, useRef } from "react";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { ExportButton } from "@/components/export/ReportExportMenu";
+import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/PageHeader";
-import { Loader2, CalendarDays, Printer, Pencil } from "lucide-react";
+import { Loader2, ChevronLeft, ChevronRight, Pencil, EyeOff, Eye } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { fmtCurrency } from "./factoryworkerattendancereport/utils";
+import { apiRequest } from "@/lib/queryClient";
+import {
+  AttendanceReportRequestError,
+  readAttendanceReportResponse,
+} from "./factoryworkerattendancereport/reportResponse";
+import { validateAttendanceReportDateRange } from "@shared/attendanceReportDateRange";
+
+import type {
+  AttendanceFilter,
+  AttendanceReportData,
+  DateMode,
+  WorkerReportRow,
+} from "./factoryworkerattendancereport/types";
+import {
+  CYCLE,
+  MONTH_NAMES,
+  fmtCurrency,
+  isoMonthEnd,
+  isoMonthStart,
+  isoToday,
+  isoYesterday,
+  workerCodeNum,
+} from "./factoryworkerattendancereport/utils";
 import { StatusPill } from "./factoryworkerattendancereport/components/StatusPill";
 import { AttendanceSummaryCards } from "./factoryworkerattendancereport/components/AttendanceSummaryCards";
 import { AttendanceLegend } from "./factoryworkerattendancereport/components/AttendanceLegend";
 import { AttendanceAdminApprovalDialog } from "./factoryattendance/components/AttendanceAdminApprovalDialog";
-import { attendanceToday } from "./factoryattendance/attendanceEditPolicy";
-import { useFactoryWorkerAttendanceReportState } from "./useFactoryWorkerAttendanceReportState";
 import {
-  FactoryWorkerAttendanceReportSection,
-  FactoryWorkerAttendanceReportSection2,
-} from "./FactoryWorkerAttendanceReportSection";
+  attendancePastDates,
+  attendanceToday,
+  type AttendanceAdminCredentials,
+} from "./factoryattendance/attendanceEditPolicy";
+import { useToast } from "@/hooks/use-toast";
+
+type AttendanceReportRecord = { workerId: number; attendanceDate: string; status: string };
+type AttendanceReportSavePayload = {
+  records: AttendanceReportRecord[];
+  credentials?: AttendanceAdminCredentials;
+};
 
 export default function FactoryWorkerAttendanceReport() {
-  const {
-    absentCount,
-    approvalDates,
-    approvalOpen,
-    approveAttendanceSave,
-    customEnd,
-    customStart,
-    cycleCell,
-    data,
-    dateRangeError,
-    editMode,
-    effectiveStatus,
-    error,
-    filter,
-    filteredWorkers,
-    flushPending,
-    fullyAbsentCount,
-    handleApprovalOpenChange,
-    hideFullAbsent,
-    isError,
-    isLoading,
-    mode,
-    navigateMonth,
-    overallPct,
-    pending,
-    presentCount,
-    rangeLabel,
-    recordChanges,
-    refetch,
-    salaryKpi,
-    saveMutation,
-    setCustomEnd,
-    setCustomStart,
-    setEditMode,
-    setFilter,
-    setHideFullAbsent,
-    setMode,
-    setPending,
-    sortedWorkers,
-  } = useFactoryWorkerAttendanceReportState();
+  const qc = useQueryClient();
+  const { toast } = useToast();
+
+  /* Date mode state */
+  const [mode, setMode] = useState<DateMode>("today");
+  /* customStart/customEnd are used for both "thisMonth" navigation and "custom" range */
+  const [customStart, setCustomStart] = useState(isoMonthStart);
+  const [customEnd, setCustomEnd] = useState(isoMonthEnd);
+
+  /* UI state */
+  const [filter, setFilter] = useState<AttendanceFilter>("all");
+  const [hideFullAbsent, setHideFullAbsent] = useState(false);
+  const recordChanges = useExistingRecordChangeAccess(); // read-only roles never enter edit mode
+  const [editModeRequested, setEditMode] = useState(false);
+  const editMode = recordChanges.allowed && editModeRequested;
+
+  /* Pending optimistic edits: "workerId|date" → status */
+  const [pending, setPending] = useState<Record<string, string | undefined>>({});
+  const [approvalOpen, setApprovalOpen] = useState(false);
+  const [approvalDates, setApprovalDates] = useState<string[]>([]);
+  const [approvalRecords, setApprovalRecords] = useState<AttendanceReportRecord[] | null>(null);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /* Helper: navigate month offset for thisMonth mode */
+  const navigateMonth = useCallback(
+    (offset: number) => {
+      const d = new Date(customStart + "T00:00:00");
+      d.setMonth(d.getMonth() + offset);
+      const y = d.getFullYear();
+      const m = d.getMonth() + 1;
+      const newStart = `${y}-${String(m).padStart(2, "0")}-01`;
+      const lastDay = new Date(y, m, 0).getDate();
+      const newEnd = `${y}-${String(m).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+      setCustomStart(newStart);
+      setCustomEnd(newEnd);
+      setMode("thisMonth");
+    },
+    [customStart]
+  );
+
+  /* Computed start/end from mode */
+  const { startDate, endDate } = useMemo(() => {
+    if (mode === "today") return { startDate: isoToday(), endDate: isoToday() };
+    if (mode === "yesterday") return { startDate: isoYesterday(), endDate: isoYesterday() };
+    if (mode === "thisMonth") return { startDate: customStart, endDate: customEnd };
+    return { startDate: customStart, endDate: customEnd };
+  }, [mode, customStart, customEnd]);
+
+  const dateRangeError = useMemo(() => validateAttendanceReportDateRange(startDate, endDate), [startDate, endDate]);
+  const queryKey = ["/api/factory/workers/attendance-report", startDate, endDate];
+
+  const { data, isLoading, isError, error, refetch } = useQuery<AttendanceReportData>({
+    queryKey,
+    queryFn: async () => {
+      const res = await fetch(`/api/factory/workers/attendance-report?startDate=${startDate}&endDate=${endDate}`, {
+        credentials: "include",
+        cache: "no-store",
+        headers: { Accept: "application/json" },
+      });
+      return readAttendanceReportResponse(res);
+    },
+    enabled: dateRangeError === null,
+    // A proxy 502/503 can be transient. Do not retry denied, missing or malformed responses.
+    retry: (failureCount, requestError) =>
+      failureCount < 2 && (!(requestError instanceof AttendanceReportRequestError) || requestError.retryable),
+    retryDelay: (failureCount) => Math.min(1000 * 2 ** failureCount, 3000),
+  });
+
+  /* Save changes using the same historical-date approval rule as the daily Attendance page. */
+  const saveMutation = useMutation({
+    // Save sequentially: a delayed response must never overwrite a newer status.
+    scope: { id: "factory-worker-attendance-report" },
+    mutationFn: async ({ records, credentials }: AttendanceReportSavePayload) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
+      const validRecords = records.filter((r) => r.status !== "");
+      const blankRecords = records.filter((r) => r.status === "");
+      const promises: Promise<unknown>[] = [];
+      if (validRecords.length > 0) {
+        promises.push(
+          apiRequest("POST", "/api/factory/attendance/bulk", {
+            records: validRecords,
+            ...credentials,
+          })
+        );
+      }
+      // Do not silently ignore a failed clear request (including a 404).
+      for (const record of blankRecords) {
+        promises.push(
+          apiRequest("POST", "/api/factory/attendance/clear", {
+            workerId: record.workerId,
+            attendanceDate: record.attendanceDate,
+            ...credentials,
+          })
+        );
+      }
+      await Promise.all(promises);
+    },
+    onSuccess: async (_result, { records, credentials }: AttendanceReportSavePayload) => {
+      // Keep optimistic edits displayed until the refreshed server report arrives.
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["/api/factory/workers/attendance-report"] }),
+        qc.invalidateQueries({ queryKey: ["/api/factory/attendance"] }),
+      ]);
+      // A newer edit to the same cell must not be discarded by an older response.
+      setPending((current) => {
+        const next = { ...current };
+        for (const record of records) {
+          const key = `${record.workerId}|${record.attendanceDate}`;
+          if (next[key] === record.status) delete next[key];
+        }
+        return next;
+      });
+      if (credentials) {
+        setApprovalOpen(false);
+        setApprovalRecords(null);
+        setApprovalDates([]);
+      }
+    },
+    onError: (error: Error, { records, credentials }: AttendanceReportSavePayload) => {
+      // A declined historical edit remains visible while the Admin retries.
+      // For other failures, revert the rejected optimistic cells explicitly.
+      if (!credentials) {
+        setPending((current) => {
+          const next = { ...current };
+          for (const record of records) {
+            const key = `${record.workerId}|${record.attendanceDate}`;
+            if (next[key] === record.status) delete next[key];
+          }
+          return next;
+        });
+      }
+      toast({
+        title: "Attendance was not saved",
+        description: error.message || "The attendance change was rejected. Please try again.",
+        variant: "destructive",
+      });
+      qc.invalidateQueries({ queryKey: ["/api/factory/workers/attendance-report"] });
+    },
+  });
+
+  /* Batch-save pending edits after short debounce, requesting Admin approval for earlier dates. */
+  const flushPending = useCallback(
+    (newPending: Record<string, string | undefined>) => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+      saveTimer.current = setTimeout(() => {
+        const entries = Object.entries(newPending);
+        if (entries.length === 0) return;
+        const records = entries.map(([key, status]) => {
+          const [workerId, attendanceDate] = key.split("|");
+          return { workerId: Number(workerId), attendanceDate, status: status ?? "" };
+        });
+        const priorDates = attendancePastDates(records.map((record) => record.attendanceDate));
+        if (priorDates.length > 0) {
+          setApprovalDates(priorDates);
+          setApprovalRecords(records);
+          setApprovalOpen(true);
+        } else {
+          saveMutation.mutate({ records });
+        }
+      }, 800);
+    },
+    [saveMutation]
+  );
+
+  const cycleCell = useCallback(
+    (workerId: number, date: string, currentStatus?: string) => {
+      if (date > attendanceToday()) {
+        toast({ title: "Future dates cannot be edited", variant: "destructive" });
+        return;
+      }
+      const key = `${workerId}|${date}`;
+      const next = CYCLE[currentStatus ?? ""] ?? "Present";
+      const newPending = { ...pending, [key]: next };
+      setPending(newPending);
+      flushPending(newPending);
+    },
+    [pending, flushPending, toast]
+  );
+
+  const approveAttendanceSave = (credentials: AttendanceAdminCredentials) => {
+    if (approvalRecords) saveMutation.mutate({ records: approvalRecords, credentials });
+  };
+
+  const handleApprovalOpenChange = (open: boolean) => {
+    if (!open && approvalRecords) {
+      // Cancelling the approval must also cancel uncommitted optimistic changes.
+      setPending((current) => {
+        const next = { ...current };
+        for (const record of approvalRecords) {
+          const key = `${record.workerId}|${record.attendanceDate}`;
+          if (next[key] === record.status) delete next[key];
+        }
+        return next;
+      });
+      setApprovalRecords(null);
+      setApprovalDates([]);
+    }
+    setApprovalOpen(open);
+  };
+
+  /* Get effective status for a cell (optimistic override or server data) */
+  const effectiveStatus = useCallback(
+    (worker: WorkerReportRow, date: string): string | undefined => {
+      const key = `${worker.id}|${date}`;
+      return key in pending ? pending[key] : worker.attendance[date];
+    },
+    [pending]
+  );
+
+  /* Workers — sorted numerically by code */
+  const sortedWorkers = useMemo(() => {
+    if (!data) return [];
+    return [...data.workers].sort((a, b) => workerCodeNum(a.employeeCode) - workerCodeNum(b.employeeCode));
+  }, [data]);
+
+  /* Filtered worker list */
+  const filteredWorkers = useMemo(() => {
+    let ws = sortedWorkers;
+    if (hideFullAbsent) ws = ws.filter((w) => w.presentCount > 0 || w.recordedCount === 0);
+    if (filter === "absent") ws = ws.filter((w) => w.absentCount > 0);
+    if (filter === "present") ws = ws.filter((w) => w.absentCount === 0);
+    return ws;
+  }, [sortedWorkers, filter, hideFullAbsent]);
+
+  /* Backend reconciles payroll, cash paid and advance settlements by period.
+     Sum in cents so KPI/print totals agree exactly with stored payroll values. */
+  const salaryKpi = useMemo(() => {
+    if (!data || !data.dates.length) return null;
+    let expectedCents = 0;
+    let paidCents = 0;
+    for (const w of filteredWorkers) {
+      expectedCents += Math.round(Number(w.expectedSalary || "0") * 100);
+      paidCents += Math.round(Number(w.paidSalary || "0") * 100);
+    }
+    return {
+      totalExpected: expectedCents / 100,
+      totalPaid: paidCents / 100,
+      totalRemaining: (expectedCents - paidCents) / 100,
+    };
+  }, [filteredWorkers, data]);
+
+  /* Counts for filter badges */
+  const absentCount = sortedWorkers.filter((w) => w.absentCount > 0).length;
+  const presentCount = sortedWorkers.filter((w) => w.absentCount === 0).length;
+  const fullyAbsentCount = sortedWorkers.filter((w) => w.presentCount === 0 && w.recordedCount > 0).length;
+
+  const overallPct =
+    data && data.totals.presentDays + data.totals.absentDays > 0
+      ? Math.round((data.totals.presentDays / (data.totals.presentDays + data.totals.absentDays)) * 100)
+      : null;
+
+  /* Range label for display */
+  const rangeLabel = useMemo(() => {
+    if (!data) {
+      if (mode === "today") return "Today";
+      if (mode === "yesterday") return "Yesterday";
+      if (mode === "thisMonth") {
+        const n = new Date();
+        return `${MONTH_NAMES[n.getMonth()]} ${n.getFullYear()}`;
+      }
+      return `${customStart} → ${customEnd}`;
+    }
+    if (data.startDate === data.endDate) return data.startDate;
+    if (data.dates.length > 0) {
+      const s = data.dates[0];
+      const e = data.dates[data.dates.length - 1];
+      if (s.date.substring(0, 7) === e.date.substring(0, 7)) {
+        const [yr, mo] = s.date.split("-");
+        return `${MONTH_NAMES[parseInt(mo, 10) - 1]} ${yr}`;
+      }
+      return `${s.date} – ${e.date}`;
+    }
+    return `${data.startDate} – ${data.endDate}`;
+  }, [data, mode, customStart, customEnd]);
 
   return (
     <div className="flex flex-col gap-5 rounded-2xl bg-gradient-to-b from-blue-50/50 via-background to-background px-2 pb-4 text-foreground dark:from-[hsl(var(--factory-hue)_59%_11%)] dark:via-[hsl(var(--factory-hue)_49%_8%)] dark:to-[hsl(var(--factory-hue)_49%_8%)] sm:px-4 sm:py-4 print:gap-3 print:rounded-none print:bg-white print:p-0 print:text-black">
@@ -67,59 +334,203 @@ export default function FactoryWorkerAttendanceReport() {
         dates={approvalDates}
       />
       {/* ── Header bar ─────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between flex-wrap gap-3 print:hidden">
-        <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-blue-400/30 bg-blue-500/10 text-blue-600 dark:text-blue-300">
-            <CalendarDays className="h-5 w-5" />
-          </span>
-          <div>
-            <h2 className="text-xl font-bold tracking-tight sm:text-2xl">Attendance Report</h2>
-            <p className="text-xs text-muted-foreground">Workforce attendance and salary overview</p>
-          </div>
-        </div>
-
+      {/* Workers hub "Report" tab: the Payroll hub PageHeader titles the page; keep the actions only. */}
+      <div className="flex items-center justify-end flex-wrap gap-3 print:hidden">
         <div className="flex items-center gap-2 flex-wrap">
-          <Button
+          <ExportButton
+            kind="print"
             variant="outline"
             size="default"
             onClick={() => window.print()}
             data-testid="button-print-report"
             className="gap-2 rounded-lg border border-blue-500 bg-blue-600 px-5 font-semibold text-white shadow-[0_5px_15px_hsl(var(--factory-hue)_83%_53%_/_0.25)] hover:bg-blue-700 hover:text-white dark:border-blue-400 dark:bg-blue-600 dark:hover:bg-blue-500 print:hidden"
-          >
-            <Printer className="h-4 w-4 mr-2" />
-            Print
-          </Button>
+          />
         </div>
       </div>
 
       {/* ── Date mode selector ──────────────────────────────────────────────── */}
-      <FactoryWorkerAttendanceReportSection2
-        customEnd={customEnd}
-        customStart={customStart}
-        mode={mode}
-        navigateMonth={navigateMonth}
-        rangeLabel={rangeLabel}
-        setCustomEnd={setCustomEnd}
-        setCustomStart={setCustomStart}
-        setMode={setMode}
-      />
+      <div className="flex flex-wrap items-center gap-3 print:hidden">
+        <span className="text-sm font-semibold text-muted-foreground">Period:</span>
+        <div className="flex flex-wrap items-center gap-1 rounded-xl border border-slate-200 bg-white/80 p-1 shadow-sm dark:border-blue-900/60 dark:bg-[hsl(var(--factory-hue)_51%_14%)]">
+          {(["today", "yesterday", "thisMonth", "custom"] as DateMode[]).map((m) => (
+            <Button
+              key={m}
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                if (m === "thisMonth") {
+                  setCustomStart(isoMonthStart());
+                  setCustomEnd(isoMonthEnd());
+                }
+                setMode(m);
+              }}
+              data-testid={`mode-${m}`}
+              className={cn(
+                "h-8 rounded-lg px-4 text-xs font-semibold transition-colors",
+                mode === m
+                  ? "bg-blue-600 text-white shadow-[0_2px_10px_hsl(var(--factory-hue)_83%_53%_/_0.35)] hover:bg-blue-700 hover:text-white dark:bg-blue-600 dark:hover:bg-blue-500"
+                  : "text-muted-foreground hover:bg-slate-100 dark:hover:bg-blue-950/70"
+              )}
+            >
+              {m === "today" ? "Today" : m === "yesterday" ? "Yesterday" : m === "thisMonth" ? "This Month" : "Custom"}
+            </Button>
+          ))}
+        </div>
+
+        {/* Month navigator for thisMonth */}
+        {mode === "thisMonth" && (
+          <div className="flex flex-wrap items-center gap-1 rounded-xl border border-slate-200 bg-white/80 p-1 shadow-sm dark:border-blue-900/60 dark:bg-[hsl(var(--factory-hue)_51%_14%)]">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigateMonth(-1)}
+              data-testid="button-prev-month"
+              className="h-7 w-7"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </Button>
+            <span className="text-xs font-semibold px-2 select-none" data-testid="text-current-month">
+              {rangeLabel}
+            </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigateMonth(1)}
+              data-testid="button-next-month"
+              className="h-7 w-7"
+            >
+              <ChevronRight className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        )}
+
+        {/* Custom range inputs */}
+        {mode === "custom" && (
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={customStart}
+              onChange={(e) => setCustomStart(e.target.value)}
+              data-testid="input-custom-start"
+              className="h-7 rounded-md border bg-background px-2 text-xs focus:outline-hidden focus:ring-1 focus:ring-ring"
+            />
+            <span className="text-xs text-muted-foreground">–</span>
+            <input
+              type="date"
+              value={customEnd}
+              onChange={(e) => setCustomEnd(e.target.value)}
+              data-testid="input-custom-end"
+              className="h-7 rounded-md border bg-background px-2 text-xs focus:outline-hidden focus:ring-1 focus:ring-ring"
+            />
+          </div>
+        )}
+      </div>
 
       {/* ── Filter + toggle bar ─────────────────────────────────────────────── */}
-      <FactoryWorkerAttendanceReportSection
-        absentCount={absentCount}
-        data={data}
-        editMode={editMode}
-        filter={filter}
-        fullyAbsentCount={fullyAbsentCount}
-        hideFullAbsent={hideFullAbsent}
-        presentCount={presentCount}
-        recordChanges={recordChanges}
-        saveMutation={saveMutation}
-        setEditMode={setEditMode}
-        setFilter={setFilter}
-        setHideFullAbsent={setHideFullAbsent}
-        sortedWorkers={sortedWorkers}
-      />
+      <div className="flex flex-wrap items-center gap-3 print:hidden">
+        <span className="text-sm font-semibold text-muted-foreground">Show:</span>
+        <div className="flex flex-wrap items-center gap-1 rounded-xl border border-slate-200 bg-white/80 p-1 shadow-sm dark:border-blue-900/60 dark:bg-[hsl(var(--factory-hue)_51%_14%)]">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setFilter("all")}
+            data-testid="filter-all"
+            className={cn(
+              "h-8 rounded-lg px-3 text-xs font-semibold transition-colors",
+              filter === "all"
+                ? "bg-blue-600 text-white shadow-sm hover:bg-blue-700 hover:text-white dark:bg-blue-600"
+                : "text-muted-foreground hover:bg-slate-100 dark:hover:bg-blue-950/70"
+            )}
+          >
+            All
+            {data && (
+              <Badge variant="secondary" className="ml-1.5 text-[11px] px-1.5 py-0 h-4">
+                {sortedWorkers.length}
+              </Badge>
+            )}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setFilter("present")}
+            data-testid="filter-present"
+            className={cn(
+              "h-8 rounded-lg px-3 text-xs font-semibold transition-colors",
+              filter === "present"
+                ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-300"
+                : "text-muted-foreground hover:bg-slate-100 dark:hover:bg-blue-950/70"
+            )}
+          >
+            No Absences
+            {data && (
+              <Badge variant="outline" className="ml-1.5 text-[11px] px-1.5 py-0 h-4 status-success">
+                {presentCount}
+              </Badge>
+            )}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setFilter("absent")}
+            data-testid="filter-absent"
+            className={cn(
+              "h-8 rounded-lg px-3 text-xs font-semibold transition-colors",
+              filter === "absent"
+                ? "bg-red-100 text-red-800 hover:bg-red-200 dark:bg-red-500/20 dark:text-red-300"
+                : "text-muted-foreground hover:bg-slate-100 dark:hover:bg-blue-950/70"
+            )}
+          >
+            Has Absences
+            {data && (
+              <Badge variant="outline" className="ml-1.5 text-[11px] px-1.5 py-0 h-4 status-danger">
+                {absentCount}
+              </Badge>
+            )}
+          </Button>
+        </div>
+
+        {/* Hide fully-absent toggle */}
+        {fullyAbsentCount > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setHideFullAbsent((v) => !v)}
+            data-testid="toggle-hide-full-absent"
+            className={cn(
+              "h-9 gap-1.5 rounded-lg border-slate-200 px-3 text-xs font-semibold dark:border-blue-900/60 dark:bg-[hsl(var(--factory-hue)_51%_14%)]",
+              hideFullAbsent &&
+                "border-blue-400 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-500/15 dark:text-blue-300"
+            )}
+          >
+            {hideFullAbsent ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+            {hideFullAbsent ? "Show" : "Hide"} fully absent
+            <Badge
+              variant="secondary"
+              className="text-[11px] px-1.5 py-0 h-4 bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400"
+            >
+              {fullyAbsentCount}
+            </Badge>
+          </Button>
+        )}
+
+        {/* Edit mode toggle */}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setEditMode((v) => !v)}
+          data-testid="toggle-edit-mode"
+          hidden={!recordChanges.allowed}
+          className={cn(
+            "h-9 gap-1.5 rounded-lg border-slate-200 px-3 text-xs font-semibold dark:border-blue-900/60 dark:bg-[hsl(var(--factory-hue)_51%_14%)]",
+            editMode &&
+              "border-blue-400 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-500/15 dark:text-blue-300"
+          )}
+        >
+          <Pencil className="h-3.5 w-3.5" />
+          {editMode ? "Editing" : "Edit"}
+          {saveMutation.isPending && <Loader2 className="h-3 w-3 animate-spin ml-1" />}
+        </Button>
+      </div>
 
       {dateRangeError && (
         <Card>

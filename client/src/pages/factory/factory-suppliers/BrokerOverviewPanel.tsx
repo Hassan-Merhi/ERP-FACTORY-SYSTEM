@@ -2,7 +2,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import {
-  ArrowLeft,
   ArrowRightLeft,
   Building2,
   Calendar,
@@ -16,6 +15,7 @@ import {
   Plus,
   Users,
 } from "lucide-react";
+import { PageHeader } from "@/components/PageHeader";
 import { CurrencyBalance, SupplierWithBalance } from "./factorySupplierTypes";
 import { DirectContainer } from "./AssignContainersDialog";
 
@@ -105,35 +105,27 @@ export function BrokerOverviewPanel({
   return (
     <div className="space-y-6">
       {/* ── Header ─────────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setParentViewSupplierId(null)}
-          data-testid="button-back-from-parent-view"
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold tracking-tight" data-testid="text-parent-supplier-name">
-              {parentSup?.name || "Loading..."}
-            </h1>
+      <PageHeader
+        title={<span data-testid="text-parent-supplier-name">{parentSup?.name || "Loading..."}</span>}
+        onBack={() => setParentViewSupplierId(null)}
+        backButtonTestId="button-back-from-parent-view"
+        meta={
+          <>
             <Badge variant="secondary" className="text-xs">
               <Building2 className="h-3 w-3 mr-1" />
               Broker
             </Badge>
-          </div>
-          <p className="text-muted-foreground text-sm">
-            {children.length} linked supplier{children.length !== 1 ? "s" : ""}
-            {directContainers.length > 0 && (
-              <span className="ml-2 text-amber-500">
-                · {directContainers.length} direct container{directContainers.length !== 1 ? "s" : ""}
-              </span>
-            )}
-          </p>
-        </div>
-
+            <span>
+              {children.length} linked supplier{children.length !== 1 ? "s" : ""}
+              {directContainers.length > 0 && (
+                <span className="ml-2 text-amber-500">
+                  · {directContainers.length} direct container{directContainers.length !== 1 ? "s" : ""}
+                </span>
+              )}
+            </span>
+          </>
+        }
+      >
         <label
           className="flex items-center gap-2 cursor-pointer select-none"
           data-testid="label-broker-overview-include-otw"
@@ -164,7 +156,7 @@ export function BrokerOverviewPanel({
             Broker Statement
           </Button>
         )}
-      </div>
+      </PageHeader>
 
       {/* ── Broker KPIs ───────────────────────────────────────────── */}
       {parentSup && (

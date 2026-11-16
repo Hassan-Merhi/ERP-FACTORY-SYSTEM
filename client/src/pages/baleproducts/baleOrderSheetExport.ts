@@ -11,6 +11,8 @@
  */
 import type { Cell as ExcelCell, FillPattern } from "exceljs";
 import type { FactoryBaleProduct } from "@shared/schema";
+import { downloadBlob } from "@/lib/downloadBlob";
+import { exportFileName } from "@/lib/exportFile";
 import { hmdLogoPath } from "./utils";
 
 export interface BaleOrderSheetInput {
@@ -27,7 +29,10 @@ export async function downloadPricedBaleOrderSheet(
 
   const priceHeader = priceType === "selling" ? "Selling Price" : "Production Price";
   const today = new Date().toISOString().slice(0, 10);
-  const fileName = priceType === "selling" ? "HMD_Order_Selling_Price.xlsx" : "HMD_Order_Production_Price.xlsx";
+  const fileName = exportFileName(
+    priceType === "selling" ? "HMD order selling price" : "HMD order production price",
+    "xlsx"
+  );
 
   const C_NAVY = "FF00205B";
   const C_BLUE = "FF1F3A6B";
@@ -202,12 +207,7 @@ export async function downloadPricedBaleOrderSheet(
   const blob = new Blob([buffer], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = fileName;
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadBlob(blob, fileName);
 
   return { priceHeader };
 }
@@ -357,10 +357,5 @@ export async function downloadNoPriceBaleOrderSheet(options: BaleOrderSheetInput
   const blob = new Blob([buffer], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "HMD_Order_No_Prices.xlsx";
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadBlob(blob, exportFileName("HMD order no prices", "xlsx"));
 }

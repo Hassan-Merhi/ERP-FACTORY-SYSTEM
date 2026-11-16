@@ -38,6 +38,7 @@ import {
   parseRetailSupplierSpreadsheetFile,
 } from "./retailSupplierImportSpreadsheet";
 import type { CatalogPreview, SupplierOption, SupplierPurchaseResult } from "./retailSupplierImportTypes";
+import { confirmAction } from "@/components/ConfirmHost";
 
 export function RetailSupplierImportDialog({
   open,
@@ -301,11 +302,17 @@ export function RetailSupplierImportDialog({
     mutationFn: async () => {
       if (!readyForPosting || !catalogPreview)
         throw new Error("Resolve all import validation errors before confirming");
-      if (
-        !window.confirm(
-          `Receive ${summary.totalUnits} items from ${knownSupplier?.legalName || knownSupplier?.name || "supplier"}? This posts the inventory and supplier credit voucher.`
-        )
-      ) {
+      const confirmed = await confirmAction({
+        title: "Receive these items from the supplier?",
+        description: "This posts the inventory and supplier credit voucher.",
+        details: [
+          { label: "Items", value: summary.totalUnits },
+          { label: "Supplier", value: knownSupplier?.legalName || knownSupplier?.name || "—" },
+        ],
+        confirmText: "Receive and post",
+        tone: "warning",
+      });
+      if (!confirmed) {
         throw new Error("Purchase confirmation cancelled");
       }
       // Reuse uploaded URLs on retry. Otherwise a lost success response would
@@ -427,7 +434,9 @@ export function RetailSupplierImportDialog({
       return;
     }
     if (file.size > spreadsheetImportLimitBytes(selectedCompany?.role)) {
-      setFileError(`Spreadsheet must be ${sizeLimitLabel(spreadsheetImportLimitBytes(selectedCompany?.role))} or smaller`);
+      setFileError(
+        `Spreadsheet must be ${sizeLimitLabel(spreadsheetImportLimitBytes(selectedCompany?.role))} or smaller`
+      );
       return;
     }
     setBusy(true);

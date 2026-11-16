@@ -16,8 +16,8 @@ describe("Factory bilingual Phase 7 document contracts", () => {
     const source = read("server/routes/factory/factoryBilingualDocumentRoutes.ts");
     expect(source).toContain("hasExplicitLanguage");
     expect(source).toContain("return next()");
-    expect(source).toContain("req.query.lang === \"en\"");
-    expect(source).toContain("req.query.lang === \"ar\"");
+    expect(source).toContain('req.query.lang === "en"');
+    expect(source).toContain('req.query.lang === "ar"');
   });
 
   it("supports bilingual PDF, Excel, loading, no-charge and price-hiding paths", () => {
@@ -39,11 +39,11 @@ describe("Factory bilingual Phase 7 document contracts", () => {
 
   it("exposes English and Arabic actions on the invoice detail page", () => {
     const source = read("client/src/pages/factory/FactoryInvoiceDetailBilingual.tsx");
-    expect(source).toContain("English PDF");
-    expect(source).toContain("English Excel");
+    expect(source).toContain("Export PDF (English)");
+    expect(source).toContain("Export Excel (English)");
     expect(source).toContain("English Loading List");
-    expect(source).toContain("فاتورة PDF عربية");
-    expect(source).toContain("فاتورة Excel عربية");
+    expect(source).toContain("Export PDF (فاتورة عربية)");
+    expect(source).toContain("Export Excel (فاتورة عربية)");
     expect(source).toContain("قائمة تحميل عربية");
   });
 

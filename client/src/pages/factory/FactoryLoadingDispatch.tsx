@@ -1,3 +1,13 @@
+/**
+ * Phase 2 — truck-trip management for one existing Factory loading order.
+ * Verification-only: displays main-loading totals but never writes to the
+ * main loading, stock, proforma, invoice or accounting endpoints.
+ *
+ * Phase 3 provides physical scan verification; Phase 4 comparison; Phase 6 close/reopen.
+ */
+import { useMemo, useState, type FormEvent } from "react";
+import { useLocation, useParams } from "wouter";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
   ArrowRight,
@@ -5,88 +15,402 @@ import {
   Clock3,
   Edit3,
   FileSearch,
+  FileSpreadsheet,
   Loader2,
   Package,
+  Plus,
+  RefreshCw,
   Route,
   ShieldCheck,
   Truck,
   Trash2,
   Weight,
 } from "lucide-react";
+import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { TabsList, PillTabButton } from "@/components/ui/tabs";
+import { useToast } from "@/hooks/use-toast";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { useDateFormat } from "@/contexts/DateFormatContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
 import FactoryDispatchOrderDashboard from "./FactoryDispatchOrderDashboard";
-import { queryClient } from "@/lib/queryClient";
+import { FACTORY_DISPATCH_TRIP_STATUS_LABELS, type FactoryDispatchTripStatus } from "@shared/factoryStatusPresentation";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import FactoryLoadingDispatchScanner from "./FactoryLoadingDispatchScanner";
 import FactoryLoadingDispatchLifecycle from "./FactoryLoadingDispatchLifecycle";
 import FactoryLoadingDispatchFinance from "./FactoryLoadingDispatchFinance";
 import FactoryLoadingDispatchPostingPanel from "./FactoryLoadingDispatchPostingPanel";
 import FactoryLoadingDispatchPoExport from "./FactoryLoadingDispatchPoExport";
-import {
-  StatCard,
-  TripEditor,
-  TripStatusBadge,
-  fromTrip,
-  getError,
-  numberValue,
-  printNumber,
-  tripPath,
-} from "./FactoryLoadingDispatchTripEditor";
-import { FactoryLoadingDispatchSection, useFactoryLoadingDispatchState } from "./useFactoryLoadingDispatchState";
-import { FactoryLoadingDispatchDialogSection, FactoryLoadingDispatchSection2 } from "./FactoryLoadingDispatchSection2";
+
+interface OrderBale {
+  id: number;
+  baleId: number;
+  weight: string | number;
+}
+interface LoadingOrder {
+  id: number;
+  status: string;
+  customerName?: string | null;
+  containerNumber?: string | null;
+  bales: OrderBale[];
+}
+type TripStatus = FactoryDispatchTripStatus;
+interface DispatchTrip {
+  id: number;
+  orderId: number;
+  dispatchNumber: number;
+  status: TripStatus;
+  containerNumberSnapshot?: string | null;
+  truckPlate: string | null;
+  driverName: string | null;
+  destination: string | null;
+  notes: string | null;
+  createdAt: string;
+  createdByUsername?: string;
+  updatedAt?: string;
+  closedAt?: string | null;
+  scannedBales?: number | string;
+  scannedWeightKg?: number | string;
+}
+interface DispatchList {
+  orderId: number;
+  containerNumber: string | null;
+  dispatches: DispatchTrip[];
+}
+interface TripForm {
+  tripNumber: string;
+  notes: string;
+}
+type TripFilter = "all" | "open" | "closed";
+
+const blankForm: TripForm = { tripNumber: "", notes: "" };
+const activeOrderStatuses = new Set(["DRAFT", "LOADING", "PENDING_VERIFICATION"]);
+
+function tripPath(orderId: number, dispatchId?: number): string {
+  return "/factory/sales/loading/dispatch/" + orderId + (dispatchId ? "/" + dispatchId : "");
+}
+
+function numberValue(raw: number | string | undefined): number {
+  const n = Number(raw ?? 0);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function printNumber(n: number, digits = 0): string {
+  return n.toLocaleString(undefined, { maximumFractionDigits: digits });
+}
+
+async function getJson<T>(url: string): Promise<T> {
+  // After a rolling deployment some intermediaries can briefly return the
+  // SPA HTML shell for an API GET. Never interpret it as dispatch evidence.
+  // One cache-busted retry allows the client to recover without operator
+  // action while preserving real JSON errors and authorization responses.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const requestUrl = attempt === 0 ? url : url + (url.includes("?") ? "&" : "?") + "_dispatch_retry=" + Date.now();
+    const response = await fetch(requestUrl, {
+      credentials: "include",
+      cache: "no-store",
+      headers: { Accept: "application/json", "Cache-Control": "no-cache" },
+    });
+    const contentType = (response.headers.get("content-type") || "").toLowerCase();
+    if (!contentType.includes("application/json")) {
+      // Retry only successful non-JSON responses. A 401, 403, 404, or 5xx
+      // should not be masked by retrying an unrelated fallback page.
+      if (response.ok && attempt === 0) continue;
+      throw new Error(
+        "Dispatch API returned " +
+          (contentType || "an unknown content type") +
+          " instead of JSON (HTTP " +
+          response.status +
+          "). " +
+          "The server or proxy served an invalid API response; please retry."
+      );
+    }
+    const body = await response.json();
+    if (!response.ok) {
+      throw new Error(body?.message || "Unable to load dispatch information (HTTP " + response.status + ")");
+    }
+    return body as T;
+  }
+  throw new Error("Dispatch API did not return JSON after retry");
+}
+
+function getError(error: unknown): string {
+  return error instanceof Error ? error.message : "An unexpected error occurred";
+}
+
+function fromTrip(trip: DispatchTrip): TripForm {
+  return {
+    tripNumber: String(trip.dispatchNumber),
+    notes: trip.notes ?? "",
+  };
+}
+
+function TripStatusBadge({ status }: { status: TripStatus }) {
+  const statusStyle =
+    status === "OPEN"
+      ? "border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/15 dark:text-blue-200"
+      : status === "CLOSED"
+        ? "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-200"
+        : "border-red-300 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/15 dark:text-red-200";
+  return (
+    <Badge variant="outline" className={statusStyle}>
+      {FACTORY_DISPATCH_TRIP_STATUS_LABELS[status]}
+    </Badge>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  unit,
+  icon: Icon,
+}: {
+  label: string;
+  value: string;
+  unit?: string;
+  icon: typeof Package;
+}) {
+  return (
+    <Card className="border-slate-200/90 bg-white/90 dark:border-blue-500/20 dark:bg-[hsl(var(--factory-hue)_53%_13%)]">
+      <CardContent className="flex items-center justify-between gap-2 p-3 sm:p-4">
+        <div className="min-w-0">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+          <p
+            className="mt-1 font-mono text-xl font-bold tracking-tight sm:text-2xl"
+            data-testid={"stat-" + label.toLowerCase().replace(/\s+/g, "-")}
+          >
+            {value} {unit && <span className="text-xs font-normal text-muted-foreground">{unit}</span>}
+          </p>
+        </div>
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-500/15 dark:text-sky-300">
+          <Icon className="h-4 w-4" />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function TripEditor({
+  open,
+  onOpenChange,
+  value,
+  onChange,
+  onSubmit,
+  title,
+  submitLabel,
+  busy,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  value: TripForm;
+  onChange: (next: TripForm) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  title: string;
+  submitLabel: string;
+  busy: boolean;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>Choose a unique trip number for this loading. Notes are optional.</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={onSubmit} className="space-y-4" data-testid="dispatch-trip-form">
+          <div className="space-y-1.5">
+            <Label htmlFor="dispatch-trip-number">Trip number</Label>
+            <Input
+              id="dispatch-trip-number"
+              type="number"
+              min={1}
+              max={2147483647}
+              step={1}
+              required
+              value={value.tripNumber}
+              placeholder="e.g. 1"
+              onChange={(e) => onChange({ ...value, tripNumber: e.target.value })}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="dispatch-notes">Notes</Label>
+            <Textarea
+              id="dispatch-notes"
+              maxLength={3000}
+              rows={3}
+              value={value.notes}
+              placeholder="Optional instructions or loading notes"
+              onChange={(e) => onChange({ ...value, notes: e.target.value })}
+            />
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={busy} data-testid="button-save-dispatch">
+              {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {submitLabel}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 export default function FactoryLoadingDispatch() {
-  const {
-    backToLoading,
-    canCreate,
-    canDeleteDispatch,
-    canEdit,
-    canViewFinancialDashboard,
-    companyId,
-    completion,
-    createMutation,
-    createOpen,
-    deleteMutation,
-    deleteOpen,
-    deleteReason,
-    dispatchId,
-    editMutation,
-    editOpen,
-    editTrip,
-    filter,
-    formatDisplayDateTime,
-    listUrl,
-    loadedQty,
-    loadedWeight,
-    navigate,
-    newTrip,
-    openTrips,
-    orderId,
-    orderQuery,
-    refresh,
-    remainingQty,
-    selectedQuery,
-    selectedTrip,
-    selectedUrl,
-    setCreateOpen,
-    setDeleteOpen,
-    setDeleteReason,
-    setEditOpen,
-    setEditTrip,
-    setFilter,
-    setNewTrip,
-    trips,
-    tripsQuery,
-    user,
-    validDispatch,
-    validOrder,
-    verifiedQty,
-    verifiedWeight,
-    visibleTrips,
-  } = useFactoryLoadingDispatchState();
+  const { orderId: orderIdText, dispatchId: dispatchIdText } = useParams<{ orderId: string; dispatchId?: string }>();
+  const orderId = Number(orderIdText);
+  const dispatchId = dispatchIdText ? Number(dispatchIdText) : null;
+  const validOrder = Number.isSafeInteger(orderId) && orderId > 0;
+  const validDispatch = dispatchId === null || (Number.isSafeInteger(dispatchId) && dispatchId > 0);
+
+  const [, navigate] = useLocation();
+  const { toast } = useToast();
+  const { formatDisplayDateTime } = useDateFormat();
+  const [filter, setFilter] = useState<TripFilter>("all");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteReason, setDeleteReason] = useState("");
+  const [newTrip, setNewTrip] = useState<TripForm>(blankForm);
+  const [editTrip, setEditTrip] = useState<TripForm>(blankForm);
+
+  const { data: user } = useQuery<{
+    currentCompanyId?: number | null;
+    currentRole?: string | null;
+    role?: string | null;
+  }>({
+    queryKey: ["/api/auth/me"],
+  });
+  const companyId = user?.currentCompanyId;
+  const listUrl = "/api/factory/customer-orders/" + orderId + "/loading-dispatches";
+  const orderUrl = "/api/factory/customer-orders/" + orderId;
+  const selectedUrl = dispatchId ? listUrl + "/" + dispatchId : null;
+
+  const tripsQuery = useQuery<DispatchList>({
+    queryKey: companyQueryKey(listUrl, companyId),
+    queryFn: () => getJson<DispatchList>(listUrl),
+    enabled: validOrder && Boolean(companyId),
+    refetchInterval: 15000,
+  });
+  const orderQuery = useQuery<LoadingOrder>({
+    queryKey: companyQueryKey(orderUrl, companyId),
+    queryFn: () => getJson<LoadingOrder>(orderUrl),
+    enabled: validOrder && Boolean(companyId),
+    refetchInterval: 15000,
+  });
+  const selectedQuery = useQuery<DispatchTrip>({
+    queryKey: companyQueryKey(selectedUrl ?? listUrl, companyId),
+    queryFn: () => getJson<DispatchTrip>(selectedUrl!),
+    enabled: validOrder && validDispatch && Boolean(selectedUrl) && Boolean(companyId),
+    refetchInterval: 15000,
+  });
+
+  const role = (user?.currentRole ?? user?.role ?? "").toLowerCase();
+  const canViewFinancialDashboard = ["admin", "owner", "developer"].includes(role);
+  const canDeleteDispatch = ["admin", "owner", "developer"].includes(role);
+  const canEdit = !["View Only", "Create Only"].includes(user?.currentRole ?? user?.role ?? "");
+  const canCreate = canEdit && activeOrderStatuses.has(orderQuery.data?.status ?? "");
+
+  const trips = useMemo(() => tripsQuery.data?.dispatches ?? [], [tripsQuery.data?.dispatches]);
+  const loadedQty = orderQuery.data?.bales?.length ?? 0;
+  const loadedWeight = (orderQuery.data?.bales ?? []).reduce((sum, bale) => sum + numberValue(bale.weight), 0);
+  const verifiedQty = trips.reduce((sum, trip) => sum + numberValue(trip.scannedBales), 0);
+  const verifiedWeight = trips.reduce((sum, trip) => sum + numberValue(trip.scannedWeightKg), 0);
+  const remainingQty = Math.max(0, loadedQty - verifiedQty);
+  const openTrips = trips.filter((trip) => trip.status === "OPEN").length;
+  const completion = loadedQty > 0 ? Math.min(100, Math.round((verifiedQty / loadedQty) * 100)) : 0;
+
+  const visibleTrips = useMemo(
+    () =>
+      trips.filter((trip) => filter === "all" || (filter === "open" ? trip.status === "OPEN" : trip.status !== "OPEN")),
+    [trips, filter]
+  );
+  const selectedTrip = selectedQuery.data ?? trips.find((trip) => Number(trip.id) === dispatchId) ?? null;
+
+  const refresh = async () => {
+    await Promise.all([tripsQuery.refetch(), orderQuery.refetch(), ...(dispatchId ? [selectedQuery.refetch()] : [])]);
+  };
+
+  const createMutation = useMutation({
+    mutationFn: async (form: TripForm) => {
+      const response = await apiRequest("POST", listUrl, {
+        tripNumber: Number(form.tripNumber),
+        notes: form.notes,
+      });
+      return response.json() as Promise<DispatchTrip>;
+    },
+    onSuccess: (trip) => {
+      setCreateOpen(false);
+      setNewTrip(blankForm);
+      void queryClient.invalidateQueries({ queryKey: companyQueryKey(listUrl, companyId) });
+      toast({
+        title: "Dispatch created",
+        description: "Trip #" + trip.dispatchNumber + " is now open for verification.",
+      });
+      navigate(tripPath(orderId, trip.id));
+    },
+    onError: (error) =>
+      toast({ title: "Could not create dispatch", description: getError(error), variant: "destructive" }),
+  });
+
+  const editMutation = useMutation({
+    mutationFn: async (form: TripForm) => {
+      if (!selectedUrl) throw new Error("Choose a dispatch to edit");
+      const response = await apiRequest("PATCH", selectedUrl, {
+        tripNumber: Number(form.tripNumber),
+        notes: form.notes,
+      });
+      return response.json() as Promise<DispatchTrip>;
+    },
+    onSuccess: () => {
+      setEditOpen(false);
+      void queryClient.invalidateQueries({ queryKey: companyQueryKey(listUrl, companyId) });
+      if (selectedUrl) void queryClient.invalidateQueries({ queryKey: companyQueryKey(selectedUrl, companyId) });
+      toast({ title: "Dispatch details saved" });
+    },
+    onError: (error) =>
+      toast({ title: "Could not save changes", description: getError(error), variant: "destructive" }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (reason: string) => {
+      if (!selectedUrl || !selectedTrip || selectedTrip.status !== "OPEN") {
+        throw new Error("Only an open dispatch can be deleted");
+      }
+      const response = await apiRequest("POST", selectedUrl + "/cancel", { reason });
+      return response.json() as Promise<{ success: boolean; removedScans: number }>;
+    },
+    onSuccess: (result) => {
+      setDeleteOpen(false);
+      setDeleteReason("");
+      void queryClient.invalidateQueries({ queryKey: companyQueryKey(listUrl, companyId) });
+      if (selectedUrl) void queryClient.invalidateQueries({ queryKey: companyQueryKey(selectedUrl, companyId) });
+      void queryClient.invalidateQueries({ queryKey: companyQueryKey(listUrl + "/comparison", companyId) });
+      toast({
+        title: "Dispatch deleted",
+        description: result.removedScans + " verification scans released. Audit history is preserved.",
+      });
+      navigate(tripPath(orderId));
+    },
+    onError: (error) =>
+      toast({ title: "Could not delete dispatch", description: getError(error), variant: "destructive" }),
+  });
+
+  const backToLoading = () => navigate("/factory/sales/loading/new?orderId=" + orderId);
 
   if (!validOrder || !validDispatch) {
     return <div className="p-6 text-sm text-destructive">Invalid loading order or dispatch ID.</div>;
@@ -98,18 +422,61 @@ export default function FactoryLoadingDispatch() {
       data-testid="factory-loading-dispatch-page"
     >
       <div className="mx-auto w-full max-w-[1480px] space-y-5 p-3 pb-10 sm:p-5 lg:p-7">
-        <FactoryLoadingDispatchSection2
-          backToLoading={backToLoading}
-          canCreate={canCreate}
-          dispatchId={dispatchId}
-          navigate={navigate}
-          orderId={orderId}
-          orderQuery={orderQuery}
-          refresh={refresh}
-          setCreateOpen={setCreateOpen}
-          setNewTrip={setNewTrip}
-          tripsQuery={tripsQuery}
-        />
+        <PageHeader
+          title="Dispatch Management"
+          icon={<Truck className="h-5 w-5" />}
+          subtitle="Scan actual bales on each trip, then compare all trips against Pending Loading."
+          onBack={backToLoading}
+          backButtonTestId="button-return-to-loading"
+          meta={
+            <>
+              <Badge variant="secondary">Loading #{orderId}</Badge>
+              {orderQuery.data?.containerNumber && <Badge variant="outline">{orderQuery.data.containerNumber}</Badge>}
+            </>
+          }
+        >
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() =>
+              navigate(
+                "/factory/sales/loading/dispatch/" + orderId + (dispatchId !== null ? "/" + dispatchId : "") + "/report"
+              )
+            }
+            data-testid="button-dispatch-reports"
+          >
+            <FileSpreadsheet className="mr-1.5 h-4 w-4" /> Reports & Excel
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => navigate("/factory/sales/loading/dispatch/" + orderId + "/compare")}
+            data-testid="button-compare-all-dispatches"
+          >
+            <FileSearch className="mr-1.5 h-4 w-4" /> Final Loading Comparison
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => void refresh()}
+            disabled={tripsQuery.isFetching || orderQuery.isFetching}
+            data-testid="button-refresh-dispatch"
+          >
+            <RefreshCw className="mr-1.5 h-4 w-4" /> Refresh
+          </Button>
+          {canCreate && (
+            <Button
+              size="sm"
+              onClick={() => {
+                setNewTrip(blankForm);
+                setCreateOpen(true);
+              }}
+              data-testid="button-new-dispatch"
+            >
+              <Plus className="mr-1.5 h-4 w-4" /> New Dispatch
+            </Button>
+          )}
+        </PageHeader>
 
         <div className="flex items-start gap-2 rounded-xl border border-indigo-200 bg-indigo-50/80 p-3 text-xs text-indigo-900 dark:border-indigo-500/25 dark:bg-indigo-500/10 dark:text-indigo-100">
           <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
@@ -169,19 +536,89 @@ export default function FactoryLoadingDispatch() {
         )}
 
         {dispatchId === null ? (
-          <FactoryLoadingDispatchSection
-            canCreate={canCreate}
-            filter={filter}
-            formatDisplayDateTime={formatDisplayDateTime}
-            navigate={navigate}
-            openTrips={openTrips}
-            orderId={orderId}
-            setCreateOpen={setCreateOpen}
-            setFilter={setFilter}
-            trips={trips}
-            tripsQuery={tripsQuery}
-            visibleTrips={visibleTrips}
-          />
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-base font-bold">Truck trips</h2>
+                <p className="text-xs text-muted-foreground">Each trip has its own record, operator and status.</p>
+              </div>
+              <TabsList className="w-max" aria-label="Dispatch status filter">
+                <PillTabButton selected={filter === "all"} onClick={() => setFilter("all")}>
+                  All ({trips.length})
+                </PillTabButton>
+                <PillTabButton selected={filter === "open"} onClick={() => setFilter("open")}>
+                  Open ({openTrips})
+                </PillTabButton>
+                <PillTabButton selected={filter === "closed"} onClick={() => setFilter("closed")}>
+                  Finished ({trips.length - openTrips})
+                </PillTabButton>
+              </TabsList>
+            </div>
+            {tripsQuery.isPending && (
+              <div className="flex items-center gap-2 p-6 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" /> Loading dispatch records…
+              </div>
+            )}
+            {!tripsQuery.isPending && tripsQuery.isSuccess && visibleTrips.length === 0 && (
+              <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-blue-200 bg-white/80 p-10 text-center dark:border-blue-500/25 dark:bg-[hsl(var(--factory-hue)_53%_13%)]">
+                <Truck className="h-9 w-9 text-blue-500" />
+                <p className="font-semibold">
+                  {trips.length === 0 ? "No dispatch trips yet" : "No dispatches match this filter"}
+                </p>
+                <p className="max-w-sm text-sm text-muted-foreground">
+                  {trips.length === 0
+                    ? "Create a dispatch for the first truck. Every additional trip will be tracked separately."
+                    : "Try another status filter to see the other trips."}
+                </p>
+                {canCreate && trips.length === 0 && (
+                  <Button onClick={() => setCreateOpen(true)}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Create first dispatch
+                  </Button>
+                )}
+              </div>
+            )}
+            <div className="grid gap-3 lg:grid-cols-2">
+              {visibleTrips.map((trip) => (
+                <button
+                  type="button"
+                  key={trip.id}
+                  onClick={() => navigate(tripPath(orderId, trip.id))}
+                  className="group rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition-colors hover:border-blue-400 hover:bg-blue-50/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 dark:border-blue-500/20 dark:bg-[hsl(var(--factory-hue)_53%_13%)] dark:hover:border-blue-400"
+                  data-testid={"dispatch-trip-" + trip.id}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <div className="rounded-lg bg-blue-50 p-2 text-blue-600 dark:bg-blue-500/15 dark:text-sky-300">
+                        <Truck className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-bold">Dispatch #{String(trip.dispatchNumber).padStart(3, "0")}</h3>
+                        <p className="text-xs text-muted-foreground">{trip.notes || "No notes"}</p>
+                      </div>
+                    </div>
+                    <TripStatusBadge status={trip.status} />
+                  </div>
+                  <div className="mt-4 grid grid-cols-2 gap-2 rounded-xl bg-slate-50 p-3 dark:bg-[hsl(var(--factory-hue)_58%_10%)]">
+                    <div>
+                      <p className="text-[11px] text-muted-foreground">Bales verified</p>
+                      <p className="font-mono font-bold">{printNumber(numberValue(trip.scannedBales))}</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] text-muted-foreground">Verified kg</p>
+                      <p className="font-mono font-bold">{printNumber(numberValue(trip.scannedWeightKg), 2)}</p>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                    <span>{trip.createdByUsername || "Unknown operator"}</span>
+                    <span className="flex items-center gap-1">
+                      {formatDisplayDateTime(trip.createdAt)} <ArrowRight className="h-3.5 w-3.5 text-blue-500" />
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
         ) : (
           <div className="space-y-4">
             <Button
@@ -409,14 +846,45 @@ export default function FactoryLoadingDispatch() {
         </div>
       </div>
 
-      <FactoryLoadingDispatchDialogSection
-        deleteMutation={deleteMutation}
-        deleteOpen={deleteOpen}
-        deleteReason={deleteReason}
-        selectedTrip={selectedTrip}
-        setDeleteOpen={setDeleteOpen}
-        setDeleteReason={setDeleteReason}
-      />
+      <Dialog
+        open={deleteOpen}
+        onOpenChange={(open) => {
+          if (!deleteMutation.isPending) setDeleteOpen(open);
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete Dispatch #{selectedTrip?.dispatchNumber}?</DialogTitle>
+            <DialogDescription>
+              Delete this open dispatch from the active list, release all its verified scans and reservations, and
+              preserve the audit history. The main loading, stock, customer balance and journal vouchers will not be
+              changed. Previously closed or financially recorded trips cannot be deleted.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={deleteReason}
+            rows={3}
+            maxLength={500}
+            placeholder="Required reason for deleting this dispatch"
+            onChange={(event) => setDeleteReason(event.target.value)}
+            data-testid="input-delete-dispatch-reason"
+          />
+          <DialogFooter>
+            <Button variant="outline" disabled={deleteMutation.isPending} onClick={() => setDeleteOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={deleteMutation.isPending || deleteReason.trim().length < 3}
+              onClick={() => deleteMutation.mutate(deleteReason.trim())}
+              data-testid="button-confirm-delete-dispatch"
+            >
+              {deleteMutation.isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+              Delete Dispatch
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <TripEditor
         open={createOpen}
         onOpenChange={(open) => {

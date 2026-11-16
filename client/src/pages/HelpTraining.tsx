@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { BookOpen, ChevronRight, CirclePlay, Clapperboard, FileText, Search, ShieldCheck, Video } from "lucide-react";
+import { PageHeader } from "@/components/PageHeader";
 import type { TrainingMode, TrainingTopic } from "@/training/trainingCatalog";
 import { usePublishedTrainingMedia } from "@/training/publishedVideos";
 
@@ -47,19 +48,19 @@ export default function HelpTraining({ mode, topics }: Props) {
 
   return (
     <main className="mx-auto w-full max-w-7xl space-y-6 px-4 py-5 sm:px-7" data-testid="help-training">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="mb-1 text-xs font-semibold uppercase tracking-[0.2em] text-primary">System knowledge base</p>
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Help & Training</h1>
-          <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+      <PageHeader
+        title="Help & Training"
+        subtitle={
+          <>
             Step-by-step guides for the {WORKSPACE[mode].label} pages you have access to. Narrated recordings of each
             screen appear alongside the guide once the nightly recorder has captured it.
-          </p>
-        </div>
+          </>
+        }
+      >
         <Link href={home} className="rounded-lg border px-3 py-2 text-sm hover:bg-muted">
           Return to {WORKSPACE[mode].label}
         </Link>
-      </div>
+      </PageHeader>
 
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="rounded-xl border bg-card p-4">

@@ -1,5 +1,5 @@
 import { writeFile, ExcelJS } from "@/lib/excelHelper";
-import { format } from "date-fns";
+import { exportFileName } from "@/lib/exportFile";
 import type { SalesReportItem } from "./types";
 
 export async function exportSalesReportExcel(salesData: SalesReportItem[]) {
@@ -77,6 +77,6 @@ export async function exportSalesReportExcel(salesData: SalesReportItem[]) {
     });
   });
 
-  const fileName = `detailed-sales-report-${format(new Date(), "yyyy-MM-dd")}.xlsx`;
+  const fileName = exportFileName("detailed sales report", "xlsx");
   await writeFile(workbook, fileName);
 }

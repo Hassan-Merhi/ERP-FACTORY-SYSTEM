@@ -1,66 +1,373 @@
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { useParams, useLocation } from "wouter";
+import { useEscapeToParent } from "@/hooks/use-escape-to-parent";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, X } from "lucide-react";
+import { ArrowLeft, X, ExternalLink, Upload, Download, Plus, Save, Trash2 } from "lucide-react";
+import { useDateFormat } from "@/contexts/DateFormatContext";
 import { CustomerStatementExports } from "./factorycustomerstatement/CustomerStatementExports";
+import { drCrClass } from "@/lib/formatNumber";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import { factoryApiRequest } from "@/lib/factoryApi";
+import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { PageHeader } from "@/components/PageHeader";
-import { fmtMoney, fmtNum } from "./factorycustomerstatement/statementHelpers";
-import { useFactoryCustomerStatementState } from "./useFactoryCustomerStatementState";
-import { FactoryCustomerStatementSection } from "./FactoryCustomerStatementSection";
-import { FactoryCustomerStatementSection2, FactoryCustomerStatementSection3 } from "./FactoryCustomerStatementSection2";
+import * as XLSX from "xlsx-js-style";
+import type { FactoryMyAccess } from "@shared/apiTypes";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
+import {
+  LEGACY_PRICE_DESTINATION,
+  downloadPriceListTemplate,
+  fmtMoney,
+  fmtNum,
+  normalizePriceDestination,
+  parsePriceListRows,
+  priceListUrl,
+  type PriceListEntry,
+  type PriceListLine,
+  type StatementData,
+} from "./factorycustomerstatement/statementHelpers";
+import { confirmAction } from "@/components/ConfirmHost";
 
 export default function FactoryCustomerStatement() {
-  const {
-    activeCustomerTab,
-    addPriceDestination,
-    customerId,
-    deletePriceMutation,
-    draftNote,
-    fileInputRef,
-    filterDateFrom,
-    filterDateTo,
-    filterDestination,
-    filteredHistory,
-    formatDisplayDate,
-    handleExcelUpload,
-    handlePriceListTemplateDownload,
-    handleSavePrices,
-    hasFilters,
-    hasPriceEdits,
-    isLoading,
-    navigate,
-    newCode,
-    newDestination,
-    newPrice,
-    priceDestination,
-    priceDestinationsQuery,
-    priceEdits,
-    priceListQuery,
-    recordChanges,
-    rowNotes,
-    saveNoteMutation,
-    savePricesMutation,
-    saveRowNote,
-    savingRowNote,
-    selectPriceDestination,
-    setDraftNote,
-    setFilterDateFrom,
-    setFilterDateTo,
-    setFilterDestination,
-    setNewCode,
-    setNewDestination,
-    setNewPrice,
-    setPriceEdits,
-    setRequestedCustomerTab,
-    setRowNotes,
-    showPriceListTab,
-    showStatementTab,
-    statement,
-    totals,
-  } = useFactoryCustomerStatementState();
+  const { selectedCompany } = useCompany();
+  const { formatDisplayDate } = useDateFormat();
+  const { toast } = useToast();
+  const [, navigate] = useLocation();
+  useEscapeToParent("/factory/customers");
+  const params = useParams<{ id: string }>();
+  const customerId = params.id;
+  const recordChanges = useExistingRecordChangeAccess();
+  const { data: myAccess } = useQuery<FactoryMyAccess>({
+    queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
+    staleTime: 5 * 60000,
+  });
+  const hiddenTabs =
+    myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
+      ? myAccess.hiddenCostFields
+      : ["hide_tab_customer_statement", "hide_tab_customer_pricelist"];
+  const showStatementTab = !hiddenTabs.includes("hide_tab_customer_statement");
+  const showPriceListTab = !hiddenTabs.includes("hide_tab_customer_pricelist");
+  const visibleCustomerTabs = [showStatementTab ? "statement" : null, showPriceListTab ? "pricelist" : null].filter(
+    (value): value is "statement" | "pricelist" => value !== null
+  );
+  const [requestedCustomerTab, setRequestedCustomerTab] = useState<"statement" | "pricelist">("statement");
+  const activeCustomerTab = visibleCustomerTabs.includes(requestedCustomerTab)
+    ? requestedCustomerTab
+    : visibleCustomerTabs[0];
+
+  useEffect(() => {
+    if (activeCustomerTab && requestedCustomerTab !== activeCustomerTab) {
+      setRequestedCustomerTab(activeCustomerTab);
+    }
+  }, [activeCustomerTab, requestedCustomerTab]);
+
+  const [draftNote, setDraftNote] = useState<string | null>(null);
+  const [rowNotes, setRowNotes] = useState<Record<number | string, string>>({});
+  const [savingRowNote, setSavingRowNote] = useState<number | null>(null);
+
+  const [filterDestination, setFilterDestination] = useState("");
+  const [filterDateFrom, setFilterDateFrom] = useState("");
+  const [filterDateTo, setFilterDateTo] = useState("");
+
+  // Prices are scoped by customer and selected destination.
+  const [priceDestination, setPriceDestination] = useState("");
+  const [newDestination, setNewDestination] = useState("");
+  const [priceEdits, setPriceEdits] = useState<Record<string, string>>({});
+  const [newCode, setNewCode] = useState("");
+  const [newPrice, setNewPrice] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const { data: statement, isLoading } = useQuery<StatementData>({
+    queryKey: companyQueryKey(
+      "/api/factory/customers",
+      selectedCompany?.id,
+      customerId,
+      "statement",
+      filterDateFrom,
+      filterDateTo
+    ),
+    queryFn: async () => {
+      // Re-group at each date boundary: a late charge must never shift into
+      // a different accounting period when filtering the statement.
+      const params = new URLSearchParams();
+      if (filterDateFrom) params.set("dateFrom", filterDateFrom);
+      if (filterDateTo) params.set("dateTo", filterDateTo);
+      const query = params.toString();
+      const res = await fetch(`/api/factory/customers/${customerId}/statement${query ? `?${query}` : ""}`, {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error((await res.json()).message || "Failed to fetch statement");
+      return res.json();
+    },
+    enabled: !!customerId && Boolean(selectedCompany?.id),
+  });
+
+  const priceDestinationsQuery = useQuery<string[]>({
+    queryKey: companyQueryKey("/api/factory/customer-price-lists", selectedCompany?.id, customerId, "destinations"),
+    enabled: !!customerId && showPriceListTab && Boolean(selectedCompany?.id),
+    queryFn: async () => {
+      const res = await fetch(`/api/factory/customer-price-lists/${customerId}/destinations`, {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to load customer price destinations");
+      return res.json();
+    },
+  });
+
+  const priceListQuery = useQuery<PriceListEntry[]>({
+    queryKey: companyQueryKey("/api/factory/customer-price-lists", selectedCompany?.id, customerId, priceDestination),
+    enabled: !!customerId && !!priceDestination && showPriceListTab && Boolean(selectedCompany?.id),
+    queryFn: async () => {
+      const res = await fetch(priceListUrl(customerId, priceDestination), { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load destination agreed prices");
+      return res.json();
+    },
+  });
+
+  useEffect(() => {
+    setPriceDestination("");
+    setPriceEdits({});
+    setNewCode("");
+    setNewPrice("");
+    setNewDestination("");
+  }, [customerId]);
+
+  useEffect(() => {
+    if (!priceDestination && priceDestinationsQuery.data) {
+      setPriceDestination(priceDestinationsQuery.data[0] ?? LEGACY_PRICE_DESTINATION);
+    }
+  }, [priceDestination, priceDestinationsQuery.data]);
+
+  const selectPriceDestination = async (destination: string) => {
+    if (!destination || savePricesMutation.isPending || deletePriceMutation.isPending) return;
+    const hasPendingEdits = Object.keys(priceEdits).length > 0 || !!(newCode.trim() && newPrice);
+    if (
+      hasPendingEdits &&
+      !(await confirmAction({
+        title: "Discard unsaved price edits?",
+        description: "Changing destination will discard the price edits you have not saved.",
+        confirmText: "Discard",
+        tone: "warning",
+      }))
+    )
+      return;
+    setPriceDestination(destination);
+    setPriceEdits({});
+    setNewCode("");
+    setNewPrice("");
+  };
+
+  const addPriceDestination = () => {
+    const destination = normalizePriceDestination(newDestination);
+    if (!destination || destination.length > 120 || destination === LEGACY_PRICE_DESTINATION.toUpperCase()) {
+      toast({ title: "Enter a valid destination (up to 120 characters)", variant: "destructive" });
+      return;
+    }
+    void selectPriceDestination(destination);
+    setNewDestination("");
+  };
+
+  useEffect(() => {
+    if (statement?.customer && draftNote === null) {
+      setDraftNote(statement.customer.statementNote ?? "");
+    }
+    if (statement?.balanceHistory) {
+      setRowNotes((prev) => {
+        const next: Record<number | string, string> = { ...prev };
+        for (const entry of statement.balanceHistory) {
+          if (!(entry.id in next)) {
+            next[entry.id] = entry.rowNote ?? "";
+          }
+        }
+        return next;
+      });
+    }
+  }, [draftNote, statement]);
+
+  const saveNoteMutation = useMutation({
+    mutationFn: async (note: string) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
+      await apiRequest("PATCH", `/api/factory/customers/${customerId}/statement-note`, { statementNote: note });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/customers"] });
+      toast({ title: "Note saved" });
+    },
+    onError: () => {
+      toast({ title: "Failed to save note", variant: "destructive" });
+    },
+  });
+
+  const savePricesMutation = useMutation({
+    mutationFn: async (payload: { destination: string; lines: PriceListLine[] }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
+      const res = await factoryApiRequest("PUT", priceListUrl(customerId, payload.destination), payload.lines);
+      return (await res.json()) as { saved?: number };
+    },
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-price-lists"] });
+      if (priceDestination === variables.destination) {
+        setPriceEdits({});
+        setNewCode("");
+        setNewPrice("");
+      }
+      toast({
+        title: "Agreed prices saved",
+        description: `${data?.saved ?? 0} price(s) updated for ${variables.destination === LEGACY_PRICE_DESTINATION ? "legacy prices" : variables.destination}`,
+      });
+    },
+    onError: () => {
+      toast({ title: "Failed to save destination prices", variant: "destructive" });
+    },
+  });
+
+  const deletePriceMutation = useMutation({
+    mutationFn: async (payload: { articleCode: string; destination: string }) => {
+      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
+      return factoryApiRequest("DELETE", priceListUrl(customerId, payload.destination, payload.articleCode), {});
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-price-lists"] });
+      if (priceDestination === variables.destination) {
+        setPriceEdits((prev) => {
+          const next = { ...prev };
+          delete next[variables.articleCode];
+          return next;
+        });
+      }
+      toast({ title: "Price removed from selected destination" });
+    },
+    onError: () => {
+      toast({ title: "Failed to remove destination price", variant: "destructive" });
+    },
+  });
+
+  const saveRowNote = async (entryId: number | string, note: string) => {
+    // Voucher-entry rows have string IDs ("ve-N") — they have no customerBalances record to update
+    if (typeof entryId === "string" || !recordChanges.allowed) return;
+    const original = statement?.balanceHistory.find((e) => e.id === entryId)?.rowNote ?? "";
+    if (note === original) return;
+    setSavingRowNote(entryId);
+    try {
+      await apiRequest("PATCH", `/api/factory/customers/${customerId}/balance/${entryId}/note`, { rowNote: note });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/customers"] });
+    } catch {
+      toast({ title: "Failed to save row note", variant: "destructive" });
+    } finally {
+      setSavingRowNote(null);
+    }
+  };
+
+  const filteredHistory = useMemo(() => {
+    if (!statement?.balanceHistory) return [];
+    return statement.balanceHistory.filter((entry) => {
+      if (filterDestination) {
+        const dest = entry.destination?.toLowerCase() ?? "";
+        if (!dest.includes(filterDestination.toLowerCase())) return false;
+      }
+      if (filterDateFrom && entry.transactionDate) {
+        if (entry.transactionDate.toString().slice(0, 10) < filterDateFrom) return false;
+      }
+      if (filterDateTo && entry.transactionDate) {
+        if (entry.transactionDate.toString().slice(0, 10) > filterDateTo) return false;
+      }
+      return true;
+    });
+  }, [statement?.balanceHistory, filterDestination, filterDateFrom, filterDateTo]);
+
+  const totals = useMemo(() => {
+    let totalBales = 0;
+    let totalAmountDebit = 0;
+    let totalAmountCredit = 0;
+    let totalKg = 0;
+    for (const entry of filteredHistory) {
+      totalAmountDebit += parseFloat(entry.debitAmount || "0");
+      totalAmountCredit += parseFloat(entry.creditAmount || "0");
+      if (entry.totalQtyBales != null) totalBales += entry.totalQtyBales;
+      if (entry.totalWeightKg != null) totalKg += entry.totalWeightKg;
+    }
+    return { totalBales, totalAmountDebit, totalAmountCredit, totalKg };
+  }, [filteredHistory]);
+
+  const hasFilters = filterDestination || filterDateFrom || filterDateTo;
+
+  const handlePriceListTemplateDownload = async () => {
+    try {
+      await downloadPriceListTemplate();
+    } catch {
+      toast({ title: "Failed to download price-list template", variant: "destructive" });
+    }
+  };
+
+  const handleExcelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !priceDestination) return;
+    // Capture the scope before FileReader completes so an import cannot land
+    // in whichever destination happens to be selected later.
+    const destination = priceDestination;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = new Uint8Array(ev.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: "array" });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
+        const lines = parsePriceListRows(rows);
+        if (lines.length === 0) {
+          toast({
+            title: "No valid rows found",
+            description: "Excel must have columns: article_code, price",
+            variant: "destructive",
+          });
+          return;
+        }
+        savePricesMutation.mutate({ destination, lines });
+      } catch {
+        toast({ title: "Failed to read file", variant: "destructive" });
+      }
+    };
+    reader.readAsArrayBuffer(file);
+    e.target.value = "";
+  };
+
+  const handleSavePrices = () => {
+    if (!priceDestination) return;
+    // Save only edited/new rows: resending stale unchanged prices can overwrite
+    // a newer explicit save from another screen.
+    const lines: PriceListLine[] = [];
+    for (const [articleCode, value] of Object.entries(priceEdits)) {
+      const price = Number(value);
+      if (!Number.isFinite(price) || price <= 0) {
+        toast({ title: `Enter a valid positive price for ${articleCode}`, variant: "destructive" });
+        return;
+      }
+      lines.push({ articleCode, pricePerBale: price });
+    }
+    if (newCode.trim() && newPrice) {
+      const price = Number(newPrice);
+      if (!Number.isFinite(price) || price <= 0) {
+        toast({ title: "Enter a valid positive new price", variant: "destructive" });
+        return;
+      }
+      lines.push({ articleCode: newCode.trim(), pricePerBale: price });
+    }
+    if (lines.length === 0) {
+      toast({ title: "No valid prices to save", variant: "destructive" });
+      return;
+    }
+    savePricesMutation.mutate({ destination: priceDestination, lines });
+  };
+
+  const hasPriceEdits = Object.keys(priceEdits).length > 0 || (newCode.trim() !== "" && newPrice !== "");
 
   if (isLoading) {
     return (
@@ -264,17 +571,161 @@ export default function FactoryCustomerStatement() {
               </div>
 
               {/* Statement table */}
-              <FactoryCustomerStatementSection3
-                filteredHistory={filteredHistory}
-                formatDisplayDate={formatDisplayDate}
-                hasFilters={hasFilters}
-                navigate={navigate}
-                recordChanges={recordChanges}
-                rowNotes={rowNotes}
-                saveRowNote={saveRowNote}
-                savingRowNote={savingRowNote}
-                setRowNotes={setRowNotes}
-              />
+              <div className="rounded-xl border overflow-hidden table-responsive">
+                <Table mobileLayout="cards">
+                  <TableHeader className="sticky top-0 z-30">
+                    <TableRow className="bg-muted border-b-2 border-border/60 hover:bg-muted">
+                      <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground py-2">
+                        Date
+                      </TableHead>
+                      <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground py-2">
+                        Type
+                      </TableHead>
+                      <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground py-2">
+                        Container
+                      </TableHead>
+                      <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground py-2">
+                        Destination
+                      </TableHead>
+                      <TableHead className="text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground py-2">
+                        Bales
+                      </TableHead>
+                      <TableHead className="text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground py-2">
+                        Kg
+                      </TableHead>
+                      <TableHead className="text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground py-2">
+                        Debit
+                      </TableHead>
+                      <TableHead className="text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground py-2">
+                        Credit
+                      </TableHead>
+                      <TableHead className="text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground py-2">
+                        Balance
+                      </TableHead>
+                      <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground py-2">
+                        Side
+                      </TableHead>
+                      <TableHead className="min-w-[160px] text-xs font-semibold uppercase tracking-wide text-muted-foreground py-2">
+                        Note
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredHistory.length === 0 ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan={11}
+                          className="text-center text-muted-foreground py-8"
+                          data-testid="text-no-transactions"
+                        >
+                          {hasFilters ? "No rows match the current filters" : "No transactions yet"}
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredHistory.map((entry) => {
+                        const isInvoice = entry.referenceType === "INVOICE" && entry.referenceId;
+                        return (
+                          <TableRow
+                            key={entry.id}
+                            data-testid={`row-balance-${entry.id}`}
+                            className={isInvoice ? "cursor-pointer hover-elevate" : undefined}
+                            onClick={
+                              isInvoice ? () => navigate(`/factory/sales/invoices/${entry.referenceId}`) : undefined
+                            }
+                          >
+                            <TableCell
+                              className="text-sm font-mono whitespace-nowrap"
+                              data-testid={`text-balance-date-${entry.id}`}
+                            >
+                              {entry.transactionDate ? formatDisplayDate(entry.transactionDate) : "-"}
+                            </TableCell>
+                            <TableCell data-testid={`text-balance-type-${entry.id}`}>
+                              <div className="flex items-center gap-1.5">
+                                <Badge variant="outline" className="text-xs">
+                                  {entry.transactionType}
+                                </Badge>
+                                {isInvoice && <ExternalLink className="h-3 w-3 text-muted-foreground shrink-0" />}
+                              </div>
+                            </TableCell>
+                            <TableCell
+                              className="text-sm font-mono text-muted-foreground whitespace-nowrap"
+                              data-testid={`text-balance-container-${entry.id}`}
+                            >
+                              {entry.containerNumber || "-"}
+                            </TableCell>
+                            <TableCell
+                              className="text-sm text-muted-foreground"
+                              data-testid={`text-balance-destination-${entry.id}`}
+                            >
+                              {entry.destination || "-"}
+                            </TableCell>
+                            <TableCell
+                              className="text-right font-mono text-sm"
+                              data-testid={`text-balance-bales-${entry.id}`}
+                            >
+                              {entry.totalQtyBales != null ? fmtNum(entry.totalQtyBales) : "-"}
+                            </TableCell>
+                            <TableCell
+                              className="text-right font-mono text-sm"
+                              data-testid={`text-balance-kg-${entry.id}`}
+                            >
+                              {entry.totalWeightKg != null ? fmtNum(entry.totalWeightKg) : "-"}
+                            </TableCell>
+                            <TableCell
+                              className="text-right font-mono text-sm"
+                              data-testid={`text-balance-debit-${entry.id}`}
+                            >
+                              {Number(entry.debitAmount || 0) > 0 ? fmtMoney(Number(entry.debitAmount)) : "-"}
+                            </TableCell>
+                            <TableCell
+                              className="text-right font-mono text-sm"
+                              data-testid={`text-balance-credit-${entry.id}`}
+                            >
+                              {Number(entry.creditAmount || 0) > 0 ? fmtMoney(Number(entry.creditAmount)) : "-"}
+                            </TableCell>
+                            <TableCell
+                              className="text-right font-mono font-semibold"
+                              data-testid={`text-balance-running-${entry.id}`}
+                            >
+                              {fmtMoney(Math.abs(entry.runningBalance))}
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                variant="outline"
+                                className={`text-xs font-semibold ${drCrClass(entry.runningBalanceSide)}`}
+                              >
+                                {entry.runningBalanceSide}
+                              </Badge>
+                            </TableCell>
+                            <TableCell
+                              className="min-w-[160px]"
+                              data-mobile-cell="wide"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <input
+                                type="text"
+                                value={rowNotes[entry.id] ?? ""}
+                                onChange={(e) =>
+                                  typeof entry.id === "number" &&
+                                  setRowNotes((prev) => ({ ...prev, [entry.id]: e.target.value }))
+                                }
+                                onBlur={() => saveRowNote(entry.id, rowNotes[entry.id] ?? "")}
+                                placeholder={typeof entry.id === "string" ? "—" : "Add note…"}
+                                disabled={
+                                  !recordChanges.allowed || savingRowNote === entry.id || typeof entry.id === "string"
+                                }
+                                title={recordChanges.reason ?? undefined}
+                                className="w-full text-xs bg-transparent border border-border rounded-sm px-2 py-1 placeholder:text-muted-foreground/50 focus:outline-hidden focus:ring-1 focus:ring-ring disabled:opacity-50"
+                                data-testid={`input-row-note-${entry.id}`}
+                              />
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
 
               {/* Statement Note */}
               <div className="rounded-xl border p-4 mt-4 space-y-2">
@@ -306,38 +757,300 @@ export default function FactoryCustomerStatement() {
           {/* ─── Price List Tab ─── */}
           {showPriceListTab && (
             <TabsContent value="pricelist">
-              <FactoryCustomerStatementSection2
-                addPriceDestination={addPriceDestination}
-                deletePriceMutation={deletePriceMutation}
-                fileInputRef={fileInputRef}
-                handleExcelUpload={handleExcelUpload}
-                handlePriceListTemplateDownload={handlePriceListTemplateDownload}
-                handleSavePrices={handleSavePrices}
-                hasPriceEdits={hasPriceEdits}
-                newDestination={newDestination}
-                priceDestination={priceDestination}
-                priceDestinationsQuery={priceDestinationsQuery}
-                recordChanges={recordChanges}
-                savePricesMutation={savePricesMutation}
-                selectPriceDestination={selectPriceDestination}
-                setNewDestination={setNewDestination}
-              />
+              <div className="mb-4 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold">Saved Agreed Prices by Destination</p>
+                    <p className="text-xs text-muted-foreground">
+                      New proformas use only agreed prices for their own customer and destination.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handlePriceListTemplateDownload}
+                      data-testid="button-download-pricelist-template"
+                    >
+                      <Download className="h-4 w-4 mr-2" /> Download Template
+                    </Button>
+                    {recordChanges.allowed && (
+                      <>
+                        <input
+                          type="file"
+                          accept=".xlsx,.xls,.csv"
+                          ref={fileInputRef}
+                          onChange={handleExcelUpload}
+                          className="hidden"
+                          data-testid="input-upload-pricelist"
+                        />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={!priceDestination || savePricesMutation.isPending || deletePriceMutation.isPending}
+                          data-testid="button-upload-excel-pricelist"
+                        >
+                          <Upload className="h-4 w-4 mr-2" /> Upload Excel
+                        </Button>
+                      </>
+                    )}
+                    {recordChanges.allowed && hasPriceEdits && (
+                      <Button
+                        size="sm"
+                        onClick={handleSavePrices}
+                        disabled={!priceDestination || savePricesMutation.isPending || deletePriceMutation.isPending}
+                        data-testid="button-save-pricelist"
+                      >
+                        <Save className="h-4 w-4 mr-2" />
+                        {savePricesMutation.isPending ? "Saving…" : "Save Changes"}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-end gap-3 rounded-xl border bg-muted/20 p-3">
+                  <div className="min-w-[200px] flex-1 sm:max-w-[320px]">
+                    <label htmlFor="customer-price-destination" className="mb-1 block text-xs font-semibold">
+                      Price list destination
+                    </label>
+                    <select
+                      id="customer-price-destination"
+                      data-testid="select-price-destination"
+                      className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground"
+                      value={priceDestination}
+                      onChange={(e) => void selectPriceDestination(e.target.value)}
+                      disabled={savePricesMutation.isPending || deletePriceMutation.isPending}
+                    >
+                      <option value="" disabled>
+                        Select destination
+                      </option>
+                      {(priceDestinationsQuery.data ?? []).map((destination) => (
+                        <option key={destination} value={destination}>
+                          {destination}
+                        </option>
+                      ))}
+                      {priceDestination &&
+                        priceDestination !== LEGACY_PRICE_DESTINATION &&
+                        !(priceDestinationsQuery.data ?? []).includes(priceDestination) && (
+                          <option value={priceDestination}>{priceDestination}</option>
+                        )}
+                      <option value={LEGACY_PRICE_DESTINATION}>Legacy / Unassigned (old prices)</option>
+                    </select>
+                  </div>
+                  {recordChanges.allowed && (
+                    <div className="flex min-w-[220px] flex-1 items-end gap-2">
+                      <div className="flex-1">
+                        <label htmlFor="customer-new-price-destination" className="mb-1 block text-xs font-semibold">
+                          Add another destination
+                        </label>
+                        <Input
+                          id="customer-new-price-destination"
+                          data-testid="input-new-price-destination"
+                          value={newDestination}
+                          onChange={(e) => setNewDestination(e.target.value)}
+                          placeholder="e.g. L'SHI, MALI"
+                          maxLength={120}
+                          disabled={savePricesMutation.isPending || deletePriceMutation.isPending}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              addPriceDestination();
+                            }
+                          }}
+                        />
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        data-testid="button-add-price-destination"
+                        onClick={addPriceDestination}
+                        disabled={
+                          !newDestination.trim() || savePricesMutation.isPending || deletePriceMutation.isPending
+                        }
+                      >
+                        Use
+                      </Button>
+                    </div>
+                  )}
+                  {priceDestinationsQuery.isError && (
+                    <p role="alert" className="w-full text-xs text-destructive">
+                      Failed to load customer destinations. Please refresh and retry.
+                    </p>
+                  )}
+                  {priceDestination === LEGACY_PRICE_DESTINATION ? (
+                    <p className="w-full text-xs text-amber-600 dark:text-amber-400">
+                      Older customer-wide prices are separate and are not applied to new destination-linked proformas.
+                    </p>
+                  ) : priceDestination ? (
+                    <p className="w-full text-xs text-muted-foreground">
+                      Only {priceDestination} prices will change here. Existing proforma line prices remain unchanged.
+                    </p>
+                  ) : null}
+                </div>
+              </div>
 
-              <FactoryCustomerStatementSection
-                deletePriceMutation={deletePriceMutation}
-                handleSavePrices={handleSavePrices}
-                newCode={newCode}
-                newPrice={newPrice}
-                priceDestination={priceDestination}
-                priceDestinationsQuery={priceDestinationsQuery}
-                priceEdits={priceEdits}
-                priceListQuery={priceListQuery}
-                recordChanges={recordChanges}
-                savePricesMutation={savePricesMutation}
-                setNewCode={setNewCode}
-                setNewPrice={setNewPrice}
-                setPriceEdits={setPriceEdits}
-              />
+              <div className="rounded-xl border overflow-hidden">
+                <Table mobileLayout="cards">
+                  <TableHeader className="sticky top-0 z-30">
+                    <TableRow className="bg-muted border-b-2 border-border/60 hover:bg-muted">
+                      <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground py-2">
+                        Article Code
+                      </TableHead>
+                      <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground py-2">
+                        Name
+                      </TableHead>
+                      <TableHead className="text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground py-2">
+                        Price per Bale ($)
+                      </TableHead>
+                      <TableHead className="text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground py-2">
+                        Last Updated
+                      </TableHead>
+                      <TableHead className="w-[50px] py-2"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {!priceDestination || priceDestinationsQuery.isLoading ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center text-muted-foreground py-6">
+                          Select a destination to view its agreed prices.
+                        </TableCell>
+                      </TableRow>
+                    ) : priceListQuery.isError ? (
+                      <TableRow>
+                        <TableCell colSpan={5} role="alert" className="text-center text-destructive py-6">
+                          Failed to load prices for this destination. Please retry.
+                        </TableCell>
+                      </TableRow>
+                    ) : priceListQuery.isLoading ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center py-6">
+                          <Skeleton className="h-4 w-48 mx-auto" />
+                        </TableCell>
+                      </TableRow>
+                    ) : (priceListQuery.data ?? []).length === 0 && !newCode ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan={5}
+                          className="text-center text-muted-foreground py-8"
+                          data-testid="text-no-prices"
+                        >
+                          No agreed prices for this destination yet. Upload Excel or add them manually below.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      (priceListQuery.data ?? []).map((entry) => (
+                        <TableRow key={entry.article_code} data-testid={`row-price-${entry.article_code}`}>
+                          <TableCell
+                            className="font-mono text-sm font-medium"
+                            data-testid={`text-price-code-${entry.article_code}`}
+                          >
+                            {entry.article_code}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{entry.item_name || "-"}</TableCell>
+                          <TableCell className="text-right">
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={
+                                priceEdits[entry.article_code] !== undefined
+                                  ? priceEdits[entry.article_code]
+                                  : entry.price_per_bale
+                              }
+                              onChange={(e) =>
+                                setPriceEdits((prev) => ({ ...prev, [entry.article_code]: e.target.value }))
+                              }
+                              readOnly={!recordChanges.allowed}
+                              title={recordChanges.reason ?? undefined}
+                              onBlur={() => {
+                                if (
+                                  recordChanges.allowed &&
+                                  priceEdits[entry.article_code] !== undefined &&
+                                  !savePricesMutation.isPending
+                                ) {
+                                  handleSavePrices();
+                                }
+                              }}
+                              className="w-32 ml-auto text-right font-mono"
+                              data-testid={`input-price-${entry.article_code}`}
+                            />
+                          </TableCell>
+                          <TableCell className="text-right text-xs text-muted-foreground whitespace-nowrap">
+                            {entry.updated_at ? new Date(entry.updated_at).toLocaleDateString() : "-"}
+                          </TableCell>
+                          <TableCell>
+                            {recordChanges.allowed && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="text-destructive"
+                                onClick={() =>
+                                  deletePriceMutation.mutate({
+                                    articleCode: entry.article_code,
+                                    destination: priceDestination,
+                                  })
+                                }
+                                disabled={
+                                  !priceDestination || deletePriceMutation.isPending || savePricesMutation.isPending
+                                }
+                                data-testid={`button-delete-price-${entry.article_code}`}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+
+                    {/* Add new row */}
+                    {recordChanges.allowed && (
+                      <TableRow data-testid="row-add-price">
+                        <TableCell>
+                          <Input
+                            placeholder="Article code…"
+                            value={newCode}
+                            onChange={(e) => setNewCode(e.target.value)}
+                            className="font-mono"
+                            data-testid="input-new-price-code"
+                          />
+                        </TableCell>
+                        <TableCell />
+                        <TableCell className="text-right">
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            placeholder="0.00"
+                            value={newPrice}
+                            onChange={(e) => setNewPrice(e.target.value)}
+                            className="w-32 ml-auto text-right font-mono"
+                            data-testid="input-new-price-value"
+                          />
+                        </TableCell>
+                        <TableCell />
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={handleSavePrices}
+                            disabled={
+                              !priceDestination ||
+                              !newCode.trim() ||
+                              !newPrice ||
+                              savePricesMutation.isPending ||
+                              deletePriceMutation.isPending
+                            }
+                            data-testid="button-add-price"
+                          >
+                            <Plus className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
 
               <p className="text-xs text-muted-foreground mt-3">
                 Excel format: columns named <span className="font-mono">article_code</span> and{" "}

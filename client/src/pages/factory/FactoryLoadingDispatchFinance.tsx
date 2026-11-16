@@ -14,10 +14,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { companyQueryKey } from "@/lib/companyQueryScope";
+import { confirmAction } from "@/components/ConfirmHost";
 
 type Kind = "BILLABLE" | "INTERNAL" | "DISCOUNT";
 type ErpType = "" | "freight" | "surcharge" | "fumigation" | "documentCharges";
-interface Account { id: number; code: string; name: string; accountType: string }
+interface Account {
+  id: number;
+  code: string;
+  name: string;
+  accountType: string;
+}
 interface Charge {
   id: number;
   name: string;
@@ -78,8 +84,13 @@ interface ChargeForm {
   notes: string;
 }
 const emptyForm = (): ChargeForm => ({
-  name: "", kind: "BILLABLE", amount: "",
-  ledgerAccountId: "", offsetLedgerAccountId: "", erpChargeType: "", notes: "",
+  name: "",
+  kind: "BILLABLE",
+  amount: "",
+  ledgerAccountId: "",
+  offsetLedgerAccountId: "",
+  erpChargeType: "",
+  notes: "",
 });
 const money = (value: string | undefined) => {
   const parsed = Number(value ?? 0);
@@ -90,12 +101,18 @@ const money = (value: string | undefined) => {
 const roleCanManage = (role: string) => ["admin", "owner", "developer"].includes(role.trim().toLowerCase());
 const acceptsOffset = (type: string) => /liability|payable|accrual|clearing/i.test(type);
 async function readJson<T>(url: string): Promise<T> {
-  const response = await fetch(url, { credentials: "include", cache: "no-store", headers: { Accept: "application/json" } });
+  const response = await fetch(url, {
+    credentials: "include",
+    cache: "no-store",
+    headers: { Accept: "application/json" },
+  });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(body.message || "Unable to load trip charges");
   return body as T;
 }
-function errorMessage(error: unknown) { return error instanceof Error ? error.message : "Unable to save financial charge"; }
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Unable to save financial charge";
+}
 
 export default function FactoryLoadingDispatchFinance({ orderId, dispatchId, companyId, status, role }: Props) {
   const { toast } = useToast();
@@ -118,10 +135,13 @@ export default function FactoryLoadingDispatchFinance({ orderId, dispatchId, com
   // Factory company. Let the operator select any ledger account type instead
   // of silently restricting customer charges to income accounts.
   const mainAccounts = data?.accounts ?? [];
-  const offsetAccounts = (data?.accounts ?? []).filter(a => acceptsOffset(a.accountType));
-  const validForm = form.name.trim().length > 0 && form.name.trim().length <= 160 &&
+  const offsetAccounts = (data?.accounts ?? []).filter((a) => acceptsOffset(a.accountType));
+  const validForm =
+    form.name.trim().length > 0 &&
+    form.name.trim().length <= 160 &&
     /^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,2})?$/.test(form.amount.trim()) &&
-    Number(form.amount) > 0 && Number(form.ledgerAccountId) > 0 &&
+    Number(form.amount) > 0 &&
+    Number(form.ledgerAccountId) > 0 &&
     (form.kind !== "INTERNAL" || Number(form.offsetLedgerAccountId) > 0);
 
   function invalidate() {
@@ -135,7 +155,9 @@ export default function FactoryLoadingDispatchFinance({ orderId, dispatchId, com
   function beginEdit(c: Charge) {
     setEditingId(c.id);
     setForm({
-      name: c.name, kind: c.kind, amount: c.amount,
+      name: c.name,
+      kind: c.kind,
+      amount: c.amount,
       ledgerAccountId: String(c.ledgerAccountId),
       offsetLedgerAccountId: c.offsetLedgerAccountId ? String(c.offsetLedgerAccountId) : "",
       erpChargeType: (c.erpChargeType ?? "") as ErpType,
@@ -151,10 +173,13 @@ export default function FactoryLoadingDispatchFinance({ orderId, dispatchId, com
         expectedChargeFingerprint: data.chargeFingerprint,
         expectedSourceFingerprint: data.source.sourceFingerprint,
         charge: {
-          name: payload.name.trim(), kind: payload.kind, amount: payload.amount,
+          name: payload.name.trim(),
+          kind: payload.kind,
+          amount: payload.amount,
           ledgerAccountId: Number(payload.ledgerAccountId),
           offsetLedgerAccountId: payload.kind === "INTERNAL" ? Number(payload.offsetLedgerAccountId) : null,
-          erpChargeType: payload.kind === "INTERNAL" || payload.kind === "DISCOUNT" ? null : payload.erpChargeType || null,
+          erpChargeType:
+            payload.kind === "INTERNAL" || payload.kind === "DISCOUNT" ? null : payload.erpChargeType || null,
           notes: payload.notes.trim() || null,
         },
       });
@@ -167,7 +192,10 @@ export default function FactoryLoadingDispatchFinance({ orderId, dispatchId, com
       invalidate();
       toast({ title: "Trip charge saved", description: "Draft only — no voucher or balance posted." });
     },
-    onError: error => { invalidate(); toast({ title: "Could not save charge", description: errorMessage(error), variant: "destructive" }); },
+    onError: (error) => {
+      invalidate();
+      toast({ title: "Could not save charge", description: errorMessage(error), variant: "destructive" });
+    },
   });
   const remove = useMutation({
     mutationFn: async (chargeId: number) => {
@@ -182,7 +210,7 @@ export default function FactoryLoadingDispatchFinance({ orderId, dispatchId, com
       invalidate();
       toast({ title: "Draft charge removed" });
     },
-    onError: error => {
+    onError: (error) => {
       invalidate();
       toast({ title: "Could not delete charge", description: errorMessage(error), variant: "destructive" });
     },
@@ -190,7 +218,10 @@ export default function FactoryLoadingDispatchFinance({ orderId, dispatchId, com
   const busy = save.isPending || remove.isPending;
 
   return (
-    <Card className="border-slate-200 bg-white dark:border-slate-700 dark:bg-card" data-testid="dispatch-trip-financial-preview">
+    <Card
+      className="border-slate-200 bg-white dark:border-slate-700 dark:bg-card"
+      data-testid="dispatch-trip-financial-preview"
+    >
       <CardContent className="space-y-4 p-4">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="flex items-start gap-2">
@@ -216,12 +247,19 @@ export default function FactoryLoadingDispatchFinance({ orderId, dispatchId, com
           </p>
         )}
         {enabled && preview.isPending && (
-          <p className="flex items-center gap-2 text-xs text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading signed trip totals…</p>
+          <p className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading signed trip totals…
+          </p>
         )}
         {enabled && preview.isError && (
           <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
-            <p className="flex items-start gap-2"><FileWarning className="h-4 w-4 shrink-0" />{errorMessage(preview.error)}</p>
-            <Button type="button" variant="outline" size="sm" onClick={() => void preview.refetch()}><RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Retry</Button>
+            <p className="flex items-start gap-2">
+              <FileWarning className="h-4 w-4 shrink-0" />
+              {errorMessage(preview.error)}
+            </p>
+            <Button type="button" variant="outline" size="sm" onClick={() => void preview.refetch()}>
+              <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Retry
+            </Button>
           </div>
         )}
         {enabled && data && (
@@ -246,11 +284,21 @@ export default function FactoryLoadingDispatchFinance({ orderId, dispatchId, com
                   </div>
                 </div>
                 <div className="space-y-1 rounded-lg border p-3 text-xs">
-                  <div className="flex justify-between gap-2"><span>Billable charges</span><span className="font-mono">+ $ {money(data.totals.billableChargesTotal)}</span></div>
-                  <div className="flex justify-between gap-2"><span>Discounts</span><span className="font-mono">− $ {money(data.totals.discountTotal)}</span></div>
-                  <div className="flex justify-between gap-2 text-muted-foreground"><span>Internal expenses (not billed)</span><span className="font-mono">$ {money(data.totals.internalExpenseTotal)}</span></div>
+                  <div className="flex justify-between gap-2">
+                    <span>Billable charges</span>
+                    <span className="font-mono">+ $ {money(data.totals.billableChargesTotal)}</span>
+                  </div>
+                  <div className="flex justify-between gap-2">
+                    <span>Discounts</span>
+                    <span className="font-mono">− $ {money(data.totals.discountTotal)}</span>
+                  </div>
+                  <div className="flex justify-between gap-2 text-muted-foreground">
+                    <span>Internal expenses (not billed)</span>
+                    <span className="font-mono">$ {money(data.totals.internalExpenseTotal)}</span>
+                  </div>
                   <div className="mt-2 flex justify-between gap-2 border-t pt-2 font-semibold">
-                    <span>Estimated customer charge</span><span className="font-mono">$ {money(data.totals.customerTotal)}</span>
+                    <span>Estimated customer charge</span>
+                    <span className="font-mono">$ {money(data.totals.customerTotal)}</span>
                   </div>
                 </div>
               </>
@@ -260,34 +308,69 @@ export default function FactoryLoadingDispatchFinance({ orderId, dispatchId, com
               <div className="flex items-center justify-between gap-2">
                 <span className="text-sm font-semibold">Trip charges ({data.charges.length})</span>
                 {canEdit && !formOpen && (
-                  <Button type="button" size="sm" variant="outline" disabled={busy} onClick={beginCreate} data-testid="dispatch-add-financial-charge">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={busy}
+                    onClick={beginCreate}
+                    data-testid="dispatch-add-financial-charge"
+                  >
                     <Plus className="mr-1 h-3.5 w-3.5" /> Add charge
                   </Button>
                 )}
               </div>
               {data.charges.length === 0 && (
-                <p className="rounded-md bg-muted/40 p-3 text-xs text-muted-foreground">No trip-specific charges saved.</p>
+                <p className="rounded-md bg-muted/40 p-3 text-xs text-muted-foreground">
+                  No trip-specific charges saved.
+                </p>
               )}
-              {data.charges.map(c => {
-                const account = data.accounts.find(a => a.id === c.ledgerAccountId);
+              {data.charges.map((c) => {
+                const account = data.accounts.find((a) => a.id === c.ledgerAccountId);
                 return (
-                  <div key={c.id} className="rounded-lg border p-3 text-xs" data-testid={"dispatch-financial-charge-" + c.id}>
+                  <div
+                    key={c.id}
+                    className="rounded-lg border p-3 text-xs"
+                    data-testid={"dispatch-financial-charge-" + c.id}
+                  >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <p className="font-semibold">{c.name}</p>
-                        <p className="text-muted-foreground">{c.kind} · {account?.name ?? ("Ledger #" + c.ledgerAccountId)}</p>
+                        <p className="text-muted-foreground">
+                          {c.kind} · {account?.name ?? "Ledger #" + c.ledgerAccountId}
+                        </p>
                         {c.erpChargeType && <p className="text-muted-foreground">PO mapping: {c.erpChargeType}</p>}
-                        {c.kind === "INTERNAL" && <p className="text-muted-foreground">Offset account #{c.offsetLedgerAccountId}</p>}
+                        {c.kind === "INTERNAL" && (
+                          <p className="text-muted-foreground">Offset account #{c.offsetLedgerAccountId}</p>
+                        )}
                       </div>
                       <div className="shrink-0 text-right">
                         <p className="font-mono font-semibold">$ {money(c.amount)}</p>
                         {canEdit && !formOpen && !c.lockedAt && (
                           <div className="mt-1 flex gap-1">
-                            <Button size="icon" variant="ghost" aria-label={"Edit " + c.name} disabled={busy} onClick={() => beginEdit(c)}>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              aria-label={"Edit " + c.name}
+                              disabled={busy}
+                              onClick={() => beginEdit(c)}
+                            >
                               <Pencil className="h-3.5 w-3.5" />
                             </Button>
-                            <Button size="icon" variant="ghost" aria-label={"Remove " + c.name} disabled={busy}
-                              onClick={() => { if (window.confirm("Remove this draft charge?")) remove.mutate(c.id); }}>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              aria-label={"Remove " + c.name}
+                              disabled={busy}
+                              onClick={async () => {
+                                const confirmed = await confirmAction({
+                                  title: "Remove this draft charge?",
+                                  confirmText: "Remove",
+                                  tone: "destructive",
+                                });
+                                if (confirmed) remove.mutate(c.id);
+                              }}
+                            >
                               <Trash2 className="h-3.5 w-3.5" />
                             </Button>
                           </div>
@@ -301,73 +384,151 @@ export default function FactoryLoadingDispatchFinance({ orderId, dispatchId, com
             </div>
 
             {canEdit && formOpen && (
-              <form onSubmit={(event: FormEvent<HTMLFormElement>) => { event.preventDefault(); if (validForm && !busy) save.mutate(form); }}
+              <form
+                onSubmit={(event: FormEvent<HTMLFormElement>) => {
+                  event.preventDefault();
+                  if (validForm && !busy) save.mutate(form);
+                }}
                 className="space-y-3 rounded-lg border border-blue-200 bg-blue-50/30 p-3 dark:border-blue-900 dark:bg-blue-950/20"
-                data-testid="dispatch-trip-charge-form">
+                data-testid="dispatch-trip-charge-form"
+              >
                 <p className="text-sm font-semibold">{editingId ? "Edit draft charge" : "New trip charge"}</p>
                 <div className="space-y-1">
                   <Label htmlFor="dispatch-charge-kind">Type</Label>
-                  <select id="dispatch-charge-kind" className="h-9 w-full rounded-md border bg-background px-2 text-sm" value={form.kind}
-                    onChange={e => setForm({ ...form, kind: e.target.value as Kind, ledgerAccountId: "", offsetLedgerAccountId: "", erpChargeType: "" })}>
+                  <select
+                    id="dispatch-charge-kind"
+                    className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+                    value={form.kind}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        kind: e.target.value as Kind,
+                        ledgerAccountId: "",
+                        offsetLedgerAccountId: "",
+                        erpChargeType: "",
+                      })
+                    }
+                  >
                     <option value="BILLABLE">Customer-billable charge</option>
                     <option value="INTERNAL">Internal expense (not billed)</option>
                     <option value="DISCOUNT">Customer discount</option>
                   </select>
                 </div>
-                <div className="space-y-1"><Label htmlFor="dispatch-charge-name">Name</Label>
-                  <Input id="dispatch-charge-name" maxLength={160} required value={form.name}
-                    onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Transport, freight, handling…" /></div>
-                <div className="space-y-1"><Label htmlFor="dispatch-charge-amount">Amount (USD)</Label>
-                  <Input id="dispatch-charge-amount" required inputMode="decimal" placeholder="0.00" value={form.amount}
-                    onChange={e => setForm({ ...form, amount: e.target.value })} /></div>
-                <div className="space-y-1"><Label htmlFor="dispatch-charge-account">Ledger account</Label>
-                  <select id="dispatch-charge-account" required className="h-9 w-full rounded-md border bg-background px-2 text-sm"
-                    value={form.ledgerAccountId} onChange={e => setForm({ ...form, ledgerAccountId: e.target.value })}>
+                <div className="space-y-1">
+                  <Label htmlFor="dispatch-charge-name">Name</Label>
+                  <Input
+                    id="dispatch-charge-name"
+                    maxLength={160}
+                    required
+                    value={form.name}
+                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                    placeholder="Transport, freight, handling…"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="dispatch-charge-amount">Amount (USD)</Label>
+                  <Input
+                    id="dispatch-charge-amount"
+                    required
+                    inputMode="decimal"
+                    placeholder="0.00"
+                    value={form.amount}
+                    onChange={(e) => setForm({ ...form, amount: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="dispatch-charge-account">Ledger account</Label>
+                  <select
+                    id="dispatch-charge-account"
+                    required
+                    className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+                    value={form.ledgerAccountId}
+                    onChange={(e) => setForm({ ...form, ledgerAccountId: e.target.value })}
+                  >
                     <option value="">Select account</option>
-                    {mainAccounts.map(a => <option key={a.id} value={a.id}>{a.code} — {a.name} ({a.accountType})</option>)}
+                    {mainAccounts.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.code} — {a.name} ({a.accountType})
+                      </option>
+                    ))}
                   </select>
                   <p className="text-[11px] text-muted-foreground">
-                    All active ledger account types are available. Billable charges credit this account,
-                    discounts debit it, and internal expenses debit it.
-                    Confirm the intended accounting treatment before posting.
+                    All active ledger account types are available. Billable charges credit this account, discounts debit
+                    it, and internal expenses debit it. Confirm the intended accounting treatment before posting.
                   </p>
                 </div>
                 {form.kind === "INTERNAL" && (
                   <div className="space-y-1">
                     <Label htmlFor="dispatch-charge-offset">Payable / offset account</Label>
-                    <select id="dispatch-charge-offset" required className="h-9 w-full rounded-md border bg-background px-2 text-sm"
-                      value={form.offsetLedgerAccountId} onChange={e => setForm({ ...form, offsetLedgerAccountId: e.target.value })}>
+                    <select
+                      id="dispatch-charge-offset"
+                      required
+                      className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+                      value={form.offsetLedgerAccountId}
+                      onChange={(e) => setForm({ ...form, offsetLedgerAccountId: e.target.value })}
+                    >
                       <option value="">Select offset</option>
-                      {offsetAccounts.filter(a => String(a.id) !== form.ledgerAccountId).map(a =>
-                        <option key={a.id} value={a.id}>{a.code} — {a.name}</option>)}
+                      {offsetAccounts
+                        .filter((a) => String(a.id) !== form.ledgerAccountId)
+                        .map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.code} — {a.name}
+                          </option>
+                        ))}
                     </select>
-                    <p className="text-[11px] text-muted-foreground">Recording this expense does not imply a cash payment.</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      Recording this expense does not imply a cash payment.
+                    </p>
                   </div>
                 )}
                 {form.kind === "BILLABLE" && (
                   <div className="space-y-1">
                     <Label htmlFor="dispatch-charge-erp-type">ERP PO charge mapping (optional)</Label>
-                    <select id="dispatch-charge-erp-type" className="h-9 w-full rounded-md border bg-background px-2 text-sm"
-                      value={form.erpChargeType} onChange={e => setForm({ ...form, erpChargeType: e.target.value as ErpType })}>
+                    <select
+                      id="dispatch-charge-erp-type"
+                      className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+                      value={form.erpChargeType}
+                      onChange={(e) => setForm({ ...form, erpChargeType: e.target.value as ErpType })}
+                    >
                       <option value="">Not mapped to ERP PO</option>
                       <option value="freight">Freight</option>
                       <option value="surcharge">Surcharge</option>
                       <option value="fumigation">Fumigation</option>
                       <option value="documentCharges">Document charges</option>
                     </select>
-                    <p className="text-[11px] text-muted-foreground">Unmapped charges will require explicit review before PO export in Phase 5.</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      Unmapped charges will require explicit review before PO export in Phase 5.
+                    </p>
                   </div>
                 )}
                 {form.kind === "DISCOUNT" && (
-                  <p className="text-[11px] text-muted-foreground">Discounts are tracked separately and will map to the ERP PO Discount column.</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Discounts are tracked separately and will map to the ERP PO Discount column.
+                  </p>
                 )}
                 <div className="space-y-1">
                   <Label htmlFor="dispatch-charge-notes">Notes (optional)</Label>
-                  <Textarea id="dispatch-charge-notes" rows={2} maxLength={1000} value={form.notes}
-                    onChange={e => setForm({ ...form, notes: e.target.value })} />
+                  <Textarea
+                    id="dispatch-charge-notes"
+                    rows={2}
+                    maxLength={1000}
+                    value={form.notes}
+                    onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                  />
                 </div>
                 <div className="flex justify-end gap-2">
-                  <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => { setFormOpen(false); setEditingId(null); }}>Cancel</Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={busy}
+                    onClick={() => {
+                      setFormOpen(false);
+                      setEditingId(null);
+                    }}
+                  >
+                    Cancel
+                  </Button>
                   <Button type="submit" size="sm" disabled={!validForm || busy}>
                     {save.isPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
                     Save draft charge
@@ -377,7 +538,8 @@ export default function FactoryLoadingDispatchFinance({ orderId, dispatchId, com
             )}
             <p className="flex items-start gap-2 border-t pt-3 text-[11px] text-muted-foreground">
               <DollarSign className="h-3.5 w-3.5 shrink-0" />
-              {data.postingNotice} These figures are provisional until posted. ERP import remains a separate PO Excel upload.
+              {data.postingNotice} These figures are provisional until posted. ERP import remains a separate PO Excel
+              upload.
             </p>
           </>
         )}

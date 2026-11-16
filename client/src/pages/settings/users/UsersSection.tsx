@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { UserPlus, Users } from "lucide-react";
+import { UserPlus } from "lucide-react";
 import { UserListTable } from "./UserListTable";
 import { UserManagementDrawer } from "./UserManagementDrawer";
 import { AddUserDialog } from "./AddUserDialog";
@@ -42,13 +42,10 @@ export function UsersSection({ appMode }: UsersSectionProps) {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h2 className="text-2xl font-semibold flex items-center gap-2" data-testid="text-users-title">
-            <Users className="h-6 w-6" />
-            User Management
-          </h2>
-          <p className="text-muted-foreground mt-1">Select a user to manage their account, access, and permissions.</p>
-        </div>
+        {/* The Users & Permissions hub owns the section title; this panel keeps only its guidance. */}
+        <p className="text-muted-foreground" data-testid="text-users-intro">
+          Select a user to manage their account, access, and permissions.
+        </p>
         <Button onClick={() => setAddDialogOpen(true)} data-testid="button-add-user">
           <UserPlus className="h-4 w-4 mr-2" />
           Add User

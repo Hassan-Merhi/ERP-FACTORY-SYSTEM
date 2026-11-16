@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/PageHeader";
 
 type Severity = "clear" | "review" | "critical" | "expected";
 type Container = {
@@ -137,13 +138,10 @@ export default function FactoryProductionAccounting() {
   const target = factory ? "/factory/containers-hub" : "/inventory";
   return (
     <div className="space-y-5 p-3 sm:p-5" data-testid="factory-production-accounting">
-      <div>
-        <h1 className="text-2xl font-semibold">Factory Production & Container Accounting</h1>
-        <p className="text-sm text-muted-foreground">
-          Read-only accounting trace: containers → raw materials → mixes → bales → finalized invoices. Existing Factory
-          cost and financial posting engines remain authoritative.
-        </p>
-      </div>
+      <PageHeader
+        title="Factory Production & Container Accounting"
+        subtitle="Read-only accounting trace: containers → raw materials → mixes → bales → finalized invoices. Existing Factory cost and financial posting engines remain authoritative."
+      />
       <Card>
         <CardContent className="flex flex-wrap items-end gap-3 pt-5">
           <div className="space-y-1">

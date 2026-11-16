@@ -1,5 +1,6 @@
-import { Download, FileSpreadsheet } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { ExportButton } from "@/components/export/ReportExportMenu";
+import { useToast } from "@/hooks/use-toast";
+import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
 
 interface CustomerStatementExportsProps {
   customerId: string | undefined;
@@ -15,6 +16,7 @@ export function CustomerStatementExports({
   filterDateTo,
   filterDestination,
 }: CustomerStatementExportsProps) {
+  const { toast } = useToast();
   const exportQuery = () => {
     const params = new URLSearchParams();
     if (filterDateFrom) params.set("dateFrom", filterDateFrom);
@@ -26,8 +28,8 @@ export function CustomerStatementExports({
 
   return (
     <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:shrink-0 sm:items-center">
-      <Button
-        variant="outline"
+      <ExportButton
+        kind="pdf"
         size="sm"
         onClick={() => {
           const url = `/api/factory/customers/${customerId}/statement/export-pdf${exportQuery()}`;
@@ -38,21 +40,27 @@ export function CustomerStatementExports({
           window.open(url, "_blank");
         }}
         data-testid="button-export-pdf"
-      >
-        <Download className="mr-2 h-4 w-4" />
-        Export PDF
-      </Button>
-      <Button
-        variant="outline"
+      />
+      <ExportButton
         size="sm"
-        onClick={() => {
-          window.open(`/api/factory/customers/${customerId}/statement/export-excel${exportQuery()}`, "_blank");
+        onClick={async () => {
+          try {
+            await downloadFromUrl(`/api/factory/customers/${customerId}/statement/export-excel${exportQuery()}`, {
+              fileName: exportFileName(`customer statement ${customerId ?? ""}`, "xlsx", {
+                from: filterDateFrom || undefined,
+                to: filterDateTo || undefined,
+              }),
+            });
+          } catch (error) {
+            toast({
+              title: "Export failed",
+              description: error instanceof Error ? error.message : "Please try again.",
+              variant: "destructive",
+            });
+          }
         }}
         data-testid="button-export-excel"
-      >
-        <FileSpreadsheet className="mr-2 h-4 w-4" />
-        Export Excel
-      </Button>
+      />
     </div>
   );
 }

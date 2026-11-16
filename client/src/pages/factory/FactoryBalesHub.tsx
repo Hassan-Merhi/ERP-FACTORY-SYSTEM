@@ -20,7 +20,8 @@ const ALL_BALES_TABS: readonly BalesTab[] = ["history", "barcode", "products", "
 export default function FactoryBalesHub() {
   const { selectedCompany } = useCompany();
   const { data: settings } = useQuery({
-    queryKey: companyQueryKey("/api/factory/settings", selectedCompany?.id), enabled: Boolean(selectedCompany?.id),
+    queryKey: companyQueryKey("/api/factory/settings", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const r = await fetch("/api/factory/settings");
       return r.ok ? r.json() : {};
@@ -28,10 +29,20 @@ export default function FactoryBalesHub() {
     staleTime: 60000,
   });
 
-  const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id), enabled: Boolean(selectedCompany?.id), staleTime: 5 * 60000 });
-  const hiddenTabs = myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
-    ? myAccess.hiddenCostFields
-    : ["hide_tab_bales_history", "hide_tab_bales_barcode", "hide_tab_bales_products", "hide_tab_bales_customer_loading"];
+  const { data: myAccess } = useQuery<FactoryMyAccess>({
+    queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
+    staleTime: 5 * 60000,
+  });
+  const hiddenTabs =
+    myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
+      ? myAccess.hiddenCostFields
+      : [
+          "hide_tab_bales_history",
+          "hide_tab_bales_barcode",
+          "hide_tab_bales_products",
+          "hide_tab_bales_customer_loading",
+        ];
 
   const visibleTabs: BalesTab[] = [
     !hiddenTabs.includes("hide_tab_bales_history") ? "history" : null,
@@ -104,7 +115,7 @@ export default function FactoryBalesHub() {
         {show("history") && (
           <TabsContent value="history" className="bales-explorer-body mt-0 flex-1 overflow-auto">
             <div className="p-3 sm:p-4">
-              <BalesHistory />
+              <BalesHistory embedded />
             </div>
           </TabsContent>
         )}
@@ -115,7 +126,7 @@ export default function FactoryBalesHub() {
         )}
         {show("products") && (
           <TabsContent value="products" className="mt-0 flex-1 overflow-auto">
-            <BaleProducts />
+            <BaleProducts embedded />
           </TabsContent>
         )}
         {show("customer-loading") && (

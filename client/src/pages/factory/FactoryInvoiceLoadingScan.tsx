@@ -1,10 +1,23 @@
+import { visibleTabInterval } from "@/lib/queryPolicies";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
+import { PageHeader } from "@/components/PageHeader";
+import { MobileBarcodeScanner, type CameraScanFeedback } from "@/components/MobileBarcodeScanner";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { translateCameraScanMessage } from "@/i18n/mobileCameraScanTranslations";
 import { FACTORY_MOBILE_ACTION_BAR_CLEARANCE, FactoryMobileActionBar } from "@/components/ui/factory-mobile";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/hooks/use-toast";
+import { queryClient } from "@/lib/queryClient";
+import { apiRequest } from "@/lib/queryClient";
+import { useLocation, useRoute } from "wouter";
+import { useEscapeToParent } from "@/hooks/use-escape-to-parent";
+import { useDateFormat } from "@/contexts/DateFormatContext";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   ScanLine,
@@ -13,13 +26,14 @@ import {
   CheckCircle,
   XCircle,
   Trash2,
-  FileDown,
-  FileSpreadsheet,
   AlertTriangle,
   Package,
   Truck,
   FilePlus,
 } from "lucide-react";
+import { useState, useRef, useEffect, useCallback } from "react";
+
+import type { LoadingSummaryResponse } from "./factoryinvoiceloadingscan/types";
 import { StatusBadge } from "./factoryinvoiceloadingscan/components/StatusBadge";
 import {
   BaleReferencesDialog,
@@ -28,60 +42,248 @@ import {
   SessionBalesDialog,
 } from "./factoryinvoiceloadingscan/components/SessionDialogs";
 import { SessionHistoryCard } from "./factoryinvoiceloadingscan/components/SessionHistoryCard";
-import { useFactoryInvoiceLoadingScanState } from "./useFactoryInvoiceLoadingScanState";
-import {
-  FactoryInvoiceLoadingScanCardSection,
-  FactoryInvoiceLoadingScanCardSection2,
-} from "./FactoryInvoiceLoadingScanCardSection2";
+import { ExportButton } from "@/components/export/ReportExportMenu";
+import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
 
 export default function FactoryInvoiceLoadingScan() {
+  const [, navigate] = useLocation();
+  const [, params] = useRoute("/factory/invoices/:id/loading-scan");
+  const invoiceId = params?.id ? parseInt(params.id) : null;
+  const { toast } = useToast();
+  const exportSessionExcel = async () => {
+    try {
+      await downloadFromUrl(`/api/factory/invoice-loading-sessions/${activeSessionId}/export/excel`, {
+        fileName: exportFileName(`loading session ${activeSessionId}`, "xlsx"),
+      });
+    } catch (error) {
+      toast({
+        title: "Export failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+  const { language } = useApplicationLanguage();
+  const { formatDisplayDate } = useDateFormat();
+  useEscapeToParent(`/factory/sales/invoices/${invoiceId}`);
+
+  const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
+  const [showStartForm, setShowStartForm] = useState(false);
+
+  const lsKey = `loading-scan-form-${invoiceId}`;
+  const savedForm = (() => {
+    try {
+      return JSON.parse(localStorage.getItem(lsKey) || "{}");
+    } catch {
+      return {};
+    }
+  })();
+  const [truckNo, setTruckNo] = useState<string>(savedForm.truckNo ?? "");
+  const [driverName, setDriverName] = useState<string>(savedForm.driverName ?? "");
+  const [notes, setNotes] = useState<string>(savedForm.notes ?? "");
+
+  const autosaveForm = useCallback(
+    (updates: { truckNo?: string; driverName?: string; notes?: string }) => {
+      try {
+        const current = (() => {
+          try {
+            return JSON.parse(localStorage.getItem(lsKey) || "{}");
+          } catch {
+            return {};
+          }
+        })();
+        localStorage.setItem(lsKey, JSON.stringify({ ...current, ...updates }));
+      } catch {
+        // Storage is unavailable in private mode and can throw on quota; the value is a convenience, not state we need.
+      }
+    },
+    [lsKey]
+  );
+
+  const [scanInput, setScanInput] = useState("");
+  const [scanFlash, setScanFlash] = useState<"success" | "error" | null>(null);
+  const [scanMessage, setScanMessage] = useState("");
+  const [cameraScanFeedback, setCameraScanFeedback] = useState<CameraScanFeedback | null>(null);
+  const scanRef = useRef<HTMLInputElement>(null);
+
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [completeDialogOpen, setCompleteDialogOpen] = useState(false);
+  const [baleRefLine, setBaleRefLine] = useState<{ code: string; name: string } | null>(null);
+  const [viewSessionId, setViewSessionId] = useState<number | null>(null);
+
+  const summaryKey = [`/api/factory/invoices/${invoiceId}/loading-summary`, activeSessionId];
   const {
-    activeSessionId,
-    autosaveForm,
-    baleRefLine,
-    cameraScanFeedback,
-    cancelDialogOpen,
-    cancelSessionMutation,
-    completeDialogOpen,
-    completeSessionMutation,
-    createRemainingProformaMutation,
-    createSessionMutation,
-    currentBales,
-    currentSession,
-    doneLineCount,
-    driverName,
-    error,
-    formatDisplayDate,
-    handleScan,
-    invoiceId,
-    isError,
-    isFullyLoaded,
+    data: summary,
     isLoading,
-    navigate,
-    notes,
-    pendingLines,
-    removeBaleFromSessionMutation,
-    scanBaleMutation,
-    scanFlash,
-    scanInput,
-    scanMessage,
-    scanRef,
-    setActiveSessionId,
-    setBaleRefLine,
-    setCancelDialogOpen,
-    setCompleteDialogOpen,
-    setDriverName,
-    setNotes,
-    setScanInput,
-    setShowStartForm,
-    setTruckNo,
-    setViewSessionId,
-    show50Warning,
-    showStartForm,
-    summary,
-    truckNo,
-    viewSessionId,
-  } = useFactoryInvoiceLoadingScanState();
+    isError,
+    error,
+  } = useQuery<LoadingSummaryResponse>({
+    queryKey: summaryKey,
+    queryFn: async () => {
+      const url = activeSessionId
+        ? `/api/factory/invoices/${invoiceId}/loading-summary?sessionId=${activeSessionId}`
+        : `/api/factory/invoices/${invoiceId}/loading-summary`;
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) throw new Error((await res.json()).message);
+      return res.json();
+    },
+    enabled: !!invoiceId,
+    refetchInterval: visibleTabInterval(10_000),
+    retry: 1,
+  });
+
+  useEffect(() => {
+    if (!summary || activeSessionId) return;
+    const openSession = summary.sessions.find((s) => s.status === "OPEN");
+    if (openSession) {
+      setActiveSessionId(openSession.id);
+    }
+  }, [activeSessionId, summary]);
+
+  useEffect(() => {
+    if (activeSessionId && scanRef.current) {
+      scanRef.current.focus();
+    }
+  }, [activeSessionId, summary?.currentSessionBales?.length]);
+
+  const flashFeedback = useCallback((type: "success" | "error", msg: string) => {
+    setScanFlash(type);
+    setScanMessage(msg);
+    setTimeout(() => setScanFlash(null), 1800);
+  }, []);
+
+  const createSessionMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/factory/invoices/${invoiceId}/loading-sessions`, {
+        truckNo: truckNo || undefined,
+        driverName: driverName || undefined,
+        notes: notes || undefined,
+      });
+      if (!res.ok) throw new Error((await res.json()).message);
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setActiveSessionId(data.session.id);
+      setShowStartForm(false);
+      queryClient.invalidateQueries({ queryKey: [`/api/factory/invoices/${invoiceId}/loading-summary`] });
+      toast({ title: "Session started", description: `Loading session #${data.session.id} is now open.` });
+    },
+    onError: (err) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const scanBaleMutation = useMutation({
+    mutationFn: async (barcode: string) => {
+      const res = await apiRequest("POST", `/api/factory/invoice-loading-sessions/${activeSessionId}/scan-bale`, {
+        barcode,
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message);
+      }
+      return res.json();
+    },
+    onSuccess: (data, barcode) => {
+      setScanInput("");
+      queryClient.invalidateQueries({ queryKey: [`/api/factory/invoices/${invoiceId}/loading-summary`] });
+      flashFeedback("success", `Scanned: ${data.bale?.referenceNumber || data.loadingBale?.baleReference}`);
+      setCameraScanFeedback({
+        type: "success",
+        referenceNumber: data.bale?.referenceNumber || data.loadingBale?.baleReference || barcode,
+        message: translateCameraScanMessage("invoiceSuccess", language),
+      });
+      setTimeout(() => scanRef.current?.focus(), 50);
+    },
+    onError: (err, barcode) => {
+      setScanInput("");
+      flashFeedback("error", err.message);
+      setCameraScanFeedback({
+        type: /already (?:been )?(?:scanned|loaded|added|in)|reserved for another loading/i.test(err.message)
+          ? "duplicate"
+          : "error",
+        referenceNumber: barcode,
+        message: err.message,
+      });
+      setTimeout(() => scanRef.current?.focus(), 50);
+    },
+  });
+
+  const removeBaleFromSessionMutation = useMutation({
+    mutationFn: async ({ sessionId, baleId }: { sessionId: number; baleId: number }) => {
+      const res = await apiRequest("DELETE", `/api/factory/invoice-loading-sessions/${sessionId}/bales/${baleId}`);
+      if (!res.ok) throw new Error((await res.json()).message);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/factory/invoices/${invoiceId}/loading-summary`] });
+      toast({ title: "Removed", description: "Bale removed and returned to unloaded." });
+    },
+    onError: (err) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const completeSessionMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/factory/invoice-loading-sessions/${activeSessionId}/complete`);
+      if (!res.ok) throw new Error((await res.json()).message);
+      return res.json();
+    },
+    onSuccess: () => {
+      setActiveSessionId(null);
+      queryClient.invalidateQueries({ queryKey: [`/api/factory/invoices/${invoiceId}/loading-summary`] });
+      toast({ title: "Completed", description: "Loading session completed successfully." });
+    },
+    onError: (err) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const cancelSessionMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/factory/invoice-loading-sessions/${activeSessionId}/cancel`);
+      if (!res.ok) throw new Error((await res.json()).message);
+      return res.json();
+    },
+    onSuccess: () => {
+      setActiveSessionId(null);
+      queryClient.invalidateQueries({ queryKey: [`/api/factory/invoices/${invoiceId}/loading-summary`] });
+      toast({ title: "Cancelled", description: "Loading session cancelled." });
+    },
+    onError: (err) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const createRemainingProformaMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/factory/invoices/${invoiceId}/create-remaining-proforma`);
+      if (!res.ok) throw new Error((await res.json()).message);
+      return res.json() as Promise<{ proformaId: number; proformaName: string }>;
+    },
+    onSuccess: (data) => {
+      toast({ title: "Proforma created", description: `"${data.proformaName}" is ready. Opening now…` });
+      navigate(`/factory/sales/proformas/${data.proformaId}`);
+    },
+    onError: (err) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const handleScan = (e: React.FormEvent) => {
+    e.preventDefault();
+    const code = scanInput.trim();
+    if (!code) return;
+    scanBaleMutation.mutate(code);
+  };
+
+  const currentSession = summary?.sessions.find((s) => s.id === activeSessionId);
+  const currentBales = summary?.currentSessionBales || [];
+  const isFullyLoaded = (summary?.totals.remaining ?? 1) <= 0;
+  const show50Warning = currentBales.length >= 50;
+  const pendingLines = summary?.lines.filter((l) => l.remaining > 0) ?? [];
+  const doneLineCount = (summary?.lines.length ?? 0) - pendingLines.length;
 
   if (isLoading) {
     return (
@@ -114,30 +316,21 @@ export default function FactoryInvoiceLoadingScan() {
     <div
       className={`mx-auto flex min-h-full max-w-5xl flex-col space-y-4 sm:p-6 ${activeSessionId && currentSession ? `${FACTORY_MOBILE_ACTION_BAR_CLEARANCE} sm:pb-6` : ""}`}
     >
-      <div className="flex flex-wrap items-center gap-3">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => navigate(`/factory/sales/invoices/${invoiceId}`)}
-          data-testid="button-back"
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <div className="flex-1 min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-2xl font-bold" data-testid="text-invoice-title">
-              {inv.invoiceNumber || `Order #${inv.id}`}
-            </h1>
+      <PageHeader
+        title={<span data-testid="text-invoice-title">{inv.invoiceNumber || `Order #${inv.id}`}</span>}
+        backTarget={`/factory/sales/invoices/${invoiceId}`}
+        meta={
+          <>
             <Badge variant="default">Finalized</Badge>
             <Badge variant="outline" className="text-xs">
               Scan Loading
             </Badge>
-          </div>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {inv.customerName} · {inv.orderDate ? formatDisplayDate(inv.orderDate) : ""}
-          </p>
-        </div>
-      </div>
+            <span>
+              {inv.customerName} · {inv.orderDate ? formatDisplayDate(inv.orderDate) : ""}
+            </span>
+          </>
+        }
+      />
 
       <div className="grid grid-cols-2 gap-3">
         <Card>
@@ -184,26 +377,146 @@ export default function FactoryInvoiceLoadingScan() {
         </Card>
       )}
 
-      <FactoryInvoiceLoadingScanCardSection
-        activeSessionId={activeSessionId}
-        doneLineCount={doneLineCount}
-        pendingLines={pendingLines}
-        setBaleRefLine={setBaleRefLine}
-      />
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <CardTitle className="text-sm font-medium">Remaining Lines</CardTitle>
+            {doneLineCount > 0 && (
+              <span className="flex items-center gap-1 text-xs text-green-700 dark:text-green-400 font-medium">
+                <CheckCircle className="h-3.5 w-3.5" />
+                {doneLineCount} line{doneLineCount !== 1 ? "s" : ""} fully loaded
+              </span>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          {pendingLines.length === 0 ? (
+            <div className="flex items-center justify-center gap-2 py-6 text-green-700 dark:text-green-400">
+              <CheckCircle className="h-5 w-5" />
+              <span className="font-medium text-sm">All lines fully loaded</span>
+            </div>
+          ) : (
+            <div className="table-responsive">
+              <Table mobileLayout="cards">
+                <TableHeader className="sticky top-0 z-30 bg-background">
+                  <TableRow>
+                    <TableHead>Article Code</TableHead>
+                    <TableHead>Product</TableHead>
+                    <TableHead className="text-right">Invoice Qty</TableHead>
+                    <TableHead className="text-right">Loaded</TableHead>
+                    {activeSessionId && <TableHead className="text-right">This Session</TableHead>}
+                    <TableHead className="text-right">Remaining</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {pendingLines.map((line) => (
+                    <TableRow key={line.lineId} data-testid={`row-line-${line.lineId}`}>
+                      <TableCell className="font-mono text-xs">{line.articleCode}</TableCell>
+                      <TableCell className="text-sm">
+                        <button
+                          className="text-left hover-elevate rounded-md px-1 -mx-1 py-0.5 font-medium underline-offset-2 hover:underline"
+                          onClick={() => setBaleRefLine({ code: line.articleCode, name: line.productName })}
+                          data-testid={`button-scan-bale-refs-${line.lineId}`}
+                          title="Click to see all reference numbers"
+                        >
+                          {line.productName}
+                        </button>
+                      </TableCell>
+                      <TableCell className="text-right text-sm">{line.invoiceQty}</TableCell>
+                      <TableCell className="text-right text-sm text-green-700 dark:text-green-400">
+                        {line.alreadyLoaded}
+                      </TableCell>
+                      {activeSessionId && (
+                        <TableCell className="text-right text-sm text-blue-700 dark:text-blue-400">
+                          {line.currentSessionLoaded}
+                        </TableCell>
+                      )}
+                      <TableCell className="text-right text-sm font-bold text-amber-700 dark:text-amber-400">
+                        {line.remaining}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {!activeSessionId && !isFullyLoaded && (
-        <FactoryInvoiceLoadingScanCardSection2
-          autosaveForm={autosaveForm}
-          createSessionMutation={createSessionMutation}
-          driverName={driverName}
-          notes={notes}
-          setDriverName={setDriverName}
-          setNotes={setNotes}
-          setShowStartForm={setShowStartForm}
-          setTruckNo={setTruckNo}
-          showStartForm={showStartForm}
-          truckNo={truckNo}
-        />
+        <Card>
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between gap-2">
+              <CardTitle className="text-sm font-medium">Start New Loading Session</CardTitle>
+              {!showStartForm && (
+                <Button size="sm" onClick={() => setShowStartForm(true)} data-testid="button-show-start-form">
+                  <Play className="h-4 w-4 mr-1" />
+                  Start Loading
+                </Button>
+              )}
+            </div>
+          </CardHeader>
+          {showStartForm && (
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <Label htmlFor="input-truck-no">Truck No.</Label>
+                  <Input
+                    id="input-truck-no"
+                    placeholder="e.g. ABC-1234"
+                    value={truckNo}
+                    onChange={(e) => {
+                      setTruckNo(e.target.value);
+                      autosaveForm({ truckNo: e.target.value });
+                    }}
+                    data-testid="input-truck-no"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="input-driver-name">Driver Name</Label>
+                  <Input
+                    id="input-driver-name"
+                    placeholder="Driver's name"
+                    value={driverName}
+                    onChange={(e) => {
+                      setDriverName(e.target.value);
+                      autosaveForm({ driverName: e.target.value });
+                    }}
+                    data-testid="input-driver-name"
+                  />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="input-notes">Notes</Label>
+                <Textarea
+                  id="input-notes"
+                  placeholder="Optional notes..."
+                  value={notes}
+                  onChange={(e) => {
+                    setNotes(e.target.value);
+                    autosaveForm({ notes: e.target.value });
+                  }}
+                  data-testid="input-notes"
+                  className="resize-none"
+                  rows={2}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={() => createSessionMutation.mutate()}
+                  disabled={createSessionMutation.isPending}
+                  data-testid="button-create-session"
+                >
+                  <Play className="h-4 w-4 mr-1" />
+                  {createSessionMutation.isPending ? "Starting…" : "Start Session"}
+                </Button>
+                <Button variant="ghost" onClick={() => setShowStartForm(false)} data-testid="button-cancel-start-form">
+                  Cancel
+                </Button>
+              </div>
+            </CardContent>
+          )}
+        </Card>
       )}
 
       {activeSessionId && currentSession && (
@@ -369,28 +682,21 @@ export default function FactoryInvoiceLoadingScan() {
                 </Button>
               </FactoryMobileActionBar>
               <div className="ml-auto flex items-center gap-2">
-                <Button
-                  variant="outline"
+                <ExportButton
                   size="sm"
-                  onClick={() =>
-                    window.open(`/api/factory/invoice-loading-sessions/${activeSessionId}/export/excel`, "_blank")
-                  }
+                  label="Export Excel (Session)"
+                  onClick={() => void exportSessionExcel()}
                   data-testid="button-export-session-excel"
-                >
-                  <FileSpreadsheet className="h-4 w-4 mr-1" />
-                  Session Excel
-                </Button>
-                <Button
-                  variant="outline"
+                />
+                <ExportButton
+                  kind="pdf"
                   size="sm"
+                  label="Export PDF (Session)"
                   onClick={() =>
                     window.open(`/api/factory/invoice-loading-sessions/${activeSessionId}/export/pdf`, "_blank")
                   }
                   data-testid="button-export-session-pdf"
-                >
-                  <FileDown className="h-4 w-4 mr-1" />
-                  Session PDF
-                </Button>
+                />
               </div>
             </div>
           </CardContent>
