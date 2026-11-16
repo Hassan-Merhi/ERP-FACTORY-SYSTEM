@@ -11,10 +11,12 @@ const review = read("config/route-access-review.json");
 
 describe("Phase 2 route access review ledger", () => {
   it("exactly matches deterministic source extraction", () => {
-    expect(() => execFileSync(process.execPath, ["scripts/generate-route-access-review.mjs", "--check"], {
-      cwd: root,
-      stdio: "pipe",
-    })).not.toThrow();
+    expect(() =>
+      execFileSync(process.execPath, ["scripts/generate-route-access-review.mjs", "--check"], {
+        cwd: root,
+        stdio: "pipe",
+      })
+    ).not.toThrow();
   });
 
   it("tracks every registration, including repeated method/path handlers", () => {
@@ -27,9 +29,11 @@ describe("Phase 2 route access review ledger", () => {
   it("records authored operational permission evidence without granting new rights", () => {
     const sourced = review.entries.filter((entry: { policyEvidence?: unknown[] }) => entry.policyEvidence);
     expect(sourced.length).toBe(259);
-    expect(sourced.some((entry: { policyEvidence: Array<{ permissionKey: string }> }) =>
-      entry.policyEvidence.some((policy) => policy.permissionKey === "act_import_data")
-    )).toBe(true);
+    expect(
+      sourced.some((entry: { policyEvidence: Array<{ permissionKey: string }> }) =>
+        entry.policyEvidence.some((policy) => policy.permissionKey === "act_import_data")
+      )
+    ).toBe(true);
     expect(
       sourced.every(
         (entry: { status: string; policyEvidence: Array<{ status: string; source: string }> }) =>
@@ -50,7 +54,9 @@ describe("Phase 2 route access review ledger", () => {
       "0:POST /api/stock-transfer-order/wa-approval/webhook [stockTransferOrderWaWebhookHandler]",
       "1085:GET /api/health [<anonymous>]",
     ]);
-    expect(reviewed.every((entry: { verifiedRule: { evidence: string[] } }) => entry.verifiedRule.evidence.length > 0)).toBe(true);
+    expect(
+      reviewed.every((entry: { verifiedRule: { evidence: string[] } }) => entry.verifiedRule.evidence.length > 0)
+    ).toBe(true);
   });
 
   it("does not present unreviewed candidates as approved authorization", () => {
@@ -70,7 +76,9 @@ describe("Phase 2 route access review ledger", () => {
       /:\s*(POST|PUT|PATCH|DELETE)\s/.test(entry.id)
     );
     expect(mutations.length).toBeGreaterThan(0);
-    expect(mutations.every((entry: { status: string }) => ["unreviewed", "reviewed"].includes(entry.status))).toBe(true);
+    expect(mutations.every((entry: { status: string }) => ["unreviewed", "reviewed"].includes(entry.status))).toBe(
+      true
+    );
     expect(mutations.filter((entry: { status: string }) => entry.status === "reviewed")).toHaveLength(1);
   });
 });
