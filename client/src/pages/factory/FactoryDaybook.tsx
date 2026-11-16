@@ -8,6 +8,7 @@
  */
 import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
+import { RestrictedTabsState } from "@/components/RestrictedTabsState";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { AuditLog } from "@/pages/settings/AuditLog";
 import { PageHeader } from "@/components/PageHeader";
@@ -98,30 +99,19 @@ export default function FactoryDaybook() {
 
       {/* Tab selector: Transactions / Edits & Activity */}
       {visibleTabs.length === 0 ? (
-        <div className="rounded-xl border border-border/70 bg-card p-6 text-sm text-muted-foreground">
-          No Daybook tabs are available for this user.
-        </div>
+        <RestrictedTabsState />
       ) : (
         <Tabs value={effectiveTab} onValueChange={(value) => setActiveDaybookTab(value as "transactions" | "activity")}>
           <div className="erp-mobile-scroll-tabs pb-1">
-            <TabsList
-              className="h-auto w-max min-w-full gap-1 rounded-xl border border-border/60 bg-muted/50 p-1 shadow-sm sm:min-w-0 sm:w-fit dark:bg-slate-900/80"
-              aria-label="Factory daybook sections"
-            >
+            <TabsList className="w-max min-w-full sm:min-w-0 sm:w-fit" aria-label="Factory daybook sections">
               {showTransactions && (
-                <TabsTrigger
-                  value="transactions"
-                  className="gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md dark:data-[state=active]:bg-blue-600 dark:data-[state=active]:text-white"
-                >
+                <TabsTrigger value="transactions">
                   <ClipboardList className="h-4 w-4" aria-hidden="true" />
                   Transactions
                 </TabsTrigger>
               )}
               {showActivity && (
-                <TabsTrigger
-                  value="activity"
-                  className="gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md dark:data-[state=active]:bg-blue-600 dark:data-[state=active]:text-white"
-                >
+                <TabsTrigger value="activity">
                   <History className="h-4 w-4" aria-hidden="true" />
                   Edits &amp; Activity
                 </TabsTrigger>

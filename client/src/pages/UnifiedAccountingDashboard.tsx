@@ -604,7 +604,7 @@ export default function UnifiedAccountingDashboard() {
                     onClick={() =>
                       go(
                         prefix === "/factory"
-                          ? "/factory/intelligence/financial-hub?section=net-position"
+                          ? "/factory/intelligence/financial-hub"
                           : prefix === "/properties"
                             ? "/properties/net-position-details"
                             : "/net-position-details"
