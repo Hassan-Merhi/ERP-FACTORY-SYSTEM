@@ -25,7 +25,10 @@ async function cleanup(): Promise<void> {
   await db.execute(sql`
     DELETE FROM financial_operation_requests
     WHERE company_id = ${companyId}
-      AND idempotency_key IN (${sql.join(keys.map((key) => sql`${key}`), sql`, `)})
+      AND idempotency_key IN (${sql.join(
+        keys.map((key) => sql`${key}`),
+        sql`, `
+      )})
   `);
 }
 
@@ -130,8 +133,8 @@ describePostgres("durable financial operation PostgreSQL boundary", () => {
         (${companyId}, ${input.operationName}, ${key}, ${input.requestFingerprint}, 'processing')
     `);
 
-    await expect(
-      db.transaction(async (tx) => reserveFinancialOperationTx(tx, input))
-    ).resolves.toMatchObject({ kind: "uncertain" });
+    await expect(db.transaction(async (tx) => reserveFinancialOperationTx(tx, input))).resolves.toMatchObject({
+      kind: "uncertain",
+    });
   });
 });

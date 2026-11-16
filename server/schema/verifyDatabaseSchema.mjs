@@ -17,13 +17,7 @@
  *   3. tenant isolation probes: company-scope RLS fails closed without a tenant
  *      identity, and voucher entries carry their voucher's company.
  */
-import {
-  loadMigrations,
-  readHistory,
-  readManifest,
-  reconcileHistory,
-  SCHEMA_MANIFEST,
-} from "./migrationRegistry.mjs";
+import { loadMigrations, readHistory, readManifest, reconcileHistory, SCHEMA_MANIFEST } from "./migrationRegistry.mjs";
 import { compareSnapshots, summariseComparison, takeCatalogSnapshot } from "./schemaCatalog.mjs";
 
 const MAX_LISTED = 25;
@@ -33,7 +27,10 @@ const MAX_LISTED = 25;
  * @param {{ catalog?: boolean, probes?: boolean, manifestFile?: string }} [options]
  * @returns {Promise<{ ok: boolean, problems: string[], summary: Record<string, unknown> }>}
  */
-export async function verifyDatabaseSchema(client, { catalog = true, probes = true, manifestFile = SCHEMA_MANIFEST } = {}) {
+export async function verifyDatabaseSchema(
+  client,
+  { catalog = true, probes = true, manifestFile = SCHEMA_MANIFEST } = {}
+) {
   const problems = [];
   const summary = {};
   const migrations = loadMigrations();
@@ -52,7 +49,9 @@ export async function verifyDatabaseSchema(client, { catalog = true, probes = tr
     summary.applied = applied.length;
     summary.adopted = history.rows.filter((row) => row.mode === "adopted").map((row) => row.id);
     if (pending.length) {
-      problems.push(`Pending migrations not applied: ${pending.map((m) => m.id).join(", ")}. Run \`npm run db:migrate\` before starting this release.`);
+      problems.push(
+        `Pending migrations not applied: ${pending.map((m) => m.id).join(", ")}. Run \`npm run db:migrate\` before starting this release.`
+      );
     }
   } catch (error) {
     problems.push(error instanceof Error ? error.message : String(error));
@@ -64,14 +63,20 @@ export async function verifyDatabaseSchema(client, { catalog = true, probes = tr
     const result = compareSnapshots(expected, actual);
     summary.catalog = summariseComparison(result);
     for (const entry of result.missing.slice(0, MAX_LISTED)) problems.push(`missing ${entry.kind} ${entry.identity}`);
-    if (result.missing.length > MAX_LISTED) problems.push(`... and ${result.missing.length - MAX_LISTED} more missing objects`);
+    if (result.missing.length > MAX_LISTED)
+      problems.push(`... and ${result.missing.length - MAX_LISTED} more missing objects`);
     for (const change of result.changed.slice(0, MAX_LISTED)) {
-      problems.push(`changed ${change.expected.kind} ${change.expected.identity}: expected ${change.expected.raw} but found ${change.actual.raw}`);
+      problems.push(
+        `changed ${change.expected.kind} ${change.expected.identity}: expected ${change.expected.raw} but found ${change.actual.raw}`
+      );
     }
-    if (result.changed.length > MAX_LISTED) problems.push(`... and ${result.changed.length - MAX_LISTED} more changed objects`);
+    if (result.changed.length > MAX_LISTED)
+      problems.push(`... and ${result.changed.length - MAX_LISTED} more changed objects`);
     summary.extraObjects = result.extra.length;
     // FK/CHECK constraints present but not yet validated against historical rows.
-    summary.notValidatedConstraints = actual.filter((line) => line.startsWith("constraint\t") && line.endsWith('"validated":false}')).length;
+    summary.notValidatedConstraints = actual.filter(
+      (line) => line.startsWith("constraint\t") && line.endsWith('"validated":false}')
+    ).length;
   }
 
   if (probes && problems.length === 0) {
@@ -126,7 +131,9 @@ export async function runTenantIsolationProbes(client) {
       problems.push("Voucher-entry company scope is out of sync with parent vouchers.");
     }
   } catch (error) {
-    problems.push(`Voucher-entry company-scope probe failed: ${error instanceof Error ? error.message : String(error)}`);
+    problems.push(
+      `Voucher-entry company-scope probe failed: ${error instanceof Error ? error.message : String(error)}`
+    );
   } finally {
     await client.query("ROLLBACK").catch(() => {});
   }

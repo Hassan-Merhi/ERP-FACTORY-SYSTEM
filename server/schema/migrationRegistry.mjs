@@ -112,8 +112,12 @@ export function reconcileHistory(migrations, appliedRows) {
   }
   const firstPending = migrations.findIndex((m) => !seen.has(m.id));
   if (firstPending >= 0 && migrations.slice(firstPending).some((m) => seen.has(m.id))) {
-    const gap = migrations.slice(firstPending).filter((m) => !seen.has(m.id) && migrations.slice(migrations.indexOf(m)).some((later) => seen.has(later.id)));
-    throw new Error(`Out-of-order migration history: ${gap.map((m) => m.id).join(", ")} not applied but later migrations are`);
+    const gap = migrations
+      .slice(firstPending)
+      .filter((m) => !seen.has(m.id) && migrations.slice(migrations.indexOf(m)).some((later) => seen.has(later.id)));
+    throw new Error(
+      `Out-of-order migration history: ${gap.map((m) => m.id).join(", ")} not applied but later migrations are`
+    );
   }
   return {
     applied: migrations.filter((m) => seen.has(m.id)),
@@ -133,10 +137,10 @@ export function readManifest(file = SCHEMA_MANIFEST) {
  * @returns {Promise<{ exists: boolean, rows: Array<{ id: string, checksum: string, mode: string }> }>}
  */
 export async function readHistory(client) {
-  const exists = await client.query("SELECT to_regclass($1) IS NOT NULL AS present", [`public.${MIGRATION_HISTORY_TABLE}`]);
+  const exists = await client.query("SELECT to_regclass($1) IS NOT NULL AS present", [
+    `public.${MIGRATION_HISTORY_TABLE}`,
+  ]);
   if (!exists.rows[0]?.present) return { exists: false, rows: [] };
-  const { rows } = await client.query(
-    `SELECT id, checksum, mode FROM public.${MIGRATION_HISTORY_TABLE} ORDER BY id`
-  );
+  const { rows } = await client.query(`SELECT id, checksum, mode FROM public.${MIGRATION_HISTORY_TABLE} ORDER BY id`);
   return { exists: true, rows };
 }

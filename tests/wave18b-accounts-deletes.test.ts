@@ -20,9 +20,7 @@ import {
   InventoryControlAccountConflictError,
 } from "../server/services/accounting/inventoryControlAccount";
 import { runAccountingIntegrityDiagnostic } from "../server/services/accounting/integrity/accountingIntegrityDiagnostic";
-import {
-  LEDGER_INTEGRITY_GUARD_VERSION,
-} from "../server/services/accounting/ledgerIntegrityGuard";
+import { LEDGER_INTEGRITY_GUARD_VERSION } from "../server/services/accounting/ledgerIntegrityGuard";
 import { isSystemResolvedAccountCode } from "../server/services/accounting/systemAccounts";
 import { findOrCreateLedger } from "../server/routes/payroll/core/_helpers";
 import { purgeOldSoftDeletes } from "../server/services/scheduler/maintenance";

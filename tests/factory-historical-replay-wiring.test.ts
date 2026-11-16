@@ -20,9 +20,7 @@ describe("Historical Replay final wiring", () => {
 
   it("invalidates tokens prepared by incomplete earlier replay versions", () => {
     const types = read("server/services/factory/historical-replay/types.ts");
-    expect(types).toContain(
-      'REPLAY_ALGORITHM_VERSION = "HISTORICAL_COST_REPLAY_V7_INVENTORY_OWNERSHIP_FINAL"',
-    );
+    expect(types).toContain('REPLAY_ALGORITHM_VERSION = "HISTORICAL_COST_REPLAY_V7_INVENTORY_OWNERSHIP_FINAL"');
   });
 
   it("registers full-company scope, safety guard and exact handlers before legacy routes", () => {

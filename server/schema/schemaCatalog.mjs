@@ -277,16 +277,32 @@ function isStricter(expected, actual) {
   const a = actual.def;
   switch (expected.kind) {
     case "function":
-      return e.def === a.def && e.kind === a.kind && e.comment === a.comment && e.publicExecute !== false && a.publicExecute === false;
+      return (
+        e.def === a.def &&
+        e.kind === a.kind &&
+        e.comment === a.comment &&
+        e.publicExecute !== false &&
+        a.publicExecute === false
+      );
     case "table":
       return (
-        e.kind === a.kind && e.unlogged === a.unlogged && e.partitionKey === a.partitionKey && e.comment === a.comment &&
-        (a.rls || !e.rls) && (a.forceRls || !e.forceRls)
+        e.kind === a.kind &&
+        e.unlogged === a.unlogged &&
+        e.partitionKey === a.partitionKey &&
+        e.comment === a.comment &&
+        (a.rls || !e.rls) &&
+        (a.forceRls || !e.forceRls)
       );
     case "column":
       return (
-        e.type === a.type && e.default === a.default && e.identity === a.identity &&
-        e.generated === a.generated && e.collation === a.collation && e.comment === a.comment && !e.notNull && a.notNull
+        e.type === a.type &&
+        e.default === a.default &&
+        e.identity === a.identity &&
+        e.generated === a.generated &&
+        e.collation === a.collation &&
+        e.comment === a.comment &&
+        !e.notNull &&
+        a.notNull
       );
     default:
       return false;
@@ -342,7 +358,8 @@ export function compareSnapshots(expectedLines, actualLines) {
   // would collide). The twin may also satisfy another expectation, so look it
   // up among all actual objects, not only the extras.
   const actualByName = new Map();
-  for (const entry of actual.values()) if (isNamedShape(entry)) actualByName.set(`${entry.kind}\t${entry.identity}`, entry);
+  for (const entry of actual.values())
+    if (isNamedShape(entry)) actualByName.set(`${entry.kind}\t${entry.identity}`, entry);
   for (let i = missing.length - 1; i >= 0; i -= 1) {
     const entry = missing[i];
     if (!isNamedShape(entry)) continue;

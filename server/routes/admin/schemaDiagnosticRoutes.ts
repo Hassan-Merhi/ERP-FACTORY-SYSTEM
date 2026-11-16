@@ -125,7 +125,7 @@ export function registerSchemaDiagnosticRoutes(app: Express) {
       // 1. Which expected tables are missing entirely?
       const tableCheckResult = await pool.query<{ table_name: string }>(
         `SELECT table_name FROM information_schema.tables
-         WHERE table_schema = 'public'`,
+         WHERE table_schema = 'public'`
       );
       const existingTables = new Set(tableCheckResult.rows.map((r) => r.table_name));
       const missingTables = EXPECTED_TABLES.filter((t) => !existingTables.has(t));
@@ -147,7 +147,7 @@ export function registerSchemaDiagnosticRoutes(app: Express) {
              AND c.table_name   = t.tbl
              AND c.column_name  = t.col
          )`,
-        params,
+        params
       );
 
       const missingColumns = colCheckResult.rows.map((r) => `${r.tbl}.${r.col}`);

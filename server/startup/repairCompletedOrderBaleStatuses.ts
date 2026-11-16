@@ -76,7 +76,9 @@ export async function repairCompletedOrderBaleStatuses(pool: Pool): Promise<void
     `);
     await client.query("COMMIT");
     const remaining = Number(conflicts.rows[0]?.count ?? 0);
-    logger.info(`[FactoryBaleIntegrity] Restored completed-order status on ${repaired.rowCount ?? 0} bales; remaining conflicts: ${remaining}`);
+    logger.info(
+      `[FactoryBaleIntegrity] Restored completed-order status on ${repaired.rowCount ?? 0} bales; remaining conflicts: ${remaining}`
+    );
     if (remaining > 0) {
       logger.warn(`[FactoryBaleIntegrity] ${remaining} bales need manual review (conflicting order links)`);
     }

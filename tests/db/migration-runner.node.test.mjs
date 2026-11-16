@@ -79,7 +79,13 @@ function runner(args, { db, env = {} } = {}) {
   const result = spawnSync(process.execPath, [RUNNER, ...args], {
     cwd: ROOT,
     encoding: "utf8",
-    env: { ...process.env, PGSSLMODE: "disable", DATABASE_URL: db ? dbUrl(db) : "", MIGRATION_CONFIRMATION: "", ...env },
+    env: {
+      ...process.env,
+      PGSSLMODE: "disable",
+      DATABASE_URL: db ? dbUrl(db) : "",
+      MIGRATION_CONFIRMATION: "",
+      ...env,
+    },
   });
   return { status: result.status, out: `${result.stdout}\n${result.stderr}` };
 }
@@ -130,8 +136,16 @@ describe("migration registry", () => {
     assert.doesNotMatch(sql, /^COPY \S+ .* FROM stdin;$/m, "schema-only: no table data");
     assert.doesNotMatch(sql, /^SELECT pg_catalog\.setval\(/m, "schema-only: no sequence positions");
     assert.doesNotMatch(sql, /^SET (?!LOCAL)/m, "session settings must be transaction-local");
-    const code = sql.split("\n").filter((line) => !line.startsWith("--")).join("\n");
-    for (const debris of ["currency_fix_backup_", "backup_customer_orders_166", "_orphan_archive_", "intercompany_trades"]) {
+    const code = sql
+      .split("\n")
+      .filter((line) => !line.startsWith("--"))
+      .join("\n");
+    for (const debris of [
+      "currency_fix_backup_",
+      "backup_customer_orders_166",
+      "_orphan_archive_",
+      "intercompany_trades",
+    ]) {
       assert.ok(!code.includes(debris), `baseline must not contain ${debris}`);
     }
   });
@@ -147,23 +161,39 @@ describe("migration registry", () => {
     assert.equal(find("table", "public.vouchers").def.forceRls, true);
     assert.ok(find("policy", "public.voucher_entries.voucher_entries_company_scope_policy"));
     assert.ok(find("function", "public.erp_current_company_id()"));
-    assert.ok(full.some((e) => e.kind === "trigger" && e.identity.startsWith("public.vouchers.") && /closed_period/.test(e.identity)));
+    assert.ok(
+      full.some(
+        (e) => e.kind === "trigger" && e.identity.startsWith("public.vouchers.") && /closed_period/.test(e.identity)
+      )
+    );
     assert.ok(full.some((e) => e.kind === "trigger" && e.identity.startsWith("public.audit_log.")));
     const secdef = full.filter((e) => e.kind === "function" && /SECURITY DEFINER/.test(e.def.def ?? ""));
-    for (const fn of secdef) assert.equal(fn.def.publicExecute, false, `${fn.identity} must not be executable by PUBLIC`);
+    for (const fn of secdef)
+      assert.equal(fn.def.publicExecute, false, `${fn.identity} must not be executable by PUBLIC`);
   });
 
   it("rejects bad names, gaps, empty files and unmanaged transaction control", () => {
-    assert.throws(() => loadMigrations(fixtureRegistry({ "0001_ok.sql": "SELECT 1;", "2_bad.sql": "SELECT 1;" })), /Invalid migration file name/);
-    assert.throws(() => loadMigrations(fixtureRegistry({ "0001_a.sql": "SELECT 1;", "0003_c.sql": "SELECT 1;" })), /contiguous/);
+    assert.throws(
+      () => loadMigrations(fixtureRegistry({ "0001_ok.sql": "SELECT 1;", "2_bad.sql": "SELECT 1;" })),
+      /Invalid migration file name/
+    );
+    assert.throws(
+      () => loadMigrations(fixtureRegistry({ "0001_a.sql": "SELECT 1;", "0003_c.sql": "SELECT 1;" })),
+      /contiguous/
+    );
     assert.throws(() => loadMigrations(fixtureRegistry({ "0001_a.sql": "  \n" })), /Empty migration/);
-    assert.throws(() => loadMigrations(fixtureRegistry({ "0001_a.sql": "BEGIN;\nSELECT 1;\nCOMMIT;" })), /transaction control/);
+    assert.throws(
+      () => loadMigrations(fixtureRegistry({ "0001_a.sql": "BEGIN;\nSELECT 1;\nCOMMIT;" })),
+      /transaction control/
+    );
     assert.throws(
       () => loadMigrations(fixtureRegistry({ "0001_a.sql": "CREATE INDEX CONCURRENTLY i ON t (a);" })),
       /CONCURRENTLY/
     );
     const ok = loadMigrations(
-      fixtureRegistry({ "0001_a.sql": "-- migrate:no-transaction\nCREATE INDEX CONCURRENTLY IF NOT EXISTS i ON t (a);" })
+      fixtureRegistry({
+        "0001_a.sql": "-- migrate:no-transaction\nCREATE INDEX CONCURRENTLY IF NOT EXISTS i ON t (a);",
+      })
     );
     assert.equal(ok[0].transactional, false);
   });
@@ -174,11 +204,21 @@ describe("migration registry", () => {
       { id: "0002_b", checksum: "b".repeat(64) },
       { id: "0003_c", checksum: "c".repeat(64) },
     ];
-    assert.deepEqual(reconcileHistory(m, [{ id: "0001_a", checksum: "a".repeat(64) }]).pending.map((x) => x.id), ["0002_b", "0003_c"]);
-    assert.throws(() => reconcileHistory(m, [{ id: "0009_z", checksum: "z".repeat(64) }]), /does not exist in this release/);
+    assert.deepEqual(
+      reconcileHistory(m, [{ id: "0001_a", checksum: "a".repeat(64) }]).pending.map((x) => x.id),
+      ["0002_b", "0003_c"]
+    );
+    assert.throws(
+      () => reconcileHistory(m, [{ id: "0009_z", checksum: "z".repeat(64) }]),
+      /does not exist in this release/
+    );
     assert.throws(() => reconcileHistory(m, [{ id: "0001_a", checksum: "f".repeat(64) }]), /Checksum mismatch/);
     assert.throws(
-      () => reconcileHistory(m, [{ id: "0001_a", checksum: "a".repeat(64) }, { id: "0001_a", checksum: "a".repeat(64) }]),
+      () =>
+        reconcileHistory(m, [
+          { id: "0001_a", checksum: "a".repeat(64) },
+          { id: "0001_a", checksum: "a".repeat(64) },
+        ]),
       /Duplicate/
     );
     assert.throws(() => reconcileHistory(m, [{ id: "0002_b", checksum: "b".repeat(64) }]), /Out-of-order/);
@@ -218,7 +258,9 @@ describe("fresh installation from migrations alone", { skip: pgSkip }, () => {
     const result = runner(["apply"], { db });
     assert.equal(result.status, 2, result.out);
     await withClient(db, async (c) => {
-      const { rows } = await c.query("SELECT count(*)::int AS n FROM pg_class WHERE relnamespace = 'public'::regnamespace");
+      const { rows } = await c.query(
+        "SELECT count(*)::int AS n FROM pg_class WHERE relnamespace = 'public'::regnamespace"
+      );
       assert.equal(rows[0].n, 0);
     });
   });
@@ -232,7 +274,9 @@ describe("fresh installation from migrations alone", { skip: pgSkip }, () => {
   });
 
   it("records every migration with its checksum and passes full verification", async () => {
-    const history = await withClient(db, (c) => c.query("SELECT id, checksum, mode FROM schema_migrations ORDER BY id"));
+    const history = await withClient(db, (c) =>
+      c.query("SELECT id, checksum, mode FROM schema_migrations ORDER BY id")
+    );
     assert.deepEqual(
       history.rows.map((r) => [r.id, r.checksum, r.mode]),
       loadMigrations().map((m) => [m.id, m.checksum, "applied"])
@@ -251,7 +295,9 @@ describe("fresh installation from migrations alone", { skip: pgSkip }, () => {
   });
 
   it("fails closed when an applied migration's checksum was changed", async () => {
-    await withClient(db, (c) => c.query("UPDATE schema_migrations SET checksum = repeat('0', 64) WHERE id = '0002_reference_data'"));
+    await withClient(db, (c) =>
+      c.query("UPDATE schema_migrations SET checksum = repeat('0', 64) WHERE id = '0002_reference_data'")
+    );
     try {
       const apply = runner(["apply"], { db, env: APPLY });
       assert.notEqual(apply.status, 0);
@@ -259,20 +305,26 @@ describe("fresh installation from migrations alone", { skip: pgSkip }, () => {
       assert.notEqual(runner(["verify"], { db }).status, 0);
     } finally {
       const real = loadMigrations().find((m) => m.id === "0002_reference_data").checksum;
-      await withClient(db, (c) => c.query("UPDATE schema_migrations SET checksum = $1 WHERE id = '0002_reference_data'", [real]));
+      await withClient(db, (c) =>
+        c.query("UPDATE schema_migrations SET checksum = $1 WHERE id = '0002_reference_data'", [real])
+      );
     }
   });
 
   it("fails closed on unknown (newer) and out-of-order history", async () => {
     await withClient(db, (c) =>
-      c.query("INSERT INTO schema_migrations (id, checksum, mode, execution_ms) VALUES ('9999_from_the_future', repeat('9', 64), 'applied', 0)")
+      c.query(
+        "INSERT INTO schema_migrations (id, checksum, mode, execution_ms) VALUES ('9999_from_the_future', repeat('9', 64), 'applied', 0)"
+      )
     );
     let result = runner(["apply"], { db, env: APPLY });
     assert.notEqual(result.status, 0);
     assert.match(result.out, /does not exist in this release/);
     await withClient(db, (c) => c.query("DELETE FROM schema_migrations WHERE id = '9999_from_the_future'"));
 
-    const saved = await withClient(db, (c) => c.query("SELECT * FROM schema_migrations WHERE id = '0002_reference_data'"));
+    const saved = await withClient(db, (c) =>
+      c.query("SELECT * FROM schema_migrations WHERE id = '0002_reference_data'")
+    );
     await withClient(db, (c) => c.query("DELETE FROM schema_migrations WHERE id = '0002_reference_data'"));
     try {
       result = runner(["apply"], { db, env: APPLY });
@@ -294,7 +346,11 @@ describe("fresh installation from migrations alone", { skip: pgSkip }, () => {
 
   it("verification detects schema drift (missing column, weakened RLS)", async () => {
     const clone = await createDatabase("drift", db);
-    await withClient(clone, (c) => c.query("ALTER TABLE vouchers NO FORCE ROW LEVEL SECURITY; ALTER TABLE companies DROP COLUMN IF EXISTS currency CASCADE"));
+    await withClient(clone, (c) =>
+      c.query(
+        "ALTER TABLE vouchers NO FORCE ROW LEVEL SECURITY; ALTER TABLE companies DROP COLUMN IF EXISTS currency CASCADE"
+      )
+    );
     const verify = runner(["verify"], { db: clone });
     assert.notEqual(verify.status, 0);
     assert.match(verify.out, /public\.vouchers/);
@@ -314,17 +370,25 @@ describe("transactional application, partial failure and concurrency", { skip: p
     assert.notEqual(failed.status, 0);
     assert.match(failed.out, /0002_two failed and was rolled back/);
     await withClient(db, async (c) => {
-      const tables = await c.query("SELECT to_regclass('one_t') IS NOT NULL AS one, to_regclass('two_t') IS NOT NULL AS two");
+      const tables = await c.query(
+        "SELECT to_regclass('one_t') IS NOT NULL AS one, to_regclass('two_t') IS NOT NULL AS two"
+      );
       assert.deepEqual(tables.rows[0], { one: true, two: false });
       const history = await c.query("SELECT id FROM schema_migrations ORDER BY id");
-      assert.deepEqual(history.rows.map((r) => r.id), ["0001_one"]);
+      assert.deepEqual(
+        history.rows.map((r) => r.id),
+        ["0001_one"]
+      );
     });
     writeFileSync(path.join(dir, "0002_two.sql"), "CREATE TABLE two_t (id int);");
     const fixed = runner(["apply"], { db, env });
     assert.equal(fixed.status, 0, fixed.out);
     await withClient(db, async (c) => {
       const history = await c.query("SELECT id FROM schema_migrations ORDER BY id");
-      assert.deepEqual(history.rows.map((r) => r.id), ["0001_one", "0002_two"]);
+      assert.deepEqual(
+        history.rows.map((r) => r.id),
+        ["0001_one", "0002_two"]
+      );
     });
   });
 
@@ -422,7 +486,9 @@ describe("existing-database adoption", { skip: pgSkip }, () => {
 
   it("blocks adoption (changing nothing) when a difference cannot be fixed losslessly", async () => {
     const db = await legacyDatabase();
-    await withClient(db, (c) => c.query("ALTER TABLE factory_settings ALTER COLUMN labor_cost_per_kg TYPE numeric(10,8)"));
+    await withClient(db, (c) =>
+      c.query("ALTER TABLE factory_settings ALTER COLUMN labor_cost_per_kg TYPE numeric(10,8)")
+    );
     const before = await withClient(db, (c) => takeCatalogSnapshot(c));
     const plan = runner(["adopt"], { db });
     assert.notEqual(plan.status, 0);
@@ -437,14 +503,18 @@ describe("existing-database adoption", { skip: pgSkip }, () => {
     const db = await legacyDatabase();
     await withClient(db, async (c) => {
       await c.query("ALTER TABLE label_design_colors DROP CONSTRAINT IF EXISTS label_design_colors_slug_key");
-      await c.query("INSERT INTO label_design_colors (slug, label, color_hex, sort_order) VALUES ('dup','a','#000000',1), ('dup','b','#000000',2)");
+      await c.query(
+        "INSERT INTO label_design_colors (slug, label, color_hex, sort_order) VALUES ('dup','a','#000000',1), ('dup','b','#000000',2)"
+      );
     });
     const before = await withClient(db, (c) => takeCatalogSnapshot(c));
     const result = runner(["adopt", "--apply"], { db, env: ADOPT });
     assert.notEqual(result.status, 0);
     assert.match(result.out, /rolled back; nothing changed/);
     assert.deepEqual(await withClient(db, (c) => takeCatalogSnapshot(c)), before);
-    const rows = await withClient(db, (c) => c.query("SELECT count(*)::int AS n FROM label_design_colors WHERE slug = 'dup'"));
+    const rows = await withClient(db, (c) =>
+      c.query("SELECT count(*)::int AS n FROM label_design_colors WHERE slug = 'dup'")
+    );
     assert.equal(rows.rows[0].n, 2, "data is untouched");
   });
 
@@ -479,7 +549,9 @@ describe("existing-database adoption", { skip: pgSkip }, () => {
     const db = await legacyDatabase();
     await withClient(db, async (c) => {
       await c.query("ALTER TABLE label_design_colors DROP CONSTRAINT IF EXISTS label_design_colors_slug_key");
-      await c.query("INSERT INTO label_design_colors (slug, label, color_hex, sort_order) VALUES ('dup','a','#000000',1), ('dup','b','#000000',2)");
+      await c.query(
+        "INSERT INTO label_design_colors (slug, label, color_hex, sort_order) VALUES ('dup','a','#000000',1), ('dup','b','#000000',2)"
+      );
     });
     const plan = runner(["adopt"], { db });
     assert.notEqual(plan.status, 0);
@@ -508,7 +580,8 @@ describe("existing-database adoption", { skip: pgSkip }, () => {
 
 describe("startup schema gate", { skip: pgSkip }, () => {
   it("passes on a migrated database and refuses on a missing, incomplete or behind database", async () => {
-    const { verifyStartupSchema, DatabaseSchemaMismatchError } = await import("../../server/schema/startupSchemaGate.mjs");
+    const { verifyStartupSchema, DatabaseSchemaMismatchError } =
+      await import("../../server/schema/startupSchemaGate.mjs");
     const db = await createDatabase("gate");
     await assert.rejects(verifyStartupSchema({ connectionString: dbUrl(db) }), DatabaseSchemaMismatchError);
     assert.equal(runner(["apply"], { db, env: APPLY }).status, 0);
@@ -516,9 +589,14 @@ describe("startup schema gate", { skip: pgSkip }, () => {
     assert.equal(result.ok, true);
 
     await withClient(db, (c) => c.query("ALTER TABLE vouchers DROP COLUMN IF EXISTS currency CASCADE"));
-    await assert.rejects(verifyStartupSchema({ connectionString: dbUrl(db) }), /missing column public\.vouchers\.currency/);
+    await assert.rejects(
+      verifyStartupSchema({ connectionString: dbUrl(db) }),
+      /missing column public\.vouchers\.currency/
+    );
 
-    await withClient(db, (c) => c.query("DELETE FROM schema_migrations WHERE id = (SELECT max(id) FROM schema_migrations)"));
+    await withClient(db, (c) =>
+      c.query("DELETE FROM schema_migrations WHERE id = (SELECT max(id) FROM schema_migrations)")
+    );
     await assert.rejects(verifyStartupSchema({ connectionString: dbUrl(db) }), /Pending migrations/);
   });
 });

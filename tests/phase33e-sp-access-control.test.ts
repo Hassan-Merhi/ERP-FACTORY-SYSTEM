@@ -22,11 +22,7 @@ vi.mock("../server/routes/sp/spHelpers", () => ({
 }));
 vi.mock("../server/lib/logger", () => ({ logger: harness.logger }));
 
-import {
-  SP_PERMISSIONS,
-  classifyPermission,
-  registerSpAccessControl,
-} from "../server/routes/sp/spAccessControl";
+import { SP_PERMISSIONS, classifyPermission, registerSpAccessControl } from "../server/routes/sp/spAccessControl";
 
 function fakeApp() {
   const registrations: Array<{

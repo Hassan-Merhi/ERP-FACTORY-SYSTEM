@@ -138,7 +138,9 @@ databaseDescribe("destination-scoped proforma prices", () => {
 
   it("lists destinations and deletes only the selected destination's price", async () => {
     const params = { customerId: String(fixture.customerId) };
-    const list = await call("GET", "/api/factory/customer-price-lists/:customerId/destinations", fixture.companyId, { params });
+    const list = await call("GET", "/api/factory/customer-price-lists/:customerId/destinations", fixture.companyId, {
+      params,
+    });
     expect(list.statusCode).toBe(200);
     expect(list.body).toEqual(expect.arrayContaining(["L'SHI", "MALI"]));
 
@@ -148,15 +150,22 @@ databaseDescribe("destination-scoped proforma prices", () => {
     });
     expect(legacy.statusCode).toBe(200);
 
-    const deleted = await call("DELETE", "/api/factory/customer-price-lists/:customerId/:articleCode", fixture.companyId, {
-      params: { ...params, articleCode },
-      query: { destination: "MALI" },
-    });
+    const deleted = await call(
+      "DELETE",
+      "/api/factory/customer-price-lists/:customerId/:articleCode",
+      fixture.companyId,
+      {
+        params: { ...params, articleCode },
+        query: { destination: "MALI" },
+      }
+    );
     expect(deleted.statusCode).toBe(200);
     expect(await agreedPrice("MALI")).toBeUndefined();
     expect(Number(await agreedPrice("L'SHI"))).toBe(25);
     const old = await call("GET", "/api/factory/customer-price-lists/:customerId", fixture.companyId, { params });
-    expect(Number(old.body.find((row: { article_code: string }) => row.article_code === articleCode)?.price_per_bale)).toBe(99);
+    expect(
+      Number(old.body.find((row: { article_code: string }) => row.article_code === articleCode)?.price_per_bale)
+    ).toBe(99);
     expect(await readLinePrice(secondLineId)).toBe(10);
 
     const restored = await call("PUT", "/api/factory/customer-price-lists/:customerId", fixture.companyId, {
@@ -178,17 +187,19 @@ databaseDescribe("destination-scoped proforma prices", () => {
     expect(Number(await agreedPrice("L'SHI"))).toBe(25);
   });
   it("explicitly reapplies only this proforma's saved destination prices, including per-kg lines", async () => {
-    await pool.query(
-      "UPDATE customer_proforma_lines SET pricing_mode = 'per_kg', price_per_kg = 1.5 WHERE id = $1",
-      [secondLineId]
-    );
-    const response = await call(
-      "POST", "/api/factory/customer-proformas/:id/apply-agreed-prices", fixture.companyId,
-      { params: { id: String(secondId) } }
-    );
+    await pool.query("UPDATE customer_proforma_lines SET pricing_mode = 'per_kg', price_per_kg = 1.5 WHERE id = $1", [
+      secondLineId,
+    ]);
+    const response = await call("POST", "/api/factory/customer-proformas/:id/apply-agreed-prices", fixture.companyId, {
+      params: { id: String(secondId) },
+    });
     expect(response.statusCode).toBe(200);
     expect(response.body).toMatchObject({
-      destination: "L'SHI", updated: 1, skipped: 0, fixed: 0, unchanged: 0,
+      destination: "L'SHI",
+      updated: 1,
+      skipped: 0,
+      fixed: 0,
+      unchanged: 0,
     });
     expect(await readLinePrice(secondLineId)).toBe(25);
     expect(await readLinePrice(firstLineId)).toBe(25);
@@ -209,14 +220,12 @@ databaseDescribe("destination-scoped proforma prices", () => {
        RETURNING id`,
       [secondId, missingCode]
     );
-    await pool.query(
-      "UPDATE customer_proforma_lines SET price_fixed = TRUE, price_per_bale = 9 WHERE id = $1",
-      [secondLineId]
-    );
-    const response = await call(
-      "POST", "/api/factory/customer-proformas/:id/apply-agreed-prices", fixture.companyId,
-      { params: { id: String(secondId) } }
-    );
+    await pool.query("UPDATE customer_proforma_lines SET price_fixed = TRUE, price_per_bale = 9 WHERE id = $1", [
+      secondLineId,
+    ]);
+    const response = await call("POST", "/api/factory/customer-proformas/:id/apply-agreed-prices", fixture.companyId, {
+      params: { id: String(secondId) },
+    });
     expect(response.statusCode).toBe(200);
     expect(response.body).toMatchObject({ updated: 0, skipped: 1, fixed: 1, unchanged: 0 });
     expect(await readLinePrice(secondLineId)).toBe(9);
@@ -224,7 +233,9 @@ databaseDescribe("destination-scoped proforma prices", () => {
     expect(await readLinePrice(firstLineId)).toBe(25);
 
     const foreignCompany = await call(
-      "POST", "/api/factory/customer-proformas/:id/apply-agreed-prices", fixture.companyId + 999999,
+      "POST",
+      "/api/factory/customer-proformas/:id/apply-agreed-prices",
+      fixture.companyId + 999999,
       { params: { id: String(secondId) } }
     );
     expect(foreignCompany.statusCode).toBe(404);
@@ -234,37 +245,39 @@ databaseDescribe("destination-scoped proforma prices", () => {
   it("matches historical KALEMIE proformas to KALEME agreed prices without modifying destinations", async () => {
     const aliasCode = "KALEMIE-ALIAS-TEST";
     const historicalId = await fixture.proforma([{ code: aliasCode, qty: 1 }]);
-    const [line] = (await pool.query<{ id: number }>(
-      "SELECT id FROM customer_proforma_lines WHERE proforma_id = $1",
-      [historicalId]
-    )).rows;
+    const [line] = (
+      await pool.query<{ id: number }>("SELECT id FROM customer_proforma_lines WHERE proforma_id = $1", [historicalId])
+    ).rows;
     const saved = await call("PUT", "/api/factory/customer-price-lists/:customerId", fixture.companyId, {
       params: { customerId: String(fixture.customerId) },
       query: { destination: "KALEME" },
       body: [{ articleCode: aliasCode, pricePerBale: 42 }],
     });
     expect(saved.statusCode).toBe(200);
-    await pool.query(
-      "UPDATE customer_proformas SET destination = 'KALEMIE' WHERE id = $1",
-      [historicalId]
-    );
+    await pool.query("UPDATE customer_proformas SET destination = 'KALEMIE' WHERE id = $1", [historicalId]);
 
-    const applied = await call(
-      "POST", "/api/factory/customer-proformas/:id/apply-agreed-prices", fixture.companyId,
-      { params: { id: String(historicalId) } }
-    );
+    const applied = await call("POST", "/api/factory/customer-proformas/:id/apply-agreed-prices", fixture.companyId, {
+      params: { id: String(historicalId) },
+    });
     expect(applied.statusCode).toBe(200);
     expect(applied.body).toMatchObject({
-      destination: "KALEME", updated: 1, skipped: 0, fixed: 0, unchanged: 0,
+      destination: "KALEME",
+      updated: 1,
+      skipped: 0,
+      fixed: 0,
+      unchanged: 0,
     });
     expect(await readLinePrice(line.id)).toBe(42);
     const { rows } = await pool.query<{ destination: string }>(
-      "SELECT destination FROM customer_proformas WHERE id = $1", [historicalId]
+      "SELECT destination FROM customer_proformas WHERE id = $1",
+      [historicalId]
     );
     expect(rows[0].destination).toBe("KALEMIE");
 
     const alreadyCurrent = await call(
-      "POST", "/api/factory/customer-proformas/:id/apply-agreed-prices", fixture.companyId,
+      "POST",
+      "/api/factory/customer-proformas/:id/apply-agreed-prices",
+      fixture.companyId,
       { params: { id: String(historicalId) } }
     );
     expect(alreadyCurrent.statusCode).toBe(200);
@@ -273,11 +286,9 @@ databaseDescribe("destination-scoped proforma prices", () => {
 
   it("requires a destination before applying saved agreed prices", async () => {
     const unlinkedId = await fixture.proforma([{ code: "UNLINKED-AGREED-TEST", qty: 1 }]);
-    const response = await call(
-      "POST", "/api/factory/customer-proformas/:id/apply-agreed-prices", fixture.companyId,
-      { params: { id: String(unlinkedId) } }
-    );
+    const response = await call("POST", "/api/factory/customer-proformas/:id/apply-agreed-prices", fixture.companyId, {
+      params: { id: String(unlinkedId) },
+    });
     expect(response.statusCode).toBe(400);
   });
-
 });

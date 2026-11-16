@@ -20,7 +20,6 @@ import {
 } from "../server/services/accounting/fiscalReviewService";
 import { withRolledBackPool } from "./helpers/routedPoolClient";
 
-
 let seq = 0;
 const PERIOD = { periodStartDate: "2025-01-01", periodEndDate: "2025-12-31" };
 

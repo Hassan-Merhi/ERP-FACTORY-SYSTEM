@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { sql } from "drizzle-orm";
 import { db } from "../server/db";
-import {
-  buildSpProductionClosureStatus,
-} from "../server/routes/sp/spProductionClosureRoutes";
+import { buildSpProductionClosureStatus } from "../server/routes/sp/spProductionClosureRoutes";
 import { hasTable, tableConstraints } from "./helpers/schemaManifest";
 
 const hasDatabase = Boolean(process.env.DATABASE_URL);
@@ -75,7 +73,7 @@ databaseDescribe("Supplier Partner production closure database", () => {
       db.execute(sql`
         INSERT INTO sp_completion_records(company_id, cutover_id, completion_snapshot, reason)
         VALUES (${companyId}, ${cutoverId}, '{}'::jsonb, 'duplicate closure')
-      `),
+      `)
     ).rejects.toMatchObject({ cause: { code: "23505" } });
 
     await db.execute(sql`DELETE FROM sp_completion_records WHERE company_id = ${companyId}`);

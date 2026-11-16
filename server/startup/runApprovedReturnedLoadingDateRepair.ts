@@ -19,7 +19,6 @@ export async function runApprovedReturnedLoadingDateRepair(pool: Pool): Promise<
     await client.query("SELECT set_config('app.current_company_id', '12', true)");
     await client.query("SELECT pg_advisory_xact_lock(hashtext('customer_loading_date_repair'), 12)");
 
-
     const existing = await client.query(
       "SELECT new_loading_finalized_at FROM factory_customer_returned_loading_date_repair_audit WHERE company_id=12 AND order_id=207"
     );

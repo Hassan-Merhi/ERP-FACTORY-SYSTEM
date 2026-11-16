@@ -23,7 +23,9 @@ describe("factory row history schema (defined by the migrations)", () => {
       const args = noisePrefixes.map((prefix) => `'${prefix}'`).join(", ");
       for (const op of ["insert", "update", "delete"]) {
         const definition = triggerDefinition(table, `${table}_row_history_${op}`);
-        expect(definition, `${table} ${op}`).toContain(`FOR EACH STATEMENT EXECUTE FUNCTION erp_factory_row_history(${args})`);
+        expect(definition, `${table} ${op}`).toContain(
+          `FOR EACH STATEMENT EXECUTE FUNCTION erp_factory_row_history(${args})`
+        );
       }
     }
   });
@@ -108,7 +110,12 @@ databaseDescribe("factory row history", () => {
     // An insert (the trigger exists from the migrations), plus the snapshot when this run took the baseline.
     const recorded = await history("factory_suppliers", preexistingSupplier);
     expect(recorded[0].op).toBe("I");
-    expect(recorded.map((row) => row.op).slice(1).every((op) => op === "S")).toBe(true);
+    expect(
+      recorded
+        .map((row) => row.op)
+        .slice(1)
+        .every((op) => op === "S")
+    ).toBe(true);
     expect(recorded.length).toBeLessThanOrEqual(2);
     for (const row of recorded) {
       expect(row).toMatchObject({ company_id: companyId, new_values: { name: `Before ${suffix}` } });

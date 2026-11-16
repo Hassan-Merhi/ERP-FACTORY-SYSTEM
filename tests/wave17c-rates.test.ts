@@ -290,10 +290,13 @@ describe("individual factory FX settings rate removal", () => {
         [ctx.companyId, `${PREFIX}-hkd-row-delete`]
       );
     });
-    const before = (await pool.query(
-      `SELECT id, effective_date::text AS date FROM factory_fx_rates
-        WHERE company_id = $1 AND currency_code = 'HKD' ORDER BY effective_date`, [ctx.companyId]
-    )).rows;
+    const before = (
+      await pool.query(
+        `SELECT id, effective_date::text AS date FROM factory_fx_rates
+        WHERE company_id = $1 AND currency_code = 'HKD' ORDER BY effective_date`,
+        [ctx.companyId]
+      )
+    ).rows;
     expect(before).toHaveLength(2);
     const [usedRate, unusedRate] = before;
 
@@ -320,8 +323,9 @@ describe("individual factory FX settings rate removal", () => {
     expect(visible.body.some((rate: { currencyCode: string }) => rate.currencyCode === "HKD")).toBe(false);
     failExternalRate();
     expect((await agent.get("/api/factory/fx-rates/HKD/2026-08-20")).status).toBe(404);
-    const audit = (await auditRows("factory_fx_rates"))
-      .filter((row) => String(row.record_identifier).startsWith("HKD "));
+    const audit = (await auditRows("factory_fx_rates")).filter((row) =>
+      String(row.record_identifier).startsWith("HKD ")
+    );
     expect(audit.map((row) => row.action)).toEqual(["delete", "update"]);
   });
 });

@@ -25,7 +25,11 @@ function isMissingSessionTable(error: unknown): boolean {
 }
 
 export const sessionRepository = {
-  async listActiveSessions(userId: string | undefined, includeAllUsers: boolean, companyId?: number): Promise<StoredSessionRow[]> {
+  async listActiveSessions(
+    userId: string | undefined,
+    includeAllUsers: boolean,
+    companyId?: number
+  ): Promise<StoredSessionRow[]> {
     try {
       if (includeAllUsers) {
         if (companyId) {

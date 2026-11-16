@@ -27,7 +27,15 @@ const names: Record<(typeof SP_GIT_FIELDS)[number], string> = {
   freightStatus: "freight_status",
 };
 const textFields = new Set<string>([
-  "shopName", "transporter", "numberPlate", "trackingLocation", "agent", "trackingDescription", "blDocs", "trackingLink", "freightStatus",
+  "shopName",
+  "transporter",
+  "numberPlate",
+  "trackingLocation",
+  "agent",
+  "trackingDescription",
+  "blDocs",
+  "trackingLink",
+  "freightStatus",
 ]);
 const dateFields = new Set<string>(["eta", "borderDate", "docsSentDate"]);
 const moneyFields = new Set<string>(["transportFee", "dutyFee"]);
@@ -38,26 +46,39 @@ export function registerSpGitTrackingRoutes(app: Express): void {
     if (!Number.isSafeInteger(id) || id <= 0) return res.status(400).json({ message: "Invalid SP container ID" });
     try {
       const parsed = updateContainerTrackingSchema.safeParse(req.body);
-      if (!parsed.success) return res.status(400).json({ message: "Invalid tracking data", errors: parsed.error.issues });
+      if (!parsed.success)
+        return res.status(400).json({ message: "Invalid tracking data", errors: parsed.error.issues });
       // GIT status is distinct from SP financial lifecycle. No caller can
       // mark a container offloaded or change its invoice/ledger through GIT.
       if (parsed.data.offloadDate !== undefined || parsed.data.etaSource !== undefined) {
-        return res.status(400).json({ message: "Offload and automated ETA fields cannot be changed through SP GIT tracking" });
+        return res
+          .status(400)
+          .json({ message: "Offload and automated ETA fields cannot be changed through SP GIT tracking" });
       }
       const status = parsed.data.status;
       if (status !== undefined && status !== null && !SP_GIT_STATUSES.some((allowed) => allowed === status)) {
-        return res.status(400).json({ message: "Only active logistics statuses may be set here; use Offload to receive stock" });
+        return res
+          .status(400)
+          .json({ message: "Only active logistics statuses may be set here; use Offload to receive stock" });
       }
-      const existing = firstRow<{ company_id: number; status: string }>(await db.execute(sql`
+      const existing = firstRow<{ company_id: number; status: string }>(
+        await db.execute(sql`
         SELECT company_id, status FROM sp_containers WHERE id = ${id} LIMIT 1
-      `));
+      `)
+      );
       if (!existing) return res.status(404).json({ message: "Supplier Partner container not found" });
-      if (existing.status !== "open") return res.status(409).json({ message: "Only open containers can have logistics fields edited" });
+      if (existing.status !== "open")
+        return res.status(409).json({ message: "Only open containers can have logistics fields edited" });
       const userId = String((req.user as { id: unknown }).id);
       const role = String(req.session?.currentRole ?? (req.user as { role: unknown }).role ?? "");
-      const scope = await resolveGitCompanyScope(userId, role, {
-        companyId: String(existing.company_id),
-      }, req.session?.currentCompanyId);
+      const scope = await resolveGitCompanyScope(
+        userId,
+        role,
+        {
+          companyId: String(existing.company_id),
+        },
+        req.session?.currentCompanyId
+      );
       if ("error" in scope) return res.status(scope.status).json({ message: scope.error, code: scope.code });
 
       const patch = parsed.data;
@@ -66,13 +87,18 @@ export function registerSpGitTrackingRoutes(app: Express): void {
         if (value === undefined) return [];
         let normalized: string | boolean | null = value === null || value === "" ? null : String(value);
         if (field === "docReceived") normalized = value === null ? null : Boolean(value);
-        if (dateFields.has(field) && normalized !== null && typeof normalized === "string" &&
-            !/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+        if (
+          dateFields.has(field) &&
+          normalized !== null &&
+          typeof normalized === "string" &&
+          !/^\d{4}-\d{2}-\d{2}$/.test(normalized)
+        ) {
           throw new Error("Invalid date");
         }
         if (moneyFields.has(field) && normalized !== null) {
           const amount = Number(normalized);
-          if (!Number.isFinite(amount) || amount < 0 || amount > 1_000_000_000) throw new Error("Invalid logistics charge");
+          if (!Number.isFinite(amount) || amount < 0 || amount > 1_000_000_000)
+            throw new Error("Invalid logistics charge");
           normalized = amount.toFixed(4);
         }
         if (textFields.has(field) && normalized !== null && String(normalized).length > 2000) {

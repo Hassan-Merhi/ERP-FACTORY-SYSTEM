@@ -52,7 +52,6 @@ export function registerPosTransferDelegatedApprovalRoutes(
   app: Express,
   dependencies: { createNoCostExcel: ExcelBuilder }
 ) {
-
   // Settings: company-specific single POS delegate and ONE administrator-chosen group.
   app.get("/api/settings/pos-transfer-approval", requireAuth, async (req, res) => {
     try {

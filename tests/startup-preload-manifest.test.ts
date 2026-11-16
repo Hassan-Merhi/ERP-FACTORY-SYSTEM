@@ -49,7 +49,9 @@ describe("startup preload manifest", () => {
   });
 
   it("has no schema bridges and no schema preload left", () => {
-    const leftovers = fs.readdirSync(path.join(root, "server")).filter((file) => /Bridge\.mjs$|^schemaPreload\.mjs$/.test(file));
+    const leftovers = fs
+      .readdirSync(path.join(root, "server"))
+      .filter((file) => /Bridge\.mjs$|^schemaPreload\.mjs$/.test(file));
     expect(leftovers).toEqual([]);
     expect(fs.existsSync(path.join(root, "server/startup-schema"))).toBe(false);
   });

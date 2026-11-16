@@ -37,9 +37,7 @@ import {
   AccountHistoryError,
   assertAccountChangeAllowed,
 } from "../server/services/accounting/accountHistoryPolicy";
-import {
-  LEDGER_INTEGRITY_GUARD_VERSION,
-} from "../server/services/accounting/ledgerIntegrityGuard";
+import { LEDGER_INTEGRITY_GUARD_VERSION } from "../server/services/accounting/ledgerIntegrityGuard";
 import {
   OPENING_BALANCE_LOCK_VERSION,
   installedOpeningBalanceLockVersion,

@@ -26,10 +26,7 @@ vi.mock("../server/edge/edgeRuntimePolicy.mjs", async (importOriginal) => ({
 import { pool } from "../server/db";
 import { hashEvidence } from "../server/edge/edgeSyncStageProtocol.mjs";
 import { validatePhase9Event } from "../server/edge/phase9EventProtocol.mjs";
-import {
-  Phase9EventConflict,
-  stagePhase9Events,
-} from "../server/edge/phase9CloudEventStore.mjs";
+import { Phase9EventConflict, stagePhase9Events } from "../server/edge/phase9CloudEventStore.mjs";
 import { EDGE_EVENT_STAGE_PROTOCOL } from "../server/edge/phase9EventProtocol.mjs";
 import {
   PHASE9_LAN_ITEM_ID_BASE,

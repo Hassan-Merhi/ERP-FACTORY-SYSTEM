@@ -12,9 +12,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { db, pool } from "../server/db";
 import { deleteAuditLogRowsForTests } from "./helpers/auditLogCleanup";
-import {
-  isPerpetualInventoryActive,
-} from "../server/services/accounting/perpetualInventory/cutover";
+import { isPerpetualInventoryActive } from "../server/services/accounting/perpetualInventory/cutover";
 import {
   applyOpeningInventoryJournal,
   planOpeningInventoryJournal,

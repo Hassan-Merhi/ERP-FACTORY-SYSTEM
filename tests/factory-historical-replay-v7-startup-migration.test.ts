@@ -1,12 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { FACTORY_HISTORICAL_REPLAY_V7_BACKFILL_SQL } from "../server/services/factory/historicalReplayV7MigrationSql";
-import {
-  columnDefinition,
-  functionDefinition,
-  hasIndex,
-  hasTrigger,
-  manifestEntry,
-} from "./helpers/schemaManifest";
+import { columnDefinition, functionDefinition, hasIndex, hasTrigger, manifestEntry } from "./helpers/schemaManifest";
 
 describe("Historical Replay V7 schema (defined by the schema migrations)", () => {
   it("has the locked supplier rate, inventory owner and valuation basis columns", () => {
@@ -33,7 +27,10 @@ describe("Historical Replay V7 schema (defined by the schema migrations)", () =>
       manifestEntry("constraint", "public.factory_mix_batch_sources.factory_mix_batch_sources_inventory_supplier_fk")
     ).toBeDefined();
     expect(
-      manifestEntry("constraint", "public.factory_raw_material_adjustments.factory_raw_material_adjustments_valuation_basis_chk")
+      manifestEntry(
+        "constraint",
+        "public.factory_raw_material_adjustments.factory_raw_material_adjustments_valuation_basis_chk"
+      )
     ).toBeDefined();
   });
 });
@@ -42,9 +39,7 @@ describe("Historical Replay V7 backfill", () => {
   it("is data only", () => {
     expect(FACTORY_HISTORICAL_REPLAY_V7_BACKFILL_SQL).toContain("inventory_supplier_id");
     expect(FACTORY_HISTORICAL_REPLAY_V7_BACKFILL_SQL).toContain("valuation_basis = 'QUANTITY_ONLY'");
-    expect(FACTORY_HISTORICAL_REPLAY_V7_BACKFILL_SQL).not.toMatch(
-      /\b(CREATE|ALTER|DROP|COMMENT)\b|\bDO\s+\$/i
-    );
+    expect(FACTORY_HISTORICAL_REPLAY_V7_BACKFILL_SQL).not.toMatch(/\b(CREATE|ALTER|DROP|COMMENT)\b|\bDO\s+\$/i);
   });
 
   it("never runs the business-data cost replay", () => {

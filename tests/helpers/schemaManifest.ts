@@ -45,8 +45,7 @@ export function hasColumn(table: string, column: string): boolean {
 
 export function columnDefinition(table: string, column: string) {
   return manifestEntry("column", `${qualify(table)}.${column}`)?.def as
-    | { type: string; notNull: boolean; default: string | null }
-    | undefined;
+    { type: string; notNull: boolean; default: string | null } | undefined;
 }
 
 /** Function by name (any signature) or by `name(arg types)`. */

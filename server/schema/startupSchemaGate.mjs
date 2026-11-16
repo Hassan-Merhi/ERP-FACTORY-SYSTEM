@@ -28,7 +28,14 @@ const RUN_KEY = Symbol.for("erp.startup-schema-gate.verified");
 function log(level, message, extra = {}) {
   const method = level === "ERROR" ? "error" : level === "WARN" ? "warn" : "log";
   console[method](
-    JSON.stringify({ timestamp: new Date().toISOString(), level, message, module: "schema-gate", action: "startup-verify", ...extra })
+    JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level,
+      message,
+      module: "schema-gate",
+      action: "startup-verify",
+      ...extra,
+    })
   );
 }
 
@@ -76,7 +83,10 @@ export async function verifyStartupSchema({ connectionString = connectionStringF
     const full = mode === "full";
     const result = await verifyDatabaseSchema(client, { catalog: full, probes: full });
     if (!result.ok) {
-      log("ERROR", "Database schema verification failed", { problems: result.problems.slice(0, 50), summary: result.summary });
+      log("ERROR", "Database schema verification failed", {
+        problems: result.problems.slice(0, 50),
+        summary: result.summary,
+      });
       throw new DatabaseSchemaMismatchError(result.problems);
     }
     log("INFO", "Database schema verified", { mode, ms: Date.now() - started, ...result.summary });

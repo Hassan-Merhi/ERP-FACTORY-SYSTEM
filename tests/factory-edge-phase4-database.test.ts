@@ -42,9 +42,11 @@ testDatabase("Phase 4 LAN durable database outbox", () => {
     );
     expect(result.rows[0].count).toBe(1);
     await client.query("SAVEPOINT duplicate_check");
-    await expect(client.query(insert, [siteId, randomUUID(), "a".repeat(64), firstSequence + 1])).rejects.toMatchObject({
-      code: "23505",
-    });
+    await expect(client.query(insert, [siteId, randomUUID(), "a".repeat(64), firstSequence + 1])).rejects.toMatchObject(
+      {
+        code: "23505",
+      }
+    );
     await client.query("ROLLBACK TO SAVEPOINT duplicate_check");
   });
 
@@ -58,7 +60,9 @@ testDatabase("Phase 4 LAN durable database outbox", () => {
     ).rejects.toMatchObject({ code: "23514" });
     await client.query("ROLLBACK TO SAVEPOINT immutable_update");
     await client.query("SAVEPOINT immutable_delete");
-    await expect(client.query("DELETE FROM factory_edge_voucher_outbox WHERE site_id = $1", [siteId])).rejects.toMatchObject({
+    await expect(
+      client.query("DELETE FROM factory_edge_voucher_outbox WHERE site_id = $1", [siteId])
+    ).rejects.toMatchObject({
       code: "23514",
     });
     await client.query("ROLLBACK TO SAVEPOINT immutable_delete");

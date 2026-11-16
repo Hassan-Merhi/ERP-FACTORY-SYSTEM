@@ -4,7 +4,7 @@ import { firstRow } from "../../lib/queryResult";
 import { toFiniteNumber } from "@shared/typeGuards";
 import { logger } from "../../lib/logger";
 import type { Express, Request, Response } from "express";
-import { db, pool, type DbTransaction } from "../../db";
+import { db, type DbTransaction } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth, requireRole } from "../../auth";
 import { writeAuditEvent } from "../../services/audit";

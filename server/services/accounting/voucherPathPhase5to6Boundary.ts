@@ -179,11 +179,12 @@ export async function completeVoucherPathRequest(
     // guard if the posting outcome cannot be verified.
     if (importFailureRecovery) {
       const { pathname, requestId, fingerprint } = importFailureRecovery;
-      const sourceType = pathname === "/api/credit-sales-import/import"
-        ? "credit-sales-import"
-        : pathname === "/api/pos-import/import"
-          ? "pos-import"
-          : null;
+      const sourceType =
+        pathname === "/api/credit-sales-import/import"
+          ? "credit-sales-import"
+          : pathname === "/api/pos-import/import"
+            ? "pos-import"
+            : null;
       if (sourceType && requestId) {
         const postingKey = `${sourceType}:${companyId}:${requestId}`;
         const posted = await db.execute(sql`
@@ -325,16 +326,14 @@ async function voucherPathPhase5to6Boundary(req: Request, res: Response, next: N
       captured.read(),
       phase6,
       phase6 ? { pathname, requestId: phase5RequestIdentity(req, body), fingerprint } : undefined
-    ).catch(
-      (error) => {
-        logger.error("Voucher request boundary completion persistence failed", {
-          module: "voucher-path-request-boundary",
-          path: pathname,
-          companyId,
-          error,
-        });
-      }
-    );
+    ).catch((error) => {
+      logger.error("Voucher request boundary completion persistence failed", {
+        module: "voucher-path-request-boundary",
+        path: pathname,
+        companyId,
+        error,
+      });
+    });
   });
   next();
 }

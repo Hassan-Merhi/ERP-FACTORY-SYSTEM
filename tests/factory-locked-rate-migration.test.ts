@@ -9,9 +9,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { pool, db } from "../server/db";
 import * as schema from "../shared/schema";
 import { eq } from "drizzle-orm";
-import {
-  FACTORY_SUPPLIER_LOCKED_RATE_BACKFILL_SQL,
-} from "../server/services/factory/rawStockLockedRate";
+import { FACTORY_SUPPLIER_LOCKED_RATE_BACKFILL_SQL } from "../server/services/factory/rawStockLockedRate";
 
 const TEST_PREFIX = "migtest_lockrate";
 
@@ -74,9 +72,9 @@ describe("Migration: factory_suppliers.current_raw_material_cost_per_kg_usd", ()
       })
       .returning();
 
-    await db.insert(schema.factoryRawStock).values([
-      { companyId, containerId: container.id, receivedKg: "10000", costPerKg: "0.20", costPerKgUsd: "0.20" },
-    ]);
+    await db
+      .insert(schema.factoryRawStock)
+      .values([{ companyId, containerId: container.id, receivedKg: "10000", costPerKg: "0.20", costPerKgUsd: "0.20" }]);
 
     const [container2] = await db
       .insert(schema.factoryContainers)
@@ -89,9 +87,11 @@ describe("Migration: factory_suppliers.current_raw_material_cost_per_kg_usd", ()
         fxRateToUsd: "1",
       })
       .returning();
-    await db.insert(schema.factoryRawStock).values([
-      { companyId, containerId: container2.id, receivedKg: "10000", costPerKg: "0.36", costPerKgUsd: "0.36" },
-    ]);
+    await db
+      .insert(schema.factoryRawStock)
+      .values([
+        { companyId, containerId: container2.id, receivedKg: "10000", costPerKg: "0.36", costPerKgUsd: "0.36" },
+      ]);
 
     // Confirm the row starts NULL (never established) before running the backfill.
     const [before] = await db

@@ -1,6 +1,5 @@
 import type { Pool } from "pg";
 
-
 /**
  * Opening balances under the period lock (wave 12, re-audit section 8).
  *

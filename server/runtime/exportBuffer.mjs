@@ -38,9 +38,7 @@ if (!globalThis[BRIDGE_FLAG]) {
   globalThis.__erpExportCoordinatorSnapshot = () => ({
     active: coordinatorState.active,
     queued: coordinatorState.queue.length,
-    oldestWaitMs: coordinatorState.queue.length
-      ? Math.max(0, Date.now() - coordinatorState.queue[0].enqueuedAt)
-      : 0,
+    oldestWaitMs: coordinatorState.queue.length ? Math.max(0, Date.now() - coordinatorState.queue[0].enqueuedAt) : 0,
     maxConcurrent: maxConcurrent(),
     maxQueue: maxQueue(),
   });

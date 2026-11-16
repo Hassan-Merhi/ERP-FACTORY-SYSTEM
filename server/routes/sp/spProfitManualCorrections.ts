@@ -23,24 +23,28 @@ export async function getLatestSpProfitCorrection(
   companyId: number,
   periodMonth: string
 ): Promise<ManualProfitCorrection | null> {
-  const rows = resultRows(await conn.execute(sql`
+  const rows = resultRows(
+    await conn.execute(sql`
     SELECT id, period_month, target_net_profit, original_net_profit,
            reason, actor_id, actor_name, created_at
     FROM sp_profit_manual_corrections
     WHERE company_id = ${companyId} AND period_month = ${periodMonth}
     ORDER BY id DESC LIMIT 1
-  `));
+  `)
+  );
   const row = rows[0];
-  return row ? {
-    id: Number(row.id),
-    periodMonth: String(row.period_month),
-    targetNetProfit: String(row.target_net_profit),
-    originalNetProfit: String(row.original_net_profit),
-    reason: String(row.reason),
-    actorId: String(row.actor_id),
-    actorName: row.actor_name == null ? null : String(row.actor_name),
-    createdAt: String(row.created_at),
-  } : null;
+  return row
+    ? {
+        id: Number(row.id),
+        periodMonth: String(row.period_month),
+        targetNetProfit: String(row.target_net_profit),
+        originalNetProfit: String(row.original_net_profit),
+        reason: String(row.reason),
+        actorId: String(row.actor_id),
+        actorName: row.actor_name == null ? null : String(row.actor_name),
+        createdAt: String(row.created_at),
+      }
+    : null;
 }
 
 export function isDeveloperForProfitCorrection(req: Request): boolean {

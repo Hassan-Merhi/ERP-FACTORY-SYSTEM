@@ -17,9 +17,7 @@ vi.mock("../server/edge/edgeRuntimePolicy.mjs", async (importOriginal) => ({
 }));
 
 import { pool } from "../server/db";
-import {
-  recordPhase10OperatorSyncControl,
-} from "../server/edge/phase10OperatorControls.mjs";
+import { recordPhase10OperatorSyncControl } from "../server/edge/phase10OperatorControls.mjs";
 import { cleanupTestData, closeTestServer, seedTestData, setupTestApp, type TestContext } from "./setup";
 
 const PREFIX = "p10sync";

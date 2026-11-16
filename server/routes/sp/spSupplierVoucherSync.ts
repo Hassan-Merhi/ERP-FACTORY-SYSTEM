@@ -238,7 +238,6 @@ export async function repairSpSupplierVoucherLinks(
 
 /** Counts SP Goods-OTW supplier links that differ from their container. */
 export async function getSpSupplierVoucherLinkGapCount(companyId: number): Promise<number> {
-
   const result = await pool.query<{ count: number }>(
     `SELECT COUNT(*)::int AS count
        FROM sp_containers c

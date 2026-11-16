@@ -13,11 +13,16 @@ const TARGET = "L'SHI";
 const COMPANY = 12;
 const CUSTOMER = 23;
 const PLAN: ReadonlyArray<readonly [number, string]> = [
-  [14, "LUBUMBASHI"], [32, "LUBUMBASHI"],
-  [35, "LUBUMBASHI"], [46, "LUBUMBASHI"],
-  [51, "LUBUMBASHI"], [61, "LUBUMBASHI"],
-  [74, "LUBUMBASHI"], [83, "LUBUMBASHI"],
-  [100, "L’SHI"], [189, "LSHI"],
+  [14, "LUBUMBASHI"],
+  [32, "LUBUMBASHI"],
+  [35, "LUBUMBASHI"],
+  [46, "LUBUMBASHI"],
+  [51, "LUBUMBASHI"],
+  [61, "LUBUMBASHI"],
+  [74, "LUBUMBASHI"],
+  [83, "LUBUMBASHI"],
+  [100, "L’SHI"],
+  [189, "LSHI"],
 ];
 const expected = new Map<number, string>(PLAN);
 
@@ -40,15 +45,25 @@ export async function runApprovedFactoryDestinationNormalization(pool: Pool): Pr
     await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [RUN_KEY]);
 
     stage = "audit-table";
-    const auditQuery = "SELECT a.order_id,a.old_destination,a.new_destination,o.destination AS current_destination FROM factory_destination_normalization_audit a LEFT JOIN customer_orders o ON o.id=a.order_id AND o.company_id=a.company_id WHERE a.company_id=$1 AND a.customer_id=$2 AND a.run_key=$3";
-    const prior = await client.query<{ order_id: number; old_destination: string; new_destination: string; current_destination: string }>(
-      auditQuery, [COMPANY, CUSTOMER, RUN_KEY]
-    );
+    const auditQuery =
+      "SELECT a.order_id,a.old_destination,a.new_destination,o.destination AS current_destination FROM factory_destination_normalization_audit a LEFT JOIN customer_orders o ON o.id=a.order_id AND o.company_id=a.company_id WHERE a.company_id=$1 AND a.customer_id=$2 AND a.run_key=$3";
+    const prior = await client.query<{
+      order_id: number;
+      old_destination: string;
+      new_destination: string;
+      current_destination: string;
+    }>(auditQuery, [COMPANY, CUSTOMER, RUN_KEY]);
     if (prior.rowCount) {
-      if (prior.rowCount !== PLAN.length || prior.rows.some(row =>
-        expected.get(row.order_id) !== row.old_destination ||
-        row.new_destination !== TARGET || row.current_destination !== TARGET
-      )) throw new Error("Destination repair refused: existing audit mismatch");
+      if (
+        prior.rowCount !== PLAN.length ||
+        prior.rows.some(
+          (row) =>
+            expected.get(row.order_id) !== row.old_destination ||
+            row.new_destination !== TARGET ||
+            row.current_destination !== TARGET
+        )
+      )
+        throw new Error("Destination repair refused: existing audit mismatch");
       await client.query("COMMIT");
       logger.info("[FactoryDestinationNormalization] Existing 10-row audit verified; no-op");
       return;
@@ -59,10 +74,13 @@ export async function runApprovedFactoryDestinationNormalization(pool: Pool): Pr
       "SELECT id,customer_id,destination,status FROM customer_orders WHERE company_id=$1 AND deleted_at IS NULL AND upper(btrim(destination)) IN ('LUBUMBASHI','LSHI','L’SHI') ORDER BY id FOR UPDATE",
       [COMPANY]
     );
-    if (before.rowCount !== PLAN.length || before.rows.some(row =>
-      row.customer_id !== CUSTOMER || row.status !== "FINALIZED" ||
-      expected.get(row.id) !== row.destination
-    )) throw new Error("Destination repair refused: data changed since preflight");
+    if (
+      before.rowCount !== PLAN.length ||
+      before.rows.some(
+        (row) => row.customer_id !== CUSTOMER || row.status !== "FINALIZED" || expected.get(row.id) !== row.destination
+      )
+    )
+      throw new Error("Destination repair refused: data changed since preflight");
 
     stage = "before-image";
     const ids = PLAN.map(([id]) => id);

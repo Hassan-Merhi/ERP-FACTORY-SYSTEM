@@ -55,8 +55,12 @@ describe("Phase 4 voucher outbox durability policy", () => {
     const trigger = triggerDefinition("factory_edge_voucher_outbox", "factory_edge_voucher_outbox_no_mutation");
     expect(trigger).toContain("BEFORE DELETE OR UPDATE");
     expect(trigger).toContain("FOR EACH ROW EXECUTE FUNCTION factory_edge_voucher_outbox_immutable()");
-    expect(functionDefinition("factory_edge_voucher_outbox_immutable")).toContain("RAISE EXCEPTION 'EDGE_OUTBOX_IMMUTABLE'");
-    expect(indexDefinition("factory_edge_voucher_outbox_id")).toMatch(/^CREATE UNIQUE INDEX .* \(site_id, operation_id\)$/);
+    expect(functionDefinition("factory_edge_voucher_outbox_immutable")).toContain(
+      "RAISE EXCEPTION 'EDGE_OUTBOX_IMMUTABLE'"
+    );
+    expect(indexDefinition("factory_edge_voucher_outbox_id")).toMatch(
+      /^CREATE UNIQUE INDEX .* \(site_id, operation_id\)$/
+    );
   });
 
   it("canonicalizes equivalent JSONB payloads for reproducible SHA-256 fingerprints", () => {

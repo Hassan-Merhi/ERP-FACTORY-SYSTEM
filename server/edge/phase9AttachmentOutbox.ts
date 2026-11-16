@@ -12,7 +12,6 @@ import { readFactoryEdgeConfiguration } from "./edgeRuntimePolicy.mjs";
 import { hashEvidence } from "./edgeSyncStageProtocol.mjs";
 import {
   PHASE9_ATTACHMENT_KIND,
-  PHASE9_ATTACHMENT_UPDATE_KIND,
   phase9AttachmentEnvelope,
   phase9AttachmentUpdateEnvelope,
   type Phase9AttachmentEvidence,

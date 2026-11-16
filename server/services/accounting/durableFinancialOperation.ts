@@ -76,7 +76,9 @@ function validateInput(input: DurableFinancialOperationInput): DurableFinancialO
 }
 
 function jsonFingerprint(value: unknown): string {
-  return createHash("sha256").update(JSON.stringify(value ?? null)).digest("hex");
+  return createHash("sha256")
+    .update(JSON.stringify(value ?? null))
+    .digest("hex");
 }
 
 export function financialOperationFingerprint(value: unknown): string {
@@ -104,14 +106,8 @@ async function readStoredRequest<T>(
   return (result.rows[0] as StoredRequest<T> | undefined) ?? null;
 }
 
-function assertCompatible<T>(
-  input: DurableFinancialOperationInput,
-  stored: StoredRequest<T>
-): void {
-  if (
-    stored.operationName !== input.operationName ||
-    stored.requestFingerprint !== input.requestFingerprint
-  ) {
+function assertCompatible<T>(input: DurableFinancialOperationInput, stored: StoredRequest<T>): void {
+  if (stored.operationName !== input.operationName || stored.requestFingerprint !== input.requestFingerprint) {
     throw new DurableFinancialOperationError(
       "FINANCIAL_OPERATION_IDEMPOTENCY_CONFLICT",
       "This request identity was already used for a different operation or financial payload"
@@ -208,7 +204,9 @@ export async function completeFinancialOperationTx<T>(
  */
 export async function withDurableFinancialOperation<T>(
   rawInput: DurableFinancialOperationInput,
-  operation: (tx: DbTransaction) => Promise<{ value: T; resultReference?: string | number | null; resultStatus?: number }>
+  operation: (
+    tx: DbTransaction
+  ) => Promise<{ value: T; resultReference?: string | number | null; resultStatus?: number }>
 ): Promise<DurableFinancialOperationResult<T>> {
   return db.transaction(async (tx) => {
     const claim = await reserveFinancialOperationTx<T>(tx, rawInput);

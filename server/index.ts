@@ -288,11 +288,13 @@ let startupDataReady = false;
       await runPhase3PayrollDaybookRepair();
       // Immutable inventory valuation cutover snapshots, captured after the
       // daybook pass while startup still blocks traffic to the new instance.
-      const { ensurePhase3InventoryValuationBaselines } = await import("./services/accounting/phase3InventoryValuation");
+      const { ensurePhase3InventoryValuationBaselines } =
+        await import("./services/accounting/phase3InventoryValuation");
       const baselinesCreated = await ensurePhase3InventoryValuationBaselines(pool);
       logger.info("[startup] ✓ Phase 3 inventory valuation cutovers ensured", { baselinesCreated });
       // Disabled by default: an explicitly reviewed one-shot historical-sales repair.
-      const { maybeRunHistoricalSalesCostRepairFromEnv } = await import("./services/inventory/historicalSalesCostRepairStartup");
+      const { maybeRunHistoricalSalesCostRepairFromEnv } =
+        await import("./services/inventory/historicalSalesCostRepairStartup");
       await maybeRunHistoricalSalesCostRepairFromEnv();
       // Factory row history baseline snapshots (historical Net Position). Data
       // only; the history triggers are part of the schema. Never fatal.
