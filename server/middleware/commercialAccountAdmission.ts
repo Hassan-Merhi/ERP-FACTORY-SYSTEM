@@ -121,9 +121,27 @@ async function ownedCompanies(accountId: string): Promise<number[]> {
   return rows.rows.map(row => Number(row.company_id));
 }
 
+async function memberCount(accountId: string): Promise<number> {
+  const result = await db.execute(sql<{ users_count: string }>`
+    SELECT COUNT(DISTINCT user_id)::text AS users_count
+    FROM commercial_account_members
+    WHERE account_id = ${accountId}
+  `);
+  const count = Number(result.rows[0]?.users_count);
+  if (!Number.isSafeInteger(count) || count < 0) throw new Error("Invalid commercial usage");
+  return count;
+}
+
+const planLimits: Record<string, { users: number | null; companies: number | null }> = {
+  retail: { users: 5, companies: 1 },
+  business: { users: 15, companies: 3 },
+  factory: { users: 30, companies: 3 },
+  enterprise: { users: null, companies: null },
+};
 export function makeCommercialAdmissionBoundary(
   lookup: Lookup = accountLookup,
-  loadCompanies: (accountId: string) => Promise<number[]> = ownedCompanies
+  loadCompanies: (accountId: string) => Promise<number[]> = ownedCompanies,
+  loadMemberCount: (accountId: string) => Promise<number> = memberCount
 ) {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     if (!commercialModeEnabled() || !req.path.startsWith("/api/")) {
@@ -165,6 +183,14 @@ export function makeCommercialAdmissionBoundary(
         return;
       }
       const owned = await loadCompanies(records[0].id);
+      const users = await loadMemberCount(records[0].id);
+      const limits = planLimits[records[0].plan || ""];
+      if (!limits || !Number.isSafeInteger(users) || users < 0 ||
+          (limits.users !== null && users > limits.users) ||
+          (limits.companies !== null && owned.length > limits.companies)) {
+        res.status(403).json({ code: "COMMERCIAL_LICENSE_LIMIT" });
+        return;
+      }
       const bodyIds = scanCompanyIdentifiers(req.body);
       const queryIds = scanCompanyIdentifiers(req.query);
       const pathIds = scanCompanyIdentifiers(req.params);
