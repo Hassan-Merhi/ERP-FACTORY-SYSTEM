@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { isVoucherMutationBlocked, voucherLockLabel } from "@/lib/migratedVoucherGuard";
 import { DaybookRow, Voucher, ViewVoucherEntry } from "./types";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
+import { EmptyState } from "@/components/ui/page-state";
 
 interface DaybookTableProps {
   displayedRows: DaybookRow[];
@@ -105,9 +106,7 @@ export function DaybookTable({
       ))}
     </div>
   ) : visibleRows.length === 0 ? (
-    <p className="text-sm text-muted-foreground text-center py-12" data-testid="daybook-empty">
-      No transactions found for the selected period and filters.
-    </p>
+    <EmptyState title="No transactions found for the selected period and filters." data-testid="daybook-empty" />
   ) : null;
 
   if (statusMessage) return statusMessage;
@@ -873,9 +872,7 @@ export function DaybookTable({
       {/* ── Mobile card list (hidden on sm+) ── */}
       <div className="sm:hidden -mx-4 overflow-y-auto max-h-[calc(100dvh-260px)]">
         {mobileItems.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-12">
-            No transactions found. Create your first voucher to get started.
-          </p>
+          <EmptyState title="No transactions found. Create your first voucher to get started." className="mx-4" />
         ) : (
           mobileItems
         )}

@@ -4,6 +4,7 @@ import type { usePayrollModel } from "./usePayrollModel";
 type PayrollModel = ReturnType<typeof usePayrollModel>;
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/page-state";
 import { SearchField } from "@/components/ui/search-field";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -308,20 +309,19 @@ export function WorkersTab({
       )}
 
       {workersOnly.length === 0 ? (
-        <Card className="border-dashed py-16 text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-muted">
-            <Users className="h-5 w-5 text-muted-foreground" />
-          </div>
-          <h3 className="mt-4 font-semibold">No workers yet</h3>
-          <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-            Workers are separate from Employees. Add a Worker here to manage worker payroll and deductions.
-          </p>
-          {canCreateWorker && (
-            <Button className="mt-4" onClick={() => setNewWorkerDialogOpen(true)}>
-              <Plus className="mr-2 h-4 w-4" /> Add Worker
-            </Button>
-          )}
-        </Card>
+        <EmptyState
+          icon={Users}
+          title="No workers yet"
+          description="Workers are separate from Employees. Add a Worker here to manage worker payroll and deductions."
+          className="py-16"
+          action={
+            canCreateWorker ? (
+              <Button className="mt-2" onClick={() => setNewWorkerDialogOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" /> Add Worker
+              </Button>
+            ) : undefined
+          }
+        />
       ) : filteredWorkers.length === 0 ? (
         <Card className="border-dashed py-14 text-center">
           <Search className="mx-auto h-5 w-5 text-muted-foreground" />

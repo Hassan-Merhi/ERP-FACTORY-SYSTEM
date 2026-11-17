@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -74,7 +75,12 @@ export function WhatsAppExportSection() {
     retry: false,
   });
 
-  const { data: recipients = [], isLoading: loadingRecipients } = useQuery<Recipient[]>({
+  const {
+    data: recipients = [],
+    isLoading: loadingRecipients,
+    isError: recipientsError,
+    refetch: refetchRecipients,
+  } = useQuery<Recipient[]>({
     queryKey: ["/api/whatsapp/recipients"],
     enabled: expanded,
   });
@@ -428,9 +434,11 @@ export function WhatsAppExportSection() {
 
             {/* Recipient list */}
             {loadingRecipients ? (
-              <p className="text-sm text-muted-foreground">Loading recipients…</p>
+              <LoadingState title="Loading recipients…" />
+            ) : recipientsError && recipients.length === 0 ? (
+              <ErrorState onAction={() => void refetchRecipients()} actionLabel="Try again" />
             ) : recipients.length === 0 ? (
-              <p className="text-sm text-muted-foreground italic">No recipients yet.</p>
+              <EmptyState title="No recipients yet." />
             ) : (
               <div className="space-y-2">
                 {recipients.map((r) => (

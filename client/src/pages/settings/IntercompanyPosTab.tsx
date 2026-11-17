@@ -2,6 +2,7 @@ import type { ClientErrorLike } from "@/lib/clientError";
 import { useState, useEffect, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { LoadingState } from "@/components/ui/page-state";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 
@@ -157,10 +158,7 @@ export function IntercompanyPosTab() {
       <Card>
         <CardContent className="pt-6 space-y-5">
           {configLoading ? (
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span>Loading config…</span>
-            </div>
+            <LoadingState title="Loading config…" />
           ) : (
             <>
               {/* Enable toggle */}

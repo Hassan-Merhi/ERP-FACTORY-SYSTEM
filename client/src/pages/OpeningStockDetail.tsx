@@ -4,6 +4,7 @@ import { useLocation, useParams, useSearch } from "wouter";
 import { useEscapeToParent } from "@/hooks/use-escape-to-parent";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
 import { PageHeader } from "@/components/PageHeader";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -99,7 +100,7 @@ export default function OpeningStockDetail() {
   const searchParams = new URLSearchParams(searchString);
   const groupName = searchParams.get("name") || "Stock Group";
 
-  const { data, isLoading } = useQuery<StockGroupItemsData>({
+  const { data, isLoading, isError, refetch } = useQuery<StockGroupItemsData>({
     queryKey: [`/api/reports/opening-stock-summary/${params.groupId}/items`, selectedCompany?.id],
     enabled: !!selectedCompany?.id && !!params.groupId,
   });
@@ -166,6 +167,8 @@ export default function OpeningStockDetail() {
                   <Skeleton key={i} className="h-10 w-full" />
                 ))}
               </div>
+            ) : isError && !data ? (
+              <ErrorState onAction={() => void refetch()} actionLabel="Try again" className="m-4" />
             ) : data?.items && data.items.length > 0 ? (
               <>
                 {data.items.map((item) => (
@@ -197,7 +200,7 @@ export default function OpeningStockDetail() {
                 ))}
               </>
             ) : (
-              <div className="p-8 text-center text-muted-foreground">No items in this stock group.</div>
+              <EmptyState title="No items in this stock group." className="m-4" />
             )}
           </div>
 

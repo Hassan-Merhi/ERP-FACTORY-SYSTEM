@@ -40,7 +40,7 @@ import {
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useSingleFlightAction } from "@/hooks/use-single-flight-action";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
-import { ErrorState } from "@/components/ui/page-state";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
 import { DataTableToolbar } from "@/components/DataTableToolbar";
 import { PaginationBar } from "@/components/PaginationBar";
 import { useTablePrefs } from "@/hooks/use-table-prefs";
@@ -673,7 +673,7 @@ export default function FactoryCustomers() {
             )}
           </div>
           {deletedCustomers.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8 px-4">No deleted customers found</p>
+            <EmptyState title="No deleted customers found" className="m-4" />
           ) : (
             <div className="table-responsive">
               <Table mobileLayout="cards">

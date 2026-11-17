@@ -1,10 +1,9 @@
 import { Fragment } from "react";
+import { EmptyState, LoadingState } from "@/components/ui/page-state";
 import { useFactoryMhdView } from "@/hooks/use-factory-mhd-view";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useLocation } from "wouter";
-import { Card, CardContent } from "@/components/ui/card";
 import {
-  Loader2,
   RefreshCw,
   AlertTriangle,
   Plus,
@@ -381,9 +380,7 @@ export default function FactoryStockAllocationV5() {
 
       {/* Content */}
       {query.isLoading ? (
-        <div className="flex items-center justify-center h-48">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
+        <LoadingState className="m-3 sm:m-4" />
       ) : query.isError ? (
         <div className="p-6 flex flex-col items-center gap-4">
           <p className="text-muted-foreground text-sm">{(query.error as Error)?.message || "Failed to load."}</p>
@@ -394,11 +391,7 @@ export default function FactoryStockAllocationV5() {
         </div>
       ) : rows.length === 0 ? (
         <div className="p-3 sm:p-4">
-          <Card>
-            <CardContent className="p-8 text-center text-muted-foreground">
-              No data found. Create a proforma with containers to use V5 stock allocation.
-            </CardContent>
-          </Card>
+          <EmptyState title="No data found. Create a proforma with containers to use V5 stock allocation." />
         </div>
       ) : (
         <>

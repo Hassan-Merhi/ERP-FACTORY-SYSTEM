@@ -40,6 +40,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
 import { factoryApiRequest } from "@/lib/factoryApi";
 import { SearchField } from "@/components/ui/search-field";
+import { ErrorState } from "@/components/ui/page-state";
 
 interface Employee {
   id: number;
@@ -117,7 +118,12 @@ export default function FactoryEmployees() {
     employees: Array<{ id: number; name: string; oldBalance: number; newBalance: number }>;
   } | null>(null);
 
-  const { data: employees = [], isLoading } = useQuery<Employee[]>({
+  const {
+    data: employeesData,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<Employee[]>({
     queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id),
     enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
@@ -126,6 +132,7 @@ export default function FactoryEmployees() {
       return res.json();
     },
   });
+  const employees = employeesData ?? [];
 
   const createMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
@@ -415,6 +422,12 @@ export default function FactoryEmployees() {
                   <TableCell></TableCell>
                 </TableRow>
               ))
+            ) : isError && !employeesData ? (
+              <TableRow>
+                <TableCell colSpan={5}>
+                  <ErrorState onAction={() => void refetch()} actionLabel="Try again" className="border-0" />
+                </TableCell>
+              </TableRow>
             ) : filtered.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={5}>

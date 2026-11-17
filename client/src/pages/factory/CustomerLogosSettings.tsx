@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Upload, Pencil, Trash2, Image } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 
 interface CustomerOption {
   id: number;
@@ -41,12 +42,18 @@ export default function CustomerLogosSettings() {
     queryFn: () => fetch("/api/factory/customers", { credentials: "include" }).then((r) => r.json()),
   });
 
-  const { data: logos = [], isLoading } = useQuery<CustomerLogo[]>({
+  const {
+    data: logosData,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<CustomerLogo[]>({
     queryKey: companyQueryKey("/api/factory/customers", selectedCompany?.id, selectedCustomerId, "logos"),
     queryFn: () =>
       fetch(`/api/factory/customers/${selectedCustomerId}/logos`, { credentials: "include" }).then((r) => r.json()),
     enabled: Boolean(selectedCompany?.id) && !!selectedCustomerId,
   });
+  const logos = logosData ?? [];
 
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
@@ -174,13 +181,15 @@ export default function CustomerLogosSettings() {
           </CardHeader>
           <CardContent>
             {isLoading ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">Loading logos...</p>
+              <LoadingState title="Loading logos..." />
+            ) : isError && !logosData ? (
+              <ErrorState onAction={() => void refetch()} actionLabel="Try again" />
             ) : logos.length === 0 ? (
-              <div className="text-center py-8 space-y-2">
-                <Image className="h-10 w-10 text-muted-foreground/40 mx-auto" />
-                <p className="text-sm text-muted-foreground">No logos uploaded yet.</p>
-                <p className="text-xs text-muted-foreground">Click "Upload Logo" to add the first one.</p>
-              </div>
+              <EmptyState
+                icon={Image}
+                title="No logos uploaded yet."
+                description='Click "Upload Logo" to add the first one.'
+              />
             ) : (
               <div className="space-y-2">
                 {logos.map((logo) => (

@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/page-state";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   AlertDialog,
@@ -430,17 +431,18 @@ export default function DeletedItems() {
             </div>
           )}
           {items.length === 0 ? (
-            <div className="text-center py-12">
-              <Trash2 className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <h3 className="text-lg font-medium text-muted-foreground">No deleted items</h3>
-              <p className="text-sm text-muted-foreground mt-1">
-                {filterType === "all"
+            <EmptyState
+              icon={Trash2}
+              title="No deleted items"
+              description={
+                filterType === "all"
                   ? "Items you delete will appear here for recovery."
                   : filterType === "orphanedPosSale"
                     ? "No orphaned POS sales found. These are vouchers linked to deleted locations."
-                    : `No deleted ${typeLabels[filterType]?.toLowerCase() || filterType}s found.`}
-              </p>
-            </div>
+                    : `No deleted ${typeLabels[filterType]?.toLowerCase() || filterType}s found.`
+              }
+              className="py-12"
+            />
           ) : (
             <>
               <div className="hidden md:block phone-land:hidden">

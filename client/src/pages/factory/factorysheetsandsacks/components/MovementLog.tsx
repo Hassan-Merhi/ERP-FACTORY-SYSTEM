@@ -9,18 +9,10 @@ import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import {
-  Loader2,
-  History,
-  ArrowDownCircle,
-  ArrowUpCircle,
-  TrendingDown,
-  TrendingUp,
-  BarChart3,
-  Calendar,
-} from "lucide-react";
+import { History, ArrowDownCircle, ArrowUpCircle, TrendingDown, TrendingUp, BarChart3, Calendar } from "lucide-react";
 
 import type { LogEntry, SheetsAndSacksItem } from "../types";
 import { DATE_PRESETS, fmt, fmtDate, fmtDateTime, getPresetDates, localDayOf } from "../utils";
@@ -37,7 +29,12 @@ export function MovementLog({ items }: { items: SheetsAndSacksItem[] }) {
     return getPresetDates(preset);
   }, [preset, customFrom, customTo]);
 
-  const { data: logEntries = [], isLoading } = useQuery<LogEntry[]>({
+  const {
+    data: logEntriesData,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<LogEntry[]>({
     queryKey: ["/api/factory/sheets-sacks/log", from, to, direction, filterItemId],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -51,6 +48,7 @@ export function MovementLog({ items }: { items: SheetsAndSacksItem[] }) {
     staleTime: 30000,
     refetchOnWindowFocus: false,
   });
+  const logEntries = useMemo(() => logEntriesData ?? [], [logEntriesData]);
 
   // Group by local calendar day
   const byDay = useMemo(() => {
@@ -225,15 +223,16 @@ export function MovementLog({ items }: { items: SheetsAndSacksItem[] }) {
 
       {/* Day-by-day log */}
       {isLoading ? (
-        <div className="flex items-center justify-center py-16">
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-        </div>
+        <LoadingState className="py-16" />
+      ) : isError && !logEntriesData ? (
+        <ErrorState onAction={() => void refetch()} actionLabel="Try again" className="py-16" />
       ) : logEntries.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-          <History className="h-10 w-10 mb-3 opacity-25" />
-          <p className="text-sm font-medium">No movement records for this period.</p>
-          <p className="text-xs mt-1 opacity-70">Use "Add Stock" (↑) or "Deduct" (↓) buttons to log movements.</p>
-        </div>
+        <EmptyState
+          icon={History}
+          title="No movement records for this period."
+          description='Use "Add Stock" (↑) or "Deduct" (↓) buttons to log movements.'
+          className="py-16"
+        />
       ) : (
         <div className="space-y-4">
           {byDay.map(([day, entries]) => {

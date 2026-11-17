@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/page-state";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -358,16 +359,19 @@ export function BrokerOverviewPanel({
         </div>
         <div>
           {children.length === 0 ? (
-            <div className="text-center py-10 text-muted-foreground">
-              <Users className="h-10 w-10 mx-auto mb-2 opacity-40" />
-              <p className="text-sm mb-3">No linked suppliers yet</p>
-              {canAddLinkedSupplier && (
-                <Button variant="outline" size="sm" onClick={onAddLinkedSupplier}>
-                  <Plus className="h-3.5 w-3.5 mr-1.5" />
-                  Add Linked Supplier
-                </Button>
-              )}
-            </div>
+            <EmptyState
+              icon={Users}
+              title="No linked suppliers yet"
+              className="rounded-none border-0"
+              action={
+                canAddLinkedSupplier ? (
+                  <Button variant="outline" size="sm" onClick={onAddLinkedSupplier}>
+                    <Plus className="h-3.5 w-3.5 mr-1.5" />
+                    Add Linked Supplier
+                  </Button>
+                ) : undefined
+              }
+            />
           ) : (
             <div className="divide-y">
               {children.map((child) => (
