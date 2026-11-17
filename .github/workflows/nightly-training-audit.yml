@@ -76,7 +76,7 @@ jobs:
   record:
     needs: plan
     if: needs.plan.outputs.record == 'true'
-    uses: ./.github/workflows/training-videos.yml
+    uses: $/.github/workflows/training-videos.yml
     with:
       topic: ${{ needs.plan.outputs.topics }}
     permissions:
@@ -182,7 +182,7 @@ jobs:
 
   whole-system:
     name: All backend / frontend / security / accounting coverage
-    uses: ./.github/workflows/nightly-system-regression.yml
+    uses: $/.github/workflows/nightly-system-regression.yml
     permissions:
       contents: read
 
