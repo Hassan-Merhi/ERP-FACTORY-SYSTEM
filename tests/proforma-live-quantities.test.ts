@@ -14,7 +14,6 @@ vi.mock("../server/auth", () => ({ requireAuth: (_req: unknown, _res: unknown, n
 
 import { sql } from "drizzle-orm";
 import { db } from "../server/db";
-import { ensureCustomerOrderBaleScanAudit } from "../server/customerOrderBaleScanAuditBridge.mjs";
 import { getLoadingPlanKind, usesLiveMasterProforma } from "../server/routes/factory/customer-orders/proformaPlan";
 import { getProformaCapacitySnapshot } from "../server/routes/factory/customer-orders/proformaCapacity";
 import { registerOrderVerificationSummaryRoutes } from "../server/routes/factory/customer-orders/verify-recover/verification-summary";
@@ -92,7 +91,6 @@ databaseDescribe("open loading proforma quantity synchronization (database)", ()
   };
 
   beforeAll(async () => {
-    await ensureCustomerOrderBaleScanAudit();
     fixture = await createProformaLoadingFixture("PLQ");
     proformaId = await fixture.proforma([
       { code: "HMD10027", qty: 1, createdAt: "2025-12-01 08:00" },

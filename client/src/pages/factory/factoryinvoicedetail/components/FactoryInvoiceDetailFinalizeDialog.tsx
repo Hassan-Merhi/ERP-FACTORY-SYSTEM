@@ -1,5 +1,6 @@
 import { Trash2, ArrowLeftRight } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { EmptyState } from "@/components/ui/page-state";
 import type { useFactoryInvoiceDetailModel } from "../useFactoryInvoiceDetailModel";
 
 type Model = ReturnType<typeof useFactoryInvoiceDetailModel>;
@@ -28,7 +29,7 @@ export function FactoryInvoiceDetailFinalizeDialog({ model, isFinalized }: { mod
               .sort((a, b) => a.baleReference.localeCompare(b.baleReference));
             const canExchange = model.canChangeExistingRecords && isAdmin && isFinalized;
             return balesForArticle.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">No bale references found for this item.</p>
+              <EmptyState title="No bale references found for this item." className="py-4" />
             ) : (
               <div className="space-y-3">
                 <p className="text-xs text-muted-foreground">

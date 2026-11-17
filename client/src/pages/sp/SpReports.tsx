@@ -1,4 +1,5 @@
 import { PageHeader } from "@/components/PageHeader";
+import { formatUsd } from "@/lib/moneyDisplay";
 import { getErrorDetails } from "@shared/errorUtils";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -10,6 +11,7 @@ import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { PeriodFilter } from "@/components/ui/period-filter";
 import {
   Dialog,
   DialogContent,
@@ -74,9 +76,7 @@ function extractAccounts(payload: AccountsResponse | CashAccount[] | undefined):
 
 function fmt(v: number | string | undefined, dec = 2) {
   const n = parseFloat(String(v ?? "0"));
-  return isNaN(n)
-    ? `$0.${"0".repeat(dec)}`
-    : `$${n.toLocaleString("en-US", { minimumFractionDigits: dec, maximumFractionDigits: dec })}`;
+  return isNaN(n) ? `$0.${"0".repeat(dec)}` : formatUsd(n, dec);
 }
 
 function toLocalDateInputValue(date: Date) {
@@ -277,26 +277,14 @@ export default function SpReports() {
 
         <TabsContent value="profit" className="mt-4 space-y-4">
           <div className="flex items-center gap-3 flex-wrap">
-            <div>
-              <label className="text-xs text-muted-foreground">From</label>
-              <Input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="mt-1 w-36"
-                data-testid="input-sp-profit-start"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">To</label>
-              <Input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="mt-1 w-36"
-                data-testid="input-sp-profit-end"
-              />
-            </div>
+            <PeriodFilter
+              value={{ fromDate: startDate, toDate: endDate, preset: startDate || endDate ? "custom" : "all_time" }}
+              onChange={(v) => {
+                setStartDate(v.fromDate);
+                setEndDate(v.toDate);
+              }}
+              data-testid="sp-profit-period"
+            />
           </div>
 
           {profitLoading ? (

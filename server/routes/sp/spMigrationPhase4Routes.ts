@@ -9,9 +9,8 @@ import { validateMigrationPair, pn } from "./spMigrationPhase2Common";
 import { importHistoricalSales } from "./spMigrationPhase2Sales";
 import { importContainers } from "./spMigrationPhase2Containers";
 import { getLiveCutover, invalidateCutoverLockCache } from "./spMigrationCutoverState";
-import { ensureCutoverHardening } from "./spMigrationCutoverHardening";
 import {
-  ensurePhase4CutoverSchema,
+  backfillLegacyCutoverStockDeltaKeys,
   restoreExactCutoverStock,
   synchronizeExactCutoverStock,
 } from "./spMigrationPhase4Inventory";
@@ -28,30 +27,10 @@ import { resultRows, firstRow } from "../../lib/queryResult";
 
 const installedApps = new WeakSet<object>();
 let holdCache: { expiresAt: number; byCompany: Map<number, Record<string, unknown> | null> } | null = null;
-let phase4RouteSchemaPromise: Promise<void> | null = null;
 
 function invalidatePhase4HoldCache(): void {
   holdCache = null;
   invalidateCutoverLockCache();
-}
-
-function ensurePhase4Schema(): Promise<void> {
-  if (!phase4RouteSchemaPromise) {
-    phase4RouteSchemaPromise = (async () => {
-      await Promise.all([ensurePhase4CutoverSchema(), ensureCutoverHardening()]);
-      await db.execute(
-        sql.raw(`
-        ALTER TABLE sp_migration_cutovers
-          ADD COLUMN IF NOT EXISTS rollback_window_hours INTEGER NOT NULL DEFAULT 72,
-          ADD COLUMN IF NOT EXISTS finalize_started_at TIMESTAMPTZ
-      `)
-      );
-    })().catch((error) => {
-      phase4RouteSchemaPromise = null;
-      throw error;
-    });
-  }
-  return phase4RouteSchemaPromise;
 }
 
 function collectCompanyIds(req: Request): number[] {
@@ -77,7 +56,7 @@ function collectCompanyIds(req: Request): number[] {
 async function loadLatestCutoversForCompanies(
   companyIds: number[]
 ): Promise<Map<number, Record<string, unknown> | null>> {
-  await ensurePhase4Schema();
+  await backfillLegacyCutoverStockDeltaKeys();
   if (holdCache && holdCache.expiresAt > Date.now() && companyIds.every((id) => holdCache!.byCompany.has(id))) {
     return holdCache.byCompany;
   }
@@ -377,7 +356,7 @@ async function prepareCutover(req: Request, res: Response): Promise<Response | v
     pair.sourceCompany.name
   );
   if (error) return res.status(400).json({ message: error });
-  await ensurePhase4Schema();
+  await backfillLegacyCutoverStockDeltaKeys();
   const existing = await getLiveCutover(pair.sourceId, pair.targetId);
   if (existing)
     return res
@@ -426,7 +405,7 @@ async function finalizeCutover(req: Request, res: Response): Promise<Response | 
     pair.sourceCompany.name
   );
   if (error) return res.status(400).json({ message: error });
-  await ensurePhase4Schema();
+  await backfillLegacyCutoverStockDeltaKeys();
   const live = await getLiveCutover(pair.sourceId, pair.targetId);
   if (!live || live.status !== "prepared") {
     return res.status(409).json({ message: "Prepare and lock this source/target pair before finalizing." });
@@ -573,7 +552,7 @@ async function finalizeCutover(req: Request, res: Response): Promise<Response | 
 async function rollbackCutover(req: Request, res: Response): Promise<Response | void> {
   const cutoverId = pn(req.body?.cutoverId);
   if (!cutoverId) return res.status(400).json({ message: "cutoverId is required" });
-  await ensurePhase4Schema();
+  await backfillLegacyCutoverStockDeltaKeys();
   const cutover = await loadCutover(cutoverId);
   if (!cutover) return res.status(404).json({ message: "Cutover not found" });
   if (cutover.status !== "active")
@@ -623,7 +602,7 @@ async function rollbackCutover(req: Request, res: Response): Promise<Response | 
 async function cancelPreparedCutover(req: Request, res: Response): Promise<Response | void> {
   const cutoverId = pn(req.body?.cutoverId);
   if (!cutoverId) return res.status(400).json({ message: "cutoverId is required" });
-  await ensurePhase4Schema();
+  await backfillLegacyCutoverStockDeltaKeys();
   const cutover = await loadCutover(cutoverId);
   if (!cutover) return res.status(404).json({ message: "Cutover not found" });
   if (cutover.status !== "prepared")
@@ -676,7 +655,7 @@ async function cancelPreparedCutover(req: Request, res: Response): Promise<Respo
 async function releaseTargetHold(req: Request, res: Response): Promise<Response | void> {
   const cutoverId = pn(req.body?.cutoverId);
   if (!cutoverId) return res.status(400).json({ message: "cutoverId is required" });
-  await ensurePhase4Schema();
+  await backfillLegacyCutoverStockDeltaKeys();
   const cutover = await loadCutover(cutoverId);
   if (!cutover) return res.status(404).json({ message: "Cutover not found" });
   const error = exactCutoverConfirmation(
@@ -718,7 +697,7 @@ async function releaseTargetHold(req: Request, res: Response): Promise<Response 
 async function statusCutover(req: Request, res: Response): Promise<Response | void> {
   const pair = await validateMigrationPair(req, res, false);
   if (!pair) return;
-  await ensurePhase4Schema();
+  await backfillLegacyCutoverStockDeltaKeys();
   const live = await getLiveCutover(pair.sourceId, pair.targetId);
   const latestResult = await db.execute(sql`
     SELECT * FROM sp_migration_cutovers
@@ -741,8 +720,8 @@ async function finalVerification(req: Request, res: Response): Promise<Response 
 
 export function registerSpMigrationPhase4Routes(app: Express): void {
   installPhase4WriteGuard(app);
-  void ensurePhase4Schema().catch((error) => {
-    logger.warn("[SP Phase 4] Schema setup deferred", {
+  void backfillLegacyCutoverStockDeltaKeys().catch((error) => {
+    logger.warn("[SP Phase 4] Legacy stock-delta key backfill deferred", {
       error: error instanceof Error ? error.message : String(error),
     });
   });

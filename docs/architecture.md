@@ -92,7 +92,7 @@ shared/   → Types and schema shared by both sides
 | `server/inventoryHelper.ts` | `adjustInventory()` — all inventory mutations; `reverseInventoryByExactValue()` |
 | `server/netPositionHelper.ts` | Net position calculation helpers |
 | `server/lib/permissionHelpers.ts` | Advanced restriction lookup |
-| `server/lib/permissionMiddleware.ts` | `requireModuleAccess`, `requireActionAccess`, `requireExportAccess` |
+| `server/lib/permissionMiddleware.ts` | `enforcePermissionKey` (used by the access boundary) and the route-level `requirePageAccess`, `requireActionAccess`, `requireExportAccess` guards |
 | `server/lib/dateUtils.ts` | Fiscal date helpers |
 
 **Services** (`server/services/`): container tracking scheduler, export job manager, email service, WhatsApp service, scheduler service.
@@ -147,7 +147,7 @@ shared/schema  ──► Drizzle table defs + Zod insert schemas + TypeScript ty
 
 ## Multi-tenancy
 
-Tenant identity is server-owned. The global `tenantIsolationBoundary` resolves the active company from authenticated session/company-role state, rejects forged caller-supplied primary company IDs, and membership-checks intentional secondary-company references. Factory and Properties use their server-pinned company context; ordinary ERP/POS routes use the active ERP company.
+Tenant identity is server-owned. The access boundary (`server/security/access/manifestAccessBoundary.ts`, mounted once ahead of every API registrar) reads each route's declared rule from `config/route-access-manifest.json`, resolves the active company from authenticated session/company-role state, rejects forged caller-supplied primary company IDs, and membership-checks intentional secondary-company references. It also enforces the route's declared role, permission keys and named policies; see [manifest-driven-access-consolidation.md](manifest-driven-access-consolidation.md). Factory and Properties use their server-pinned company context; ordinary ERP/POS routes use the active ERP company.
 
 PostgreSQL adds a second fail-closed boundary for high-risk tenant tables. Migration `0016_company_scope_rls_readiness.sql` enables and **FORCES ROW LEVEL SECURITY** on vouchers, customers, ledger accounts, bank accounts, fixed assets, stock groups, stock items, and inventory; voucher entries are scoped through their parent voucher. Request transactions bind `app.current_company_id` and any explicitly authorized secondary companies. Missing or malformed database tenant context is denied rather than falling back to all-company access.
 

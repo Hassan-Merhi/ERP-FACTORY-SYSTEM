@@ -39,8 +39,8 @@ let seq = 0;
 async function createBatch(totalWeightKg = "500.000", usedKg = "0"): Promise<number> {
   seq += 1;
   const result = await pool.query<{ id: number }>(
-    `INSERT INTO factory_mix_batches (company_id, batch_code, cost_per_kg, total_weight_kg, used_kg, status)
-     VALUES ($1, $2, '2.00', $3, $4, 'OPEN') RETURNING id`,
+    `INSERT INTO factory_mix_batches (company_id, batch_code, batch_number, cost_per_kg, total_weight_kg, used_kg, status)
+     VALUES ($1, $2::varchar, $2::text, '2.00', $3, $4, 'OPEN') RETURNING id`,
     [ctx.companyId, `${TEST_PREFIX}-MB-${seq}`, totalWeightKg, usedKg]
   );
   return result.rows[0].id;

@@ -21,7 +21,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { pool } from "../server/db";
 import {
   CURRENCY_NORMALIZATION_GUARD_VERSION,
-  ensureCurrencyNormalizationGuard,
   installedCurrencyNormalizationVersion,
 } from "../server/services/accounting/currencyNormalizationGuard";
 import { retireVouchersTx } from "../server/services/accounting/voucherRetirement";
@@ -102,7 +101,6 @@ beforeAll(async () => {
   ctx = await seedTestData(PREFIX);
   // The factory routes need a factory company.
   await pool.query(`UPDATE companies SET company_type = 'factory' WHERE id = $1`, [ctx.companyId]);
-  expect(await ensureCurrencyNormalizationGuard(pool)).toBe(true);
   expect(await installedCurrencyNormalizationVersion(pool)).toBe(CURRENCY_NORMALIZATION_GUARD_VERSION);
   supplierId = (
     await one<{ id: number }>(

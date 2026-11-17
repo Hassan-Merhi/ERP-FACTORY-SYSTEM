@@ -16,6 +16,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { EmptyState } from "@/components/ui/page-state";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 const WINDOW_DAYS = 1;
 
@@ -150,8 +152,6 @@ function ContainerChargesDialog({
     staleTime: 60_000,
   });
 
-  const fmt = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-sm">
@@ -187,12 +187,12 @@ function ContainerChargesDialog({
                   <p className="text-sm font-medium">{c.label}</p>
                   {c.accountName && <p className="text-xs text-muted-foreground mt-0.5">{c.accountName}</p>}
                 </div>
-                <span className="text-sm font-semibold tabular-nums">${fmt(c.amount)}</span>
+                <span className="text-sm font-semibold tabular-nums">{formatUsd(c.amount, 0)}</span>
               </div>
             ))}
             <div className="flex items-center justify-between pt-2 px-3 border-t mt-1">
               <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Total</span>
-              <span className="text-sm font-bold tabular-nums">${fmt(data.totalCharges)}</span>
+              <span className="text-sm font-bold tabular-nums">{formatUsd(data.totalCharges, 0)}</span>
             </div>
           </div>
         )}
@@ -512,7 +512,7 @@ export function CountryActivityKPI() {
           ) : isError ? (
             <p className="text-sm text-destructive text-center py-8">Failed to load activity data — please refresh.</p>
           ) : !data || data.companies.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">No ERP companies found.</p>
+            <EmptyState title="No ERP companies found." className="m-3 py-8" />
           ) : (
             <div className="px-2 py-1">
               {data.companies.map((c) => (

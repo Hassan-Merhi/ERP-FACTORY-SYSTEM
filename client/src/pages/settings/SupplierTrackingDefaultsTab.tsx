@@ -4,6 +4,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
+import { EmptyState, LoadingState } from "@/components/ui/page-state";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { SearchField } from "@/components/ui/search-field";
@@ -166,13 +167,11 @@ export function SupplierTrackingDefaultsTab({ canManage = false }: { canManage?:
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" /> Loading supplier mappings…
-            </div>
+            <LoadingState title="Loading supplier mappings…" className="py-8" />
           ) : isError ? (
             <div className="py-8 text-sm text-destructive">Could not load supplier tracking defaults.</div>
           ) : filteredSuppliers.length === 0 ? (
-            <div className="py-8 text-sm text-muted-foreground">No matching suppliers found.</div>
+            <EmptyState title="No matching suppliers found." className="py-8" />
           ) : (
             <div className="space-y-3">
               {filteredSuppliers.map((row) => {

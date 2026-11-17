@@ -1,4 +1,5 @@
 import type { ClientErrorLike } from "@/lib/clientError";
+import { formatUsd } from "@/lib/moneyDisplay";
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
@@ -403,11 +404,19 @@ export function AgentCard({
                 <Building2 className="h-4.5 w-4.5" aria-hidden="true" />
               </span>
             </div>
-            <h3 className="min-w-0 truncate text-center text-base font-extrabold uppercase tracking-wider text-white sm:text-lg" title={agentName}>
+            <h3
+              className="min-w-0 truncate text-center text-base font-extrabold uppercase tracking-wider text-white sm:text-lg"
+              title={agentName}
+            >
               {agentName}
             </h3>
             <div className="flex min-w-0 justify-end">
-              <Badge className={cn("max-w-full truncate border px-2 py-1 text-[10px] font-semibold no-default-active-elevate sm:text-[11px]", confidenceBadge.cls)}>
+              <Badge
+                className={cn(
+                  "max-w-full truncate border px-2 py-1 text-[10px] font-semibold no-default-active-elevate sm:text-[11px]",
+                  confidenceBadge.cls
+                )}
+              >
                 {confidenceBadge.label}
               </Badge>
             </div>
@@ -420,7 +429,15 @@ export function AgentCard({
               </span>
               <div className="min-w-0">
                 <p className="text-[11px] font-medium text-muted-foreground">Account Balance</p>
-                <p className={cn("truncate text-lg font-bold tabular-nums", displayBalance !== null && displayBalance < 0 ? "text-rose-700 dark:text-rose-400" : "text-emerald-800 dark:text-emerald-300")} data-testid={`agent-balance-${agentName}`}>
+                <p
+                  className={cn(
+                    "truncate text-lg font-bold tabular-nums",
+                    displayBalance !== null && displayBalance < 0
+                      ? "text-rose-700 dark:text-rose-400"
+                      : "text-emerald-800 dark:text-emerald-300"
+                  )}
+                  data-testid={`agent-balance-${agentName}`}
+                >
                   {displayBalance === null ? "Unavailable" : `${fmt(Math.abs(displayBalance), 0)}`}
                   {balanceKind && <span className="ml-1 text-xs font-semibold">({balanceKind})</span>}
                 </p>
@@ -450,7 +467,7 @@ export function AgentCard({
               </span>
               <div className="min-w-0">
                 <p className="text-[11px] font-medium text-muted-foreground">Upcoming Duty</p>
-                <p className="truncate text-lg font-bold tabular-nums text-foreground">${fmt(upcomingDuty, 0)}</p>
+                <p className="truncate text-lg font-bold tabular-nums text-foreground">{formatUsd(upcomingDuty, 0)}</p>
               </div>
             </div>
           </div>
@@ -536,7 +553,8 @@ export function AgentCard({
                         a.type === "debit" ? "text-green-700 dark:text-green-400" : "text-red-600 dark:text-red-400"
                       )}
                     >
-                      {a.type === "debit" ? "+" : "−"}${fmt(a.amount, 0)}
+                      {a.type === "debit" ? "+" : "−"}
+                      {formatUsd(a.amount, 0)}
                     </span>
                     <Badge
                       variant="outline"
@@ -740,8 +758,8 @@ export function AgentCard({
             <DialogTitle>Replace Prepaid Container</DialogTitle>
             <DialogDescription>
               Select an in-transit container to swap in place of{" "}
-              <span className="font-mono font-semibold">{replaceTarget?.containerNumber}</span> ($
-              {fmt(replaceTarget?.dutyFee ?? 0, 0)} duty).
+              <span className="font-mono font-semibold">{replaceTarget?.containerNumber}</span> (
+              {formatUsd(replaceTarget?.dutyFee ?? 0, 0)} duty).
             </DialogDescription>
           </DialogHeader>
           {replaceAmountWarning && (
@@ -750,8 +768,8 @@ export function AgentCard({
               <div className="flex-1">
                 <p className="font-semibold mb-1">Duty amounts differ — click again to confirm</p>
                 <p>
-                  Old: <span className="font-mono font-semibold">${fmt(replaceAmountWarning.oldAmount, 0)}</span> → New:{" "}
-                  <span className="font-mono font-semibold">${fmt(replaceAmountWarning.newAmount, 0)}</span>
+                  Old: <span className="font-mono font-semibold">{formatUsd(replaceAmountWarning.oldAmount, 0)}</span> →
+                  New: <span className="font-mono font-semibold">{formatUsd(replaceAmountWarning.newAmount, 0)}</span>
                 </p>
               </div>
             </div>
@@ -792,7 +810,7 @@ export function AgentCard({
                     </span>
                     <span className="text-muted-foreground grow">{r.supplierCode ?? r.supplierName ?? "—"}</span>
                     <span className="font-mono text-muted-foreground shrink-0">{r.numberPlate ?? ""}</span>
-                    <span className="font-semibold text-right shrink-0 w-20">${fmt(r.dutyFee, 0)}</span>
+                    <span className="font-semibold text-right shrink-0 w-20">{formatUsd(r.dutyFee, 0)}</span>
                     {amountsDiffer && <AlertTriangle className="h-3 w-3 text-amber-500 shrink-0" />}
                   </button>
                 );

@@ -8,6 +8,7 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { AlertCircle, AlertTriangle, FileSearch, Package, Truck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { StatusBadge as SharedStatusBadge, type StatusKind } from "@/components/StatusBadge";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -109,21 +110,17 @@ export async function getComparison(url: string): Promise<Comparison> {
   return response.json() as Promise<Comparison>;
 }
 
+const ARTICLE_STATUS_KIND: Record<ArticleStatus, StatusKind> = {
+  MATCH: "success",
+  MISSING: "warning",
+  EXTRA: "error",
+  BOTH: "error",
+  UNPLANNED: "neutral",
+};
+
 export function StatusBadge({ value }: { value: ArticleStatus }) {
-  const style =
-    value === "MATCH"
-      ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300"
-      : value === "MISSING"
-        ? "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-200"
-        : value === "EXTRA" || value === "BOTH"
-          ? "border-red-200 bg-red-50 text-red-700 dark:border-red-700 dark:bg-red-950/30 dark:text-red-200"
-          : "border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300";
   const label = { MATCH: "Match", MISSING: "Missing", EXTRA: "Extra", BOTH: "Difference", UNPLANNED: "Scanned" }[value];
-  return (
-    <Badge variant="outline" className={style}>
-      {label}
-    </Badge>
-  );
+  return <SharedStatusBadge status={ARTICLE_STATUS_KIND[value]} label={label} showIcon={false} />;
 }
 
 export function Metric({

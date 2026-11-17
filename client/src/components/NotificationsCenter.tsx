@@ -20,6 +20,7 @@ import { Bell, CheckCircle, XCircle, ArrowRight, ExternalLink, CheckCheck, Loade
 import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -112,9 +113,8 @@ function getNavPath(item: NotificationItem, isFactory: boolean): string | null {
 
 function formatAmount(amount: string) {
   const n = parseFloat(amount);
-  return Number.isInteger(n)
-    ? n.toLocaleString()
-    : n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const decimals = Number.isInteger(n) ? 0 : 2;
+  return formatUsd(n, decimals);
 }
 
 // ── Main Component ─────────────────────────────────────────────────────────────
@@ -424,7 +424,7 @@ export function NotificationsCenter() {
                         </span>
                       </div>
                       <div className="flex items-center gap-4 text-sm">
-                        <span className="font-semibold">${formatAmount(req.amount)}</span>
+                        <span className="font-semibold">{formatAmount(req.amount)}</span>
                         <span className="text-muted-foreground text-xs truncate">CR: {req.linkDestLedgerName}</span>
                       </div>
                       {req.description && <p className="text-xs text-muted-foreground truncate">{req.description}</p>}
@@ -569,7 +569,7 @@ export function NotificationsCenter() {
                   <span className="text-muted-foreground">From:</span> {approveReq.fromCompanyName}
                 </p>
                 <p>
-                  <span className="text-muted-foreground">Amount:</span> ${formatAmount(approveReq.amount)}
+                  <span className="text-muted-foreground">Amount:</span> {formatAmount(approveReq.amount)}
                 </p>
                 <p>
                   <span className="text-muted-foreground">CR side:</span> {approveReq.linkDestLedgerName}

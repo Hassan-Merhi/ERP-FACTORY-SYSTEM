@@ -3,6 +3,7 @@
  * supervisor-only reopening. This never posts to loading/stock/accounting.
  */
 import { useState } from "react";
+import { LoadingState } from "@/components/ui/page-state";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import {
@@ -656,11 +657,7 @@ export default function FactoryLoadingDispatchLifecycle({
               Historical snapshot as it was when the trip ended. Later stock/loading changes do not rewrite it.
             </DialogDescription>
           </DialogHeader>
-          {frozen.isPending && (
-            <p className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" /> Loading saved comparison…
-            </p>
-          )}
+          {frozen.isPending && <LoadingState title="Loading saved comparison…" />}
           {frozen.isError && <p className="text-sm text-red-600">{errorMessage(frozen.error)}</p>}
           {frozenClosureId && frozen.data && (
             <div className="space-y-3">

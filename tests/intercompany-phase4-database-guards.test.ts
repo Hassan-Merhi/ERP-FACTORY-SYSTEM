@@ -12,14 +12,16 @@ const scripts = [1, 2, 3, 4].map((number) => {
     "20261105_003_intercompany_phase3_sync.sql",
     "20261105_004_intercompany_phase4_payments.sql",
   ];
-  return readFileSync(join(process.cwd(), "migrations", files[number - 1]), "utf8");
+  return readFileSync(join(process.cwd(), "migrations/archive/legacy", files[number - 1]), "utf8");
 });
 
 describe("Phase 4 paired payment database protections", () => {
   it("registers immutable cash transfer and credit tables", () => {
     expect(getTableConfig(intercompanyContainerPayments).name).toBe("intercompany_container_payments");
     expect(getTableConfig(intercompanyPaymentAllocations).name).toBe("intercompany_payment_allocations");
-    const journal = JSON.parse(readFileSync(join(process.cwd(), "migrations/meta/_journal.json"), "utf8"));
+    const journal = JSON.parse(
+      readFileSync(join(process.cwd(), "migrations/archive/legacy/meta/_journal.json"), "utf8")
+    );
     expect(
       journal.entries.filter((e: { tag: string }) => e.tag === "20261105_004_intercompany_phase4_payments")
     ).toHaveLength(1);

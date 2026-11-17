@@ -1,4 +1,5 @@
 import type { ClientErrorLike } from "@/lib/clientError";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 import { useState, useRef, useEffect } from "react";
 import { useCompany } from "@/contexts/CompanyContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
@@ -22,12 +23,13 @@ import { Trash2, Plus, ArrowLeft, TruckIcon } from "lucide-react";
 import { ExportButton } from "@/components/export/ReportExportMenu";
 import { useReactToPrint } from "react-to-print";
 import { DeleteConfirmDialog } from "@/components/ConfirmationDialog";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 const API = "/api/factory/transporters";
 
-function fmt(n: number | null | undefined) {
-  if (n == null || isNaN(n)) return "0.00";
-  return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+function fmtUsd(n: number | null | undefined) {
+  const value = n == null || isNaN(n) ? 0 : n;
+  return formatUsd(value, 2);
 }
 
 type LedgerAccount = { id: number; name: string; accountType: string };
@@ -313,7 +315,7 @@ function TransporterStatement({ transporterId, onBack }: { transporterId: number
   // Charges and payments post to an existing transporter's ledger; read-only roles view and print only.
   const recordChanges = useExistingRecordChangeAccess();
 
-  const { data, isLoading } = useQuery<TransporterDetail>({
+  const { data, isLoading, isError, refetch } = useQuery<TransporterDetail>({
     queryKey: companyQueryKey(API, selectedCompany?.id, transporterId),
     enabled: Boolean(selectedCompany?.id),
     queryFn: () => fetch(`${API}/${transporterId}`, { credentials: "include" }).then((r) => r.json()),
@@ -334,7 +336,8 @@ function TransporterStatement({ transporterId, onBack }: { transporterId: number
 
   const handlePrint = useReactToPrint({ contentRef: printRef });
 
-  if (isLoading) return <div className="p-8 text-center text-muted-foreground">Loading statement…</div>;
+  if (isLoading) return <LoadingState title="Loading statement…" />;
+  if (isError && !data) return <ErrorState onAction={() => void refetch()} actionLabel="Try again" />;
   if (!data) return <div className="p-8 text-center text-muted-foreground">Transporter not found.</div>;
 
   return (
@@ -383,7 +386,7 @@ function TransporterStatement({ transporterId, onBack }: { transporterId: number
             <CardTitle className="text-xs text-muted-foreground font-normal">TOTAL CHARGED</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${fmt(data.totalCharged)}</div>
+            <div className="text-2xl font-bold">{fmtUsd(data.totalCharged)}</div>
           </CardContent>
         </Card>
         <Card>
@@ -392,7 +395,7 @@ function TransporterStatement({ transporterId, onBack }: { transporterId: number
           </CardHeader>
           <CardContent>
             <div className={`text-2xl font-bold ${data.totalPaid > 0 ? "text-green-600 dark:text-green-400" : ""}`}>
-              ${fmt(data.totalPaid)}
+              {fmtUsd(data.totalPaid)}
             </div>
           </CardContent>
         </Card>
@@ -404,7 +407,7 @@ function TransporterStatement({ transporterId, onBack }: { transporterId: number
             <div
               className={`text-2xl font-bold ${data.outstanding > 0 ? "text-red-600 dark:text-red-400" : data.outstanding < 0 ? "text-green-600 dark:text-green-400" : ""}`}
             >
-              ${fmt(data.outstanding)}
+              {fmtUsd(data.outstanding)}
             </div>
             <p className="text-[11px] text-muted-foreground mt-1">positive = you owe them</p>
           </CardContent>
@@ -420,9 +423,7 @@ function TransporterStatement({ transporterId, onBack }: { transporterId: number
           </div>
           <div className="table-responsive">
             {data.transactions.length === 0 ? (
-              <div className="p-8 text-center text-muted-foreground">
-                No transactions yet. Record a charge to get started.
-              </div>
+              <EmptyState title="No transactions yet. Record a charge to get started." className="border-0" />
             ) : (
               <table className="w-full text-sm">
                 <thead className="sticky top-0 z-30 bg-muted">
@@ -447,11 +448,11 @@ function TransporterStatement({ transporterId, onBack }: { transporterId: number
                       </td>
                       <td className="px-3 py-2 text-muted-foreground">{tx.description || "—"}</td>
                       <td className="px-3 py-2 text-right tabular-nums">
-                        {tx.txType === "charge" ? <span>${fmt(Number(tx.amount))}</span> : "—"}
+                        {tx.txType === "charge" ? <span>{fmtUsd(Number(tx.amount))}</span> : "—"}
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums">
                         {tx.txType === "payment" ? (
-                          <span className="text-green-600 dark:text-green-400">${fmt(Number(tx.amount))}</span>
+                          <span className="text-green-600 dark:text-green-400">{fmtUsd(Number(tx.amount))}</span>
                         ) : (
                           "—"
                         )}
@@ -459,7 +460,7 @@ function TransporterStatement({ transporterId, onBack }: { transporterId: number
                       <td
                         className={`px-3 py-2 text-right tabular-nums font-medium ${tx.runningBalance > 0 ? "text-red-600 dark:text-red-400" : tx.runningBalance < 0 ? "text-green-600 dark:text-green-400" : ""}`}
                       >
-                        ${fmt(tx.runningBalance)}
+                        {fmtUsd(tx.runningBalance)}
                       </td>
                       <td className="px-3 py-2 print:hidden">
                         {recordChanges.allowed && (
@@ -486,14 +487,14 @@ function TransporterStatement({ transporterId, onBack }: { transporterId: number
                     <td className="px-3 py-2" colSpan={3}>
                       TOTALS
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums">${fmt(data.totalCharged)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{fmtUsd(data.totalCharged)}</td>
                     <td className="px-3 py-2 text-right tabular-nums text-green-600 dark:text-green-400">
-                      ${fmt(data.totalPaid)}
+                      {fmtUsd(data.totalPaid)}
                     </td>
                     <td
                       className={`px-3 py-2 text-right tabular-nums ${data.outstanding > 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}
                     >
-                      ${fmt(data.outstanding)}
+                      {fmtUsd(data.outstanding)}
                     </td>
                     <td className="print:hidden" />
                   </tr>
@@ -616,7 +617,12 @@ export default function FactoryTransporters() {
     setAddOpen(false);
   }, [selectedCompany?.id]);
 
-  const { data: transporters = [], isLoading } = useQuery<Transporter[]>({
+  const {
+    data: transporters = [],
+    isLoading,
+    isError: transportersError,
+    refetch: refetchTransporters,
+  } = useQuery<Transporter[]>({
     queryKey: companyQueryKey(API, selectedCompany?.id),
     enabled: Boolean(selectedCompany?.id),
   });
@@ -665,7 +671,7 @@ export default function FactoryTransporters() {
               <div
                 className={`text-2xl font-bold ${transporters.reduce((s, t) => s + t.totalPaid, 0) > 0 ? "text-green-600 dark:text-green-400" : ""}`}
               >
-                ${fmt(transporters.reduce((s, t) => s + t.totalPaid, 0))}
+                {fmtUsd(transporters.reduce((s, t) => s + t.totalPaid, 0))}
               </div>
             </CardContent>
           </Card>
@@ -677,7 +683,7 @@ export default function FactoryTransporters() {
               <div
                 className={`text-2xl font-bold ${transporters.reduce((s, t) => s + t.outstanding, 0) > 0 ? "text-red-600 dark:text-red-400" : ""}`}
               >
-                ${fmt(transporters.reduce((s, t) => s + t.outstanding, 0))}
+                {fmtUsd(transporters.reduce((s, t) => s + t.outstanding, 0))}
               </div>
             </CardContent>
           </Card>
@@ -693,12 +699,19 @@ export default function FactoryTransporters() {
                 <Skeleton key={i} className="h-12 w-full" />
               ))}
             </div>
+          ) : transportersError && transporters.length === 0 ? (
+            <ErrorState
+              onAction={() => void refetchTransporters()}
+              actionLabel="Try again"
+              className="rounded-none border-0"
+            />
           ) : transporters.length === 0 ? (
-            <div className="p-12 text-center text-muted-foreground">
-              <TruckIcon className="h-10 w-10 mx-auto mb-3 opacity-30" />
-              <p className="font-medium mb-1">No transporters yet</p>
-              <p className="text-xs">Add your first transporter to start tracking charges and payments.</p>
-            </div>
+            <EmptyState
+              icon={TruckIcon}
+              title="No transporters yet"
+              description="Add your first transporter to start tracking charges and payments."
+              className="rounded-none border-0"
+            />
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -721,16 +734,16 @@ export default function FactoryTransporters() {
                     >
                       <td className="px-4 py-3 font-medium">{t.name}</td>
                       <td className="px-4 py-3 text-muted-foreground">{t.phone || "—"}</td>
-                      <td className="px-4 py-3 text-right tabular-nums">${fmt(t.totalCharged)}</td>
+                      <td className="px-4 py-3 text-right tabular-nums">{fmtUsd(t.totalCharged)}</td>
                       <td
                         className={`px-4 py-3 text-right tabular-nums ${t.totalPaid > 0 ? "text-green-600 dark:text-green-400" : ""}`}
                       >
-                        ${fmt(t.totalPaid)}
+                        {fmtUsd(t.totalPaid)}
                       </td>
                       <td
                         className={`px-4 py-3 text-right tabular-nums font-medium ${t.outstanding > 0 ? "text-red-600 dark:text-red-400" : t.outstanding < 0 ? "text-green-600 dark:text-green-400" : ""}`}
                       >
-                        ${fmt(t.outstanding)}
+                        {fmtUsd(t.outstanding)}
                       </td>
                     </tr>
                   ))}

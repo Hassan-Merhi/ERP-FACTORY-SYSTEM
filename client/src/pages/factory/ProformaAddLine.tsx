@@ -1,4 +1,5 @@
 import type { ClientErrorLike } from "@/lib/clientError";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useParams, useLocation } from "wouter";
 import { useEscapeBack } from "@/hooks/use-escape-back";
@@ -16,6 +17,7 @@ import { getApiRequest } from "@/lib/factoryApi";
 import { formatNumber } from "@/lib/formatNumber";
 import { PageHeader } from "@/components/PageHeader";
 import { SearchField } from "@/components/ui/search-field";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 const AUTOSAVE_KEY = "proforma-autosave-enabled";
 const AUTOSAVE_DELAY_MS = 1500;
@@ -89,7 +91,12 @@ export default function ProformaAddLine() {
 
   const numericProformaId = parseInt(proformaId);
 
-  const { data: allItems = [], isLoading: itemsLoading } = useQuery<StockItem[]>({
+  const {
+    data: allItems = [],
+    isLoading: itemsLoading,
+    isError: itemsError,
+    refetch: refetchItems,
+  } = useQuery<StockItem[]>({
     queryKey: ["/api/stock-items/light", selectedCompany?.id],
     enabled: !!selectedCompany,
     staleTime: 10 * 60 * 1000,
@@ -341,11 +348,10 @@ export default function ProformaAddLine() {
               <Skeleton key={i} className="h-24" />
             ))}
           </div>
+        ) : itemsError && allItems.length === 0 ? (
+          <ErrorState onAction={() => void refetchItems()} actionLabel="Try again" className="mt-2" />
         ) : filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-            <Search className="h-8 w-8 mb-2 opacity-30" />
-            <p className="text-sm">No items found</p>
-          </div>
+          <EmptyState icon={Search} title="No items found" className="mt-2" />
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 mt-2">
             {filtered.map((item) => {
@@ -383,7 +389,7 @@ export default function ProformaAddLine() {
                     </p>
                   )}
                   {item.salePrice && parseFloat(item.salePrice) > 0 && (
-                    <p className="text-xs text-muted-foreground">${parseFloat(item.salePrice).toFixed(2)}</p>
+                    <p className="text-xs text-muted-foreground">{formatUsd(parseFloat(item.salePrice), 2)}</p>
                   )}
                   {item.stockGroup?.name && (
                     <Badge variant="secondary" className="text-xs mt-1 w-fit no-default-active-elevate">

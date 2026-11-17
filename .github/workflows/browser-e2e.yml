@@ -89,7 +89,7 @@ jobs:
         run: node scripts/verify-factory-blue-theme-browser.mjs
       - name: Prepare disposable transactional fixture
         run: |
-          node node_modules/drizzle-kit/bin.cjs push --force
+          MIGRATION_CONFIRMATION=APPLY_SCHEMA_MIGRATIONS node scripts/db/migrate.mjs apply
           node scripts/prepare-phase7-browser-e2e-fixture.mjs
       - name: Run transactional browser E2E
         run: |

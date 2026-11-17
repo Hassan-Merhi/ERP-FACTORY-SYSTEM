@@ -144,7 +144,7 @@ describe("customer loading finalization concurrency", () => {
       quantity: number;
       price_per_bale: string;
     }>(
-      `SELECT article_code, quantity, price_per_bale
+      `SELECT article_code, quantity::float8 AS quantity, price_per_bale
        FROM customer_proforma_lines
        WHERE proforma_id = $1`,
       [carriedOverProformas.rows[0].id]

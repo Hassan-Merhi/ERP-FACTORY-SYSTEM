@@ -1,4 +1,5 @@
 import { searchAny } from "@shared/searchNormalization";
+import { EmptyState } from "@/components/ui/page-state";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FileText, Plus, Users } from "lucide-react";
@@ -115,19 +116,20 @@ export default function FactoryProformas() {
 
         {/* Empty: customer selected but no proformas */}
         {customerId && !proformasLoading && proformas.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-20 text-center" data-testid="text-no-proformas">
-            <div className="rounded-full bg-muted p-4 mb-4">
-              <FileText className="h-8 w-8 text-muted-foreground" />
-            </div>
-            <p className="font-medium text-muted-foreground">No proformas yet</p>
-            <p className="text-sm text-muted-foreground mt-1">Create a proforma to define this customer's pricing</p>
-            {!recordChanges.isCreateOnly && (
-              <Button size="sm" className="mt-4" onClick={() => model.setIsCreateOpen(true)}>
-                <Plus className="mr-1.5 h-3.5 w-3.5" />
-                New Proforma
-              </Button>
-            )}
-          </div>
+          <EmptyState
+            icon={FileText}
+            title="No proformas yet"
+            description="Create a proforma to define this customer's pricing"
+            data-testid="text-no-proformas"
+            action={
+              !recordChanges.isCreateOnly ? (
+                <Button size="sm" onClick={() => model.setIsCreateOpen(true)}>
+                  <Plus className="mr-1.5 h-3.5 w-3.5" />
+                  New Proforma
+                </Button>
+              ) : undefined
+            }
+          />
         )}
 
         {/* Proforma list */}

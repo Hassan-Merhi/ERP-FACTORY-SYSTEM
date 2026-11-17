@@ -29,10 +29,9 @@ vi.mock("../server/edge/edgeRuntimePolicy.mjs", async (importOriginal) => ({
 }));
 
 import { pool, type DbTransaction } from "../server/db";
-import { ensurePhase9PaymentOutboxSchema } from "../server/edge/phase9PaymentOutbox";
 import { hashEvidence } from "../server/edge/edgeSyncStageProtocol.mjs";
 import { phase9OverridableConflicts, validatePhase9Event } from "../server/edge/phase9EventProtocol.mjs";
-import { ensurePhase9CloudEventSchema, Phase9EventConflict } from "../server/edge/phase9CloudEventStore.mjs";
+import { Phase9EventConflict } from "../server/edge/phase9CloudEventStore.mjs";
 import { phase9PaymentApplyHandler, type Phase9PaymentEvent } from "../server/edge/phase9PaymentApply";
 import {
   PHASE9_PAYMENT_CHANGED_CONFLICT,
@@ -192,10 +191,7 @@ beforeAll(async () => {
     [ctx.companyId, `${PREFIX}-BANK-${ctx.companyId}`]
   );
   bankId = Number(bank.rows[0].id);
-  edge.config = LAN;
-  await ensurePhase9PaymentOutboxSchema(pool);
   edge.config = CLOUD;
-  await ensurePhase9CloudEventSchema(pool);
   agent = request.agent(ctx.app);
   await agent.post("/api/auth/login").send({ username: `${PREFIX}_testuser`, password: "testpassword123" });
   await agent.post("/api/auth/set-company").send({ companyId: ctx.companyId });

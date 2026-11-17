@@ -18,7 +18,6 @@ import { and, eq, isNull, like } from "drizzle-orm";
 
 import { db, pool } from "../server/db";
 import * as schema from "../shared/schema";
-import { ensureClosedPeriodGuard } from "../server/services/accounting/closedPeriodGuard";
 import { seedTestData, cleanupTestData, closeTestServer, type TestContext } from "./setup";
 
 const TEST_PREFIX = "fiscalreopen";
@@ -78,7 +77,6 @@ async function openingOf(accountId: number) {
 
 beforeAll(async () => {
   ctx = await seedTestData(TEST_PREFIX);
-  await ensureClosedPeriodGuard(pool);
   agent = request.agent(ctx.app);
   expect(
     (await agent.post("/api/auth/login").send({ username: `${TEST_PREFIX}_testuser`, password: "testpassword123" }))

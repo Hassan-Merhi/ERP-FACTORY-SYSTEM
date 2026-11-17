@@ -83,7 +83,7 @@ async function insertProformaLine(
 
 async function loadedItems(container: number): Promise<Array<{ id: number; barcode: string; qty: number }>> {
   const result = await pool.query<{ id: number; barcode: string; qty: number }>(
-    `SELECT id, barcode, qty FROM supplier_container_loaded_items WHERE container_id = $1 ORDER BY barcode`,
+    `SELECT id, barcode, qty::float8 AS qty FROM supplier_container_loaded_items WHERE container_id = $1 ORDER BY barcode`,
     [container]
   );
   return result.rows;
@@ -294,12 +294,12 @@ describe("container verification summary", () => {
   beforeAll(async () => {
     await pool.query(`DELETE FROM supplier_proforma_lines WHERE proforma_id = $1`, [proformaId]);
     // One line per outcome the comparison is meant to classify.
-    await insertProformaLine(proformaId, "BC-MATCH", "Matching bale", 10, "50", "20.00");
+    // A proforma holds each barcode once (unique (proforma_id, barcode) in the
+    // schema), so BC-MATCH carries the full 12 bales on one line.
+    await insertProformaLine(proformaId, "BC-MATCH", "Matching bale", 12, "50", "20.00");
     await insertProformaLine(proformaId, "BC-OVER", "Over-loaded bale", 5, "40", "15.00");
     await insertProformaLine(proformaId, "BC-UNDER", "Under-loaded bale", 8, "30", "12.00");
     await insertProformaLine(proformaId, "BC-MISSING", "Never loaded bale", 4, "25", "9.00");
-    // The same barcode twice: the proforma side must aggregate before comparing.
-    await insertProformaLine(proformaId, "BC-MATCH", "Matching bale second line", 2, "50", "20.00");
 
     await clearLoadedItems(containerId);
     await agent
@@ -326,7 +326,7 @@ describe("container verification summary", () => {
     expect(response.body.supplierId).toBe(supplierId);
 
     const comparison = response.body.comparison as ComparisonRow[];
-    // Two proforma lines share BC-MATCH, so the comparison has one row for it.
+    // One comparison row per barcode.
     expect(comparison).toHaveLength(5);
 
     const match = rowFor(comparison, "BC-MATCH");

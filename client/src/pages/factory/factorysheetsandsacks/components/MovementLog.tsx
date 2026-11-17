@@ -9,21 +9,16 @@ import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import {
-  Loader2,
-  History,
-  ArrowDownCircle,
-  ArrowUpCircle,
-  TrendingDown,
-  TrendingUp,
-  BarChart3,
-  Calendar,
-} from "lucide-react";
+import { History, ArrowDownCircle, ArrowUpCircle, TrendingDown, TrendingUp, BarChart3, Calendar } from "lucide-react";
 
 import type { LogEntry, SheetsAndSacksItem } from "../types";
-import { DATE_PRESETS, fmt, fmtDate, fmtDateTime, getPresetDates, localDayOf } from "../utils";
+import { DATE_PRESETS, fmtDate, fmtDateTime, getPresetDates, localDayOf } from "../utils";
+import { formatUsd } from "@/lib/moneyDisplay";
+
+const usd = (value: string | number) => formatUsd(parseFloat(String(value) || "0"), 2);
 
 export function MovementLog({ items }: { items: SheetsAndSacksItem[] }) {
   const [preset, setPreset] = useState("week");
@@ -37,7 +32,12 @@ export function MovementLog({ items }: { items: SheetsAndSacksItem[] }) {
     return getPresetDates(preset);
   }, [preset, customFrom, customTo]);
 
-  const { data: logEntries = [], isLoading } = useQuery<LogEntry[]>({
+  const {
+    data: logEntriesData,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<LogEntry[]>({
     queryKey: ["/api/factory/sheets-sacks/log", from, to, direction, filterItemId],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -51,6 +51,7 @@ export function MovementLog({ items }: { items: SheetsAndSacksItem[] }) {
     staleTime: 30000,
     refetchOnWindowFocus: false,
   });
+  const logEntries = useMemo(() => logEntriesData ?? [], [logEntriesData]);
 
   // Group by local calendar day
   const byDay = useMemo(() => {
@@ -185,7 +186,7 @@ export function MovementLog({ items }: { items: SheetsAndSacksItem[] }) {
             <p className="font-mono font-bold text-sm text-green-700 dark:text-green-300">
               {totals.inPcs.toLocaleString()} pcs
             </p>
-            <p className="text-xs text-green-600 dark:text-green-500 mt-0.5">${fmt(totals.inVal)}</p>
+            <p className="text-xs text-green-600 dark:text-green-500 mt-0.5">{usd(totals.inVal)}</p>
           </div>
           <div className="rounded-lg border bg-red-50 dark:bg-red-950/20 px-3 py-2.5">
             <div className="flex items-center gap-1.5 text-xs text-red-700 dark:text-red-400 mb-1">
@@ -195,7 +196,7 @@ export function MovementLog({ items }: { items: SheetsAndSacksItem[] }) {
             <p className="font-mono font-bold text-sm text-red-700 dark:text-red-300">
               {totals.outPcs.toLocaleString()} pcs
             </p>
-            <p className="text-xs text-red-600 dark:text-red-500 mt-0.5">${fmt(totals.outVal)}</p>
+            <p className="text-xs text-red-600 dark:text-red-500 mt-0.5">{usd(totals.outVal)}</p>
           </div>
           <div
             className={`rounded-lg border px-3 py-2.5 ${totals.net >= 0 ? "bg-blue-50 dark:bg-blue-950/20" : "bg-amber-50 dark:bg-amber-950/20"}`}
@@ -225,15 +226,16 @@ export function MovementLog({ items }: { items: SheetsAndSacksItem[] }) {
 
       {/* Day-by-day log */}
       {isLoading ? (
-        <div className="flex items-center justify-center py-16">
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-        </div>
+        <LoadingState className="py-16" />
+      ) : isError && !logEntriesData ? (
+        <ErrorState onAction={() => void refetch()} actionLabel="Try again" className="py-16" />
       ) : logEntries.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-          <History className="h-10 w-10 mb-3 opacity-25" />
-          <p className="text-sm font-medium">No movement records for this period.</p>
-          <p className="text-xs mt-1 opacity-70">Use "Add Stock" (↑) or "Deduct" (↓) buttons to log movements.</p>
-        </div>
+        <EmptyState
+          icon={History}
+          title="No movement records for this period."
+          description='Use "Add Stock" (↑) or "Deduct" (↓) buttons to log movements.'
+          className="py-16"
+        />
       ) : (
         <div className="space-y-4">
           {byDay.map(([day, entries]) => {
@@ -329,10 +331,10 @@ export function MovementLog({ items }: { items: SheetsAndSacksItem[] }) {
                             {e.pieces.toLocaleString()}
                           </TableCell>
                           <TableCell className="text-right font-mono text-sm text-muted-foreground">
-                            ${fmt(e.unitPrice)}
+                            {usd(e.unitPrice)}
                           </TableCell>
                           <TableCell className="text-right font-mono text-sm font-medium">
-                            ${fmt(e.totalValue)}
+                            {usd(e.totalValue)}
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground max-w-[160px] truncate">
                             {e.notes || "—"}

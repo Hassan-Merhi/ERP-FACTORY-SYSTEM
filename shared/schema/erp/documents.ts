@@ -193,8 +193,8 @@ export const supplierContainerLoadedItems = pgTable("supplier_container_loaded_i
   barcode: varchar("barcode", { length: 200 }).notNull(),
   itemName: text("item_name"),
   qty: integer("qty").notNull().default(0),
-  weightPerBale: decimal("weight_per_bale", { precision: 15, scale: 3 }),
-  pricePerBale: decimal("price_per_bale", { precision: 15, scale: 2 }),
+  weightPerBale: decimal("weight_per_bale", { precision: 15, scale: 3 }).default("0"),
+  pricePerBale: decimal("price_per_bale", { precision: 15, scale: 2 }).default("0"),
 });
 
 export const insertSupplierContainerLoadedItemSchema = createInsertSchema(supplierContainerLoadedItems)

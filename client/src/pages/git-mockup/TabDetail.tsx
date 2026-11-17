@@ -1,9 +1,11 @@
 import { searchAny } from "@shared/searchNormalization";
+import { formatUsd } from "@/lib/moneyDisplay";
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { authenticatedUserQueryOptions } from "@/contracts/sessionQueryContracts";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/ui/page-state";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   AlertTriangle,
@@ -19,7 +21,7 @@ import {
   FileCheck2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { fmt, fmtD, gitContainersUrl, parseNum, COMPANY_COLORS, getRealRowBg } from "./helpers";
+import { fmtD, gitContainersUrl, parseNum, COMPANY_COLORS, getRealRowBg } from "./helpers";
 import { WorkbookLegend, RealWorkbookBlock } from "./WorkbookBlock";
 import type { GitContainersResponse, EnrichedContainerApi, CompanyViewMode } from "./types";
 import { isExistingRecordReadOnlyRole } from "@shared/createOnlyRolePolicy";
@@ -214,10 +216,7 @@ export function TabDetail() {
       </div>
 
       {allContainers.length === 0 ? (
-        <div className="rounded-md border border-dashed px-6 py-10 text-center text-muted-foreground text-sm">
-          <FileX className="h-8 w-8 mx-auto mb-2 opacity-40" />
-          <div className="font-medium">No active containers found</div>
-        </div>
+        <EmptyState icon={FileX} title="No active containers found" className="rounded-md px-6 py-10" />
       ) : (
         <>
           <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-card/80 p-3 shadow-sm">
@@ -283,9 +282,9 @@ export function TabDetail() {
                 <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-violet-300/40 bg-gradient-to-r from-violet-600 to-indigo-700 px-4 py-3 text-xs font-bold text-white shadow-md shadow-violet-500/10">
                   <span>TOTAL — ALL COMPANIES ({filtered.length} containers)</span>
                   <div className="flex flex-wrap gap-x-4 gap-y-1">
-                    <span>CTR COST: ${fmt(totals.amount, 2)}</span>
-                    <span>TRANSPORT: ${fmt(totals.fee, 0)}</span>
-                    <span>DUTY: ${fmt(totals.duty, 0)}</span>
+                    <span>CTR COST: {formatUsd(totals.amount, 2)}</span>
+                    <span>TRANSPORT: {formatUsd(totals.fee, 0)}</span>
+                    <span>DUTY: {formatUsd(totals.duty, 0)}</span>
                   </div>
                 </div>
               )}
@@ -322,7 +321,7 @@ export function TabDetail() {
                       data-testid={`row-git-${r.containerNumber}`}
                     >
                       <TableCell className="font-mono font-semibold">{r.containerNumber}</TableCell>
-                      <TableCell className="text-right font-medium">${fmt(parseNum(r.grandTotal), 2)}</TableCell>
+                      <TableCell className="text-right font-medium">{formatUsd(parseNum(r.grandTotal), 2)}</TableCell>
                       <TableCell>{r.companyName}</TableCell>
                       <TableCell>{fmtD(r.eta)}</TableCell>
                       <TableCell className="font-mono">{r.numberPlate ?? "—"}</TableCell>
@@ -343,11 +342,11 @@ export function TabDetail() {
                       </TableCell>
                       <TableCell>{r.transporter ?? "—"}</TableCell>
                       <TableCell className="text-right">
-                        {parseNum(r.transportFee) > 0 ? `$${fmt(parseNum(r.transportFee), 0)}` : "—"}
+                        {parseNum(r.transportFee) > 0 ? formatUsd(parseNum(r.transportFee), 0) : "—"}
                       </TableCell>
                       <TableCell>{r.agent ?? "—"}</TableCell>
                       <TableCell className="text-right">
-                        {parseNum(r.dutyFee) > 0 ? `$${fmt(parseNum(r.dutyFee), 0)}` : "—"}
+                        {parseNum(r.dutyFee) > 0 ? formatUsd(parseNum(r.dutyFee), 0) : "—"}
                       </TableCell>
                       <TableCell className="max-w-32 truncate text-muted-foreground">
                         {r.trackingDescription ?? "—"}
@@ -356,11 +355,11 @@ export function TabDetail() {
                   ))}
                   <TableRow className="border-t-2 font-semibold bg-muted/40">
                     <TableCell className="text-center">Totals ({filtered.length})</TableCell>
-                    <TableCell className="text-right">${fmt(totals.amount, 2)}</TableCell>
+                    <TableCell className="text-right">{formatUsd(totals.amount, 2)}</TableCell>
                     <TableCell colSpan={8} />
-                    <TableCell className="text-right">${fmt(totals.fee, 0)}</TableCell>
+                    <TableCell className="text-right">{formatUsd(totals.fee, 0)}</TableCell>
                     <TableCell />
-                    <TableCell className="text-right">${fmt(totals.duty, 0)}</TableCell>
+                    <TableCell className="text-right">{formatUsd(totals.duty, 0)}</TableCell>
                     <TableCell colSpan={1} />
                   </TableRow>
                 </TableBody>

@@ -22,6 +22,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { EmptyState } from "@/components/ui/page-state";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Check, Layers, MinusCircle, Pencil, Plus, PlusCircle, Tag, Trash2, X } from "lucide-react";
@@ -272,9 +273,7 @@ export function StockItemsDialogs({ stockItems }: { stockItems: StockItemsModel 
             <DialogDescription>Add, rename, or remove stock grades.</DialogDescription>
           </DialogHeader>
           <div className="space-y-2 py-2 max-h-72 overflow-y-auto pr-1">
-            {stockGrades.length === 0 && (
-              <p className="text-sm text-muted-foreground text-center py-4">No grades yet. Add one below.</p>
-            )}
+            {stockGrades.length === 0 && <EmptyState title="No grades yet. Add one below." className="min-h-0 py-4" />}
             {stockGrades.map((grade) => (
               <div key={grade.id} className="flex items-center gap-2 group">
                 {editingGradeId === grade.id ? (
@@ -386,7 +385,7 @@ export function StockItemsDialogs({ stockItems }: { stockItems: StockItemsModel 
           </DialogHeader>
           <div className="space-y-2 py-2 max-h-72 overflow-y-auto pr-1">
             {stockCategories.length === 0 && (
-              <p className="text-sm text-muted-foreground text-center py-4">No categories yet. Add one below.</p>
+              <EmptyState title="No categories yet. Add one below." className="min-h-0 py-4" />
             )}
             {stockCategories.map((category) => (
               <div key={category.id} className="flex items-center gap-2 group">

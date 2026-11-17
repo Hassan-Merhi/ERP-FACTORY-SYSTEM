@@ -7,6 +7,7 @@ import {
 } from "../server/services/security/createOnlyWritePolicy";
 import { refuseInactiveCreateOnlyAssignment } from "../server/services/security/createOnlyActivation";
 import { evaluateAccessControl, ACCESS_CONTROL_ACTIONS, ACCESS_CONTROL_RESOURCES } from "../shared/accessControlV2";
+import { functionDefinition, tableRowLevelSecurity } from "./helpers/schemaManifest";
 
 const root = process.cwd();
 const manifest = JSON.parse(fs.readFileSync(path.join(root, "config/route-manifest.json"), "utf8")) as {
@@ -66,13 +67,13 @@ describe("Phase 7 deny-by-default inventory and data integrity release contract"
       "CREATE_ONLY_ASSIGNMENT_NOT_ACTIVATED"
     );
     const migration = fs.readFileSync(
-      path.join(root, "migrations/20261024_001_permissions_control_center_shadow.sql"),
+      path.join(root, "migrations/archive/legacy/20261024_001_permissions_control_center_shadow.sql"),
       "utf8"
     );
     expect(migration).not.toMatch(
       /\b(?:UPDATE|DELETE)\s+(?:FROM\s+)?(?:vouchers|voucher_entries|inventory|role_feature_permissions)\b/i
     );
-    expect(migration).toContain("FORCE ROW LEVEL SECURITY");
-    expect(migration).toContain("ACCESS_POLICY_AUDIT_APPEND_ONLY");
+    expect(tableRowLevelSecurity("access_user_overrides")).toEqual({ rls: true, forceRls: true });
+    expect(functionDefinition("access_policy_audit_append_only")).toContain("ACCESS_POLICY_AUDIT_APPEND_ONLY");
   });
 });

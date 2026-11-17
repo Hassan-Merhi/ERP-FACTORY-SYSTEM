@@ -3,18 +3,10 @@ import { formatMoneyDisplay } from "@/lib/moneyDisplay";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
-import {
-  ArrowLeftRight,
-  BarChart3,
-  Check,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  GitCompare,
-  RefreshCw,
-} from "lucide-react";
+import { ArrowLeftRight, BarChart3, Check, ChevronDown, GitCompare, RefreshCw } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
+import { PaginationBar } from "@/components/PaginationBar";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PeriodFilter, getDefaultPeriodValue, type PeriodFilterValue } from "@/components/ui/period-filter";
@@ -665,31 +657,14 @@ export default function StockInSalesReportComparison() {
                   </TableBody>
                 </Table>
               </div>
-              {data && data.itemRowCount > ITEM_PAGE_SIZE && (
-                <div className="flex items-center justify-between border-t px-4 py-3">
-                  <p className="text-xs text-muted-foreground">
-                    Page {itemPage} of {itemTotalPages}
-                  </p>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setItemPage((page) => Math.max(1, page - 1))}
-                      disabled={itemPage <= 1}
-                    >
-                      <ChevronLeft className="mr-1 h-4 w-4" /> Previous
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setItemPage((page) => Math.min(itemTotalPages, page + 1))}
-                      disabled={itemPage >= itemTotalPages}
-                    >
-                      Next <ChevronRight className="ml-1 h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              )}
+              <PaginationBar
+                page={itemPage}
+                totalPages={itemTotalPages}
+                total={data?.itemRows.length ?? 0}
+                pageSize={ITEM_PAGE_SIZE}
+                onPageChange={setItemPage}
+                noun="items"
+              />
             </div>
           </section>
         </>

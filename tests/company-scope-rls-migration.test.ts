@@ -1,5 +1,6 @@
 /**
- * Migration 0016 actually isolates tenants — proven by running it.
+ * Legacy migration 0016 (now migrations/archive/legacy/, folded into the
+ * baseline) actually isolates tenants — proven by running it.
  *
  * The migration is executed against a scratch database as an ordinary
  * non-superuser role. A superuser bypasses RLS entirely, so using one for the
@@ -11,7 +12,7 @@ import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 const MIGRATION_SQL = readFileSync(
-  path.join(process.cwd(), "migrations", "0016_company_scope_rls_readiness.sql"),
+  path.join(process.cwd(), "migrations", "archive", "legacy", "0016_company_scope_rls_readiness.sql"),
   "utf8"
 );
 

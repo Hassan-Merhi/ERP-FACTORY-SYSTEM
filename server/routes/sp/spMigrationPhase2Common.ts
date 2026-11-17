@@ -10,55 +10,6 @@ export const pn = (value: unknown): number => {
 
 export const money = (value: unknown): string => pn(value).toFixed(4);
 
-let phase2SchemaPromise: Promise<void> | null = null;
-
-export function ensurePhase2Schema(): Promise<void> {
-  if (!phase2SchemaPromise) {
-    phase2SchemaPromise = (async () => {
-      await db.execute(
-        sql.raw(`
-        CREATE TABLE IF NOT EXISTS sp_migration_container_charges (
-          id BIGSERIAL PRIMARY KEY,
-          run_id UUID NOT NULL REFERENCES sp_migration_rehearsal_runs(id) ON DELETE CASCADE,
-          source_company_id INTEGER NOT NULL,
-          target_company_id INTEGER NOT NULL,
-          source_container_id INTEGER NOT NULL,
-          sp_container_id INTEGER NOT NULL REFERENCES sp_containers(id) ON DELETE CASCADE,
-          source_key VARCHAR(180) NOT NULL,
-          source_kind VARCHAR(40) NOT NULL,
-          source_row_id INTEGER,
-          charge_type VARCHAR(120) NOT NULL,
-          amount_usd NUMERIC(20,4) NOT NULL DEFAULT 0,
-          source_ledger_account_id INTEGER,
-          target_ledger_account_id INTEGER,
-          mapping_method VARCHAR(40) NOT NULL,
-          review_status VARCHAR(20) NOT NULL DEFAULT 'review',
-          notes TEXT,
-          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-          UNIQUE (target_company_id, source_container_id, source_key)
-        )
-      `)
-      );
-      await db.execute(
-        sql.raw(`
-        CREATE INDEX IF NOT EXISTS sp_mig_container_charges_pair_idx
-        ON sp_migration_container_charges(source_company_id, target_company_id)
-      `)
-      );
-      await db.execute(
-        sql.raw(`
-        CREATE INDEX IF NOT EXISTS sp_mig_container_charges_sp_container_idx
-        ON sp_migration_container_charges(sp_container_id)
-      `)
-      );
-    })().catch((error) => {
-      phase2SchemaPromise = null;
-      throw error;
-    });
-  }
-  return phase2SchemaPromise;
-}
-
 /** A company row as the migration pair validator reads it. */
 export type MigrationCompanyRow = {
   id: number;

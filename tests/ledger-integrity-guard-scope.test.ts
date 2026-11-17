@@ -1,37 +1,59 @@
 /**
- * Production forces company-scope RLS, so the ledger guard install (whose
- * parent foreign key validation reads every company's accounts) failed with
- * "app.current_company_id is required for tenant data access". The installer
- * must enter the maintenance scope, transaction-locally, before any DDL.
+ * The ledger integrity guards are defined by the schema migrations (migrations/),
+ * not installed at runtime. Two of their SQL functions mirror the TypeScript
+ * account classifier: erp_ledger_account_class (the class of an account) and
+ * erp_default_ledger_opening_side (the side of a sideless opening). This pins
+ * the migrated definitions to accountClassification's type lists, so a change
+ * to the classifier without a schema migration fails here.
  */
-import type { Pool } from "pg";
 import { describe, expect, it } from "vitest";
 
+import { accountTypeNamesOf } from "../server/services/accounting/accountClassification";
 import {
-  ensureLedgerIntegrityGuard,
-  LEDGER_INTEGRITY_GUARD_DDL,
+  LEDGER_ACCOUNT_PARENT_FK,
+  LEDGER_ACCOUNT_TREE_TRIGGER,
+  LEDGER_GUARD_CONSTRAINTS,
 } from "../server/services/accounting/ledgerIntegrityGuard";
+import { functionDefinition, hasTrigger, manifestEntry } from "./helpers/schemaManifest";
 
-describe("ledger integrity guard install scope", () => {
-  it("sets the maintenance scope for its own transaction before the DDL", async () => {
-    const queries: string[] = [];
-    const client = {
-      query: async (text: string) => {
-        queries.push(text);
-        return { rows: [] };
-      },
-      release: () => {},
-    };
-    const pool = { connect: async () => client } as unknown as Pool;
+const typeList = (...classes: Parameters<typeof accountTypeNamesOf>) =>
+  accountTypeNamesOf(...classes)
+    .map((name) => `'${name}'`)
+    .join(", ");
 
-    expect(await ensureLedgerIntegrityGuard(pool)).toBe(true);
+const ACCOUNT_CLASSES = ["asset", "liability", "equity", "income", "expense", "party"] as const;
 
-    const scope = queries.findIndex((q) => q.includes("set_config('app.company_scope_maintenance', 'on', true)"));
-    const firstDdl = queries.indexOf(LEDGER_INTEGRITY_GUARD_DDL[0]);
-    expect(queries.indexOf("BEGIN")).toBeLessThan(scope);
-    expect(scope).toBeGreaterThan(-1);
-    expect(scope).toBeLessThan(firstDdl);
-    expect(queries[scope]).toContain("set_config('app.current_company_id', '', true)");
-    expect(queries.at(-1)).toBe("COMMIT");
+describe("ledger integrity guard schema", () => {
+  it("classifies accounts in SQL exactly as accountClassification does", () => {
+    const definition = functionDefinition("erp_ledger_account_class");
+    expect(definition).toBeDefined();
+    for (const column of ["p_type", "p_sub_type"]) {
+      for (const accountClass of ACCOUNT_CLASSES) {
+        expect(definition).toContain(
+          `WHEN lower(btrim(COALESCE(${column}, ''))) IN (${typeList(accountClass)}) THEN '${accountClass}'`
+        );
+      }
+    }
+    expect(definition).toContain("ELSE 'unknown'");
+  });
+
+  it("puts a sideless opening on the classifier's side", () => {
+    const definition = functionDefinition("erp_default_ledger_opening_side");
+    expect(definition).toBeDefined();
+    expect(definition).toContain(`WHEN t IN (${typeList("asset", "expense")}) THEN 'Dr'`);
+    expect(definition).toContain(`WHEN t IN (${typeList("liability", "equity", "income")}) THEN 'Cr'`);
+    expect(definition).toContain("WHEN t = 'customer' THEN 'Dr'");
+    expect(definition).toContain(`WHEN t IN (${typeList("party")}) THEN 'Cr'`);
+  });
+
+  it("defines the constraints and triggers the integrity diagnostic requires", () => {
+    for (const name of LEDGER_GUARD_CONSTRAINTS) {
+      expect(manifestEntry("constraint", `public.voucher_entries.${name}`), name).toBeDefined();
+    }
+    expect(manifestEntry("constraint", `public.ledger_accounts.${LEDGER_ACCOUNT_PARENT_FK}`)).toBeDefined();
+    expect(hasTrigger("voucher_entries", "voucher_entries_target_guard")).toBe(true);
+    expect(hasTrigger("ledger_accounts", "ledger_accounts_delete_guard")).toBe(true);
+    expect(hasTrigger("bank_accounts", "bank_accounts_delete_guard")).toBe(true);
+    expect(hasTrigger("ledger_accounts", LEDGER_ACCOUNT_TREE_TRIGGER)).toBe(true);
   });
 });

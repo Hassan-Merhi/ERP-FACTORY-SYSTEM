@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/page-state";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   AlertDialog,
@@ -53,6 +54,7 @@ import {
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
 import type { LucideIcon } from "lucide-react";
+import { formatUsd } from "@/lib/moneyDisplay";
 
 interface DeletedItem {
   id: number;
@@ -430,17 +432,18 @@ export default function DeletedItems() {
             </div>
           )}
           {items.length === 0 ? (
-            <div className="text-center py-12">
-              <Trash2 className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <h3 className="text-lg font-medium text-muted-foreground">No deleted items</h3>
-              <p className="text-sm text-muted-foreground mt-1">
-                {filterType === "all"
+            <EmptyState
+              icon={Trash2}
+              title="No deleted items"
+              description={
+                filterType === "all"
                   ? "Items you delete will appear here for recovery."
                   : filterType === "orphanedPosSale"
                     ? "No orphaned POS sales found. These are vouchers linked to deleted locations."
-                    : `No deleted ${typeLabels[filterType]?.toLowerCase() || filterType}s found.`}
-              </p>
-            </div>
+                    : `No deleted ${typeLabels[filterType]?.toLowerCase() || filterType}s found.`
+              }
+              className="py-12"
+            />
           ) : (
             <>
               <div className="hidden md:block phone-land:hidden">
@@ -493,12 +496,12 @@ export default function DeletedItems() {
                               )}
                               {item.type === "orphanedPosSale" && (
                                 <span className="text-xs text-muted-foreground">
-                                  {item.locationName} | ${item.amount?.toLocaleString() || "0"}
+                                  {item.locationName} | {formatUsd(item.amount ?? 0, 0, 3)}
                                 </span>
                               )}
                               {item.type === "voucher" && (
                                 <span className="text-xs text-muted-foreground">
-                                  {item.voucherType} | ${item.amount?.toLocaleString() || "0"}
+                                  {item.voucherType} | {formatUsd(item.amount ?? 0, 0, 3)}
                                 </span>
                               )}
                             </div>
@@ -754,7 +757,7 @@ export default function DeletedItems() {
               {detailItem.amount !== undefined && (
                 <div>
                   <p className="text-sm text-muted-foreground">Amount</p>
-                  <p className="font-medium">${detailItem.amount?.toLocaleString() || "0"}</p>
+                  <p className="font-medium">{formatUsd(detailItem.amount ?? 0, 0, 3)}</p>
                 </div>
               )}
               {detailItem.date && (
@@ -803,12 +806,12 @@ export default function DeletedItems() {
                                 </td>
                                 <td className="px-3 py-2 text-right font-mono text-xs">
                                   {parseFloat(entry.debitAmount || "0") > 0
-                                    ? `$${parseFloat(entry.debitAmount || "0").toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                    ? formatUsd(parseFloat(entry.debitAmount || "0"), 2)
                                     : "—"}
                                 </td>
                                 <td className="px-3 py-2 text-right font-mono text-xs">
                                   {parseFloat(entry.creditAmount || "0") > 0
-                                    ? `$${parseFloat(entry.creditAmount || "0").toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                    ? formatUsd(parseFloat(entry.creditAmount || "0"), 2)
                                     : "—"}
                                 </td>
                               </tr>
@@ -818,16 +821,16 @@ export default function DeletedItems() {
                             <tr className="bg-muted/50 font-semibold">
                               <td className="px-3 py-2 text-xs">Total</td>
                               <td className="px-3 py-2 text-right font-mono text-xs">
-                                $
-                                {voucherEntries
-                                  .reduce((s: number, e) => s + parseFloat(e.debitAmount || "0"), 0)
-                                  .toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                {formatUsd(
+                                  voucherEntries.reduce((s: number, e) => s + parseFloat(e.debitAmount || "0"), 0),
+                                  2
+                                )}
                               </td>
                               <td className="px-3 py-2 text-right font-mono text-xs">
-                                $
-                                {voucherEntries
-                                  .reduce((s: number, e) => s + parseFloat(e.creditAmount || "0"), 0)
-                                  .toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                {formatUsd(
+                                  voucherEntries.reduce((s: number, e) => s + parseFloat(e.creditAmount || "0"), 0),
+                                  2
+                                )}
                               </td>
                             </tr>
                           </tfoot>

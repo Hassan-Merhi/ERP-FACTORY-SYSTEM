@@ -8,6 +8,7 @@ import {
 } from "../server/services/accounting/currencyAmounts";
 import { normalizeOpeningBalanceCurrency } from "../server/services/accounting/openingBalanceCurrency";
 import { summarizeAccountStatementCurrency } from "../server/services/accounting/accountStatementCurrency";
+import { functionDefinition, hasColumn, triggerDefinition } from "./helpers/schemaManifest";
 
 const root = path.resolve(process.cwd());
 const read = (relativePath: string) => fs.readFileSync(path.join(root, relativePath), "utf8");
@@ -80,7 +81,7 @@ describe("multi-currency historical amount rules", () => {
         transactionDebitAmount: "600000",
         transactionCreditAmount: "0",
         historicalRate: null,
-      }),
+      })
     ).toThrow(/valid positive rate/i);
   });
 });
@@ -123,14 +124,17 @@ describe("opening balance currency rules", () => {
         openingBalance: "1000",
         openingBalanceCurrency: null,
         baseCurrency: "USD",
-      }),
+      })
     ).toThrow(/requires its currency/i);
   });
 });
 
 describe("required database migrations", () => {
+  // The live schema comes from migrations/ (manifest); the historical files that
+  // introduced it are archived under migrations/archive/legacy/.
+  const archived = (name: string) => read(`migrations/archive/legacy/${name}.sql`);
+
   it("adds all voucher-entry dual-currency columns", () => {
-    const sql = read("migrations/20260720_002_voucher_entry_currency_fields.sql");
     for (const column of [
       "transaction_currency",
       "transaction_debit_amount",
@@ -140,41 +144,51 @@ describe("required database migrations", () => {
       "historical_exchange_rate",
       "rate_convention",
     ]) {
-      expect(sql).toContain(column);
+      expect(hasColumn("voucher_entries", column), column).toBe(true);
     }
-    expect(sql).not.toMatch(/UPDATE\s+voucher_entries/i);
+    expect(archived("20260720_002_voucher_entry_currency_fields")).not.toMatch(/UPDATE\s+voucher_entries/i);
   });
 
   it("adds ledger and bank opening-balance metadata", () => {
-    const ledgerSql = read("migrations/20260720_003_ledger_account_opening_balance_currency.sql");
-    const bankSql = read("migrations/20260720_004_bank_account_opening_balance_currency.sql");
-    for (const sql of [ledgerSql, bankSql]) {
-      expect(sql).toContain("opening_balance_currency");
-      expect(sql).toContain("opening_balance_historical_rate");
-      expect(sql).toContain("opening_balance_base_amount");
+    for (const table of ["ledger_accounts", "bank_accounts"]) {
+      for (const column of [
+        "opening_balance_currency",
+        "opening_balance_historical_rate",
+        "opening_balance_base_amount",
+      ]) {
+        expect(hasColumn(table, column), `${table}.${column}`).toBe(true);
+      }
     }
   });
 
   it("adds native opening and fixed-asset acquisition metadata", () => {
-    const sql = read("migrations/20260720_006_entity_opening_and_asset_currency.sql");
-    expect(sql).toContain("opening_balance_native_amount");
-    expect(sql).toContain("purchase_native_amount");
-    expect(sql).toContain("purchase_historical_rate");
-    expect(sql).toContain("purchase_base_amount");
-    expect(sql).not.toMatch(/UPDATE\s+(customers|suppliers|employees|fixed_assets)/i);
+    for (const table of ["customers", "suppliers", "employees"]) {
+      expect(hasColumn(table, "opening_balance_native_amount"), table).toBe(true);
+    }
+    for (const column of ["purchase_native_amount", "purchase_historical_rate", "purchase_base_amount"]) {
+      expect(hasColumn("fixed_assets", column), column).toBe(true);
+    }
+    expect(archived("20260720_006_entity_opening_and_asset_currency")).not.toMatch(
+      /UPDATE\s+(customers|suppliers|employees|fixed_assets)/i
+    );
   });
 
   it("normalizes new USD/CFA writes and synchronizes legacy updates", () => {
-    const sql = read("migrations/20260720_005_voucher_entry_currency_normalization_trigger.sql");
-    expect(sql).toMatch(/BEFORE INSERT OR UPDATE/i);
-    expect(sql).toContain("ROUND(raw_debit / voucher_rate, 6)");
-    expect(sql).toContain("NEW.debit_amount := NEW.base_debit_amount");
-    expect(sql).toMatch(/already locked rate\/convention/i);
-    expect(sql).toMatch(/Other currencies[\s\S]*remain explicitly unresolved/i);
+    expect(triggerDefinition("voucher_entries", "voucher_entries_normalize_currency_before_write")).toMatch(
+      /BEFORE INSERT OR UPDATE OF voucher_id, debit_amount, credit_amount/i
+    );
+    const fn = functionDefinition("normalize_voucher_entry_currency_amounts");
+    expect(fn).toContain("ROUND(raw_debit / voucher_rate, 6)");
+    expect(fn).toContain("NEW.debit_amount := NEW.base_debit_amount");
+    expect(fn).toMatch(/already locked rate\/convention/i);
+    // Other currencies are never guessed: since v2 (deployed) a new line without
+    // native amounts is refused instead of being left unresolved.
+    expect(fn).toMatch(/Any other currency needs its native amounts[\s\S]*never guesses one/i);
+    expect(fn).toContain("VOUCHER_LINE_NATIVE_AMOUNT_REQUIRED");
   });
 
-  it("registers every new migration in the Drizzle journal", () => {
-    const journal = read("migrations/meta/_journal.json");
+  it("registers every new migration in the (archived) Drizzle journal", () => {
+    const journal = read("migrations/archive/legacy/meta/_journal.json");
     expect(journal).toContain("20260720_002_voucher_entry_currency_fields");
     expect(journal).toContain("20260720_003_ledger_account_opening_balance_currency");
     expect(journal).toContain("20260720_004_bank_account_opening_balance_currency");

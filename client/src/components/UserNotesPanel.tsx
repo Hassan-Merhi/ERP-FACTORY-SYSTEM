@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { LoadingState } from "@/components/ui/page-state";
 import { NotebookPen, Save, Check } from "lucide-react";
 
 const NOTES_KEY = "/api/user/notes";
@@ -268,7 +269,7 @@ export function UserNotesPanel() {
 
           <div className="flex-1 overflow-hidden p-4">
             {isLoading ? (
-              <div className="h-full flex items-center justify-center text-sm text-muted-foreground">Loading…</div>
+              <LoadingState className="h-full" />
             ) : (
               <Textarea
                 value={displayContent}

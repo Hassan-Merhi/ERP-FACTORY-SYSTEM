@@ -4,6 +4,7 @@ import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAc
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { PeriodFilter } from "@/components/ui/period-filter";
 import { ExportButton } from "@/components/export/ReportExportMenu";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/PageHeader";
@@ -414,23 +415,15 @@ export default function FactoryWorkerAttendanceReport() {
 
         {/* Custom range inputs */}
         {mode === "custom" && (
-          <div className="flex items-center gap-2">
-            <input
-              type="date"
-              value={customStart}
-              onChange={(e) => setCustomStart(e.target.value)}
-              data-testid="input-custom-start"
-              className="h-7 rounded-md border bg-background px-2 text-xs focus:outline-hidden focus:ring-1 focus:ring-ring"
-            />
-            <span className="text-xs text-muted-foreground">–</span>
-            <input
-              type="date"
-              value={customEnd}
-              onChange={(e) => setCustomEnd(e.target.value)}
-              data-testid="input-custom-end"
-              className="h-7 rounded-md border bg-background px-2 text-xs focus:outline-hidden focus:ring-1 focus:ring-ring"
-            />
-          </div>
+          <PeriodFilter
+            value={{ fromDate: customStart, toDate: customEnd, preset: "custom" }}
+            onChange={(v) => {
+              setCustomStart(v.fromDate);
+              setCustomEnd(v.toDate);
+            }}
+            requireBoundedRange
+            data-testid="attendance-report-custom-period"
+          />
         )}
       </div>
 

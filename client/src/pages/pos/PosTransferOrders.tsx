@@ -21,6 +21,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import "@/styles/pos-orders-premium.css";
@@ -47,7 +48,12 @@ export default function PosTransferOrders({ posUser }: PosTransferOrdersProps) {
   });
   const myLocationIds = useMemo(() => new Set(myLocations.map((location) => location.id)), [myLocations]);
 
-  const { data: allTransfers = [], isLoading } = useQuery<TransferSummary[]>({
+  const {
+    data: allTransfers = [],
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<TransferSummary[]>({
     queryKey: ["/api/stock-transfers/list", dateFilter],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -244,15 +250,16 @@ export default function PosTransferOrders({ posUser }: PosTransferOrdersProps) {
             </div>
           ))}
         </div>
+      ) : isError && allTransfers.length === 0 ? (
+        <ErrorState onAction={() => void refetch()} actionLabel="Try again" className="rounded-2xl py-14" />
       ) : transfers.length === 0 ? (
-        <div
-          className="pos-orders-empty rounded-2xl border border-dashed bg-card py-14 text-center text-muted-foreground"
+        <EmptyState
+          className="pos-orders-empty rounded-2xl py-14"
           data-testid="text-empty"
-        >
-          <Package2 className="mx-auto mb-3 h-10 w-10 opacity-20" />
-          <p className="text-sm font-medium">No transfer orders found</p>
-          {hasFilters && <p className="mt-1 text-xs opacity-70">Try clearing your filters.</p>}
-        </div>
+          icon={Package2}
+          title="No transfer orders found"
+          description={hasFilters ? "Try clearing your filters." : undefined}
+        />
       ) : (
         <div className="space-y-3">
           {transfers.map((transfer) => (

@@ -2,10 +2,11 @@ import { Eye, Package, Plus, Check, X, Pencil } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/StatusBadge";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Container } from "@shared/schema";
 import { getContainerOffloadingCost, getContainerTotalCost } from "./containerTotalCost";
+import { EmptyState } from "@/components/ui/page-state";
 
 interface ActiveContainersTableProps {
   containers: Array<Container & { linkedParentCompanyName?: string | null }>;
@@ -56,36 +57,31 @@ export function ActiveContainersTable({
 
   if (containers.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-center">
-        <div className="w-14 h-14 rounded-xl bg-muted/60 flex items-center justify-center mb-4">
-          <Package className="w-7 h-7 text-muted-foreground" />
-        </div>
-        <h2 className="text-lg font-semibold mb-1">No containers found</h2>
-        <p className="text-sm text-muted-foreground mb-4">
-          {allContainers.length === 0
+      <EmptyState
+        icon={Package}
+        title="No containers found"
+        description={
+          allContainers.length === 0
             ? "Import your first purchase order to get started"
-            : "Try adjusting your search or filters"}
-        </p>
-        {allContainers.length === 0 && !propertiesMode && (
-          <Link href="/po-import">
-            <Button>
-              <Plus className="w-4 h-4 mr-2" />
-              Import PO
-            </Button>
-          </Link>
-        )}
-      </div>
+            : "Try adjusting your search or filters"
+        }
+        action={
+          allContainers.length === 0 && !propertiesMode ? (
+            <Link href="/po-import">
+              <Button>
+                <Plus className="w-4 h-4 mr-2" />
+                Import PO
+              </Button>
+            </Link>
+          ) : undefined
+        }
+      />
     );
   }
 
   return (
     <div className="space-y-2">
       {containers.map((container) => {
-        const statusColors: Record<string, string> = {
-          OTW: "bg-blue-500/10 text-blue-700 dark:text-blue-300 border-transparent",
-          ARRIVED: "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-transparent",
-          OFFLOADED: "bg-green-500/10 text-green-700 dark:text-green-300 border-transparent",
-        };
         return (
           <div
             key={container.id}
@@ -150,12 +146,12 @@ export function ActiveContainersTable({
                       )}
                     </div>
                   )}
-                  <Badge
-                    className={statusColors[container.status] || "border-transparent"}
+                  <StatusBadge
+                    status={container.status}
+                    label={container.status}
+                    showIcon={false}
                     data-testid={`badge-status-${container.id}`}
-                  >
-                    {container.status}
-                  </Badge>
+                  />
                 </div>
                 {container.linkedParentCompanyName ? (
                   <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mt-0.5">

@@ -21,19 +21,8 @@ import {
   requireValidatedUnsafeInput,
 } from "../services/security/unsafeInputEnforcementAdapter";
 import { requireStoredFileAccess } from "../services/security/storedFileAccessAdapter";
-import { enforceAdminCompanyScope } from "../middleware/adminCompanyScopeGuard";
 
 export function registerAdminRoutes(app: Express) {
-  for (const path of [
-    "/api/admin",
-    "/api/orphaned-records",
-    "/api/location-summary",
-    "/api/deleted-items",
-    "/api/files",
-  ]) {
-    app.use(path, enforceAdminCompanyScope);
-  }
-
   app.use(
     "/api/admin/rebuild-inventory",
     requireValidatedUnsafeInput({
