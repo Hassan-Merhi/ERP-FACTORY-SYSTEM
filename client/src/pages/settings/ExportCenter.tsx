@@ -7,6 +7,7 @@ import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Zap, Download, MessageCircle, Building2 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
+import { authenticatedUserQueryOptions } from "@/contracts/sessionQueryContracts";
 import { useToast } from "@/hooks/use-toast";
 
 import {
@@ -20,6 +21,7 @@ import {
 } from "./ExportCenterTypes";
 import { ExportProgressDialog } from "./ExportProgressDialog";
 import { DailyExportTab } from "./DailyExportTab";
+import { canSendAllCompanyExportToWhatsApp } from "./ExportCenterHelpers";
 import { RecipientsTab } from "./RecipientsTab";
 import { StockReportSection } from "./StockReportSection";
 import { PosWhatsAppSection } from "./PosWhatsAppSection";
@@ -34,6 +36,8 @@ type ExportCenterTab = (typeof EXPORT_CENTER_TABS)[number];
 export function ExportCenter() {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const { data: currentUser } = useQuery(authenticatedUserQueryOptions());
+  const canSendWa = canSendAllCompanyExportToWhatsApp(currentUser?.role);
 
   // Shared UI state
   const [tab, setTab] = useHubQueryState<ExportCenterTab>({
@@ -134,7 +138,7 @@ export function ExportCenter() {
       setGmailPassword("");
       toast({ title: "Settings saved" });
     } catch (e) {
-      toast({ variant: "destructive", title: "Error", description: getErrorDetails(e).message });
+      toast({ variant: "destructive", title: "Save failed", description: getErrorDetails(e).message });
     } finally {
       setSavingGmail(false);
     }
@@ -180,6 +184,7 @@ export function ExportCenter() {
             waReady={waReady}
             sendingWa={sendViaWaMutation.isPending}
             sendViaWhatsApp={sendViaWhatsApp}
+            canSendWa={canSendWa}
             showCompanies={showCompanies}
             setShowCompanies={setShowCompanies}
             showHistory={showHistory}

@@ -224,7 +224,7 @@ describe("journal voucher form behavior", () => {
       )
     );
     expect(harness.discardDraft).toHaveBeenCalled();
-    expect(harness.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Success" }));
+    expect(harness.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Saved" }));
     expect(harness.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["/api/vouchers"] });
   });
 

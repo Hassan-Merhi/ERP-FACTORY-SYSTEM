@@ -40,7 +40,7 @@ export default function EditSupplier() {
   const { toast } = useToast();
   const { selectedCompany } = useCompany();
   const supplierId = params.id ? parseInt(params.id) : null;
-  useEscapeToParent("/suppliers");
+  useEscapeToParent(selectedCompany?.companyType === "properties" ? "/properties/suppliers" : "/suppliers");
 
   const { data: supplier, isLoading } = useQuery({
     queryKey: [`/api/suppliers/${supplierId}`],
@@ -99,18 +99,18 @@ export default function EditSupplier() {
     },
     onSuccess: (data) => {
       toast({
-        title: "Success",
+        title: "Updated",
         description: `Supplier "${data.legalName}" updated successfully`,
       });
       queryClient.invalidateQueries({ queryKey: ["/api/suppliers"] });
       queryClient.invalidateQueries({ queryKey: ["/api/suppliers/stats"] });
       queryClient.invalidateQueries({ queryKey: [`/api/suppliers/${supplierId}`] });
-      navigate("/suppliers");
+      navigate(selectedCompany?.companyType === "properties" ? "/properties/suppliers" : "/suppliers");
     },
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;
       toast({
-        title: "Error",
+        title: "Update failed",
         description: error.message || "Failed to update supplier",
         variant: "destructive",
       });

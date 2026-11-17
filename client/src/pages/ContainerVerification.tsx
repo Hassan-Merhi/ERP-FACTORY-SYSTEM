@@ -119,7 +119,7 @@ export default function ContainerVerification() {
     },
     onError: (e: ClientErrorLike) => {
       if (e?._handledGlobally) return;
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      toast({ title: "Save failed", description: e.message, variant: "destructive" });
     },
   });
 
@@ -134,7 +134,7 @@ export default function ContainerVerification() {
     },
     onError: (e: ClientErrorLike) => {
       if (e?._handledGlobally) return;
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      toast({ title: "Update failed", description: e.message, variant: "destructive" });
     },
   });
 
@@ -148,7 +148,7 @@ export default function ContainerVerification() {
     },
     onError: (e: ClientErrorLike) => {
       if (e?._handledGlobally) return;
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      toast({ title: "Delete failed", description: e.message, variant: "destructive" });
     },
   });
 
@@ -170,7 +170,7 @@ export default function ContainerVerification() {
     },
     onError: (e: ClientErrorLike) => {
       if (e?._handledGlobally) return;
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      toast({ title: "Update failed", description: e.message, variant: "destructive" });
     },
   });
 
@@ -249,7 +249,7 @@ export default function ContainerVerification() {
         const data = await res.json();
         setVerificationResult(data);
       } catch (err) {
-        toast({ title: "Error", description: getErrorDetails(err).message, variant: "destructive" });
+        toast({ title: "Load failed", description: getErrorDetails(err).message, variant: "destructive" });
       }
     },
     [selectedSupplierId, selectedProformaId, containerId, toast, syncLoadedItemsFromContainer]
@@ -343,10 +343,12 @@ export default function ContainerVerification() {
   // Prefers the starred proforma; falls back to the most recent if none is starred.
   useEffect(() => {
     if (!autoCompare || !selectedSupplierId || proformas.length === 0 || selectedProformaId) return;
-    const starred = proformas.find((p) => p.isStarred);
-    const pick = starred ?? proformas[proformas.length - 1];
+    const destinationId = containerData?.container?.companyId;
+    const eligible = proformas.filter((p) => (p.destinationCompanyId ?? p.companyId) === destinationId);
+    const starred = eligible.find((p) => p.isStarred);
+    const pick = starred ?? eligible[eligible.length - 1];
     if (pick) setSelectedProformaId(String(pick.id));
-  }, [autoCompare, selectedSupplierId, proformas, selectedProformaId]);
+  }, [autoCompare, selectedSupplierId, proformas, selectedProformaId, containerData]);
 
   // Auto-generate only after the current container details have been refreshed.
   useEffect(() => {

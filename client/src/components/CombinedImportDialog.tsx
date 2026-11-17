@@ -13,6 +13,7 @@ import { Download, Package } from "lucide-react";
 import type { Location } from "@shared/schema";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { StockNameUpdateImport } from "@/components/StockNameUpdateImport";
+import { useCompany } from "@/contexts/CompanyContext";
 
 interface OpeningBalanceImportResult {
   message?: string;
@@ -30,6 +31,9 @@ export function CombinedImportDialog({ open, onOpenChange }: CombinedImportDialo
   const [isProcessing, setIsProcessing] = useState(false);
   const [isProcessingOpening, setIsProcessingOpening] = useState(false);
   const { toast } = useToast();
+  const { selectedCompany } = useCompany();
+  const newItemsImportHref =
+    selectedCompany?.companyType === "properties" ? "/properties/import-stock-items" : "/import-stock-items";
 
   const { data: locations = [] } = useQuery<Location[]>({
     queryKey: ["/api/locations"],
@@ -56,7 +60,7 @@ export function CombinedImportDialog({ open, onOpenChange }: CombinedImportDialo
     onError: (error: Error) => {
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
       toast({
-        title: "Error",
+        title: "Import failed",
         description: error.message || "Failed to import prices",
         variant: "destructive",
       });
@@ -73,7 +77,7 @@ export function CombinedImportDialog({ open, onOpenChange }: CombinedImportDialo
     },
     onSuccess: (result) => {
       toast({
-        title: "Success",
+        title: "Imported",
         description: result.message || "Opening balances imported successfully",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/stock-items"] });
@@ -86,7 +90,7 @@ export function CombinedImportDialog({ open, onOpenChange }: CombinedImportDialo
     onError: (error: Error) => {
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
       toast({
-        title: "Error",
+        title: "Import failed",
         description: error.message || "Failed to import opening balances",
         variant: "destructive",
       });
@@ -120,7 +124,7 @@ export function CombinedImportDialog({ open, onOpenChange }: CombinedImportDialo
   const handleImportPrices = async () => {
     if (!pricesFile) {
       toast({
-        title: "Error",
+        title: "Missing information",
         description: "Please select a file",
         variant: "destructive",
       });
@@ -129,7 +133,7 @@ export function CombinedImportDialog({ open, onOpenChange }: CombinedImportDialo
 
     if (!selectedLocation) {
       toast({
-        title: "Error",
+        title: "Missing information",
         description: "Please select a location",
         variant: "destructive",
       });
@@ -149,7 +153,7 @@ export function CombinedImportDialog({ open, onOpenChange }: CombinedImportDialo
 
       if (data.length === 0) {
         toast({
-          title: "Error",
+          title: "Import failed",
           description: "No data found in file",
           variant: "destructive",
         });
@@ -167,7 +171,7 @@ export function CombinedImportDialog({ open, onOpenChange }: CombinedImportDialo
 
       if (prices.length === 0) {
         toast({
-          title: "Error",
+          title: "Import failed",
           description: "No valid barcode entries found",
           variant: "destructive",
         });
@@ -178,7 +182,7 @@ export function CombinedImportDialog({ open, onOpenChange }: CombinedImportDialo
       importMutation.mutate(prices);
     } catch (error) {
       toast({
-        title: "Error",
+        title: "Import failed",
         description: getErrorDetails(error).message || "Failed to read file",
         variant: "destructive",
       });
@@ -212,7 +216,7 @@ export function CombinedImportDialog({ open, onOpenChange }: CombinedImportDialo
   const handleImportOpening = async () => {
     if (!openingFile) {
       toast({
-        title: "Error",
+        title: "Missing information",
         description: "Please select a file",
         variant: "destructive",
       });
@@ -233,7 +237,7 @@ export function CombinedImportDialog({ open, onOpenChange }: CombinedImportDialo
 
       if (data.length === 0) {
         toast({
-          title: "Error",
+          title: "Import failed",
           description: "No data found in file",
           variant: "destructive",
         });
@@ -252,7 +256,7 @@ export function CombinedImportDialog({ open, onOpenChange }: CombinedImportDialo
 
       if (openingBalances.length === 0) {
         toast({
-          title: "Error",
+          title: "Import failed",
           description: "No valid barcode entries found",
           variant: "destructive",
         });
@@ -263,7 +267,7 @@ export function CombinedImportDialog({ open, onOpenChange }: CombinedImportDialo
       openingBalanceMutation.mutate(openingBalances);
     } catch (error) {
       toast({
-        title: "Error",
+        title: "Import failed",
         description: getErrorDetails(error).message || "Failed to read file",
         variant: "destructive",
       });
@@ -403,7 +407,7 @@ export function CombinedImportDialog({ open, onOpenChange }: CombinedImportDialo
               <p className="text-sm text-muted-foreground">
                 Use the dedicated import page for new items with stock-group validation and preview.
               </p>
-              <a href="/import-stock-items">
+              <a href={newItemsImportHref}>
                 <Button variant="outline" className="w-full" data-testid="button-go-to-import-items">
                   Go to New Items Import Page
                 </Button>

@@ -95,7 +95,7 @@ export function useFactorySettingsModel() {
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Preview failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -119,7 +119,7 @@ export function useFactorySettingsModel() {
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Fix failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -143,7 +143,7 @@ export function useFactorySettingsModel() {
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Preview failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -159,7 +159,7 @@ export function useFactorySettingsModel() {
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Rename failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -264,8 +264,14 @@ export function useFactorySettingsModel() {
     },
   });
 
-  const { data: locations } = useQuery<Location[]>({ queryKey: companyQueryKey("/api/locations", selectedCompany?.id), enabled: Boolean(selectedCompany?.id) });
-  const { data, isLoading } = useQuery<FactorySettingsData & FactoryCompanyUiSettings>({ queryKey: companyQueryKey("/api/factory/settings", selectedCompany?.id), enabled: Boolean(selectedCompany?.id) });
+  const { data: locations } = useQuery<Location[]>({
+    queryKey: companyQueryKey("/api/locations", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
+  });
+  const { data, isLoading } = useQuery<FactorySettingsData & FactoryCompanyUiSettings>({
+    queryKey: companyQueryKey("/api/factory/settings", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
+  });
 
   useEffect(() => {
     // Never carry editable rename input or preview from one company to another.
@@ -372,7 +378,7 @@ export function useFactorySettingsModel() {
     },
     onError: (error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Save failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -399,7 +405,7 @@ export function useFactorySettingsModel() {
     },
     onError: (error: Error & { _handledGlobally?: boolean }) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Save failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -427,7 +433,7 @@ export function useFactorySettingsModel() {
     },
     onError: (error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Save failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -446,7 +452,7 @@ export function useFactorySettingsModel() {
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Save failed", description: error.message, variant: "destructive" });
     },
   });
 

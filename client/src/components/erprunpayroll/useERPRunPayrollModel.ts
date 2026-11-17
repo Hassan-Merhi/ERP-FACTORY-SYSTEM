@@ -265,7 +265,7 @@ export function useERPRunPayrollModel() {
       setPreviewItems([]);
       setActiveTab("history");
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
   });
 
   const payRunMutation = useMutation({
@@ -292,7 +292,7 @@ export function useERPRunPayrollModel() {
         setTimeout(() => printRun(run), 300);
       }
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Update failed", description: e.message, variant: "destructive" }),
   });
 
   const deleteRunMutation = useMutation({
@@ -309,7 +309,7 @@ export function useERPRunPayrollModel() {
       toast({ title: "Draft deleted" });
       setDeleteRunId(null);
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Delete failed", description: e.message, variant: "destructive" }),
   });
 
   const undoRunMutation = useMutation({
@@ -333,7 +333,7 @@ export function useERPRunPayrollModel() {
       });
       setUndoRunId(null);
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Update failed", description: e.message, variant: "destructive" }),
   });
 
   // ── Helpers for the worker-salaries template ──────────────────────────────

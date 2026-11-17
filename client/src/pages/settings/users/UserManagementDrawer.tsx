@@ -96,7 +96,7 @@ export function UserManagementDrawer({ user, open, onClose, companies, onUserDel
       setShowPasswordReset(false);
     },
     onError: (err: Error) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Update failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -116,7 +116,7 @@ export function UserManagementDrawer({ user, open, onClose, companies, onUserDel
       onUserDeleted();
     },
     onError: (err: Error) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Delete failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -136,7 +136,7 @@ export function UserManagementDrawer({ user, open, onClose, companies, onUserDel
       toast({ title: "Saved", description: "ERP cost field restrictions updated" });
     },
     onError: (err: Error) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Save failed", description: err.message, variant: "destructive" });
     },
   });
 

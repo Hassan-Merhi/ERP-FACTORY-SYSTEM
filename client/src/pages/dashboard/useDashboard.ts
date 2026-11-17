@@ -146,12 +146,12 @@ export function useDashboard() {
       });
       setIsAddDialogOpen(false);
       setSelectedAccountId(0);
-      toast({ title: "Success", description: "Account added to dashboard" });
+      toast({ title: "Added", description: "Account added to dashboard" });
     },
     onError: (error: unknown) => {
       if (isGloballyHandled(error)) return;
       toast({
-        title: "Error",
+        title: "Save failed",
         description: getErrorMessage(error, "Failed to add account"),
         variant: "destructive",
       });
@@ -167,14 +167,14 @@ export function useDashboard() {
         queryKey: ["/api/dashboard-cash-accounts", selectedCompany?.id],
       });
       toast({
-        title: "Success",
+        title: "Removed",
         description: "Account removed from dashboard",
       });
     },
     onError: (error: unknown) => {
       if (isGloballyHandled(error)) return;
       toast({
-        title: "Error",
+        title: "Delete failed",
         description: getErrorMessage(error, "Failed to remove account"),
         variant: "destructive",
       });
@@ -192,14 +192,14 @@ export function useDashboard() {
       setIsAddPayableDialogOpen(false);
       setSelectedPayableAccountId(0);
       toast({
-        title: "Success",
+        title: "Added",
         description: "Payable account added to dashboard",
       });
     },
     onError: (error: unknown) => {
       if (isGloballyHandled(error)) return;
       toast({
-        title: "Error",
+        title: "Save failed",
         description: getErrorMessage(error, "Failed to add payable account"),
         variant: "destructive",
       });
@@ -215,14 +215,14 @@ export function useDashboard() {
         queryKey: ["/api/dashboard-payable-accounts", selectedCompany?.id],
       });
       toast({
-        title: "Success",
+        title: "Removed",
         description: "Account removed from dashboard",
       });
     },
     onError: (error: unknown) => {
       if (isGloballyHandled(error)) return;
       toast({
-        title: "Error",
+        title: "Delete failed",
         description: getErrorMessage(error, "Failed to remove payable account"),
         variant: "destructive",
       });

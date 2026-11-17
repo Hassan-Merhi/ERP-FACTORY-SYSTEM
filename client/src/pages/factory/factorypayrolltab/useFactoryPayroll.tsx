@@ -257,7 +257,7 @@ export default function useFactoryPayroll() {
     },
     onError: (err: Error) => {
       if (err?._handledGlobally) return;
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Generation failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -285,7 +285,7 @@ export default function useFactoryPayroll() {
     },
     onError: (err: Error) => {
       if (err?._handledGlobally) return;
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Update failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -314,7 +314,7 @@ export default function useFactoryPayroll() {
     },
     onError: (err: Error) => {
       if (err?._handledGlobally) return;
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Update failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -465,7 +465,7 @@ export default function useFactoryPayroll() {
     },
     onError: (err: Error) => {
       if (err?._handledGlobally) return;
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Fix failed", description: err.message, variant: "destructive" });
     },
   });
 

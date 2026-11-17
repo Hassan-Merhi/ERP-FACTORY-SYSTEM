@@ -326,7 +326,7 @@ export default function LocationInventory({ posUser }: { posUser?: AuthMe } = {}
                           onClick={() => setCreateLocationOpen(true)}
                           data-testid="button-create-location"
                         >
-                          <Plus className="h-4 w-4" /> Create Location
+                          <Plus className="h-4 w-4" /> Add Location
                         </Button>
                       )}
                     </div>

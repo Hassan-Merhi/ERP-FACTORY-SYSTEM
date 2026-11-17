@@ -21,6 +21,8 @@ interface DailyExportTabProps {
   waReady: boolean;
   sendingWa: boolean;
   sendViaWhatsApp: () => void;
+  /** Admin / Owner / Developer only; the server returns 403 to everyone else. */
+  canSendWa: boolean;
   showCompanies: boolean;
   setShowCompanies: (v: boolean | ((v: boolean) => boolean)) => void;
   showHistory: boolean;
@@ -48,6 +50,7 @@ export function DailyExportTab({
   waReady,
   sendingWa,
   sendViaWhatsApp,
+  canSendWa,
   showCompanies,
   setShowCompanies,
   showHistory,
@@ -173,16 +176,18 @@ export function DailyExportTab({
                 <Mail className="mr-2 h-4 w-4" />
                 Send by email
               </Button>
-              <Button
-                variant="outline"
-                className="h-11 justify-start"
-                onClick={sendViaWhatsApp}
-                disabled={!waReady || sendingWa}
-                data-testid="menu-export-whatsapp"
-              >
-                <MessageSquare className="mr-2 h-4 w-4 text-green-600" />
-                {sendingWa ? "Sending…" : "Send to WhatsApp"}
-              </Button>
+              {canSendWa && (
+                <Button
+                  variant="outline"
+                  className="h-11 justify-start"
+                  onClick={sendViaWhatsApp}
+                  disabled={!waReady || sendingWa}
+                  data-testid="menu-export-whatsapp"
+                >
+                  <MessageSquare className="mr-2 h-4 w-4 text-green-600" />
+                  {sendingWa ? "Sending…" : "Send to WhatsApp"}
+                </Button>
+              )}
             </div>
             <p className="mt-2 text-xs text-muted-foreground">
               {fromDate || toDate ? `Selected range: ${fromDate || "—"} to ${toDate || "—"}` : "Full history selected"}

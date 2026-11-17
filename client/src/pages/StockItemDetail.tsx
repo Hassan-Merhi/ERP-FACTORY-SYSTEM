@@ -121,7 +121,10 @@ const formatSmartNumber = (value: string | number) => {
 export default function StockItemDetail() {
   const { formatDisplayDate } = useDateFormat();
   const { formatAmount } = useCurrencyContext();
-  const [, params] = useRoute("/stock-query/:id");
+  const [, erpParams] = useRoute("/stock-query/:id");
+  const [, propertiesParams] = useRoute("/properties/stock-query/:id");
+  const isProperties = propertiesParams != null;
+  const params = propertiesParams ?? erpParams;
   const [, navigate] = useLocation();
   const itemId = params?.id ? parseInt(params.id) : null;
 
@@ -194,7 +197,8 @@ export default function StockItemDetail() {
   const search = useSearch();
   const from = new URLSearchParams(search).get("from");
   const handleBack = () => {
-    if (from === "pos-daybook") navigate("/pos-daybook");
+    if (isProperties) navigate(from === "daybook" ? "/properties/daybook" : "/properties/stock?tab=query");
+    else if (from === "pos-daybook") navigate("/pos-daybook");
     else if (from === "daybook") navigate("/daybook");
     else navigate("/stock-query");
   };
@@ -202,7 +206,8 @@ export default function StockItemDetail() {
 
   const handleSaleClick = (sale: Sale) => {
     if (!sale.voucherId) return;
-    if (sale.posStation != null)
+    if (isProperties) navigate(`/properties/vouchers/${sale.voucherId}/edit`);
+    else if (sale.posStation != null)
       navigate(`/pos-daybook?date=${sale.saleDate.split(" ")[0]}&voucherId=${sale.voucherId}`);
     else navigate(`/vouchers/${sale.voucherId}/edit`);
   };

@@ -94,14 +94,14 @@ export default function OrphanedRecordsPage() {
       return modeApiRequest("POST", `/api/stock-group-archives/${archiveId}/restore`);
     },
     onSuccess: () => {
-      toast({ title: "Success", description: "Stock group inventory restored successfully" });
+      toast({ title: "Restored", description: "Stock group inventory restored successfully" });
       queryClient.invalidateQueries({ queryKey: ["/api/stock-group-archives"] });
       queryClient.invalidateQueries({ queryKey: ["/api/stock-items"] });
       queryClient.invalidateQueries({ queryKey: ["/api/stock-items/light"] });
     },
     onError: (error: ClientErrorLike) => {
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Restore failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -110,12 +110,12 @@ export default function OrphanedRecordsPage() {
       return modeApiRequest("DELETE", `/api/stock-group-archives/${archiveId}?permanent=${permanent}`);
     },
     onSuccess: () => {
-      toast({ title: "Success", description: "Archive deleted successfully" });
+      toast({ title: "Deleted", description: "Archive deleted successfully" });
       queryClient.invalidateQueries({ queryKey: ["/api/stock-group-archives"] });
     },
     onError: (error: ClientErrorLike) => {
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Delete failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -126,7 +126,7 @@ export default function OrphanedRecordsPage() {
     onSuccess: async (res) => {
       const data = (await res.json()) as { updated: number; newLocationName: string };
       toast({
-        title: "Success",
+        title: "Updated",
         description: `${data.updated} records reassigned to ${data.newLocationName}`,
       });
       queryClient.invalidateQueries({ queryKey: ["/api/orphaned-records"] });
@@ -136,7 +136,7 @@ export default function OrphanedRecordsPage() {
     },
     onError: (error: ClientErrorLike) => {
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Reassign failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -156,7 +156,7 @@ export default function OrphanedRecordsPage() {
     },
     onError: (error: ClientErrorLike) => {
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Delete failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -174,11 +174,11 @@ export default function OrphanedRecordsPage() {
 
   const handleReassign = () => {
     if (selectedVouchers.length === 0) {
-      toast({ title: "Error", description: "Please select records to reassign", variant: "destructive" });
+      toast({ title: "Missing information", description: "Please select records to reassign", variant: "destructive" });
       return;
     }
     if (!selectedLocation) {
-      toast({ title: "Error", description: "Please select a location", variant: "destructive" });
+      toast({ title: "Missing information", description: "Please select a location", variant: "destructive" });
       return;
     }
     reassignMutation.mutate({

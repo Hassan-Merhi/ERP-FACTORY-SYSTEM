@@ -53,7 +53,7 @@ export function SupplierObEdit() {
     },
     onError: (err: Error) => {
       if (err?._handledGlobally) return;
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Save failed", description: err.message, variant: "destructive" });
     },
   });
 
