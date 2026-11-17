@@ -3,7 +3,6 @@ import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   ChevronLeft,
-  Download,
   ChevronRight,
   ScanLine,
   X,
@@ -285,7 +284,7 @@ export default function DailyScan() {
       });
       await exportOperationalWorkbook({
         title: "Factory Daily Scan",
-        fileName: "daily-scan_" + selectedDate + ".xlsx",
+        fileName: "daily-scan-" + selectedDate + ".xlsx",
         filters: [
           { label: "Production date", value: formatDisplay(selectedDate) },
           { label: "Scanned", value: scanned.length + "/" + totalBales },
