@@ -54,8 +54,9 @@ describe("Factory Dispatch Phase 9 — order-wide reporting, immutable history a
     expect(workbook).toContain("ERP PO Files");
     expect(workbook).toContain("Invoice & Postings");
     expect(workbook).toContain("Audit History");
-    expect(workbook).toContain('orientation:"landscape"');
-    expect(workbook).toContain('"+t:t');
+    expect(workbook).toMatch(/orientation:\s*"landscape"/);
+    // Formula-injection guard: a leading = + @ - is prefixed with an apostrophe.
+    expect(workbook).toMatch(/"'"\s*\+\s*t\s*:\s*t/);
     expect(workbook).toContain("NO — Factory cannot confirm");
     expect(workbook).toContain("1,000 newest events");
     expect(routes).toContain("writeWorkbookToResponse");

@@ -368,9 +368,16 @@ describe("XLSX Export — Daily Production Report", () => {
     const res = await getBinary(agent, "/api/factory/daily-report/export?format=excel");
     const wb = await loadWorkbook(res.body as Buffer);
     const ws = wb.getWorksheet("Production Report")!;
-    const headers: string[] = [];
-    ws.getRow(1).eachCell((cell) => {
-      if (cell.value) headers.push(String(cell.value));
+    // The universal workbook puts report metadata above the table, so the
+    // column headers are the first row that contains "Date".
+    let headers: string[] = [];
+    ws.eachRow((row) => {
+      if (headers.length) return;
+      const cells: string[] = [];
+      row.eachCell((cell) => {
+        if (cell.value) cells.push(String(cell.value));
+      });
+      if (cells.includes("Date")) headers = cells;
     });
     expect(headers).toContain("Date");
     expect(headers).toContain("Batch Code");

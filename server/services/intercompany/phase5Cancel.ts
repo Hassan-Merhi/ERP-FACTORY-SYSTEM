@@ -88,9 +88,7 @@ export async function cancelUnreceivedTrade(input: CancelIntercompanyTradeInput,
     db.transaction(async (tx) => {
       // Same source-company lock order as import, edits, shared invoices and Phase 4 cash.
       await tx.execute(
-        sql.raw(
-          "SELECT pg_advisory_xact_lock(" + INTERCOMPANY_PAYMENT_LOCK_NAMESPACE + "," + trade.sourceCompanyId + ")"
-        )
+        sql`SELECT pg_advisory_xact_lock(${INTERCOMPANY_PAYMENT_LOCK_NAMESPACE},${trade.sourceCompanyId})`
       );
       const [fresh] = await tx
         .select()
@@ -186,7 +184,7 @@ export async function cancelUnreceivedTrade(input: CancelIntercompanyTradeInput,
       for (const entry of events) {
         net.set(entry.paymentId, (net.get(entry.paymentId) ?? new MoneyDecimal(0)).plus(entry.amount));
       }
-      await tx.execute(sql.raw("SELECT set_config('erp.ic_phase5_cancel','" + fresh.id + "',true)"));
+      await tx.execute(sql`SELECT set_config('erp.ic_phase5_cancel', ${String(fresh.id)}, true)`);
       let totalReleased = new MoneyDecimal(0);
       for (const [paymentId, money] of [...net].sort((a, b) => a[0] - b[0])) {
         if (money.lt(0)) rejectEdit("Original payment allocation has a negative balance", "IC_CANCEL_CREDIT");
