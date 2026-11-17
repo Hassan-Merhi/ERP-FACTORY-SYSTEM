@@ -110,7 +110,10 @@ export function CompaniesTab() {
 
   const deleteCompanyMutation = useMutation({
     mutationFn: async (id: number) => {
-      const res = await apiRequest("DELETE", `/api/companies/${id}`, { forceDeleteWithHistory, confirmedCompanyCode: deleteConfirmationCode });
+      const res = await apiRequest("DELETE", `/api/companies/${id}`, {
+        forceDeleteWithHistory,
+        confirmedCompanyCode: deleteConfirmationCode,
+      });
       return res.json();
     },
     onSuccess: () => {
@@ -424,20 +427,24 @@ export function CompaniesTab() {
       </div>
 
       <div className="flex flex-wrap items-center gap-4">
-      {companies.length > 3 && (
-        <SearchField
-          placeholder="Search companies…"
-          value={companySearch}
-          onValueChange={setCompanySearch}
-          wrapperClassName="max-w-xs"
-          data-testid="input-company-search"
-        />
-      )}
+        {companies.length > 3 && (
+          <SearchField
+            placeholder="Search companies…"
+            value={companySearch}
+            onValueChange={setCompanySearch}
+            wrapperClassName="max-w-xs"
+            data-testid="input-company-search"
+          />
+        )}
 
-      <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
-        <Checkbox checked={showInactive} onCheckedChange={(checked) => setShowInactive(checked === true)} data-testid="checkbox-show-inactive-companies" />
-        Show inactive ({companies.filter((company) => !company.active).length})
-      </label>
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
+          <Checkbox
+            checked={showInactive}
+            onCheckedChange={(checked) => setShowInactive(checked === true)}
+            data-testid="checkbox-show-inactive-companies"
+          />
+          Show inactive ({companies.filter((company) => !company.active).length})
+        </label>
       </div>
 
       {isLoadingCompanies ? (
@@ -458,7 +465,9 @@ export function CompaniesTab() {
         (() => {
           const q = companySearch.toLowerCase();
           const filtered = companies.filter(
-            (c) => (showInactive ? !c.active : c.active) && (!q || c.name?.toLowerCase().includes(q) || c.code?.toLowerCase().includes(q))
+            (c) =>
+              (showInactive ? !c.active : c.active) &&
+              (!q || c.name?.toLowerCase().includes(q) || c.code?.toLowerCase().includes(q))
           );
 
           if (filtered.length === 0) {
@@ -571,15 +580,21 @@ export function CompaniesTab() {
                       >
                         <Edit className="h-4 w-4" />
                       </Button>
-                      {!company.active && <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => { setCompanyToDelete(company); setDeleteConfirmationCode(""); setForceDeleteWithHistory(false); }}
-                        data-testid={`button-delete-company-${company.id}`}
-                        title="Delete company"
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>}
+                      {!company.active && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => {
+                            setCompanyToDelete(company);
+                            setDeleteConfirmationCode("");
+                            setForceDeleteWithHistory(false);
+                          }}
+                          data-testid={`button-delete-company-${company.id}`}
+                          title="Delete company"
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      )}
                     </div>
                   </div>
                 );
@@ -589,7 +604,16 @@ export function CompaniesTab() {
         })()
       )}
 
-      <AlertDialog open={!!companyToDelete} onOpenChange={(open) => { if (!open) { setCompanyToDelete(null); setDeleteConfirmationCode(""); setForceDeleteWithHistory(false); } }}>
+      <AlertDialog
+        open={!!companyToDelete}
+        onOpenChange={(open) => {
+          if (!open) {
+            setCompanyToDelete(null);
+            setDeleteConfirmationCode("");
+            setForceDeleteWithHistory(false);
+          }
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Company</AlertDialogTitle>
@@ -599,7 +623,8 @@ export function CompaniesTab() {
                   Are you sure you want to delete <strong>{companyToDelete?.name}</strong>?
                 </p>
                 <p className="text-destructive font-medium">
-                  Inactive companies may be permanently deleted. Select the financial-history option below if the company has transactions or balances. Deletion removes associated records, including:
+                  Inactive companies may be permanently deleted. Select the financial-history option below if the
+                  company has transactions or balances. Deletion removes associated records, including:
                 </p>
                 <ul className="list-disc list-inside text-sm space-y-1 ml-2">
                   <li>All locations and inventory</li>
@@ -611,13 +636,26 @@ export function CompaniesTab() {
                 </ul>
                 <p className="font-bold text-destructive mt-2">This action cannot be undone!</p>
                 <label className="flex items-start gap-2 text-sm">
-                  <Checkbox checked={forceDeleteWithHistory} onCheckedChange={(checked) => setForceDeleteWithHistory(checked === true)} data-testid="checkbox-force-delete-history" />
+                  <Checkbox
+                    checked={forceDeleteWithHistory}
+                    onCheckedChange={(checked) => setForceDeleteWithHistory(checked === true)}
+                    data-testid="checkbox-force-delete-history"
+                  />
                   Permanently remove accounting history too (vouchers, inventory, closures and balances)
                 </label>
                 {forceDeleteWithHistory && (
                   <div className="space-y-1">
-                    <p className="text-sm">Type company code <strong>{companyToDelete?.code}</strong> to confirm permanent deletion of its financial records.</p>
-                    <Input value={deleteConfirmationCode} onChange={(event) => setDeleteConfirmationCode(event.target.value)} placeholder="Exact company code" data-testid="input-force-delete-company-code" autoComplete="off" />
+                    <p className="text-sm">
+                      Type company code <strong>{companyToDelete?.code}</strong> to confirm permanent deletion of its
+                      financial records.
+                    </p>
+                    <Input
+                      value={deleteConfirmationCode}
+                      onChange={(event) => setDeleteConfirmationCode(event.target.value)}
+                      placeholder="Exact company code"
+                      data-testid="input-force-delete-company-code"
+                      autoComplete="off"
+                    />
                   </div>
                 )}
               </div>
@@ -628,7 +666,10 @@ export function CompaniesTab() {
             <AlertDialogAction
               onClick={() => companyToDelete && deleteCompanyMutation.mutate(companyToDelete.id)}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              disabled={deleteCompanyMutation.isPending || (forceDeleteWithHistory && deleteConfirmationCode !== companyToDelete?.code)}
+              disabled={
+                deleteCompanyMutation.isPending ||
+                (forceDeleteWithHistory && deleteConfirmationCode !== companyToDelete?.code)
+              }
               data-testid="button-confirm-delete-company"
             >
               {deleteCompanyMutation.isPending ? "Deleting..." : "Delete Company"}
