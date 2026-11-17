@@ -45,7 +45,8 @@ assert.match(
 );
 assert.match(
   stockEntrySource,
-  /getNextPageParam: \(lastPage\) => lastPage\.hasNextPage \? lastPage\.page \+ 1 : undefined/,
+  // Prettier may wrap the conditional in parentheses; both forms are the same code.
+  /getNextPageParam: \(lastPage\) => \(?lastPage\.hasNextPage \? lastPage\.page \+ 1 : undefined\)?/,
   "Stock Entry History must keep fetching pages until the server reports no next page"
 );
 assert.match(

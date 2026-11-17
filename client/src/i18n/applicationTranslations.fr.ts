@@ -272,6 +272,9 @@ export const applicationFrenchTranslations = {
   "offline.coldStart.banner":
     "Hors ligne : les saisies possibles hors ligne sont enregistrées sur cet ordinateur et envoyées au retour de la connexion",
   "offline.coldStart.until": "Les données en cache restent consultables jusqu'au",
+  "export.download.empty": "Le serveur a renvoyé un export vide (0 octet). Veuillez réessayer ou contacter le support.",
+  "export.download.invalidExcel":
+    "Le serveur a renvoyé un fichier Excel invalide. Veuillez réessayer ou contacter le support.",
   "offline.coldStart.unlockTitle": "Aucune connexion au cloud ni au serveur de l'usine",
   "offline.coldStart.unlockBody":
     "Saisissez la phrase secrète des données hors ligne définie sur cet ordinateur pour consulter les données préparées lors de votre dernière connexion. Rien ne peut être modifié avant la reconnexion.",
