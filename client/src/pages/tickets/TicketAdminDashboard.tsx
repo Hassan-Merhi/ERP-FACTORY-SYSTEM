@@ -6,6 +6,7 @@ import { ExportButton } from "@/components/export/ReportExportMenu";
 import { downloadBlob } from "@/lib/downloadBlob";
 import { exportFileName } from "@/lib/exportFile";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type ReportFilters = {
   from: string;
@@ -170,45 +171,54 @@ export default function TicketAdminDashboard({
           </label>
           <label className="space-y-1 text-sm">
             Status
-            <select
-              className="h-10 w-full rounded-md border bg-background px-2"
-              value={filters.status}
-              onChange={(e) => set("status", e.target.value)}
-            >
-              <option value="">All statuses</option>
-              {["open", "seen", "working", "finalized", "reopened"].map((x) => (
-                <option key={x} value={x}>
-                  {x}
-                </option>
-              ))}
-            </select>
+            <Select value={filters.status || "__all__"} onValueChange={(v) => set("status", v === "__all__" ? "" : v)}>
+              <SelectTrigger className="h-10 w-full px-2" aria-label="Status">
+                <SelectValue placeholder="All statuses" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">All statuses</SelectItem>
+                {["open", "seen", "working", "finalized", "reopened"].map((x) => (
+                  <SelectItem key={x} value={x}>
+                    {x}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
           <label className="space-y-1 text-sm">
             Priority
-            <select
-              className="h-10 w-full rounded-md border bg-background px-2"
-              value={filters.priority}
-              onChange={(e) => set("priority", e.target.value)}
+            <Select
+              value={filters.priority || "__all__"}
+              onValueChange={(v) => set("priority", v === "__all__" ? "" : v)}
             >
-              <option value="">All priorities</option>
-              {["low", "normal", "high", "urgent"].map((x) => (
-                <option key={x} value={x}>
-                  {x}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger className="h-10 w-full px-2" aria-label="Priority">
+                <SelectValue placeholder="All priorities" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">All priorities</SelectItem>
+                {["low", "normal", "high", "urgent"].map((x) => (
+                  <SelectItem key={x} value={x}>
+                    {x}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
           <label className="space-y-1 text-sm">
             Source
-            <select
-              className="h-10 w-full rounded-md border bg-background px-2"
-              value={filters.sourceMode}
-              onChange={(e) => set("sourceMode", e.target.value)}
+            <Select
+              value={filters.sourceMode || "__all__"}
+              onValueChange={(v) => set("sourceMode", v === "__all__" ? "" : v)}
             >
-              <option value="">ERP + Factory</option>
-              <option value="erp">ERP</option>
-              <option value="factory">Factory</option>
-            </select>
+              <SelectTrigger className="h-10 w-full px-2" aria-label="Source">
+                <SelectValue placeholder="ERP + Factory" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">ERP + Factory</SelectItem>
+                <SelectItem value="erp">ERP</SelectItem>
+                <SelectItem value="factory">Factory</SelectItem>
+              </SelectContent>
+            </Select>
           </label>
           <label className="space-y-1 text-sm">
             Issue category
@@ -221,18 +231,22 @@ export default function TicketAdminDashboard({
           </label>
           <label className="space-y-1 text-sm">
             Assigned employee
-            <select
-              className="h-10 w-full rounded-md border bg-background px-2"
-              value={filters.assignedTo}
-              onChange={(e) => set("assignedTo", e.target.value)}
+            <Select
+              value={filters.assignedTo || "__all__"}
+              onValueChange={(v) => set("assignedTo", v === "__all__" ? "" : v)}
             >
-              <option value="">All employees</option>
-              {employees.data?.users.map((user) => (
-                <option key={user.id} value={user.id}>
-                  {user.username}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger className="h-10 w-full px-2" aria-label="Assigned employee">
+                <SelectValue placeholder="All employees" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">All employees</SelectItem>
+                {employees.data?.users.map((user) => (
+                  <SelectItem key={user.id} value={String(user.id)}>
+                    {user.username}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
         </div>
         <div className="flex flex-wrap justify-end gap-2">

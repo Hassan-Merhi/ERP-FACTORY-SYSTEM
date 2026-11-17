@@ -18,12 +18,13 @@ import { useToast } from "@/hooks/use-toast";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { PageHeader } from "@/components/PageHeader";
-import { Plus, Truck, Package, Filter, ChevronRight, Search, BarChart2 } from "lucide-react";
+import { Plus, Truck, Package, Filter, ChevronRight, BarChart2 } from "lucide-react";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { visibleTabInterval } from "@/lib/queryPolicies";
 import type { FactoryMyAccess } from "@shared/apiTypes";
 import { useCompany } from "@/contexts/CompanyContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
+import { SearchField } from "@/components/ui/search-field";
 
 interface Customer {
   id: number;
@@ -469,16 +470,13 @@ export default function FactoryDispatchBatches() {
                   </div>
                   <div className="flex flex-col gap-1">
                     <Label className="text-xs text-muted-foreground">Search</Label>
-                    <div className="relative">
-                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                      <Input
-                        className="pl-8 w-52"
-                        placeholder="Batch #, customer, invoice..."
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        data-testid="input-search-batches"
-                      />
-                    </div>
+                    <SearchField
+                      wrapperClassName="w-52"
+                      placeholder="Batch #, customer, invoice..."
+                      value={search}
+                      onValueChange={setSearch}
+                      data-testid="input-search-batches"
+                    />
                   </div>
                   {(filterCustomer !== "_all" || filterStatus !== "_all" || search) && (
                     <Button

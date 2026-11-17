@@ -4,14 +4,12 @@ import { getErrorDetails } from "@shared/errorUtils";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient as useTQClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   Radio,
   Loader2,
-  Search,
   Package,
   Pencil,
   Ship,
@@ -52,6 +50,7 @@ import { useOtwCsvTools } from "./factoryotwtrackingtab/hooks/useOtwCsvTools";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import type { AuthMe } from "@shared/apiTypes";
 import { ExportButton } from "@/components/export/ReportExportMenu";
+import { SearchField } from "@/components/ui/search-field";
 export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = {}) {
   const { toast } = useToast();
   const { selectedCompany } = useCompany();
@@ -352,16 +351,14 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
         className="rounded-2xl border border-border/70 bg-card p-3 shadow-sm sm:p-4"
       >
         <div className="flex flex-wrap items-center gap-2.5">
-          <div className="relative min-w-[210px] flex-[2_1_320px]">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search container # or supplier..."
-              className="h-10 rounded-xl bg-background/80 pl-10"
-              data-testid="input-otw-search"
-            />
-          </div>
+          <SearchField
+            value={search}
+            onValueChange={setSearch}
+            placeholder="Search container # or supplier..."
+            wrapperClassName="min-w-[210px] flex-[2_1_320px]"
+            className="h-10 rounded-xl bg-background/80"
+            data-testid="input-otw-search"
+          />
           <div className="min-w-[150px] flex-[1_1_155px]">
             <Select value={supplierFilter} onValueChange={setSupplierFilter}>
               <SelectTrigger className="h-10 rounded-xl" data-testid="select-supplier-filter">

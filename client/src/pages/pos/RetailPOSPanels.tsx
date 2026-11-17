@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RetailItemImage } from "./RetailScanFeedback";
 import { money, type CartLine, type RetailSale } from "./retailPosTypes";
 import type { RetailReceiptPaperWidth } from "./retailReceipt";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 /** One cart line: exact variant, availability, line adjustment and quantity controls. */
 export function RetailCartLineRow({
@@ -131,17 +132,20 @@ export function RetailLastSaleSummary({
         <label htmlFor="retail-receipt-width" className="sr-only">
           Thermal receipt paper width
         </label>
-        <select
-          id="retail-receipt-width"
-          aria-label="Thermal receipt paper width"
-          data-testid="retail-receipt-paper-width"
-          className="h-9 rounded-md border bg-background px-2 text-sm"
-          value={paperWidth}
-          onChange={(event) => onPaperWidthChange(event.target.value === "58" ? 58 : 80)}
-        >
-          <option value={80}>80 mm</option>
-          <option value={58}>58 mm</option>
-        </select>
+        <Select value={String(paperWidth)} onValueChange={(v) => onPaperWidthChange(v === "58" ? 58 : 80)}>
+          <SelectTrigger
+            id="retail-receipt-width"
+            aria-label="Thermal receipt paper width"
+            data-testid="retail-receipt-paper-width"
+            className="h-9 w-auto text-sm"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="80">80 mm</SelectItem>
+            <SelectItem value="58">58 mm</SelectItem>
+          </SelectContent>
+        </Select>
         <ExportButton
           kind="print"
           label="Print receipt"

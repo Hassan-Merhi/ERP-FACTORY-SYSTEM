@@ -1,6 +1,7 @@
+import { SearchField } from "@/components/ui/search-field";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Plus, Search, X } from "lucide-react";
+import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -235,31 +236,20 @@ export default function BaleProductsBilingual({ embedded = false }: { embedded?:
             </Select>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <div className="relative min-w-[220px] flex-1 sm:flex-none">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-              <Input
-                value={catalogSearch}
-                onChange={(event) => setCatalogSearch(event.target.value)}
-                placeholder={
-                  language === "ar"
-                    ? "بحث بالعربي أو الإنجليزي أو الرمز..."
-                    : language === "fr"
-                      ? "Rechercher en français, anglais, arabe ou par code..."
-                      : "Search English, Arabic, or article code..."
-                }
-                className="h-10 w-full min-w-0 rounded-xl border-slate-300 bg-white/90 pl-9 pr-8 text-sm shadow-sm sm:w-80 dark:border-blue-300/20 dark:bg-[#0d192c]"
-                dir="auto"
-              />
-              {catalogSearch && (
-                <button
-                  type="button"
-                  onClick={() => setCatalogSearch("")}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </div>
+            <SearchField
+              value={catalogSearch}
+              onValueChange={setCatalogSearch}
+              placeholder={
+                language === "ar"
+                  ? "بحث بالعربي أو الإنجليزي أو الرمز..."
+                  : language === "fr"
+                    ? "Rechercher en français, anglais, arabe ou par code..."
+                    : "Search English, Arabic, or article code..."
+              }
+              wrapperClassName="min-w-[220px] flex-1 sm:w-80 sm:flex-none"
+              className="h-10 rounded-xl border-slate-300 bg-white/90 text-sm shadow-sm dark:border-blue-300/20 dark:bg-[#0d192c]"
+              dir="auto"
+            />
             {isAdmin && recordChanges.canCreate("POST", "/api/factory/categories") && (
               <Button
                 type="button"

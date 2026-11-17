@@ -5,6 +5,8 @@ import { useToast } from "@/hooks/use-toast";
 import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { getJson, money, type Brand, type Location, type RetailCatalogFacets } from "./retailInventoryTypes";
 
@@ -40,6 +42,40 @@ interface SalesRow {
 }
 
 type ReportKind = "stock" | "sales";
+
+const selectClass = "h-10 px-2 text-sm";
+const ALL = "__all__";
+
+/** Filter dropdown whose "All" choice keeps the empty-string state value. */
+function FilterSelect({
+  label,
+  allLabel,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  allLabel: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: Array<{ value: string; label: string }>;
+}) {
+  return (
+    <Select value={value || ALL} onValueChange={(v) => onChange(v === ALL ? "" : v)}>
+      <SelectTrigger className={selectClass} aria-label={label}>
+        <SelectValue placeholder={allLabel} />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value={ALL}>{allLabel}</SelectItem>
+        {options.map((option) => (
+          <SelectItem key={option.value} value={option.value}>
+            {option.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
 
 const STATUS_OPTIONS = [
   { value: "all", label: "All stock" },
@@ -124,7 +160,6 @@ export function RetailVariantReports({ companyKey }: { companyKey: number }) {
     }
   };
 
-  const selectClass = "h-10 rounded-md border bg-background px-2 text-sm";
   const stockRows = kind === "stock" ? (rows as StockRow[]) : [];
   const salesRows = kind === "sales" ? (rows as SalesRow[]) : [];
 
@@ -150,50 +185,55 @@ export function RetailVariantReports({ companyKey }: { companyKey: number }) {
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-8">
-          <Input
-            className="col-span-2"
+          <SearchField
+            wrapperClassName="col-span-2"
             placeholder="Style, brand, barcode or SKU…"
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
+            onValueChange={setSearch}
           />
-          <select className={selectClass} value={brandId} onChange={(event) => setBrandId(event.target.value)}>
-            <option value="">All brands</option>
-            {brands.map((brand) => (
-              <option key={brand.id} value={brand.id}>
-                {brand.name}
-              </option>
-            ))}
-          </select>
-          <select className={selectClass} value={color} onChange={(event) => setColor(event.target.value)}>
-            <option value="">All colors</option>
-            {(facets?.colors ?? []).map((value) => (
-              <option key={value}>{value}</option>
-            ))}
-          </select>
-          <select className={selectClass} value={size} onChange={(event) => setSize(event.target.value)}>
-            <option value="">All sizes</option>
-            {(facets?.sizes ?? []).map((value) => (
-              <option key={value}>{value}</option>
-            ))}
-          </select>
-          <select className={selectClass} value={locationId} onChange={(event) => setLocationId(event.target.value)}>
-            <option value="">All locations</option>
-            {locations
+          <FilterSelect
+            label="Brand"
+            allLabel="All brands"
+            value={brandId}
+            onChange={setBrandId}
+            options={brands.map((brand) => ({ value: String(brand.id), label: brand.name }))}
+          />
+          <FilterSelect
+            label="Color"
+            allLabel="All colors"
+            value={color}
+            onChange={setColor}
+            options={(facets?.colors ?? []).map((value) => ({ value, label: value }))}
+          />
+          <FilterSelect
+            label="Size"
+            allLabel="All sizes"
+            value={size}
+            onChange={setSize}
+            options={(facets?.sizes ?? []).map((value) => ({ value, label: value }))}
+          />
+          <FilterSelect
+            label="Location"
+            allLabel="All locations"
+            value={locationId}
+            onChange={setLocationId}
+            options={locations
               .filter((location) => location.id > 0 && location.active !== false)
-              .map((location) => (
-                <option key={location.id} value={location.id}>
-                  {location.name}
-                </option>
-              ))}
-          </select>
+              .map((location) => ({ value: String(location.id), label: location.name }))}
+          />
           {kind === "stock" ? (
-            <select className={selectClass} value={status} onChange={(event) => setStatus(event.target.value)}>
-              {STATUS_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+            <Select value={status} onValueChange={setStatus}>
+              <SelectTrigger className={selectClass} aria-label="Stock status">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {STATUS_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           ) : (
             <>
               <Input type="date" aria-label="From" value={from} onChange={(event) => setFrom(event.target.value)} />

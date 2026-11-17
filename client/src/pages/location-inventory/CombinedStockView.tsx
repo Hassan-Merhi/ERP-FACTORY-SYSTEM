@@ -1,8 +1,7 @@
-import { Package, Warehouse, Search, ChevronDown } from "lucide-react";
+import { Package, Warehouse, ChevronDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -18,6 +17,7 @@ import type {
   InventoryLocationOption,
 } from "./locationInventoryTypes";
 import { useMobileCardTable } from "@/components/ui/mobile-card-table";
+import { SearchField } from "@/components/ui/search-field";
 
 type StockCategory = { id: number; name: string; active: boolean };
 
@@ -114,16 +114,13 @@ export function CombinedStockView({
       <Card className="w-full">
         {/* Filters row */}
         <div className="flex flex-col sm:flex-row flex-wrap gap-3 p-4 border-b">
-          <div className="relative flex-1 min-w-48">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search items by name or code..."
-              value={allStockSearchTerm}
-              onChange={(e) => setAllStockSearchTerm(e.target.value)}
-              className="pl-10"
-              data-testid="input-all-stock-search"
-            />
-          </div>
+          <SearchField
+            placeholder="Search items by name or code..."
+            value={allStockSearchTerm}
+            onValueChange={setAllStockSearchTerm}
+            wrapperClassName="flex-1 min-w-48"
+            data-testid="input-all-stock-search"
+          />
           <Select
             value={allStockGroupFilter || "__all__"}
             onValueChange={(v) => setAllStockGroupFilter(v === "__all__" ? "" : v)}

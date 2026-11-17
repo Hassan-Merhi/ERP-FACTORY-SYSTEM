@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Loader2, Search, SlidersHorizontal } from "lucide-react";
+import { Loader2, SlidersHorizontal } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,6 +24,7 @@ import { factoryApiRequest } from "@/lib/factoryApi";
 import { queryClient } from "@/lib/queryClient";
 import type { PeriodType, ProductionRow } from "../factoryProductionTargetsModel";
 import { ProductionWorkerLinkControl } from "./ProductionWorkerLinkControl";
+import { SearchField } from "@/components/ui/search-field";
 
 interface ProductionTargetsEditorDialogProps {
   open: boolean;
@@ -116,9 +117,7 @@ export function ProductionTargetsEditorDialog({
 
   const updateRow = (personId: number, patch: Partial<ProductionRow>) => {
     // Linked tablemates can have different daily targets.
-    setDraftRows((current) =>
-      current.map((row) => (row.personId === personId ? { ...row, ...patch } : row))
-    );
+    setDraftRows((current) => current.map((row) => (row.personId === personId ? { ...row, ...patch } : row)));
   };
 
   const categoryOverrideState = (row: ProductionRow) => {
@@ -232,16 +231,13 @@ export function ProductionTargetsEditorDialog({
         </DialogHeader>
 
         <div className="flex shrink-0 flex-wrap items-center gap-2 border-b px-5 py-3">
-          <div className="relative min-w-[220px] flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder={tr("searchNameCodeCategory")}
-              className="pl-9"
-              data-testid="input-production-editor-search"
-            />
-          </div>
+          <SearchField
+            value={search}
+            onValueChange={setSearch}
+            placeholder={tr("searchNameCodeCategory")}
+            wrapperClassName="min-w-[220px] flex-1"
+            data-testid="input-production-editor-search"
+          />
           <Select value={categoryFilter} onValueChange={setCategoryFilter}>
             <SelectTrigger className="w-[190px]" data-testid="select-production-editor-category">
               <SelectValue />

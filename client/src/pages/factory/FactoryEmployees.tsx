@@ -6,7 +6,6 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import {
   Plus,
-  Search,
   Pencil,
   Users,
   UserX,
@@ -40,6 +39,7 @@ import { queryClient } from "@/lib/queryClient";
 import { useCompany } from "@/contexts/CompanyContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
 import { factoryApiRequest } from "@/lib/factoryApi";
+import { SearchField } from "@/components/ui/search-field";
 
 interface Employee {
   id: number;
@@ -338,16 +338,14 @@ export default function FactoryEmployees() {
 
       {/* Filter row */}
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-        <div className="relative min-w-[200px] flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search employees..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="h-11 rounded-xl border-border/70 bg-card/80 pl-10 shadow-sm focus-visible:ring-emerald-500/30"
-            data-testid="input-employee-search"
-          />
-        </div>
+        <SearchField
+          placeholder="Search employees..."
+          value={search}
+          onValueChange={setSearch}
+          wrapperClassName="min-w-[200px] flex-1"
+          className="h-11 rounded-xl border-border/70 bg-card/80 shadow-sm focus-visible:ring-emerald-500/30"
+          data-testid="input-employee-search"
+        />
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger
             className="h-11 w-full rounded-xl border-border/70 bg-card/80 shadow-sm sm:w-36"

@@ -10,7 +10,12 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { apiRequest } from "@/lib/queryClient";
 import { RetailPhotoGallery } from "@/pages/retail/RetailProductImage";
 import { makeKey, money, readJson, type RetailSale } from "./retailPosTypes";
-import { paymentFromAccount, RetailPaymentAccountOptions, type RetailPaymentAccounts } from "./RetailPaymentAccountSelect";
+import {
+  paymentFromAccount,
+  RetailPaymentAccountOptions,
+  type RetailPaymentAccounts,
+} from "./RetailPaymentAccountSelect";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type Destination = "original" | "customer_credit" | "account";
 type ReturnLine = { quantity: number; restock: boolean };
@@ -147,14 +152,21 @@ export function RetailReturnDialog({
       return;
     }
     // The same exact retry uses one key; edited lines/options use a fresh key.
-    const signature = JSON.stringify({ saleId: sale.id, locationId, returned, destination, refundAccount, reason: reason.trim() });
+    const signature = JSON.stringify({
+      saleId: sale.id,
+      locationId,
+      returned,
+      destination,
+      refundAccount,
+      reason: reason.trim(),
+    });
     if (!attempt.current || attempt.current.signature !== signature) {
       attempt.current = { signature, key: makeKey("retail-return") };
     }
     setSubmitting(true);
     try {
-      const chosenAccount = destination === "account" && accounts
-        ? paymentFromAccount(refundAccount, 1, accounts) : null;
+      const chosenAccount =
+        destination === "account" && accounts ? paymentFromAccount(refundAccount, 1, accounts) : null;
       const response = await apiRequest("POST", `/api/pos/retail/sales/${sale.id}/returns`, {
         locationId,
         shiftId: shiftId ?? undefined,
@@ -169,7 +181,9 @@ export function RetailReturnDialog({
       const outcome =
         destination === "customer_credit"
           ? "Credited to customer account"
-          : destination === "account" ? "Refunded through selected account" : "Reversed / refunded against original tenders";
+          : destination === "account"
+            ? "Refunded through selected account"
+            : "Reversed / refunded against original tenders";
       toast({
         title: data.replayed ? "Return already recorded" : "Return completed",
         description: `${outcome}: ${money(data.refundAmount)}`,
@@ -354,18 +368,20 @@ export function RetailReturnDialog({
               <label htmlFor="retail-refund-destination" className="text-sm font-medium">
                 Refund destination
               </label>
-              <select
-                id="retail-refund-destination"
-                value={destination}
-                onChange={(event) => setDestination(event.target.value as Destination)}
-                className="h-9 w-full rounded-md border bg-background px-3 text-sm"
-              >
-                <option value="original">Original tenders (reverse unpaid credit first)</option>
-                <option value="customer_credit" disabled={!sale.customerId || !canOverride}>
-                  Customer account credit (manager)
-                </option>
-                <option value="account" disabled={!canOverride}>Refund from selected cash/bank account (manager)</option>
-              </select>
+              <Select value={destination} onValueChange={(v) => setDestination(v as Destination)}>
+                <SelectTrigger id="retail-refund-destination" className="h-9 w-full text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="original">Original tenders (reverse unpaid credit first)</SelectItem>
+                  <SelectItem value="customer_credit" disabled={!sale.customerId || !canOverride}>
+                    Customer account credit (manager)
+                  </SelectItem>
+                  <SelectItem value="account" disabled={!canOverride}>
+                    Refund from selected cash/bank account (manager)
+                  </SelectItem>
+                </SelectContent>
+              </Select>
               {destination === "account" && (
                 <select
                   aria-label="Refund cash or bank account"
@@ -397,7 +413,11 @@ export function RetailReturnDialog({
                   Final amount recalculated from original sale by the server
                 </div>
               </div>
-              <Button type="button" disabled={submitting || !returned.length || (destination === "account" && !refundAccount)} onClick={() => void submit()}>
+              <Button
+                type="button"
+                disabled={submitting || !returned.length || (destination === "account" && !refundAccount)}
+                onClick={() => void submit()}
+              >
                 <RotateCcw className="mr-2 h-4 w-4" />
                 {submitting ? "Refunding…" : "Confirm return"}
               </Button>
