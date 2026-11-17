@@ -41,7 +41,18 @@ const BRACES_BUILD_ONLY = {
   reviewOn: "2026-11-03",
 };
 
+// One advisory, one dependency path: vite -> tinyglobby / fdir -> picomatch.
+const PICOMATCH_BUILD_ONLY = {
+  advisories: ["GHSA-fc5q-39xc-vjpf"],
+  reason:
+    "picomatch has no patched release (GHSA-fc5q-39xc-vjpf, a ReDoS through repeated extglobs, affects every version up to the latest 4.0.7). It is reached only through vite, which builds the client and serves the local development server. The production server never loads vite: server/index.ts imports ./vite dynamically, and only when NODE_ENV is development, otherwise serving the prebuilt client. The glob patterns picomatch evaluates come from this repository's own build configuration, never from request input. npm's only remedy is a breaking vite downgrade. Owner-approved 2026-11-17.",
+  reviewOn: "2026-12-17",
+};
+
 const ACCEPTED = {
+  picomatch: PICOMATCH_BUILD_ONLY,
+  tinyglobby: PICOMATCH_BUILD_ONLY,
+  vite: PICOMATCH_BUILD_ONLY,
   braces: BRACES_BUILD_ONLY,
   chokidar: BRACES_BUILD_ONLY,
   "fast-glob": BRACES_BUILD_ONLY,
