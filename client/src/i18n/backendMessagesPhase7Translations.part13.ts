@@ -463,4 +463,24 @@ export const backendMessagesPhase7TranslationsPart13: readonly Phase7BackendMess
     ar: "فشل فحص سلامة خلطات المصنع لـ",
     fr: "Le contrôle d’intégrité des mélanges a échoué pour",
   },
+  {
+    en: "Your role is not allowed to perform this operational task.",
+    ar: "دورك لا يسمح بتنفيذ هذه المهمة التشغيلية.",
+    fr: "Votre rôle ne permet pas d’effectuer cette tâche opérationnelle.",
+  },
+  {
+    en: "Developer access is required for the all-company export center.",
+    ar: "يتطلب مركز التصدير لجميع الشركات صلاحية المطوّر.",
+    fr: "L’accès Développeur est requis pour le centre d’export multi-sociétés.",
+  },
+  {
+    en: "API endpoint not found",
+    ar: "نقطة النهاية غير موجودة",
+    fr: "Point d’accès API introuvable",
+  },
+  {
+    en: "Admin or Developer access required for account migration.",
+    ar: "تتطلب ترحيل الحسابات صلاحية المدير أو المطوّر.",
+    fr: "L’accès Administrateur ou Développeur est requis pour la migration des comptes.",
+  },
 ];

@@ -491,6 +491,7 @@ export default function FactoryAttendance() {
                             toDate: rangeEnd,
                             preset: rangeStart || rangeEnd ? "custom" : "all_time",
                           }}
+                          requireBoundedRange
                           onChange={(v) => {
                             setRangeStart(v.fromDate);
                             setRangeEnd(v.toDate);
