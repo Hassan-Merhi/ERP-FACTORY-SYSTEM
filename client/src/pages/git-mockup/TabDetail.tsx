@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { authenticatedUserQueryOptions } from "@/contracts/sessionQueryContracts";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/ui/page-state";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   AlertTriangle,
@@ -214,10 +215,7 @@ export function TabDetail() {
       </div>
 
       {allContainers.length === 0 ? (
-        <div className="rounded-md border border-dashed px-6 py-10 text-center text-muted-foreground text-sm">
-          <FileX className="h-8 w-8 mx-auto mb-2 opacity-40" />
-          <div className="font-medium">No active containers found</div>
-        </div>
+        <EmptyState icon={FileX} title="No active containers found" className="rounded-md px-6 py-10" />
       ) : (
         <>
           <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-card/80 p-3 shadow-sm">

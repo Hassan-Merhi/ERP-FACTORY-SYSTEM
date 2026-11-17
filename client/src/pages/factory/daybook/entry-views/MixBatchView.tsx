@@ -6,6 +6,7 @@
  * boundary rather than a behavioural change.
  */
 import { DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { EmptyState, LoadingState } from "@/components/ui/page-state";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatNumber } from "@/lib/formatNumber";
@@ -49,7 +50,7 @@ export function MixBatchView({
         {/* Batch summary card */}
         <div className="rounded-md border p-4 space-y-3">
           {!mb ? (
-            <p className="text-sm text-muted-foreground">Loading batch details…</p>
+            <LoadingState title="Loading batch details…" className="min-h-0 border-0 bg-transparent p-0 sm:p-0" />
           ) : (
             <>
               <div className="flex items-start justify-between gap-2 flex-wrap">
@@ -103,7 +104,7 @@ export function MixBatchView({
             {sourcesTotalKg > 0 ? ` · ${formatNumber(sourcesTotalKg)} kg total` : ""})
           </p>
           {mixBatchSources.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-4 rounded-md border">No source records found</p>
+            <EmptyState title="No source records found" className="min-h-0 py-4 sm:py-4" />
           ) : (
             <div className="rounded-md border overflow-x-auto">
               <table className="w-full text-sm">
@@ -167,10 +168,7 @@ export function MixBatchView({
                       <td className="px-3 py-2 text-right font-mono font-medium">{formatNumber(sourcesTotalKg)} kg</td>
                       <td />
                       <td className="px-3 py-2 text-right font-mono font-medium">
-                        $
-                        {formatNumber(
-                          mixBatchSources.reduce((s: number, src) => s + apiNumber(src.totalCost), 0)
-                        )}
+                        ${formatNumber(mixBatchSources.reduce((s: number, src) => s + apiNumber(src.totalCost), 0))}
                       </td>
                     </tr>
                   </tfoot>

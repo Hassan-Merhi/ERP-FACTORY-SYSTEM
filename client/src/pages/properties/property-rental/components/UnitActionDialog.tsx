@@ -8,6 +8,7 @@ import { queryClient } from "@/lib/queryClient";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { LoadingState } from "@/components/ui/page-state";
 import { Plus, DollarSign, FileEdit, Send, XCircle, UserCog } from "lucide-react";
 import type { CashAccount, Contract, LedgerRow, Payment, Unit } from "../types";
 import { useApiBase } from "../shared";
@@ -96,7 +97,7 @@ function UnitActionDialog({
         </DialogHeader>
 
         {isLoading ? (
-          <div className="p-6 text-center text-muted-foreground">Loading…</div>
+          <LoadingState className="p-6" />
         ) : !contract ? (
           isShared ? (
             <div className="p-6 text-center text-muted-foreground text-sm">This is a read-only shared unit.</div>

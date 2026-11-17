@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ErpField, ErpFormActions, ErpPendingButton, ErpConfirmDialog } from "@/erp-core";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { EmptyState, LoadingState } from "@/components/ui/page-state";
 
 export type AccountDisplayNode = {
   key: string;
@@ -313,7 +314,7 @@ export default function DisplayAccountGroups() {
           {(layoutError as Error).message}
         </p>
       ) : loadingLayout || loadingAccounts ? (
-        <p className="text-sm text-muted-foreground">Loading layout…</p>
+        <LoadingState title="Loading layout…" />
       ) : (
         <>
           <div className="flex flex-wrap gap-2">
@@ -383,7 +384,7 @@ export default function DisplayAccountGroups() {
                 {item.type === "group" && groupItems(item.key).map((child) => renderRow(child, 1))}
               </div>
             ))}
-            {nodes.length === 0 && <div className="p-6 text-sm text-muted-foreground">No ledger accounts yet.</div>}
+            {nodes.length === 0 && <EmptyState title="No ledger accounts yet." className="rounded-none border-0" />}
           </div>
           {dirty && (
             <p className="text-sm text-amber-600">

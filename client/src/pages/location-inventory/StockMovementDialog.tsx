@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from "@/components/ui/button";
 import { Package, ArrowLeft, ArrowRight, ChevronRight } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ErrorState } from "@/components/ui/page-state";
 import { cn } from "@/lib/utils";
 import { PeriodFilter } from "@/components/ui/period-filter";
 import type {
@@ -63,7 +64,12 @@ export function StockMovementDialog({
     return n === 0 ? <span className="text-muted-foreground/35">—</span> : <>{formatAmount(n)}</>;
   };
 
-  const { data: stockMovementData, isLoading: stockMovementLoading } = useQuery<StockMovementResponse>({
+  const {
+    data: stockMovementData,
+    isLoading: stockMovementLoading,
+    isError: stockMovementError,
+    refetch: refetchStockMovement,
+  } = useQuery<StockMovementResponse>({
     queryKey: stockMovementItem
       ? ["/api/inventory/movement", stockMovementItem.stockItemId, stockMovementItem.locationId, stockMovementPeriod]
       : [],
@@ -80,7 +86,12 @@ export function StockMovementDialog({
     },
   });
 
-  const { data: smDrillData, isLoading: smDrillLoading } = useQuery<StockMovementDrillResponse>({
+  const {
+    data: smDrillData,
+    isLoading: smDrillLoading,
+    isError: smDrillError,
+    refetch: refetchSmDrill,
+  } = useQuery<StockMovementDrillResponse>({
     queryKey:
       stockMovementItem && drillMonth
         ? [
@@ -184,6 +195,12 @@ export function StockMovementDialog({
                     <Skeleton key={i} className="h-11 w-full rounded-lg" />
                   ))}
                 </div>
+              ) : smDrillError && !smDrillData ? (
+                <ErrorState
+                  onAction={() => void refetchSmDrill()}
+                  actionLabel="Try again"
+                  className="rounded-none border-0 p-6"
+                />
               ) : (
                 <table
                   {...mobileCards.tableProps}
@@ -377,6 +394,12 @@ export function StockMovementDialog({
                   <Skeleton key={i} className="h-12 w-full rounded-lg" />
                 ))}
               </div>
+            ) : stockMovementError && !stockMovementData ? (
+              <ErrorState
+                onAction={() => void refetchStockMovement()}
+                actionLabel="Try again"
+                className="rounded-none border-0 p-6"
+              />
             ) : (
               <table
                 {...mobileCardsSecondary.tableProps}

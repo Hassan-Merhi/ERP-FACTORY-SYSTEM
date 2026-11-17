@@ -5,6 +5,7 @@ import { useBackToParent } from "@/hooks/use-back-to-parent";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/PageHeader";
 import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
 import { Package } from "lucide-react";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
@@ -53,7 +54,7 @@ export default function ClosingStockDetail() {
   const groupName = new URLSearchParams(searchString).get("name") || "Stock Group";
   const groupId = params.groupId;
 
-  const { data, isLoading } = useQuery<ClosingStockDetailData>({
+  const { data, isLoading, isError, refetch } = useQuery<ClosingStockDetailData>({
     queryKey: ["/api/reports/closing-stock-summary", groupId, "items", selectedCompany?.id],
     queryFn: async () => {
       const response = await fetch(`/api/reports/closing-stock-summary/${groupId}/items`, { credentials: "include" });
@@ -94,6 +95,8 @@ export default function ClosingStockDetail() {
                   <Skeleton key={i} className="h-10 w-full" />
                 ))}
               </div>
+            ) : isError && !data ? (
+              <ErrorState onAction={() => void refetch()} actionLabel="Try again" className="m-4" />
             ) : data?.items && data.items.length > 0 ? (
               <>
                 {data.items.map((item) => (
@@ -109,7 +112,7 @@ export default function ClosingStockDetail() {
                 ))}
               </>
             ) : (
-              <div className="p-8 text-center text-muted-foreground">No items found in this stock group.</div>
+              <EmptyState title="No items found in this stock group." className="m-4" />
             )}
           </div>
 

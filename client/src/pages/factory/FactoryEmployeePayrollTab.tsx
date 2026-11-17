@@ -33,6 +33,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
 
 interface Employee {
   id: number;
@@ -92,7 +93,12 @@ export default function FactoryEmployeePayrollTab() {
   const [previewRows, setPreviewRows] = useState<Record<number, PayrollPreview>>({});
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
 
-  const { data: employees = [], isLoading } = useQuery<Employee[]>({
+  const {
+    data: employeesData,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<Employee[]>({
     queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id),
     enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
@@ -102,6 +108,7 @@ export default function FactoryEmployeePayrollTab() {
       return all.filter((e: Employee) => e.active);
     },
   });
+  const employees = useMemo(() => employeesData ?? [], [employeesData]);
 
   const { isLoading: previewLoading, refetch: refetchPreview } = useQuery<{ preview: PayrollPreview[] }>({
     queryKey: companyQueryKey("/api/factory/employee-payroll-preview", selectedCompany?.id, startDate, endDate),
@@ -223,6 +230,10 @@ export default function FactoryEmployeePayrollTab() {
     );
   }
 
+  if (isError && !employeesData) {
+    return <ErrorState onAction={() => void refetch()} actionLabel="Try again" />;
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-blue-500/15 bg-gradient-to-r from-blue-500/[0.07] via-card to-card px-4 py-4 shadow-sm dark:border-slate-700/80 dark:from-blue-950/40 sm:px-5">
@@ -252,12 +263,7 @@ export default function FactoryEmployeePayrollTab() {
       </div>
 
       {employees.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center text-muted-foreground">
-            <Users className="h-10 w-10 mx-auto mb-3 opacity-40" />
-            <p>No active employees found.</p>
-          </CardContent>
-        </Card>
+        <EmptyState icon={Users} title="No active employees found." />
       ) : (
         <div className="space-y-2.5">
           {Object.entries(grouped).map(([dept, emps]) => {

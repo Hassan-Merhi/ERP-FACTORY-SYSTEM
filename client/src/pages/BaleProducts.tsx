@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/page-state";
 import { Input } from "@/components/ui/input";
 import { CreateBaleProductDialog } from "../components/CreateBaleProductDialog";
 import { AdminAuthDialog } from "@/components/AdminAuthDialog";
@@ -417,7 +418,7 @@ export function BaleProductsContent({ embedded = false }: { embedded?: boolean }
                 })}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">No categories yet. Create one above.</p>
+              <EmptyState title="No categories yet. Create one above." />
             )}
           </div>
         </div>

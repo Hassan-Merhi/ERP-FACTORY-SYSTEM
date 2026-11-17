@@ -44,6 +44,7 @@ import {
 import { SessionHistoryCard } from "./factoryinvoiceloadingscan/components/SessionHistoryCard";
 import { ExportButton } from "@/components/export/ReportExportMenu";
 import { downloadFromUrl, exportFileName } from "@/lib/exportFile";
+import { EmptyState } from "@/components/ui/page-state";
 
 export default function FactoryInvoiceLoadingScan() {
   const [, navigate] = useLocation();
@@ -743,18 +744,18 @@ export default function FactoryInvoiceLoadingScan() {
       )}
 
       {summary.sessions.length === 0 && !showStartForm && !activeSessionId && (
-        <Card>
-          <CardContent className="pt-8 pb-8 flex flex-col items-center gap-3 text-center">
-            <Package className="h-10 w-10 text-muted-foreground" />
-            <p className="text-muted-foreground text-sm">No loading sessions yet for this invoice.</p>
-            {!isFullyLoaded && (
+        <EmptyState
+          icon={Package}
+          title="No loading sessions yet for this invoice."
+          action={
+            !isFullyLoaded ? (
               <Button onClick={() => setShowStartForm(true)} data-testid="button-show-start-form-empty">
                 <Play className="h-4 w-4 mr-1" />
                 Start Loading
               </Button>
-            )}
-          </CardContent>
-        </Card>
+            ) : undefined
+          }
+        />
       )}
 
       <CompleteSessionDialog

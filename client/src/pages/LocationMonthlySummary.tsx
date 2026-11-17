@@ -10,6 +10,7 @@ import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { PeriodFilter, getDefaultPeriodValue, PeriodFilterValue } from "@/components/ui/period-filter";
 import { useDateJump } from "@/hooks/use-date-jump";
 import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useCursorNav } from "@/contexts/CursorNavContext";
 import { PageHeader } from "@/components/PageHeader";
@@ -157,7 +158,7 @@ export default function LocationMonthlySummary({ posUser }: { posUser?: AuthMe }
         { startDate: periodFilter.fromDate, endDate: periodFilter.toDate },
       ];
 
-  const { data, isLoading } = useQuery<LocationMonthlySummaryData>({
+  const { data, isLoading, isError, refetch } = useQuery<LocationMonthlySummaryData>({
     queryKey,
     queryFn: async () => {
       const response = await fetch(apiUrl, { credentials: "include" });
@@ -252,6 +253,14 @@ export default function LocationMonthlySummary({ posUser }: { posUser?: AuthMe }
       <div className="container mx-auto p-6 space-y-4">
         <Skeleton className="h-8 w-64" />
         <Skeleton className="h-[400px] w-full" />
+      </div>
+    );
+  }
+
+  if (isError && !data) {
+    return (
+      <div className="container mx-auto p-0 sm:p-6">
+        <ErrorState onAction={() => void refetch()} actionLabel="Try again" />
       </div>
     );
   }
@@ -711,11 +720,7 @@ export default function LocationMonthlySummary({ posUser }: { posUser?: AuthMe }
                 };
 
                 if (!rows.length) {
-                  return (
-                    <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
-                      No transactions found for this period.
-                    </div>
-                  );
+                  return <EmptyState title="No transactions found for this period." className="m-4 py-12" />;
                 }
 
                 const totalQty = rows.reduce((s: number, r) => s + (r.qty || 0), 0);

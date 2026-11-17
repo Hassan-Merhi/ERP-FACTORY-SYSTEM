@@ -1,4 +1,5 @@
 import type { ClientErrorLike } from "@/lib/clientError";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 import { useState, useRef, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -14,18 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PageHeader } from "@/components/PageHeader";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import {
-  Trash2,
-  ChevronDown,
-  ChevronRight,
-  Loader2,
-  Weight,
-  DollarSign,
-  History,
-  CheckSquare,
-  ScanLine,
-  X,
-} from "lucide-react";
+import { Trash2, ChevronDown, ChevronRight, Weight, DollarSign, History, CheckSquare, ScanLine, X } from "lucide-react";
 
 import type {
   Bale,
@@ -57,7 +47,7 @@ export default function WasteDispatch() {
   const [deleteDispatchId, setDeleteDispatchId] = useState<number | null>(null);
 
   // ── Dispatch queries ───────────────────────────────────────────
-  const { data, isLoading } = useQuery<{ bales: Bale[]; categories: unknown[] }>({
+  const { data, isLoading, isError, refetch } = useQuery<{ bales: Bale[]; categories: unknown[] }>({
     queryKey: companyQueryKey("/api/factory/waste-dispatch/bales", selectedCompany?.id, search),
     enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
@@ -407,9 +397,9 @@ export default function WasteDispatch() {
           </CardHeader>
           <CardContent className="p-0">
             {isLoading ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-              </div>
+              <LoadingState className="rounded-none border-0" />
+            ) : isError && !data ? (
+              <ErrorState onAction={() => void refetch()} actionLabel="Try again" className="rounded-none border-0" />
             ) : productGroups.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">
                 <Trash2 className="w-10 h-10 mx-auto mb-3 opacity-25" />
@@ -624,7 +614,7 @@ export default function WasteDispatch() {
           </CardHeader>
           <CardContent className="p-0">
             {history.length === 0 ? (
-              <p className="text-sm text-muted-foreground p-4">No dispatches yet.</p>
+              <EmptyState title="No dispatches yet." className="rounded-none border-0" />
             ) : (
               <div className="divide-y">
                 {(showAllHistory ? history : history.slice(0, 10)).map((d) => {

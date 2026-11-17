@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/PageHeader";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
 import { PeriodFilter, PeriodFilterValue, getDefaultPeriodValue } from "@/components/ui/period-filter";
 import { useDateJump } from "@/hooks/use-date-jump";
 import { useDateFormat } from "@/contexts/DateFormatContext";
@@ -69,7 +70,7 @@ export default function StockItemVouchers() {
   const [periodFilter, setPeriodFilter] = useState<PeriodFilterValue>(() => getDefaultPeriodValue("this_month"));
   useDateJump((date) => setPeriodFilter({ fromDate: date, toDate: date, preset: "custom" }));
 
-  const { data, isLoading } = useQuery<VouchersData>({
+  const { data, isLoading, isError, refetch } = useQuery<VouchersData>({
     queryKey: [
       `/api/stock-items/${stockItemId}/vouchers/${year}/${month}`,
       { startDate: periodFilter.fromDate, endDate: periodFilter.toDate },
@@ -139,6 +140,14 @@ export default function StockItemVouchers() {
       <div className="container mx-auto space-y-6 p-0 sm:p-6">
         <Skeleton className="h-8 w-64" />
         <Skeleton className="h-[400px] w-full" />
+      </div>
+    );
+  }
+
+  if (isError && !data) {
+    return (
+      <div className="container mx-auto p-0 sm:p-6">
+        <ErrorState onAction={() => void refetch()} actionLabel="Try again" />
       </div>
     );
   }
@@ -279,7 +288,7 @@ export default function StockItemVouchers() {
 
           <div className="md:hidden phone-land:block space-y-2">
             {data?.transactions.length === 0 && (
-              <p className="text-center text-muted-foreground py-8">No transactions found for this month</p>
+              <EmptyState title="No transactions found for this month" className="py-8" />
             )}
             {data?.transactions.map((txn, idx) => (
               <div

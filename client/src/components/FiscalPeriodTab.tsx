@@ -21,6 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -77,7 +78,12 @@ export function FiscalPeriodTab({ currentCompanyId, userRole }: FiscalPeriodTabP
   });
 
   // Fetch fiscal period closures for the current company
-  const { data: closures = [], isLoading: isLoadingClosures } = useQuery<Serialized<FiscalPeriodClosure>[]>({
+  const {
+    data: closures = [],
+    isLoading: isLoadingClosures,
+    isError: isClosuresError,
+    refetch: refetchClosures,
+  } = useQuery<Serialized<FiscalPeriodClosure>[]>({
     queryKey: ["/api/fiscal-period/closures", { companyId: currentCompanyId }],
     enabled: !!currentCompanyId,
   });
@@ -320,9 +326,11 @@ export function FiscalPeriodTab({ currentCompanyId, userRole }: FiscalPeriodTabP
       <Card className="p-6">
         <h3 className="text-lg font-semibold mb-4">Fiscal Period Closure History</h3>
         {isLoadingClosures ? (
-          <div className="text-center py-8 text-muted-foreground">Loading closures...</div>
+          <LoadingState title="Loading closures..." className="py-8" />
+        ) : isClosuresError && closures.length === 0 ? (
+          <ErrorState onAction={() => void refetchClosures()} actionLabel="Try again" className="py-8" />
         ) : closures.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">No fiscal periods have been closed yet.</div>
+          <EmptyState title="No fiscal periods have been closed yet." className="py-8" />
         ) : (
           <Table>
             <TableHeader>

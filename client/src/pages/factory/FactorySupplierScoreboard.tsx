@@ -1,11 +1,11 @@
 import { useState } from "react";
+import { ErrorState, LoadingState } from "@/components/ui/page-state";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 
 interface SupplierScore {
@@ -150,10 +150,9 @@ export default function FactorySupplierScoreboard() {
         </CardHeader>
         <CardContent>
           {query.isLoading ? (
-            <div className="flex items-center justify-center py-12" data-testid="loading-spinner">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-              <span className="ml-2 text-muted-foreground">Loading supplier scores...</span>
-            </div>
+            <LoadingState title="Loading supplier scores..." data-testid="loading-spinner" />
+          ) : query.isError && !query.data ? (
+            <ErrorState onAction={() => void query.refetch()} actionLabel="Try again" />
           ) : !Array.isArray(data) || data.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-muted-foreground" data-testid="text-no-data">
