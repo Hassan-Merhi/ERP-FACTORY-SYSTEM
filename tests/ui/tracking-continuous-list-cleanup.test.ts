@@ -1,9 +1,9 @@
-import { readFileSync } from "node:fs";
+import { readModuleFamily } from "../../scripts/lib/readModuleFamily.mjs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 function source(path: string): string {
-  return readFileSync(resolve(process.cwd(), path), "utf8");
+  return readModuleFamily(resolve(process.cwd(), path));
 }
 
 describe("tracking continuous-list cleanup", () => {

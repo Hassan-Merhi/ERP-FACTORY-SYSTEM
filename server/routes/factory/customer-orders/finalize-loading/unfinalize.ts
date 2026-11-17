@@ -112,9 +112,7 @@ export function registerOrderUnfinalizeRoutes(app: Express) {
         // A consolidated invoice must never be reverted by a handler that
         // simply deletes the invoice cache and restores SOLD bales to stock.
         if (await hasLiveFinancialTripTx(tx, companyId, orderId)) {
-          throw new Error(
-            "DISPATCH_FINANCIAL_REVERSAL_REQUIRED: Trip receivables must be handled through the authorized consolidated-invoice reversal workflow."
-          );
+          throw new Error("DISPATCH_FINANCIAL_REVERSAL_REQUIRED: Trip receivables must be handled through the authorized consolidated-invoice reversal workflow.");
         }
 
         // New finalizations always persist the authoritative workflow origin.

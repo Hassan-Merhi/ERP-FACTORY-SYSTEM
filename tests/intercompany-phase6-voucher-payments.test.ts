@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 import { describe, expect, it } from "vitest";
 import {
   canAccessPairedCash,
@@ -85,8 +85,8 @@ describe("Phase 6 — normal Vouchers intercompany payment isolation", () => {
   });
 
   it("does not turn ordinary supplier payments or receipt drafts into a paired posting", () => {
-    const vouchers = readFileSync("client/src/pages/Vouchers.tsx", "utf8");
-    const payments = readFileSync("client/src/pages/intercompany/IntercompanyPayments.tsx", "utf8");
+    const vouchers = readModuleFamily("client/src/pages/Vouchers.tsx");
+    const payments = readModuleFamily("client/src/pages/intercompany/IntercompanyPayments.tsx");
     expect(vouchers).toContain('activeTab === "payment"');
     expect(vouchers).toContain("PaymentVoucherTab");
     expect(vouchers).not.toContain('activeTab === "intercompany"');
@@ -94,7 +94,7 @@ describe("Phase 6 — normal Vouchers intercompany payment isolation", () => {
     expect(vouchers).toContain("useNormalIntercompanyVoucher");
     expect(vouchers).toContain("normalIntercompany.buildMirror()");
     expect(vouchers).toContain("normalIntercompany.details");
-    const history = readFileSync("client/src/pages/vouchers/IntercompanyVoucherHistory.tsx", "utf8");
+    const history = readModuleFamily("client/src/pages/vouchers/IntercompanyVoucherHistory.tsx");
     expect(history).toContain("confirmedSourceReversal: true");
     expect(history).toContain("confirmedDestinationReversal: true");
     expect(vouchers).toContain('activeTab !== "payment" && activeTab !== "receipt"');
@@ -107,9 +107,9 @@ describe("Phase 6 — normal Vouchers intercompany payment isolation", () => {
   });
 
   it("reuses one paired payment posting service with transaction, FX, credits and reversal guards", () => {
-    const service = readFileSync("server/services/intercompany/paymentSync.ts", "utf8");
-    const routes = readFileSync("server/routes/import/intercompany-phase4.ts", "utf8");
-    const sql = readFileSync("migrations/20261105_004_intercompany_phase4_payments.sql", "utf8");
+    const service = readModuleFamily("server/services/intercompany/paymentSync.ts");
+    const routes = readModuleFamily("server/routes/import/intercompany-phase4.ts");
+    const sql = readModuleFamily("migrations/20261105_004_intercompany_phase4_payments.sql");
     expect(service).toContain("await requirePairedCashAuthorization(pair, actor)");
     expect(service).toContain("db.transaction(async (tx)");
     expect(service).toContain("postErpVoucherTx(tx,");
@@ -145,7 +145,7 @@ describe("Phase 6 — normal Vouchers intercompany payment isolation", () => {
   });
 
   it("keeps paired voucher history and the supplier payment distinction visible", () => {
-    const page = readFileSync("client/src/pages/intercompany/IntercompanyPayments.tsx", "utf8");
+    const page = readModuleFamily("client/src/pages/intercompany/IntercompanyPayments.tsx");
     expect(page).toContain("intercompanyVoucherDetailPath(");
     expect(page).toContain("row.sourceVoucherId");
     expect(page).toContain("row.destinationVoucherId");

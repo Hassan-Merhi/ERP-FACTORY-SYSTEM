@@ -1,4 +1,5 @@
 import { getErrorDetails } from "@shared/errorUtils";
+import { exportFileName } from "@/lib/exportFile";
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import {
@@ -255,7 +256,7 @@ export default function DailyScan() {
       });
       await exportOperationalWorkbook({
         title: "Factory Daily Scan",
-        fileName: "daily-scan-" + selectedDate + ".xlsx",
+        fileName: exportFileName("daily scan", "xlsx", { date: selectedDate }),
         filters: [
           { label: "Production date", value: formatDisplay(selectedDate) },
           { label: "Scanned", value: scanned.length + "/" + totalBales },

@@ -368,10 +368,16 @@ describe("XLSX Export — Daily Production Report", () => {
     const res = await getBinary(agent, "/api/factory/daily-report/export?format=excel");
     const wb = await loadWorkbook(res.body as Buffer);
     const ws = wb.getWorksheet("Production Report")!;
-    const headers: string[] = [];
-    ws.getRow(1).eachCell((cell) => {
-      if (cell.value) headers.push(String(cell.value));
-    });
+    // The universal Excel layout puts title/filter rows above the table; find the header row.
+    const rowValues = (n: number) => {
+      const values: string[] = [];
+      ws.getRow(n).eachCell((cell) => {
+        if (cell.value) values.push(String(cell.value));
+      });
+      return values;
+    };
+    const headerRow = Array.from({ length: 12 }, (_, i) => i + 1).find((n) => rowValues(n).includes("Date"));
+    const headers = headerRow ? rowValues(headerRow) : rowValues(1);
     expect(headers).toContain("Date");
     expect(headers).toContain("Batch Code");
     expect(headers).toContain("KG Used");

@@ -72,9 +72,7 @@ export function registerOrderFinalizeRoutes(app: Express) {
         // the full invoice journal. On dispatch-managed orders it would bypass
         // trip reconciliation and debit receivables a second time.
         if (await hasAnyPhysicalDispatchTx(tx, companyId, orderId)) {
-          throw new Error(
-            "DISPATCH_CONSOLIDATION_REQUIRED: This loading has dispatch trips. Finalize all trip financials and use the consolidated invoice workflow."
-          );
+          throw new Error("DISPATCH_CONSOLIDATION_REQUIRED: This loading has dispatch trips. Finalize all trip financials and use the consolidated invoice workflow.");
         }
         if (!["DRAFT", "VERIFIED"].includes(order.status))
           throw new Error("Only DRAFT or VERIFIED orders can be finalized");
@@ -193,74 +191,74 @@ export function registerOrderFinalizeRoutes(app: Express) {
           // the customer's ledger exists here even if no pre-voucher prepared it.
           const customerLedgerId = await customerLedgerAccountTx(tx, companyId, order.customerId);
           for (const charge of chargesForJournal) {
-            const chargeAmountDecimal = toMoney(charge.amount);
-            if (chargeAmountDecimal.lte(0)) continue;
+              const chargeAmountDecimal = toMoney(charge.amount);
+              if (chargeAmountDecimal.lte(0)) continue;
 
-            // Phase 22 (C): deterministic per charge (was Date.now()).
-            const invoiceVoucherNumber = finalizedChargeVoucherNumber(invoiceNumber, charge.id);
-            const chargeDesc = order.containerNumber
-              ? `${charge.name} for offloaded container - ${order.containerNumber}`
-              : `${charge.name} - ${invoiceNumber}`;
+              // Phase 22 (C): deterministic per charge (was Date.now()).
+              const invoiceVoucherNumber = finalizedChargeVoucherNumber(invoiceNumber, charge.id);
+              const chargeDesc = order.containerNumber
+                ? `${charge.name} for offloaded container - ${order.containerNumber}`
+                : `${charge.name} - ${invoiceNumber}`;
 
-            // Check for a PRE-voucher created when the charge was saved in pending/verified state
-            const preVoucherNumber = preChargeVoucherNumber(orderId, charge.id);
-            const [preVoucher] = await tx
-              .select({ id: vouchers.id })
-              .from(vouchers)
-              .where(
-                and(
-                  eq(vouchers.companyId, companyId),
-                  eq(vouchers.voucherNumber, preVoucherNumber),
-                  isNull(vouchers.deletedAt)
-                )
-              );
+              // Check for a PRE-voucher created when the charge was saved in pending/verified state
+              const preVoucherNumber = preChargeVoucherNumber(orderId, charge.id);
+              const [preVoucher] = await tx
+                .select({ id: vouchers.id })
+                .from(vouchers)
+                .where(
+                  and(
+                    eq(vouchers.companyId, companyId),
+                    eq(vouchers.voucherNumber, preVoucherNumber),
+                    isNull(vouchers.deletedAt)
+                  )
+                );
 
-            if (preVoucher) {
-              // Rename the PRE-voucher — same entries already exist, just update the
-              // reference and date. Phase 22 (C), G4: an audited edit of a posted
-              // voucher, refused (409) when it lies in a closed period.
-              await editPostedFactoryVoucherTx(
-                tx,
-                {
+              if (preVoucher) {
+                // Rename the PRE-voucher — same entries already exist, just update the
+                // reference and date. Phase 22 (C), G4: an audited edit of a posted
+                // voucher, refused (409) when it lies in a closed period.
+                await editPostedFactoryVoucherTx(
+                  tx,
+                  {
+                    companyId,
+                    voucherIds: [preVoucher.id],
+                    reason: "factory-order-finalize-charge-rename",
+                    newVoucherDate: today,
+                    actor: { userId: req.session.userId, username: req.session.username },
+                  },
+                  async () => {
+                    await tx
+                      .update(vouchers)
+                      .set({ voucherNumber: invoiceVoucherNumber, voucherDate: today, description: chargeDesc })
+                      .where(eq(vouchers.id, preVoucher.id));
+                    await tx
+                      .update(voucherEntries)
+                      .set({ narration: chargeDesc })
+                      .where(eq(voucherEntries.voucherId, preVoucher.id));
+                  }
+                );
+                // Phase 6: ensure the charge.voucherId FK points at the renamed voucher
+                // (it should already, from the PRE-create stamp, but stay defensive for legacy data)
+                await tx
+                  .update(customerOrderCharges)
+                  .set({ voucherId: preVoucher.id })
+                  .where(eq(customerOrderCharges.id, charge.id));
+              } else {
+                // No PRE-voucher — charge was added before this feature or on a DRAFT order.
+                // Dr Customer Account (charge billed to customer) / Cr Charge Account,
+                // through the engine with the charge's posting identity.
+                await postOrderChargeVoucherTx(tx, {
                   companyId,
-                  voucherIds: [preVoucher.id],
-                  reason: "factory-order-finalize-charge-rename",
-                  newVoucherDate: today,
-                  actor: { userId: req.session.userId, username: req.session.username },
-                },
-                async () => {
-                  await tx
-                    .update(vouchers)
-                    .set({ voucherNumber: invoiceVoucherNumber, voucherDate: today, description: chargeDesc })
-                    .where(eq(vouchers.id, preVoucher.id));
-                  await tx
-                    .update(voucherEntries)
-                    .set({ narration: chargeDesc })
-                    .where(eq(voucherEntries.voucherId, preVoucher.id));
-                }
-              );
-              // Phase 6: ensure the charge.voucherId FK points at the renamed voucher
-              // (it should already, from the PRE-create stamp, but stay defensive for legacy data)
-              await tx
-                .update(customerOrderCharges)
-                .set({ voucherId: preVoucher.id })
-                .where(eq(customerOrderCharges.id, charge.id));
-            } else {
-              // No PRE-voucher — charge was added before this feature or on a DRAFT order.
-              // Dr Customer Account (charge billed to customer) / Cr Charge Account,
-              // through the engine with the charge's posting identity.
-              await postOrderChargeVoucherTx(tx, {
-                companyId,
-                chargeId: charge.id,
-                voucherNumber: invoiceVoucherNumber,
-                voucherDate: today,
-                description: chargeDesc,
-                customerId: order.customerId,
-                customerLedgerAccountId: customerLedgerId,
-                chargeLedgerAccountId: charge.ledgerAccountId!,
-                amount: chargeAmountDecimal,
-              });
-            }
+                  chargeId: charge.id,
+                  voucherNumber: invoiceVoucherNumber,
+                  voucherDate: today,
+                  description: chargeDesc,
+                  customerId: order.customerId,
+                  customerLedgerAccountId: customerLedgerId,
+                  chargeLedgerAccountId: charge.ledgerAccountId!,
+                  amount: chargeAmountDecimal,
+                });
+              }
           }
         }
 
