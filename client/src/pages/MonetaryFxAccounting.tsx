@@ -4,6 +4,7 @@
  * Dated monetary revaluation is report-only by design. A realized FX journal
  * may be posted explicitly only for a valid, foreign-currency Phase 3 match.
  */
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -230,19 +231,22 @@ export default function MonetaryFxAccounting() {
             rates change.
           </p>
           <Label htmlFor="fx-account">Cash or bank account</Label>
-          <select
-            id="fx-account"
-            className="h-10 w-full rounded-md border bg-background px-2"
-            value={account}
-            onChange={(e) => setAccount(e.target.value)}
+          <Select
+            value={account || "__none__"}
+            onValueChange={(value) => setAccount(value === "__none__" ? "" : value)}
           >
-            <option value="">Select bank or cash account...</option>
-            {(accounts.data ?? []).map((a) => (
-              <option key={a.accountKind + ":" + a.accountId} value={a.accountKind + ":" + a.accountId}>
-                {a.name} ({a.accountKind})
-              </option>
-            ))}
-          </select>
+            <SelectTrigger id="fx-account" className="h-10 w-full">
+              <SelectValue placeholder="Select bank or cash account..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">Select bank or cash account...</SelectItem>
+              {(accounts.data ?? []).map((a) => (
+                <SelectItem key={a.accountKind + ":" + a.accountId} value={a.accountKind + ":" + a.accountId}>
+                  {a.name} ({a.accountKind})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           {valuation.isError && <p className="text-sm text-destructive">{(valuation.error as Error).message}</p>}
           {accounts.isError && <p className="text-sm text-destructive">{(accounts.error as Error).message}</p>}
           {valuation.data && (
@@ -323,16 +327,20 @@ export default function MonetaryFxAccounting() {
           <div className="grid gap-3 sm:grid-cols-3">
             <div>
               <Label>Area</Label>
-              <select
-                className="h-10 w-full rounded-md border bg-background px-2"
-                value={domain}
-                onChange={(e) => setDomain(e.target.value as Domain | "")}
+              <Select
+                value={domain || "__all__"}
+                onValueChange={(value) => setDomain(value === "__all__" ? "" : (value as Domain))}
               >
-                <option value="">All matched parties</option>
-                <option value="customer">Customers</option>
-                <option value="supplier">ERP suppliers</option>
-                <option value="factory_supplier">Factory suppliers (report only)</option>
-              </select>
+                <SelectTrigger className="h-10 w-full" aria-label="Area">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">All matched parties</SelectItem>
+                  <SelectItem value="customer">Customers</SelectItem>
+                  <SelectItem value="supplier">ERP suppliers</SelectItem>
+                  <SelectItem value="factory_supplier">Factory suppliers (report only)</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label>Party ID (optional)</Label>

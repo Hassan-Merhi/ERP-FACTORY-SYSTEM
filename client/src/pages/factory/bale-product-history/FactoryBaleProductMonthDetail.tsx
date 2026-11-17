@@ -2,9 +2,8 @@ import { searchAny } from "@shared/searchNormalization";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useParams, useLocation } from "wouter";
-import { Package, Search, Pencil } from "lucide-react";
+import { Package, Pencil } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
-import { Input } from "@/components/ui/input";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,6 +19,7 @@ import type { FactoryMyAccess } from "@shared/apiTypes";
 
 import { BaleWeightEditDialog, type WeightEditBale } from "@/components/BaleWeightEditDialog";
 import type { BaleDetailResponse } from "./types";
+import { SearchField } from "@/components/ui/search-field";
 
 // ── Month-detail view ─────────────────────────────────────────────────────────
 export function FactoryBaleProductMonthDetail() {
@@ -180,16 +180,13 @@ export function FactoryBaleProductMonthDetail() {
         <CardContent className="space-y-3">
           {/* Filter bar */}
           <div className="flex items-center gap-2 flex-wrap">
-            <div className="relative flex-1 min-w-[180px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search bale code or ref #..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9"
-                data-testid="input-bale-search"
-              />
-            </div>
+            <SearchField
+              placeholder="Search bale code or ref #..."
+              value={searchTerm}
+              onValueChange={setSearchTerm}
+              wrapperClassName="flex-1 min-w-[180px]"
+              data-testid="input-bale-search"
+            />
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="w-[160px]" data-testid="select-status-filter">
                 <SelectValue placeholder="All Status" />

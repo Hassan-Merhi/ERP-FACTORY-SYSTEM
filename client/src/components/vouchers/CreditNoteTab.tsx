@@ -1,3 +1,4 @@
+import { SearchField } from "@/components/ui/search-field";
 import { VoucherPhoneActionBar } from "@/pages/vouchers/VoucherPhoneActionBar";
 import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
 import { searchAny } from "@shared/searchNormalization";
@@ -18,7 +19,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Form, FormControl, FormField, FormItem, FormLabel } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Trash2, Search, Package, MapPin, Pencil } from "lucide-react";
+import { Plus, Trash2, Package, MapPin, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AccountAutocomplete } from "@/components/AccountAutocomplete";
 import type { CombinedAccount } from "@/components/AccountAutocomplete";
@@ -739,17 +740,13 @@ export function CreditNoteTab({ allAccounts, editVoucherId }: CreditNoteTabProps
             </SelectContent>
           </Select>
           <div className="mt-3">
-            <div className="relative">
-              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                ref={searchInputRef}
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Search items..."
-                className="pl-8"
-                data-testid="input-search-item"
-              />
-            </div>
+            <SearchField
+              ref={searchInputRef}
+              value={searchTerm}
+              onValueChange={setSearchTerm}
+              placeholder="Search items..."
+              data-testid="input-search-item"
+            />
           </div>
           <div className="mt-3 grid grid-cols-2 gap-2">
             <div>

@@ -15,6 +15,7 @@ import { readFinalizedReturnImport } from "./finalizedSaleReturnImportFile";
 import { buildFinalizedReturnMatchWorkbook } from "./finalizedSaleReturnMatchWorkbook";
 import { ExportButton } from "@/components/export/ReportExportMenu";
 import { exportFileName } from "@/lib/exportFile";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type PreviewRow = {
   reference: string;
@@ -285,14 +286,11 @@ export default function FinalizedSaleReturnImport() {
       </div>
       <div className="space-y-2">
         <Label htmlFor="finalized-return-customer">{copy.importCustomerLabel}</Label>
-        <select
-          id="finalized-return-customer"
-          data-testid="finalized-return-customer"
-          className="flex h-10 w-full max-w-lg rounded-md border border-input bg-background px-3 py-2 text-sm"
-          value={customerId ?? ""}
+        <Select
+          value={customerId == null ? "__none__" : String(customerId)}
           disabled={reading || posting || customersLoading}
-          onChange={(event) => {
-            const next = Number(event.target.value) || null;
+          onValueChange={(v) => {
+            const next = v === "__none__" ? null : Number(v) || null;
             setCustomerId(next);
             setPreview(null);
             setSelectedOrders([]);
@@ -301,13 +299,24 @@ export default function FinalizedSaleReturnImport() {
             setFileName("");
           }}
         >
-          <option value="">{customersLoading ? copy.importCustomerLoading : copy.importCustomerPlaceholder}</option>
-          {customers.map((customer) => (
-            <option key={customer.id} value={customer.id}>
-              {customer.legalName}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger
+            id="finalized-return-customer"
+            data-testid="finalized-return-customer"
+            className="h-10 w-full max-w-lg"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__none__">
+              {customersLoading ? copy.importCustomerLoading : copy.importCustomerPlaceholder}
+            </SelectItem>
+            {customers.map((customer) => (
+              <SelectItem key={customer.id} value={String(customer.id)}>
+                {customer.legalName}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         {customersError && (
           <p role="alert" className="text-sm text-destructive">
             {copy.importCustomerLoadFailed}

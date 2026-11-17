@@ -36,6 +36,7 @@ import PressingHourlyTargets from "./PressingHourlyTargets";
 import { pressingHourlyKpiTotals, type PressingHourlySnapshot } from "./pressing-scanner/pressingHourlyKpi";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { translatePressingUiText } from "@/i18n/pressingUiTranslations";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const ROOT = "/api/factory/pressing-machines/report";
 const DETAIL_COLUMNS: PressingReportColumn[] = [
@@ -446,36 +447,42 @@ export default function PressingHistoryReport({
             {canSeeEveryone && (
               <label className="space-y-1 text-xs font-medium text-muted-foreground">
                 Worker
-                <select
-                  aria-label="Pressing user filter"
-                  value={filters.userId || ""}
-                  className="h-10 w-full rounded-md border bg-background px-2 text-sm text-foreground"
-                  onChange={(e) => update({ userId: e.target.value || undefined })}
+                <Select
+                  value={filters.userId || "__all__"}
+                  onValueChange={(v) => update({ userId: v === "__all__" ? undefined : v || undefined })}
                 >
-                  <option value="">All users</option>
-                  {operators.map((operator) => (
-                    <option key={operator.userId} value={operator.userId}>
-                      {operator.displayName?.trim() || "Display name not set"}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger aria-label="Pressing user filter" className="h-10 w-full text-foreground">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">All users</SelectItem>
+                    {operators.map((operator) => (
+                      <SelectItem key={operator.userId} value={String(operator.userId)}>
+                        {operator.displayName?.trim() || "Display name not set"}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </label>
             )}
             <label className="space-y-1 text-xs font-medium text-muted-foreground">
               Item weight
-              <select
-                aria-label="Pressing KG filter"
-                value={filters.weightKg === undefined ? "" : String(filters.weightKg)}
-                className="h-10 w-full rounded-md border bg-background px-2 text-sm text-foreground"
-                onChange={(e) => update({ weightKg: e.target.value ? Number(e.target.value) : undefined })}
+              <Select
+                value={filters.weightKg === undefined ? "__all__" : String(filters.weightKg)}
+                onValueChange={(v) => update({ weightKg: v !== "__all__" ? Number(v) : undefined })}
               >
-                <option value="">All KG</option>
-                {weightOptions.map((kg) => (
-                  <option key={kg} value={Number(kg)}>
-                    {kgText(kg)} KG
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger aria-label="Pressing KG filter" className="h-10 w-full text-foreground">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">All KG</SelectItem>
+                  {weightOptions.map((kg) => (
+                    <SelectItem key={kg} value={String(Number(kg))}>
+                      {kgText(kg)} KG
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </label>
             <label className="space-y-1 text-xs font-medium text-muted-foreground">
               Barcode / article
@@ -493,16 +500,19 @@ export default function PressingHistoryReport({
             {canSeeEveryone && (
               <label className="space-y-1 text-xs font-medium text-muted-foreground">
                 Status
-                <select
+                <Select
                   value={filters.status}
-                  aria-label="Pressing confirmation status"
-                  className="h-10 w-full rounded-md border bg-background px-2 text-sm text-foreground"
-                  onChange={(e) => update({ status: e.target.value as PressingReportFilters["status"] })}
+                  onValueChange={(v) => update({ status: v as PressingReportFilters["status"] })}
                 >
-                  <option value="active">Confirmed</option>
-                  <option value="voided">Voided</option>
-                  <option value="all">All</option>
-                </select>
+                  <SelectTrigger aria-label="Pressing confirmation status" className="h-10 w-full text-foreground">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Confirmed</SelectItem>
+                    <SelectItem value="voided">Voided</SelectItem>
+                    <SelectItem value="all">All</SelectItem>
+                  </SelectContent>
+                </Select>
               </label>
             )}
           </div>

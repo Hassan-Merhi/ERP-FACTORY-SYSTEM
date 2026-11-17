@@ -9,6 +9,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
 import { releaseDebtEnglish } from "@/i18n/finalCloseoutTranslations";
 import { apiRequest } from "@/lib/queryClient";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { CashAccountKind, CashAccountOption } from "./contracts";
 
 export function todayIso(): string {
@@ -94,23 +95,22 @@ export function AccountPicker({
 }) {
   const effectiveValue = value || (accounts[0] ? accountKey(accounts[0]) : "");
   return (
-    <select
-      id={id}
-      value={effectiveValue}
-      onChange={(event) => onChange(event.target.value)}
-      className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-      data-testid={id}
-    >
-      {accounts.length === 0 ? (
-        <option value="">{releaseDebtEnglish("No active cash or bank accounts")}</option>
-      ) : (
-        accounts.map((account) => (
-          <option key={accountKey(account)} value={accountKey(account)}>
-            {account.name} · {account.type ?? account.kind}
-          </option>
-        ))
-      )}
-    </select>
+    <Select value={effectiveValue || "__none__"} onValueChange={(next) => onChange(next === "__none__" ? "" : next)}>
+      <SelectTrigger id={id} className="h-10 w-full text-sm" data-testid={id}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {accounts.length === 0 ? (
+          <SelectItem value="__none__">{releaseDebtEnglish("No active cash or bank accounts")}</SelectItem>
+        ) : (
+          accounts.map((account) => (
+            <SelectItem key={accountKey(account)} value={accountKey(account)}>
+              {account.name} · {account.type ?? account.kind}
+            </SelectItem>
+          ))
+        )}
+      </SelectContent>
+    </Select>
   );
 }
 

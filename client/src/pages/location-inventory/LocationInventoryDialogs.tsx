@@ -3,8 +3,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { AlertCircle, Search } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 import type { InventoryLocation as Location, NegativeInventoryRow } from "./locationInventoryTypes";
+import { SearchField } from "@/components/ui/search-field";
 
 interface LocationInventoryDialogsProps {
   // Create Location dialog
@@ -92,16 +93,13 @@ export function LocationInventoryDialogs({
               <AlertCircle className="h-5 w-5" /> Negative Stock — All Locations
             </DialogTitle>
           </DialogHeader>
-          <div className="relative shrink-0">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
-            <Input
-              placeholder="Search by item or location..."
-              className="pl-8"
-              value={negativeSearchTerm}
-              onChange={(e) => setNegativeSearchTerm(e.target.value)}
-              data-testid="input-negative-stock-search"
-            />
-          </div>
+          <SearchField
+            placeholder="Search by item or location..."
+            wrapperClassName="shrink-0"
+            value={negativeSearchTerm}
+            onValueChange={setNegativeSearchTerm}
+            data-testid="input-negative-stock-search"
+          />
           <div className="flex-1 overflow-auto min-h-0">
             {negativeStockLoading ? (
               <p className="text-sm text-muted-foreground p-4">Loading…</p>

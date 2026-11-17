@@ -7,7 +7,7 @@ import type { ClientErrorLike } from "@/lib/clientError";
  */
 import { useState, useMemo, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Loader2, Save, Search, Trash2 } from "lucide-react";
+import { Loader2, Save, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -17,6 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import type { InventoryItem, NewTransferItem } from "../types";
 import { fmtQty } from "../utils";
+import { SearchField } from "@/components/ui/search-field";
 
 export function CreateTransferDialog({
   open,
@@ -191,17 +192,14 @@ export function CreateTransferDialog({
           {sourceId && (
             <div className="space-y-2">
               <label className="text-xs font-medium text-muted-foreground">Add Items</label>
-              <div className="relative">
-                <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-                <Input
-                  ref={searchRef}
-                  placeholder="Search items to add…"
-                  value={itemSearch}
-                  onChange={(e) => setItemSearch(e.target.value)}
-                  className="pl-8 text-sm"
-                  data-testid="input-item-search"
-                />
-              </div>
+              <SearchField
+                ref={searchRef}
+                placeholder="Search items to add…"
+                value={itemSearch}
+                onValueChange={setItemSearch}
+                className="text-sm"
+                data-testid="input-item-search"
+              />
               {itemSearch && searchMatches.length > 0 && (
                 <div className="border rounded-md overflow-hidden max-h-48 overflow-y-auto">
                   {searchMatches.map((inv) => {

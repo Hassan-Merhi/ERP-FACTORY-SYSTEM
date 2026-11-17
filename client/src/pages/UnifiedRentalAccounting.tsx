@@ -1,4 +1,5 @@
 /** Phase 8: unified rental accounts — operational rent vs posted financial evidence. */
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -211,20 +212,20 @@ export default function UnifiedRentalAccounting() {
         <CardContent className="grid gap-3 sm:grid-cols-3">
           <div className="space-y-1 sm:col-span-2">
             <Label htmlFor="rent-accounting-contract">Unit / tenant</Label>
-            <select
-              id="rent-accounting-contract"
-              value={id}
-              className="w-full h-10 rounded-md border bg-background px-2 text-sm"
-              onChange={(e) => setId(e.target.value)}
-            >
-              <option value="">Select contract...</option>
-              {(list.data?.contracts ?? []).map((c) => (
-                <option value={c.id} key={c.id}>
-                  #{c.id} · {c.locationGroup}/{c.unitNumber} · {c.tenantName} ({c.currency}, {c.status},{" "}
-                  {c.perspective ?? "lease"})
-                </option>
-              ))}
-            </select>
+            <Select value={id || "__none__"} onValueChange={(value) => setId(value === "__none__" ? "" : value)}>
+              <SelectTrigger id="rent-accounting-contract" className="h-10 w-full text-sm">
+                <SelectValue placeholder="Select contract..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">Select contract...</SelectItem>
+                {(list.data?.contracts ?? []).map((c) => (
+                  <SelectItem value={String(c.id)} key={c.id}>
+                    #{c.id} · {c.locationGroup}/{c.unitNumber} · {c.tenantName} ({c.currency}, {c.status},{" "}
+                    {c.perspective ?? "lease"})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-1">
             <Label htmlFor="rent-accounting-date">As-of date</Label>
@@ -462,20 +463,24 @@ export default function UnifiedRentalAccounting() {
                 </div>
                 <div>
                   <Label>Expense category</Label>
-                  <select
+                  <Select
                     value={category}
-                    className="h-10 w-full rounded-md border bg-background px-2 text-sm"
-                    onChange={(e) => {
-                      setCategory(e.target.value as Category);
+                    onValueChange={(value) => {
+                      setCategory(value as Category);
                       setRequestId(crypto.randomUUID());
                     }}
                   >
-                    {CATEGORIES.map((c) => (
-                      <option value={c} key={c}>
-                        {name(c)}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger className="h-10 w-full text-sm" aria-label="Expense category">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CATEGORIES.map((c) => (
+                        <SelectItem value={c} key={c}>
+                          {name(c)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="sm:col-span-3">
                   <Label>Explanation / property work details</Label>

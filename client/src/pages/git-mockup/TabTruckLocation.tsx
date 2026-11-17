@@ -9,7 +9,6 @@ import {
   Truck,
   Loader2,
   MessageCircle,
-  Search,
   SlidersHorizontal,
   Building2,
   Layers3,
@@ -26,6 +25,8 @@ import { STATUS_BADGE as STATUS_BADGE_MAP } from "./types";
 import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
 import { ErpMobileRecordCard, ErpMobileRecordList } from "@/components/ui/erp-mobile-records";
 import { isExistingRecordReadOnlyRole } from "@shared/createOnlyRolePolicy";
+import { SearchField } from "@/components/ui/search-field";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export function TabTruckLocation() {
   const { data: viewer } = useQuery(authenticatedUserQueryOptions());
@@ -317,18 +318,15 @@ export function TabTruckLocation() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-card p-2.5 shadow-sm">
-        <div className="relative min-w-[210px] flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <input
-            type="search"
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder="Search container, plate, supplier, location..."
-            aria-label="Search tracking containers"
-            data-testid="git-trucks-search"
-            className="h-9 w-full rounded-lg border border-input bg-background pl-9 pr-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
-          />
-        </div>
+        <SearchField
+          value={searchQuery}
+          onValueChange={setSearchQuery}
+          placeholder="Search container, plate, supplier, location..."
+          aria-label="Search tracking containers"
+          data-testid="git-trucks-search"
+          wrapperClassName="min-w-[210px] flex-1"
+          className="h-9 rounded-lg"
+        />
         <Button
           type="button"
           size="sm"
@@ -366,35 +364,35 @@ export function TabTruckLocation() {
         >
           <label className="min-w-[160px] flex-1 space-y-1 text-xs font-medium text-muted-foreground">
             Status
-            <select
-              value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value)}
-              aria-label="Filter by status"
-              className="block h-9 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground"
-            >
-              <option value="all">All statuses</option>
-              {statusOptions.map((status) => (
-                <option key={status} value={status}>
-                  {status}
-                </option>
-              ))}
-            </select>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger aria-label="Filter by status" className="h-9 w-full rounded-lg text-sm text-foreground">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                {statusOptions.map((status) => (
+                  <SelectItem key={status} value={status}>
+                    {status}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
           <label className="min-w-[160px] flex-1 space-y-1 text-xs font-medium text-muted-foreground">
             Shop
-            <select
-              value={shopFilter}
-              onChange={(event) => setShopFilter(event.target.value)}
-              aria-label="Filter by shop"
-              className="block h-9 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground"
-            >
-              <option value="all">All shops</option>
-              {shopOptions.map((shop) => (
-                <option key={shop} value={shop}>
-                  {shop}
-                </option>
-              ))}
-            </select>
+            <Select value={shopFilter} onValueChange={setShopFilter}>
+              <SelectTrigger aria-label="Filter by shop" className="h-9 w-full rounded-lg text-sm text-foreground">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All shops</SelectItem>
+                {shopOptions.map((shop) => (
+                  <SelectItem key={shop} value={shop}>
+                    {shop}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
           <Button
             type="button"

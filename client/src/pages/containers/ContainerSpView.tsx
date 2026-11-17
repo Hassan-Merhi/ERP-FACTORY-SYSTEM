@@ -1,19 +1,19 @@
+import { SearchField } from "@/components/ui/search-field";
 import { searchAny } from "@shared/searchNormalization";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useState } from "react";
 import { Link } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/PageHeader";
+import { ReportExportMenu } from "@/components/export/ReportExportMenu";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { apiRequest } from "@/lib/queryClient";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useToast } from "@/hooks/use-toast";
-import { ReportExportMenu } from "@/components/export/ReportExportMenu";
-import { Plus, Package, Eye, Search, X, Ban, Loader2, Truck, Check, ChevronDown, Filter } from "lucide-react";
+import { Plus, Package, Eye, X, Ban, Loader2, Truck, Check, ChevronDown, Filter } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -396,16 +396,13 @@ export function ContainerSpView({
         </div>
       </div>
       <div className="flex flex-wrap gap-2 items-center">
-        <div className="relative flex-1 min-w-[220px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search by container number, invoice, supplier..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
-            data-testid="input-search-container"
-          />
-        </div>
+        <SearchField
+          value={searchTerm}
+          onValueChange={setSearchTerm}
+          placeholder="Search by container number, invoice, supplier..."
+          wrapperClassName="flex-1 min-w-[220px]"
+          data-testid="input-search-container"
+        />
         <div className="flex gap-1">
           {(["ALL", "OTW", "OFFLOADED"] as const).map((status) => (
             <Button

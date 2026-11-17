@@ -3,6 +3,7 @@
  * GET reads never post. Reviewed close is a separate explicit Owner action;
  * existing fiscal period close/reopen workflows are not silently invoked.
  */
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -347,21 +348,25 @@ export default function FiscalCloseReview() {
             </div>
             <div>
               <Label>Existing Retained Earnings / Equity account</Label>
-              <select
-                className="h-10 w-full rounded-md border bg-background px-2"
-                value={retainedId}
-                onChange={(e) => {
-                  setRetainedId(e.target.value);
+              <Select
+                value={retainedId || "__none__"}
+                onValueChange={(value) => {
+                  setRetainedId(value === "__none__" ? "" : value);
                   setConfirmText("");
                 }}
               >
-                <option value="">Select an active Equity account</option>
-                {accounts.data?.accounts.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.code} · {a.name} (#{a.id})
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger className="h-10 w-full" aria-label="Existing Retained Earnings / Equity account">
+                  <SelectValue placeholder="Select an active Equity account" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Select an active Equity account</SelectItem>
+                  {accounts.data?.accounts.map((a) => (
+                    <SelectItem key={a.id} value={String(a.id)}>
+                      {a.code} · {a.name} (#{a.id})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               {accounts.isError && <p className="text-xs text-destructive">Unable to list existing Equity accounts</p>}
             </div>
           </div>
@@ -484,14 +489,15 @@ export default function FiscalCloseReview() {
             <div className="grid sm:grid-cols-3 gap-3">
               <div>
                 <Label>Review capacity</Label>
-                <select
-                  className="h-10 w-full rounded-md border bg-background px-2"
-                  value={reviewKind}
-                  onChange={(e) => setReviewKind(e.target.value as ReviewKind)}
-                >
-                  <option value="ACCOUNTING">Accounting review (Admin/Developer)</option>
-                  <option value="OWNER">Owner approval (Owner)</option>
-                </select>
+                <Select value={reviewKind} onValueChange={(value) => setReviewKind(value as ReviewKind)}>
+                  <SelectTrigger className="h-10 w-full" aria-label="Review capacity">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ACCOUNTING">Accounting review (Admin/Developer)</SelectItem>
+                    <SelectItem value="OWNER">Owner approval (Owner)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div className="sm:col-span-2">
                 <Label>Review evidence / explanation</Label>
