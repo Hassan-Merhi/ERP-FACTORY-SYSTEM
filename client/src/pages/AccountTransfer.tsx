@@ -1,3 +1,4 @@
+import { SearchField } from "@/components/ui/search-field";
 import { searchAny } from "@shared/searchNormalization";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useDeferredValue, useState, useMemo } from "react";
@@ -65,10 +66,7 @@ function AccountCombobox({
     () =>
       accounts
         .filter((a) => a.id !== excludeId)
-        .filter(
-          (a) =>
-            searchAny(search, a.name, a.code)
-        )
+        .filter((a) => searchAny(search, a.name, a.code))
         .slice(0, 50),
     [accounts, search, excludeId]
   );
@@ -344,20 +342,18 @@ export default function AccountTransfer() {
                 <p className="text-sm text-muted-foreground mt-0.5">Select which entries to transfer</p>
               </div>
               <div className="flex items-center gap-2">
-                <div className="relative">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                  <Input
-                    className="pl-8 h-8 text-sm w-52"
-                    placeholder="Filter entries…"
-                    value={searchEntries}
-                    onChange={(e) => {
-                      setSearchEntries(e.target.value);
-                      setEntryPage(1);
-                      setSelectedIds(new Set());
-                    }}
-                    data-testid="input-search-entries"
-                  />
-                </div>
+                <SearchField
+                  value={searchEntries}
+                  onValueChange={(value) => {
+                    setSearchEntries(value);
+                    setEntryPage(1);
+                    setSelectedIds(new Set());
+                  }}
+                  placeholder="Filter entries…"
+                  wrapperClassName="w-52"
+                  className="text-sm"
+                  data-testid="input-search-entries"
+                />
               </div>
             </div>
           </CardHeader>

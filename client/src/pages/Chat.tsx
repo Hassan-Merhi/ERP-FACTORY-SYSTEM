@@ -1,8 +1,9 @@
+import { SearchField } from "@/components/ui/search-field";
 import { searchAny } from "@shared/searchNormalization";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Send, MessageCircle, CheckCheck, Plus, Search, Trash2, Paperclip, FileText, X, Download } from "lucide-react";
+import { Send, MessageCircle, CheckCheck, Plus, Trash2, Paperclip, FileText, X, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -641,16 +642,12 @@ export default function Chat() {
             <DialogTitle>New Message</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search users..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9"
-                data-testid="input-user-search"
-              />
-            </div>
+            <SearchField
+              value={searchQuery}
+              onValueChange={setSearchQuery}
+              placeholder="Search users..."
+              data-testid="input-user-search"
+            />
             <div className="max-h-72 overflow-y-auto divide-y rounded-md border">
               {filteredAllUsers.length === 0 ? (
                 <div className="p-4 text-center text-sm text-muted-foreground">No users found</div>

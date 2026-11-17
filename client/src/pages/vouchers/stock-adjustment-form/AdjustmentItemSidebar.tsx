@@ -9,8 +9,7 @@
 
 import { formatNumber } from "@/lib/formatNumber";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Search } from "lucide-react";
+import { SearchField } from "@/components/ui/search-field";
 import type { StockAdjustmentFormModel } from "./useStockAdjustmentFormModel";
 
 export function AdjustmentItemSidebar({ model }: { model: StockAdjustmentFormModel }) {
@@ -50,19 +49,15 @@ export function AdjustmentItemSidebar({ model }: { model: StockAdjustmentFormMod
             {locations.find((l) => l.id === adjustmentLocationId)?.name}
           </p>
         )}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search by name or code..."
-            value={adjustmentSearchTerm}
-            onChange={(e) => {
-              setAdjustmentSearchTerm(e.target.value);
-              setAdjustmentHighlightedIndex(0);
-            }}
-            className="pl-9"
-            data-testid="input-adjustment-sidebar-search"
-          />
-        </div>
+        <SearchField
+          placeholder="Search by name or code..."
+          value={adjustmentSearchTerm}
+          onValueChange={(value) => {
+            setAdjustmentSearchTerm(value);
+            setAdjustmentHighlightedIndex(0);
+          }}
+          data-testid="input-adjustment-sidebar-search"
+        />
       </div>
       <div className="flex-1 overflow-y-auto p-2" ref={adjustmentSidebarRef}>
         <div className="space-y-1">

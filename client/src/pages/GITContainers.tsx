@@ -1,10 +1,10 @@
+import { SearchField } from "@/components/ui/search-field";
 import { getErrorDetails } from "@shared/errorUtils";
 import { useState, useEffect, useRef, ChangeEvent } from "react";
 import { Redirect } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -15,7 +15,6 @@ import {
   AlertTriangle,
   Clock,
   DollarSign,
-  Search,
   Filter,
   CheckCircle2,
   ChevronDown,
@@ -491,16 +490,14 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
 
         {/* ── Search + Filters Toggle ── (narrow phones: search row, then paired controls) */}
         <div className="flex shrink-0 items-center gap-2 flex-wrap max-sm:grid max-sm:grid-cols-2">
-          <div className="relative flex-1 min-w-48 max-sm:col-span-2 max-sm:min-w-0">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search container #, company, truck, transporter, agent…"
-              className="h-10 rounded-xl border-border/80 bg-card pl-9 shadow-sm dark:border-white/10 sm:h-11"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              data-testid="input-otw-search"
-            />
-          </div>
+          <SearchField
+            value={search}
+            onValueChange={setSearch}
+            placeholder="Search container #, company, truck, transporter, agent…"
+            wrapperClassName="flex-1 min-w-48 max-sm:col-span-2 max-sm:min-w-0"
+            className="h-10 rounded-xl border-border/80 bg-card shadow-sm dark:border-white/10 sm:h-11"
+            data-testid="input-otw-search"
+          />
           <Button
             variant={showFilters ? "default" : "outline"}
             size="default"

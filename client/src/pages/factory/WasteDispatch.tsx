@@ -16,7 +16,6 @@ import { PageHeader } from "@/components/PageHeader";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   Trash2,
-  Search,
   ChevronDown,
   ChevronRight,
   Loader2,
@@ -38,6 +37,7 @@ import type {
 import { fmt, fmtKg, today } from "./wastedispatch/utils";
 import { WasteDispatchDialogs } from "./wastedispatch/components/WasteDispatchDialogs";
 import { ExportButton } from "@/components/export/ReportExportMenu";
+import { SearchField } from "@/components/ui/search-field";
 export default function WasteDispatch() {
   const { selectedCompany } = useCompany();
   const { toast } = useToast();
@@ -389,16 +389,14 @@ export default function WasteDispatch() {
                 )}
               </div>
               <div className="flex items-center gap-2">
-                <div className="relative">
-                  <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    placeholder="Filter products..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="pl-8 w-48 h-8 text-xs"
-                    data-testid="input-search-bales"
-                  />
-                </div>
+                <SearchField
+                  placeholder="Filter products..."
+                  value={search}
+                  onValueChange={setSearch}
+                  wrapperClassName="w-48"
+                  className="h-8 text-xs"
+                  data-testid="input-search-bales"
+                />
                 {bales.length > 0 && (
                   <Button variant="outline" size="sm" onClick={toggleAll} className="text-xs h-8 px-3">
                     {selected.size === bales.length ? "Deselect All" : "Select All"}

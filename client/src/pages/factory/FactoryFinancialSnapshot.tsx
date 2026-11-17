@@ -1,7 +1,6 @@
 import { useLocation } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { PageHeader } from "@/components/PageHeader";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -23,12 +22,12 @@ import {
   ExternalLink,
   Plus,
   X,
-  Search,
 } from "lucide-react";
 import { kg, usd } from "./factoryfinancialsnapshot/utils";
 import { KpiCard } from "./factoryfinancialsnapshot/components/KpiCard";
 import { SectionHeader } from "./factoryfinancialsnapshot/components/SectionHeader";
 import { useFactoryFinancialSnapshotModel } from "./factoryfinancialsnapshot/useFactoryFinancialSnapshotModel";
+import { SearchField } from "@/components/ui/search-field";
 export default function FactoryFinancialSnapshot() {
   const [, navigate] = useLocation();
   const financialSnapshot = useFactoryFinancialSnapshotModel();
@@ -726,17 +725,14 @@ export default function FactoryFinancialSnapshot() {
             <DialogTitle>Add {cardLabel} Account</DialogTitle>
           </DialogHeader>
           <div className="p-3 border-b shrink-0">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-              <Input
-                className="pl-8 h-8 text-sm"
-                placeholder="Search accounts..."
-                value={pickerSearch}
-                onChange={(e) => setPickerSearch(e.target.value)}
-                autoFocus
-                data-testid="input-picker-search"
-              />
-            </div>
+            <SearchField
+              className="h-8 text-sm"
+              placeholder="Search accounts..."
+              value={pickerSearch}
+              onValueChange={setPickerSearch}
+              autoFocus
+              data-testid="input-picker-search"
+            />
           </div>
           <div className="overflow-y-auto flex-1 p-2">
             {pickerAccounts.length === 0 && (

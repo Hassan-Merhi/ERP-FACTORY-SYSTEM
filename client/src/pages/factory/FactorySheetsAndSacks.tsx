@@ -12,7 +12,6 @@ import type { FactoryMyAccess } from "@shared/apiTypes";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
@@ -34,7 +33,6 @@ import {
   Plus,
   Pencil,
   Trash2,
-  Search,
   Loader2,
   Package,
   ShoppingBag,
@@ -52,6 +50,7 @@ import type { SheetsAndSacksItem } from "./factorysheetsandsacks/types";
 import { TYPES, fmt, fmtInt } from "./factorysheetsandsacks/utils";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import type { RouteComponentProps } from "wouter";
+import { SearchField } from "@/components/ui/search-field";
 
 /** Routed standalone (receives route props) or embedded as a hub tab panel. */
 type EmbeddablePageProps = { embedded?: boolean } & Partial<RouteComponentProps>;
@@ -409,16 +408,14 @@ export default function FactorySheetsAndSacks({ embedded = false }: EmbeddablePa
           <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-700/60 dark:bg-card">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/80 bg-slate-50/80 px-4 py-3 dark:border-slate-700/60 dark:bg-slate-900/40">
               <div className="flex min-w-0 flex-wrap items-center gap-2">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    placeholder="Search by name, size..."
-                    aria-label="Search stock"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="h-9 w-56 rounded-xl border-slate-200 bg-background pl-9 dark:border-slate-600 sm:w-64"
-                  />
-                </div>
+                <SearchField
+                  placeholder="Search by name, size..."
+                  aria-label="Search stock"
+                  value={search}
+                  onValueChange={setSearch}
+                  wrapperClassName="w-56 sm:w-64"
+                  className="h-9 rounded-xl border-slate-200 bg-background dark:border-slate-600"
+                />
                 <Select value={typeFilter} onValueChange={setTypeFilter}>
                   <SelectTrigger
                     aria-label="Filter item type"

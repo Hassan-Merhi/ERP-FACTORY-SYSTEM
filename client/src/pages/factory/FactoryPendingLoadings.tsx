@@ -50,9 +50,9 @@ import {
 import { apiRequest, keyStartsWith } from "@/lib/queryClient";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PriorityScanLoadingControl } from "./PriorityScanLoadingControl";
+import { SearchField } from "@/components/ui/search-field";
 
 const UNDO_TIMEOUT_MS = 8000;
 
@@ -604,17 +604,15 @@ export default function FactoryPendingLoadings() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-border/60 bg-card p-2 shadow-sm sm:gap-3">
-        <div className="relative min-w-44 flex-1 sm:max-w-xl">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={searchTerm}
-            onChange={(event) => setSearchTerm(event.target.value)}
-            placeholder="Search customer, loading #, proforma or note..."
-            className="h-10 rounded-xl border-border/80 bg-background pl-9"
-            aria-label="Search pending loadings"
-            data-testid="input-pending-loadings-search"
-          />
-        </div>
+        <SearchField
+          value={searchTerm}
+          onValueChange={setSearchTerm}
+          placeholder="Search customer, loading #, proforma or note..."
+          wrapperClassName="min-w-44 flex-1 sm:max-w-xl"
+          className="h-10 rounded-xl border-border/80 bg-background"
+          aria-label="Search pending loadings"
+          data-testid="input-pending-loadings-search"
+        />
         <Select value={sortOrder} onValueChange={(value) => setSortOrder(value as "newest" | "oldest" | "bales")}>
           <SelectTrigger
             className="h-10 w-full rounded-xl sm:w-52"

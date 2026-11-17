@@ -25,9 +25,10 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { moveProductNearItem, moveProductToPosition } from "./monthlyProductionRowOrder";
 import { useToast } from "@/hooks/use-toast";
 import type { MonthlyProductionExportBale } from "./monthlyProductionWorkbookDrilldown";
-import { ArrowDown, ArrowUp, ChevronDown, GripVertical, ListOrdered, Plus, RotateCcw, Search, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, GripVertical, ListOrdered, Plus, RotateCcw, X } from "lucide-react";
 import { ExportButton } from "@/components/export/ReportExportMenu";
 import { exportFileName } from "@/lib/exportFile";
+import { SearchField } from "@/components/ui/search-field";
 
 /** Routed standalone (receives route props) or embedded as a hub tab panel. */
 type EmbeddablePageProps = { embedded?: boolean } & Partial<RouteComponentProps>;
@@ -423,16 +424,13 @@ export default function FactoryMonthlyProductionMatrix({ embedded = false }: Emb
           <Button size="sm" variant="outline" onClick={addMonth}>
             <Plus className="mr-1 h-4 w-4" /> {t("monthlyProduction.addMonth")}
           </Button>
-          <div className="relative w-full sm:w-64 sm:ml-auto">
-            <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              aria-label={t("monthlyProduction.searchItems")}
-              className="pl-9"
-              placeholder={t("monthlyProduction.searchPlaceholder")}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
+          <SearchField
+            aria-label={t("monthlyProduction.searchItems")}
+            wrapperClassName="w-full sm:w-64 sm:ml-auto"
+            placeholder={t("monthlyProduction.searchPlaceholder")}
+            value={search}
+            onValueChange={setSearch}
+          />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button

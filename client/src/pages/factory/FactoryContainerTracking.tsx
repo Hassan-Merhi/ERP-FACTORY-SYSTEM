@@ -1,11 +1,11 @@
 import { searchAny } from "@shared/searchNormalization";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ExternalLink, Search, Ship } from "lucide-react";
+import { ExternalLink, Ship } from "lucide-react";
 import { formatNumber } from "@/lib/formatNumber";
+import { SearchField } from "@/components/ui/search-field";
 
 interface InvoiceContainerRow {
   id: number;
@@ -63,16 +63,13 @@ export default function FactoryContainerTracking() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2 flex-wrap">
-        <div className="relative flex-1 min-w-[200px] max-w-sm">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search container, customer, invoice…"
-            className="pl-8"
-            data-testid="input-tracking-search"
-          />
-        </div>
+        <SearchField
+          value={search}
+          onValueChange={setSearch}
+          placeholder="Search container, customer, invoice…"
+          wrapperClassName="flex-1 min-w-[200px] max-w-sm"
+          data-testid="input-tracking-search"
+        />
         <span className="text-xs text-muted-foreground">
           {filtered.length} container{filtered.length !== 1 ? "s" : ""}
         </span>

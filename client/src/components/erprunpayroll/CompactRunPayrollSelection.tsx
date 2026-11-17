@@ -1,3 +1,4 @@
+import { SearchField } from "@/components/ui/search-field";
 import { TabsList, PillTabButton } from "@/components/ui/tabs";
 import { useMemo, useState } from "react";
 import {
@@ -8,7 +9,6 @@ import {
   ClipboardList,
   History,
   PlayCircle,
-  Search,
   Users,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -234,16 +234,14 @@ export function CompactRunPayrollSelection({ model }: CompactRunPayrollSelection
       <div className="overflow-hidden rounded-xl border bg-card shadow-xs">
         <div className="border-b p-3 sm:p-4">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-            <div className="relative min-w-0 flex-1 xl:max-w-2xl">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search by name, code, department..."
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                className="h-10 bg-background pl-9"
-                data-testid="input-search-workers"
-              />
-            </div>
+            <SearchField
+              value={searchQuery}
+              onValueChange={setSearchQuery}
+              placeholder="Search by name, code, department..."
+              wrapperClassName="flex-1 xl:max-w-2xl"
+              className="bg-background"
+              data-testid="input-search-workers"
+            />
 
             <div className="flex flex-wrap items-end gap-2">
               <div className="space-y-1">

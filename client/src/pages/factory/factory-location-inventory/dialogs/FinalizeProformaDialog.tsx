@@ -5,13 +5,14 @@
  * discovered from compiler errors rather than guessed.
  */
 import type { useFactoryLocationInventory } from "../../FactoryLocationInventoryModel";
+import { SearchField } from "@/components/ui/search-field";
 
 type FactoryLocationInventoryModel = ReturnType<typeof useFactoryLocationInventory>;
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search, FileText, X, Plus, Check } from "lucide-react";
+import { FileText, X, Plus, Check } from "lucide-react";
 import { ExportButton } from "@/components/export/ReportExportMenu";
 
 export function FinalizeProformaDialog({
@@ -162,16 +163,13 @@ export function FinalizeProformaDialog({
               ) : (
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
-                    <div className="relative flex-1">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        placeholder="Search customers..."
-                        value={customerSearch}
-                        onChange={(e) => setCustomerSearch(e.target.value)}
-                        className="pl-9"
-                        data-testid="input-search-customers"
-                      />
-                    </div>
+                    <SearchField
+                      placeholder="Search customers..."
+                      value={customerSearch}
+                      onValueChange={setCustomerSearch}
+                      wrapperClassName="flex-1"
+                      data-testid="input-search-customers"
+                    />
                     <Button
                       variant="outline"
                       size="sm"
