@@ -304,7 +304,7 @@ export async function beginRevisionTx(
       evidence: input.evidence,
     })
     .returning();
-  await tx.execute(sql.raw("SELECT set_config('erp.ic_edit_revision','" + revision.id + "',true)"));
+  await tx.execute(sql`SELECT set_config('erp.ic_edit_revision', ${String(revision.id)}, true)`);
   return revision;
 }
 export async function completeRevisionTx(
@@ -562,7 +562,7 @@ export async function editLinkedTrade(input: LinkedTradeEditInput, identity: Edi
   }
   return withTradeScope(identity, [trade.sourceCompanyId, trade.destinationCompanyId], () =>
     db.transaction(async (tx) => {
-      await tx.execute(sql.raw("SELECT pg_advisory_xact_lock(" + IMPORT_LOCK + "," + trade.sourceCompanyId + ")"));
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(${IMPORT_LOCK}, ${trade.sourceCompanyId})`);
       const [duplicate] = await tx
         .select()
         .from(intercompanyTradeRevisions)
