@@ -20,7 +20,6 @@ const env = {
   SESSION_SECRET: "A".repeat(64),
   CSRF_ENFORCE: "1",
   ENABLE_SCHEDULERS: "false",
-  RUN_STARTUP_MIGRATIONS: "true",
 };
 const approvedJournal = {
   clientRequestId: "e53cdbd1-7c4b-4b5c-9a60-b4f9de710b8c",

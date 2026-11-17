@@ -10,36 +10,8 @@ export interface CredentialVersionSession {
 }
 
 const DEFAULT_REFRESH_MS = 60_000;
-let credentialVersionSchemaPromise: Promise<void> | null = null;
-
-async function ensureCredentialVersionSchema(db: DatabaseOrTransaction): Promise<void> {
-  if (!credentialVersionSchemaPromise) {
-    credentialVersionSchemaPromise = (async () => {
-      await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS user_credential_versions (
-          user_id varchar PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-          credential_version integer NOT NULL DEFAULT 0,
-          updated_at timestamp NOT NULL DEFAULT now()
-        )
-      `);
-
-      await db.execute(sql`
-        INSERT INTO user_credential_versions (user_id, credential_version)
-        SELECT id, 0 FROM users
-        ON CONFLICT (user_id) DO NOTHING
-      `);
-    })().catch((error) => {
-      credentialVersionSchemaPromise = null;
-      throw error;
-    });
-  }
-
-  await credentialVersionSchemaPromise;
-}
 
 export async function loadCredentialVersion(db: DatabaseOrTransaction, userId: string): Promise<number> {
-  await ensureCredentialVersionSchema(db);
-
   const [row] = await db
     .select({ credentialVersion: userCredentialVersions.credentialVersion })
     .from(userCredentialVersions)
@@ -92,8 +64,6 @@ export async function hydrateActiveCredentialVersion(
 }
 
 export async function bumpCredentialVersion(tx: DbTransaction, userId: string): Promise<number> {
-  await ensureCredentialVersionSchema(tx);
-
   const [row] = await tx
     .insert(userCredentialVersions)
     .values({ userId, credentialVersion: 1, updatedAt: new Date() })

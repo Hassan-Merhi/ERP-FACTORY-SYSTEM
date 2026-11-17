@@ -23,7 +23,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { db, pool } from "../server/db";
 import { companyBusinessDate } from "../server/services/accounting/companyBusinessDate";
 import { perpetualReadinessReport } from "../server/services/accounting/perpetualInventory/readiness";
-import { ensureFactoryCostBasisSchema } from "../server/services/factory/factoryCostBasisSchema";
 import { writeDaybookEntry as sharedDaybookWriter } from "../server/services/factory/factoryDaybookWriter";
 import { writeDaybookEntry as payrollDaybookWriter } from "../server/routes/payroll/core/_helpers";
 import { writeDaybookEntry as factoryDaybookWriter } from "../server/routes/factory/_helpers";
@@ -109,7 +108,6 @@ async function excel(rows: unknown[][]): Promise<Buffer> {
 
 beforeAll(async () => {
   ctx = await seedTestData(PREFIX);
-  await ensureFactoryCostBasisSchema(pool);
   await pool.query(`UPDATE companies SET company_type = 'factory' WHERE id = $1`, [ctx.companyId]);
   agent = request.agent(ctx.app);
   expect(
@@ -391,18 +389,18 @@ describe("F7 / DI10: imports", () => {
 
   it("reimport keeps only this company's costed mix ids", async () => {
     const costed = await insertId(
-      `INSERT INTO factory_mix_batches (company_id, batch_code, total_weight_kg, cost_per_kg, total_cost)
-       VALUES ($1, 'P19C-MIX-OK', 100, 2, 200) RETURNING id`,
+      `INSERT INTO factory_mix_batches (company_id, batch_code, batch_number, total_weight_kg, cost_per_kg, total_cost)
+       VALUES ($1, 'P19C-MIX-OK', 'P19C-MIX-OK', 100, 2, 200) RETURNING id`,
       [ctx.companyId]
     );
     const zero = await insertId(
-      `INSERT INTO factory_mix_batches (company_id, batch_code, total_weight_kg, cost_per_kg, total_cost)
-       VALUES ($1, 'P19C-MIX-ZERO', 100, 0, 0) RETURNING id`,
+      `INSERT INTO factory_mix_batches (company_id, batch_code, batch_number, total_weight_kg, cost_per_kg, total_cost)
+       VALUES ($1, 'P19C-MIX-ZERO', 'P19C-MIX-ZERO', 100, 0, 0) RETURNING id`,
       [ctx.companyId]
     );
     const foreign = await insertId(
-      `INSERT INTO factory_mix_batches (company_id, batch_code, total_weight_kg, cost_per_kg, total_cost)
-       VALUES ($1, 'P19C-MIX-B', 100, 3, 300) RETURNING id`,
+      `INSERT INTO factory_mix_batches (company_id, batch_code, batch_number, total_weight_kg, cost_per_kg, total_cost)
+       VALUES ($1, 'P19C-MIX-B', 'P19C-MIX-B', 100, 3, 300) RETURNING id`,
       [companyB]
     );
     const file = await excel([

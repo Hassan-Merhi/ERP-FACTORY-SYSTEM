@@ -23,9 +23,8 @@ import {
   rebalanceVoucherRoundingTx,
 } from "../server/services/accounting/engineRounding";
 import {
-  ensureVoucherBalanceGuard,
   installedVoucherBalanceGuardVersion,
-  VOUCHER_BALANCE_GUARD_TRIGGERS,
+  VOUCHER_BALANCE_GUARD_VERSION,
 } from "../server/services/accounting/voucherBalanceGuard";
 import { runInCompanyPostingScope } from "../server/services/accounting/scheduledPostingScope";
 import {
@@ -43,7 +42,6 @@ let ctx: TestContext;
 let agent: request.SuperAgentTest;
 let otherCompanyId: number;
 let sequence = 0;
-let guardWasInstalled = false;
 
 const allocate = (companyId: number, voucherType: string, voucherDate: string) =>
   runInCompanyPostingScope(companyId, () =>
@@ -146,9 +144,8 @@ const auditRows = async (voucherId: number, action: string) =>
   ).rows;
 
 beforeAll(async () => {
-  // The balance guard is installed at boot; another suite may have dropped it.
-  guardWasInstalled = (await installedVoucherBalanceGuardVersion(pool)) !== null;
-  await ensureVoucherBalanceGuard(pool);
+  // The balance guard is defined by the schema migrations.
+  expect(await installedVoucherBalanceGuardVersion(pool)).toBe(VOUCHER_BALANCE_GUARD_VERSION);
   ctx = await seedTestData(PREFIX);
   agent = request.agent(ctx.app);
   await agent.post("/api/auth/login").send({ username: `${PREFIX}_testuser`, password: "testpassword123" });
@@ -167,11 +164,6 @@ afterAll(async () => {
   await pool.query(`DELETE FROM vouchers WHERE company_id = $1`, [otherCompanyId]);
   await pool.query(`DELETE FROM companies WHERE id = $1`, [otherCompanyId]);
   await cleanupTestData(PREFIX);
-  if (!guardWasInstalled) {
-    for (const [table, trigger] of VOUCHER_BALANCE_GUARD_TRIGGERS) {
-      await pool.query(`DROP TRIGGER IF EXISTS ${trigger} ON ${table}`);
-    }
-  }
   closeTestServer();
 }, 120_000);
 

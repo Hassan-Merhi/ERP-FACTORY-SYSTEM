@@ -150,7 +150,7 @@ jobs:
         id: db_schema
         if: always() && steps.install.outcome == 'success'
         continue-on-error: true
-        run: node node_modules/drizzle-kit/bin.cjs push --force
+        run: MIGRATION_CONFIRMATION=APPLY_SCHEMA_MIGRATIONS node scripts/db/migrate.mjs apply
 
       - name: Prepare disposable authenticated browser fixture
         id: browser_fixture

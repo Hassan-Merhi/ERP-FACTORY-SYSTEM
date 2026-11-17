@@ -211,13 +211,16 @@ describe("retired routes", () => {
   });
 
   it("no longer runs the CHARGE-PRE and worker-bonus repairs at boot", () => {
-    const bridge = fs.readFileSync(path.join(process.cwd(), "server/companyScopeRlsBridge.mjs"), "utf8");
-    expect(bridge.includes("factoryChargeVoucherRepairBridge")).toBe(false);
-    expect(bridge.includes("workerBonusExpenseRepairBridge")).toBe(false);
+    // The startup preload (successor of the deleted company-scope RLS bridge) loads neither repair.
+    const preload = fs.readFileSync(path.join(process.cwd(), "server/startupPreload.mjs"), "utf8");
+    expect(preload.includes("factoryChargeVoucherRepairBridge")).toBe(false);
+    expect(preload.includes("workerBonusExpenseRepairBridge")).toBe(false);
     for (const file of [
+      "server/companyScopeRlsBridge.mjs",
       "server/factoryChargeVoucherRepairBridge.mjs",
       "server/workerBonusExpenseRepairBridge.mjs",
       "migrations/0018_worker_bonus_expense_worker_names.sql",
+      "migrations/archive/legacy/0018_worker_bonus_expense_worker_names.sql",
     ]) {
       expect(fs.existsSync(path.join(process.cwd(), file))).toBe(false);
     }
