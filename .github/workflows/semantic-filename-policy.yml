@@ -22,6 +22,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Run positive and negative filename compatibility regression tests
+        run: node --test tests/semantic-filename-policy.node.test.mjs
       - name: Verify semantic filename policy and entrypoint references
         run: |
           node scripts/verify-semantic-filename-policy.mjs --json > semantic-filename-policy.json || status=$?
