@@ -153,12 +153,16 @@ export default function FactoryDispatchCombinedInvoicePanel({
               <div className="space-y-1 rounded-lg border p-3 text-xs">
                 <div className="flex justify-between"><span>Already-posted trip customer totals</span>
                   <strong className="font-mono">$ {money(value.tripCustomerTotal)}</strong></div>
+                <div className="flex justify-between text-muted-foreground"><span>Dispatch charges included above (all trips, net)</span>
+                  <span className="font-mono">$ {money((Number(value.tripBillableCharges??0)-Number(value.tripDiscounts??0)).toFixed(2))}</span></div>
                 <div className="flex justify-between"><span>Original order charges (not in trips)</span>
                   <strong className="font-mono">$ {money(value.originalOrderCharges)}</strong></div>
                 <div className="flex justify-between border-t pt-2"><span className="font-bold">One final invoice</span>
                   <strong className="font-mono">$ {money(value.finalInvoiceTotal)}</strong></div>
                 <p className="text-[11px] text-muted-foreground">
-                  Posted truck fees and discounts are already included in trip totals.
+                  One combined dispatch-charge line will appear on the final invoice.
+                  It nets only customer-billable trip fees and discounts; internal trip costs stay separate.
+                  Charges above are already in posted trip totals, not added again.
                   Clearing-to-sales is a reclassification, not another customer receivable.
                 </p>
               </div>

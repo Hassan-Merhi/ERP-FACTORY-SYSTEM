@@ -32,6 +32,7 @@ import {
 import { eq, and, inArray, isNull, ne } from "drizzle-orm";
 import { isFactorySessionLocation } from "../../../helpers/companyOwnership";
 import { plusMoney, toMoney } from "../../../../lib/money";
+import { hasAnyPhysicalDispatchTx } from "../../../../services/factory/dispatchTripFinancialGuards";
 
 export function registerOrderLoadingRoutes(app: Express) {
   app.post("/api/factory/customer-orders-loading", requireAuth, async (req: Request, res: Response) => {
@@ -176,6 +177,15 @@ export function registerOrderLoadingRoutes(app: Express) {
           .for("update");
         if (!order) throw new Error("Order not found");
         if (order.status !== "LOADING") throw new Error("Only LOADING orders can be finalized for loading");
+        // Dispatch-managed loadings remain LOADING until the signed all-trip
+        // combined-invoice workflow. Legacy closing marks every order bale SOLD
+        // and switches to VERIFIED, invalidating reconciliation and risking
+        // duplicate invoice accounting. Route operators to dispatch sign-off.
+        if (await hasAnyPhysicalDispatchTx(tx, companyId, orderId)) {
+          throw new Error(
+            "DISPATCH_CONSOLIDATION_REQUIRED: This loading has dispatch trips. Close and financially post every trip, then open Dispatch Comparison to reconcile and finalize the one combined invoice with its net dispatch charges."
+          );
+        }
 
         if (order.proformaIdUsed && order.proformaIdUsed !== orderProformaLink?.proformaIdUsed) {
           await acquireProformaCapacityTransactionLock(tx, {
@@ -576,8 +586,12 @@ export function registerOrderLoadingRoutes(app: Express) {
         ...(finalized.nextLoading ? { nextLoading: finalized.nextLoading } : {}),
       });
     } catch (error: unknown) {
-      logger.error("Error finalizing loading:", { error: error });
-      res.status(400).json({ message: getErrorMessage(error) });
+      const message = getErrorMessage(error);
+      if (message.startsWith("DISPATCH_CONSOLIDATION_REQUIRED:")) {
+        return res.status(409).json({ code: "DISPATCH_CONSOLIDATION_REQUIRED", message });
+      }
+      logger.error("Error finalizing loading:", { error });
+      res.status(400).json({ message });
     }
   });
 }
