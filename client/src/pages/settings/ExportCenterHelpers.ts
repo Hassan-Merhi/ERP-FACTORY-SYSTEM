@@ -1,6 +1,17 @@
 import { TIMEZONES, DAYS } from "./ExportCenterConstants.ts";
 import { NpSettings } from "./ExportCenterTypes.ts";
 
+/**
+ * Roles allowed to send the all-company export to WhatsApp. The server enforces
+ * it (requireRole("Admin", "Owner") on POST /api/daily-export/trigger-whatsapp;
+ * requireRole always admits Developer); the client only hides the button.
+ */
+export const WHATSAPP_ALL_COMPANY_EXPORT_ROLES: readonly string[] = ["Admin", "Owner", "Developer"];
+
+export function canSendAllCompanyExportToWhatsApp(role: string | null | undefined): boolean {
+  return !!role && WHATSAPP_ALL_COMPANY_EXPORT_ROLES.includes(role);
+}
+
 export function fmtBytes(bytes?: number): string {
   if (!bytes) return "—";
   const mb = bytes / 1024 / 1024;

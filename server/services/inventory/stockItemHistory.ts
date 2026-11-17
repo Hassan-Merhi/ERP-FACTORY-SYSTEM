@@ -8,6 +8,7 @@
  * used to delete the item's document lines with it.
  */
 import { sql } from "drizzle-orm";
+import { assertSqlColumnRef } from "../../lib/sqlTextGuards";
 
 import type { DatabaseOrTransaction } from "../../db";
 
@@ -54,6 +55,7 @@ export async function presentStockItemHistoryTables(executor: DatabaseOrTransact
  * from STOCK_ITEM_HISTORY_TABLES.
  */
 export function stockItemHistorySqlText(tables: readonly string[], itemColumn: string): string {
+  assertSqlColumnRef(itemColumn, "stock_item_history_column");
   const checks = tables
     .filter((table) => STOCK_ITEM_HISTORY_TABLES.includes(table))
     .map((table) => `SELECT 1 FROM ${table} h WHERE h.stock_item_id = ${itemColumn}`);

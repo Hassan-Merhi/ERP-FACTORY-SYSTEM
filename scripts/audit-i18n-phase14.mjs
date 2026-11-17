@@ -114,6 +114,11 @@ const reviewedTechnicalValues = new Set([
   "Scheduled WhatsApp schema verification failed; apply reviewed controlled migration 008 first",
   "${migrations.length} unversioned startup statements have not been mapped to controlled migrations",
   "Legacy startup cutover blocked:",
+  // Raw SQL audit: internal refusal codes for invalid ids / map keys before SQL is built.
+  // Thrown to callers and logs, never rendered as interface text.
+  "EXPORT_COMPANY_INVALID",
+  "FACTORY_BILINGUAL_ID_INVALID",
+  "HISTORICAL_REPAIR_KIND_INVALID",
   "HISTORICAL_FX_WALLET_DATE_MISMATCH",
   "HISTORICAL_FX_WALLET_COVERAGE_INVALID",
   "HISTORICAL_FX_WALLET_COVERAGE_EMPTY",

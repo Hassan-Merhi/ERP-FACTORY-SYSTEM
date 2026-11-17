@@ -159,6 +159,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [dead-code-cleanup-final-report.md](dead-code-cleanup-final-report.md) | 2026-10 dead-code cleanup: results, retained code, open decisions and required validation |
 | [ci/branch-protection.md](ci/branch-protection.md) | Required checks on `main` |
 | [security/phase4-main-ruleset-hardening.md](security/phase4-main-ruleset-hardening.md) | Current main ruleset security gaps, immutable dependency pinning and required administrative verification |
+| [security/raw-sql-audit.md](security/raw-sql-audit.md) | Raw SQL injection audit results and the `npm run check:raw-sql` review gate (allowlist, register, how to fix findings) |
 | [mobile-tablet-web-regression.md](mobile-tablet-web-regression.md) | Browser regression checklist |
 | [iphone-duo-phase1-mobile-regression.md](iphone-duo-phase1-mobile-regression.md) | Full-system iPhone Duo route inventory, viewport tests, evidence, and remaining certification gates |
 | [erp-mobile-program.md](erp-mobile-program.md) | ERP phone contracts, route certification and phase status |
