@@ -200,8 +200,8 @@ export function DailyRateModal({ companyId }: DailyRateModalProps) {
       // Only mark today's date after an acknowledged successful server save.
       markDoneToday(savedCompanyId, savedDate);
       toast({
-        title: "Today's exchange rate has been saved",
-        description: "It now applies to every user of the company. Current USD valuation views are refreshing.",
+        title: "Today's exchange rate has been set",
+        description: "Current USD valuation views are refreshing.",
       });
       setIsOpen(false);
       setChangeMode(false);
