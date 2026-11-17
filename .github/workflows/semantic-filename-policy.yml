@@ -1,0 +1,35 @@
+name: Semantic filename policy and entrypoint compatibility
+on:
+  push:
+    branches:
+      - refactor/phase-wave-semantic-names
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+concurrency:
+  group: semantic-filename-policy-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify semantic filename policy and entrypoint references
+        run: |
+          node scripts/verify-semantic-filename-policy.mjs --json > semantic-filename-policy.json || status=$?
+          node -e "const r=require('./semantic-filename-policy.json');console.log('Scanned',r.scannedEntrypoints,'entrypoint manifests,',r.referencesChecked,'references; failures:',r.problems.length);for(const p of r.problems)console.error(p.code,(p.owner||'')+' -> '+p.path)"
+          exit ${status:-0}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: semantic-filename-policy
+          path: semantic-filename-policy.json
+          retention-days: 30
