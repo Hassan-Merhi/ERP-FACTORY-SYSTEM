@@ -1196,96 +1196,96 @@
     },
     {
       "findingId": "RSQL-0047",
-      "id": "11d5999b845f876222eb",
+      "id": "a70c36ac22b693f4ba82",
       "path": "scripts/db/lib/schemaDdl.mjs",
-      "line": 414,
+      "line": 475,
       "category": "assembled-sql-text",
       "sink": "string assembly",
-      "context": "adoptionDataChecks",
+      "context": "adoptionDataChecks.duplicateGroups",
       "dynamicInputs": [
         {
-          "expression": "m[1]",
-          "source": "scripts/db/lib/schemaDdl.mjs: regex capture m[1] (table of CREATE UNIQUE INDEX, :412) over a statement produced by planAdoption() from the committed manifest migrations/manifest/0001_baseline_schema.tsv, read by readManifest (server/schema/migrationRegistry.mjs:129) in scripts/db/migrate.mjs:260 and passed as the EXPECTED side of compareSnapshots (server/schema/schemaCatalog.mjs:376-388)",
+          "expression": "table",
+          "source": "scripts/db/lib/schemaDdl.mjs:489/:494: argument m[1], the quoted table captured from CREATE UNIQUE INDEX (:479-483) or ADD CONSTRAINT PRIMARY KEY/UNIQUE (:490) over a statement produced by planAdoption() from the committed manifest migrations/manifest/0001_baseline_schema.tsv (the EXPECTED side of compareSnapshots, server/schema/schemaCatalog.mjs), the only input to adoptionDataChecks (scripts/db/migrate.mjs:287)",
           "validation": "Captured from DDL that schemaDdl.mjs itself compiled from the committed manifest (quoted identifiers / pg_get_indexdef / pg_get_constraintdef text); no other input reaches adoptionDataChecks"
         },
         {
-          "expression": "m[4]",
-          "source": "scripts/db/lib/schemaDdl.mjs: regex capture m[4] (index predicate) over a statement produced by planAdoption() from the committed manifest migrations/manifest/0001_baseline_schema.tsv, read by readManifest (server/schema/migrationRegistry.mjs:129) in scripts/db/migrate.mjs:260 and passed as the EXPECTED side of compareSnapshots (server/schema/schemaCatalog.mjs:376-388)",
-          "validation": "Captured from DDL that schemaDdl.mjs itself compiled from the committed manifest (quoted identifiers / pg_get_indexdef / pg_get_constraintdef text); no other input reaches adoptionDataChecks"
+          "expression": "where.join(\" AND \")",
+          "source": "scripts/db/lib/schemaDdl.mjs:487-488 and :494: elements are the partial-index predicate m[6] wrapped in parentheses and the literal template \"(<keys>) IS NOT NULL\", where keys is keyExpressions() of the key list; both come from regex captures over a statement produced by planAdoption() from the committed manifest migrations/manifest/0001_baseline_schema.tsv (the EXPECTED side of compareSnapshots, server/schema/schemaCatalog.mjs), the only input to adoptionDataChecks (scripts/db/migrate.mjs:287)",
+          "validation": "Captured from DDL that schemaDdl.mjs itself compiled from the committed manifest (quoted identifiers / pg_get_indexdef / pg_get_constraintdef text); no other input reaches adoptionDataChecks; the only literal joined in is \" AND \""
         },
         {
-          "expression": "m[2]",
-          "source": "scripts/db/lib/schemaDdl.mjs: regex capture m[2] (index key list) over a statement produced by planAdoption() from the committed manifest migrations/manifest/0001_baseline_schema.tsv, read by readManifest (server/schema/migrationRegistry.mjs:129) in scripts/db/migrate.mjs:260 and passed as the EXPECTED side of compareSnapshots (server/schema/schemaCatalog.mjs:376-388)",
-          "validation": "Captured from DDL that schemaDdl.mjs itself compiled from the committed manifest (quoted identifiers / pg_get_indexdef / pg_get_constraintdef text); no other input reaches adoptionDataChecks"
+          "expression": "keys",
+          "source": "scripts/db/lib/schemaDdl.mjs:485/:492: keyExpressions(m[2] or m[4]) (:414-419), the index or constraint key list split on top-level commas with per-column ASC/DESC/NULLS ordering removed, captured over a statement produced by planAdoption() from the committed manifest migrations/manifest/0001_baseline_schema.tsv (the EXPECTED side of compareSnapshots, server/schema/schemaCatalog.mjs), the only input to adoptionDataChecks (scripts/db/migrate.mjs:287)",
+          "validation": "Captured from DDL that schemaDdl.mjs itself compiled from the committed manifest (quoted identifiers / pg_get_indexdef / pg_get_constraintdef text); no other input reaches adoptionDataChecks; keyExpressions only removes ordering suffixes and re-joins with \", \""
         }
       ],
       "userControlled": "no",
-      "validation": "Captured from DDL that schemaDdl.mjs itself compiled from the committed manifest (quoted identifiers / pg_get_indexdef / pg_get_constraintdef text); no other input reaches adoptionDataChecks / Captured from DDL that schemaDdl.mjs itself compiled from the committed manifest (quoted identifiers / pg_get_indexdef / pg_get_constraintdef text); no other input reaches adoptionDataChecks / Captured from DDL that schemaDdl.mjs itself compiled from the committed manifest (quoted identifiers / pg_get_indexdef / pg_get_constraintdef text); no other input reaches adoptionDataChecks",
+      "validation": "Captured from DDL that schemaDdl.mjs itself compiled from the committed manifest (quoted identifiers / pg_get_indexdef / pg_get_constraintdef text); no other input reaches adoptionDataChecks / Captured from DDL that schemaDdl.mjs itself compiled from the committed manifest (quoted identifiers / pg_get_indexdef / pg_get_constraintdef text); no other input reaches adoptionDataChecks; the only literal joined in is \" AND \" / Captured from DDL that schemaDdl.mjs itself compiled from the committed manifest (quoted identifiers / pg_get_indexdef / pg_get_constraintdef text); no other input reaches adoptionDataChecks; keyExpressions only removes ordering suffixes and re-joins with \", \"",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
       "disposition": "reviewed:developer-script",
-      "reason": "Duplicate-key check SELECT is assembled from parts of a unique-index definition the runner compiled from the committed manifest. adoptionDataChecks is only called by scripts/db/migrate.mjs:287 on planAdoption's statements, and the checks run inside BEGIN READ ONLY (migrate.mjs:289-302), so even a malformed check cannot modify data. scripts/db/lib/schemaDdl.mjs is imported only by the operator CLI scripts/db/migrate.mjs (and isLosslessTypeChange by its test); no server route or request can supply manifest entries, and the live database's own catalog text never becomes DDL."
+      "reason": "Duplicate-key check SELECT is assembled from the quoted table, key list and (partial-index or NULL-exclusion) predicates of a unique index or PK/UNIQUE constraint the runner compiled from the committed manifest. adoptionDataChecks is only called by scripts/db/migrate.mjs:287 on planAdoption's statements, and the checks run inside BEGIN READ ONLY (migrate.mjs:296-305), so even a malformed check cannot modify data. scripts/db/lib/schemaDdl.mjs is imported only by the operator CLI scripts/db/migrate.mjs (and adoptionDataChecks/isLosslessTypeChange by its test); no server route or request can supply manifest entries, and the live database's own catalog text never becomes DDL."
     },
     {
       "findingId": "RSQL-0048",
-      "id": "d9a77e91bedfcbee00f2",
+      "id": "40919e7857c2b8832fe5",
       "path": "scripts/db/lib/schemaDdl.mjs",
-      "line": 414,
+      "line": 475,
       "category": "assembled-sql-text",
       "sink": "string assembly",
-      "context": "adoptionDataChecks",
+      "context": "adoptionDataChecks.duplicateGroups",
       "dynamicInputs": [
         {
-          "expression": "m[4]",
-          "source": "scripts/db/lib/schemaDdl.mjs: regex capture m[4] (partial-index predicate of CREATE UNIQUE INDEX, :412) over a statement produced by planAdoption() from the committed manifest migrations/manifest/0001_baseline_schema.tsv, read by readManifest (server/schema/migrationRegistry.mjs:129) in scripts/db/migrate.mjs:260 and passed as the EXPECTED side of compareSnapshots (server/schema/schemaCatalog.mjs:376-388)",
-          "validation": "Captured from DDL that schemaDdl.mjs itself compiled from the committed manifest (quoted identifiers / pg_get_indexdef / pg_get_constraintdef text); no other input reaches adoptionDataChecks"
+          "expression": "where.join(\" AND \")",
+          "source": "scripts/db/lib/schemaDdl.mjs:487-488 and :494: elements are the partial-index predicate m[6] wrapped in parentheses and the literal template \"(<keys>) IS NOT NULL\", where keys is keyExpressions() of the key list; both come from regex captures over a statement produced by planAdoption() from the committed manifest migrations/manifest/0001_baseline_schema.tsv (the EXPECTED side of compareSnapshots, server/schema/schemaCatalog.mjs), the only input to adoptionDataChecks (scripts/db/migrate.mjs:287)",
+          "validation": "Captured from DDL that schemaDdl.mjs itself compiled from the committed manifest (quoted identifiers / pg_get_indexdef / pg_get_constraintdef text); no other input reaches adoptionDataChecks; the only literal joined in is \" AND \""
         }
       ],
       "userControlled": "no",
-      "validation": "Captured from DDL that schemaDdl.mjs itself compiled from the committed manifest (quoted identifiers / pg_get_indexdef / pg_get_constraintdef text); no other input reaches adoptionDataChecks",
+      "validation": "Captured from DDL that schemaDdl.mjs itself compiled from the committed manifest (quoted identifiers / pg_get_indexdef / pg_get_constraintdef text); no other input reaches adoptionDataChecks; the only literal joined in is \" AND \"",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
       "disposition": "reviewed:developer-script",
-      "reason": "The WHERE clause is the partial-index predicate from pg_get_indexdef() text in the committed manifest. adoptionDataChecks is only called by scripts/db/migrate.mjs:287 on planAdoption's statements, and the checks run inside BEGIN READ ONLY (migrate.mjs:289-302), so even a malformed check cannot modify data. scripts/db/lib/schemaDdl.mjs is imported only by the operator CLI scripts/db/migrate.mjs (and isLosslessTypeChange by its test); no server route or request can supply manifest entries, and the live database's own catalog text never becomes DDL."
+      "reason": "The WHERE clause joins the partial-index predicate from pg_get_indexdef() text in the committed manifest and a literal NULL-exclusion over the same manifest key list. adoptionDataChecks is only called by scripts/db/migrate.mjs:287 on planAdoption's statements, and the checks run inside BEGIN READ ONLY (migrate.mjs:296-305), so even a malformed check cannot modify data. scripts/db/lib/schemaDdl.mjs is imported only by the operator CLI scripts/db/migrate.mjs (and adoptionDataChecks/isLosslessTypeChange by its test); no server route or request can supply manifest entries, and the live database's own catalog text never becomes DDL."
     },
     {
       "findingId": "RSQL-0049",
-      "id": "1b1f0773ebb9a8a3df54",
+      "id": "4091a0bc5f8fb218d2ce",
       "path": "scripts/db/lib/schemaDdl.mjs",
-      "line": 417,
+      "line": 495,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "adoptionDataChecks",
       "dynamicInputs": [
         {
           "expression": "m[1]",
-          "source": "scripts/db/lib/schemaDdl.mjs: regex capture m[1] (table of ADD CONSTRAINT PRIMARY KEY/UNIQUE, :415) over a statement produced by planAdoption() from the committed manifest migrations/manifest/0001_baseline_schema.tsv, read by readManifest (server/schema/migrationRegistry.mjs:129) in scripts/db/migrate.mjs:260 and passed as the EXPECTED side of compareSnapshots (server/schema/schemaCatalog.mjs:376-388)",
+          "source": "scripts/db/lib/schemaDdl.mjs:490: regex capture m[1] (quoted table of ADD CONSTRAINT PRIMARY KEY) over a statement produced by planAdoption() from the committed manifest migrations/manifest/0001_baseline_schema.tsv (the EXPECTED side of compareSnapshots, server/schema/schemaCatalog.mjs), the only input to adoptionDataChecks (scripts/db/migrate.mjs:287)",
           "validation": "Captured from DDL that schemaDdl.mjs itself compiled from the committed manifest (quoted identifiers / pg_get_indexdef / pg_get_constraintdef text); no other input reaches adoptionDataChecks"
         },
         {
-          "expression": "m[2]",
-          "source": "scripts/db/lib/schemaDdl.mjs: regex capture m[2] (constraint column list) over a statement produced by planAdoption() from the committed manifest migrations/manifest/0001_baseline_schema.tsv, read by readManifest (server/schema/migrationRegistry.mjs:129) in scripts/db/migrate.mjs:260 and passed as the EXPECTED side of compareSnapshots (server/schema/schemaCatalog.mjs:376-388)",
-          "validation": "Captured from DDL that schemaDdl.mjs itself compiled from the committed manifest (quoted identifiers / pg_get_indexdef / pg_get_constraintdef text); no other input reaches adoptionDataChecks"
+          "expression": "keys",
+          "source": "scripts/db/lib/schemaDdl.mjs:492: keyExpressions(m[4]) (:414-419), the PRIMARY KEY column list captured over a statement produced by planAdoption() from the committed manifest migrations/manifest/0001_baseline_schema.tsv (the EXPECTED side of compareSnapshots, server/schema/schemaCatalog.mjs), the only input to adoptionDataChecks (scripts/db/migrate.mjs:287)",
+          "validation": "Captured from DDL that schemaDdl.mjs itself compiled from the committed manifest (quoted identifiers / pg_get_indexdef / pg_get_constraintdef text); no other input reaches adoptionDataChecks; keyExpressions only removes ordering suffixes and re-joins with \", \""
         }
       ],
       "userControlled": "no",
-      "validation": "Captured from DDL that schemaDdl.mjs itself compiled from the committed manifest (quoted identifiers / pg_get_indexdef / pg_get_constraintdef text); no other input reaches adoptionDataChecks / Captured from DDL that schemaDdl.mjs itself compiled from the committed manifest (quoted identifiers / pg_get_indexdef / pg_get_constraintdef text); no other input reaches adoptionDataChecks",
+      "validation": "Captured from DDL that schemaDdl.mjs itself compiled from the committed manifest (quoted identifiers / pg_get_indexdef / pg_get_constraintdef text); no other input reaches adoptionDataChecks / Captured from DDL that schemaDdl.mjs itself compiled from the committed manifest (quoted identifiers / pg_get_indexdef / pg_get_constraintdef text); no other input reaches adoptionDataChecks; keyExpressions only removes ordering suffixes and re-joins with \", \"",
       "parameterization": "dynamic text reviewed (values bound separately)",
       "risk": "low",
       "requiredAction": "none",
       "reviewStatus": "closed",
       "disposition": "reviewed:developer-script",
-      "reason": "Duplicate-group check is assembled from the quoted table and column list of a PK/UNIQUE constraint compiled from the committed manifest. adoptionDataChecks is only called by scripts/db/migrate.mjs:287 on planAdoption's statements, and the checks run inside BEGIN READ ONLY (migrate.mjs:289-302), so even a malformed check cannot modify data. scripts/db/lib/schemaDdl.mjs is imported only by the operator CLI scripts/db/migrate.mjs (and isLosslessTypeChange by its test); no server route or request can supply manifest entries, and the live database's own catalog text never becomes DDL."
+      "reason": "NULL-key check for a planned PRIMARY KEY, assembled from the quoted table and column list of a constraint compiled from the committed manifest. adoptionDataChecks is only called by scripts/db/migrate.mjs:287 on planAdoption's statements, and the checks run inside BEGIN READ ONLY (migrate.mjs:296-305), so even a malformed check cannot modify data. scripts/db/lib/schemaDdl.mjs is imported only by the operator CLI scripts/db/migrate.mjs (and adoptionDataChecks/isLosslessTypeChange by its test); no server route or request can supply manifest entries, and the live database's own catalog text never becomes DDL."
     },
     {
       "findingId": "RSQL-0050",
       "id": "ae30e942cdbb794936db",
       "path": "scripts/db/lib/schemaDdl.mjs",
-      "line": 419,
+      "line": 497,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "adoptionDataChecks",
@@ -1309,7 +1309,7 @@
       "findingId": "RSQL-0051",
       "id": "2a88eb9538e8a6e43b02",
       "path": "scripts/db/lib/schemaDdl.mjs",
-      "line": 421,
+      "line": 499,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "adoptionDataChecks",
@@ -1338,7 +1338,7 @@
       "findingId": "RSQL-0052",
       "id": "27ecf97cee877328eb6e",
       "path": "scripts/db/lib/schemaDdl.mjs",
-      "line": 424,
+      "line": 502,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "adoptionDataChecks",
@@ -1367,7 +1367,7 @@
       "findingId": "RSQL-0053",
       "id": "39f7b92224f00d959d49",
       "path": "scripts/db/lib/schemaDdl.mjs",
-      "line": 427,
+      "line": 505,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "adoptionDataChecks",
@@ -1444,7 +1444,7 @@
       "findingId": "RSQL-0056",
       "id": "e02ef2540d4f2e5ee544",
       "path": "scripts/db/migrate.mjs",
-      "line": 318,
+      "line": 325,
       "category": "indirect-query-text",
       "sink": "client.query",
       "context": "cmdAdopt.run",
@@ -1468,7 +1468,7 @@
       "findingId": "RSQL-0057",
       "id": "17318191acc4767a34ba",
       "path": "scripts/db/migrate.mjs",
-      "line": 335,
+      "line": 342,
       "category": "indirect-query-text",
       "sink": "client.query",
       "context": "cmdAdopt.run",
@@ -1492,7 +1492,7 @@
       "findingId": "RSQL-0058",
       "id": "e11b4c2c69efebc056fe",
       "path": "scripts/db/migrate.mjs",
-      "line": 381,
+      "line": 388,
       "category": "indirect-query-text",
       "sink": "client.query",
       "context": "cmdManifest",
@@ -19323,7 +19323,7 @@
       "findingId": "RSQL-0907",
       "id": "5eef22f3ba5768853a84",
       "path": "tests/db/migration-runner.node.test.mjs",
-      "line": 614,
+      "line": 642,
       "category": "query-text",
       "sink": "c.query",
       "context": "<module>",
