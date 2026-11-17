@@ -228,6 +228,48 @@ export function parseSnapshot(lines) {
   return entries;
 }
 
+// PostgreSQL stores `col IN ('a','b')` on a varchar column as an array cast.
+// Restoring a pg_dump re-parses the deparsed text, and the stored tree changes
+// shape: the cast moves from the array onto each element. Both render forms
+// mean exactly the same thing:
+//
+//   created from source SQL:  ARRAY['a'::character varying, 'b'::character varying]::text[]
+//   restored from a dump:     ARRAY['a'::character varying::text, 'b'::character varying::text]
+//
+// (and, without pretty-printing, `(ARRAY['a'::character varying])::text[]` vs
+// `ARRAY[('a'::character varying)::text]`). Production was created from source
+// while the baseline and any restored backup carry the dump form, so comparison
+// canonicalises the dump form to the source form. Only comparison uses this:
+// manifests, adoption DDL and function bodies keep their exact text.
+const SQL_LITERAL = String.raw`'(?:[^']|'')*'`;
+const SQL_TYPE = String.raw`[a-z][a-z ]*(?:\(\d+\))?`;
+const PRETTY_ELEMENT = String.raw`${SQL_LITERAL}::${SQL_TYPE}::text`;
+const PLAIN_ELEMENT = String.raw`\(${SQL_LITERAL}::${SQL_TYPE}\)::text`;
+const PRETTY_ARRAY = new RegExp(String.raw`ARRAY\[(${PRETTY_ELEMENT}(?:, ${PRETTY_ELEMENT})*)\]`, "g");
+const PLAIN_ARRAY = new RegExp(String.raw`ARRAY\[(${PLAIN_ELEMENT}(?:, ${PLAIN_ELEMENT})*)\]`, "g");
+const PRETTY_ITEM = new RegExp(String.raw`(${SQL_LITERAL}::${SQL_TYPE})::text`, "g");
+const PLAIN_ITEM = new RegExp(String.raw`\((${SQL_LITERAL}::${SQL_TYPE})\)::text`, "g");
+
+/** Rewrite dump-form cast arrays to the equivalent source form (see above). */
+export function canonicalExpressions(text) {
+  return text
+    .replace(PRETTY_ARRAY, (_, items) => `ARRAY[${items.replace(PRETTY_ITEM, "$1")}]::text[]`)
+    .replace(PLAIN_ARRAY, (_, items) => `(ARRAY[${items.replace(PLAIN_ITEM, "$1")}])::text[]`);
+}
+
+/**
+ * The form of an entry that comparison looks at. Function bodies are source
+ * text and compared verbatim; every other definition is expression-canonical.
+ */
+function comparable(entry) {
+  if (entry.kind === "function") return entry;
+  if (!entry.comparable) {
+    const raw = canonicalExpressions(entry.raw);
+    entry.comparable = raw === entry.raw ? entry : { ...entry, raw, def: JSON.parse(raw) };
+  }
+  return entry.comparable;
+}
+
 /**
  * Comparison key for an entry.
  *
@@ -238,7 +280,8 @@ export function parseSnapshot(lines) {
  * object under another name satisfies the expectation. Everything else is keyed
  * by its qualified name and compared by full definition.
  */
-export function comparisonKey(entry) {
+export function comparisonKey(original) {
+  const entry = comparable(original);
   if (entry.kind === "constraint") {
     const table = entry.identity.slice(0, entry.identity.lastIndexOf("."));
     // NOT VALID is carried by def.validated, not by the key.
@@ -251,7 +294,8 @@ export function comparisonKey(entry) {
 }
 
 /** The comparable part of an entry once its key matched. */
-function comparisonValue(entry) {
+function comparisonValue(original) {
+  const entry = comparable(original);
   // FOREIGN KEY / CHECK constraints are enforced on every new or changed row
   // whether or not historical rows were validated. Adoption adds them NOT VALID
   // to populated tables so production history is never scanned or rewritten;
@@ -273,8 +317,8 @@ const isNamedShape = (entry) => entry.kind === "constraint" || entry.kind === "i
  * Every other field must match exactly.
  */
 function isStricter(expected, actual) {
-  const e = expected.def;
-  const a = actual.def;
+  const e = comparable(expected).def;
+  const a = comparable(actual).def;
   switch (expected.kind) {
     case "function":
       return (

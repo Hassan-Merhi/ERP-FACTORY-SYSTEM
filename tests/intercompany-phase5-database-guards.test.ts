@@ -16,14 +16,18 @@ const migrationNames = [
   "20261105_004_intercompany_phase4_payments.sql",
   "20261105_005_intercompany_phase5_lifecycle.sql",
 ];
-const migrations = migrationNames.map((file) => readFileSync(join(process.cwd(), "migrations", file), "utf8"));
+const migrations = migrationNames.map((file) =>
+  readFileSync(join(process.cwd(), "migrations/archive/legacy", file), "utf8")
+);
 
 describe("Phase 5 destination inventory and pre-receipt cancellation database guards", () => {
   it("registers all three receipt/cancellation models and the exact fifth migration", () => {
     expect(getTableConfig(intercompanyDestinationReceipts).name).toBe("intercompany_destination_receipts");
     expect(getTableConfig(intercompanyDestinationReceiptItems).name).toBe("intercompany_destination_receipt_items");
     expect(getTableConfig(intercompanyTradeCancellations).name).toBe("intercompany_trade_cancellations");
-    const journal = JSON.parse(readFileSync(join(process.cwd(), "migrations/meta/_journal.json"), "utf8"));
+    const journal = JSON.parse(
+      readFileSync(join(process.cwd(), "migrations/archive/legacy/meta/_journal.json"), "utf8")
+    );
     expect(
       journal.entries.filter((entry: { tag: string }) => entry.tag === "20261105_005_intercompany_phase5_lifecycle")
     ).toHaveLength(1);

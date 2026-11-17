@@ -18,9 +18,11 @@
 --       the startup gate now proves the guarded function body is installed)
 --
 -- Additive only: new tables, functions, triggers, indexes and one nullable
--- column. Every CREATE is IF NOT EXISTS / OR REPLACE, so a database that already
--- ran the feature-branch migrations (the Factory copy) converges on the same
--- definitions. No existing container, PO, voucher, account, stock or balance row
+-- column. Re-runnable: tables and indexes are IF NOT EXISTS, functions OR
+-- REPLACE, and each trigger is dropped and recreated (CREATE OR REPLACE does not
+-- cover constraint triggers), so a database that already ran the feature-branch
+-- migrations (the Factory copy) converges on the same definitions. These guards
+-- are the only edits to the original statements. No existing container, PO, voucher, account, stock or balance row
 -- is changed. Trading stays disabled until a relationship policy enables it.
 
 -- ── 1. supplier proforma destination company ─────────────────────────────────
@@ -967,6 +969,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END $block$;
+DROP TRIGGER IF EXISTS ic_trade_line_link_guard ON intercompany_trade_line_links;
 CREATE TRIGGER ic_trade_line_link_guard BEFORE INSERT OR UPDATE OR DELETE
   ON intercompany_trade_line_links FOR EACH ROW EXECUTE FUNCTION ic_guard_trade_line_link();
 
@@ -988,6 +991,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END $blocked$;
+DROP TRIGGER IF EXISTS ic_shared_charge_invoice_immutability ON intercompany_shared_charge_invoices;
 CREATE TRIGGER ic_shared_charge_invoice_immutability BEFORE UPDATE OR DELETE
 ON intercompany_shared_charge_invoices FOR EACH ROW EXECUTE FUNCTION ic_guard_charge_invoice();
 
@@ -1008,6 +1012,7 @@ BEGIN
   END IF;
   RETURN NULL;
 END $check$;
+DROP TRIGGER IF EXISTS ic_shared_charge_totals_after_allocation ON intercompany_shared_charge_allocations;
 CREATE CONSTRAINT TRIGGER ic_shared_charge_totals_after_allocation
 AFTER INSERT OR UPDATE OR DELETE ON intercompany_shared_charge_allocations
 DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION ic_check_shared_charge_totals();
@@ -1023,6 +1028,7 @@ BEGIN
   END IF;
   RETURN NULL;
 END $check$;
+DROP TRIGGER IF EXISTS ic_shared_invoice_face_after_confirm ON intercompany_shared_charge_invoices;
 CREATE CONSTRAINT TRIGGER ic_shared_invoice_face_after_confirm
 AFTER INSERT OR UPDATE ON intercompany_shared_charge_invoices
 DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION ic_check_shared_invoice_face();
@@ -1043,11 +1049,13 @@ BEGIN
   END IF;
   RETURN NULL;
 END $check$;
+DROP TRIGGER IF EXISTS ic_shared_charge_po_sum_guard ON intercompany_shared_charge_po_allocations;
 CREATE CONSTRAINT TRIGGER ic_shared_charge_po_sum_guard AFTER INSERT OR UPDATE OR DELETE
 ON intercompany_shared_charge_po_allocations DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW EXECUTE FUNCTION ic_check_shared_po_allocations();
 
 -- Recheck source-PO totals when the parent container allocation changes too.
+DROP TRIGGER IF EXISTS ic_shared_charge_parent_po_sum_guard ON intercompany_shared_charge_allocations;
 CREATE CONSTRAINT TRIGGER ic_shared_charge_parent_po_sum_guard AFTER INSERT OR UPDATE OR DELETE
 ON intercompany_shared_charge_allocations DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW EXECUTE FUNCTION ic_check_shared_po_allocations();
@@ -1075,6 +1083,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END $check$;
+DROP TRIGGER IF EXISTS ic_shared_charge_allocation_guard ON intercompany_shared_charge_allocations;
 CREATE TRIGGER ic_shared_charge_allocation_guard BEFORE INSERT OR UPDATE OR DELETE
   ON intercompany_shared_charge_allocations FOR EACH ROW EXECUTE FUNCTION ic_guard_shared_charge_allocation();
 
@@ -1101,6 +1110,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END $check$;
+DROP TRIGGER IF EXISTS ic_shared_charge_po_allocation_guard ON intercompany_shared_charge_po_allocations;
 CREATE TRIGGER ic_shared_charge_po_allocation_guard BEFORE INSERT OR UPDATE OR DELETE
 ON intercompany_shared_charge_po_allocations FOR EACH ROW EXECUTE FUNCTION ic_guard_shared_charge_po_allocation();
 
@@ -1233,9 +1243,11 @@ BEGIN
   END IF;
   RETURN NULL;
 END $guard$;
+DROP TRIGGER IF EXISTS ic_payment_allocation_totals ON intercompany_payment_allocations;
 CREATE CONSTRAINT TRIGGER ic_payment_allocation_totals
   AFTER INSERT ON intercompany_payment_allocations
   DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION ic_verify_payment_allocation_totals();
+DROP TRIGGER IF EXISTS ic_payment_pair_totals ON intercompany_container_payments;
 CREATE CONSTRAINT TRIGGER ic_payment_pair_totals
   AFTER INSERT OR UPDATE ON intercompany_container_payments
   DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION ic_verify_payment_allocation_totals();
@@ -1255,6 +1267,7 @@ BEGIN
   END IF;
   RETURN NULL;
 END $check$;
+DROP TRIGGER IF EXISTS ic_payment_po_cost_guard ON intercompany_import_batch_containers;
 CREATE CONSTRAINT TRIGGER ic_payment_po_cost_guard
 AFTER UPDATE ON intercompany_import_batch_containers
 DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION ic_check_trade_paid_after_cost();
@@ -1281,6 +1294,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END $guard$;
+DROP TRIGGER IF EXISTS ic_payment_allocation_append_only ON intercompany_payment_allocations;
 CREATE TRIGGER ic_payment_allocation_append_only
 BEFORE INSERT OR UPDATE OR DELETE ON intercompany_payment_allocations
 FOR EACH ROW EXECUTE FUNCTION ic_validate_payment_allocation_row();
@@ -1428,6 +1442,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END $guard$;
+DROP TRIGGER IF EXISTS ic_payment_pair_immutable ON intercompany_container_payments;
 CREATE TRIGGER ic_payment_pair_immutable
 BEFORE INSERT OR UPDATE OR DELETE ON intercompany_container_payments
 FOR EACH ROW EXECUTE FUNCTION ic_validate_payment_pair();
@@ -1458,6 +1473,7 @@ BEGIN
   END LOOP;
   RETURN NULL;
 END $guard$;
+DROP TRIGGER IF EXISTS ic_trade_payment_pair_guard ON intercompany_trades;
 CREATE CONSTRAINT TRIGGER ic_trade_payment_pair_guard
 AFTER UPDATE ON intercompany_trades
 DEFERRABLE INITIALLY DEFERRED
@@ -1506,8 +1522,10 @@ BEGIN
   END IF;
   RETURN CASE WHEN TG_OP='DELETE' THEN OLD ELSE NEW END;
 END $guard$;
+DROP TRIGGER IF EXISTS ic_payment_voucher_guard ON vouchers;
 CREATE TRIGGER ic_payment_voucher_guard BEFORE INSERT OR UPDATE OR DELETE ON vouchers
 FOR EACH ROW EXECUTE FUNCTION ic_block_payment_voucher_mutation();
+DROP TRIGGER IF EXISTS ic_payment_voucher_entry_guard ON voucher_entries;
 CREATE TRIGGER ic_payment_voucher_entry_guard BEFORE INSERT OR UPDATE OR DELETE ON voucher_entries
 FOR EACH ROW EXECUTE FUNCTION ic_block_payment_voucher_mutation();
 
@@ -1517,7 +1535,7 @@ FOR EACH ROW EXECUTE FUNCTION ic_block_payment_voucher_mutation();
 -- Keep the ONE physical container in Properties. This migration posts NO live
 -- stock, cash, supplier, or GL changes and does not activate any workflow.
 
-CREATE TABLE intercompany_destination_receipts (
+CREATE TABLE IF NOT EXISTS intercompany_destination_receipts (
   id BIGSERIAL PRIMARY KEY,
   trade_id INTEGER NOT NULL UNIQUE REFERENCES intercompany_trades(id) ON DELETE RESTRICT,
   relationship_id INTEGER NOT NULL REFERENCES intercompany_relationship_policies(id) ON DELETE RESTRICT,
@@ -1536,8 +1554,8 @@ CREATE TABLE intercompany_destination_receipts (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CONSTRAINT ic_receipt_fingerprint CHECK(request_fingerprint ~ '^[0-9a-f]{64}$')
 );
-CREATE INDEX ic_destination_receipts_company_idx ON intercompany_destination_receipts(destination_company_id, posting_date);
-CREATE TABLE intercompany_destination_receipt_items (
+CREATE INDEX IF NOT EXISTS ic_destination_receipts_company_idx ON intercompany_destination_receipts(destination_company_id, posting_date);
+CREATE TABLE IF NOT EXISTS intercompany_destination_receipt_items (
   id BIGSERIAL PRIMARY KEY,
   receipt_id BIGINT NOT NULL REFERENCES intercompany_destination_receipts(id) ON DELETE RESTRICT,
   stock_item_id INTEGER NOT NULL REFERENCES stock_items(id) ON DELETE RESTRICT,
@@ -1551,7 +1569,7 @@ CREATE TABLE intercompany_destination_receipt_items (
   CONSTRAINT ic_receipt_no_cost_variance CHECK(landed_value=value_moved)
 );
 
-CREATE TABLE intercompany_trade_cancellations (
+CREATE TABLE IF NOT EXISTS intercompany_trade_cancellations (
   id BIGSERIAL PRIMARY KEY,
   trade_id INTEGER NOT NULL UNIQUE REFERENCES intercompany_trades(id) ON DELETE RESTRICT,
   relationship_id INTEGER NOT NULL REFERENCES intercompany_relationship_policies(id) ON DELETE RESTRICT,
@@ -1575,12 +1593,12 @@ CREATE TABLE intercompany_trade_cancellations (
 
 -- Credit released by canceling an unreceived trade stays available only to
 -- its ORIGINAL payment / original company pair; NO cash vouchers are posted.
-ALTER TABLE intercompany_payment_allocations DROP CONSTRAINT ic_payment_allocation_kind;
+ALTER TABLE intercompany_payment_allocations DROP CONSTRAINT IF EXISTS ic_payment_allocation_kind;
 ALTER TABLE intercompany_payment_allocations ADD CONSTRAINT ic_payment_allocation_kind CHECK(
   allocation_kind IN ('manual','new_import_credit','cancel_credit_reallocate',
     'edit_release','reversal_release','cancel_release')
 );
-ALTER TABLE intercompany_payment_allocations DROP CONSTRAINT ic_payment_allocation_signed_kind;
+ALTER TABLE intercompany_payment_allocations DROP CONSTRAINT IF EXISTS ic_payment_allocation_signed_kind;
 ALTER TABLE intercompany_payment_allocations ADD CONSTRAINT ic_payment_allocation_signed_kind CHECK(
   (amount>0 AND allocation_kind IN ('manual','new_import_credit','cancel_credit_reallocate'))
   OR (amount<0 AND allocation_kind IN ('edit_release','reversal_release','cancel_release'))
@@ -1626,6 +1644,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END $fn$;
+DROP TRIGGER IF EXISTS ic_destination_receipt_guard ON intercompany_destination_receipts;
 CREATE TRIGGER ic_destination_receipt_guard BEFORE INSERT OR UPDATE OR DELETE
 ON intercompany_destination_receipts FOR EACH ROW EXECUTE FUNCTION ic_phase5_receipt_immutable();
 
@@ -1656,6 +1675,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END $fn$;
+DROP TRIGGER IF EXISTS ic_destination_receipt_item_guard ON intercompany_destination_receipt_items;
 CREATE TRIGGER ic_destination_receipt_item_guard BEFORE INSERT OR UPDATE OR DELETE
 ON intercompany_destination_receipt_items FOR EACH ROW EXECUTE FUNCTION ic_phase5_receipt_item_guard();
 
@@ -1689,9 +1709,11 @@ BEGIN
   END IF;
   RETURN NULL;
 END $fn$;
+DROP TRIGGER IF EXISTS ic_destination_receipt_sum ON intercompany_destination_receipts;
 CREATE CONSTRAINT TRIGGER ic_destination_receipt_sum
 AFTER INSERT ON intercompany_destination_receipts DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW EXECUTE FUNCTION ic_phase5_receipt_totals();
+DROP TRIGGER IF EXISTS ic_destination_receipt_item_sum ON intercompany_destination_receipt_items;
 CREATE CONSTRAINT TRIGGER ic_destination_receipt_item_sum
 AFTER INSERT ON intercompany_destination_receipt_items DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW EXECUTE FUNCTION ic_phase5_receipt_totals();
@@ -1713,6 +1735,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END $fn$;
+DROP TRIGGER IF EXISTS ic_phase5_trade_cancel_guard ON intercompany_trades;
 CREATE TRIGGER ic_phase5_trade_cancel_guard BEFORE UPDATE ON intercompany_trades
 FOR EACH ROW EXECUTE FUNCTION ic_phase5_trade_cancellation_guard();
 
@@ -1813,6 +1836,7 @@ BEGIN
   RETURN NEW;
 END $fn$;
 
+DROP TRIGGER IF EXISTS ic_phase5_cancellation_insert_guard ON intercompany_trade_cancellations;
 CREATE TRIGGER ic_phase5_cancellation_insert_guard BEFORE INSERT OR UPDATE OR DELETE
 ON intercompany_trade_cancellations FOR EACH ROW EXECUTE FUNCTION ic_phase5_cancellation_immutable();
 
@@ -1874,17 +1898,23 @@ BEGIN
   END IF;
   RETURN CASE WHEN TG_OP='DELETE' THEN OLD ELSE NEW END;
 END $fn$;
+DROP TRIGGER IF EXISTS ic_phase5_canceled_po_lock ON purchase_orders;
 CREATE TRIGGER ic_phase5_canceled_po_lock
 BEFORE UPDATE OR DELETE ON purchase_orders FOR EACH ROW EXECUTE FUNCTION ic_phase5_preserve_closed_trade_history();
+DROP TRIGGER IF EXISTS ic_phase5_canceled_line_lock ON po_line_items;
 CREATE TRIGGER ic_phase5_canceled_line_lock
 BEFORE INSERT OR UPDATE OR DELETE ON po_line_items FOR EACH ROW EXECUTE FUNCTION ic_phase5_preserve_closed_trade_history();
+DROP TRIGGER IF EXISTS ic_phase5_canceled_charge_lock ON container_charges;
 CREATE TRIGGER ic_phase5_canceled_charge_lock
 BEFORE INSERT OR UPDATE OR DELETE ON container_charges FOR EACH ROW EXECUTE FUNCTION ic_phase5_preserve_closed_trade_history();
+DROP TRIGGER IF EXISTS ic_phase5_canceled_container_lock ON containers;
 CREATE TRIGGER ic_phase5_canceled_container_lock
 BEFORE UPDATE OF company_id,supplier_id,status,offload_date,items_total,charges_total,grand_total
  OR DELETE ON containers FOR EACH ROW EXECUTE FUNCTION ic_phase5_preserve_closed_trade_history();
+DROP TRIGGER IF EXISTS ic_phase5_evidence_voucher_lock ON vouchers;
 CREATE TRIGGER ic_phase5_evidence_voucher_lock
 BEFORE UPDATE OR DELETE ON vouchers FOR EACH ROW EXECUTE FUNCTION ic_phase5_preserve_closed_trade_history();
+DROP TRIGGER IF EXISTS ic_phase5_evidence_entry_lock ON voucher_entries;
 CREATE TRIGGER ic_phase5_evidence_entry_lock
 BEFORE INSERT OR UPDATE OR DELETE ON voucher_entries FOR EACH ROW EXECUTE FUNCTION ic_phase5_preserve_closed_trade_history();
 
@@ -1899,6 +1929,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END $fn$;
+DROP TRIGGER IF EXISTS ic_phase5_no_reprice_received_trade ON intercompany_trade_revisions;
 CREATE TRIGGER ic_phase5_no_reprice_received_trade
 BEFORE INSERT ON intercompany_trade_revisions FOR EACH ROW EXECUTE FUNCTION ic_phase5_guard_received_revision();
 
@@ -1913,6 +1944,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END $fn$;
+DROP TRIGGER IF EXISTS ic_phase5_stock_cancel_guard ON intercompany_trades;
 CREATE TRIGGER ic_phase5_stock_cancel_guard BEFORE UPDATE OF state ON intercompany_trades
 FOR EACH ROW EXECUTE FUNCTION ic_phase5_block_cancel_after_receipt();
 

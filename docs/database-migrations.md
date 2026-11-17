@@ -21,6 +21,7 @@ migrations/
   0004_widen_columns_to_declared_types.sql
   0005_employee_opening_side_default_credit.sql
   0006_retire_retail_catalog_cost_snapshot_trigger.sql
+  0007_intercompany_container_trading.sql
   NNNN_short_description.sql           every later change
   manifest/0001_baseline_schema.tsv    catalog right after the baseline (adoption target)
   manifest/schema.tsv                  catalog after all migrations (startup + CI contract)
@@ -174,6 +175,47 @@ value. Examples are `factory_bales.pressed_at DEFAULT now()`,
 `factory_mix_batches.status 'OPEN'` vs `'ACTIVE'`, `users.chatbot_enabled
 false` vs `true`, and `production_bales.status`. Narrowing type differences
 (`text` vs `varchar(n)`, `timestamptz` vs `timestamp`) are left untouched too.
+
+## Intercompany container trading (0007)
+
+Intercompany container trading reached `main` (#2870) with its schema in the
+old form:
+- six date-named Drizzle-journal files (`20261105_001`–`005`, `20261113_001`);
+- two statements appended to startup-schema `010`;
+- a boot-time catch-up (`ensureLinkedPhysicalDeleteGuard`).
+
+`0007` folds all of it into one migration, in the original order. The six
+files are kept verbatim under `migrations/archive/legacy`.
+`tests/db/migration-runner.node.test.mjs` proves that `0007` contains each one
+unchanged, apart from re-run guards: `IF [NOT] EXISTS`, and a
+`DROP TRIGGER IF EXISTS` before each trigger. `CREATE OR REPLACE TRIGGER`
+cannot replace constraint triggers, hence the explicit drop.
+
+Those guards let the Factory copy, which already ran the feature-branch
+migrations, converge on the same definitions. The boot-time catch-up is gone:
+the startup gate compares the `ic_guard_trade_line_link()` body with the
+manifest, so a database without the physical-delete guard refuses to start.
+
+## Equivalent expression forms
+
+PostgreSQL stores `col IN ('a', 'b')` on a `varchar` column as an array cast,
+and restoring a `pg_dump` re-parses it into a different but equivalent tree:
+
+```
+created from source SQL (production):  ARRAY['a'::character varying, 'b'::character varying]::text[]
+restored from a dump (baseline, backups): ARRAY['a'::character varying::text, 'b'::character varying::text]
+```
+
+Catalog comparison (`canonicalExpressions` in `server/schema/schemaCatalog.mjs`)
+treats the two forms as equal. It applies to constraint, index, policy,
+trigger, column and table definitions, but never to function bodies, and it
+never changes the text that manifests or adoption DDL use.
+
+Without it, the live HMD database would fail verification on 56 baseline CHECK
+constraints. That was confirmed read-only against the live catalog on
+2026-11-17. The dump-restored copies used for the adoption rehearsals hid the
+problem. Any new adoption rehearsal should include a source-form database: the
+runner suite redefines a CHECK from source SQL before adopting.
 
 ## Writing a new migration
 

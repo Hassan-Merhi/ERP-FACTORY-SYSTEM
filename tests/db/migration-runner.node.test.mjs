@@ -10,7 +10,7 @@
  */
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, writeFileSync, mkdirSync, cpSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, it, before, after } from "node:test";
@@ -25,7 +25,12 @@ import {
   reconcileHistory,
   sha256,
 } from "../../server/schema/migrationRegistry.mjs";
-import { compareSnapshots, takeCatalogSnapshot, parseSnapshot } from "../../server/schema/schemaCatalog.mjs";
+import {
+  canonicalExpressions,
+  compareSnapshots,
+  takeCatalogSnapshot,
+  parseSnapshot,
+} from "../../server/schema/schemaCatalog.mjs";
 import { isLosslessTypeChange } from "../../scripts/db/lib/schemaDdl.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -233,6 +238,65 @@ describe("migration registry", () => {
     assert.equal(isLosslessTypeChange("bigint", "integer"), false);
     assert.equal(isLosslessTypeChange("integer", "character varying"), true);
     assert.equal(isLosslessTypeChange("timestamp without time zone", "timestamp with time zone"), false);
+  });
+
+  it("treats a CHECK created from source SQL and the same CHECK restored from a dump as equal", () => {
+    // Exactly what pg_get_constraintdef returns for account_display_layout_node_type_check
+    // on the live HMD database (created from source) and on a pg_dump restore of it.
+    const source =
+      "CHECK (((node_type)::text = ANY ((ARRAY['group'::character varying, 'ledger'::character varying])::text[])))";
+    const dump =
+      "CHECK (((node_type)::text = ANY (ARRAY[('group'::character varying)::text, ('ledger'::character varying)::text])))";
+    assert.equal(canonicalExpressions(dump), source);
+    assert.equal(canonicalExpressions(source), source);
+    const prettySource =
+      "CHECK (node_type::text = ANY (ARRAY['group'::character varying, 'ledger'::character varying]::text[]))";
+    const prettyDump =
+      "CHECK (node_type::text = ANY (ARRAY['group'::character varying::text, 'ledger'::character varying::text]))";
+    assert.equal(canonicalExpressions(prettyDump), prettySource);
+    assert.equal(
+      canonicalExpressions("x = ANY (ARRAY['it''s'::character varying::text])"),
+      "x = ANY (ARRAY['it''s'::character varying]::text[])"
+    );
+    // A different value list is still a difference.
+    assert.notEqual(canonicalExpressions(prettyDump.replace("'ledger'", "'other'")), prettySource);
+
+    const line = (def) => `constraint\tpublic.t.t_kind_check\t${JSON.stringify({ type: "c", def, validated: true })}`;
+    const same = compareSnapshots([line(prettyDump)], [line(prettySource)]);
+    assert.deepEqual([same.missing.length, same.changed.length, same.extra.length], [0, 0, 0]);
+    const different = compareSnapshots([line(prettyDump)], [line(prettySource.replace("'ledger'", "'other'"))]);
+    // Same name, different list: reported as changed, never silently accepted.
+    assert.equal(different.changed.length, 1, "a changed value list must not be accepted");
+    // Function bodies are compared verbatim, never canonicalised.
+    const fn = (body) =>
+      `function\tpublic.f()\t${JSON.stringify({ def: body, kind: "f", comment: null, publicExecute: true })}`;
+    assert.equal(compareSnapshots([fn(prettyDump)], [fn(prettySource)]).changed.length, 1);
+  });
+
+  it("0007 carries main's intercompany migrations verbatim, changed only by re-run guards", () => {
+    // Folded from the six date-named files kept in migrations/archive/legacy. The only
+    // permitted edits are IF [NOT] EXISTS and a DROP TRIGGER IF EXISTS before each trigger.
+    const normalise = (sql) =>
+      sql
+        .split("\n")
+        .filter((l) => !/^\s*DROP TRIGGER IF EXISTS \w+ ON \S+;\s*$/.test(l))
+        .join("\n")
+        .replace(/ IF NOT EXISTS\b/g, "")
+        .replace(/ IF EXISTS\b/g, "");
+    const folded = normalise(
+      readFileSync(path.join(MIGRATIONS_DIR, "0007_intercompany_container_trading.sql"), "utf8")
+    );
+    for (const name of [
+      "20261105_001_intercompany_phase1_foundation.sql",
+      "20261105_002_intercompany_phase2_import.sql",
+      "20261105_003_intercompany_phase3_sync.sql",
+      "20261105_004_intercompany_phase4_payments.sql",
+      "20261105_005_intercompany_phase5_lifecycle.sql",
+      "20261113_001_intercompany_pristine_physical_delete.sql",
+    ]) {
+      const original = normalise(readFileSync(path.join(MIGRATIONS_DIR, "archive/legacy", name), "utf8")).trim();
+      assert.ok(folded.includes(original), `${name} is not carried verbatim in 0007`);
+    }
   });
 
   it("plan mode needs no database", () => {
@@ -482,6 +546,28 @@ describe("existing-database adoption", { skip: pgSkip }, () => {
       const kept = await c.query("SELECT note FROM legacy_archive_2026 WHERE id = 1");
       assert.equal(kept.rows[0].note, "kept");
     });
+  });
+
+  it("adopts a database whose CHECK constraints were created from source SQL, as production's were", async () => {
+    // The baseline is pg_dump output; production created the same constraints from
+    // source SQL, which PostgreSQL stores (and renders) in a different but equivalent form.
+    const db = await legacyDatabase();
+    await withClient(db, async (c) => {
+      await c.query("ALTER TABLE account_display_layout DROP CONSTRAINT account_display_layout_node_type_check");
+      await c.query(
+        "ALTER TABLE account_display_layout ADD CONSTRAINT account_display_layout_node_type_check CHECK (node_type IN ('group','ledger'))"
+      );
+      const { rows } = await c.query(
+        "SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint WHERE conname = 'account_display_layout_node_type_check'"
+      );
+      assert.match(rows[0].def, /\]\)::text\[\]/, "fixture must be in the source-SQL form");
+    });
+    const adopted = runner(["adopt", "--apply"], { db, env: ADOPT });
+    assert.equal(adopted.status, 0, adopted.out);
+    const applied = runner(["apply"], { db, env: APPLY });
+    assert.equal(applied.status, 0, applied.out);
+    const verify = runner(["verify"], { db });
+    assert.equal(verify.status, 0, verify.out);
   });
 
   it("blocks adoption (changing nothing) when a difference cannot be fixed losslessly", async () => {
