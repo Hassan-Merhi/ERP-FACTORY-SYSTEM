@@ -10,6 +10,7 @@ import {
   index,
   jsonb,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -24,8 +25,14 @@ export const stockItemMergeLogs = pgTable(
     mergedItemId: integer("merged_item_id").notNull(),
     mergedItemCode: varchar("merged_item_code", { length: 50 }).notNull(),
     mergedItemName: text("merged_item_name").notNull(),
-    snapshotBefore: jsonb("snapshot_before").notNull().$type<Record<string, unknown>>(),
-    snapshotAfter: jsonb("snapshot_after").notNull().$type<Record<string, unknown>>(),
+    snapshotBefore: jsonb("snapshot_before")
+      .notNull()
+      .$type<Record<string, unknown>>()
+      .default(sql`'{}'::jsonb`),
+    snapshotAfter: jsonb("snapshot_after")
+      .notNull()
+      .$type<Record<string, unknown>>()
+      .default(sql`'{}'::jsonb`),
     mergedByUserId: varchar("merged_by_user_id").notNull(),
     mergedAt: timestamp("merged_at").notNull().defaultNow(),
     notes: text("notes"),
