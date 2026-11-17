@@ -88,7 +88,7 @@ export async function cancelUnreceivedTrade(input: CancelIntercompanyTradeInput,
     db.transaction(async (tx) => {
       // Same source-company lock order as import, edits, shared invoices and Phase 4 cash.
       await tx.execute(
-        sql`SELECT pg_advisory_xact_lock(${INTERCOMPANY_PAYMENT_LOCK_NAMESPACE},${trade.sourceCompanyId})`
+        sql`SELECT pg_advisory_xact_lock(${INTERCOMPANY_PAYMENT_LOCK_NAMESPACE}, ${trade.sourceCompanyId})`
       );
       const [fresh] = await tx
         .select()
@@ -324,7 +324,7 @@ export async function cancelUnreceivedTrade(input: CancelIntercompanyTradeInput,
         .where(and(eq(intercompanyTrades.id, fresh.id), eq(intercompanyTrades.version, fresh.version)))
         .returning();
       if (!updated) rejectEdit("A simultaneous trade update invalidated the cancellation");
-      await tx.execute(sql`SELECT set_config('erp.ic_phase5_cancel', '', true)`);
+      await tx.execute(sql.raw("SELECT set_config('erp.ic_phase5_cancel','',true)"));
       await tx.insert(intercompanyAuditEvents).values({
         eventKey: "ic-phase5-cancellation:" + cancellation.id,
         relationshipId: fresh.relationshipId,
