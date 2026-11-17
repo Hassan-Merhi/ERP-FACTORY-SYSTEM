@@ -7,6 +7,7 @@ import { normalizeRetailImageUrl } from "@/lib/retailImageUrl";
 import { MAX_PRODUCT_IMAGES, NO_BRAND, type Brand, type Location, type RetailProduct } from "./retailInventoryTypes";
 import { putPhotoFirst, useProductEditorState } from "./useProductEditorState";
 import { ProductEditorSection } from "./ProductEditorSection";
+import { SelectContent, SelectItem, SelectTrigger, SelectValue, Select } from "@/components/ui/select";
 
 export function ProductEditor(props: {
   open: boolean;
@@ -62,20 +63,24 @@ export function ProductEditor(props: {
                 </Button>
               )}
             </div>
-            <select
-              className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-              value={draft.brandId}
-              onChange={(e) => setDraft({ ...draft, brandId: e.target.value ? Number(e.target.value) : "" })}
+            <Select
+              value={draft.brandId === "" ? "__none__" : String(draft.brandId)}
+              onValueChange={(v) => setDraft({ ...draft, brandId: v !== "__none__" ? Number(v) : "" })}
             >
-              <option value="">{NO_BRAND}</option>
-              {brands
-                .filter((brand) => !brand.isNoBrand)
-                .map((brand) => (
-                  <option key={brand.id} value={brand.id}>
-                    {brand.name}
-                  </option>
-                ))}
-            </select>
+              <SelectTrigger className="h-10 w-full text-sm" aria-label="Brand">
+                <SelectValue placeholder={NO_BRAND} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">{NO_BRAND}</SelectItem>
+                {brands
+                  .filter((brand) => !brand.isNoBrand)
+                  .map((brand) => (
+                    <SelectItem key={brand.id} value={String(brand.id)}>
+                      {brand.name}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
             {addingBrand && (
               <div className="flex gap-2">
                 <Input

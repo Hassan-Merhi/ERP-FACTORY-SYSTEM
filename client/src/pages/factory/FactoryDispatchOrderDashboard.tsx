@@ -19,6 +19,7 @@ import {
   useFactoryDispatchOrderDashboardState,
 } from "./useFactoryDispatchOrderDashboardState";
 import { FactoryDispatchOrderDashboardSection3 } from "./FactoryDispatchOrderDashboardSection3";
+import { SelectContent, SelectItem, SelectTrigger, SelectValue, Select } from "@/components/ui/select";
 
 export default function FactoryDispatchOrderDashboard(props: Props) {
   const {
@@ -335,36 +336,42 @@ export default function FactoryDispatchOrderDashboard(props: Props) {
             {section === "HISTORY" && (
               <div className="space-y-3">
                 <div className="flex flex-wrap gap-2">
-                  <select
-                    aria-label="Activity history source"
+                  <Select
                     value={source}
-                    onChange={(e) => {
-                      setSource(e.target.value as Source);
+                    onValueChange={(v) => {
+                      setSource(v as Source);
                       setExpanded(null);
                     }}
-                    className="h-9 rounded-md border border-input bg-background px-2.5 text-xs text-foreground"
                   >
-                    <option value="ALL">All activity</option>
-                    <option value="PHYSICAL">Physical scans & dispatch</option>
-                    <option value="FINANCIAL">Financial & invoice</option>
-                    <option value="CLOSURE">Signed truck closures</option>
-                  </select>
-                  <select
-                    aria-label="Activity history dispatch"
+                    <SelectTrigger aria-label="Activity history source" className="h-9 w-auto text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">All activity</SelectItem>
+                      <SelectItem value="PHYSICAL">Physical scans & dispatch</SelectItem>
+                      <SelectItem value="FINANCIAL">Financial & invoice</SelectItem>
+                      <SelectItem value="CLOSURE">Signed truck closures</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select
                     value={filterTrip}
-                    onChange={(e) => {
-                      setFilterTrip(e.target.value);
+                    onValueChange={(v) => {
+                      setFilterTrip(v);
                       setExpanded(null);
                     }}
-                    className="h-9 rounded-md border border-input bg-background px-2.5 text-xs text-foreground"
                   >
-                    <option value="ALL">All trucks</option>
-                    {value.trips.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        Trip #{t.dispatchNumber}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger aria-label="Activity history dispatch" className="h-9 w-auto text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">All trucks</SelectItem>
+                      {value.trips.map((t) => (
+                        <SelectItem key={t.id} value={String(t.id)}>
+                          Trip #{t.dispatchNumber}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <Button
                     size="sm"
                     variant="outline"

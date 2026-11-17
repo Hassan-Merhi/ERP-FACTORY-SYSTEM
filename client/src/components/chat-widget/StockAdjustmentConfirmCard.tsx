@@ -1,4 +1,5 @@
 // Extracted from ./ConfirmCards.tsx to keep that module under the source-size cap.
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { Check, Loader2, Package, Search, X, XCircle } from "lucide-react";
@@ -64,11 +65,10 @@ export function StockAdjustmentConfirmCard({
         <div className="flex justify-between gap-2 text-muted-foreground items-center">
           <span className="shrink-0">Location</span>
           {hasLocChoice ? (
-            <select
-              className="text-xs font-medium text-foreground bg-background border rounded-sm px-1.5 py-0.5 max-w-[180px]"
-              value={selectedLocationId}
-              onChange={(e) => {
-                const id = Number(e.target.value);
+            <Select
+              value={String(selectedLocationId)}
+              onValueChange={(value) => {
+                const id = Number(value);
                 const loc = locCandidates.find((l) => l.id === id);
                 if (loc) {
                   setSelectedLocationId(id);
@@ -76,12 +76,20 @@ export function StockAdjustmentConfirmCard({
                 }
               }}
             >
-              {locCandidates.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger
+                className="h-7 max-w-[180px] px-1.5 text-xs font-medium text-foreground"
+                aria-label="Location"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {locCandidates.map((l) => (
+                  <SelectItem key={l.id} value={String(l.id)}>
+                    {l.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           ) : (
             <span className="font-medium text-foreground">{selectedLocationName}</span>
           )}
@@ -124,11 +132,10 @@ export function StockAdjustmentConfirmCard({
                     return (
                       <div key={i} className={`grid ${cols} gap-1 items-center`}>
                         {hasChoice ? (
-                          <select
-                            className="text-xs font-medium text-foreground bg-background border rounded-sm px-1.5 py-0.5 w-full"
-                            value={selectedItems[i].id}
-                            onChange={(e) => {
-                              const id = Number(e.target.value);
+                          <Select
+                            value={String(selectedItems[i].id)}
+                            onValueChange={(value) => {
+                              const id = Number(value);
                               const c = candidates.find((c) => c.id === id);
                               if (c) {
                                 setSelectedItems((prev) =>
@@ -137,13 +144,21 @@ export function StockAdjustmentConfirmCard({
                               }
                             }}
                           >
-                            {candidates.map((c) => (
-                              <option key={c.id} value={c.id}>
-                                {c.name}
-                                {c.code ? ` (${c.code})` : ""}
-                              </option>
-                            ))}
-                          </select>
+                            <SelectTrigger
+                              className="h-7 w-full px-1.5 text-xs font-medium text-foreground"
+                              aria-label="Item"
+                            >
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {candidates.map((c) => (
+                                <SelectItem key={c.id} value={String(c.id)}>
+                                  {c.name}
+                                  {c.code ? ` (${c.code})` : ""}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         ) : (
                           <span className="truncate text-foreground">{selectedItems[i].name}</span>
                         )}

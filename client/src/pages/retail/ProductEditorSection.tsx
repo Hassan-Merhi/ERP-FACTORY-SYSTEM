@@ -9,6 +9,7 @@ import { confirmAction } from "@/components/ConfirmHost";
 import { normalizeRetailImageUrl } from "@/lib/retailImageUrl";
 import { blankVariant, MAX_VARIANT_IMAGES } from "./retailInventoryTypes";
 import { putPhotoFirst, useProductEditorState } from "./useProductEditorState";
+import { SelectContent, SelectItem, SelectTrigger, SelectValue, Select } from "@/components/ui/select";
 
 export function ProductEditorSection({
   draft,
@@ -217,27 +218,31 @@ export function ProductEditorSection({
                 </div>
                 {variant.stocks.map((stock, stockIndex) => (
                   <div key={`${variantIndex}-${stockIndex}`} className="flex gap-2">
-                    <select
-                      className="h-10 flex-1 rounded-md border bg-background px-3 text-sm"
-                      value={stock.locationId}
-                      onChange={(e) => {
+                    <Select
+                      value={stock.locationId === "" ? "__none__" : String(stock.locationId)}
+                      onValueChange={(v) => {
                         const stocks = variant.stocks.map((item, i) =>
                           i === stockIndex
-                            ? { ...item, locationId: e.target.value ? Number(e.target.value) : ("" as const) }
+                            ? { ...item, locationId: v !== "__none__" ? Number(v) : ("" as const) }
                             : item
                         );
                         updateVariant(variantIndex, { stocks });
                       }}
                     >
-                      <option value="">Select location</option>
-                      {locations
-                        .filter((location) => location.active !== false)
-                        .map((location) => (
-                          <option key={location.id} value={location.id}>
-                            {location.name}
-                          </option>
-                        ))}
-                    </select>
+                      <SelectTrigger className="h-10 flex-1 text-sm" aria-label="Stock location">
+                        <SelectValue placeholder="Select location" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">Select location</SelectItem>
+                        {locations
+                          .filter((location) => location.active !== false)
+                          .map((location) => (
+                            <SelectItem key={location.id} value={String(location.id)}>
+                              {location.name}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
                     <Input
                       className="w-36"
                       type="number"

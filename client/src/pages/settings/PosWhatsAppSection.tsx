@@ -1,5 +1,4 @@
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -11,10 +10,11 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { MessageCircle, Search, Check, X, Loader2, Users, RefreshCw, CheckCircle, XCircle } from "lucide-react";
+import { MessageCircle, Check, X, Loader2, Users, RefreshCw, CheckCircle, XCircle } from "lucide-react";
 import { InstanceStateBadge } from "./PosWhatsAppSectionInstanceStateBadge";
 import { PosWhatsAppSectionCardContentSection, usePosWhatsAppSectionState } from "./usePosWhatsAppSectionState";
 import { PosWhatsAppSectionSection } from "./PosWhatsAppSectionSection";
+import { SearchField } from "@/components/ui/search-field";
 
 export function PosWhatsAppSection() {
   const {
@@ -210,16 +210,13 @@ export function PosWhatsAppSection() {
           </DialogHeader>
 
           <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-              <Input
-                placeholder="Search groups…"
-                value={chatSearch}
-                onChange={(e) => setChatSearch(e.target.value)}
-                className="pl-8"
-                data-testid="input-chat-search"
-              />
-            </div>
+            <SearchField
+              placeholder="Search groups…"
+              value={chatSearch}
+              onValueChange={setChatSearch}
+              wrapperClassName="flex-1"
+              data-testid="input-chat-search"
+            />
             <Button
               size="icon"
               variant="ghost"

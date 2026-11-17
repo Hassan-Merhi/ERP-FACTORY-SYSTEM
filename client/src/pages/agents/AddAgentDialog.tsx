@@ -4,9 +4,9 @@
  * Extracted from pages/Agents.tsx; markup, styling, and test ids are
  * unchanged.
  */
-import { Search } from "lucide-react";
+import { SearchField } from "@/components/ui/search-field";
+import {} from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { drCrClass } from "@/lib/formatNumber";
 import type { Account } from "./agentStatementMath";
@@ -39,17 +39,13 @@ export function AddAgentDialog({
           <DialogTitle>Add Account to Agent Ledger</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by name, code or type..."
-              value={search}
-              onChange={(e) => onSearchChange(e.target.value)}
-              className="pl-9"
-              autoFocus
-              data-testid="input-add-agent-search"
-            />
-          </div>
+          <SearchField
+            value={search}
+            onValueChange={onSearchChange}
+            placeholder="Search by name, code or type..."
+            autoFocus
+            data-testid="input-add-agent-search"
+          />
           <div className="max-h-80 overflow-y-auto border rounded-xl divide-y">
             {loading ? (
               <div className="p-4 space-y-2">

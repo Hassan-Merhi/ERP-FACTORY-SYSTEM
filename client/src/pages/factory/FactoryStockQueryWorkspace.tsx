@@ -6,7 +6,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowRight, Boxes, FilterX, MapPin, ShoppingCart, TrendingUp, Warehouse } from "lucide-react";
 import {
-  baseSelect,
   cell,
   exportCsv,
   fmt,
@@ -20,6 +19,7 @@ import {
   FactoryStockQueryWorkspaceSection3,
   FactoryStockQueryWorkspaceSection4,
 } from "./FactoryStockQueryWorkspaceSection";
+import { SelectContent, SelectTrigger, SelectValue, Select, SelectItem } from "@/components/ui/select";
 
 export default function FactoryStockQueryWorkspace() {
   const {
@@ -90,47 +90,67 @@ export default function FactoryStockQueryWorkspace() {
           </label>
           <label>
             <span className={label}>Category</span>
-            <select className={baseSelect} value={category} onChange={(e) => setCategory(e.target.value)}>
-              <option value="">All categories</option>
-              {data?.categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+            <Select value={category || "__all__"} onValueChange={(v) => setCategory(v === "__all__" ? "" : v)}>
+              <SelectTrigger className="h-10 w-full min-w-0 rounded-lg shadow-sm" aria-label="Category">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">All categories</SelectItem>
+                {data?.categories.map((c) => (
+                  <SelectItem key={c.id} value={String(c.id)}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
           <label>
             <span className={label}>Location</span>
-            <select className={baseSelect} value={location} onChange={(e) => setLocation(e.target.value)}>
-              <option value="">All locations</option>
-              {data?.locations.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name}
-                </option>
-              ))}
-            </select>
+            <Select value={location || "__all__"} onValueChange={(v) => setLocation(v === "__all__" ? "" : v)}>
+              <SelectTrigger className="h-10 w-full min-w-0 rounded-lg shadow-sm" aria-label="Location">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">All locations</SelectItem>
+                {data?.locations.map((l) => (
+                  <SelectItem key={l.id} value={String(l.id)}>
+                    {l.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
           <label>
             <span className={label}>Customer (sales)</span>
-            <select className={baseSelect} value={customer} onChange={(e) => setCustomer(e.target.value)}>
-              <option value="">All customers</option>
-              {data?.customers.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+            <Select value={customer || "__all__"} onValueChange={(v) => setCustomer(v === "__all__" ? "" : v)}>
+              <SelectTrigger className="h-10 w-full min-w-0 rounded-lg shadow-sm" aria-label="Customer (sales)">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">All customers</SelectItem>
+                {data?.customers.map((c) => (
+                  <SelectItem key={c.id} value={String(c.id)}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
           <label>
             <span className={label}>Container (sales)</span>
-            <select className={baseSelect} value={container} onChange={(e) => setContainer(e.target.value)}>
-              <option value="">All containers</option>
-              {data?.containers.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
+            <Select value={container || "__all__"} onValueChange={(v) => setContainer(v === "__all__" ? "" : v)}>
+              <SelectTrigger className="h-10 w-full min-w-0 rounded-lg shadow-sm" aria-label="Container (sales)">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">All containers</SelectItem>
+                {data?.containers.map((c) => (
+                  <SelectItem key={c} value={String(c)}>
+                    {c}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2">

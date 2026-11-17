@@ -1,17 +1,6 @@
-import {
-  Plus,
-  Search,
-  Upload,
-  Download,
-  X,
-  FileSpreadsheet,
-  ChevronDown,
-  SlidersHorizontal,
-  Layers,
-} from "lucide-react";
+import { Plus, Upload, Download, X, FileSpreadsheet, ChevronDown, SlidersHorizontal, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { downloadFromUrl } from "@/lib/exportFile";
-import { Input } from "@/components/ui/input";
 import { Table } from "@/components/ui/table";
 
 import {
@@ -29,6 +18,7 @@ import {
   FactoryWorkersRosterPanelTableHeaderSection,
 } from "./FactoryWorkersRosterPanelTableBodySection";
 import { FactoryWorkersRosterPanelSection } from "./FactoryWorkersRosterPanelSection";
+import { SearchField } from "@/components/ui/search-field";
 
 export function FactoryWorkersRosterPanel(props: FactoryWorkersModelProps) {
   const {
@@ -112,16 +102,14 @@ export function FactoryWorkersRosterPanel(props: FactoryWorkersModelProps) {
 
         {/* Filter + actions row */}
         <div className="flex flex-wrap items-center gap-3">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by name, code, position, nationality..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-10 rounded-lg border-border/70 bg-card/80 pl-9 shadow-sm focus-visible:ring-primary/40"
-              data-testid="input-search"
-            />
-          </div>
+          <SearchField
+            placeholder="Search by name, code, position, nationality..."
+            value={searchQuery}
+            onValueChange={setSearchQuery}
+            wrapperClassName="flex-1 min-w-[200px]"
+            className="h-10 rounded-lg border-border/70 bg-card/80 shadow-sm focus-visible:ring-primary/40"
+            data-testid="input-search"
+          />
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="h-10 w-32 rounded-lg bg-card/80" data-testid="select-status-filter">
               <SelectValue />

@@ -10,7 +10,6 @@ import { companyQueryKey } from "@/lib/companyQueryScope";
 import { useToast } from "@/hooks/use-toast";
 import { downloadBlob } from "@/lib/downloadBlob";
 import { exportFileName } from "@/lib/exportFile";
-
 interface Employee {
   id: number;
   code: string;

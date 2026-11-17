@@ -1,3 +1,4 @@
+import { SearchField } from "@/components/ui/search-field";
 import { VoucherPhoneActionBar } from "@/pages/vouchers/VoucherPhoneActionBar";
 import { formatNumber } from "@/lib/formatNumber";
 import { Badge } from "@/components/ui/badge";
@@ -5,7 +6,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, MapPin } from "lucide-react";
+import { MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { CreditNoteTabProps } from "./CreditNoteTabTypes";
 import { useCreditNoteTabState } from "./useCreditNoteTabState";
@@ -106,17 +107,13 @@ export function CreditNoteTab(props: CreditNoteTabProps) {
             </SelectContent>
           </Select>
           <div className="mt-3">
-            <div className="relative">
-              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                ref={searchInputRef}
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Search items..."
-                className="pl-8"
-                data-testid="input-search-item"
-              />
-            </div>
+            <SearchField
+              ref={searchInputRef}
+              value={searchTerm}
+              onValueChange={setSearchTerm}
+              placeholder="Search items..."
+              data-testid="input-search-item"
+            />
           </div>
           <div className="mt-3 grid grid-cols-2 gap-2">
             <div>

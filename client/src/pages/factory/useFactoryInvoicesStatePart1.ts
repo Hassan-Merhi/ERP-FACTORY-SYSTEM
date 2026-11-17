@@ -17,7 +17,6 @@ import type { Customer, CustomerOrder, StatusFilter } from "./factoryinvoices/ty
 import type { AuthMe, FactoryMyAccess } from "@shared/apiTypes";
 import type { EditableShippingField, InvoiceColumnKey } from "./factoryinvoices/InvoiceOrderRow";
 import { downloadFromUrl } from "@/lib/exportFile";
-
 // All permitted invoice columns are visible unless the user chooses to hide them.
 const INVOICE_OPTIONAL_COLUMNS: { key: InvoiceColumnKey; label: string }[] = [
   { key: "loading", label: "Loading #" },

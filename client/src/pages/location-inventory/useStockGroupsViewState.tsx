@@ -1,7 +1,6 @@
 // Extracted from ./StockGroupsView.tsx to keep that module under the source-size cap.
-import { Printer, Search } from "lucide-react";
+import { Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import type { InventoryLocation as Location, StockGroupSummary } from "./locationInventoryTypes";
 import type { AuthMe } from "@shared/apiTypes";
 import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
+import { SearchField } from "@/components/ui/search-field";
 
 export interface StockGroupsViewProps {
   selectedLocationLocal: Location;
@@ -126,16 +126,14 @@ export function useStockGroupsViewState({
 
   const groupSearchControls = (
     <div className="flex items-center gap-2 flex-wrap">
-      <div className={isPhone ? "relative w-full" : "relative min-w-[220px] flex-[1_1_320px] max-w-xl"}>
-        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Search stock groups by name..."
-          value={groupSearchTerm}
-          onChange={(e) => setGroupSearchTerm(e.target.value)}
-          className="h-10 rounded-xl border-violet-200/80 bg-background/90 pl-10 shadow-sm focus-visible:ring-violet-500/30 dark:border-violet-500/25 dark:bg-slate-950/40"
-          data-testid="input-group-search"
-        />
-      </div>
+      <SearchField
+        placeholder="Search stock groups by name..."
+        value={groupSearchTerm}
+        onValueChange={setGroupSearchTerm}
+        wrapperClassName={isPhone ? "w-full" : "min-w-[220px] flex-[1_1_320px] max-w-xl"}
+        className="h-10 rounded-xl border-violet-200/80 bg-background/90 shadow-sm focus-visible:ring-violet-500/30 dark:border-violet-500/25 dark:bg-slate-950/40"
+        data-testid="input-group-search"
+      />
       <Select value={groupCategoryFilter || "all"} onValueChange={(v) => setGroupCategoryFilter(v === "all" ? "" : v)}>
         <SelectTrigger
           className={

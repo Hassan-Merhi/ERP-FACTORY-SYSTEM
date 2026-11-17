@@ -3,6 +3,7 @@ import { RefreshCw, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useFactorySupplierReturnsState } from "./useFactorySupplierReturnsState";
+import { SelectContent, SelectItem, SelectTrigger, SelectValue, Select } from "@/components/ui/select";
 
 export function FactorySupplierReturnsSection2({
   addManual,
@@ -82,12 +83,11 @@ export function FactorySupplierReturnsSection2({
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <label className="text-sm space-y-1 sm:col-span-3">
           <span>{copy.filterSupplier}</span>
-          <select
-            className="flex h-10 w-full max-w-lg rounded-md border border-input bg-background px-3 py-2 text-sm"
-            value={supplierId ?? ""}
+          <Select
+            value={supplierId == null ? "__all__" : String(supplierId)}
             disabled={busy || !!receipt}
-            onChange={(event) => {
-              setSupplierId(Number(event.target.value) || null);
+            onValueChange={(v) => {
+              setSupplierId(v === "__all__" ? null : Number(v) || null);
               setPreview([]);
               setAllocations({});
               setPreviewSupplierId(null);
@@ -95,13 +95,18 @@ export function FactorySupplierReturnsSection2({
               setRequestKey(crypto.randomUUID());
             }}
           >
-            <option value="">{copy.allSuppliers}</option>
-            {(suppliers.data?.rows ?? []).map((supplier) => (
-              <option key={supplier.id} value={supplier.id}>
-                {supplier.name}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger className="h-10 w-full max-w-lg" aria-label={copy.filterSupplier}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">{copy.allSuppliers}</SelectItem>
+              {(suppliers.data?.rows ?? []).map((supplier) => (
+                <SelectItem key={supplier.id} value={String(supplier.id)}>
+                  {supplier.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           {suppliers.isError && <span className="text-destructive">{copy.supplierListError}</span>}
         </label>
         <div className="sm:col-span-3 flex flex-wrap items-end gap-3 rounded-md bg-muted/30 p-3">

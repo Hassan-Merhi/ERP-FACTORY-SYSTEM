@@ -1,6 +1,5 @@
 // Extracted from ./MixBatchList.tsx to keep that module under the source-size cap.
 import type { MixBatchSupplierCategory, MixBatchSupplierCategoryLink } from "./mixBatchCategoryTargets";
-
 export interface MixBatchRow {
   id: number;
   batchCode: string;

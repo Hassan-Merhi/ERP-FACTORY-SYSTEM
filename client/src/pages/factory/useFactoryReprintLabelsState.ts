@@ -19,7 +19,6 @@ import {
 } from "@/lib/labelHtml";
 import { useLabelDesignColors } from "@/hooks/useLabelDesignColors";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
-
 interface Location {
   id: number;
   code: string;

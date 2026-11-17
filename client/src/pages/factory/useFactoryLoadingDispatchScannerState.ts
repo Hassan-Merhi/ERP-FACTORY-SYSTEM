@@ -6,7 +6,6 @@ import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { companyQueryKey } from "@/lib/companyQueryScope";
-
 type DispatchStatus = "OPEN" | "CLOSED" | "CANCELLED";
 
 interface DispatchScan {

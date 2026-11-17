@@ -1,11 +1,12 @@
 import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
 import { VoucherPhoneActionBar, useVoucherEditCancel } from "@/pages/vouchers/VoucherPhoneActionBar";
 import { searchAny } from "@shared/searchNormalization";
-import { ArrowRight, Check, GitBranch, Package, Plus, Search, Trash2, Upload } from "lucide-react";
+import { ArrowRight, Check, GitBranch, Package, Plus, Trash2, Upload } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -66,16 +67,12 @@ export function StockTransferOrderPanel({ model }: { model: Model }) {
             <div className="flex-1 overflow-y-auto py-4 space-y-4">
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Stock Item</Label>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    className="pl-9"
-                    placeholder="Search stock items..."
-                    value={mobileSearchTerm}
-                    onChange={(event) => setMobileSearchTerm(event.target.value)}
-                    data-testid="input-mobile-search"
-                  />
-                </div>
+                <SearchField
+                  placeholder="Search stock items..."
+                  value={mobileSearchTerm}
+                  onValueChange={setMobileSearchTerm}
+                  data-testid="input-mobile-search"
+                />
                 <ScrollArea className="h-48 border rounded-md">
                   <div className="p-1 space-y-0.5">
                     {stockItems

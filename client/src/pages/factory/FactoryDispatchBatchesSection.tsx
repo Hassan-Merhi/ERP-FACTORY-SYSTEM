@@ -1,13 +1,13 @@
 // Extracted from ./FactoryDispatchBatches.tsx to keep that module under the source-size cap.
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronRight, Filter, Plus, Search, Truck } from "lucide-react";
+import { ChevronRight, Filter, Plus, Truck } from "lucide-react";
 import { StatusBadge, fmt, useFactoryDispatchBatchesState } from "./useFactoryDispatchBatchesState";
+import { SearchField } from "@/components/ui/search-field";
 
 export function FactoryDispatchBatchesSection({
   canCreateBatch,
@@ -194,16 +194,13 @@ export function FactoryDispatchBatchesSection({
                 </div>
                 <div className="flex flex-col gap-1">
                   <Label className="text-xs text-muted-foreground">Search</Label>
-                  <div className="relative">
-                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                    <Input
-                      className="pl-8 w-52"
-                      placeholder="Batch #, customer, invoice..."
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      data-testid="input-search-batches"
-                    />
-                  </div>
+                  <SearchField
+                    wrapperClassName="w-52"
+                    placeholder="Batch #, customer, invoice..."
+                    value={search}
+                    onValueChange={setSearch}
+                    data-testid="input-search-batches"
+                  />
                 </div>
                 {(filterCustomer !== "_all" || filterStatus !== "_all" || search) && (
                   <Button

@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { apiRequest } from "@/lib/queryClient";
 import { kinds, read, root, type Kind, type Mode, type Policy, type Readiness } from "./UnifiedAccountingRolloutTypes";
+import { SelectContent, SelectItem, SelectTrigger, SelectValue, Select } from "@/components/ui/select";
 
 export function useUnifiedAccountingRolloutState() {
   const [path, go] = useLocation();
@@ -167,17 +168,18 @@ export function UnifiedAccountingRolloutSection({
     <div className="grid sm:grid-cols-3 gap-3">
       <div>
         <Label>Review capacity</Label>
-        <select
-          className="h-10 w-full rounded-md border bg-background px-2"
-          value={reviewKind}
-          onChange={(e) => setReviewKind(e.target.value as Kind)}
-        >
-          {kinds.map((k) => (
-            <option key={k} value={k}>
-              {k}
-            </option>
-          ))}
-        </select>
+        <Select value={reviewKind} onValueChange={(value) => setReviewKind(value as Kind)}>
+          <SelectTrigger className="h-10 w-full" aria-label="Review capacity">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {kinds.map((k) => (
+              <SelectItem key={k} value={k}>
+                {k}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
       <div className="sm:col-span-2">
         <Label>Evidence reference (CI run, audit or PR)</Label>

@@ -80,9 +80,6 @@ export function exportCsv(rows: (string | number)[][]) {
   );
 }
 
-export const baseSelect =
-  "h-10 w-full min-w-0 rounded-lg border border-input bg-background px-3 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40";
-
 export const cell = "whitespace-nowrap px-3 py-2.5 text-sm";
 
 export const label = "block mb-1.5 text-xs font-semibold text-muted-foreground";

@@ -16,6 +16,7 @@ import {
   type Preview,
   type Statement,
 } from "./CashBankReconciliationTypes";
+import { SelectContent, SelectItem, SelectTrigger, SelectValue, Select } from "@/components/ui/select";
 
 export function useCashBankReconciliationState() {
   const [location] = useLocation();
@@ -217,19 +218,23 @@ export function CashBankReconciliationSection({
   return (
     <div className="rounded-md border p-3 space-y-2">
       <Label>Classify selected transaction (no accounting posting)</Label>
-      <select
-        className="h-9 w-full rounded-md border bg-background px-2 text-sm"
-        value={reviewCategory}
-        onChange={(e) => setReviewCategory(e.target.value)}
+      <Select
+        value={reviewCategory || "__none__"}
+        onValueChange={(value) => setReviewCategory(value === "__none__" ? "" : value)}
         disabled={!selectedLine}
       >
-        <option value="">Not classified</option>
-        <option value="bank_fee">Bank fee / charge</option>
-        <option value="transfer">Bank / cash transfer</option>
-        <option value="unidentified_receipt">Unidentified receipt</option>
-        <option value="unidentified_payment">Unidentified payment</option>
-        <option value="other">Other investigation</option>
-      </select>
+        <SelectTrigger className="h-9 w-full text-sm" aria-label="Review category">
+          <SelectValue placeholder="Not classified" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="__none__">Not classified</SelectItem>
+          <SelectItem value="bank_fee">Bank fee / charge</SelectItem>
+          <SelectItem value="transfer">Bank / cash transfer</SelectItem>
+          <SelectItem value="unidentified_receipt">Unidentified receipt</SelectItem>
+          <SelectItem value="unidentified_payment">Unidentified payment</SelectItem>
+          <SelectItem value="other">Other investigation</SelectItem>
+        </SelectContent>
+      </Select>
       <Input
         placeholder="Investigation note"
         disabled={!selectedLine}

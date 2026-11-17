@@ -1,7 +1,8 @@
 // Extracted from ./RetailInventory.tsx to keep that module under the source-size cap.
 import { ChevronRight, FolderOpen, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RetailCatalogList } from "./RetailCatalogList";
 import { useRetailInventoryState } from "./useRetailInventoryState";
 
@@ -226,46 +227,54 @@ export function RetailInventorySection4({
 >) {
   return (
     <div className="grid grid-cols-1 gap-3 rounded-2xl border border-border/70 bg-card/70 p-3 shadow-sm sm:grid-cols-2 lg:grid-cols-5 sm:p-4">
-      <Input
+      <SearchField
         placeholder="Search style, brand, barcode, SKU, color or size…"
         value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        className="h-11 rounded-xl bg-background/60 sm:col-span-2 lg:col-span-2"
+        onValueChange={setSearch}
+        className="h-11 rounded-xl bg-background/60"
+        wrapperClassName="sm:col-span-2 lg:col-span-2"
         aria-label="Search retail inventory"
       />
-      <select
-        className="h-11 rounded-xl border border-border/70 bg-background/60 px-3 text-sm"
-        aria-label="Filter by color"
-        value={color}
-        onChange={(e) => setColor(e.target.value)}
-      >
-        <option value="">All colors</option>
-        {colors.map((value) => (
-          <option key={value}>{value}</option>
-        ))}
-      </select>
-      <select
-        className="h-10 rounded-md border bg-background px-2 text-sm"
-        aria-label="Filter by size"
-        value={size}
-        onChange={(e) => setSize(e.target.value)}
-      >
-        <option value="">All sizes</option>
-        {sizes.map((value) => (
-          <option key={value}>{value}</option>
-        ))}
-      </select>
-      <select
-        className="h-10 rounded-md border bg-background px-2 text-sm"
-        aria-label="Filter by stock status"
-        value={stockStatus}
-        onChange={(e) => setStockStatus(e.target.value)}
-      >
-        <option value="all">All stock</option>
-        <option value="in">In stock</option>
-        <option value="low">Low stock</option>
-        <option value="out">Out of stock</option>
-      </select>
+      <Select value={color || "__all__"} onValueChange={(v) => setColor(v === "__all__" ? "" : v)}>
+        <SelectTrigger
+          className="h-11 rounded-xl border-border/70 bg-background/60 px-3 text-sm"
+          aria-label="Filter by color"
+        >
+          <SelectValue placeholder="All colors" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="__all__">All colors</SelectItem>
+          {colors.map((value) => (
+            <SelectItem key={value} value={value}>
+              {value}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Select value={size || "__all__"} onValueChange={(v) => setSize(v === "__all__" ? "" : v)}>
+        <SelectTrigger className="h-10 px-2 text-sm" aria-label="Filter by size">
+          <SelectValue placeholder="All sizes" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="__all__">All sizes</SelectItem>
+          {sizes.map((value) => (
+            <SelectItem key={value} value={value}>
+              {value}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Select value={stockStatus} onValueChange={setStockStatus}>
+        <SelectTrigger className="h-10 px-2 text-sm" aria-label="Filter by stock status">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All stock</SelectItem>
+          <SelectItem value="in">In stock</SelectItem>
+          <SelectItem value="low">Low stock</SelectItem>
+          <SelectItem value="out">Out of stock</SelectItem>
+        </SelectContent>
+      </Select>
     </div>
   );
 }

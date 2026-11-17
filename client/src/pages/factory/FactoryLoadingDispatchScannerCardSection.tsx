@@ -1,16 +1,16 @@
 // Extracted from ./FactoryLoadingDispatchScanner.tsx to keep that module under the source-size cap.
-import { History, Loader2, Package, Search, ShieldCheck, Trash2, Weight } from "lucide-react";
+import { History, Loader2, Package, ShieldCheck, Trash2, Weight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
 import {
   PAGE_CHUNK,
   fmtCount,
   fmtKg,
   useFactoryLoadingDispatchScannerState,
 } from "./useFactoryLoadingDispatchScannerState";
+import { SearchField } from "@/components/ui/search-field";
 
 export function FactoryLoadingDispatchScannerCardSection({
   active,
@@ -96,19 +96,17 @@ export function FactoryLoadingDispatchScannerCardSection({
             </Button>
           </div>
         </div>
-        <div className="relative max-w-sm">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            className="h-9 pl-9"
-            placeholder="Search reference, article, operator"
-            value={filterText}
-            onChange={(event) => {
-              setFilterText(event.target.value);
-              setVisibleCount(PAGE_CHUNK);
-            }}
-            data-testid="input-search-dispatch-scans"
-          />
-        </div>
+        <SearchField
+          wrapperClassName="max-w-sm"
+          className="h-9"
+          placeholder="Search reference, article, operator"
+          value={filterText}
+          onValueChange={(v) => {
+            setFilterText(v);
+            setVisibleCount(PAGE_CHUNK);
+          }}
+          data-testid="input-search-dispatch-scans"
+        />
         {canCorrect && (
           <div className="flex flex-wrap items-center gap-2" data-testid="dispatch-bulk-scan-controls">
             <Button

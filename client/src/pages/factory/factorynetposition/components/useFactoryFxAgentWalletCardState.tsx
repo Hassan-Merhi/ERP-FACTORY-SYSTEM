@@ -8,7 +8,7 @@ import { authenticatedUserQueryOptions } from "@/contracts/sessionQueryContracts
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { confirmAction } from "@/components/ConfirmHost";
-
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 type Choice = { id: number; name: string; code?: string; accountType?: string };
 
 type Wallet = {
@@ -194,18 +194,22 @@ export function FactoryFxAgentWalletCardSection({
           onChange={(e) => setAccountSearch(e.target.value)}
         />
       )}
-      <select
-        className="w-full h-10 border rounded-md bg-background px-2 text-sm"
-        value={scopeAccountId == null ? accountId : String(scopeAccountId)}
-        onChange={(e) => setAccountId(e.target.value)}
+      <Select
+        value={(scopeAccountId == null ? accountId : String(scopeAccountId)) || "__none__"}
+        onValueChange={(v) => setAccountId(v === "__none__" ? "" : v)}
       >
-        <option value="">Choose a ledger account</option>
-        {choices.map((a) => (
-          <option key={a.id} value={a.id}>
-            {a.name} ({a.code})
-          </option>
-        ))}
-      </select>
+        <SelectTrigger className="w-full h-10 text-sm" aria-label="Ledger account">
+          <SelectValue placeholder="Choose a ledger account" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="__none__">Choose a ledger account</SelectItem>
+          {choices.map((a) => (
+            <SelectItem key={a.id} value={String(a.id)}>
+              {a.name} ({a.code})
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
       <Button
         disabled={write.isPending || !(scopeAccountId || Number(accountId))}
         variant="secondary"

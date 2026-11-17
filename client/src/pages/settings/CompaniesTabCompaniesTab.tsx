@@ -1,9 +1,10 @@
 // Extracted from ./CompaniesTab.tsx to keep that module under the source-size cap.
-import { Building2, Edit, Plus, Search, Trash2 } from "lucide-react";
+import { Building2, Edit, Plus, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ParentCreditAccountSelect } from "./ParentCreditAccountSelect";
@@ -271,16 +272,13 @@ export function CompaniesTab() {
       </div>
       <div className="flex flex-wrap items-center gap-4">
         {companies.length > 3 && (
-          <div className="relative max-w-xs">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-            <Input
-              placeholder="Search companies…"
-              value={companySearch}
-              onChange={(e) => setCompanySearch(e.target.value)}
-              className="pl-9"
-              data-testid="input-company-search"
-            />
-          </div>
+          <SearchField
+            placeholder="Search companies…"
+            value={companySearch}
+            onValueChange={setCompanySearch}
+            wrapperClassName="max-w-xs"
+            data-testid="input-company-search"
+          />
         )}
 
         <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">

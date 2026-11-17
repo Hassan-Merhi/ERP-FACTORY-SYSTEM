@@ -2,9 +2,8 @@ import { ChangeEvent } from "react";
 import { Redirect } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Ship, AlertTriangle, Search, Filter, ChevronDown, X } from "lucide-react";
+import { Ship, AlertTriangle, Filter, ChevronDown, X } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { cn } from "@/lib/utils";
 import { isBlockingQueryError } from "@/lib/abortError";
@@ -16,6 +15,7 @@ import { ErpFilterSheet } from "@/components/ui/erp-mobile-filters";
 import { ImportResultBanner } from "./git-containers/ImportResultBanner";
 import { useGITContainersState } from "./useGITContainersState";
 import { GITContainersPopoverSection, GITContainersSection, GITContainersSection2 } from "./GITContainersSection";
+import { SearchField } from "@/components/ui/search-field";
 
 export default function GITContainers(props: { embedded?: boolean }) {
   const {
@@ -289,16 +289,14 @@ export default function GITContainers(props: { embedded?: boolean }) {
 
         {/* ── Search + Filters Toggle ── (narrow phones: search row, then paired controls) */}
         <div className="flex shrink-0 items-center gap-2 flex-wrap max-sm:grid max-sm:grid-cols-2">
-          <div className="relative flex-1 min-w-48 max-sm:col-span-2 max-sm:min-w-0">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search container #, company, truck, transporter, agent…"
-              className="h-10 rounded-xl border-border/80 bg-card pl-9 shadow-sm dark:border-white/10 sm:h-11"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              data-testid="input-otw-search"
-            />
-          </div>
+          <SearchField
+            value={search}
+            onValueChange={setSearch}
+            placeholder="Search container #, company, truck, transporter, agent…"
+            wrapperClassName="flex-1 min-w-48 max-sm:col-span-2 max-sm:min-w-0"
+            className="h-10 rounded-xl border-border/80 bg-card shadow-sm dark:border-white/10 sm:h-11"
+            data-testid="input-otw-search"
+          />
           <Button
             variant={showFilters ? "default" : "outline"}
             size="default"

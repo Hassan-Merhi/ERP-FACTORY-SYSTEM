@@ -14,13 +14,12 @@ import {
   Package,
   Boxes,
   Scale,
-  Search,
-  X,
 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { cn } from "@/lib/utils";
 import { V5ProformaMobileLines } from "./V5ProformaMobileLines";
 import { useEditProformaV5DrawerState, type ArticleRow, type Props } from "./useEditProformaV5DrawerState";
+import { SearchField } from "@/components/ui/search-field";
 
 export default function EditProformaV5Drawer(props: Props) {
   const {
@@ -312,28 +311,16 @@ export default function EditProformaV5Drawer(props: Props) {
                 <span className="text-sm text-muted-foreground">{isActive ? "Active" : "Inactive"}</span>
               </div>
             </div>
-
-            <div className="relative w-full sm:w-72">
+            <div className="w-full sm:w-72">
               <Label className="mb-1 block text-xs font-medium">Search</Label>
-              <Search className="pointer-events-none absolute bottom-3 left-3 h-4 w-4 text-muted-foreground" />
-              <Input
+              <SearchField
                 value={articleSearch}
-                onChange={(event) => setArticleSearch(event.target.value)}
+                onValueChange={setArticleSearch}
                 placeholder="Search product name or code..."
-                className="h-10 rounded-lg pl-9 pr-8 text-sm"
+                className="h-10 rounded-lg text-sm"
                 data-testid="input-v5-edit-search"
+                clearTestId="button-v5-edit-clear-search"
               />
-              {articleSearch && (
-                <button
-                  type="button"
-                  onClick={() => setArticleSearch("")}
-                  className="absolute bottom-3 right-3 text-muted-foreground hover:text-foreground"
-                  data-testid="button-v5-edit-clear-search"
-                  aria-label="Clear search"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              )}
             </div>
             <div className="w-full sm:w-56">
               <Label className="mb-1 block text-xs font-medium">Catalog</Label>

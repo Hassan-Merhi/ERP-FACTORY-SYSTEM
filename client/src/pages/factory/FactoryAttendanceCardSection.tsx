@@ -10,6 +10,7 @@ import type { AttendanceStatus } from "./factoryattendance/types";
 import { formatDate, STATUS_COLORS, STATUS_OPTIONS } from "./factoryattendance/utils";
 import { attendanceToday } from "./factoryattendance/attendanceEditPolicy";
 import { useFactoryAttendanceState } from "./useFactoryAttendanceStatePart2";
+import { SearchField } from "@/components/ui/search-field";
 
 export function FactoryAttendanceCardSection({
   attendanceMap,
@@ -75,16 +76,14 @@ export function FactoryAttendanceCardSection({
 
         {workers.length > 0 && (
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div className="relative w-full sm:max-w-sm">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={workerSearch}
-                onChange={(event) => setWorkerSearch(event.target.value)}
-                placeholder="Search worker, code, position…"
-                className="h-9 rounded-xl bg-background/70 pl-9"
-                data-testid="input-attendance-worker-search"
-              />
-            </div>
+            <SearchField
+              value={workerSearch}
+              onValueChange={setWorkerSearch}
+              placeholder="Search worker, code, position…"
+              wrapperClassName="w-full sm:max-w-sm"
+              className="h-9 rounded-xl bg-background/70"
+              data-testid="input-attendance-worker-search"
+            />
             <div className="flex flex-wrap items-center gap-2">
               <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as typeof statusFilter)}>
                 <SelectTrigger

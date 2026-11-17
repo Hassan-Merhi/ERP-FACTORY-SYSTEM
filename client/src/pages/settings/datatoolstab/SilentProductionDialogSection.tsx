@@ -1,9 +1,10 @@
 // Extracted from ./SilentProductionDialog.tsx to keep that module under the source-size cap.
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
 import { Label } from "@/components/ui/label";
 import { apiRequest } from "@/lib/queryClient";
-import { Loader2, Search, X } from "lucide-react";
+import { Loader2, X } from "lucide-react";
 import { useSilentProductionDialogState } from "./useSilentProductionDialogState";
 
 export function SilentProductionDialogSection({
@@ -63,16 +64,12 @@ export function SilentProductionDialogSection({
         <Label>Items</Label>
         {silentProdLocId && (
           <div className="border rounded-md p-3 bg-muted/30 space-y-2">
-            <div className="relative">
-              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Type item name or code to search…"
-                value={silentProdSearchTerm}
-                onChange={(event) => setSilentProdSearchTerm(event.target.value)}
-                className="pl-8"
-                data-testid="input-silent-prod-search"
-              />
-            </div>
+            <SearchField
+              placeholder="Type item name or code to search…"
+              value={silentProdSearchTerm}
+              onValueChange={setSilentProdSearchTerm}
+              data-testid="input-silent-prod-search"
+            />
             <div className="max-h-48 overflow-y-auto space-y-1">
               {(() => {
                 const term = silentProdSearchTerm.toLowerCase();

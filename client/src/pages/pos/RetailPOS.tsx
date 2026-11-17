@@ -10,6 +10,7 @@ import { RetailLineAdjustDialog, type LineAdjustment } from "./RetailLineAdjustD
 import { money, type RetailPaymentDraft } from "./retailPosTypes";
 import { useRetailPOSState } from "./useRetailPOSState";
 import { RetailPOSPosWorkspaceColumnsSection } from "./RetailPOSPosWorkspaceColumnsSection";
+import { SelectContent, SelectItem, SelectTrigger, SelectValue, Select } from "@/components/ui/select";
 
 export default function RetailPOS() {
   const {
@@ -101,23 +102,26 @@ export default function RetailPOS() {
           <label htmlFor="retail-pos-location" className="text-xs text-muted-foreground">
             Location
           </label>
-          <select
-            id="retail-pos-location"
+          <Select
             disabled={isPosRole}
-            value={selectedLocation?.id ?? ""}
-            onChange={(event) => {
-              const location = locations.find((entry) => entry.id === Number(event.target.value)) ?? null;
+            value={selectedLocation ? String(selectedLocation.id) : "__none__"}
+            onValueChange={(v) => {
+              const location = locations.find((entry) => entry.id === Number(v === "__none__" ? "" : v)) ?? null;
               setSelectedLocation(location);
             }}
-            className="block h-9 min-w-[154px] max-w-[220px] rounded-md border bg-background px-3 text-sm"
           >
-            <option value="">Select location</option>
-            {locations.map((location) => (
-              <option key={location.id} value={location.id}>
-                {location.name}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger id="retail-pos-location" className="h-9 min-w-[154px] max-w-[220px] text-sm">
+              <SelectValue placeholder="Select location" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">Select location</SelectItem>
+              {locations.map((location) => (
+                <SelectItem key={location.id} value={String(location.id)}>
+                  {location.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div className="space-y-1">
           <label htmlFor="retail-pos-date" className="text-xs text-muted-foreground">

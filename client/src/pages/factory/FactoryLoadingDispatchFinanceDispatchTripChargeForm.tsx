@@ -10,6 +10,7 @@ import {
   type ErpType,
   type Kind,
 } from "./useFactoryLoadingDispatchFinanceState";
+import { SelectContent, SelectItem, SelectTrigger, SelectValue, Select } from "@/components/ui/select";
 
 export function FactoryLoadingDispatchFinanceDispatchTripChargeForm({
   busy,
@@ -47,24 +48,27 @@ export function FactoryLoadingDispatchFinanceDispatchTripChargeForm({
       <p className="text-sm font-semibold">{editingId ? "Edit draft charge" : "New trip charge"}</p>
       <div className="space-y-1">
         <Label htmlFor="dispatch-charge-kind">Type</Label>
-        <select
-          id="dispatch-charge-kind"
-          className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+        <Select
           value={form.kind}
-          onChange={(e) =>
+          onValueChange={(v) =>
             setForm({
               ...form,
-              kind: e.target.value as Kind,
+              kind: v as Kind,
               ledgerAccountId: "",
               offsetLedgerAccountId: "",
               erpChargeType: "",
             })
           }
         >
-          <option value="BILLABLE">Customer-billable charge</option>
-          <option value="INTERNAL">Internal expense (not billed)</option>
-          <option value="DISCOUNT">Customer discount</option>
-        </select>
+          <SelectTrigger id="dispatch-charge-kind" className="h-9 w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="BILLABLE">Customer-billable charge</SelectItem>
+            <SelectItem value="INTERNAL">Internal expense (not billed)</SelectItem>
+            <SelectItem value="DISCOUNT">Customer discount</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
       <div className="space-y-1">
         <Label htmlFor="dispatch-charge-name">Name</Label>
@@ -90,20 +94,22 @@ export function FactoryLoadingDispatchFinanceDispatchTripChargeForm({
       </div>
       <div className="space-y-1">
         <Label htmlFor="dispatch-charge-account">Ledger account</Label>
-        <select
-          id="dispatch-charge-account"
-          required
-          className="h-9 w-full rounded-md border bg-background px-2 text-sm"
-          value={form.ledgerAccountId}
-          onChange={(e) => setForm({ ...form, ledgerAccountId: e.target.value })}
+        <Select
+          value={form.ledgerAccountId || "__none__"}
+          onValueChange={(v) => setForm({ ...form, ledgerAccountId: v === "__none__" ? "" : v })}
         >
-          <option value="">Select account</option>
-          {mainAccounts.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.code} — {a.name} ({a.accountType})
-            </option>
-          ))}
-        </select>
+          <SelectTrigger id="dispatch-charge-account" aria-required="true" className="h-9 w-full">
+            <SelectValue placeholder="Select account" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__none__">Select account</SelectItem>
+            {mainAccounts.map((a) => (
+              <SelectItem key={a.id} value={String(a.id)}>
+                {a.code} — {a.name} ({a.accountType})
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <p className="text-[11px] text-muted-foreground">
           All active ledger account types are available. Billable charges credit this account, discounts debit it, and
           internal expenses debit it. Confirm the intended accounting treatment before posting.
@@ -112,40 +118,45 @@ export function FactoryLoadingDispatchFinanceDispatchTripChargeForm({
       {form.kind === "INTERNAL" && (
         <div className="space-y-1">
           <Label htmlFor="dispatch-charge-offset">Payable / offset account</Label>
-          <select
-            id="dispatch-charge-offset"
-            required
-            className="h-9 w-full rounded-md border bg-background px-2 text-sm"
-            value={form.offsetLedgerAccountId}
-            onChange={(e) => setForm({ ...form, offsetLedgerAccountId: e.target.value })}
+          <Select
+            value={form.offsetLedgerAccountId || "__none__"}
+            onValueChange={(v) => setForm({ ...form, offsetLedgerAccountId: v === "__none__" ? "" : v })}
           >
-            <option value="">Select offset</option>
-            {offsetAccounts
-              .filter((a) => String(a.id) !== form.ledgerAccountId)
-              .map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.code} — {a.name}
-                </option>
-              ))}
-          </select>
+            <SelectTrigger id="dispatch-charge-offset" aria-required="true" className="h-9 w-full">
+              <SelectValue placeholder="Select offset" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">Select offset</SelectItem>
+              {offsetAccounts
+                .filter((a) => String(a.id) !== form.ledgerAccountId)
+                .map((a) => (
+                  <SelectItem key={a.id} value={String(a.id)}>
+                    {a.code} — {a.name}
+                  </SelectItem>
+                ))}
+            </SelectContent>
+          </Select>
           <p className="text-[11px] text-muted-foreground">Recording this expense does not imply a cash payment.</p>
         </div>
       )}
       {form.kind === "BILLABLE" && (
         <div className="space-y-1">
           <Label htmlFor="dispatch-charge-erp-type">ERP PO charge mapping (optional)</Label>
-          <select
-            id="dispatch-charge-erp-type"
-            className="h-9 w-full rounded-md border bg-background px-2 text-sm"
-            value={form.erpChargeType}
-            onChange={(e) => setForm({ ...form, erpChargeType: e.target.value as ErpType })}
+          <Select
+            value={form.erpChargeType || "__none__"}
+            onValueChange={(v) => setForm({ ...form, erpChargeType: (v === "__none__" ? "" : v) as ErpType })}
           >
-            <option value="">Not mapped to ERP PO</option>
-            <option value="freight">Freight</option>
-            <option value="surcharge">Surcharge</option>
-            <option value="fumigation">Fumigation</option>
-            <option value="documentCharges">Document charges</option>
-          </select>
+            <SelectTrigger id="dispatch-charge-erp-type" className="h-9 w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">Not mapped to ERP PO</SelectItem>
+              <SelectItem value="freight">Freight</SelectItem>
+              <SelectItem value="surcharge">Surcharge</SelectItem>
+              <SelectItem value="fumigation">Fumigation</SelectItem>
+              <SelectItem value="documentCharges">Document charges</SelectItem>
+            </SelectContent>
+          </Select>
           <p className="text-[11px] text-muted-foreground">
             Unmapped charges will require explicit review before PO export in Phase 5.
           </p>

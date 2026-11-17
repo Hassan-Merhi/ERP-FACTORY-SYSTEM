@@ -8,8 +8,9 @@ import { Input } from "@/components/ui/input";
 import TicketConversation from "@/pages/tickets/TicketConversation";
 import TicketNotificationSettings from "@/pages/tickets/TicketNotificationSettings";
 import TicketAdminDashboard from "@/pages/tickets/TicketAdminDashboard";
-import { fetchJson, inputStyle, ticketKey, type Ticket, type User } from "./useTicketFormState";
+import { fetchJson, ticketKey, type Ticket, type User } from "./useTicketFormState";
 import { TicketForm } from "./TicketManagementTicketForm";
+import { SelectContent, SelectItem, SelectTrigger, SelectValue, Select } from "@/components/ui/select";
 const statusLabels: Record<string, string> = {
   open: "Open",
   seen: "Seen",
@@ -167,22 +168,25 @@ export default function TicketManagement({ sourceMode = "erp" }: { sourceMode?: 
                 setPage(1);
               }}
             />
-            <select
-              aria-label="Filter status"
-              className={inputStyle}
-              value={status}
-              onChange={(e) => {
-                setStatus(e.target.value);
+            <Select
+              value={status || "__all__"}
+              onValueChange={(value) => {
+                setStatus(value === "__all__" ? "" : value);
                 setPage(1);
               }}
             >
-              <option value="">All statuses</option>
-              {Object.entries(statusLabels).map(([key, label]) => (
-                <option key={key} value={key}>
-                  {label}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger aria-label="Filter status" className="w-full min-w-0 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">All statuses</SelectItem>
+                {Object.entries(statusLabels).map(([key, label]) => (
+                  <SelectItem key={key} value={key}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           {listing.isLoading && <p role="status">Loading tickets...</p>}
           {listing.isError && (

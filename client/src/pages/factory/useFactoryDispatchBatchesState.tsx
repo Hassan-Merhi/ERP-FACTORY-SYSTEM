@@ -13,7 +13,6 @@ import { visibleTabInterval } from "@/lib/queryPolicies";
 import type { FactoryMyAccess } from "@shared/apiTypes";
 import { useCompany } from "@/contexts/CompanyContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
-
 interface Customer {
   id: number;
   legalName: string;

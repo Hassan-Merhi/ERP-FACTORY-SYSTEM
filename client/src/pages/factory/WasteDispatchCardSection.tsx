@@ -2,12 +2,12 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ChevronDown, ChevronRight, Loader2, Search, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Loader2, Trash2 } from "lucide-react";
 import { fmt, fmtKg } from "./wastedispatch/utils";
 import { useWasteDispatchState } from "./useWasteDispatchState";
+import { SearchField } from "@/components/ui/search-field";
 
 export function WasteDispatchCardSection({
   bales,
@@ -50,16 +50,14 @@ export function WasteDispatchCardSection({
             )}
           </div>
           <div className="flex items-center gap-2">
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Filter products..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-8 w-48 h-8 text-xs"
-                data-testid="input-search-bales"
-              />
-            </div>
+            <SearchField
+              placeholder="Filter products..."
+              value={search}
+              onValueChange={setSearch}
+              wrapperClassName="w-48"
+              className="h-8 text-xs"
+              data-testid="input-search-bales"
+            />
             {bales.length > 0 && (
               <Button variant="outline" size="sm" onClick={toggleAll} className="text-xs h-8 px-3">
                 {selected.size === bales.length ? "Deselect All" : "Select All"}

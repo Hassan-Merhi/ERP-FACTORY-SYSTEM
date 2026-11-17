@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/PageHeader";
 import type { ReviewKind } from "./FiscalCloseReviewTypes";
 import { FiscalCloseReviewCardSection, useFiscalCloseReviewState } from "./useFiscalCloseReviewState";
 import { FiscalCloseReviewCardSection2, FiscalCloseReviewCardSection3 } from "./FiscalCloseReviewCardSection2";
+import { SelectContent, SelectItem, SelectTrigger, SelectValue, Select } from "@/components/ui/select";
 
 // Phase 15 never authorizes new GL posting; certification is separate.
 const UNIFIED_FINANCIAL_POSTING_CERTIFIED = false;
@@ -176,14 +177,15 @@ export default function FiscalCloseReview() {
             <div className="grid sm:grid-cols-3 gap-3">
               <div>
                 <Label>Review capacity</Label>
-                <select
-                  className="h-10 w-full rounded-md border bg-background px-2"
-                  value={reviewKind}
-                  onChange={(e) => setReviewKind(e.target.value as ReviewKind)}
-                >
-                  <option value="ACCOUNTING">Accounting review (Admin/Developer)</option>
-                  <option value="OWNER">Owner approval (Owner)</option>
-                </select>
+                <Select value={reviewKind} onValueChange={(value) => setReviewKind(value as ReviewKind)}>
+                  <SelectTrigger className="h-10 w-full" aria-label="Review capacity">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ACCOUNTING">Accounting review (Admin/Developer)</SelectItem>
+                    <SelectItem value="OWNER">Owner approval (Owner)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div className="sm:col-span-2">
                 <Label>Review evidence / explanation</Label>

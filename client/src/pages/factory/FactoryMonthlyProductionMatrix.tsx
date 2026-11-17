@@ -10,11 +10,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { ChevronDown, ListOrdered, Plus, Search, X } from "lucide-react";
+import { ChevronDown, ListOrdered, Plus, X } from "lucide-react";
 import type { EmbeddablePageProps } from "./FactoryMonthlyProductionMatrixCurrentMonth";
 import { useFactoryMonthlyProductionMatrixState } from "./useFactoryMonthlyProductionMatrixState";
 import { FactoryMonthlyProductionMatrixSection } from "./FactoryMonthlyProductionMatrixSection";
 import { FactoryMonthlyProductionMatrixDialogSection } from "./FactoryMonthlyProductionMatrixDialogSection";
+import { SearchField } from "@/components/ui/search-field";
 
 /** `embedded`: rendered as the Overview hub "Monthly Production" tab, whose PageHeader already titles the page. */
 export default function FactoryMonthlyProductionMatrix(props: EmbeddablePageProps) {
@@ -106,16 +107,13 @@ export default function FactoryMonthlyProductionMatrix(props: EmbeddablePageProp
           <Button size="sm" variant="outline" onClick={addMonth}>
             <Plus className="mr-1 h-4 w-4" /> {t("monthlyProduction.addMonth")}
           </Button>
-          <div className="relative w-full sm:w-64 sm:ml-auto">
-            <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              aria-label={t("monthlyProduction.searchItems")}
-              className="pl-9"
-              placeholder={t("monthlyProduction.searchPlaceholder")}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
+          <SearchField
+            aria-label={t("monthlyProduction.searchItems")}
+            wrapperClassName="w-full sm:w-64 sm:ml-auto"
+            placeholder={t("monthlyProduction.searchPlaceholder")}
+            value={search}
+            onValueChange={setSearch}
+          />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button

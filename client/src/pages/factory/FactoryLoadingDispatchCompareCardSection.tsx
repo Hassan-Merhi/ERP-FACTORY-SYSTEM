@@ -1,12 +1,11 @@
 // Extracted from ./FactoryLoadingDispatchCompare.tsx to keep that module under the source-size cap.
-import { Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { PillTabButton, TabsList } from "@/components/ui/tabs";
 import { PAGE_SIZE, printNumber, StatusBadge } from "./FactoryLoadingDispatchCompareParts";
 import { useFactoryLoadingDispatchCompareState } from "./useFactoryLoadingDispatchCompareState";
+import { SearchField } from "@/components/ui/search-field";
 
 export function useFactoryLoadingDispatchCompareState2() {
   const {
@@ -106,19 +105,17 @@ export function FactoryLoadingDispatchCompareCardSection({
           <Badge variant="secondary">{printNumber(rows.length)} articles</Badge>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="relative min-w-[180px] flex-1 sm:max-w-xs">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              className="h-9 pl-9"
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setVisibleCount(PAGE_SIZE);
-              }}
-              placeholder="Search article or name"
-              data-testid="input-compare-article-search"
-            />
-          </div>
+          <SearchField
+            wrapperClassName="min-w-[180px] flex-1 sm:max-w-xs"
+            className="h-9"
+            value={search}
+            onValueChange={(v) => {
+              setSearch(v);
+              setVisibleCount(PAGE_SIZE);
+            }}
+            placeholder="Search article or name"
+            data-testid="input-compare-article-search"
+          />
           <div className="max-w-full overflow-x-auto">
             <TabsList className="w-max" aria-label="Filter article comparison status">
               {(

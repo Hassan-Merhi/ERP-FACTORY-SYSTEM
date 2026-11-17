@@ -1,6 +1,6 @@
 // Extracted from ./BalesHistory.tsx to keep that module under the source-size cap.
 import { addDays, format } from "date-fns";
-import { ChevronDown, ChevronLeft, ChevronRight, FileSpreadsheet, Search, Upload, XCircle } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, FileSpreadsheet, Upload, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -15,6 +15,7 @@ import {
 import { LabelPrintSettings } from "@/components/LabelPrintSettings";
 import { exportFileName } from "@/lib/exportFile";
 import { useBalesHistoryState } from "./useBalesHistoryState";
+import { SearchField } from "@/components/ui/search-field";
 
 export function BalesHistorySection({
   bulkUpdateNamesMutation,
@@ -54,16 +55,14 @@ export function BalesHistorySection({
 >) {
   return (
     <div className="bales-modern-toolbar">
-      <div className="bales-modern-search relative flex-1 min-w-[180px]">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-        <Input
-          placeholder="Search by ref #, code, product, batch..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-8 h-8 text-sm"
-          data-testid="input-bales-search"
-        />
-      </div>
+      <SearchField
+        value={searchTerm}
+        onValueChange={setSearchTerm}
+        placeholder="Search by ref #, code, product, batch..."
+        wrapperClassName="bales-modern-search flex-1 min-w-[180px]"
+        className="text-sm"
+        data-testid="input-bales-search"
+      />
       <div className="flex items-center gap-1">
         <Button
           size="icon"

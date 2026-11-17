@@ -8,7 +8,7 @@
 import { Building2, Factory, Filter, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -88,9 +88,15 @@ export function JournalFilters({ model }: { model: TransactionJournalModel }) {
 
       {/* Voucher type */}
       <div className="w-full space-y-1.5 sm:w-auto">
-        <Label className="text-[11px] font-semibold text-slate-600 dark:text-slate-300" htmlFor="voucher-type-tj">Voucher Type</Label>
+        <Label className="text-[11px] font-semibold text-slate-600 dark:text-slate-300" htmlFor="voucher-type-tj">
+          Voucher Type
+        </Label>
         <Select value={model.voucherType} onValueChange={model.applyVoucherType}>
-          <SelectTrigger id="voucher-type-tj" className="h-9 w-full rounded-lg border-slate-200 bg-white/85 shadow-sm dark:border-white/15 dark:bg-white/[0.04] sm:w-[150px]" data-testid="select-voucher-type">
+          <SelectTrigger
+            id="voucher-type-tj"
+            className="h-9 w-full rounded-lg border-slate-200 bg-white/85 shadow-sm dark:border-white/15 dark:bg-white/[0.04] sm:w-[150px]"
+            data-testid="select-voucher-type"
+          >
             <SelectValue placeholder="All Types" />
           </SelectTrigger>
           <SelectContent>
@@ -107,9 +113,15 @@ export function JournalFilters({ model }: { model: TransactionJournalModel }) {
 
       {/* Currency */}
       <div className="w-full space-y-1.5 sm:w-auto">
-        <Label className="text-[11px] font-semibold text-slate-600 dark:text-slate-300" htmlFor="currency-tj">Currency</Label>
+        <Label className="text-[11px] font-semibold text-slate-600 dark:text-slate-300" htmlFor="currency-tj">
+          Currency
+        </Label>
         <Select value={model.currency} onValueChange={model.applyCurrency}>
-          <SelectTrigger id="currency-tj" className="h-9 w-full rounded-lg border-slate-200 bg-white/85 shadow-sm dark:border-white/15 dark:bg-white/[0.04] sm:w-[112px]" data-testid="select-currency">
+          <SelectTrigger
+            id="currency-tj"
+            className="h-9 w-full rounded-lg border-slate-200 bg-white/85 shadow-sm dark:border-white/15 dark:bg-white/[0.04] sm:w-[112px]"
+            data-testid="select-currency"
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -122,9 +134,15 @@ export function JournalFilters({ model }: { model: TransactionJournalModel }) {
 
       {/* Status */}
       <div className="w-full space-y-1.5 sm:w-auto">
-        <Label className="text-[11px] font-semibold text-slate-600 dark:text-slate-300" htmlFor="status-tj">Status</Label>
+        <Label className="text-[11px] font-semibold text-slate-600 dark:text-slate-300" htmlFor="status-tj">
+          Status
+        </Label>
         <Select value={model.optionalFilter} onValueChange={model.applyOptionalFilter}>
-          <SelectTrigger id="status-tj" className="h-9 w-full rounded-lg border-slate-200 bg-white/85 shadow-sm dark:border-white/15 dark:bg-white/[0.04] sm:w-[138px]" data-testid="select-optional">
+          <SelectTrigger
+            id="status-tj"
+            className="h-9 w-full rounded-lg border-slate-200 bg-white/85 shadow-sm dark:border-white/15 dark:bg-white/[0.04] sm:w-[138px]"
+            data-testid="select-optional"
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -155,20 +173,22 @@ export function JournalFilters({ model }: { model: TransactionJournalModel }) {
 
   const searchControl = (
     <div className="space-y-1.5 flex-1 min-w-0 w-full md:min-w-[235px] md:w-auto">
-      <Label className="text-[11px] font-semibold text-slate-600 dark:text-slate-300" htmlFor="search-tj">Search</Label>
+      <Label className="text-[11px] font-semibold text-slate-600 dark:text-slate-300" htmlFor="search-tj">
+        Search
+      </Label>
       <div className="flex flex-col gap-2 sm:flex-row">
-        <div className="relative flex-1">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            id="search-tj"
-            value={model.searchInput}
-            onChange={(e) => model.setSearchInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && model.handleSearch()}
-            placeholder="Voucher # or narration…"
-            className="h-9 rounded-lg border-slate-200 bg-white/85 pl-9 shadow-sm focus-visible:ring-violet-500 dark:border-white/15 dark:bg-white/[0.04]"
-            data-testid="input-search"
-          />
-        </div>
+        <SearchField
+          id="search-tj"
+          wrapperClassName="flex-1"
+          value={model.searchInput}
+          onValueChange={model.setSearchInput}
+          onKeyDown={(e) => e.key === "Enter" && model.handleSearch()}
+          placeholder="Voucher # or narration…"
+          aria-label="Search"
+          showClear={false}
+          className="h-9 rounded-lg border-slate-200 bg-white/85 shadow-sm focus-visible:ring-violet-500 dark:border-white/15 dark:bg-white/[0.04]"
+          data-testid="input-search"
+        />
         <Button
           variant="default"
           className="h-9 w-full shrink-0 rounded-lg bg-gradient-to-r from-violet-600 to-purple-600 px-5 text-white shadow-sm hover:from-violet-700 hover:to-purple-700 sm:w-auto"
@@ -206,7 +226,9 @@ export function JournalFilters({ model }: { model: TransactionJournalModel }) {
             <CardHeader className="px-4 pb-1.5 pt-3 sm:px-5">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div className="flex items-center gap-2">
-                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-100 text-violet-700 dark:bg-violet-400/15 dark:text-violet-300"><Filter className="h-3.5 w-3.5" /></span>
+                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-100 text-violet-700 dark:bg-violet-400/15 dark:text-violet-300">
+                    <Filter className="h-3.5 w-3.5" />
+                  </span>
                   <CardTitle className="text-sm font-semibold tracking-tight">Filters</CardTitle>
                 </div>
                 {model.hasActiveFilters && (
@@ -243,20 +265,19 @@ function JournalPhoneSearch({ model }: { model: TransactionJournalModel }) {
   const { t } = useApplicationLanguage();
   return (
     <div className="flex min-w-0 items-center gap-1.5">
-      <div className="relative min-w-0 flex-1">
-        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          id="search-tj"
-          value={model.searchInput}
-          onChange={(e) => model.setSearchInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && model.handleSearch()}
-          placeholder="Voucher # or narration…"
-          aria-label={t("mobileFilters.search")}
-          enterKeyHint="search"
-          className="h-9 rounded-lg border-slate-200 bg-white/85 pl-9 shadow-sm dark:border-white/15 dark:bg-white/[0.04]"
-          data-testid="input-search"
-        />
-      </div>
+      <SearchField
+        id="search-tj"
+        wrapperClassName="flex-1"
+        value={model.searchInput}
+        onValueChange={model.setSearchInput}
+        onKeyDown={(e) => e.key === "Enter" && model.handleSearch()}
+        placeholder="Voucher # or narration…"
+        aria-label={t("mobileFilters.search")}
+        enterKeyHint="search"
+        showClear={false}
+        className="h-9 rounded-lg border-slate-200 bg-white/85 shadow-sm dark:border-white/15 dark:bg-white/[0.04]"
+        data-testid="input-search"
+      />
       <Button
         variant="default"
         size="icon"

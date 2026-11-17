@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Eye, EyeOff, Search, SlidersHorizontal, ChevronDown, CalendarDays, Filter } from "lucide-react";
+import { Eye, EyeOff, SlidersHorizontal, ChevronDown, CalendarDays, Filter } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { InvoiceDashboardMetrics } from "./factoryinvoices/InvoiceDashboardMetrics";
@@ -20,6 +20,7 @@ import { getEstimatedKg, getEstimatedPrice, getRemainingBales } from "./factoryi
 import { ShippingAvailabilityTable } from "./factoryshippingcontainers/components/ShippingAvailabilityTable";
 import { ScheduledContainersTable } from "./factoryshippingcontainers/components/ScheduledContainersTable";
 import { FactoryInvoicesSection, useFactoryInvoicesState } from "./FactoryInvoicesSection";
+import { SearchField } from "@/components/ui/search-field";
 
 export default function FactoryInvoices() {
   const {
@@ -193,16 +194,14 @@ export default function FactoryInvoices() {
 
         {/* Search and column controls retain all existing invoice actions. */}
         <div className="flex flex-wrap items-center gap-2 border-b border-border/60 px-3 py-2.5">
-          <div className="relative min-w-[210px] flex-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search customer, loading, container, destination..."
-              className="h-9 rounded-lg border-border/70 bg-background/80 pl-9 text-xs"
-              data-testid="input-invoice-search"
-            />
-          </div>
+          <SearchField
+            value={searchTerm}
+            onValueChange={setSearchTerm}
+            placeholder="Search customer, loading, container, destination..."
+            wrapperClassName="min-w-[210px] flex-1"
+            className="h-9 rounded-lg border-border/70 bg-background/80 text-xs"
+            data-testid="input-invoice-search"
+          />
           <Button
             size="sm"
             variant={showMoreFilters || fromDate || toDate ? "secondary" : "outline"}

@@ -17,6 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MixBatchWhatsAppPreview } from "./MixBatchWhatsAppPreview";
 import type { MixBatchListProps } from "./MixBatchListTypes";
+import { SelectContent, SelectItem, SelectTrigger, SelectValue, Select } from "@/components/ui/select";
 
 export function MixBatchList({
   mixBatches,
@@ -137,16 +138,19 @@ export function MixBatchList({
 
         <div className="flex w-full flex-col gap-1.5 sm:w-auto">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <select
-              value={exportPeriod}
-              onChange={(event) => setExportPeriod(event.target.value as "month" | "all-time")}
-              aria-label="Excel cost report period"
-              className="h-10 min-w-0 rounded-xl border border-input bg-background px-3 text-sm font-semibold shadow-sm"
-              data-testid="select-mix-batch-export-period"
-            >
-              <option value="month">Selected Month</option>
-              <option value="all-time">All Time</option>
-            </select>
+            <Select value={exportPeriod} onValueChange={(v) => setExportPeriod(v as "month" | "all-time")}>
+              <SelectTrigger
+                aria-label="Excel cost report period"
+                className="h-10 min-w-0 rounded-xl text-sm font-semibold shadow-sm"
+                data-testid="select-mix-batch-export-period"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="month">Selected Month</SelectItem>
+                <SelectItem value="all-time">All Time</SelectItem>
+              </SelectContent>
+            </Select>
             {exportPeriod === "month" && (
               <input
                 type="month"

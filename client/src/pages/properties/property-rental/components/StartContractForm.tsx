@@ -128,18 +128,22 @@ export function StartContractForm({
         </div>
         <div>
           <Label>Currency</Label>
-          <select
-            className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs focus:outline-hidden focus:ring-1 focus:ring-ring"
-            value={form.currency}
-            onChange={(e) => setForm((f) => ({ ...f, currency: e.target.value }))}
-            data-testid={`select-${testIdPrefix}-contract-currency`}
-          >
-            {CURRENCIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
+          <Select value={form.currency} onValueChange={(v) => setForm((f) => ({ ...f, currency: v }))}>
+            <SelectTrigger
+              className="w-full"
+              data-testid={`select-${testIdPrefix}-contract-currency`}
+              aria-label="Currency"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {CURRENCIES.map((c) => (
+                <SelectItem key={c} value={c}>
+                  {c}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div>
           <Label>Monthly Rental Amount *</Label>

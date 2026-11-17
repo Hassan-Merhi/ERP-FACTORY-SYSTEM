@@ -1,22 +1,14 @@
 // Extracted from ./FactoryStockQueryWorkspace.tsx to keep that module under the source-size cap.
-import { Input } from "@/components/ui/input";
+import { CalendarDays, ChartNoAxesColumnIncreasing, Package, ShoppingCart, TrendingUp, Warehouse } from "lucide-react";
 import {
-  CalendarDays,
-  ChartNoAxesColumnIncreasing,
-  Package,
-  Search,
-  ShoppingCart,
-  TrendingUp,
-  Warehouse,
-} from "lucide-react";
-import {
-  baseSelect,
   cell,
   fmt,
   money,
   useFactoryStockQueryWorkspaceState,
   type DisplayColumn,
 } from "./useFactoryStockQueryWorkspaceState";
+import { SearchField } from "@/components/ui/search-field";
+import { SelectContent, SelectItem, SelectTrigger, SelectValue, Select } from "@/components/ui/select";
 
 export function FactoryStockQueryWorkspaceSection({
   displayedProducts,
@@ -52,27 +44,24 @@ export function FactoryStockQueryWorkspaceSection({
         <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs">{products.length} items</span>
       </div>
       <div className="flex flex-wrap items-center gap-2 border-b p-3">
-        <div className="relative min-w-[190px] flex-1">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            className="pl-9"
-            placeholder="Search item or code..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            data-testid="input-stock-search"
-          />
-        </div>
-        <select
-          className={baseSelect + " !w-auto"}
-          value={sort}
-          onChange={(e) => setSort(e.target.value)}
-          aria-label="Sort products"
-        >
-          <option value="name">Name A–Z</option>
-          <option value="stock">Most stock</option>
-          <option value="sold">Most sold</option>
-          <option value="sales">Highest sales value</option>
-        </select>
+        <SearchField
+          wrapperClassName="min-w-[190px] flex-1"
+          placeholder="Search item or code..."
+          value={search}
+          onValueChange={setSearch}
+          data-testid="input-stock-search"
+        />
+        <Select value={sort} onValueChange={setSort}>
+          <SelectTrigger className="h-10 w-auto rounded-lg shadow-sm" aria-label="Sort products">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="name">Name A–Z</SelectItem>
+            <SelectItem value="stock">Most stock</SelectItem>
+            <SelectItem value="sold">Most sold</SelectItem>
+            <SelectItem value="sales">Highest sales value</SelectItem>
+          </SelectContent>
+        </Select>
         <details className="relative">
           <summary className="cursor-pointer rounded-lg border px-3 py-2 text-xs font-semibold">Columns</summary>
           <div className="absolute right-0 top-11 z-20 min-w-44 space-y-2 rounded-xl border bg-popover p-3 shadow-xl">

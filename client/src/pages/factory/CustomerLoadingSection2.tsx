@@ -1,13 +1,13 @@
 // Extracted from ./CustomerLoading.tsx to keep that module under the source-size cap.
-import { ChevronLeft, ChevronRight, Columns3, Package, Search, SlidersHorizontal } from "lucide-react";
+import { ChevronLeft, ChevronRight, Columns3, Package, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatNumber } from "./customerLoadingFormat";
 import type { AvailableNegativeFilter, AvailableZeroFilter, LoadingFilter } from "./customerLoadingTypes";
 import { PAGE_SIZE } from "./customerLoadingHelpers";
 import { useCustomerLoadingState } from "./useCustomerLoadingState";
+import { SearchField } from "@/components/ui/search-field";
 
 export function CustomerLoadingSection({
   allVisibleSelected,
@@ -135,19 +135,17 @@ export function CustomerLoadingSection2({
         <SlidersHorizontal className="h-3.5 w-3.5" /> Search & filters
       </div>
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-[minmax(16rem,1.6fr)_repeat(5,minmax(8rem,1fr))]">
-        <div className="relative sm:col-span-2 lg:col-span-3 2xl:col-span-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
-            placeholder="Search name, Arabic, or code..."
-            className="h-10 border-slate-300 bg-white pl-9 shadow-sm dark:border-slate-600 dark:bg-slate-900/60"
-            data-testid="customer-loading-search"
-          />
-        </div>
+        <SearchField
+          value={search}
+          onValueChange={(v) => {
+            setSearch(v);
+            setPage(1);
+          }}
+          placeholder="Search name, Arabic, or code..."
+          wrapperClassName="sm:col-span-2 lg:col-span-3 2xl:col-span-1"
+          className="h-10 border-slate-300 bg-white shadow-sm dark:border-slate-600 dark:bg-slate-900/60"
+          data-testid="customer-loading-search"
+        />
         <Select
           value={loadingFilter}
           onValueChange={(v) => {

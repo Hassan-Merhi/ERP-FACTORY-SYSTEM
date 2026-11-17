@@ -1,7 +1,6 @@
-import { Plus, Search } from "lucide-react";
+import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -15,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { useChatState } from "./ChatUseChatState";
 import { ChatCardSection } from "./ChatChatCardSection";
+import { SearchField } from "@/components/ui/search-field";
 
 export default function Chat() {
   const {
@@ -173,16 +173,12 @@ export default function Chat() {
             <DialogTitle>New Message</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search users..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9"
-                data-testid="input-user-search"
-              />
-            </div>
+            <SearchField
+              value={searchQuery}
+              onValueChange={setSearchQuery}
+              placeholder="Search users..."
+              data-testid="input-user-search"
+            />
             <div className="max-h-72 overflow-y-auto divide-y rounded-md border">
               {filteredAllUsers.length === 0 ? (
                 <div className="p-4 text-center text-sm text-muted-foreground">No users found</div>

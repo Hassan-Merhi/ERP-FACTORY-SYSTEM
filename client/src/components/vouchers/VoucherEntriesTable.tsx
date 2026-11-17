@@ -1,11 +1,12 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Plus, X, Search, Check } from "lucide-react";
+import { Plus, X, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ENTRY_TYPE_BADGE, type VoucherEntriesTableProps } from "./VoucherEntriesTableTypes";
 import { useVoucherEntriesTableState } from "./useVoucherEntriesTableState";
 import { VoucherEntriesTableSection } from "./VoucherEntriesTableSection";
+import { SearchField } from "@/components/ui/search-field";
 export type { VoucherEntry } from "./VoucherEntriesTableTypes";
 
 export function VoucherEntriesTable(props: VoucherEntriesTableProps) {
@@ -172,20 +173,17 @@ export function VoucherEntriesTable(props: VoucherEntriesTableProps) {
                 Done
               </Button>
             </div>
-            <div className="relative mt-2">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-              <Input
-                ref={mobileSearchInputRef}
-                placeholder="Search accounts..."
-                value={mobileSearch}
-                onChange={(event) => {
-                  setMobileSearch(event.target.value);
-                  setSidebarSearchValue(event.target.value);
-                }}
-                className="pl-9"
-                data-testid="input-mobile-account-search"
-              />
-            </div>
+            <SearchField
+              ref={mobileSearchInputRef}
+              value={mobileSearch}
+              onValueChange={(value) => {
+                setMobileSearch(value);
+                setSidebarSearchValue(value);
+              }}
+              placeholder="Search accounts..."
+              wrapperClassName="mt-2"
+              data-testid="input-mobile-account-search"
+            />
           </SheetHeader>
 
           <div className="flex-1 overflow-y-auto min-h-0">

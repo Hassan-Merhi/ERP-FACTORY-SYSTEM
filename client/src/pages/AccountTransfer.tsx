@@ -1,3 +1,4 @@
+import { SearchField } from "@/components/ui/search-field";
 import { searchAny } from "@shared/searchNormalization";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useDeferredValue, useState, useMemo } from "react";
@@ -8,9 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeftRight, ArrowRight, Check, Search } from "lucide-react";
+import { ArrowLeftRight, ArrowRight, Check } from "lucide-react";
 import { format } from "date-fns";
 import { PageHeader } from "@/components/PageHeader";
 import { AccountCombobox, ENTRY_PAGE_SIZE, fmtMoney, type Account, type EntryPage } from "./AccountCombobox";
@@ -213,20 +213,18 @@ export default function AccountTransfer() {
                 <p className="text-sm text-muted-foreground mt-0.5">Select which entries to transfer</p>
               </div>
               <div className="flex items-center gap-2">
-                <div className="relative">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                  <Input
-                    className="pl-8 h-8 text-sm w-52"
-                    placeholder="Filter entries…"
-                    value={searchEntries}
-                    onChange={(e) => {
-                      setSearchEntries(e.target.value);
-                      setEntryPage(1);
-                      setSelectedIds(new Set());
-                    }}
-                    data-testid="input-search-entries"
-                  />
-                </div>
+                <SearchField
+                  value={searchEntries}
+                  onValueChange={(value) => {
+                    setSearchEntries(value);
+                    setEntryPage(1);
+                    setSelectedIds(new Set());
+                  }}
+                  placeholder="Filter entries…"
+                  wrapperClassName="w-52"
+                  className="text-sm"
+                  data-testid="input-search-entries"
+                />
               </div>
             </div>
           </CardHeader>

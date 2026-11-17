@@ -15,7 +15,6 @@ import { Plus } from "lucide-react";
 import type { SheetsAndSacksItem } from "./factorysheetsandsacks/types";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import type { RouteComponentProps } from "wouter";
-
 /** Routed standalone (receives route props) or embedded as a hub tab panel. */
 export type EmbeddablePageProps = { embedded?: boolean } & Partial<RouteComponentProps>;
 

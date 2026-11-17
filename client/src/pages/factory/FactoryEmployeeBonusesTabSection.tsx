@@ -1,5 +1,5 @@
 // Extracted from ./FactoryEmployeeBonusesTab.tsx to keep that module under the source-size cap.
-import { CalendarDays, Columns3, Filter, Gift, Plus, Search, Trash2, UserRound } from "lucide-react";
+import { CalendarDays, Columns3, Filter, Gift, Plus, Trash2, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -22,6 +22,7 @@ import {
   fmt,
   useFactoryEmployeeBonusesTabState,
 } from "./useFactoryEmployeeBonusesTabState";
+import { SearchField } from "@/components/ui/search-field";
 
 export function FactoryEmployeeBonusesTabSection({
   bonuses,
@@ -159,17 +160,13 @@ export function FactoryEmployeeBonusesTabSection({
               <Label htmlFor="bonus-search" className="mb-1.5 block text-xs text-muted-foreground">
                 Name or notes
               </Label>
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="bonus-search"
-                  className="pl-9"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search bonuses..."
-                  data-testid="input-bonus-search"
-                />
-              </div>
+              <SearchField
+                id="bonus-search"
+                value={search}
+                onValueChange={setSearch}
+                placeholder="Search bonuses..."
+                data-testid="input-bonus-search"
+              />
             </div>
             <div>
               <Label htmlFor="bonus-start-date" className="mb-1.5 block text-xs text-muted-foreground">

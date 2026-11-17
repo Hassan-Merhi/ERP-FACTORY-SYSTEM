@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useFactoryReprintLabelsState } from "./useFactoryReprintLabelsState";
+import { SearchField } from "@/components/ui/search-field";
 
 export function FactoryReprintLabelsSection({
   allFilteredSelected,
@@ -56,26 +57,14 @@ export function FactoryReprintLabelsSection({
     <>
       {/* Search bar + actions */}
       <div className="flex items-center gap-2 flex-wrap">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-          <Input
-            placeholder="Filter by bale name or reference…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-            data-testid="input-search-bales"
-          />
-          {search && (
-            <button
-              onClick={() => setSearch("")}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              data-testid="button-clear-search"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          )}
-        </div>
-
+        <SearchField
+          placeholder="Filter by bale name or reference…"
+          value={search}
+          onValueChange={setSearch}
+          wrapperClassName="flex-1 min-w-[200px]"
+          data-testid="input-search-bales"
+          clearTestId="button-clear-search"
+        />
         <Popover open={articlePickerOpen} onOpenChange={setArticlePickerOpen}>
           <PopoverTrigger asChild>
             <Button variant="outline" size="default" className="gap-2" data-testid="button-article-code-filter">

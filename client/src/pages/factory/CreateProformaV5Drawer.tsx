@@ -14,8 +14,6 @@ import {
   Plus,
   Trash2,
   Container,
-  Search,
-  X,
 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { V5ProformaMobileLines } from "./V5ProformaMobileLines";
@@ -24,6 +22,7 @@ import type { Props } from "./createproformav5drawer/types";
 import { useCreateProformaV5DrawerState } from "./useCreateProformaV5DrawerState";
 import { CreateProformaV5DrawerSection } from "./CreateProformaV5DrawerSection";
 import { CreateProformaV5DrawerSection2 } from "./CreateProformaV5DrawerSection2";
+import { SearchField } from "@/components/ui/search-field";
 
 export default function CreateProformaV5Drawer(props: Props) {
   const {
@@ -225,25 +224,15 @@ export default function CreateProformaV5Drawer(props: Props) {
 
       {/* Search bar */}
       <div className="mx-3 flex flex-wrap items-end gap-3 border-x border-b bg-card/70 px-3.5 py-3 sm:mx-5 sm:px-4">
-        <div className="relative w-full sm:w-72">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-          <Input
-            value={articleSearch}
-            onChange={(e) => setArticleSearch(e.target.value)}
-            placeholder="Search product name or code..."
-            className="h-10 rounded-lg pl-8 text-sm"
-            data-testid="input-v5-create-search"
-          />
-          {articleSearch && (
-            <button
-              onClick={() => setArticleSearch("")}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover-elevate rounded-sm"
-              data-testid="button-v5-create-clear-search"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          )}
-        </div>
+        <SearchField
+          value={articleSearch}
+          onValueChange={setArticleSearch}
+          placeholder="Search product name or code..."
+          wrapperClassName="w-full sm:w-72"
+          className="h-10 rounded-lg text-sm"
+          data-testid="input-v5-create-search"
+          clearTestId="button-v5-create-clear-search"
+        />
         <div className="w-full sm:w-56">
           <Label className="mb-1 block text-xs font-medium">Catalog</Label>
           <Select value={catalogFilter} onValueChange={setCatalogFilter}>

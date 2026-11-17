@@ -6,6 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Download, Plus, Save, Trash2, Upload } from "lucide-react";
 import { LEGACY_PRICE_DESTINATION } from "./factorycustomerstatement/statementHelpers";
 import { useFactoryCustomerStatementState } from "./useFactoryCustomerStatementStatePart2";
+import { SelectContent, SelectItem, SelectTrigger, SelectValue, Select } from "@/components/ui/select";
 
 export function FactoryCustomerStatementSection({
   deletePriceMutation,
@@ -284,29 +285,32 @@ export function FactoryCustomerStatementSection2({
           <label htmlFor="customer-price-destination" className="mb-1 block text-xs font-semibold">
             Price list destination
           </label>
-          <select
-            id="customer-price-destination"
-            data-testid="select-price-destination"
-            className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground"
+          <Select
             value={priceDestination}
-            onChange={(e) => void selectPriceDestination(e.target.value)}
+            onValueChange={(v) => void selectPriceDestination(v)}
             disabled={savePricesMutation.isPending || deletePriceMutation.isPending}
           >
-            <option value="" disabled>
-              Select destination
-            </option>
-            {(priceDestinationsQuery.data ?? []).map((destination) => (
-              <option key={destination} value={destination}>
-                {destination}
-              </option>
-            ))}
-            {priceDestination &&
-              priceDestination !== LEGACY_PRICE_DESTINATION &&
-              !(priceDestinationsQuery.data ?? []).includes(priceDestination) && (
-                <option value={priceDestination}>{priceDestination}</option>
-              )}
-            <option value={LEGACY_PRICE_DESTINATION}>Legacy / Unassigned (old prices)</option>
-          </select>
+            <SelectTrigger
+              id="customer-price-destination"
+              data-testid="select-price-destination"
+              className="h-9 w-full"
+            >
+              <SelectValue placeholder="Select destination" />
+            </SelectTrigger>
+            <SelectContent>
+              {(priceDestinationsQuery.data ?? []).map((destination) => (
+                <SelectItem key={destination} value={destination}>
+                  {destination}
+                </SelectItem>
+              ))}
+              {priceDestination &&
+                priceDestination !== LEGACY_PRICE_DESTINATION &&
+                !(priceDestinationsQuery.data ?? []).includes(priceDestination) && (
+                  <SelectItem value={priceDestination}>{priceDestination}</SelectItem>
+                )}
+              <SelectItem value={LEGACY_PRICE_DESTINATION}>Legacy / Unassigned (old prices)</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         {recordChanges.allowed && (
           <div className="flex min-w-[220px] flex-1 items-end gap-2">

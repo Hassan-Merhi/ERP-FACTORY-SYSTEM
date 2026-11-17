@@ -1,10 +1,11 @@
 // Extracted from ./ERPRunPayrollView.tsx to keep that module under the source-size cap.
-import { ArrowLeft, CheckCircle2, ClipboardList, Loader2, Search } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ClipboardList, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { useERPRunPayrollModel } from "./useERPRunPayrollModel";
+import { SearchField } from "@/components/ui/search-field";
 
 export interface ERPRunPayrollViewProps {
   model: ReturnType<typeof useERPRunPayrollModel>;
@@ -297,16 +298,13 @@ export function ERPRunPayrollViewSection2({
 >) {
   return (
     <div className="flex flex-wrap items-center gap-3 mb-4">
-      <div className="relative flex-1 min-w-52">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Search by name, code, department..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-9"
-          data-testid="input-search-workers"
-        />
-      </div>
+      <SearchField
+        value={searchQuery}
+        onValueChange={setSearchQuery}
+        placeholder="Search by name, code, department..."
+        wrapperClassName="flex-1 min-w-52"
+        data-testid="input-search-workers"
+      />
       <div className="flex items-center gap-2 flex-wrap">
         <div className="flex items-center gap-2">
           <Label className="text-sm whitespace-nowrap">Payroll Date</Label>

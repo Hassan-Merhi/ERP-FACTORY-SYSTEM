@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { exact, fmt } from "./CashBankReconciliationTypes";
 import { CashBankReconciliationSection, useCashBankReconciliationState } from "./useCashBankReconciliationState";
 import { CashBankReconciliationCardSection } from "./CashBankReconciliationCardSection";
+import { SelectContent, SelectTrigger, SelectValue, Select, SelectItem } from "@/components/ui/select";
 
 export default function CashBankReconciliation() {
   const {
@@ -64,24 +65,27 @@ export default function CashBankReconciliation() {
         </CardHeader>
         <CardContent className="space-y-2">
           <Label htmlFor="cash-bank-account">Account</Label>
-          <select
-            id="cash-bank-account"
-            value={account}
-            className="h-10 w-full rounded-md border bg-background px-2"
-            onChange={(e) => {
-              setAccount(e.target.value);
+          <Select
+            value={account || "__none__"}
+            onValueChange={(value) => {
+              setAccount(value === "__none__" ? "" : value);
               setStatementId(null);
               setSelectedLine(null);
               setPreview(null);
             }}
           >
-            <option value="">Choose existing account...</option>
-            {(accounts.data ?? []).map((a) => (
-              <option key={a.accountKind + ":" + a.accountId} value={a.accountKind + ":" + a.accountId}>
-                {a.accountKind === "bank" ? "Bank" : "Cash/Bank Ledger"} — {a.name} (#{a.accountId})
-              </option>
-            ))}
-          </select>
+            <SelectTrigger id="cash-bank-account" className="h-10 w-full">
+              <SelectValue placeholder="Choose existing account..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">Choose existing account...</SelectItem>
+              {(accounts.data ?? []).map((a) => (
+                <SelectItem key={a.accountKind + ":" + a.accountId} value={a.accountKind + ":" + a.accountId}>
+                  {a.accountKind === "bank" ? "Bank" : "Cash/Bank Ledger"} — {a.name} (#{a.accountId})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           {accounts.isError && <p className="text-sm text-destructive">{(accounts.error as Error).message}</p>}
         </CardContent>
       </Card>

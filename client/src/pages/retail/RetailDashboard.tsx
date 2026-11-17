@@ -16,6 +16,7 @@ import {
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCompany } from "@/contexts/CompanyContext";
 import { RetailNav } from "./RetailNav";
 import { RetailVariantReports } from "./RetailVariantReports";
@@ -190,20 +191,21 @@ export default function RetailDashboard() {
           </label>
           <label className="space-y-1 text-xs font-medium text-muted-foreground sm:col-span-2">
             Location
-            <select
-              value={locationId}
-              onChange={(event) => setLocationId(event.target.value)}
-              className="h-10 w-full rounded-md border bg-background px-3 text-sm text-foreground"
-            >
-              <option value="">All locations</option>
-              {locations
-                .filter((location) => location.active !== false)
-                .map((location) => (
-                  <option key={location.id} value={location.id}>
-                    {location.name}
-                  </option>
-                ))}
-            </select>
+            <Select value={locationId || "__all__"} onValueChange={(v) => setLocationId(v === "__all__" ? "" : v)}>
+              <SelectTrigger className="h-10 w-full text-sm text-foreground" aria-label="Location">
+                <SelectValue placeholder="All locations" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">All locations</SelectItem>
+                {locations
+                  .filter((location) => location.active !== false)
+                  .map((location) => (
+                    <SelectItem key={location.id} value={String(location.id)}>
+                      {location.name}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
           </label>
         </CardContent>
       </Card>

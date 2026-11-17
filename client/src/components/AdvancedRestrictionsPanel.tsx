@@ -1,3 +1,4 @@
+import { SearchField } from "@/components/ui/search-field";
 import { searchAny } from "@shared/searchNormalization";
 /**
  * AdvancedRestrictionsPanel
@@ -18,10 +19,9 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Loader2, ChevronDown, ChevronRight, Search, Shield, Info } from "lucide-react";
+import { Loader2, ChevronDown, ChevronRight, Shield, Info } from "lucide-react";
 import {
   PERMISSION_CATALOG,
   PERMISSION_TYPE_LABELS,
@@ -224,16 +224,13 @@ export function AdvancedRestrictionsPanel({ role, companyId, companyName }: Adva
       </div>
 
       {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-        <Input
-          placeholder="Search permissions…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-8 h-8 text-xs"
-          data-testid="input-permission-search"
-        />
-      </div>
+      <SearchField
+        value={search}
+        onValueChange={setSearch}
+        placeholder="Search permissions…"
+        className="text-xs"
+        data-testid="input-permission-search"
+      />
 
       {/* Sections by type */}
       {TYPE_ORDER.map((type) => {

@@ -9,6 +9,7 @@ import { RetailPaymentPanel } from "./RetailPaymentPanel";
 import { RetailLastSaleSummary } from "./RetailPOSPanels";
 import { money, scanBeep } from "./retailPosTypes";
 import { useRetailPOSState } from "./useRetailPOSState";
+import { SelectContent, SelectItem, SelectTrigger, SelectValue, Select } from "@/components/ui/select";
 
 export function RetailPOSPosWorkspaceColumnsSection({
   addItem,
@@ -141,21 +142,28 @@ export function RetailPOSPosWorkspaceColumnsSection({
               {orderDiscountOpen && (
                 <div className="mt-2 space-y-2">
                   <div className="flex gap-2">
-                    <select
-                      className="h-9 flex-1 rounded-md border bg-background px-2 text-sm"
+                    <Select
                       value={orderDiscount.type}
-                      onChange={(event) =>
+                      onValueChange={(v) =>
                         setOrderDiscount((current) => ({
                           ...current,
-                          type: event.target.value as "none" | "percent" | "fixed",
+                          type: v as "none" | "percent" | "fixed",
                         }))
                       }
-                      data-testid="retail-order-discount-type"
                     >
-                      <option value="none">No discount</option>
-                      <option value="percent">Percent</option>
-                      <option value="fixed">Fixed amount</option>
-                    </select>
+                      <SelectTrigger
+                        className="h-9 flex-1 text-sm"
+                        data-testid="retail-order-discount-type"
+                        aria-label="Order discount type"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">No discount</SelectItem>
+                        <SelectItem value="percent">Percent</SelectItem>
+                        <SelectItem value="fixed">Fixed amount</SelectItem>
+                      </SelectContent>
+                    </Select>
                     {orderDiscount.type !== "none" && (
                       <Input
                         type="number"

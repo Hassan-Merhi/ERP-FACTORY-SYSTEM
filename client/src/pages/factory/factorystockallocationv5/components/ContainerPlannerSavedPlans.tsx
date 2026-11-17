@@ -8,6 +8,7 @@ import { ContainerPlannerBaleAssignment } from "./ContainerPlannerBaleAssignment
 import { ContainerPlannerCustomerAllocation } from "./ContainerPlannerCustomerAllocation";
 import { ContainerPlannerShipments } from "./ContainerPlannerShipments";
 import { ContainerPlannerOptimizer } from "./ContainerPlannerOptimizer";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatQty, type Props } from "./ContainerPlannerSavedPlansTypes";
 import { useContainerPlannerSavedPlansState } from "./useContainerPlannerSavedPlansState";
 import {
@@ -254,22 +255,29 @@ export function ContainerPlannerSavedPlans(props: Props) {
                     </div>
                     <div className="w-full lg:w-56">
                       <label className="mb-1 block text-xs text-muted-foreground">Destination</label>
-                      <select
-                        value={moveDestinationId}
-                        onChange={(event) => setMoveDestinationId(event.target.value)}
-                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                        data-testid="select-container-plan-move-destination"
+                      <Select
+                        value={moveDestinationId || "__none__"}
+                        onValueChange={(v) => setMoveDestinationId(v === "__none__" ? "" : v)}
                       >
-                        {unlockedDestinations.length === 0 ? (
-                          <option value="">No unlocked destination has space</option>
-                        ) : (
-                          unlockedDestinations.map((container) => (
-                            <option key={container.id} value={container.id}>
-                              {container.name} · {formatQty(container.capacityBales - container.totalBales)} free
-                            </option>
-                          ))
-                        )}
-                      </select>
+                        <SelectTrigger
+                          className="h-9 w-full text-sm"
+                          data-testid="select-container-plan-move-destination"
+                          aria-label="Destination"
+                        >
+                          <SelectValue placeholder="Choose destination" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {unlockedDestinations.length === 0 ? (
+                            <SelectItem value="__none__">No unlocked destination has space</SelectItem>
+                          ) : (
+                            unlockedDestinations.map((container) => (
+                              <SelectItem key={container.id} value={String(container.id)}>
+                                {container.name} · {formatQty(container.capacityBales - container.totalBales)} free
+                              </SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
                     </div>
                     <Button
                       size="sm"
