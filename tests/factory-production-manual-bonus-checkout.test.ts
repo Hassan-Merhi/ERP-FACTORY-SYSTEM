@@ -43,8 +43,15 @@ describe("Manual Production Bonuses", () => {
     const constraints = tableConstraints("factory_target_bonus_manual_payments");
     expect(constraints).toContain("UNIQUE (company_id, request_key, worker_id)");
     expect(constraints).toContain("UNIQUE (payment_voucher_id)");
-    expect(manifestEntry("constraint", "public.factory_target_bonus_manual_payments.factory_manual_bonus_request_worker_unique")).toBeDefined();
-    expect(manifestEntry("constraint", "public.factory_target_bonus_manual_payments.factory_manual_bonus_voucher_unique")).toBeDefined();
+    expect(
+      manifestEntry(
+        "constraint",
+        "public.factory_target_bonus_manual_payments.factory_manual_bonus_request_worker_unique"
+      )
+    ).toBeDefined();
+    expect(
+      manifestEntry("constraint", "public.factory_target_bonus_manual_payments.factory_manual_bonus_voucher_unique")
+    ).toBeDefined();
     for (const target of ["targetBonusPaymentService.ts", "weeklyBonusPaymentService.ts"]) {
       expect(source("server/services/factory/" + target)).toContain("factory_target_bonus_manual_payments");
     }

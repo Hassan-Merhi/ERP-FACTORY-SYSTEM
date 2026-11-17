@@ -27,10 +27,12 @@ const plannerTables: PgTable[] = [
 
 function manifestColumns(table: string): string[] {
   const prefix = `public.${table}.`;
-  return schemaManifest()
-    .filter((entry) => entry.kind === "column" && entry.identity.startsWith(prefix))
-    // Reserved words such as "position" are quoted in the identity.
-    .map((entry) => entry.identity.slice(prefix.length).replace(/^"(.*)"$/, "$1"));
+  return (
+    schemaManifest()
+      .filter((entry) => entry.kind === "column" && entry.identity.startsWith(prefix))
+      // Reserved words such as "position" are quoted in the identity.
+      .map((entry) => entry.identity.slice(prefix.length).replace(/^"(.*)"$/, "$1"))
+  );
 }
 
 describe("Factory container planner schema", () => {

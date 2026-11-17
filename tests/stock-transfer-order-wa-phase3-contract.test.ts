@@ -17,7 +17,10 @@ const entry = read("server/routes.ts");
 const origin = read("server/security/originGuard.ts");
 const settings = read("server/routes/stockTransferOrderWaApprovalRoutes.ts");
 const manifest = JSON.parse(read("config/route-manifest.json")) as {
-  routeCount: number; routes: string[]; middlewareMountCount: number; middlewareMounts: string[];
+  routeCount: number;
+  routes: string[];
+  middlewareMountCount: number;
+  middlewareMounts: string[];
 };
 
 describe("Stock Transfer Order WhatsApp inbound Phase 3", () => {
@@ -40,8 +43,8 @@ describe("Stock Transfer Order WhatsApp inbound Phase 3", () => {
     expect(parser).toContain('root.typeWebhook !== "incomingMessageReceived"');
     expect(parser).toContain('message.typeMessage === "quotedMessage"');
     expect(parser).toContain('message.typeMessage === "textMessage"');
-    expect(parser).toContain('record(message.quotedMessage)?.stanzaId');
-    expect(parser).toContain('textData?.stanzaId');
+    expect(parser).toContain("record(message.quotedMessage)?.stanzaId");
+    expect(parser).toContain("textData?.stanzaId");
     expect(parser).toContain('normalized !== "DONE" && normalized !== "DECLINE"');
   });
 
@@ -52,7 +55,7 @@ describe("Stock Transfer Order WhatsApp inbound Phase 3", () => {
     expect(consumer).toContain("reply.senderE164 !== matched.authorized_phone_e164");
     expect(consumer).toContain("matched.current_phone !== matched.authorized_phone_e164");
     expect(consumer).toContain("matched.current_group !== matched.approval_group_chat_id");
-    expect(consumer).toContain("matched.status !== \"requested\"");
+    expect(consumer).toContain('matched.status !== "requested"');
     expect(consumer).toContain("runWithDatabaseMaintenanceScope");
   });
 

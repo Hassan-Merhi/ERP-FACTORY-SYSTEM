@@ -6,7 +6,7 @@
  */
 import type { PoolClient } from "pg";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { db, pool } from "../server/db";
+import { db } from "../server/db";
 import {
   currentPilotEligibilityTx,
   deployedUnifiedReleaseSha,

@@ -37,12 +37,14 @@ describe("declared runtime tables", () => {
       expect(hasTable(`${schema}.${config.name}`), `${config.name} is not created by migrations/`).toBe(true);
       const migrated = migratedColumns(config.name, schema);
       const declared = new Set(config.columns.map((column) => column.name));
-      expect([...migrated].filter((column) => !declared.has(column)).sort(), "created by migrations, not declared").toEqual(
-        []
-      );
-      expect([...declared].filter((column) => !migrated.has(column)).sort(), "declared, not created by migrations").toEqual(
-        []
-      );
+      expect(
+        [...migrated].filter((column) => !declared.has(column)).sort(),
+        "created by migrations, not declared"
+      ).toEqual([]);
+      expect(
+        [...declared].filter((column) => !migrated.has(column)).sort(),
+        "declared, not created by migrations"
+      ).toEqual([]);
     });
   }
 });

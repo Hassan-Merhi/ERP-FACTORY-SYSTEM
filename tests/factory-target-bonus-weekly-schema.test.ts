@@ -21,7 +21,9 @@ describe("Phase 14 weekly bonus method and review schema", () => {
   });
 
   it("blocks UPDATE and DELETE of method versions and reviews with row triggers", () => {
-    expect(triggerDefinition("factory_production_target_bonus_weekly_methods", "factory_bonus_weekly_method_immutable")).toBe(
+    expect(
+      triggerDefinition("factory_production_target_bonus_weekly_methods", "factory_bonus_weekly_method_immutable")
+    ).toBe(
       "CREATE TRIGGER factory_bonus_weekly_method_immutable BEFORE DELETE OR UPDATE ON public.factory_production_target_bonus_weekly_methods FOR EACH ROW EXECUTE FUNCTION prevent_bonus_weekly_method_mutation()"
     );
     expect(triggerDefinition("factory_target_bonus_weekly_reviews", "factory_bonus_weekly_review_immutable")).toBe(

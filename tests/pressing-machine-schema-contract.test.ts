@@ -76,8 +76,12 @@ describe("pressing machine Phase 1 schema contracts", () => {
       type: "date",
       notNull: true,
     });
-    expect(triggerDefinition("factory_pressing_corrections", "factory_pressing_corrections_immutable_trg")).toBeDefined();
-    expect(triggerDefinition("factory_pressing_confirmations", "factory_pressing_confirmations_protect_trg")).toBeDefined();
+    expect(
+      triggerDefinition("factory_pressing_corrections", "factory_pressing_corrections_immutable_trg")
+    ).toBeDefined();
+    expect(
+      triggerDefinition("factory_pressing_confirmations", "factory_pressing_confirmations_protect_trg")
+    ).toBeDefined();
     expect(functionDefinition("factory_pressing_confirmations_protect")).toContain(
       "correction event must be recorded before voiding"
     );

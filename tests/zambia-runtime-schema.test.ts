@@ -40,7 +40,9 @@ describe("Zambia purchase cost schema", () => {
     // NOT VALID: existing (USD) rows are never scanned or rewritten.
     expect(constraint?.validated).toBe(false);
     expect(constraint?.def).toContain("upper(currency) <> 'ZMW'::text OR historical_exchange_rate > 0::numeric");
-    for (const column of PURCHASE_ORDER_COLUMNS.filter((name) => name.startsWith("native_") && name !== "native_line_count")) {
+    for (const column of PURCHASE_ORDER_COLUMNS.filter(
+      (name) => name.startsWith("native_") && name !== "native_line_count"
+    )) {
       expect(constraint?.def).toContain(`${column} IS NOT NULL`);
     }
     expect(constraint?.def).toContain("native_line_count > 0");

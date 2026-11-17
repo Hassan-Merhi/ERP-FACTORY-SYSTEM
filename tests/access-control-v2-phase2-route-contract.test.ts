@@ -2,7 +2,14 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { functionDefinition, hasPolicy, hasTable, manifestEntry, tableRowLevelSecurity, triggerDefinition } from "./helpers/schemaManifest";
+import {
+  functionDefinition,
+  hasPolicy,
+  hasTable,
+  manifestEntry,
+  tableRowLevelSecurity,
+  triggerDefinition,
+} from "./helpers/schemaManifest";
 
 const root = process.cwd();
 const read = (name: string) => fs.readFileSync(path.join(root, name), "utf8");

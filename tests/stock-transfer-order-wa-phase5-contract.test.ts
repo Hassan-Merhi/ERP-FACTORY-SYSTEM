@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { columnDefinition, hasPolicy, tableRowLevelSecurity, triggerDefinition } from "./helpers/schemaManifest";
 
-const read = (name: string) => fs.readFileSync(path.join(process.cwd(),name),"utf8");
+const read = (name: string) => fs.readFileSync(path.join(process.cwd(), name), "utf8");
 
 const snapshot = read("server/services/stockTransferOrderApprovedWorkbookSnapshot.ts");
 const delivery = read("server/services/stockTransferOrderWaDeliveryWorker.ts");
@@ -59,9 +59,9 @@ describe("Stock Transfer Order Phase 5 no-cost Excel delivery", () => {
   });
 
   it("sends only from the original main instance, never fallback or blind network retry", () => {
-    const start=sending.indexOf("export async function sendApprovedStockTransferOrderWorkbook(");
-    const end=sending.indexOf("/** Send a plain text message to one specific chatId */",start);
-    const fn=sending.slice(start,end);
+    const start = sending.indexOf("export async function sendApprovedStockTransferOrderWorkbook(");
+    const end = sending.indexOf("/** Send a plain text message to one specific chatId */", start);
+    const fn = sending.slice(start, end);
     expect(fn).toContain("settings.instanceId !== expectedInstanceId");
     expect(fn).toContain("requestGreenApiUpload(settings");
     expect(fn).not.toContain("uploadGreenApiWithAuthFallback");

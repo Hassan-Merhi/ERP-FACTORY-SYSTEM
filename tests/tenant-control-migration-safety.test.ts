@@ -25,8 +25,7 @@ describe("tenant control database guard migration", () => {
   it("is registered as the next versioned migration", () => {
     const journal = JSON.parse(readFileSync(journalPath, "utf8"));
     const entry = journal.entries.find(
-      (candidate: { tag?: string }) =>
-        candidate.tag === "0013_tenant_control_integrity_guards"
+      (candidate: { tag?: string }) => candidate.tag === "0013_tenant_control_integrity_guards"
     );
 
     expect(entry).toMatchObject({ idx: 13, version: "7", breakpoints: true });

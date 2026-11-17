@@ -83,128 +83,131 @@ describe("Phase 2 Factory bilingual schema", () => {
 
   const databaseIt = process.env.DATABASE_URL ? it : it.skip;
 
-  databaseIt("has the migrated bilingual columns and round-trips Arabic text without changing English snapshots", async () => {
-    // The database is built from migrations/ (the bilingual catalog columns are
-    // part of the baseline); nothing is installed at runtime.
-    const { pool } = await import("../server/db");
+  databaseIt(
+    "has the migrated bilingual columns and round-trips Arabic text without changing English snapshots",
+    async () => {
+      // The database is built from migrations/ (the bilingual catalog columns are
+      // part of the baseline); nothing is installed at runtime.
+      const { pool } = await import("../server/db");
 
-    const requiredColumns = [
-      ["factory_categories", "name_ar"],
-      ["factory_bale_products", "name_ar"],
-      ["factory_bale_products", "description_ar"],
-      ["factory_bales", "product_name_ar"],
-      ["factory_bales", "category_ar"],
-      ["customer_proforma_lines", "product_name_ar"],
-      ["customer_order_lines", "bale_name_ar"],
-      ["customer_order_bales", "bale_name_ar"],
-      ["customer_order_bales_history", "bale_name_ar"],
-      ["customer_order_expected_lines", "product_name_ar"],
-    ];
+      const requiredColumns = [
+        ["factory_categories", "name_ar"],
+        ["factory_bale_products", "name_ar"],
+        ["factory_bale_products", "description_ar"],
+        ["factory_bales", "product_name_ar"],
+        ["factory_bales", "category_ar"],
+        ["customer_proforma_lines", "product_name_ar"],
+        ["customer_order_lines", "bale_name_ar"],
+        ["customer_order_bales", "bale_name_ar"],
+        ["customer_order_bales_history", "bale_name_ar"],
+        ["customer_order_expected_lines", "product_name_ar"],
+      ];
 
-    for (const [tableName, columnName] of requiredColumns) {
-      const result = await pool.query(
-        `SELECT 1
+      for (const [tableName, columnName] of requiredColumns) {
+        const result = await pool.query(
+          `SELECT 1
            FROM information_schema.columns
           WHERE table_schema = 'public'
             AND table_name = $1
             AND column_name = $2`,
-        [tableName, columnName]
-      );
-      expect(result.rowCount).toBe(1);
-    }
+          [tableName, columnName]
+        );
+        expect(result.rowCount).toBe(1);
+      }
 
-    const indexResult = await pool.query(
-      `SELECT indexdef
+      const indexResult = await pool.query(
+        `SELECT indexdef
          FROM pg_indexes
         WHERE schemaname = 'public'
           AND indexname = 'factory_bale_products_company_article_code_normalized_idx'`
-    );
-    expect(indexResult.rowCount).toBe(1);
-    // article_code is text in the migrated schema, so PostgreSQL renders no ::text cast.
-    expect(indexResult.rows[0].indexdef.toUpperCase()).toContain("UPPER(BTRIM(ARTICLE_CODE))");
+      );
+      expect(indexResult.rowCount).toBe(1);
+      // article_code is text in the migrated schema, so PostgreSQL renders no ::text cast.
+      expect(indexResult.rows[0].indexdef.toUpperCase()).toContain("UPPER(BTRIM(ARTICLE_CODE))");
 
-    const client = await pool.connect();
-    const suffix = `${Date.now()}${Math.floor(Math.random() * 10_000)}`;
-    const englishProductName = `PHASE2 ENGLISH PRODUCT ${suffix}`;
-    const arabicProductName = "حقيبة رجالية كريمي 20 كغ";
-    const englishCategoryName = `PHASE2 ENGLISH CATEGORY ${suffix}`;
-    const arabicCategoryName = "حقائب وأحزمة";
-    const arabicDescription = "وصف عربي محفوظ كما أُدخل";
-    const articleCode = `00-AR-${suffix}`.slice(0, 50);
+      const client = await pool.connect();
+      const suffix = `${Date.now()}${Math.floor(Math.random() * 10_000)}`;
+      const englishProductName = `PHASE2 ENGLISH PRODUCT ${suffix}`;
+      const arabicProductName = "حقيبة رجالية كريمي 20 كغ";
+      const englishCategoryName = `PHASE2 ENGLISH CATEGORY ${suffix}`;
+      const arabicCategoryName = "حقائب وأحزمة";
+      const arabicDescription = "وصف عربي محفوظ كما أُدخل";
+      const articleCode = `00-AR-${suffix}`.slice(0, 50);
 
-    try {
-      await client.query("BEGIN");
-      const companyResult = await client.query(
-        `INSERT INTO companies (code, name, company_type, base_currency)
+      try {
+        await client.query("BEGIN");
+        const companyResult = await client.query(
+          `INSERT INTO companies (code, name, company_type, base_currency)
          VALUES ($1, $2, 'factory', 'USD')
          RETURNING id`,
-        [`P2C${suffix}`.slice(0, 50), `Phase 2 Bilingual Test ${suffix}`]
-      );
-      const companyId = companyResult.rows[0].id;
+          [`P2C${suffix}`.slice(0, 50), `Phase 2 Bilingual Test ${suffix}`]
+        );
+        const companyId = companyResult.rows[0].id;
 
-      const categoryResult = await client.query(
-        `INSERT INTO factory_categories (company_id, name, name_ar)
+        const categoryResult = await client.query(
+          `INSERT INTO factory_categories (company_id, name, name_ar)
          VALUES ($1, $2, $3)
          RETURNING id, name, name_ar`,
-        [companyId, englishCategoryName, arabicCategoryName]
-      );
-      const categoryId = categoryResult.rows[0].id;
+          [companyId, englishCategoryName, arabicCategoryName]
+        );
+        const categoryId = categoryResult.rows[0].id;
 
-      const productResult = await client.query(
-        `INSERT INTO factory_bale_products
+        const productResult = await client.query(
+          `INSERT INTO factory_bale_products
            (company_id, code, article_code, name, name_ar, description_ar, category_id)
          VALUES ($1, $2, $3, $4, $5, $6, $7)
          RETURNING id, name, name_ar, description_ar`,
-        [
-          companyId,
-          `P2${suffix}`.slice(0, 50),
-          articleCode,
-          englishProductName,
-          arabicProductName,
-          arabicDescription,
-          categoryId,
-        ]
-      );
-      const productId = productResult.rows[0].id;
+          [
+            companyId,
+            `P2${suffix}`.slice(0, 50),
+            articleCode,
+            englishProductName,
+            arabicProductName,
+            arabicDescription,
+            categoryId,
+          ]
+        );
+        const productId = productResult.rows[0].id;
 
-      const baleResult = await client.query(
-        `INSERT INTO factory_bales
+        const baleResult = await client.query(
+          `INSERT INTO factory_bales
            (company_id, product_id, bale_code, reference_number, article_code,
             product_name, product_name_ar, category, category_ar, weight_kg)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
          RETURNING product_name, product_name_ar, category, category_ar`,
-        [
-          companyId,
-          productId,
-          `B${suffix}`.slice(0, 50),
-          `REF-${suffix}`.slice(0, 100),
-          articleCode,
-          englishProductName,
-          arabicProductName,
-          englishCategoryName,
-          arabicCategoryName,
-          "20.000",
-        ]
-      );
+          [
+            companyId,
+            productId,
+            `B${suffix}`.slice(0, 50),
+            `REF-${suffix}`.slice(0, 100),
+            articleCode,
+            englishProductName,
+            arabicProductName,
+            englishCategoryName,
+            arabicCategoryName,
+            "20.000",
+          ]
+        );
 
-      expect(categoryResult.rows[0]).toMatchObject({
-        name: englishCategoryName,
-        name_ar: arabicCategoryName,
-      });
-      expect(productResult.rows[0]).toMatchObject({
-        name: englishProductName,
-        name_ar: arabicProductName,
-        description_ar: arabicDescription,
-      });
-      expect(baleResult.rows[0]).toMatchObject({
-        product_name: englishProductName,
-        product_name_ar: arabicProductName,
-        category: englishCategoryName,
-        category_ar: arabicCategoryName,
-      });
-    } finally {
-      await client.query("ROLLBACK").catch(() => {});
-      client.release();
+        expect(categoryResult.rows[0]).toMatchObject({
+          name: englishCategoryName,
+          name_ar: arabicCategoryName,
+        });
+        expect(productResult.rows[0]).toMatchObject({
+          name: englishProductName,
+          name_ar: arabicProductName,
+          description_ar: arabicDescription,
+        });
+        expect(baleResult.rows[0]).toMatchObject({
+          product_name: englishProductName,
+          product_name_ar: arabicProductName,
+          category: englishCategoryName,
+          category_ar: arabicCategoryName,
+        });
+      } finally {
+        await client.query("ROLLBACK").catch(() => {});
+        client.release();
+      }
     }
-  });
+  );
 });

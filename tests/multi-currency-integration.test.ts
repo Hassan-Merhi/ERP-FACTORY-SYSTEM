@@ -81,7 +81,7 @@ describe("multi-currency historical amount rules", () => {
         transactionDebitAmount: "600000",
         transactionCreditAmount: "0",
         historicalRate: null,
-      }),
+      })
     ).toThrow(/valid positive rate/i);
   });
 });
@@ -124,7 +124,7 @@ describe("opening balance currency rules", () => {
         openingBalance: "1000",
         openingBalanceCurrency: null,
         baseCurrency: "USD",
-      }),
+      })
     ).toThrow(/requires its currency/i);
   });
 });
