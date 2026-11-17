@@ -13,7 +13,6 @@ import {
   ChevronUp,
   CheckCircle2,
   AlertCircle,
-  Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
@@ -22,7 +21,6 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { exportFileName } from "@/lib/exportFile";
 import { formatNumber } from "@/lib/formatNumber";
 import { visibleTabInterval } from "@/lib/queryPolicies";
 
@@ -286,7 +284,7 @@ export default function DailyScan() {
       });
       await exportOperationalWorkbook({
         title: "Factory Daily Scan",
-        fileName: exportFileName("daily scan", "xlsx", { date: selectedDate }),
+        fileName: "daily-scan-" + selectedDate + ".xlsx",
         filters: [
           { label: "Production date", value: formatDisplay(selectedDate) },
           { label: "Scanned", value: scanned.length + "/" + totalBales },

@@ -306,7 +306,9 @@ export async function confirmMirroredPayment(input: MirroredPaymentInput, actor:
   return withTradeScope(actor, [pair.sourceCompanyId, pair.destinationCompanyId], () =>
     db.transaction(async (tx) => {
       await tx.execute(
-        sql`SELECT pg_advisory_xact_lock(${INTERCOMPANY_PAYMENT_LOCK_NAMESPACE}, ${pair.sourceCompanyId})`
+        sql.raw(
+          "SELECT pg_advisory_xact_lock(" + INTERCOMPANY_PAYMENT_LOCK_NAMESPACE + "," + pair.sourceCompanyId + ")"
+        )
       );
       const [duplicate] = await tx
         .select()
@@ -473,7 +475,9 @@ export async function reverseMirroredPayment(input: MirroredReversalInput, actor
   return withTradeScope(actor, [pair.sourceCompanyId, pair.destinationCompanyId], () =>
     db.transaction(async (tx) => {
       await tx.execute(
-        sql`SELECT pg_advisory_xact_lock(${INTERCOMPANY_PAYMENT_LOCK_NAMESPACE}, ${pair.sourceCompanyId})`
+        sql.raw(
+          "SELECT pg_advisory_xact_lock(" + INTERCOMPANY_PAYMENT_LOCK_NAMESPACE + "," + pair.sourceCompanyId + ")"
+        )
       );
       const [payment] = await tx
         .select()
@@ -540,7 +544,7 @@ export async function reverseMirroredPayment(input: MirroredReversalInput, actor
           { supplierId: payment.destinationSupplierId }
         ),
       });
-      await tx.execute(sql`SELECT set_config('erp.ic_payment_reversal', ${String(payment.id)}, true)`);
+      await tx.execute(sql.raw("SELECT set_config('erp.ic_payment_reversal','" + payment.id + "',true)"));
       await tx
         .update(intercompanyContainerPayments)
         .set({

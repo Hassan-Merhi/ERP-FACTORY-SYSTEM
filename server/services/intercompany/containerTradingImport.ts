@@ -206,7 +206,7 @@ export async function setTradingRelationship(
   );
   return withinTrustedPair(sourceCompanyId, [mapping.destinationCompanyId], () =>
     db.transaction(async (tx) => {
-      await tx.execute(sql`SELECT pg_advisory_xact_lock(${IMPORT_LOCK}, ${sourceCompanyId})`);
+      await tx.execute(sql.raw("SELECT pg_advisory_xact_lock(" + IMPORT_LOCK + ", " + sourceCompanyId + ")"));
       const accounts = await tx
         .select()
         .from(ledgerAccounts)
@@ -343,7 +343,7 @@ export async function postIntercompanyImport(args: {
   const destinations = [...new Set(policies.map((p) => p.destinationCompanyId))];
   return withinTrustedPair(sourceCompanyId, destinations, () =>
     db.transaction(async (tx) => {
-      await tx.execute(sql`SELECT pg_advisory_xact_lock(${IMPORT_LOCK}, ${sourceCompanyId})`);
+      await tx.execute(sql.raw("SELECT pg_advisory_xact_lock(" + IMPORT_LOCK + ", " + sourceCompanyId + ")"));
       // Partner settings may have changed while the request awaited the source lock.
       // Never post under a stale account map or a now-disabled relationship.
       const freshPolicies = await tx
