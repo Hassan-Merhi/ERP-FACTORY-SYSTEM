@@ -266,6 +266,15 @@ export function useLoadingOrderMutations({
       navigate("/factory/invoicing?tab=invoices");
     },
     onError: (error: Error) => {
+      if (orderId && error.message.includes("DISPATCH_CONSOLIDATION_REQUIRED")) {
+        setShowFinalizeDialog(false);
+        toast({
+          title: "Continue in Dispatch Comparison",
+          description: "Close and post all trips, reconcile the loading, then finalize one invoice with combined dispatch charges.",
+        });
+        navigate(`/factory/sales/loading/dispatch/${orderId}/compare`);
+        return;
+      }
       if ((error as Error & { _handledGlobally?: boolean })?._handledGlobally) return;
       toast({
         title: "Finalize failed",
