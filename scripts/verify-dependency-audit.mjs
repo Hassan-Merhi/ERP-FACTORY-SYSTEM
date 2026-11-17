@@ -58,8 +58,6 @@ const ACCEPTED = {
   picomatch: PICOMATCH_BUILD_ONLY,
   tinyglobby: PICOMATCH_BUILD_ONLY,
   vite: PICOMATCH_BUILD_ONLY,
-  // Dev-only test runner reached by the same advisory through its own tinyglobby.
-  vitest: PICOMATCH_BUILD_ONLY,
 };
 
 const BLOCKING = new Set(["high", "critical"]);
