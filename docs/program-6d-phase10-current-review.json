@@ -92,7 +92,8 @@
       "P6D-3173cb3bbf98",
       "P6D-1dfb7aa12353",
       "P6D-d60ad46e2768",
-      "P6D-49058141465d"
+      "P6D-49058141465d",
+      "P6D-e8d4bb609a1c"
     ]
   },
   "reviewEvidence": {
@@ -119,6 +120,10 @@
     "P6D-49058141465d": {
       "rationale": "Startup warning schema verification iterates six hard-coded metadata column specs in a read-only transaction, not application rows, requests, or tenant data.",
       "falsePositiveReason": "SUPPLIER_SYNC_COLUMNS is a six-element module constant and each query checks information_schema.columns for a fixed (table,column) pair. This is a bounded schema-metadata verification path, not a growing per-record data query."
+    },
+    "P6D-e8d4bb609a1c": {
+      "rationale": "The flagged loop in server/startup/warmupDb.ts is a three-attempt startup retry around one SELECT 1 connectivity probe; it returns on the first success and never iterates over records.",
+      "falsePositiveReason": "At most three sequential SELECT 1 calls, separated by a 3 second back-off, run once at boot to open the pool; there is no per-row query and no collection to batch."
     }
   }
 }
