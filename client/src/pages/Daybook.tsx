@@ -652,7 +652,7 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
       await apiRequest("DELETE", `/api/vouchers/${id}`);
       return { linked: false };
     },
-    onSuccess: ({ linked }) => {
+    onSuccess: () => {
       void invalidateCompanyApiFamily(queryClient, "/api/vouchers", selectedCompany?.id);
       for (const key of [
         "/api/intercompany-container-trading/daybook-linked-vouchers",

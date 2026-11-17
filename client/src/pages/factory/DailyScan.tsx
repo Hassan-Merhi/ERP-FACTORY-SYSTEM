@@ -12,6 +12,7 @@ import {
   ChevronUp,
   CheckCircle2,
   AlertCircle,
+  Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
