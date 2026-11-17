@@ -284,7 +284,7 @@ export default function DailyScan() {
       });
       await exportOperationalWorkbook({
         title: "Factory Daily Scan",
-        fileName: "daily-scan-" + selectedDate + ".xlsx",
+        fileName: "daily-scan_" + selectedDate + ".xlsx",
         filters: [
           { label: "Production date", value: formatDisplay(selectedDate) },
           { label: "Scanned", value: scanned.length + "/" + totalBales },
