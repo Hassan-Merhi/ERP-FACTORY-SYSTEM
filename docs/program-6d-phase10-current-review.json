@@ -1,7 +1,7 @@
 {
   "program": "6D",
   "baselineHead": "3e8f11bb3cb91b9ea6eecf1f99edd18be5918ba6",
-  "reviewedAt": "2026-11-06",
+  "reviewedAt": "2026-11-17",
   "groups": {
     "intentional-full-read": [
       "P6D-a4ef6930012d",
@@ -68,7 +68,11 @@
       "P6D-1a567f58e457",
       "P6D-0e0b77211576",
       "P6D-f96badb95233",
-      "P6D-7830b70593f6"
+      "P6D-7830b70593f6",
+      "P6D-73f573dc395b",
+      "P6D-14167a4fb08e",
+      "P6D-518ae9a14f6f",
+      "P6D-43e5e2ba0cc8"
     ],
     "false-positive": [
       "P6D-94dd2f11ecdd",
@@ -85,7 +89,35 @@
       "P6D-82a18c3edca2",
       "P6D-d7060a4cb698",
       "P6D-3173cb3bbf98",
-      "P6D-1dfb7aa12353"
+      "P6D-1dfb7aa12353",
+      "P6D-d60ad46e2768",
+      "P6D-49058141465d"
     ]
+  },
+  "reviewEvidence": {
+    "P6D-73f573dc395b": {
+      "rationale": "The supplier-return commit serializes and validates each selected offload item under one transaction; it locks source rows in sorted offload-item ID order before any stock or voucher mutation.",
+      "orderingDependency": "At most 1000 distinct input offload IDs (enforced by the route) are processed in ascending order using SELECT FOR UPDATE OF coi. Keeping locks in deterministic order prevents concurrent returns from consuming the same original offload and reduces deadlock risk; an unordered bulk prefetch would change these locking guarantees."
+    },
+    "P6D-14167a4fb08e": {
+      "rationale": "The supplier-return commit locks the distinct inventory demand keys before creating the return batch or posting stock/vouchers; these are correctness locks, not read-side per-item enrichment.",
+      "orderingDependency": "Inventory demand is deduplicated and sorted by (locationId, stockItemId), then each row is SELECTed FOR UPDATE in deterministic order. Concurrent return commits must serialize overlapping inventory keys consistently; any bulk replacement must explicitly preserve the same lock order."
+    },
+    "P6D-518ae9a14f6f": {
+      "rationale": "Monthly rent accrual evidence is read inside the posting transaction for each due payment allocation to decide whether an existing live payable can be settled or a recognition voucher must be created.",
+      "orderingDependency": "Each ledgerRowId is checked against the same company, contract, year and month, including the live accrual voucher and credited liability, before posting a month-specific journal. Reordering or stale prefetch could misclassify an already accrued/prepaid month and double-recognize expense."
+    },
+    "P6D-43e5e2ba0cc8": {
+      "rationale": "A due prepaid rental month needs its posted pre-billing payment sum checked against that month's expected and paid amounts immediately before the same transaction recognizes expense and payable.",
+      "orderingDependency": "The SUM only runs for the allocated ledgerRowId when the earlier evidence finds no live accrual but a prepaid month requiring recognition. A mismatch aborts the posting; this check must remain causally before postAccrualPassTx, with the same transaction snapshot."
+    },
+    "P6D-d60ad46e2768": {
+      "rationale": "The FX valuation scanner reports a looped read, but the loop iterates a fixed maximum of two account-table descriptors, never over journal entries or user-provided record collections.",
+      "falsePositiveReason": "kinds is one ledger_accounts descriptor for ledger mode, or bank_accounts plus at most one linked ledger_accounts descriptor for bank mode. The resulting at-most-two keyed lookups are not an unbounded N+1 query pattern."
+    },
+    "P6D-49058141465d": {
+      "rationale": "Startup warning schema verification iterates six hard-coded metadata column specs in a read-only transaction, not application rows, requests, or tenant data.",
+      "falsePositiveReason": "SUPPLIER_SYNC_COLUMNS is a six-element module constant and each query checks information_schema.columns for a fixed (table,column) pair. This is a bounded schema-metadata verification path, not a growing per-record data query."
+    }
   }
 }
