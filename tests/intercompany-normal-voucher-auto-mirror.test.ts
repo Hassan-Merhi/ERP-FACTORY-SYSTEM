@@ -106,6 +106,20 @@ describe("Phase 6 normal voucher linked-account auto-mirror", () => {
     expect(save).toContain('apiRequestPrivileged("POST", endpoint, mirroredPayload)');
     expect(save).toContain("attachAccountingRequestIdentity");
   });
+  it("bounds preview latency and keeps ordinary receipt checking unobtrusive without bypassing safety", () => {
+    const client = readFileSync("client/src/pages/vouchers/useNormalIntercompanyVoucher.tsx", "utf8");
+    const route = readFileSync("server/routes/vouchers/normalIntercompanyVoucherRoutes.ts", "utf8");
+    expect(client).toContain("const PREVIEW_TIMEOUT_MS = 12_000");
+    expect(client).toContain('apiRequestPrivileged("POST", PREVIEW,');
+    expect(client).toContain("PREVIEW_TIMEOUT_MS);");
+    expect(client).toContain('className="sr-only" role="status"');
+    expect(client).toContain("Retry account check");
+    expect(client).toContain("previewQuery.refetch()");
+    expect(client).toContain("previewQuery.isError || previewQuery.isFetching");
+    expect(route).toContain('if (!match) return next();');
+    expect(route).toContain("matchNormalIntercompanyVoucher(");
+  });
+
   it("has no separate Intercompany tab and redirects old links into normal Payment", () => {
     const page = readFileSync("client/src/pages/Vouchers.tsx", "utf8");
     const sidebar = readFileSync("client/src/pages/vouchers/voucherSidebarGroups.ts", "utf8");
