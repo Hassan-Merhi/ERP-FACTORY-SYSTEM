@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import { PosSaleSubmitButton } from "./PosSaleHeader";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -164,11 +165,13 @@ export function PosMobileLayout({
               onChange={(event) => setSearchTerm(event.target.value)}
               data-testid="input-mobile-product-search"
             />
-            <MobileBarcodeScanner onScan={(code) => {
-              const match = inventory.find((item) => item.code?.trim().toUpperCase() === code.trim().toUpperCase());
-              if (match) openItemSheet(match);
-              else setSearchTerm(code);
-            }} />
+            <MobileBarcodeScanner
+              onScan={(code) => {
+                const match = inventory.find((item) => item.code?.trim().toUpperCase() === code.trim().toUpperCase());
+                if (match) openItemSheet(match);
+                else setSearchTerm(code);
+              }}
+            />
             {searchTerm && (
               <button
                 type="button"
@@ -557,15 +560,17 @@ export function PosMobileLayout({
               {formatDisplayAmount(total)}
             </p>
           </div>
-          <Button
+          <PosSaleSubmitButton
             className="min-h-12 min-w-34 shrink-0 px-5 text-base font-semibold"
             size="lg"
             onClick={handleSaveSale}
             disabled={saveMutation?.isPending || !hasValidItems || disableSave}
             data-testid="button-mobile-checkout"
-          >
-            {saveMutation?.isPending ? "Saving…" : "Checkout"}
-          </Button>
+            pending={Boolean(saveMutation?.isPending)}
+            pendingLabel="Saving…"
+            label="Checkout"
+            showIcon={false}
+          />
         </div>
       </div>
     </div>

@@ -144,6 +144,8 @@ interface SidebarFlatLinkProps {
   badge?: number;
   testId: string;
   trailing?: ReactNode;
+  /** Overrides the path match for links that also own other routes (POS: `/` opens Containers). */
+  active?: boolean;
 }
 
 export function SidebarFlatLink({
@@ -154,13 +156,15 @@ export function SidebarFlatLink({
   badge,
   testId,
   trailing,
+  active,
 }: SidebarFlatLinkProps) {
   const [location] = useLocation();
-  const isActive = sidebarPathMatches(location, href);
+  const isActive = active ?? sidebarPathMatches(location, href);
   return (
     <Link
       href={href}
       data-testid={testId}
+      aria-current={isActive ? "page" : undefined}
       className={`${baseLinkClasses} ${isActive ? activeClasses : inactiveClasses}`}
     >
       {isActive && <ActiveRail color={color} />}
@@ -505,6 +509,8 @@ export const MODULE_ACCENT = {
   erp: "hsl(var(--module-erp))",
   factory: "hsl(var(--module-factory))",
   properties: "hsl(var(--module-properties))",
+  /** POS keeps the violet accent its own shell used. */
+  pos: "#8b5cf6",
 };
 
 /** Section color tokens for navSections. */
