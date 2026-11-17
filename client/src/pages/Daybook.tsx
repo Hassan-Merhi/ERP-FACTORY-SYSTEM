@@ -303,7 +303,10 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
 
   useEffect(() => {
     if (!cashAccountId || !viewDialogOpen) return;
-    fetch(`/api/accounts/ledger/${cashAccountId}/balance`, { credentials: "include", cache: "no-store" })
+    fetch(`/api/accounts/ledger/${cashAccountId}/balance?balanceBasis=book`, {
+      credentials: "include",
+      cache: "no-store",
+    })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => setCashAccountBalance(data?.balance?.toString() || "0"))
       .catch(() => {});

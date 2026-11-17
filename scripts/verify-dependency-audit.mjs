@@ -41,11 +41,12 @@ const BRACES_BUILD_ONLY = {
   reviewOn: "2026-11-03",
 };
 
+// One advisory, one dependency path: vite -> tinyglobby -> picomatch.
 const PICOMATCH_BUILD_ONLY = {
-  advisories: ["GHSA-FC5Q-39XC-VJPF"],
+  advisories: ["GHSA-fc5q-39xc-vjpf"],
   reason:
-    "picomatch has no patched release (GHSA-fc5q-39xc-vjpf, a ReDoS through repeated extglobs, affects every version) and npm's only suggested fix is a major downgrade of vite to 6.2.7. It is reached only through vite and its tinyglobby dependency, which match this repository's own source globs while building the client and while serving it in development. Production runs the pre-built bundle: server/index.ts loads server/vite.ts (the only server import of vite) with a dynamic import only when the app runs in development, so no request or user-supplied glob reaches picomatch in production. Revisit when picomatch or vite ships a fix.",
-  reviewOn: "2026-11-17",
+    "picomatch has no patched release (GHSA-fc5q-39xc-vjpf affects every version through 4.0.7, the latest). It is reached only through vite, which bundles the client at build time and serves it in local development; build tools are kept in dependencies because Render installs with NODE_ENV=production. Production never loads vite: server/index.ts imports ./vite dynamically only when the app runs in development, and serves the prebuilt client otherwise. The globs vite and tinyglobby expand come from this repository's own config, never from request input. npm's only remedy is a downgrade to vite 6.2.7, which is not acceptable.",
+  reviewOn: "2026-12-01",
 };
 
 const ACCEPTED = {

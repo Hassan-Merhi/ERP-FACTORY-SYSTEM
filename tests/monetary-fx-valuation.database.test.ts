@@ -1011,6 +1011,20 @@ databaseDescribe("FX monetary valuation (database)", () => {
       expect(find("ledger", ids.deposit)).not.toHaveProperty("currencyRevalued");
     });
 
+    it("keeps the posted USD book balance for operational account views without affecting live FX reports", async () => {
+      const { accounts: translatedAccounts } = await accountsList(mali);
+      const { accounts: bookAccounts } = await accountsList(mali, { balanceBasis: "book" });
+      const liveCash = translatedAccounts.find((a) => a.type === "ledger" && a.accountId === ids.cash);
+      const bookCash = bookAccounts.find((a) => a.type === "ledger" && a.accountId === ids.cash);
+      const party = await getPartyBalances(db, { companyId: mali, kind: "ledger", ids: [ids.cash] });
+
+      expect(liveCash).toMatchObject({ balance: "217.60", currencyRevalued: true });
+      expect(bookCash).toBeDefined();
+      expect(bookCash.balance).toBe(new Decimal(party.parties[0].closing).abs().toFixed(2));
+      expect(bookCash.balanceSide).toBe(new Decimal(party.parties[0].closing).isNegative() ? "Cr" : "Dr");
+      expect(bookCash).not.toHaveProperty("currencyRevalued");
+    });
+
     it("keeps a date-filtered Accounts list at booked USD", async () => {
       const { accounts } = await accountsList(mali, { endDate: "2026-10-24" });
       const linked = accounts.find((a) => a.type === "ledger" && a.accountId === ids.custLedger);
