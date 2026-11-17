@@ -139,14 +139,8 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
 
   const targetDate = isSingleDay ? fromDate : null;
   const { data: productionTargets } = useQuery<ProductionResponse>({
-    queryKey: companyQueryKey(
-      "/api/factory/staff-tracking",
-      selectedCompany?.id,
-      "production",
-      "daily",
-      targetDate,
-      targetDate
-    ),
+    // prettier-ignore
+    queryKey: companyQueryKey("/api/factory/staff-tracking", selectedCompany?.id, "production", "daily", targetDate, targetDate),
     queryFn: () => fetchProduction("daily", targetDate!, targetDate!),
     enabled: canReadProductionTargets && Boolean(targetDate),
     staleTime: 30_000,
