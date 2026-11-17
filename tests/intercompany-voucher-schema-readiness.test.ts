@@ -26,7 +26,7 @@ describe("optional intercompany policy table on normal voucher routes", () => {
       route.indexOf(".from(intercompanyRelationshipPolicies)")
     );
     expect(route).toContain("return { identity, match: null, policyTableAvailable: false }");
-    expect(route).toContain('if (!policyTableAvailable && req.body?.intercompanyMirror != null)');
+    expect(route).toContain("if (!policyTableAvailable && req.body?.intercompanyMirror != null)");
     expect(route).toContain('"IC_VOUCHER_SCHEMA_UNAVAILABLE"');
     expect(route).toContain("return next()");
     expect(route).toContain('sourceModule === "INTERCOMPANY_CONTAINER"');
