@@ -18,6 +18,9 @@ migrations/
   0001_baseline_schema.sql             complete schema, fresh installs only
   0002_reference_data.sql              idempotent reference rows
   0003_retail_selling_legacy_backfill.sql
+  0004_widen_columns_to_declared_types.sql
+  0005_employee_opening_side_default_credit.sql
+  0006_retire_retail_catalog_cost_snapshot_trigger.sql
   NNNN_short_description.sql           every later change
   manifest/0001_baseline_schema.tsv    catalog right after the baseline (adoption target)
   manifest/schema.tsv                  catalog after all migrations (startup + CI contract)
@@ -151,6 +154,26 @@ Every data-dependent statement in both plans was also checked **read-only
 against the live production data**: duplicates, `NULL`s, numeric overflow and
 CHECK violations. All counts were 0. See
 [archive/database-migrations-only-cutover-2026-11-16.md](archive/database-migrations-only-cutover-2026-11-16.md).
+
+## Corrections found by testing against the deployed schema
+
+Before this change, CI built its database with `drizzle-kit push`. That
+produced Drizzle's *declared* schema, which production never had, so several
+production defects went unnoticed. Running the test suite against the deployed
+schema exposed them. The fixes ship as reviewed migrations:
+
+| Migration | What | Why |
+| --- | --- | --- |
+| 0004 | Widens 44 columns in 22 tables to the declared precision, length or type (numeric scale/precision, `varchar` lengths, integer user-id columns to `varchar`). Strictly lossless; the opening-balance lock trigger is recreated in the same transaction. | Production rejected or rounded values the code writes. Daybook entry edits failed (`edited_by` was `integer`; the code writes user ids). One Golden Coast POS sale path failed (`sp_stock_movements.source_type` was `varchar(20)`). Supplier opening balances were rounded to 2 decimals. |
+| 0005 | `employees.opening_balance_side` defaults to `'Cr'` for new rows. Existing rows are untouched. | The code treats employees as credit-normal and never sets the side. Production defaulted to `'Dr'`, so new employees' openings were booked on the wrong side; owner-approved repairs had to flip them. **81 of 92 production employees currently carry `'Dr'`.** Reviewing those is a separate, business-approved data task. |
+| 0006 | Drops the legacy `retail_pos_sale_items_snapshot_cost` trigger and its function. | It overwrote retail sale-line costs with the catalog cost, contradicting the value-exact retail accounting. Production has 1 retail sale line. **Requires owner sign-off before release.** |
+
+Differences deliberately **not** changed (owner decision): column defaults
+where production and the repository disagree but the code always supplies the
+value. Examples are `factory_bales.pressed_at DEFAULT now()`,
+`factory_mix_batches.status 'OPEN'` vs `'ACTIVE'`, `users.chatbot_enabled
+false` vs `true`, and `production_bales.status`. Narrowing type differences
+(`text` vs `varchar(n)`, `timestamptz` vs `timestamp`) are left untouched too.
 
 ## Writing a new migration
 
