@@ -38,6 +38,7 @@ import { AttendanceLegend } from "./factoryworkerattendancereport/components/Att
 import { AttendanceAdminApprovalDialog } from "./factoryattendance/components/AttendanceAdminApprovalDialog";
 import {
   attendancePastDates,
+  canSkipAttendanceApproval,
   attendanceToday,
   type AttendanceAdminCredentials,
 } from "./factoryattendance/attendanceEditPolicy";
@@ -53,7 +54,7 @@ export default function FactoryWorkerAttendanceReport() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const { selectedCompany } = useCompany();
-  const canEditPastWithoutPassword = selectedCompany?.role === "Admin" || selectedCompany?.role === "Developer";
+  const canEditPastWithoutPassword = (dates: string[]) => canSkipAttendanceApproval(selectedCompany?.role, dates);
 
   /* Date mode state */
   const [mode, setMode] = useState<DateMode>("today");
@@ -204,7 +205,7 @@ export default function FactoryWorkerAttendanceReport() {
           return { workerId: Number(workerId), attendanceDate, status: status ?? "" };
         });
         const priorDates = attendancePastDates(records.map((record) => record.attendanceDate));
-        if (priorDates.length > 0 && !canEditPastWithoutPassword) {
+        if (priorDates.length > 0 && !canEditPastWithoutPassword(priorDates)) {
           setApprovalDates(priorDates);
           setApprovalRecords(records);
           setApprovalOpen(true);
