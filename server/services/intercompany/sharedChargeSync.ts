@@ -196,7 +196,7 @@ async function withGrantedInvoiceScope<T>(
     : run();
 }
 async function lockSource(tx: DbTransaction, sourceCompanyId: number) {
-  await tx.execute(sql`SELECT pg_advisory_xact_lock(${IMPORT_LOCK},${sourceCompanyId})`);
+  await tx.execute(sql.raw("SELECT pg_advisory_xact_lock(" + IMPORT_LOCK + "," + sourceCompanyId + ")"));
 }
 function poSplit(data: Awaited<ReturnType<typeof loadTradeTx>>, amount: Decimal) {
   const groups = data.source;

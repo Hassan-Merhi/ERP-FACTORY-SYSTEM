@@ -152,7 +152,6 @@ describe("pressing machine Phase 6 reporting contracts", () => {
     expect(server).toContain("byOperatorSqlFor");
     expect(page).toContain("Export Excel");
     expect(page).toContain("queryClient.invalidateQueries");
-    // The history export now goes through the shared operational workbook writer.
     expect(client).toContain("exportOperationalWorkbook");
     expect(client).toContain("first.total > PRESSING_EXPORT_LIMIT");
     expect(client).toContain("asOf: first.asOf");

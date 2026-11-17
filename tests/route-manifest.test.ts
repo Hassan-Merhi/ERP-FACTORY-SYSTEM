@@ -80,11 +80,14 @@ const reviewedSpMounts: string[] = [];
 // POST /api/vouchers/bulk-delete and POST /api/voucher-entries ahead of their
 // handlers to refuse changes to correction voucher 16303, and calls next() for
 // every other request, so the later registrations stay reachable.
-// The manifest-driven access layer removed the 14 action-permission prerequisite routes that
-// core/permissionBoundaryRoutes.ts registered ahead of their handlers, taking the live count from
-// 78 to 64. Main then added the Payment/Receipt intercompany auto-mirror, which registers both
-// POST /api/vouchers/payment-receipt and PATCH /api/vouchers/:id/payment-receipt ahead of the
-// ordinary handlers and calls next() for a voucher that is not an intercompany pair (64 + 2 = 66).
+// Raised from 79 to 80 for the normal Payment/Receipt intercompany auto-mirror:
+// normalIntercompanyVoucherRoutes registers POST /api/vouchers/payment-receipt and
+// PATCH /api/vouchers/:id/payment-receipt ahead of the standard handlers and calls
+// next() unless the voucher touches a linked intercompany account.
+// Lowered from 80 to 66 by the manifest-driven access layer: the 14 action-permission
+// prerequisite routes that core/permissionBoundaryRoutes.ts registered ahead of their
+// handlers are gone. Their permission keys are declared on the handlers' own rules in
+// config/route-access-manifest.json and enforced by the access boundary.
 const MAX_SHADOWED_REGISTRATIONS = 66;
 let actual: SerializedRouteManifest;
 

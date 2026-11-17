@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { apiRequest } from "@/lib/queryClient";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useToast } from "@/hooks/use-toast";
+import { ReportExportMenu } from "@/components/export/ReportExportMenu";
 import { Plus, Package, Eye, Search, X, Ban, Loader2, Truck, Check, ChevronDown, Filter } from "lucide-react";
 import {
   DropdownMenu,
@@ -28,7 +29,6 @@ import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { spContainerInvoiceChargeLines } from "@shared/spContainerInvoiceCharges";
 import type { Container, Supplier } from "@shared/schema";
 import type { SpContainerWithLines } from "./types";
-import { ReportExportMenu } from "@/components/export/ReportExportMenu";
 
 /**
  * Common display shape the SP list and the ERP (PO Import) containers are

@@ -368,17 +368,19 @@ describe("XLSX Export — Daily Production Report", () => {
     const res = await getBinary(agent, "/api/factory/daily-report/export?format=excel");
     const wb = await loadWorkbook(res.body as Buffer);
     const ws = wb.getWorksheet("Production Report")!;
-    // The universal workbook puts report metadata above the table, so the
-    // column headers are the first row that contains "Date".
+    // The universal Excel layout puts the report title and metadata above the
+    // table, so the column headers are no longer guaranteed to be on row 1.
     let headers: string[] = [];
-    ws.eachRow((row) => {
-      if (headers.length) return;
-      const cells: string[] = [];
-      row.eachCell((cell) => {
-        if (cell.value) cells.push(String(cell.value));
+    for (let rowNumber = 1; rowNumber <= Math.min(ws.rowCount, 12); rowNumber++) {
+      const values: string[] = [];
+      ws.getRow(rowNumber).eachCell((cell) => {
+        if (cell.value) values.push(String(cell.value));
       });
-      if (cells.includes("Date")) headers = cells;
-    });
+      if (values.includes("Date") && values.includes("Batch Code")) {
+        headers = values;
+        break;
+      }
+    }
     expect(headers).toContain("Date");
     expect(headers).toContain("Batch Code");
     expect(headers).toContain("KG Used");
