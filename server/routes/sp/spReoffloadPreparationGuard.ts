@@ -4,7 +4,6 @@ import { requireAuth } from "../../auth";
 import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { requireSpCompany } from "./spHelpers";
-import { ensureSpOffloadReversalStorage } from "./spOffloadLifecycleRoutes";
 import { resultRows, firstRow } from "../../lib/queryResult";
 
 /**
@@ -24,7 +23,6 @@ async function prepareCorrectedReoffload(req: Request, res: Response, next: Next
       return;
     }
 
-    await ensureSpOffloadReversalStorage();
     await db.transaction(async (tx) => {
       const containerResult = await tx.execute(sql`
         SELECT status

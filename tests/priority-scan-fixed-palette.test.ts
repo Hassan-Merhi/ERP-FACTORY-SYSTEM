@@ -11,7 +11,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { PRIORITY_SCAN_COLORS } from "@shared/priorityScanColors";
 import { pool } from "../server/db";
-import { ensurePriorityScanSchema } from "../server/startup/priorityScanSchema";
 import { closeTestServer, cleanupTestData, seedTestData, type TestContext } from "./setup";
 
 const PREFIX = "priorityscanpal";
@@ -56,7 +55,6 @@ async function disableAll(): Promise<void> {
 }
 
 beforeAll(async () => {
-  await ensurePriorityScanSchema(pool);
   ctx = await seedTestData(PREFIX);
   agent = request.agent(ctx.app);
   const login = await agent.post("/api/auth/login").send({

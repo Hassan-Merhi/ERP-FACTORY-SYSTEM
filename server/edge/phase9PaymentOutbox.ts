@@ -1,10 +1,9 @@
 /**
  * Phase 9: atomic LAN evidence for Payment / Receipt vouchers ("payments"
  * stream): supplier, customer, employee and bank payments and receipts
- * created on the factory LAN server. Schema: reviewed DBA install only.
+ * created on the factory LAN server. Schema: migrations/ (never created at runtime).
  */
 import { sql } from "drizzle-orm";
-import type { Pool } from "pg";
 import type { DbTransaction } from "../db";
 import { toMoney } from "../lib/money";
 import { readFactoryEdgeConfiguration } from "./edgeRuntimePolicy.mjs";
@@ -12,8 +11,6 @@ import { hashEvidence } from "./edgeSyncStageProtocol.mjs";
 import { randomUUID } from "node:crypto";
 import type { Request } from "express";
 import {
-  PHASE9_PAYMENT_DELETE_KIND,
-  PHASE9_PAYMENT_EDIT_KIND,
   PHASE9_PAYMENT_KIND,
   phase9PaymentDeleteEnvelope,
   phase9PaymentEditEnvelope,
@@ -25,72 +22,7 @@ import {
   type Phase9PaymentVoucherInputs,
 } from "./phase9PaymentEnvelope.mjs";
 
-const PAYMENT_OUTBOX_KINDS = [PHASE9_PAYMENT_KIND, PHASE9_PAYMENT_EDIT_KIND, PHASE9_PAYMENT_DELETE_KIND] as const;
-
 export { phase9PaymentSnapshotTx } from "./phase9PaymentSnapshot";
-
-export async function ensurePhase9PaymentOutboxSchema(queryable: Pick<Pool, "query">): Promise<void> {
-  if (readFactoryEdgeConfiguration().mode !== "lan") return;
-  await queryable.query(`
-    CREATE TABLE IF NOT EXISTS factory_edge_payment_counter (
-      site_id UUID PRIMARY KEY,
-      last_sequence BIGINT NOT NULL CHECK(last_sequence > 0)
-    )
-  `);
-  await queryable.query(`
-    CREATE TABLE IF NOT EXISTS factory_edge_payment_outbox (
-      site_id UUID NOT NULL,
-      sequence BIGINT NOT NULL CHECK(sequence > 0),
-      operation_id UUID NOT NULL,
-      company_id INTEGER NOT NULL CHECK(company_id > 0),
-      actor_user_id TEXT NOT NULL CHECK(length(actor_user_id) > 0),
-      local_voucher_id INTEGER NOT NULL CHECK(local_voucher_id > 0),
-      operation_kind TEXT NOT NULL,
-      payload JSONB NOT NULL,
-      payload_sha256 CHAR(64) NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
-      PRIMARY KEY (site_id, sequence),
-      UNIQUE (site_id, operation_id),
-      CONSTRAINT factory_edge_payment_source_fk
-        FOREIGN KEY (local_voucher_id) REFERENCES vouchers(id) ON DELETE RESTRICT
-    )
-  `);
-  // Plan batch 4: edits and deletes follow the create on this stream and name
-  // the same voucher, so one voucher may have several records. Only the create
-  // stays one-per-voucher. Existing installs lose the old one-row constraints.
-  await queryable.query(
-    "ALTER TABLE factory_edge_payment_outbox DROP CONSTRAINT IF EXISTS factory_edge_payment_outbox_operation_kind_check"
-  );
-  await queryable.query(
-    `ALTER TABLE factory_edge_payment_outbox ADD CONSTRAINT factory_edge_payment_outbox_operation_kind_check
-       CHECK (operation_kind IN (${PAYMENT_OUTBOX_KINDS.map((kind) => `'${kind}'`).join(", ")}))`
-  );
-  for (const name of [
-    "factory_edge_payment_outbox_site_id_local_voucher_id_key",
-    "factory_edge_payment_outbox_site_id_local_voucher_id_unique",
-  ]) {
-    await queryable.query(`ALTER TABLE factory_edge_payment_outbox DROP CONSTRAINT IF EXISTS ${name}`);
-  }
-  await queryable.query(
-    `CREATE UNIQUE INDEX IF NOT EXISTS factory_edge_payment_outbox_create_once
-       ON factory_edge_payment_outbox (site_id, local_voucher_id) WHERE operation_kind = '${PHASE9_PAYMENT_KIND}'`
-  );
-  await queryable.query(`
-    CREATE OR REPLACE FUNCTION factory_edge_payment_outbox_immutable()
-    RETURNS trigger LANGUAGE plpgsql AS $$
-    BEGIN
-      RAISE EXCEPTION 'PHASE9_PAYMENT_OUTBOX_IMMUTABLE' USING ERRCODE = '23514';
-    END $$
-  `);
-  await queryable.query(
-    `DROP TRIGGER IF EXISTS factory_edge_payment_outbox_no_mutation ON factory_edge_payment_outbox`
-  );
-  await queryable.query(`
-    CREATE TRIGGER factory_edge_payment_outbox_no_mutation
-    BEFORE UPDATE OR DELETE ON factory_edge_payment_outbox
-    FOR EACH ROW EXECUTE FUNCTION factory_edge_payment_outbox_immutable()
-  `);
-}
 
 /** The route's inputs in the evidence's canonical form (decimal strings). */
 export function paymentReceiptEvidence(input: {

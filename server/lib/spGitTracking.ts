@@ -10,84 +10,74 @@ import type { RawContainerRow } from "./gitHelpers";
 
 export const SP_GIT_STATUSES = ["OTW", "Sea", "At Port", "Left Dar", "At Border", "In Transit", "Arrived"] as const;
 export const SP_GIT_FIELDS = [
-  "shopName", "eta", "transporter", "transportFee", "numberPlate", "trackingLocation",
-  "borderDate", "agent", "dutyFee", "docReceived", "trackingDescription", "blDocs",
-  "docsSentDate", "trackingLink", "freightStatus",
+  "shopName",
+  "eta",
+  "transporter",
+  "transportFee",
+  "numberPlate",
+  "trackingLocation",
+  "borderDate",
+  "agent",
+  "dutyFee",
+  "docReceived",
+  "trackingDescription",
+  "blDocs",
+  "docsSentDate",
+  "trackingLink",
+  "freightStatus",
 ] as const;
 export type SpGitField = (typeof SP_GIT_FIELDS)[number];
-
-/** Exactly one small logistics table; this does not change stock/accounting. */
-let ensurePromise: Promise<void> | null = null;
-export function ensureSpGitTracking(): Promise<void> {
-  if (!ensurePromise) {
-    ensurePromise = (async () => {
-      await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS sp_container_git_tracking (
-          container_id integer PRIMARY KEY REFERENCES sp_containers(id) ON DELETE CASCADE,
-          company_id integer NOT NULL,
-          status varchar(24),
-          shop_name text,
-          eta date,
-          transporter text,
-          transport_fee numeric(20,4),
-          number_plate text,
-          tracking_location text,
-          border_date date,
-          agent text,
-          duty_fee numeric(20,4),
-          doc_received boolean,
-          tracking_description text,
-          bl_docs text,
-          docs_sent_date date,
-          tracking_link text,
-          freight_status text,
-          updated_at timestamptz NOT NULL DEFAULT now()
-        )
-      `);
-      await db.execute(sql`ALTER TABLE sp_container_git_tracking ADD COLUMN IF NOT EXISTS freight_status text`);
-      await db.execute(sql`CREATE INDEX IF NOT EXISTS sp_container_git_tracking_company_idx
-        ON sp_container_git_tracking(company_id)`);
-    })().catch((error) => {
-      ensurePromise = null;
-      throw error;
-    });
-  }
-  return ensurePromise;
-}
 
 const str = (value: unknown): string | null =>
   value === null || value === undefined || value === "" ? null : String(value);
 const isoDate = (value: unknown): string | null =>
-  value instanceof Date ? value.toISOString().slice(0, 10) : str(value)?.slice(0, 10) ?? null;
+  value instanceof Date ? value.toISOString().slice(0, 10) : (str(value)?.slice(0, 10) ?? null);
 
 type SpGitDbRow = {
-  id: number; company_id: number; container_number: string | null;
-  supplier_name: string | null; status: string; invoice_date: string;
-  invoice_total_usd: string; freight_estimate_usd: string | null;
-  created_at: string | Date; offload_date: string | Date | null; shop_name: string | null; eta: string | Date | null;
-  transporter: string | null; transport_fee: string | null;
-  number_plate: string | null; tracking_location: string | null; border_date: string | Date | null;
-  agent: string | null; duty_fee: string | null; doc_received: boolean | null;
-  tracking_description: string | null; bl_docs: string | null; docs_sent_date: string | Date | null;
-  tracking_link: string | null; freight_status: string | null; logistics_status: string | null;
+  id: number;
+  company_id: number;
+  container_number: string | null;
+  supplier_name: string | null;
+  status: string;
+  invoice_date: string;
+  invoice_total_usd: string;
+  freight_estimate_usd: string | null;
+  created_at: string | Date;
+  offload_date: string | Date | null;
+  shop_name: string | null;
+  eta: string | Date | null;
+  transporter: string | null;
+  transport_fee: string | null;
+  number_plate: string | null;
+  tracking_location: string | null;
+  border_date: string | Date | null;
+  agent: string | null;
+  duty_fee: string | null;
+  doc_received: boolean | null;
+  tracking_description: string | null;
+  bl_docs: string | null;
+  docs_sent_date: string | Date | null;
+  tracking_link: string | null;
+  freight_status: string | null;
+  logistics_status: string | null;
 };
 
 export async function fetchSpGitContainers(
   companyIds: number[],
-  options: { includeOffloaded?: boolean; containerId?: number } = {},
+  options: { includeOffloaded?: boolean; containerId?: number } = {}
 ): Promise<RawContainerRow[]> {
   if (companyIds.length === 0 || (options.containerId !== undefined && options.containerId > 0)) return [];
-  const ids = sql.join(companyIds.map((id) => sql`${id}`), sql`, `);
-  // Do not run SP schema DDL in ordinary ERP tracking requests that have
-  // zero Supplier Partner containers. Legacy ERP queries stay read-only.
+  const ids = sql.join(
+    companyIds.map((id) => sql`${id}`),
+    sql`, `
+  );
+  // Skip the SP query entirely for ERP tracking requests that have zero
+  // Supplier Partner containers.
   const presence = await db.execute(sql`
     SELECT 1 FROM sp_containers WHERE company_id IN (${ids}) LIMIT 1
   `);
   if (resultRows(presence).length === 0) return [];
-  await ensureSpGitTracking();
-  const idCondition = options.containerId && options.containerId < 0
-    ? sql`AND s.id = ${-options.containerId}`
-    : sql``;
+  const idCondition = options.containerId && options.containerId < 0 ? sql`AND s.id = ${-options.containerId}` : sql``;
   const statusCondition = options.includeOffloaded ? sql`AND s.status <> 'cancelled'` : sql`AND s.status = 'open'`;
   const response = await db.execute(sql`
     SELECT s.id, s.company_id, s.container_number, s.supplier_name, s.status,
@@ -115,10 +105,11 @@ export async function fetchSpGitContainers(
       supplierId: 0,
       supplierName: str(row.supplier_name),
       supplierCode: str(row.supplier_name),
-      status: isOffloaded ? "OFFLOADED" : (
-        SP_GIT_STATUSES.includes(row.logistics_status as (typeof SP_GIT_STATUSES)[number])
-          ? row.logistics_status! : "OTW"
-      ),
+      status: isOffloaded
+        ? "OFFLOADED"
+        : SP_GIT_STATUSES.includes(row.logistics_status as (typeof SP_GIT_STATUSES)[number])
+          ? row.logistics_status!
+          : "OTW",
       importDate: isoDate(row.invoice_date) || "",
       grandTotal: String(row.invoice_total_usd),
       itemName: null,

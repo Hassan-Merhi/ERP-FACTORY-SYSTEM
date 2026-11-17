@@ -12,6 +12,7 @@ import {
   index,
   jsonb,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { locations } from "../common";
@@ -221,7 +222,9 @@ export const factoryProductionSessions = pgTable(
   {
     id: serial("id").primaryKey(),
     companyId: integer("company_id").notNull(),
-    sessionDate: varchar("session_date", { length: 10 }).notNull(),
+    sessionDate: varchar("session_date", { length: 10 })
+      .notNull()
+      .default(sql`CURRENT_DATE`),
     productionEndedAt: timestamp("production_ended_at"),
     productionEndedBy: text("production_ended_by"),
     workerMatrixWhatsappSentAt: timestamp("worker_matrix_whatsapp_sent_at"),

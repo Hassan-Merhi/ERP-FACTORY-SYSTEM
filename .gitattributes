@@ -1,0 +1,4 @@
+
+# Migration files are checksummed byte-for-byte; never normalise line endings.
+migrations/**/*.sql -text
+migrations/manifest/*.tsv -text

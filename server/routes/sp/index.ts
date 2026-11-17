@@ -1,5 +1,4 @@
 import type { Express } from "express";
-import { logger } from "../../lib/logger";
 import { registerSpAccessControl } from "./spAccessControl";
 import { registerSpPermissionRoutes } from "./spPermissionRoutes";
 import { registerSpSetupRoutes } from "./spSetupRoutes";
@@ -27,7 +26,6 @@ import { registerSpOffloadLifecycleRoutes } from "./spOffloadLifecycleRoutes";
 import { registerSpChargeReconciliationRoutes } from "./spChargeReconciliationRoutes";
 import { registerSpFullReconciliationRoutes } from "./spFullReconciliationRoutes";
 import { registerSpProductionClosureRoutes } from "./spProductionClosureRoutes";
-import { ensureSpProductionClosureStorage } from "./spProductionClosureStorage";
 import { registerSpSalesRoutes } from "./spSalesRoutes";
 import { registerSpLifecycleRoutes } from "./spLifecycleRoutes";
 import { registerSpOpeningStockRoutes } from "./spOpeningStockRoutes";
@@ -37,8 +35,7 @@ import { registerSpExportRoutes } from "./spExportRoutes";
 import { registerSpMigrationPhase2Routes } from "./spMigrationPhase2Routes";
 import { registerSpMigrationCutoverRoutes } from "./spMigrationCutoverRoutes";
 import { registerSpMigrationPhase4Routes } from "./spMigrationPhase4Routes";
-import { ensureCutoverHardening, installExplicitCompanyWriteGuard } from "./spMigrationCutoverHardening";
-import { runSpSupplierVoucherStartup } from "./spSupplierVoucherStartup";
+import { installExplicitCompanyWriteGuard } from "./spMigrationCutoverHardening";
 import { registerSpSupplierVoucherLinkRepairRoutes } from "./spSupplierVoucherLinkRepairRoutes";
 
 export function registerSpRoutes(app: Express) {
@@ -49,23 +46,7 @@ export function registerSpRoutes(app: Express) {
   registerSpMigrationPhase4Routes(app);
   registerSpMigrationCutoverRoutes(app);
   registerSpMigrationPhase2Routes(app);
-  void ensureCutoverHardening().catch((error) => {
-    logger.warn("[SP Cutover] Hardening indexes deferred", {
-      error: error instanceof Error ? error.message : String(error),
-    });
-  });
-  void ensureSpProductionClosureStorage().catch((error) => {
-    logger.warn("[SP Production Closure] Storage initialization deferred", {
-      error: error instanceof Error ? error.message : String(error),
-    });
-  });
 
-  // Wave 16 (A): installs the link trigger only; no voucher is rewritten at boot.
-  void runSpSupplierVoucherStartup().catch((error) => {
-    logger.warn("[SP] Supplier voucher link trigger deferred until Setup", {
-      error: error instanceof Error ? error.message : String(error),
-    });
-  });
   registerSpSupplierVoucherLinkRepairRoutes(app);
 
   registerSpSetupRoutes(app);

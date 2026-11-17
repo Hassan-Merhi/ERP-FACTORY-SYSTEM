@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const migration = readFileSync("migrations/20260728_001_supplier_company_scope.sql", "utf8");
+// Historical data repair (archived; already applied in production, not replayed).
+const migration = readFileSync("migrations/archive/legacy/20260728_001_supplier_company_scope.sql", "utf8");
 
 describe("supplier company-scope migration repair", () => {
   it("repairs historical CREATE-audit ownership before the legacy parent fallback", () => {

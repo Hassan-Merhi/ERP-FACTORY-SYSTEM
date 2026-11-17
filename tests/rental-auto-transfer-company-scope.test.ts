@@ -6,8 +6,6 @@
  * runs the transfer as a non-superuser role with RLS forced, the way production
  * does, inside a request scoped to the paying company.
  */
-import { readFile } from "node:fs/promises";
-import path from "node:path";
 import { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -45,11 +43,7 @@ describeDatabase("rental auto-transfer under company-scope RLS", () => {
   beforeAll(async () => {
     admin = new Client({ connectionString: databaseUrl });
     await admin.connect();
-    const migration = await readFile(
-      path.join(process.cwd(), "migrations/0016_company_scope_rls_readiness.sql"),
-      "utf8"
-    );
-    await admin.query(migration);
+    // Company-scope RLS is part of the migrated schema the test database is built from.
 
     await admin.query(`DROP OWNED BY ${roleName}`).catch(() => {});
     await admin.query(`DROP ROLE IF EXISTS ${roleName}`);

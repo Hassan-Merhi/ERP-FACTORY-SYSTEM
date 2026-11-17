@@ -10,7 +10,6 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 vi.mock("../server/auth", () => ({ requireAuth: (_req: unknown, _res: unknown, next: () => void) => next() }));
 
 import { db } from "../server/db";
-import { ensureCustomerOrderBaleScanAudit } from "../server/customerOrderBaleScanAuditBridge.mjs";
 import { mergeNewProformaArticles } from "../server/routes/factory/customer-orders/proformaPlan";
 import { getProformaCapacitySnapshot } from "../server/routes/factory/customer-orders/proformaCapacity";
 import { registerOrderVerificationSummaryRoutes } from "../server/routes/factory/customer-orders/verify-recover/verification-summary";
@@ -111,7 +110,6 @@ databaseDescribe("new proforma articles on already-created loadings (database)",
   };
 
   beforeAll(async () => {
-    await ensureCustomerOrderBaleScanAudit();
     fixture = await createProformaLoadingFixture("PAL");
     // Both master lines predate every loading (created 2026-01-01).
     proformaId = await fixture.proforma([

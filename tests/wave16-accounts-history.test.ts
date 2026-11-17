@@ -37,17 +37,10 @@ import {
   AccountHistoryError,
   assertAccountChangeAllowed,
 } from "../server/services/accounting/accountHistoryPolicy";
-import { ensureClosedPeriodGuard } from "../server/services/accounting/closedPeriodGuard";
+import { LEDGER_INTEGRITY_GUARD_VERSION } from "../server/services/accounting/ledgerIntegrityGuard";
 import {
-  ensureLedgerIntegrityGuard,
-  LEDGER_INTEGRITY_GUARD_VERSION,
-} from "../server/services/accounting/ledgerIntegrityGuard";
-import {
-  ensureOpeningBalanceLock,
-  OPENING_BALANCE_LOCK_TABLES,
   OPENING_BALANCE_LOCK_VERSION,
   installedOpeningBalanceLockVersion,
-  openingBalanceLockTriggerName,
 } from "../server/services/accounting/openingBalanceLock";
 import { deleteAuditLogRowsForTests } from "./helpers/auditLogCleanup";
 import { withFixtureTransaction } from "./helpers/voucherFixtureTransaction";
@@ -129,9 +122,6 @@ beforeAll(async () => {
   ctx = await seedTestData(PREFIX);
   // Factory supplier routes need a factory company.
   await pool.query(`UPDATE companies SET company_type = 'factory' WHERE id = $1`, [ctx.companyId]);
-  expect(await ensureLedgerIntegrityGuard(pool)).toBe(true);
-  await ensureClosedPeriodGuard(pool);
-  expect(await ensureOpeningBalanceLock(pool)).toBe(true);
   otherCompanyId = (
     await pool.query(`INSERT INTO companies (code, name) VALUES ($1::varchar, $1::text) RETURNING id`, [
       `W16B${Date.now().toString(36).slice(-5).toUpperCase()}`,
@@ -146,10 +136,6 @@ beforeAll(async () => {
 
 afterAll(async () => {
   auditControl.fail = false;
-  // The rest of the suite writes masters freely: remove the opening lock this file installed.
-  for (const table of OPENING_BALANCE_LOCK_TABLES) {
-    await pool.query(`DROP TRIGGER IF EXISTS ${openingBalanceLockTriggerName(table)} ON ${table}`);
-  }
   await withFixtureTransaction(async (client) => {
     await client.query(`SET LOCAL app.closed_period_override = 'on'`);
     await client.query(`SET LOCAL app.ledger_integrity_bypass = 'on'`);

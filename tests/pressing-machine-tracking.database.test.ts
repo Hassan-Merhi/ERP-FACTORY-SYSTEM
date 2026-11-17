@@ -119,8 +119,8 @@ databaseDescribe("Pressing Scan — simplified user-based PostgreSQL integration
   async function fixtureBale(key: string, companyId: number, status = "PENDING_PRESSING", deleted = false) {
     const ref = "PRS-" + key.toUpperCase() + "-" + suffix;
     const id =
-      await one(sql`INSERT INTO factory_bales(company_id,bale_code,reference_number,article_code,product_name,weight_kg,status,deleted_at)
-      VALUES(${companyId},${ref},${ref},${"ART-" + key},${"Bale " + key},45.5,${status},${deleted ? sql`now()` : null}) RETURNING id`);
+      await one(sql`INSERT INTO factory_bales(company_id,bale_code,reference_number,article_code,product_name,weight_kg,status,deleted_at,pressed_at)
+      VALUES(${companyId},${ref},${ref},${"ART-" + key},${"Bale " + key},45.5,${status},${deleted ? sql`now()` : null},NULL) RETURNING id`);
     bales[key] = { id, ref };
   }
   async function activate(user: Actor) {
