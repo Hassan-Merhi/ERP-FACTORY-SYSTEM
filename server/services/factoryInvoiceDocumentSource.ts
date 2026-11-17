@@ -255,13 +255,22 @@ export async function buildLiveCanonicalInvoiceDocument(
              AND c.kind IN ('BILLABLE','DISCOUNT') AND c.locked_at IS NOT NULL
            ORDER BY d.dispatch_number,c.id
         `);
-        for(const row of resultRows<{
+        // Invoice presentation: one net dispatch charge across all signed
+        // trips. The immutable source rows and their original GL vouchers stay
+        // separate for audit and are NEVER recreated in customer_order_charges.
+        // Internal expenses are not customer-billable and remain excluded.
+        const dispatchChargeRows=resultRows<{
           id:unknown;name:unknown;kind:unknown;amount:unknown;dispatchNumber:unknown;
-        }>(tripChargeResult)) {
+        }>(tripChargeResult);
+        if(dispatchChargeRows.length) {
+          const netDispatchCharges=sumMoney(dispatchChargeRows.map(row=>
+            new MoneyDecimal(String(row.amount??"0"))
+              .times(row.kind==="DISCOUNT"?-1:1).toFixed(2)
+          ));
           charges.push({
-            id:-safeNumber(row.id),
-            name:`Trip #${safeNumber(row.dispatchNumber)} — ${safeString(row.name,"Charge")}`,
-            amount:safeNumber(row.amount)*(row.kind==="DISCOUNT"?-1:1),
+            id:-safeNumber(header.id),
+            name:"Dispatch charges (all trips, net of discounts)",
+            amount:netDispatchCharges.toDecimalPlaces(2).toNumber(),
             // Trip freight is intentionally not "FREIGHT": the existing
             // exporter filters that bucket and would otherwise hide it.
             chargeType:"OTHER",
