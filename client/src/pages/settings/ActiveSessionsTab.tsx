@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
 import { Monitor, Smartphone, Globe, LogOut, ShieldAlert, RefreshCw, MapPin, Clock } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 
@@ -57,6 +58,7 @@ export function ActiveSessionsTab({ isAdmin }: { isAdmin: boolean }) {
   const {
     data: sessions = [],
     isLoading,
+    isError,
     refetch,
   } = useQuery<ActiveSession[]>({
     queryKey: ["/api/sessions"],
@@ -138,10 +140,10 @@ export function ActiveSessionsTab({ isAdmin }: { isAdmin: boolean }) {
             <Skeleton key={i} className="h-20 w-full" />
           ))}
         </div>
+      ) : isError && sessions.length === 0 ? (
+        <ErrorState onAction={() => void refetch()} actionLabel="Try again" className="py-8" />
       ) : sessions.length === 0 ? (
-        <Card>
-          <CardContent className="py-8 text-center text-muted-foreground">No active sessions found.</CardContent>
-        </Card>
+        <EmptyState title="No active sessions found." className="py-8" />
       ) : isAdmin ? (
         <div className="space-y-6">
           {Object.entries(groupedByUser).map(([username, userSessions]) => (

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 import { useQuery } from "@tanstack/react-query";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { DollarSign, FileText, TrendingUp, Info } from "lucide-react";
@@ -107,7 +108,12 @@ export default function FactorySupplierStatement() {
     enabled: !!companyId,
   });
 
-  const { data: statement, isLoading: statementLoading } = useQuery({
+  const {
+    data: statement,
+    isLoading: statementLoading,
+    isError: statementError,
+    refetch: refetchStatement,
+  } = useQuery({
     queryKey: ["/api/factory/suppliers", supplierId, "statement"],
     queryFn: async () => {
       const res = await fetch(`/api/factory/suppliers/${supplierId}/statement`, { credentials: "include" });
@@ -199,12 +205,10 @@ export default function FactorySupplierStatement() {
         </CardContent>
       </Card>
 
-      {statementLoading && (
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-muted-foreground text-sm">Loading statement...</p>
-          </CardContent>
-        </Card>
+      {statementLoading && <LoadingState title="Loading statement..." />}
+
+      {statementError && !statement && !statementLoading && (
+        <ErrorState onAction={() => void refetchStatement()} actionLabel="Try again" />
       )}
 
       {statement && !statementLoading && (
@@ -466,14 +470,7 @@ export default function FactorySupplierStatement() {
           )}
 
           {(!statement.currencyGroups || statement.currencyGroups.length === 0) && (
-            <Card>
-              <CardContent className="pt-6">
-                <div className="text-center py-8">
-                  <FileText className="mx-auto h-10 w-10 text-muted-foreground" />
-                  <p className="text-sm text-muted-foreground mt-3">No containers found for this supplier.</p>
-                </div>
-              </CardContent>
-            </Card>
+            <EmptyState icon={FileText} title="No containers found for this supplier." />
           )}
 
           {statement.brokerContainers && statement.brokerContainers.length > 0 && (

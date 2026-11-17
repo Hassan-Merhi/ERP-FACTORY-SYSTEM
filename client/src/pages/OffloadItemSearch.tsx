@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { SearchField } from "@/components/ui/search-field";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
 import { Search, Package, Container, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { PageHeader } from "@/components/PageHeader";
@@ -25,7 +26,12 @@ export default function OffloadItemSearch() {
   const [input, setInput] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
 
-  const { data: results = [], isLoading } = useQuery<OffloadResult[]>({
+  const {
+    data: results = [],
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<OffloadResult[]>({
     queryKey: ["/api/offload-item-search", searchTerm],
     queryFn: async () => {
       if (!searchTerm) return [];
@@ -121,12 +127,16 @@ export default function OffloadItemSearch() {
       )}
 
       {/* ── No results state ── */}
-      {searchTerm && !isLoading && results.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground">
-          <Package className="h-10 w-10 opacity-25" />
-          <p className="text-sm font-medium">No offloaded containers found for &ldquo;{searchTerm}&rdquo;</p>
-          <p className="text-xs">Try a different item name or partial name</p>
-        </div>
+      {searchTerm && !isLoading && isError && results.length === 0 && (
+        <ErrorState onAction={() => void refetch()} actionLabel="Try again" className="py-20" />
+      )}
+      {searchTerm && !isLoading && !isError && results.length === 0 && (
+        <EmptyState
+          icon={Package}
+          title={`No offloaded containers found for “${searchTerm}”`}
+          description="Try a different item name or partial name"
+          className="py-20"
+        />
       )}
 
       {/* ── Results table ── */}

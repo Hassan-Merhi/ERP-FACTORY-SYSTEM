@@ -5,6 +5,7 @@
  * entry and a close handler and owns everything else itself.
  */
 import { useState, useEffect } from "react";
+import { EmptyState, LoadingState } from "@/components/ui/page-state";
 import { useQuery } from "@tanstack/react-query";
 import { DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -305,7 +306,7 @@ export function ViewEntryModal({
           <div>
             <h3 className="font-semibold mb-3">Entries</h3>
             {viewEntries.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">No entries found</p>
+              <EmptyState title="No entries found" className="min-h-0 py-4 sm:py-4" />
             ) : (
               <div className="rounded-md border overflow-x-auto">
                 <table className="w-full text-sm">
@@ -532,7 +533,7 @@ export function ViewEntryModal({
         <div className="space-y-4">
           <div className="rounded-md border p-4 space-y-2">
             {!c && metaContainerId ? (
-              <p className="text-sm text-muted-foreground">Loading container details…</p>
+              <LoadingState title="Loading container details…" className="min-h-0 border-0 bg-transparent p-0 sm:p-0" />
             ) : c ? (
               <div className="flex items-start justify-between gap-2 flex-wrap">
                 <div>
@@ -591,7 +592,7 @@ export function ViewEntryModal({
         <div className="space-y-4">
           <div className="rounded-md border p-4 space-y-2">
             {!c && metaContainerId ? (
-              <p className="text-sm text-muted-foreground">Loading container details…</p>
+              <LoadingState title="Loading container details…" className="min-h-0 border-0 bg-transparent p-0 sm:p-0" />
             ) : c ? (
               <div className="flex items-start justify-between gap-2 flex-wrap">
                 <div>

@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -108,7 +109,12 @@ export default function ChatbotSettings() {
     },
   });
 
-  const { data: users = [], isLoading: usersLoading } = useQuery<UserChatbotStatus[]>({
+  const {
+    data: users = [],
+    isLoading: usersLoading,
+    isError: usersError,
+    refetch: refetchUsers,
+  } = useQuery<UserChatbotStatus[]>({
     queryKey: ["/api/users/chatbot-status"],
   });
 
@@ -135,6 +141,7 @@ export default function ChatbotSettings() {
   const {
     data: patchHistory = [],
     isLoading: patchHistoryLoading,
+    isError: patchHistoryError,
     refetch: refetchPatchHistory,
   } = useQuery<PatchHistoryEntry[]>({
     queryKey: ["/api/chatbot/patch-history"],
@@ -336,10 +343,7 @@ export default function ChatbotSettings() {
           </CardHeader>
           <CardContent className="space-y-4">
             {githubLoading ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Loading...
-              </div>
+              <LoadingState />
             ) : (
               <>
                 {githubSettings?.configured && (
@@ -454,8 +458,10 @@ export default function ChatbotSettings() {
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
+              ) : usersError && users.length === 0 ? (
+                <ErrorState onAction={() => void refetchUsers()} actionLabel="Try again" className="py-8" />
               ) : users.length === 0 ? (
-                <p className="text-center text-muted-foreground py-8">No users found.</p>
+                <EmptyState title="No users found." className="py-8" />
               ) : (
                 <div className="table-responsive">
                   <Table mobileLayout="cards">
@@ -544,11 +550,12 @@ export default function ChatbotSettings() {
                     <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                   </div>
                 ) : (viewAllChats ? allSessions : mySessions).length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
-                    <MessageCircle className="h-8 w-8 mb-2 opacity-40" />
-                    <p className="text-sm">No conversations yet.</p>
-                    <p className="text-xs mt-1 opacity-70">Start a chat to see history here.</p>
-                  </div>
+                  <EmptyState
+                    icon={MessageCircle}
+                    title="No conversations yet."
+                    description="Start a chat to see history here."
+                    className="py-10"
+                  />
                 ) : (
                   <ScrollArea className="h-[440px]">
                     <div className="space-y-0.5 p-2">
@@ -690,12 +697,15 @@ export default function ChatbotSettings() {
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
+              ) : patchHistoryError && patchHistory.length === 0 ? (
+                <ErrorState onAction={() => void refetchPatchHistory()} actionLabel="Try again" className="py-12" />
               ) : patchHistory.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-                  <FileCode className="h-10 w-10 mb-3 opacity-40" />
-                  <p className="text-sm">No patches applied yet.</p>
-                  <p className="text-xs mt-1 opacity-70">Applied AI code changes will appear here.</p>
-                </div>
+                <EmptyState
+                  icon={FileCode}
+                  title="No patches applied yet."
+                  description="Applied AI code changes will appear here."
+                  className="py-12"
+                />
               ) : (
                 <div className="table-responsive">
                   <Table mobileLayout="cards">

@@ -10,6 +10,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/page-state";
 import { DataTableToolbar } from "@/components/DataTableToolbar";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -417,20 +418,16 @@ export function ContainerListView({
             </TableBody>
           </Table>
         ) : (
-          <div className="py-16 text-center text-muted-foreground">
-            <Container className="h-12 w-12 mx-auto mb-3 opacity-50" />
-            {containers && containers.length > 0 ? (
-              <>
-                <p className="text-lg font-medium">No matching containers</p>
-                <p className="text-sm mt-1">Try adjusting your search or filter</p>
-              </>
-            ) : (
-              <>
-                <p className="text-lg font-medium">No factory containers yet</p>
-                <p className="text-sm mt-1">Add your first container to start tracking arrivals</p>
-              </>
-            )}
-          </div>
+          <EmptyState
+            icon={Container}
+            title={containers && containers.length > 0 ? "No matching containers" : "No factory containers yet"}
+            description={
+              containers && containers.length > 0
+                ? "Try adjusting your search or filter"
+                : "Add your first container to start tracking arrivals"
+            }
+            className="rounded-none border-0"
+          />
         )}
       </div>
     </section>

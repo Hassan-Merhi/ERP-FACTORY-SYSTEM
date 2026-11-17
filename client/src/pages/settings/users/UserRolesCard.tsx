@@ -5,6 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/page-state";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -151,9 +152,7 @@ export function UserRolesCard({ userId, companies }: UserRolesCardProps) {
           </div>
         </CardHeader>
         <CardContent className="space-y-2">
-          {companyRoles.length === 0 && !showEditor && (
-            <p className="text-sm text-muted-foreground">No company roles assigned yet.</p>
-          )}
+          {companyRoles.length === 0 && !showEditor && <EmptyState title="No company roles assigned yet." />}
 
           {companyRoles.map((role) => (
             <div key={role.id}>

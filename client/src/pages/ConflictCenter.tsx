@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { ErrorState, LoadingState } from "@/components/ui/page-state";
 import { useToast } from "@/hooks/use-toast";
 import { PageHeader } from "@/components/PageHeader";
 import { getUnresolvedConflicts, resolveConflict, addToSyncQueue, type Conflict } from "@/lib/db";
@@ -167,6 +168,7 @@ export default function ConflictCenter() {
   const {
     data: conflicts = [],
     isLoading,
+    isError,
     refetch,
   } = useQuery<Conflict[]>({
     queryKey: ["conflicts", "unresolved"],
@@ -217,7 +219,9 @@ export default function ConflictCenter() {
       <Separator />
 
       {isLoading ? (
-        <div className="text-center py-12 text-muted-foreground text-sm">Loading conflicts…</div>
+        <LoadingState title="Loading conflicts…" className="py-12" />
+      ) : isError && conflicts.length === 0 ? (
+        <ErrorState onAction={() => void refetch()} actionLabel="Try again" className="py-12" />
       ) : conflicts.length === 0 ? (
         <div className="text-center py-16 space-y-3" data-testid="no-conflicts-message">
           <CheckCircle className="h-12 w-12 text-green-500 mx-auto" />

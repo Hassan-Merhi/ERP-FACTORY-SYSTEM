@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCompany } from "@/contexts/CompanyContext";
 import { RetailNav } from "./RetailNav";
@@ -330,10 +331,16 @@ export default function RetailSalesHistory() {
             </CardContent>
           </Card>
         ))}
-        {submittedFilters && !historyQuery.isLoading && !sales.length && (
-          <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground lg:col-span-2">
-            No sales match those filters.
-          </div>
+        {historyQuery.isError && !historyQuery.data ? (
+          <ErrorState
+            onAction={() => void historyQuery.refetch()}
+            actionLabel="Try again"
+            className="p-6 lg:col-span-2"
+          />
+        ) : (
+          submittedFilters &&
+          !historyQuery.isLoading &&
+          !sales.length && <EmptyState title="No sales match those filters." className="p-6 lg:col-span-2" />
         )}
       </div>
     </div>

@@ -16,6 +16,7 @@ import { useFactoryNavigationAccess } from "@/hooks/useFactoryNavigationAccess";
 import { useDailyProductionReport } from "./dailyproductionreport/useDailyProductionReport";
 import { ProductionTabPanel } from "./dailyproductionreport/components/ProductionTabPanel";
 import "./factoryshippingcontainers/shipping-redesign.css";
+import { LoadingState } from "@/components/ui/page-state";
 
 const loadMonthlyProduction = () => import("./FactoryMonthlyProductionMatrix");
 const loadSheetsAndSacks = () => import("./FactorySheetsAndSacks");
@@ -201,9 +202,7 @@ export default function DailyProductionReport() {
               value="monthly-production"
               className="mt-0 min-h-0 flex-1 overflow-y-auto p-4 data-[state=inactive]:hidden"
             >
-              <Suspense
-                fallback={<div className="p-4 text-sm text-muted-foreground">Loading monthly production...</div>}
-              >
+              <Suspense fallback={<LoadingState title="Loading monthly production..." className="m-4" />}>
                 <FactoryMonthlyProductionMatrix embedded />
               </Suspense>
             </TabsContent>
@@ -218,7 +217,7 @@ export default function DailyProductionReport() {
               value="sheets-sacks"
               className="mt-0 min-h-0 flex-1 overflow-y-auto p-4 data-[state=inactive]:hidden"
             >
-              <Suspense fallback={<div className="p-4 text-sm text-muted-foreground">Loading sheets and sacks...</div>}>
+              <Suspense fallback={<LoadingState title="Loading sheets and sacks..." className="m-4" />}>
                 <FactorySheetsAndSacks embedded />
               </Suspense>
             </TabsContent>

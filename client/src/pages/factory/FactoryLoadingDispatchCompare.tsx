@@ -59,6 +59,7 @@ import {
   getComparison,
 } from "./FactoryLoadingDispatchCompareParts";
 import { SearchField } from "@/components/ui/search-field";
+import { EmptyState, LoadingState } from "@/components/ui/page-state";
 
 export default function FactoryLoadingDispatchCompare() {
   const { orderId: orderIdText, dispatchId: dispatchIdText } = useParams<{ orderId: string; dispatchId?: string }>();
@@ -258,9 +259,7 @@ export default function FactoryLoadingDispatchCompare() {
           </div>
         )}
         {comparison.isPending && (
-          <div className="flex items-center gap-2 rounded-xl border p-5 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" /> Comparing Pending Loading with physical truck scans…
-          </div>
+          <LoadingState title="Comparing Pending Loading with physical truck scans…" className="rounded-xl" />
         )}
 
         {result && (
@@ -659,7 +658,7 @@ export default function FactoryLoadingDispatchCompare() {
               <CardContent className="space-y-3 p-4">
                 <h3 className="text-sm font-bold">All truck trips</h3>
                 {result.trips.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No dispatch records created yet.</p>
+                  <EmptyState title="No dispatch records created yet." className="min-h-0 py-6" />
                 ) : (
                   <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
                     {result.trips.map((trip) => (

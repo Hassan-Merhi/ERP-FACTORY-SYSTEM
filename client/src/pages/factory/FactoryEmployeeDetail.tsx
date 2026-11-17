@@ -32,6 +32,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
 import { factoryApiRequest } from "@/lib/factoryApi";
 import { useDateFormat } from "@/contexts/DateFormatContext";
+import { EmptyState, ErrorState } from "@/components/ui/page-state";
 
 interface Employee {
   id: number;
@@ -160,7 +161,12 @@ export default function FactoryEmployeeDetail() {
     enabled: Boolean(selectedCompany?.id) && !!employeeId,
   });
 
-  const { data: statement, isLoading: stmtLoading } = useQuery<{ employee: Employee; rows: StatementRow[] }>({
+  const {
+    data: statement,
+    isLoading: stmtLoading,
+    isError: stmtError,
+    refetch: refetchStatement,
+  } = useQuery<{ employee: Employee; rows: StatementRow[] }>({
     queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id, employeeId, "statement"),
     queryFn: async () => {
       const res = await factoryApiRequest("GET", `/api/factory/employees/${employeeId}/statement`);
@@ -481,8 +487,10 @@ export default function FactoryEmployeeDetail() {
                     <Skeleton key={i} className="h-10 w-full" />
                   ))}
                 </div>
+              ) : stmtError && !statement ? (
+                <ErrorState onAction={() => void refetchStatement()} actionLabel="Try again" />
               ) : !statement?.rows || statement.rows.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-8 text-center">No transactions yet</p>
+                <EmptyState title="No transactions yet" />
               ) : (
                 <Table mobileLayout="cards">
                   <TableHeader className="sticky top-0 z-30 bg-background">
