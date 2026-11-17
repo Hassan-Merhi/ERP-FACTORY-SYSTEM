@@ -3,19 +3,32 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  buildTripPoExport, groupFrozenTripArticles, suggestedErpPoCharges,
-  tripErpContainerNumber, tripErpPoNumber, TRIP_PO_HEADERS,
-  type PostedTripPoSource, type TripPoExportChoice,
+  buildTripPoExport,
+  groupFrozenTripArticles,
+  suggestedErpPoCharges,
+  tripErpContainerNumber,
+  tripErpPoNumber,
+  TRIP_PO_HEADERS,
+  type PostedTripPoSource,
+  type TripPoExportChoice,
 } from "../server/routes/factory/customer-orders/loadingDispatchPoExportModel";
 import { buildTripPoImportWorkbook } from "../server/routes/factory/customer-orders/loadingDispatchPoExportWorkbook";
 import { parsePoImportSheetRows } from "../server/routes/import/poImportExcelParser";
 import { readExcel, sheetToJson, writeWorkbook } from "../server/excelHelper";
 
 const source = (): PostedTripPoSource => ({
-  companyId: 12, orderId: 345, dispatchId: 8, financialId: 72, revision: 1,
-  status: "POSTED", currency: "USD", sourceFingerprint: "a".repeat(64),
-  goodsSubtotal: "35.00", billableChargesTotal: "20.00",
-  discountTotal: "2.00", customerTotal: "53.00",
+  companyId: 12,
+  orderId: 345,
+  dispatchId: 8,
+  financialId: 72,
+  revision: 1,
+  status: "POSTED",
+  currency: "USD",
+  sourceFingerprint: "a".repeat(64),
+  goodsSubtotal: "35.00",
+  billableChargesTotal: "20.00",
+  discountTotal: "2.00",
+  customerTotal: "53.00",
   bales: [
     { baleId: 100, articleCode: "A-100", productName: "Shirts", weightKg: "10.500", lineTotal: "12.50" },
     { baleId: 101, articleCode: "A-100", productName: "Shirts", weightKg: "11.250", lineTotal: "13.50" },
@@ -30,10 +43,16 @@ const source = (): PostedTripPoSource => ({
 });
 const choice = (): TripPoExportChoice => ({
   supplierCode: "SUP-ERP-001",
-  rates: [{ articleCode: "B200", rate: "2.50" }, { articleCode: "A-100", rate: "6.00" }],
+  rates: [
+    { articleCode: "B200", rate: "2.50" },
+    { articleCode: "A-100", rate: "6.00" },
+  ],
   charges: {
-    freight: "10.00", surcharge: "1.00", fumigation: "0.00",
-    discount: "0.50", documentCharges: "0.00",
+    freight: "10.00",
+    surcharge: "1.00",
+    fumigation: "0.00",
+    discount: "0.50",
+    documentCharges: "0.00",
   },
 });
 describe("Phase 5: posted Factory trip -> manual Normal ERP PO Excel", () => {
@@ -41,11 +60,14 @@ describe("Phase 5: posted Factory trip -> manual Normal ERP PO Excel", () => {
     const actual = groupFrozenTripArticles(source());
     expect(actual).toHaveLength(2);
     expect(actual[0]).toMatchObject({
-      articleCode: "A-100", quantity: 2, totalKg: "21.750", factoryGoodsValue: "26.00",
+      articleCode: "A-100",
+      quantity: 2,
+      totalKg: "21.750",
+      factoryGoodsValue: "26.00",
     });
     expect(actual[1]).toMatchObject({ articleCode: "B200", quantity: 1, factoryGoodsValue: "9.00" });
     const po = buildTripPoExport(source(), choice());
-    expect(po.rows.map(row => row.Item_Barcode)).toEqual(["A-100", "B200"]);
+    expect(po.rows.map((row) => row.Item_Barcode)).toEqual(["A-100", "B200"]);
     expect(po.rows[0].Quantity).toBe(2);
     expect(po.rows[0].Item_Barcode).not.toBe("100");
   });
@@ -84,8 +106,10 @@ describe("Phase 5: posted Factory trip -> manual Normal ERP PO Excel", () => {
       expect(parsed.preview).toHaveLength(1);
       expect(parsed.preview[0].containerNumber).toBe("FD-12-345-8");
       expect(parsed.preview[0].pos).toEqual(["FDPO-12-345-8"]);
-      expect(parsed.preview[0].items.map(i => [i.barcode, i.quantity, i.rate]))
-        .toEqual([["A-100", 2, 6], ["B200", 1, 2.5]]);
+      expect(parsed.preview[0].items.map((i) => [i.barcode, i.quantity, i.rate])).toEqual([
+        ["A-100", 2, 6],
+        ["B200", 1, 2.5],
+      ]);
       expect(parsed.preview[0].grandTotal).toBe(25);
       expect(parsed.preview[0].charges.freight).toBe(10);
       expect(parsed.preview[0].charges.discount).toBe(0.5);
@@ -93,18 +117,33 @@ describe("Phase 5: posted Factory trip -> manual Normal ERP PO Excel", () => {
   });
 
   it("refuses missing prices, invalid supplier, duplicated articles and malformed charges", () => {
-    expect(() => buildTripPoExport(source(), {
-      ...choice(), rates: [{ articleCode: "A-100", rate: "1.00" }],
-    })).toThrow("purchase rate");
-    expect(() => buildTripPoExport(source(), {
-      ...choice(), supplierCode: "=HYPERLINK(1,2)",
-    })).toThrow("supplier code");
-    expect(() => buildTripPoExport(source(), {
-      ...choice(), rates: [{ articleCode: "A-100", rate: "1.00" }, { articleCode: "A-100", rate: "1.00" }],
-    })).toThrow("more than once");
-    expect(() => buildTripPoExport(source(), {
-      ...choice(), charges: { ...choice().charges, discount: "-0.20" },
-    })).toThrow("charge");
+    expect(() =>
+      buildTripPoExport(source(), {
+        ...choice(),
+        rates: [{ articleCode: "A-100", rate: "1.00" }],
+      })
+    ).toThrow("purchase rate");
+    expect(() =>
+      buildTripPoExport(source(), {
+        ...choice(),
+        supplierCode: "=HYPERLINK(1,2)",
+      })
+    ).toThrow("supplier code");
+    expect(() =>
+      buildTripPoExport(source(), {
+        ...choice(),
+        rates: [
+          { articleCode: "A-100", rate: "1.00" },
+          { articleCode: "A-100", rate: "1.00" },
+        ],
+      })
+    ).toThrow("more than once");
+    expect(() =>
+      buildTripPoExport(source(), {
+        ...choice(),
+        charges: { ...choice().charges, discount: "-0.20" },
+      })
+    ).toThrow("charge");
   });
 
   it("blocks duplicate source bales and mismatching signed Factory balances", () => {
@@ -126,9 +165,15 @@ describe("Phase 5: posted Factory trip -> manual Normal ERP PO Excel", () => {
     expect(a.containerNumber).toBe(tripErpContainerNumber(12, 345, 8));
     expect(a.poNumber).toBe(tripErpPoNumber(12, 345, 8));
     expect(tripErpContainerNumber(12, 345, 9)).not.toBe(a.containerNumber);
-    expect(buildTripPoExport(source(), {
-      ...choice(), rates: [{ articleCode: "A-100", rate: "6.10" }, { articleCode: "B200", rate: "2.50" }],
-    }).exportFingerprint).not.toBe(a.exportFingerprint);
+    expect(
+      buildTripPoExport(source(), {
+        ...choice(),
+        rates: [
+          { articleCode: "A-100", rate: "6.10" },
+          { articleCode: "B200", rate: "2.50" },
+        ],
+      }).exportFingerprint
+    ).not.toBe(a.exportFingerprint);
   });
 
   it("exports no internal expense and warns of unmapped customer-billable charges", () => {
@@ -136,7 +181,7 @@ describe("Phase 5: posted Factory trip -> manual Normal ERP PO Excel", () => {
     expect(values.charges.freight).toBe("15.00");
     expect(values.charges.discount).toBe("2.00");
     expect(values.internalExpenseTotal).toBe("3.00");
-    expect(values.unmappedBillableCharges.map(c => c.name)).toEqual(["Special handling"]);
+    expect(values.unmappedBillableCharges.map((c) => c.name)).toEqual(["Special handling"]);
   });
 
   it("requires one saved export per trip and never creates ERP accounting entries", () => {

@@ -88,9 +88,7 @@ afterAll(async () => {
 
 describe("Phase 3 ERP read success paths", () => {
   it("reads a seeded ledger pre-period balance from the account statement route", async () => {
-    const response = await agent.get(
-      `/api/accounts/ledger/${ctx.cashAccountId}/pre-period-balance?endDate=2026-09-14`
-    );
+    const response = await agent.get(`/api/accounts/ledger/${ctx.cashAccountId}/pre-period-balance?endDate=2026-09-14`);
 
     expect(response.status).toBe(200);
     expect(response.body).toHaveProperty("balance");

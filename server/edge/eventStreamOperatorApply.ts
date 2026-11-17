@@ -48,11 +48,7 @@ import {
 } from "./stockTransferWorkflowEnvelope.mjs";
 import { PHASE9_STOCK_ITEM_EDIT_KIND } from "./stockItemEditEnvelope.mjs";
 import { phase9PosSaleApplyHandler } from "./posSaleApply";
-import {
-  PHASE9_POS_SALE_CANCEL_KIND,
-  PHASE9_POS_SALE_EDIT_KIND,
-  PHASE9_POS_SALE_KIND,
-} from "./posSaleEnvelope.mjs";
+import { PHASE9_POS_SALE_CANCEL_KIND, PHASE9_POS_SALE_EDIT_KIND, PHASE9_POS_SALE_KIND } from "./posSaleEnvelope.mjs";
 import { phase9PosSaleCancelApplyHandler } from "./posSaleCancelApply";
 import { recalculateIntercompanyForDate } from "../routes/helpers/intercompanyHelpers";
 import { phase9PosSaleEditApplyHandler } from "./posSaleEditApply";

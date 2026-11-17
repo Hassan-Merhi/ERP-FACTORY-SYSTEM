@@ -125,10 +125,9 @@ describe("Factory container planner phase 2 API", () => {
     expect(productTotal(created.body.plan, ARTICLE_A)).toBe(7);
     expect(productTotal(created.body.plan, ARTICLE_B)).toBe(10);
 
-    const expectedRows = await pool.query(
-      "SELECT id FROM customer_order_expected_lines WHERE order_id = $1",
-      [orderId]
-    );
+    const expectedRows = await pool.query("SELECT id FROM customer_order_expected_lines WHERE order_id = $1", [
+      orderId,
+    ]);
     expect(expectedRows.rowCount).toBe(0);
 
     planId = Number(created.body.plan.id);
@@ -151,8 +150,8 @@ describe("Factory container planner phase 2 API", () => {
     const before = await agent.get(`/api/factory/v5/container-plans/${planId}`);
     expect(before.status).toBe(200);
 
-    const source = before.body.plan.containers.find(
-      (container: any) => container.lines.some((line: any) => line.articleCode === ARTICLE_A && line.plannedQty > 0)
+    const source = before.body.plan.containers.find((container: any) =>
+      container.lines.some((line: any) => line.articleCode === ARTICLE_A && line.plannedQty > 0)
     );
     const destination = before.body.plan.containers.find(
       (container: any) => container.id !== source.id && container.totalBales < container.capacityBales

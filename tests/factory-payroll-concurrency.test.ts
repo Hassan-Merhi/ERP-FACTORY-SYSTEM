@@ -43,10 +43,7 @@ describe("Phase 23 — payroll generation concurrency", () => {
       createdBy: "phase23-concurrency-test",
     };
 
-    const [first, second] = await Promise.all([
-      generateFactoryPayrollBatch(input),
-      generateFactoryPayrollBatch(input),
-    ]);
+    const [first, second] = await Promise.all([generateFactoryPayrollBatch(input), generateFactoryPayrollBatch(input)]);
 
     expect(first.createdCount + second.createdCount).toBe(1);
     expect([first.replayed, second.replayed].filter(Boolean)).toHaveLength(1);

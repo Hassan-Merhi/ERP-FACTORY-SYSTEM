@@ -59,10 +59,7 @@ describe("Factory container planner phase 1", () => {
   });
 
   it("excludes garbage/wipers by default but can include them explicitly", () => {
-    const source = [
-      row("CWR", 100),
-      row("WIPER", 50, { isGarbageOrWipers: true }),
-    ];
+    const source = [row("CWR", 100), row("WIPER", 50, { isGarbageOrWipers: true })];
 
     const defaultPreview = buildContainerPlannerPreview(source, 600);
     const includedPreview = buildContainerPlannerPreview(source, 600, { includeGarbageWipers: true });

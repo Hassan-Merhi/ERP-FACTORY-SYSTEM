@@ -60,10 +60,10 @@ describe("Phase 23 — aggregate concurrency guards", () => {
   it("rejects a purchase-order edit while the same container lifecycle lock is held", async () => {
     const lockClient = await pool.connect();
     try {
-      const locked = await lockClient.query<{ locked: boolean }>(
-        "SELECT pg_try_advisory_lock($1, $2) AS locked",
-        [ctx.companyId, containerId]
-      );
+      const locked = await lockClient.query<{ locked: boolean }>("SELECT pg_try_advisory_lock($1, $2) AS locked", [
+        ctx.companyId,
+        containerId,
+      ]);
       expect(locked.rows[0]?.locked).toBe(true);
 
       const response = await agent.patch(`/api/purchase-orders/${poId}`).send({
@@ -86,10 +86,10 @@ describe("Phase 23 — aggregate concurrency guards", () => {
 
     const probe = await pool.connect();
     try {
-      const locked = await probe.query<{ locked: boolean }>(
-        "SELECT pg_try_advisory_lock($1, $2) AS locked",
-        [ctx.companyId, containerId]
-      );
+      const locked = await probe.query<{ locked: boolean }>("SELECT pg_try_advisory_lock($1, $2) AS locked", [
+        ctx.companyId,
+        containerId,
+      ]);
       expect(locked.rows[0]?.locked).toBe(true);
       await probe.query("SELECT pg_advisory_unlock($1, $2)", [ctx.companyId, containerId]);
     } finally {
@@ -103,10 +103,10 @@ describe("Phase 23 — aggregate concurrency guards", () => {
 
     const lockClient = await pool.connect();
     try {
-      const locked = await lockClient.query<{ locked: boolean }>(
-        "SELECT pg_try_advisory_lock($1, $2) AS locked",
-        [ctx.companyId, spContainerId]
-      );
+      const locked = await lockClient.query<{ locked: boolean }>("SELECT pg_try_advisory_lock($1, $2) AS locked", [
+        ctx.companyId,
+        spContainerId,
+      ]);
       expect(locked.rows[0]?.locked).toBe(true);
 
       const response = await agent.post("/api/sp/offload").send({

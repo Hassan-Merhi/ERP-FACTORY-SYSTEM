@@ -1,11 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import {
-  FACTORY_ACCESS_REGISTRY,
-  factoryPageAllowsRole,
-  resolveFactoryPage,
-} from "../shared/factoryAccessRegistry";
+import { FACTORY_ACCESS_REGISTRY, factoryPageAllowsRole, resolveFactoryPage } from "../shared/factoryAccessRegistry";
 import { companyQueryKey, isCompanySessionQueryKey, isGlobalQueryKey } from "../client/src/lib/companyQueryScope";
 import { factoryActionCapabilities } from "../shared/factoryActionCapabilities";
 
@@ -17,7 +13,12 @@ type BaselineRegistryPage = {
   pinned: boolean;
 };
 type Phase1Fixture = {
-  counts: { registryPages: number; routerDeclarations: number; uniqueRouterPaths: number; nonFactoryRouterPaths: string[] };
+  counts: {
+    registryPages: number;
+    routerDeclarations: number;
+    uniqueRouterPaths: number;
+    nonFactoryRouterPaths: string[];
+  };
   registry: BaselineRegistryPage[];
   routerPaths: string[];
 };
@@ -48,7 +49,7 @@ function registryFromSource(): BaselineRegistryPage[] {
 function routesFromSource(): string[] {
   return Array.from(
     readSource("client/src/components/FactoryRoutes.tsx").matchAll(/<Route\b[^>]*?\bpath="([^"]+)"/g),
-    (match) => match[1],
+    (match) => match[1]
   );
 }
 
@@ -93,9 +94,7 @@ describe("Factory Phase 1 pinned source baseline (not a browser/API fixture)", (
   });
 
   it("captures selected-company cache and fail-closed action policy contracts", () => {
-    expect(companyQueryKey("/api/factory/my-access", 1)).not.toEqual(
-      companyQueryKey("/api/factory/my-access", 2),
-    );
+    expect(companyQueryKey("/api/factory/my-access", 1)).not.toEqual(companyQueryKey("/api/factory/my-access", 2));
     expect(isCompanySessionQueryKey(["/api/factory/stock-allocation"])).toBe(true);
     expect(isGlobalQueryKey(["/api/user/companies"])).toBe(true);
     const viewOnly = factoryActionCapabilities({ role: "View Only", hasFactoryAccess: true });

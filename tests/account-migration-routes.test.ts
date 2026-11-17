@@ -474,5 +474,4 @@ describe("Phase 33B account migration accounting routes", () => {
       destinationClosing: "-125.50",
     });
   }, 60_000);
-
 });

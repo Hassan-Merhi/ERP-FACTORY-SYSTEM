@@ -40,10 +40,7 @@ import {
   type Phase9PaymentVoucherInputs,
   type Phase9PaymentVoucherRef,
 } from "../server/edge/paymentEnvelope.mjs";
-import {
-  phase9PaymentDeleteApplyHandler,
-  phase9PaymentEditApplyHandler,
-} from "../server/edge/paymentFollowUpApply";
+import { phase9PaymentDeleteApplyHandler, phase9PaymentEditApplyHandler } from "../server/edge/paymentFollowUpApply";
 import { phase9PaymentSnapshotTx } from "../server/edge/paymentSnapshot";
 import { PHASE9_PERIOD_CLOSED } from "../server/edge/closedPeriod";
 import {

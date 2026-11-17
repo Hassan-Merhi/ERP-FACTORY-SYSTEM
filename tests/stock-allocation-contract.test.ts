@@ -120,11 +120,7 @@ describe("Phase 33 3C V5 stock allocation", () => {
   });
 
   it("computes the compact summary from stock, loading, and expected quantities", async () => {
-    harness.executeResults.push(
-      { rows: [{ count: 120 }] },
-      { rows: [{ count: 18 }] },
-      { rows: [{ qty: 35 }] }
-    );
+    harness.executeResults.push({ rows: [{ count: 120 }] }, { rows: [{ count: 18 }] }, { rows: [{ qty: 35 }] });
 
     const res = await invoke("/api/factory/v5/stock-allocation/summary", {
       session: { currentCompanyId: 7 },

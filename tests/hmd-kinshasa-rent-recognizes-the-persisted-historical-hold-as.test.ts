@@ -23,8 +23,9 @@ describe("HMD KINSHASA historical rent reconciliation holds (Phase 3)", () => {
       { month: "2026-12", notes: null, due: true },
       { month: "2027-01", notes: null, due: false },
     ];
-    expect(rows.filter((row) => isRentMonthReadyToRecognize(row.notes, row.due)).map((r) => r.month))
-      .toEqual(["2026-12"]);
+    expect(rows.filter((row) => isRentMonthReadyToRecognize(row.notes, row.due)).map((r) => r.month)).toEqual([
+      "2026-12",
+    ]);
   });
 
   it("does not suppress an ordinary unpaid month without an explicit hold", () => {

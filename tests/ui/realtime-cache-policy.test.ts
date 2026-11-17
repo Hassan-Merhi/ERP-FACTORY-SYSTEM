@@ -5,16 +5,11 @@ import {
   QUERY_STALE_TIMES,
   staleTimeForQueryKey,
 } from "@/lib/queryPolicies";
-import {
-  shouldDefaultRefetchLiveQuery,
-  shouldRefreshLiveQueryOnObserverAdd,
-} from "@/lib/liveQueryRuntimePolicy";
+import { shouldDefaultRefetchLiveQuery, shouldRefreshLiveQueryOnObserverAdd } from "@/lib/liveQueryRuntimePolicy";
 
 describe("Realtime Refresh Wave 5 cache policy", () => {
   it("keeps exact reference endpoints long-lived while their transactional descendants are live", () => {
-    expect(staleTimeForQueryKey(["/api/locations?includeInactive=true", 7])).toBe(
-      QUERY_STALE_TIMES.referenceData
-    );
+    expect(staleTimeForQueryKey(["/api/locations?includeInactive=true", 7])).toBe(QUERY_STALE_TIMES.referenceData);
     expect(isLiveTransactionalQueryKey(["/api/locations", 7])).toBe(false);
 
     expect(isLiveTransactionalQueryKey(["/api/locations/7/inventory?includeZero=true"])).toBe(true);

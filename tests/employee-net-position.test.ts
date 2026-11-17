@@ -279,14 +279,21 @@ describe("Phase 33D employee/factory net position", () => {
     await routes.get("GET /api/factory/net-position")!(req(), res);
 
     expect(res.statusCode).toBe(200);
-    expect(res.body.forUs.accounts).toContainEqual(expect.objectContaining({
-      code: "FX_UNREALIZED_GAIN", value: 459.44,
-    }));
-    expect(res.body.onUs.accounts).toContainEqual(expect.objectContaining({
-      code: "SUPPLIER", name: "EUR Supplier", value: 9035.50,
-    }));
+    expect(res.body.forUs.accounts).toContainEqual(
+      expect.objectContaining({
+        code: "FX_UNREALIZED_GAIN",
+        value: 459.44,
+      })
+    );
+    expect(res.body.onUs.accounts).toContainEqual(
+      expect.objectContaining({
+        code: "SUPPLIER",
+        name: "EUR Supplier",
+        value: 9035.5,
+      })
+    );
     expect(res.body.forUsTotal).toBe(459.44);
-    expect(res.body.onUsTotal).toBe(9035.50);
+    expect(res.body.onUsTotal).toBe(9035.5);
     expect(res.body.netPosition).toBe(-8576.06);
     expect(res.body.supplierLiabilitiesCurrentRate).toBe(8576.06);
   });
@@ -306,12 +313,19 @@ describe("Phase 33D employee/factory net position", () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.body.forUs.accounts.some((row: any) => row.code === "FX_UNREALIZED_GAIN")).toBe(false);
-    expect(res.body.onUs.accounts).toContainEqual(expect.objectContaining({
-      code: "FX_UNREALIZED_LOSS", value: 459.43,
-    }));
-    expect(res.body.onUs.accounts).toContainEqual(expect.objectContaining({
-      code: "SUPPLIER", name: "EUR Supplier", value: 9035.50,
-    }));
+    expect(res.body.onUs.accounts).toContainEqual(
+      expect.objectContaining({
+        code: "FX_UNREALIZED_LOSS",
+        value: 459.43,
+      })
+    );
+    expect(res.body.onUs.accounts).toContainEqual(
+      expect.objectContaining({
+        code: "SUPPLIER",
+        name: "EUR Supplier",
+        value: 9035.5,
+      })
+    );
     expect(res.body.onUsTotal).toBe(9494.93);
     expect(res.body.netPosition).toBe(-9494.93);
   });

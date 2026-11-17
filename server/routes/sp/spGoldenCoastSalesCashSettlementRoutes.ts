@@ -39,11 +39,7 @@ import {
   gcSalesCashPayableBalance,
   gcSalesCashSettleablePayable,
 } from "../../services/accounting/goldenCoastSalesCashPayable";
-import {
-  goldenCoastPhase3VoucherNumber,
-  isGoldenCoastCompany,
-  type DbLike,
-} from "./spGoldenCoastCutoverFifoRoutes";
+import { goldenCoastPhase3VoucherNumber, isGoldenCoastCompany, type DbLike } from "./spGoldenCoastCutoverFifoRoutes";
 import { requireSpCompany } from "./spHelpers";
 
 const postingDependencies = createDatabasePostingDependencies();

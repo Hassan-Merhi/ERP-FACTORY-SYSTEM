@@ -40,24 +40,129 @@ function previewFixture() {
       scanCoverageError: false,
     },
     supplierRows: [
-      { supplierId: 1, safeToRepair: true, endingExpectedRate: 1.2, replayRemainingKg: 10, authoritativeRemainingKg: 10, currentStoredRate: 1 },
-      { supplierId: 2, safeToRepair: false, endingExpectedRate: 9, replayRemainingKg: 1, authoritativeRemainingKg: 2, currentStoredRate: 8 },
+      {
+        supplierId: 1,
+        safeToRepair: true,
+        endingExpectedRate: 1.2,
+        replayRemainingKg: 10,
+        authoritativeRemainingKg: 10,
+        currentStoredRate: 1,
+      },
+      {
+        supplierId: 2,
+        safeToRepair: false,
+        endingExpectedRate: 9,
+        replayRemainingKg: 1,
+        authoritativeRemainingKg: 2,
+        currentStoredRate: 8,
+      },
     ],
     containerRows: [
-      { containerId: 90, supplierId: 1, fxUnresolved: false, safeToRepair: true, storedCostPerKgUsd: 1, canonicalCostPerKgUsd: 1.2, storedTotalUsd: 10, canonicalTotalUsd: 12 },
-      { containerId: 91, supplierId: 1, fxUnresolved: true, safeToRepair: false, storedCostPerKgUsd: 1, canonicalCostPerKgUsd: 1, storedTotalUsd: 10, canonicalTotalUsd: 10 },
-      { containerId: 92, supplierId: 2, fxUnresolved: false, safeToRepair: true, storedCostPerKgUsd: 8, canonicalCostPerKgUsd: 9, storedTotalUsd: 8, canonicalTotalUsd: 9 },
+      {
+        containerId: 90,
+        supplierId: 1,
+        fxUnresolved: false,
+        safeToRepair: true,
+        storedCostPerKgUsd: 1,
+        canonicalCostPerKgUsd: 1.2,
+        storedTotalUsd: 10,
+        canonicalTotalUsd: 12,
+      },
+      {
+        containerId: 91,
+        supplierId: 1,
+        fxUnresolved: true,
+        safeToRepair: false,
+        storedCostPerKgUsd: 1,
+        canonicalCostPerKgUsd: 1,
+        storedTotalUsd: 10,
+        canonicalTotalUsd: 10,
+      },
+      {
+        containerId: 92,
+        supplierId: 2,
+        fxUnresolved: false,
+        safeToRepair: true,
+        storedCostPerKgUsd: 8,
+        canonicalCostPerKgUsd: 9,
+        storedTotalUsd: 8,
+        canonicalTotalUsd: 9,
+      },
     ],
     batchRows: [
-      { batchId: 10, status: "ACTIVE", storedCostPerKg: 1, expectedCostPerKg: 1.2, storedTotalCost: 10, expectedTotalCost: 12 },
-      { batchId: 11, status: "COMPLETED", storedCostPerKg: 1, expectedCostPerKg: 1.2, storedTotalCost: 10, expectedTotalCost: 12 },
+      {
+        batchId: 10,
+        status: "ACTIVE",
+        storedCostPerKg: 1,
+        expectedCostPerKg: 1.2,
+        storedTotalCost: 10,
+        expectedTotalCost: 12,
+      },
+      {
+        batchId: 11,
+        status: "COMPLETED",
+        storedCostPerKg: 1,
+        expectedCostPerKg: 1.2,
+        storedTotalCost: 10,
+        expectedTotalCost: 12,
+      },
     ],
     sourceRows: [
-      { sourceId: 100, batchId: 10, pricingBasis: "SUPPLIER_LOCKED_RATE", supplierId: 1, containerId: null, expectedHistoricalCostPerKg: 1.2, storedCostPerKg: 1, weightKg: 5, safeToRepair: true },
-      { sourceId: 101, batchId: 10, pricingBasis: "CONTAINER_DIRECT", supplierId: null, containerId: 90, expectedHistoricalCostPerKg: 1.2, storedCostPerKg: 1, weightKg: 5, safeToRepair: true },
-      { sourceId: 102, batchId: 10, pricingBasis: "CONTAINER_DIRECT", supplierId: null, containerId: 91, expectedHistoricalCostPerKg: 1.2, storedCostPerKg: 1, weightKg: 5, safeToRepair: true },
-      { sourceId: 103, batchId: 10, pricingBasis: "SUPPLIER_LOCKED_RATE", supplierId: 1, containerId: null, expectedHistoricalCostPerKg: 1.2, storedCostPerKg: 1, weightKg: 5, safeToRepair: false },
-      { sourceId: 110, batchId: 11, pricingBasis: "SUPPLIER_LOCKED_RATE", supplierId: 1, containerId: null, expectedHistoricalCostPerKg: 1.2, storedCostPerKg: 1, weightKg: 5, safeToRepair: true },
+      {
+        sourceId: 100,
+        batchId: 10,
+        pricingBasis: "SUPPLIER_LOCKED_RATE",
+        supplierId: 1,
+        containerId: null,
+        expectedHistoricalCostPerKg: 1.2,
+        storedCostPerKg: 1,
+        weightKg: 5,
+        safeToRepair: true,
+      },
+      {
+        sourceId: 101,
+        batchId: 10,
+        pricingBasis: "CONTAINER_DIRECT",
+        supplierId: null,
+        containerId: 90,
+        expectedHistoricalCostPerKg: 1.2,
+        storedCostPerKg: 1,
+        weightKg: 5,
+        safeToRepair: true,
+      },
+      {
+        sourceId: 102,
+        batchId: 10,
+        pricingBasis: "CONTAINER_DIRECT",
+        supplierId: null,
+        containerId: 91,
+        expectedHistoricalCostPerKg: 1.2,
+        storedCostPerKg: 1,
+        weightKg: 5,
+        safeToRepair: true,
+      },
+      {
+        sourceId: 103,
+        batchId: 10,
+        pricingBasis: "SUPPLIER_LOCKED_RATE",
+        supplierId: 1,
+        containerId: null,
+        expectedHistoricalCostPerKg: 1.2,
+        storedCostPerKg: 1,
+        weightKg: 5,
+        safeToRepair: false,
+      },
+      {
+        sourceId: 110,
+        batchId: 11,
+        pricingBasis: "SUPPLIER_LOCKED_RATE",
+        supplierId: 1,
+        containerId: null,
+        expectedHistoricalCostPerKg: 1.2,
+        storedCostPerKg: 1,
+        weightKg: 5,
+        safeToRepair: true,
+      },
     ],
   };
 }
@@ -157,7 +262,12 @@ describe("Phase 33D historical replay scope", () => {
         return { rows: [{ id: 500, container_id: 90 }] };
       }
       if (sql.includes("FROM factory_bales")) {
-        return { rows: [{ id: 700, is_finalized: false }, { id: 701, is_finalized: true }] };
+        return {
+          rows: [
+            { id: 700, is_finalized: false },
+            { id: 701, is_finalized: true },
+          ],
+        };
       }
       return { rows: [] };
     });
@@ -192,7 +302,11 @@ describe("Phase 33D historical replay scope", () => {
   });
 
   it("keeps finalized bales out of the available set unless the caller opts in", async () => {
-    const rows = [{ id: 1, is_finalized: false }, { id: 2, is_finalized: true }, { id: 3, is_finalized: false }];
+    const rows = [
+      { id: 1, is_finalized: false },
+      { id: 2, is_finalized: true },
+      { id: 3, is_finalized: false },
+    ];
     const excludedQuery = vi.fn(async () => ({ rows }));
     const includedQuery = vi.fn(async () => ({ rows }));
 

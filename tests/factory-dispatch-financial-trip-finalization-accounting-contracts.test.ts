@@ -6,8 +6,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { MoneyDecimal } from "../server/lib/money";
-import { buildTripChargePreview, type TripChargeRow } from
-  "../server/routes/factory/customer-orders/loadingDispatchFinancialChargeModel";
+import {
+  buildTripChargePreview,
+  type TripChargeRow,
+} from "../server/routes/factory/customer-orders/loadingDispatchFinancialChargeModel";
 
 const root = process.cwd();
 const file = (p: string) => fs.readFileSync(path.join(root, p), "utf8");
@@ -23,18 +25,22 @@ const voucherRetirement = file("server/services/accounting/voucherRetirement.ts"
 const voucherOwnership = file("server/services/factory/dispatchTripFinancialGuards.ts");
 
 const charge = (id: number, kind: TripChargeRow["kind"], amount: string): TripChargeRow => ({
-  id, name: "charge" + id, kind, amount, currency: "USD", revision: 1,
-  ledgerAccountId: id + 100, offsetLedgerAccountId: kind === "INTERNAL" ? 800 : null,
-  erpChargeType: null, notes: null, lockedAt: null,
+  id,
+  name: "charge" + id,
+  kind,
+  amount,
+  currency: "USD",
+  revision: 1,
+  ledgerAccountId: id + 100,
+  offsetLedgerAccountId: kind === "INTERNAL" ? 800 : null,
+  erpChargeType: null,
+  notes: null,
+  lockedAt: null,
 });
 
 describe("Factory trip financial finalization accounting contracts", () => {
   it("balances the signed goods clearing / charge / discount journal to cents", () => {
-    const charges = [
-      charge(1, "BILLABLE", "7.25"),
-      charge(2, "DISCOUNT", "2.10"),
-      charge(3, "INTERNAL", "19.30"),
-    ];
+    const charges = [charge(1, "BILLABLE", "7.25"), charge(2, "DISCOUNT", "2.10"), charge(3, "INTERNAL", "19.30")];
     const totals = buildTripChargePreview("150.40", charges);
     const debits = new MoneyDecimal(totals.customerTotal).plus(totals.discountTotal);
     const credits = new MoneyDecimal(totals.goodsSubtotal).plus(totals.billableChargesTotal);
@@ -51,7 +57,7 @@ describe("Factory trip financial finalization accounting contracts", () => {
     expect(posting).toContain("customerLedgerAccountTx");
     expect(posting).toContain("FACTORY_DISPATCH_CLEARING");
     expect(posting).toContain("keyOf(scope.companyId,scope.dispatchId,revision");
-    expect(posting).toContain('kind = \'POST\'');
+    expect(posting).toContain("kind = 'POST'");
     expect(posting).not.toContain("tx.insert(customerBalances)");
   });
 
@@ -82,7 +88,7 @@ describe("Factory trip financial finalization accounting contracts", () => {
 
   it("requires confirmation, role checks, and an auditable reason before reversal", () => {
     expect(routes).toContain("Only Admin, Owner or Developer");
-    expect(routes).toContain('input.confirm !== true');
+    expect(routes).toContain("input.confirm !== true");
     expect(routes).toContain("reverseDispatchTripFinancialTx");
     expect(posting).toContain("TRIP_EXPORTED_LOCKED");
     expect(posting).toContain("TRIP_SETTLEMENT_LOCKED");

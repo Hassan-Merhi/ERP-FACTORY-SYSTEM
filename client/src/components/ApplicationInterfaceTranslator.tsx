@@ -7,19 +7,13 @@ import { translateTabsFiltersText } from "@/i18n/tabsFiltersTranslations";
 import { translateVoucherKpiText } from "@/i18n/voucherKpiTranslations";
 import { translateAccountingDocumentText } from "@/i18n/accountingDocumentTranslations";
 import { isPhase3SharedUiText, translatePhase3SharedUiText } from "@/i18n/sharedUiTranslations";
-import {
-  isPhase4SupplierPartnerText,
-  translatePhase4SupplierPartnerText,
-} from "@/i18n/supplierPartnerTranslations";
+import { isPhase4SupplierPartnerText, translatePhase4SupplierPartnerText } from "@/i18n/supplierPartnerTranslations";
 import {
   isPhase5PropertiesRentalsText,
   translatePhase5PropertiesRentalsText,
 } from "@/i18n/propertiesRentalsTranslations";
 import { isPhase6ReportsExportsText, translatePhase6ReportsExportsText } from "@/i18n/reportsExportsTranslations";
-import {
-  isPhase7BackendMessageText,
-  translatePhase7BackendMessageText,
-} from "@/i18n/backendMessagesTranslations";
+import { isPhase7BackendMessageText, translatePhase7BackendMessageText } from "@/i18n/backendMessagesTranslations";
 import { translateFactoryProductionPlannerText } from "@/i18n/factoryProductionPlannerTranslations";
 import { translateFactoryInsuranceText } from "@/i18n/factoryInsuranceTranslations";
 import { translateAutomaticPriorityPrintingText } from "@/i18n/automaticPriorityPrintingTranslations";

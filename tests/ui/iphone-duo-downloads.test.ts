@@ -56,7 +56,9 @@ describe("iOS Safari file-download lifecycle", () => {
   });
 
   it("removes the anchor and schedules cleanup even when the browser rejects the click", () => {
-    click.mockImplementation(() => { throw new Error("blocked by browser"); });
+    click.mockImplementation(() => {
+      throw new Error("blocked by browser");
+    });
     expect(() => downloadBlob(new Blob(["report"]), "report.csv")).toThrow("blocked by browser");
     expect(document.querySelector('a[download="report.csv"]')).toBeNull();
     vi.advanceTimersByTime(BLOB_DOWNLOAD_GRACE_MS);

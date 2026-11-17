@@ -7,7 +7,7 @@ function source(path: string): string {
 describe("Phase 11 operational monitoring contracts", () => {
   it("protects the monitoring endpoint and keeps it read-only", () => {
     const routes = source("server/routes/admin/operationalMonitoringRoutes.ts");
-    expect(routes).toContain('app.get(');
+    expect(routes).toContain("app.get(");
     expect(routes).toContain('"/api/admin/operational-monitoring"');
     expect(routes).toContain("requireAuth");
     expect(routes).toContain('requireRole("Admin", "Owner")');

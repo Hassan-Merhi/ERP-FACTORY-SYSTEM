@@ -9,17 +9,29 @@ import {
 
 describe("Factory Phase 6 V5 proforma read-only projection", () => {
   it("retains V5 server balances and does not round six-decimal values", () => {
-    const source = [{
-      articleCode: "B", productName: "Zulu", categoryName: "Raw",
-      stockAvailable: 3.000001, totalLoaded: 2, expectedToLoad: 0.000001,
-      freeToPromise: 1.000000, totalKg: 12.345678,
-      proformaDetails: [],
-    }, {
-      articleCode: "A", productName: "Alpha",
-      stockAvailable: 7, totalLoaded: 1, expectedToLoad: 3,
-      freeToPromise: 3, totalKg: 20,
-      proformaDetails: [],
-    }];
+    const source = [
+      {
+        articleCode: "B",
+        productName: "Zulu",
+        categoryName: "Raw",
+        stockAvailable: 3.000001,
+        totalLoaded: 2,
+        expectedToLoad: 0.000001,
+        freeToPromise: 1.0,
+        totalKg: 12.345678,
+        proformaDetails: [],
+      },
+      {
+        articleCode: "A",
+        productName: "Alpha",
+        stockAvailable: 7,
+        totalLoaded: 1,
+        expectedToLoad: 3,
+        freeToPromise: 3,
+        totalKg: 20,
+        proformaDetails: [],
+      },
+    ];
     const before = JSON.stringify(source);
     const projected = toFactoryProformaAllocationArticles(source);
     expect(projected.map((row) => row.articleCode)).toEqual(["A", "B"]);
@@ -35,7 +47,7 @@ describe("Factory Phase 6 V5 proforma read-only projection", () => {
     const c2 = companyQueryKey(FACTORY_V5_CREATE_SNAPSHOT, 2);
     expect(c1).not.toEqual(c2);
     expect(companyQueryKey(FACTORY_V5_EDIT_SNAPSHOT, 1, 10)).not.toEqual(
-      companyQueryKey(FACTORY_V5_EDIT_SNAPSHOT, 1, 11),
+      companyQueryKey(FACTORY_V5_EDIT_SNAPSHOT, 1, 11)
     );
     expect(FACTORY_V5_ALLOCATION_BASE).toBe("/api/factory/v5/stock-allocation");
   });

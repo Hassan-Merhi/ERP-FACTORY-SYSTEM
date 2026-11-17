@@ -221,7 +221,9 @@ describe("buildCustomerPackingList", () => {
     expect(second.containers[0].lines[0].baleCodes).toEqual(["CWR-00003", "CWR-00004"]);
     expect(first.totalQty).toBe(2);
     expect(first.totalWeightKg).toBe(50);
-    expect(new Set([...first.containers[0].lines[0].baleCodes, ...second.containers[0].lines[0].baleCodes]).size).toBe(4);
+    expect(new Set([...first.containers[0].lines[0].baleCodes, ...second.containers[0].lines[0].baleCodes]).size).toBe(
+      4
+    );
   });
 
   it("reports an allocation with no bales assigned yet as an unfilled line", () => {

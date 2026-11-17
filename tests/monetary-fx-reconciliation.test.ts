@@ -5,15 +5,19 @@
 import { describe, expect, it } from "vitest";
 import Decimal from "decimal.js";
 import {
-  applyVerifiedMonetaryFxOverlay, applyCurrentAccountsFxOverlay,
-  applyCurrentCustomerFxOverlay, monetaryReportRowKey,
+  applyVerifiedMonetaryFxOverlay,
+  applyCurrentAccountsFxOverlay,
+  applyCurrentCustomerFxOverlay,
+  monetaryReportRowKey,
   type MonetaryNetPositionPayload,
 } from "../server/services/accounting/monetaryFxReportOverlay";
 import {
-  translateMonetaryFxBalance, monetaryFxEligibility,
+  translateMonetaryFxBalance,
+  monetaryFxEligibility,
 } from "../server/services/accounting/monetaryFxValuationCore";
 import type {
-  MonetaryFxValuationResult, MonetaryFxValuationRow,
+  MonetaryFxValuationResult,
+  MonetaryFxValuationRow,
 } from "../server/services/accounting/monetaryFxValuationService";
 
 function account(
@@ -39,8 +43,8 @@ function account(
     historicalBaseUsd,
     bookClosingUsd: new Decimal(historicalBaseUsd).toDecimalPlaces(2).toFixed(6),
     currentTranslatedUsd,
-    translationDifferenceUsd: currentTranslatedUsd === null ? null
-      : new Decimal(currentTranslatedUsd).minus(historicalBaseUsd).toFixed(6),
+    translationDifferenceUsd:
+      currentTranslatedUsd === null ? null : new Decimal(currentTranslatedUsd).minus(historicalBaseUsd).toFixed(6),
     unresolvedCurrencies: provisional ? ["CFA"] : [],
     unresolvedEntryCount: provisional ? 1 : 0,
     unresolvedOpening: false,
@@ -89,11 +93,14 @@ describe("Phase 6 signed net-position reconciliation", () => {
       equity: { total: 0, includedInNetPosition: false },
     };
     const sourceBefore = JSON.parse(JSON.stringify(payload));
-    const projected = applyVerifiedMonetaryFxOverlay(payload, valuation([
-      account("ledger:10", "101.16", "100"),
-      account("customer:3", "50", "40", "customer"),
-      account("ledger:20", "-20", "-25", "loan"),
-    ]));
+    const projected = applyVerifiedMonetaryFxOverlay(
+      payload,
+      valuation([
+        account("ledger:10", "101.16", "100"),
+        account("customer:3", "50", "40", "customer"),
+        account("ledger:20", "-20", "-25", "loan"),
+      ])
+    );
     expect(projected.appliedKeys).toEqual(["ledger:10", "customer:3", "ledger:20"]);
     expect(projected.payload.forUsTotal).toBe(1140);
     expect(projected.payload.onUsTotal).toBe(325);
@@ -104,11 +111,14 @@ describe("Phase 6 signed net-position reconciliation", () => {
     expect(projected.currentMonetaryTranslationDifferenceUsd).toBe("-16.160000");
     expect(sourceBefore.netPosition).toBe(831.16);
     // A second projection on an already-translated report must not count it twice.
-    const twice = applyVerifiedMonetaryFxOverlay(projected.payload, valuation([
-      account("ledger:10", "101.16", "100"),
-      account("customer:3", "50", "40", "customer"),
-      account("ledger:20", "-20", "-25", "loan"),
-    ]));
+    const twice = applyVerifiedMonetaryFxOverlay(
+      projected.payload,
+      valuation([
+        account("ledger:10", "101.16", "100"),
+        account("customer:3", "50", "40", "customer"),
+        account("ledger:20", "-20", "-25", "loan"),
+      ])
+    );
     expect(twice.appliedKeys).toEqual([]);
     expect(twice.payload.netPosition).toBe(815);
   });
@@ -122,7 +132,11 @@ describe("Phase 6 signed net-position reconciliation", () => {
           { partyKind: "customer", partyId: 12, name: "AUD Customer", category: "Customer", value: 200 },
           { code: "INVENTORY", name: "Finished stock", value: 1000, category: "Inventory" },
         ],
-        breakdown: [{ name: "Cash", value: 118 }, { name: "Customer", value: 200 }, { name: "Inventory", value: 1000 }],
+        breakdown: [
+          { name: "Cash", value: 118 },
+          { name: "Customer", value: 200 },
+          { name: "Inventory", value: 1000 },
+        ],
       },
       onUs: {
         total: 70,
@@ -152,11 +166,15 @@ describe("Phase 6 signed net-position reconciliation", () => {
     expect(result.payload.forUs?.accounts.find((a) => a.code === "INVENTORY")?.value).toBe(1000);
     expect(result.payload.onUs?.accounts.find((a) => a.id === 13)?.value).toBe(70);
     expect(gain?.breakdown).toHaveLength(2);
-    const second = applyVerifiedMonetaryFxOverlay(result.payload, valuation([
-      account("ledger:11", "118", "112"),
-      account("customer:12", "200", "210", "customer"),
-      account("ledger:13", "-70", "-65", "loan"),
-    ]), { showFxAsRows: true });
+    const second = applyVerifiedMonetaryFxOverlay(
+      result.payload,
+      valuation([
+        account("ledger:11", "118", "112"),
+        account("customer:12", "200", "210", "customer"),
+        account("ledger:13", "-70", "-65", "loan"),
+      ]),
+      { showFxAsRows: true }
+    );
     expect(second.appliedKeys).toEqual([]);
     expect(second.payload.netPosition).toBe(1257);
     expect(second.payload.forUs?.accounts.find((a) => a.code === "FX_UNREALIZED_GAIN")?.value).toBe(15);
@@ -166,11 +184,15 @@ describe("Phase 6 signed net-position reconciliation", () => {
     const payload: MonetaryNetPositionPayload = {
       forUs: {
         total: 459.44,
-        accounts: [{
-          name: "Unrealized FX Gains", code: "FX_UNREALIZED_GAIN",
-          category: "Exchange Rate Gains", value: 459.44,
-          breakdown: [{ label: "Supplier: Euro Imports", native: "EUR", usd: 459.44 }],
-        }],
+        accounts: [
+          {
+            name: "Unrealized FX Gains",
+            code: "FX_UNREALIZED_GAIN",
+            category: "Exchange Rate Gains",
+            value: 459.44,
+            breakdown: [{ label: "Supplier: Euro Imports", native: "EUR", usd: 459.44 }],
+          },
+        ],
         breakdown: [{ name: "Exchange Rate Gains", value: 459.44 }],
       },
       onUs: {
@@ -179,13 +201,18 @@ describe("Phase 6 signed net-position reconciliation", () => {
           { code: "SUPPLIER", name: "Euro Imports", category: "Supplier", value: 9035.5 },
           { id: 4, name: "Bank EUR payable", category: "Bank", value: 100 },
         ],
-        breakdown: [{ name: "Suppliers", value: 9035.5 }, { name: "Bank", value: 100 }],
+        breakdown: [
+          { name: "Suppliers", value: 9035.5 },
+          { name: "Bank", value: 100 },
+        ],
       },
       netPosition: -8676.06,
     };
-    const result = applyVerifiedMonetaryFxOverlay(payload, valuation([
-      { ...account("ledger:4", "-100", "-110"), nativeBalancesByCurrency: { EUR: "-90" } },
-    ]), { showFxAsRows: true });
+    const result = applyVerifiedMonetaryFxOverlay(
+      payload,
+      valuation([{ ...account("ledger:4", "-100", "-110"), nativeBalancesByCurrency: { EUR: "-90" } }]),
+      { showFxAsRows: true }
+    );
     expect(result.payload.forUs?.accounts.filter((a) => a.code === "FX_UNREALIZED_GAIN")).toHaveLength(1);
     expect(result.payload.forUs?.accounts.find((a) => a.code === "FX_UNREALIZED_GAIN")?.value).toBe(459.44);
     expect(result.payload.onUs?.accounts.find((a) => a.code === "FX_UNREALIZED_LOSS")?.value).toBe(10);
@@ -205,10 +232,11 @@ describe("Phase 6 signed net-position reconciliation", () => {
       onUs: { total: 0, accounts: [] },
       netPosition: 200,
     };
-    const result = applyVerifiedMonetaryFxOverlay(payload, valuation([
-      account("ledger:30", "100", "110"),
-      account("ledger:31", "100", null, "loan", true),
-    ]), { showFxAsRows: true, skipAccountKeys: new Set(["ledger:30"]) });
+    const result = applyVerifiedMonetaryFxOverlay(
+      payload,
+      valuation([account("ledger:30", "100", "110"), account("ledger:31", "100", null, "loan", true)]),
+      { showFxAsRows: true, skipAccountKeys: new Set(["ledger:30"]) }
+    );
     expect(result.appliedKeys).toEqual([]);
     expect(result.payload.netPosition).toBe(200);
     expect(result.payload.forUs?.accounts.some((a) => a.code === "FX_UNREALIZED_GAIN")).toBe(false);
@@ -240,11 +268,14 @@ describe("Phase 6 signed net-position reconciliation", () => {
       },
       onUs: { total: 0, accounts: [] },
     };
-    const result = applyVerifiedMonetaryFxOverlay(p, valuation([
-      account("ledger:10", "100", "200"),
-      account("ledger:33", "20", "300"),
-      account("ledger:11", "25", null, "cash_bank", true),
-    ]));
+    const result = applyVerifiedMonetaryFxOverlay(
+      p,
+      valuation([
+        account("ledger:10", "100", "200"),
+        account("ledger:33", "20", "300"),
+        account("ledger:11", "25", null, "cash_bank", true),
+      ])
+    );
     expect(result.appliedKeys).toEqual([]);
     expect(result.skipped).toEqual([
       { key: "ledger:10", reason: "historical_usd_mismatch" },
@@ -258,19 +289,40 @@ describe("Phase 6 signed net-position reconciliation", () => {
 
   it("uses only configured monetary account types, with no supplier or inventory translation", () => {
     for (const type of ["Supplier", "Inventory", "Expense", "Liability", "Intercompany", "Fixed Asset"]) {
-      expect(monetaryFxEligibility({
-        kind: "ledger", id: 20, name: type, code: type, accountType: type, subType: null,
-      })).toBe("excluded");
+      expect(
+        monetaryFxEligibility({
+          kind: "ledger",
+          id: 20,
+          name: type,
+          code: type,
+          accountType: type,
+          subType: null,
+        })
+      ).toBe("excluded");
     }
-    expect(monetaryFxEligibility({
-      kind: "ledger", id: 21, name: "Security Deposit", code: "DEPOSIT_CFA", accountType: "Asset", subType: null,
-    })).toBe("needs_review");
+    expect(
+      monetaryFxEligibility({
+        kind: "ledger",
+        id: 21,
+        name: "Security Deposit",
+        code: "DEPOSIT_CFA",
+        accountType: "Asset",
+        subType: null,
+      })
+    ).toBe("needs_review");
   });
 
   it("keeps native CFA and USD separate, and revalues only the current USD equivalent", () => {
-    const native = new Map([["CFA", new Decimal("61200")], ["USD", new Decimal("10")]]);
-    const oldRate = new Map([["CFA", { currency: "CFA", rate: "605", direction: "FOREIGN_PER_USD" as const, effectiveDate: "2026-10-20" }]]);
-    const newRate = new Map([["CFA", { currency: "CFA", rate: "612", direction: "FOREIGN_PER_USD" as const, effectiveDate: "2026-10-27" }]]);
+    const native = new Map([
+      ["CFA", new Decimal("61200")],
+      ["USD", new Decimal("10")],
+    ]);
+    const oldRate = new Map([
+      ["CFA", { currency: "CFA", rate: "605", direction: "FOREIGN_PER_USD" as const, effectiveDate: "2026-10-20" }],
+    ]);
+    const newRate = new Map([
+      ["CFA", { currency: "CFA", rate: "612", direction: "FOREIGN_PER_USD" as const, effectiveDate: "2026-10-27" }],
+    ]);
     const oldValue = translateMonetaryFxBalance(native, new Decimal("111.157025"), oldRate);
     const newValue = translateMonetaryFxBalance(native, new Decimal("111.157025"), newRate);
     expect(oldValue.currentTranslatedUsd).toBe("111.157025");
@@ -281,8 +333,17 @@ describe("Phase 6 signed net-position reconciliation", () => {
   });
 
   it("preserves a Factory customer's memo and refuses to translate a mismatched combined balance", () => {
-    const rows = [{ id: 3, balance: 105, balanceSide: "Dr", ledgerBalance: 100,
-      ledgerBalanceSide: "Dr", notInLedgerTotal: 5, heldUnfinalizedCharges: 0 }];
+    const rows = [
+      {
+        id: 3,
+        balance: 105,
+        balanceSide: "Dr",
+        ledgerBalance: 100,
+        ledgerBalanceSide: "Dr",
+        notInLedgerTotal: 5,
+        heldUnfinalizedCharges: 0,
+      },
+    ];
     const result = applyCurrentCustomerFxOverlay(rows, valuation([account("customer:3", "100", "95", "customer")]));
     expect(result[0].balance).toBe(105);
     expect(result[0].monetaryFxProvisional).toBe(true);

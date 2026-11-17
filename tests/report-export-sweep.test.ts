@@ -59,7 +59,11 @@ function materialize(routePath: string, ctx: TestContext): string {
   );
 }
 
-function selectRoutes(manifest: SerializedRouteManifest, erpCtx: TestContext, factoryCtx: TestContext): SweptReadRoute[] {
+function selectRoutes(
+  manifest: SerializedRouteManifest,
+  erpCtx: TestContext,
+  factoryCtx: TestContext
+): SweptReadRoute[] {
   const selected: SweptReadRoute[] = [];
   const seen = new Set<string>();
 

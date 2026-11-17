@@ -363,7 +363,6 @@ export function buildGoldenCoastPhase8FundingPosting(input: {
   };
 }
 
-
 /** Post Fresh Start invoice against GC Goods OTW and its internal clearing
  * account, NOT a supplier payable or Cash/Bank account.
  */
@@ -477,7 +476,10 @@ export function planGoldenCoastPhase8Offload(input: {
   // against the funding account the operator names on the offload.
   if (funded.origin === "cutover" || funded.origin === "fresh_start_excel") {
     if (!reserve.isZero()) {
-      throw new GoldenCoastPhase8Error("An unfunded-clearing container cannot carry a cash reserve", "GC_PHASE8_SCOPE_MISMATCH");
+      throw new GoldenCoastPhase8Error(
+        "An unfunded-clearing container cannot carry a cash reserve",
+        "GC_PHASE8_SCOPE_MISMATCH"
+      );
     }
     if (actual.gt(0) && !offload.chargeFundingAccount) {
       throw new GoldenCoastPhase8Error(
@@ -491,11 +493,13 @@ export function planGoldenCoastPhase8Offload(input: {
       "GC_PHASE8_RESERVE_EXCEEDED"
     );
   }
-  const unused = funded.origin === "cutover" || funded.origin === "fresh_start_excel" ? new Decimal(0) : reserve.minus(actual);
+  const unused =
+    funded.origin === "cutover" || funded.origin === "fresh_start_excel" ? new Decimal(0) : reserve.minus(actual);
   const totalQty = funded.lines.reduce((sum, line) => sum.plus(line.qty), new Decimal(0));
   if (!totalQty.gt(0)) throw new GoldenCoastPhase8Error("Funded container has no positive quantity");
   const grossLines = funded.lines.reduce(
-    (sum, line) => sum.plus(new Decimal(line.qty).times(line.unitRateUsd)), new Decimal(0),
+    (sum, line) => sum.plus(new Decimal(line.qty).times(line.unitRateUsd)),
+    new Decimal(0)
   );
   // Original item rates remain unchanged; net invoice freight, fees and
   // discount already in Goods OTW are allocated as landed cost at offload.

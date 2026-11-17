@@ -111,7 +111,6 @@ describe("Golden Coast Phase 8 container/offload accounting", () => {
     expect(credit).toBe(67900);
   });
 
-
   it("funds Fresh Start invoice through OTW clearing without supplier, cash, or Hassan equity", () => {
     const input = parseGoldenCoastPhase8ContainerInput({
       companyId: 7,

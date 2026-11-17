@@ -1,15 +1,7 @@
 import { describe, expect, it } from "vitest";
-import {
-  isFxRateDependentPath,
-  isFxRateDependentQuery,
-} from "../shared/fxRateQueryInvalidation";
-import {
-  classifyRealtimeWrite,
-  parseRealtimeInvalidationMessage,
-} from "../shared/realtimeInvalidation";
-import {
-  _getCached, _setCached, _invalidateCachedWhere,
-} from "../server/services/shared/ttlCache";
+import { isFxRateDependentPath, isFxRateDependentQuery } from "../shared/fxRateQueryInvalidation";
+import { classifyRealtimeWrite, parseRealtimeInvalidationMessage } from "../shared/realtimeInvalidation";
+import { _getCached, _setCached, _invalidateCachedWhere } from "../server/services/shared/ttlCache";
 
 describe("Phase 3 FX read-model invalidation policy", () => {
   it("recognizes monetary valuation, finance snapshots, account screens, and rate history", () => {

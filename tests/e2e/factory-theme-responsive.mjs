@@ -29,17 +29,35 @@ await page.evaluateOnNewDocument(() => {
 });
 
 const productionReport = {
-  from: null, to: null, costsHidden: false, valuationMode: "cost",
+  from: null,
+  to: null,
+  costsHidden: false,
+  valuationMode: "cost",
   summary: {
-    batchCost: 0, weightCost: 0, productionValue: 0, statusValue: 0, costValue: 0,
-    sellingValue: 0, remainingMaterialValue: 0, consumedMaterialCost: 0, profitValue: 0,
-    profitMarginPct: 0, missingSelectedPriceBales: 0, missingCostPriceBales: 0,
+    batchCost: 0,
+    weightCost: 0,
+    productionValue: 0,
+    statusValue: 0,
+    costValue: 0,
+    sellingValue: 0,
+    remainingMaterialValue: 0,
+    consumedMaterialCost: 0,
+    profitValue: 0,
+    profitMarginPct: 0,
+    missingSelectedPriceBales: 0,
+    missingCostPriceBales: 0,
     missingSellingPriceBales: 0,
   },
   production: { totalBales: 0, totalWeightKg: 0, totalValue: 0, byProduct: [], byCategory: [] },
   wipersGarbage: {
-    totalWipersQty: 0, totalWipersKg: 0, totalGarbageQty: 0, totalGarbageKg: 0,
-    totalWeightKg: 0, totalValue: 0, rows: [], products: [],
+    totalWipersQty: 0,
+    totalWipersKg: 0,
+    totalGarbageQty: 0,
+    totalGarbageKg: 0,
+    totalWeightKg: 0,
+    totalValue: 0,
+    rows: [],
+    products: [],
   },
   rawMaterial: { totalBatches: 0, totalWeightKg: 0, totalCost: 0, blendedCostPerKg: 0, batches: [] },
   balanceOnTable: { weightKg: 0, costPerKg: 0, value: 0 },
@@ -47,9 +65,15 @@ const productionReport = {
   kgComparison: { producedKg: 0, mixedKg: 0, diffKg: 0, diffLabel: "" },
 };
 const salarySummary = {
-  currentDay: 1, daysInMonth: 30, totalWorkerBaseSalary: 0, totalWorkerTransport: 0,
-  totalWorkerPaid: 0, totalEmployeeMonthlySalary: 0, totalEmployeeBalance: 0,
-  workerBreakdown: [], employeeBreakdown: [],
+  currentDay: 1,
+  daysInMonth: 30,
+  totalWorkerBaseSalary: 0,
+  totalWorkerTransport: 0,
+  totalWorkerPaid: 0,
+  totalEmployeeMonthlySalary: 0,
+  totalEmployeeBalance: 0,
+  workerBreakdown: [],
+  employeeBreakdown: [],
 };
 await page.setRequestInterception(true);
 page.on("request", (request) => {
@@ -62,16 +86,27 @@ page.on("request", (request) => {
   if (path === "/api/auth/me") {
     result = { id: 1, username: "qa-admin", role: "Admin", currentCompanyId: 1, active: true };
   } else if (path === "/api/user/companies") {
-    result = [{
-      companyId: 1, companyCode: "FACTORY-QA", companyName: "Factory QA Fixture",
-      companyType: "factory", companyActive: true, role: "Admin",
-    }];
+    result = [
+      {
+        companyId: 1,
+        companyCode: "FACTORY-QA",
+        companyName: "Factory QA Fixture",
+        companyType: "factory",
+        companyActive: true,
+        role: "Admin",
+      },
+    ];
   } else if (path === "/api/auth/session-company") {
     result = { companyId: 1 };
   } else if (path === "/api/factory/my-access") {
     result = {
-      fullAccess: true, hasFactoryAccess: true, hasErpAccess: true,
-      companyId: 1, companyName: "Factory QA Fixture", pageKeys: [], hiddenCostFields: [],
+      fullAccess: true,
+      hasFactoryAccess: true,
+      hasErpAccess: true,
+      companyId: 1,
+      companyName: "Factory QA Fixture",
+      pageKeys: [],
+      hiddenCostFields: [],
     };
   } else if (path === "/api/factory/settings") {
     result = {};
@@ -120,14 +155,18 @@ try {
             activeTheme: document.documentElement.classList.contains("dark") ? "dark" : "light",
             viewportWidth: innerWidth,
             documentWidth: document.documentElement.scrollWidth,
-            errorScreen: text.includes("Something went wrong on this page") ||
-              text.includes("Application loading took too long"),
+            errorScreen:
+              text.includes("Something went wrong on this page") || text.includes("Application loading took too long"),
             pageTextLength: text.length,
           };
         });
-        const passed = !navigationError &&
-          state.appShell === "factory" && state.activeTheme === theme &&
-          state.viewportWidth === width && state.documentWidth <= width && !state.errorScreen &&
+        const passed =
+          !navigationError &&
+          state.appShell === "factory" &&
+          state.activeTheme === theme &&
+          state.viewportWidth === width &&
+          state.documentWidth <= width &&
+          !state.errorScreen &&
           state.pageTextLength > 100;
         const name = route.split("?")[0].split("/").pop();
         await page.screenshot({ path: screenshotDir + "/" + name + "-" + width + "-" + theme + ".png" });

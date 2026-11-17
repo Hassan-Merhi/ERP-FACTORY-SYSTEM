@@ -8,12 +8,26 @@ const source = (path: string) => readFileSync(resolve(process.cwd(), path), "utf
 
 describe("Factory Phase 2 continuation: selected-company source invariants", () => {
   it("isolates staff-tracking and attendance keys by company and preserves URL-first prefix", () => {
-    const productionA = companyQueryKey("/api/factory/staff-tracking", 1, "production", "daily", "2026-11-09", "2026-11-09");
-    const productionB = companyQueryKey("/api/factory/staff-tracking", 2, "production", "daily", "2026-11-09", "2026-11-09");
+    const productionA = companyQueryKey(
+      "/api/factory/staff-tracking",
+      1,
+      "production",
+      "daily",
+      "2026-11-09",
+      "2026-11-09"
+    );
+    const productionB = companyQueryKey(
+      "/api/factory/staff-tracking",
+      2,
+      "production",
+      "daily",
+      "2026-11-09",
+      "2026-11-09"
+    );
     expect(productionA[0]).toBe("/api/factory/staff-tracking");
     expect(productionA).not.toEqual(productionB);
     expect(companyQueryKey("/api/factory/attendance", 1, "2026-11-09")).not.toEqual(
-      companyQueryKey("/api/factory/attendance", 2, "2026-11-09"),
+      companyQueryKey("/api/factory/attendance", 2, "2026-11-09")
     );
     expect(isCompanySessionQueryKey(productionA)).toBe(true);
   });
@@ -22,9 +36,15 @@ describe("Factory Phase 2 continuation: selected-company source invariants", () 
     for (const role of ["Admin", "Owner", "Developer", "View Only", "Create Only"]) {
       expect(factoryActionCapabilities({ role, hasFactoryAccess: false })["production.manage-bonuses"]).toBe(false);
     }
-    expect(factoryActionCapabilities({ role: "Admin", hasFactoryAccess: true })["production.manage-bonuses"]).toBe(true);
-    expect(factoryActionCapabilities({ role: "Owner", hasFactoryAccess: true })["production.manage-bonuses"]).toBe(true);
-    expect(factoryActionCapabilities({ role: "Developer", hasFactoryAccess: true })["production.manage-bonuses"]).toBe(false);
+    expect(factoryActionCapabilities({ role: "Admin", hasFactoryAccess: true })["production.manage-bonuses"]).toBe(
+      true
+    );
+    expect(factoryActionCapabilities({ role: "Owner", hasFactoryAccess: true })["production.manage-bonuses"]).toBe(
+      true
+    );
+    expect(factoryActionCapabilities({ role: "Developer", hasFactoryAccess: true })["production.manage-bonuses"]).toBe(
+      false
+    );
   });
 
   it("pins company-scoped data dependencies on sensitive attendance and production views", () => {
@@ -38,10 +58,10 @@ describe("Factory Phase 2 continuation: selected-company source invariants", () 
       expect(code, path).toContain("selectedCompany?.id");
     }
     expect(source("client/src/pages/factory/FactoryAttendance.tsx")).toContain(
-      'companyQueryKey("/api/factory/attendance", selectedCompany?.id, selectedDate)',
+      'companyQueryKey("/api/factory/attendance", selectedCompany?.id, selectedDate)'
     );
     expect(source("client/src/pages/factory/FactoryProductionTargets.tsx")).toContain(
-      "access?.companyId === selectedCompany?.id && access?.hasFactoryAccess === true",
+      "access?.companyId === selectedCompany?.id && access?.hasFactoryAccess === true"
     );
   });
 
@@ -59,7 +79,7 @@ describe("Factory Phase 2 continuation: selected-company source invariants", () 
     expect(bonus).toContain('companyQueryKey("/api/factory/worker-bonuses", selectedCompany?.id');
     expect(worker).toContain("myAccess?.hasFactoryAccess");
     expect(companyQueryKey("/api/factory/workers/amount-due", 1)).not.toEqual(
-      companyQueryKey("/api/factory/workers/amount-due", 2),
+      companyQueryKey("/api/factory/workers/amount-due", 2)
     );
   });
 

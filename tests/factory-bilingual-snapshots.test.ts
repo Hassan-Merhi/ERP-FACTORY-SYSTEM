@@ -1,7 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  FACTORY_BILINGUAL_SNAPSHOT_TARGETS,
-} from "../server/services/factoryBilingualSnapshotService";
+import { FACTORY_BILINGUAL_SNAPSHOT_TARGETS } from "../server/services/factoryBilingualSnapshotService";
 
 const expectedTargets = new Map([
   ["factory_bales", "product_name_ar"],
@@ -20,9 +18,9 @@ const expectedTargets = new Map([
 
 describe("Factory bilingual Phase 6 snapshot contract", () => {
   it("covers every Arabic snapshot column added in Phase 2", () => {
-    expect(
-      new Map(FACTORY_BILINGUAL_SNAPSHOT_TARGETS.map((target) => [target.table, target.arabicColumn]))
-    ).toEqual(expectedTargets);
+    expect(new Map(FACTORY_BILINGUAL_SNAPSHOT_TARGETS.map((target) => [target.table, target.arabicColumn]))).toEqual(
+      expectedTargets
+    );
   });
 
   it("resolves by product ID before exact article code and never by name", () => {
@@ -38,9 +36,7 @@ describe("Factory bilingual Phase 6 snapshot contract", () => {
     const history = FACTORY_BILINGUAL_SNAPSHOT_TARGETS.find(
       (target) => target.table === "customer_order_bales_history"
     );
-    const pos = FACTORY_BILINGUAL_SNAPSHOT_TARGETS.find(
-      (target) => target.table === "factory_pos_sale_items"
-    );
+    const pos = FACTORY_BILINGUAL_SNAPSHOT_TARGETS.find((target) => target.table === "factory_pos_sale_items");
     expect(history?.finalizedExpression).toBe("true");
     expect(pos?.finalizedExpression).toBe("true");
   });

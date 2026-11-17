@@ -22,14 +22,8 @@ import { pool } from "../server/db";
 import { hashEvidence } from "../server/edge/edgeSyncStageProtocol.mjs";
 import { validatePhase9Event } from "../server/edge/eventProtocol.mjs";
 import { Phase9EventConflict } from "../server/edge/cloudEventStore.mjs";
-import {
-  phase9StockItemEditEnvelope,
-  type Phase9StockItemChange,
-} from "../server/edge/stockItemEditEnvelope.mjs";
-import {
-  phase9StockItemEditApplyHandler,
-  type Phase9StockItemEditEvent,
-} from "../server/edge/stockItemEditApply";
+import { phase9StockItemEditEnvelope, type Phase9StockItemChange } from "../server/edge/stockItemEditEnvelope.mjs";
+import { phase9StockItemEditApplyHandler, type Phase9StockItemEditEvent } from "../server/edge/stockItemEditApply";
 import {
   createTenantDatabaseScope,
   runWithDatabaseScopeRuntimeContext,

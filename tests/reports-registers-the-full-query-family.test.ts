@@ -7,7 +7,10 @@ vi.mock("../server/chat/reports/implementations/reportShardSupport", () => ({
   sql: (strings: TemplateStringsArray, ...values: unknown[]) => ({ strings: Array.from(strings), values }),
 }));
 
-import { phase5QueryTypes, accountingDetailReportShard } from "../server/chat/reports/implementations/accountingDetailReportShard";
+import {
+  phase5QueryTypes,
+  accountingDetailReportShard,
+} from "../server/chat/reports/implementations/accountingDetailReportShard";
 
 function ctx(queryType: string, extraParams: Record<string, unknown> = {}) {
   return {
@@ -90,7 +93,9 @@ describe("Phase 33F phase 5 report shard", () => {
 
   it("reports a clean no-match result for unknown purchase orders", async () => {
     harness.execute.mockResolvedValueOnce({ rows: [] });
-    const result = await accountingDetailReportShard.run(ctx("purchase_order_detail", { containerNumber: "PO-MISSING" }));
+    const result = await accountingDetailReportShard.run(
+      ctx("purchase_order_detail", { containerNumber: "PO-MISSING" })
+    );
     expect(result.summary).toBe('No PO found matching "PO-MISSING".');
     expect(harness.execute).toHaveBeenCalledOnce();
   });

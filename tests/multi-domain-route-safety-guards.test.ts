@@ -29,9 +29,11 @@ import { registerContainerCostingRoutes } from "../server/routes/containers/acco
 import { registerFactoryLocationInventoryRoutes } from "../server/routes/factory/stock/locationInventoryRoutes";
 
 function fakeApp() {
-  const register = (method: string) => (path: string, ...handlers: Array<(...args: any[]) => any>) => {
-    harness.registrations.push({ method, path, handlers });
-  };
+  const register =
+    (method: string) =>
+    (path: string, ...handlers: Array<(...args: any[]) => any>) => {
+      harness.registrations.push({ method, path, handlers });
+    };
   return {
     get: register("GET"),
     post: register("POST"),

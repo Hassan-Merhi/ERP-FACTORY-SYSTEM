@@ -11,10 +11,7 @@ const productionBalanceOnTable = readFileSync(
   resolve(process.cwd(), "server/services/factory/productionBalanceOnTable.ts"),
   "utf8"
 );
-const baleLedger = readFileSync(
-  resolve(process.cwd(), "server/routes/performance/bandwidthFactoryReads.ts"),
-  "utf8"
-);
+const baleLedger = readFileSync(resolve(process.cwd(), "server/routes/performance/bandwidthFactoryReads.ts"), "utf8");
 const snapshotRoutes = readFileSync(
   resolve(process.cwd(), "server/routes/factory/factoryBilingualSnapshotRoutes.ts"),
   "utf8"

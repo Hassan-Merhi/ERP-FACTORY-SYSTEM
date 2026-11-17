@@ -1,7 +1,12 @@
 import React from "react";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ProductionBonusWeeklySheet, linkedDailyProgress, productionTeamPeriodTotals, type BonusSheetWorker } from "@/pages/factory/productiontargets/ProductionBonusWeeklySheet";
+import {
+  ProductionBonusWeeklySheet,
+  linkedDailyProgress,
+  productionTeamPeriodTotals,
+  type BonusSheetWorker,
+} from "@/pages/factory/productiontargets/ProductionBonusWeeklySheet";
 
 vi.mock("@/contexts/ApplicationLanguageContext", () => ({
   useApplicationLanguage: () => ({ language: "en" }),
@@ -10,16 +15,18 @@ vi.mock("@/contexts/ApplicationLanguageContext", () => ({
 const worker: BonusSheetWorker = {
   workerId: 18,
   workerName: "Factory Operator",
-  days: [{
-    date: "2026-11-05",
-    target: 25,
-    produced: 28,
-    extra: 3,
-    category: "Cotton",
-    issue: null,
-    status: "ready",
-    linkGroupId: null,
-  }],
+  days: [
+    {
+      date: "2026-11-05",
+      target: 25,
+      produced: 28,
+      extra: 3,
+      category: "Cotton",
+      issue: null,
+      status: "ready",
+      linkGroupId: null,
+    },
+  ],
   target: 25,
   produced: 28,
   extra: 3,
@@ -38,9 +45,16 @@ afterEach(cleanup);
 
 describe("iPhone Duo Phase 2 worker bonus cards", () => {
   it("renders a per-worker card without changing calculated totals", () => {
-    render(<ProductionBonusWeeklySheet
-      from="2026-11-05" to="2026-11-05" workers={[worker]} selected={[]}
-      onToggle={vi.fn()} loading={false} />);
+    render(
+      <ProductionBonusWeeklySheet
+        from="2026-11-05"
+        to="2026-11-05"
+        workers={[worker]}
+        selected={[]}
+        onToggle={vi.fn()}
+        loading={false}
+      />
+    );
     const card = screen.getByTestId("bonus-mobile-worker-18");
     expect(within(card).getByText("Factory Operator")).toBeInTheDocument();
     expect(within(card).getByText(/\$12\.00/)).toBeInTheDocument();
@@ -49,44 +63,85 @@ describe("iPhone Duo Phase 2 worker bonus cards", () => {
 
   it("keeps each worker's eligibility and selection independent", () => {
     const onToggle = vi.fn();
-    render(<ProductionBonusWeeklySheet
-      from="2026-11-05" to="2026-11-05" workers={[worker]} selected={[]}
-      onToggle={onToggle} loading={false} />);
+    render(
+      <ProductionBonusWeeklySheet
+        from="2026-11-05"
+        to="2026-11-05"
+        workers={[worker]}
+        selected={[]}
+        onToggle={onToggle}
+        loading={false}
+      />
+    );
     fireEvent.click(within(screen.getByTestId("bonus-mobile-worker-18")).getByRole("checkbox"));
     expect(onToggle).toHaveBeenCalledWith(18, true);
   });
 
   it("keeps manual payment inputs controlled by the existing parent handler", () => {
     const onAmountChange = vi.fn();
-    render(<ProductionBonusWeeklySheet from="2026-11-05" to="2026-11-05" workers={[worker]}
-      selected={[18]} onToggle={vi.fn()} loading={false} manualMode
-      manualAmounts={{ 18: "10.50" }} onAmountChange={onAmountChange} />);
+    render(
+      <ProductionBonusWeeklySheet
+        from="2026-11-05"
+        to="2026-11-05"
+        workers={[worker]}
+        selected={[18]}
+        onToggle={vi.fn()}
+        loading={false}
+        manualMode
+        manualAmounts={{ 18: "10.50" }}
+        onAmountChange={onAmountChange}
+      />
+    );
     fireEvent.change(screen.getByTestId("bonus-mobile-amount-18"), { target: { value: "18.75" } });
     expect(onAmountChange).toHaveBeenCalledWith(18, "18.75");
   });
 
   it("retains daily actions in the mobile worker breakdown", () => {
-    render(<ProductionBonusWeeklySheet from="2026-11-05" to="2026-11-05" workers={[worker]}
-      selected={[]} onToggle={vi.fn()} loading={false}
-      renderDayActions={(workerId, date) => <button type="button">{workerId}: {date}</button>} />);
-    expect(within(screen.getByTestId("bonus-mobile-worker-18")).getByRole("button", {
-      name: "18: 2026-11-05",
-      hidden: true,
-    })).toBeInTheDocument();
+    render(
+      <ProductionBonusWeeklySheet
+        from="2026-11-05"
+        to="2026-11-05"
+        workers={[worker]}
+        selected={[]}
+        onToggle={vi.fn()}
+        loading={false}
+        renderDayActions={(workerId, date) => (
+          <button type="button">
+            {workerId}: {date}
+          </button>
+        )}
+      />
+    );
+    expect(
+      within(screen.getByTestId("bonus-mobile-worker-18")).getByRole("button", {
+        name: "18: 2026-11-05",
+        hidden: true,
+      })
+    ).toBeInTheDocument();
   });
 });
 
 describe("same-category linked daily target", () => {
   const linkedWorkers = (): BonusSheetWorker[] => [
     {
-      ...worker, workerId: 18, workerName: "First Dress Worker",
+      ...worker,
+      workerId: 18,
+      workerName: "First Dress Worker",
       days: [{ ...worker.days[0], category: "DRESS", linkGroupId: 701, target: 10, produced: 0 }],
-      target: 10, produced: 0, extra: 0, amount: 0,
+      target: 10,
+      produced: 0,
+      extra: 0,
+      amount: 0,
     },
     {
-      ...worker, workerId: 19, workerName: "Second Dress Worker",
+      ...worker,
+      workerId: 19,
+      workerName: "Second Dress Worker",
       days: [{ ...worker.days[0], category: "DRESS", linkGroupId: 701, target: 10, produced: 16 }],
-      target: 10, produced: 16, extra: 6, amount: 3,
+      target: 10,
+      produced: 16,
+      extra: 6,
+      amount: 3,
     },
   ];
 
@@ -94,10 +149,21 @@ describe("same-category linked daily target", () => {
     const workers = linkedWorkers();
     const progress = linkedDailyProgress(workers[0], workers, "2026-11-05");
     expect(progress).toMatchObject({
-      produced: 16, target: 20, linkedMemberIds: [18, 19], category: "DRESS",
+      produced: 16,
+      target: 20,
+      linkedMemberIds: [18, 19],
+      category: "DRESS",
     });
-    render(<ProductionBonusWeeklySheet from="2026-11-05" to="2026-11-05"
-      workers={workers} selected={[]} onToggle={vi.fn()} loading={false} />);
+    render(
+      <ProductionBonusWeeklySheet
+        from="2026-11-05"
+        to="2026-11-05"
+        workers={workers}
+        selected={[]}
+        onToggle={vi.fn()}
+        loading={false}
+      />
+    );
     const shared = screen.getByTestId("linked-daily-cell-2026-11-05-18");
     expect(shared).toHaveAttribute("rowspan", "2");
     expect(within(shared).getByText("16")).toBeInTheDocument();
@@ -123,13 +189,26 @@ describe("same-category linked daily target", () => {
     workers[1].days[0].target = 0;
     workers[1].days[0].produced = 82;
     workers.push({
-      ...worker, workerId: 20, workerName: "Third Dress Worker",
+      ...worker,
+      workerId: 20,
+      workerName: "Third Dress Worker",
       days: [{ ...worker.days[0], category: "DRESS", linkGroupId: 701, target: 0, produced: 0 }],
-      target: 0, produced: 0, extra: 0, amount: 0,
+      target: 0,
+      produced: 0,
+      extra: 0,
+      amount: 0,
     });
     expect(productionTeamPeriodTotals(workers)).toMatchObject({ produced: 82, target: 0, percent: 0 });
-    render(<ProductionBonusWeeklySheet from="2026-11-05" to="2026-11-05"
-      workers={workers} selected={[]} onToggle={vi.fn()} loading={false} />);
+    render(
+      <ProductionBonusWeeklySheet
+        from="2026-11-05"
+        to="2026-11-05"
+        workers={workers}
+        selected={[]}
+        onToggle={vi.fn()}
+        loading={false}
+      />
+    );
     const total = screen.getByTestId("linked-period-total-18");
     expect(total).toHaveAttribute("rowspan", "3");
     expect(within(total).getByText("82")).toBeInTheDocument();
@@ -145,13 +224,25 @@ describe("same-category linked daily target", () => {
     const workers = linkedWorkers();
     workers[1].days[0].category = "BLOUSE";
     expect(linkedDailyProgress(workers[0], workers, "2026-11-05")).toMatchObject({
-      produced: 0, target: 10, linkedMemberIds: [18],
+      produced: 0,
+      target: 10,
+      linkedMemberIds: [18],
     });
     expect(linkedDailyProgress(workers[1], workers, "2026-11-05")).toMatchObject({
-      produced: 16, target: 10, linkedMemberIds: [19],
+      produced: 16,
+      target: 10,
+      linkedMemberIds: [19],
     });
-    render(<ProductionBonusWeeklySheet from="2026-11-05" to="2026-11-05"
-      workers={workers} selected={[]} onToggle={vi.fn()} loading={false} />);
+    render(
+      <ProductionBonusWeeklySheet
+        from="2026-11-05"
+        to="2026-11-05"
+        workers={workers}
+        selected={[]}
+        onToggle={vi.fn()}
+        loading={false}
+      />
+    );
     expect(screen.queryByTestId("linked-daily-cell-2026-11-05-18")).not.toBeInTheDocument();
     expect(screen.getAllByLabelText("Target met").length).toBeGreaterThan(0);
   });
@@ -166,9 +257,17 @@ describe("same-category linked daily target", () => {
 
   it("keeps per-worker day actions accessible inside the merged cell", () => {
     const workers = linkedWorkers();
-    render(<ProductionBonusWeeklySheet from="2026-11-05" to="2026-11-05"
-      workers={workers} selected={[]} onToggle={vi.fn()} loading={false}
-      renderDayActions={(workerId) => <button type="button">Edit {workerId}</button>} />);
+    render(
+      <ProductionBonusWeeklySheet
+        from="2026-11-05"
+        to="2026-11-05"
+        workers={workers}
+        selected={[]}
+        onToggle={vi.fn()}
+        loading={false}
+        renderDayActions={(workerId) => <button type="button">Edit {workerId}</button>}
+      />
+    );
     const shared = screen.getByTestId("linked-daily-cell-2026-11-05-18");
     expect(within(shared).getByRole("button", { name: "Edit 18", hidden: true })).toBeInTheDocument();
     expect(within(shared).getByRole("button", { name: "Edit 19", hidden: true })).toBeInTheDocument();

@@ -70,8 +70,15 @@ describe("iPhone Duo Phase 2 shared proforma mobile editor", () => {
   it("preserves edit removal, shortage notices and amount controls", () => {
     const props = makeProps();
     const onClear = vi.fn();
-    render(<V5ProformaMobileLines {...props} variant="edit" existingCodes={new Set(["BALE-001"])}
-      onClear={onClear} shortageCount={() => 2} />);
+    render(
+      <V5ProformaMobileLines
+        {...props}
+        variant="edit"
+        existingCodes={new Set(["BALE-001"])}
+        onClear={onClear}
+        shortageCount={() => 2}
+      />
+    );
     expect(screen.getByText("Low stock")).toBeInTheDocument();
     fireEvent.click(screen.getByTestId("v5-edit-mobile-clear-BALE-001"));
     expect(onClear).toHaveBeenCalledWith("BALE-001");

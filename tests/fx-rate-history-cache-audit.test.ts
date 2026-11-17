@@ -42,7 +42,9 @@ describe("Phase 5 effective-date, historical-lock, company and cache safety", ()
   it("leaves dated ERP Accounts, ERP Net Position and Factory reconstruction locked", () => {
     expect(route).toContain('req.path !== "/api/stats/net-profit" || req.query.toDate');
     expect(accounts).toContain("!balStartDate && !effectiveEndDate");
-    expect(factory).toContain("if (scope.isHistorical || Number(scope.sessionCompanyId) !== scope.companyId) return finished;");
+    expect(factory).toContain(
+      "if (scope.isHistorical || Number(scope.sessionCompanyId) !== scope.companyId) return finished;"
+    );
     expect(overlay).toContain("historical_usd_mismatch");
     expect(overlay).toContain("missing_in_report");
     expect(overlay).toContain("duplicate_report_row");
@@ -65,8 +67,9 @@ describe("Phase 5 effective-date, historical-lock, company and cache safety", ()
     expect(rateSave).toContain("writeAuditEvent(");
     expect(rateSave).toContain("effectiveDate: { old:");
     expect(rateSave).toContain("CURRENT_MANAGEMENT_USD_ONLY");
-    expect(rateRoutes.indexOf("invalidateCompanyFxRateCaches(companyId)"))
-      .toBeGreaterThan(rateRoutes.indexOf("await saveCompanyExchangeRate("));
+    expect(rateRoutes.indexOf("invalidateCompanyFxRateCaches(companyId)")).toBeGreaterThan(
+      rateRoutes.indexOf("await saveCompanyExchangeRate(")
+    );
     expect(rateRoutes).not.toContain("postErpVoucherTx");
     for (const forbidden of ["INSERT INTO", "UPDATE vouchers", "DELETE FROM", "FX-REVAL-"]) {
       expect(history).not.toContain(forbidden);

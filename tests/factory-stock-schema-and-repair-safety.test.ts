@@ -119,9 +119,7 @@ describe("Phase 33 3C schema validation", () => {
       }).success
     ).toBe(false);
 
-    expect(
-      insertStockTransferVoucherSchema.safeParse({ voucherId: 0, destinationLocationId: 9 }).success
-    ).toBe(false);
+    expect(insertStockTransferVoucherSchema.safeParse({ voucherId: 0, destinationLocationId: 9 }).success).toBe(false);
     expect(
       insertStockTransferItemSchema.safeParse({
         transferId: 1,

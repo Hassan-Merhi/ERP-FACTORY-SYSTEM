@@ -51,7 +51,7 @@ describe("Phase 9 type-safety wiring", () => {
 
     expect(page).toContain("useQuery(authenticatedUserQueryOptions())");
     expect(page).toContain("const { selectedCompany } = useCompany()");
-    expect(page).toContain("selectedCompany?.id ?? \"no-company\"");
+    expect(page).toContain('selectedCompany?.id ?? "no-company"');
     expect(page).not.toContain("useQuery<AuthUser>");
     expect(page).not.toContain("catch (err: any)");
     expect(localTypes).not.toContain("export interface AuthUser");

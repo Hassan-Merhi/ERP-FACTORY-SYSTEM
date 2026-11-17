@@ -12,10 +12,7 @@ const phase10RouteSource = readFileSync(
   new URL("./spGoldenCoastSalesCashSettlementRoutes.ts", import.meta.url),
   "utf8"
 );
-const phase11RouteSource = readFileSync(
-  new URL("./spGoldenCoastMonthlyCloseRoutes.ts", import.meta.url),
-  "utf8"
-);
+const phase11RouteSource = readFileSync(new URL("./spGoldenCoastMonthlyCloseRoutes.ts", import.meta.url), "utf8");
 const legacySalesGuardSource = readFileSync(new URL("./spGoldenCoastLegacySalesGuard.ts", import.meta.url), "utf8");
 const posMutationsSource = readFileSync(
   new URL("../../../client/src/pages/pos/hooks/usePosMutations.ts", import.meta.url),

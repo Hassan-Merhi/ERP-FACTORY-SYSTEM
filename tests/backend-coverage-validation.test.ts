@@ -51,9 +51,7 @@ describe("Phase 4 validation branches", () => {
   });
 
   it("returns 400 for a malformed account-statement date", async () => {
-    const response = await agent.get(
-      `/api/accounts/ledger/${ctx.cashAccountId}/pre-period-balance?endDate=2026-02-31`
-    );
+    const response = await agent.get(`/api/accounts/ledger/${ctx.cashAccountId}/pre-period-balance?endDate=2026-02-31`);
 
     expect(response.status).toBe(400);
     expect(response.body.message).toMatch(/date|yyyy-mm-dd/i);

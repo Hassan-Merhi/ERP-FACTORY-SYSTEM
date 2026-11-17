@@ -298,7 +298,7 @@ export const backendMessagesPhase7TranslationsPart12: readonly Phase7BackendMess
     fr: "La phase 3 n’a pas pu créer le grand livre {0} pour la société {1}",
   },
   {
-    en: "Phase 3 repair left voucher ${voucherId} unbalanced (${row?.debit ?? \"missing\"}/${row?.credit ?? \"missing\"})",
+    en: 'Phase 3 repair left voucher ${voucherId} unbalanced (${row?.debit ?? "missing"}/${row?.credit ?? "missing"})',
     ar: "ترك إصلاح المرحلة 3 السند {0} غير متوازن ({1}/{2})",
     fr: "La réparation de la phase 3 a laissé la pièce {0} déséquilibrée ({1}/{2})",
   },

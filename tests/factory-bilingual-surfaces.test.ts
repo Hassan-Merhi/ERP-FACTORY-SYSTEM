@@ -1,19 +1,10 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const routeSource = readFileSync(
-  "server/routes/factory/factoryBilingualSurfaceRoutes.ts",
-  "utf8"
-);
-const resolverSource = readFileSync(
-  "server/services/factoryBilingualSurfaceResolver.ts",
-  "utf8"
-);
+const routeSource = readFileSync("server/routes/factory/factoryBilingualSurfaceRoutes.ts", "utf8");
+const resolverSource = readFileSync("server/services/factoryBilingualSurfaceResolver.ts", "utf8");
 const shellSource = readFileSync("client/src/app/FactoryShell.tsx", "utf8");
-const switchSource = readFileSync(
-  "client/src/components/FactoryCatalogLanguageSwitch.tsx",
-  "utf8"
-);
+const switchSource = readFileSync("client/src/components/FactoryCatalogLanguageSwitch.tsx", "utf8");
 
 describe("Factory bilingual Phase 8 remaining surfaces", () => {
   it("covers current and legacy Factory read surfaces", () => {

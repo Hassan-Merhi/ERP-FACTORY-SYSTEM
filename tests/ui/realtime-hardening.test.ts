@@ -31,8 +31,7 @@ describe("Realtime Refresh Wave 6 final hardening", () => {
   }
 
   function wrapper(client: QueryClient) {
-    return ({ children }: { children: ReactNode }) =>
-      createElement(QueryClientProvider, { client }, children);
+    return ({ children }: { children: ReactNode }) => createElement(QueryClientProvider, { client }, children);
   }
 
   beforeEach(() => {

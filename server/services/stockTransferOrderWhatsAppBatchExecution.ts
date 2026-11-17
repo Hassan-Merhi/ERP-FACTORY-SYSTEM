@@ -24,12 +24,13 @@ import {
 } from "./stockTransferOrderWhatsAppApprovalBatch";
 import { runWithDatabaseMaintenanceScope } from "./security/databaseScopeRuntimeContext";
 import { runWithAuditActor } from "./audit/auditActorContext";
-import { chooseStockTransferOrderWaApprovalLeaders, stockTransferOrderWaBusinessConflictCode, type StockTransferOrderWaFrozenRevision } from "./stockTransferOrderWhatsAppDecisionPolicy";
-import { isPhase9LanPrimary } from "../edge/posOutbox";
 import {
-  capturePhase9StockTransferRevisionReviewTx,
-  phase9RevisionRefTx,
-} from "../edge/stockOutbox";
+  chooseStockTransferOrderWaApprovalLeaders,
+  stockTransferOrderWaBusinessConflictCode,
+  type StockTransferOrderWaFrozenRevision,
+} from "./stockTransferOrderWhatsAppDecisionPolicy";
+import { isPhase9LanPrimary } from "../edge/posOutbox";
+import { capturePhase9StockTransferRevisionReviewTx, phase9RevisionRefTx } from "../edge/stockOutbox";
 
 type Header = {
   id: number | string;
@@ -59,8 +60,14 @@ type FinalRevision = {
 };
 
 export type StockTransferOrderWaBatchExecution =
-  | { outcome: "approved" | "declined"; batchId: number; orderCount: number; revisionCount: number;
-      appliedRevisions: number; supersededRevisions: number }
+  | {
+      outcome: "approved" | "declined";
+      batchId: number;
+      orderCount: number;
+      revisionCount: number;
+      appliedRevisions: number;
+      supersededRevisions: number;
+    }
   | { outcome: "skipped" | "waiting"; batchId: number; reason: string };
 
 async function captureLanReviewIfNeeded(
@@ -69,7 +76,7 @@ async function captureLanReviewIfNeeded(
   revisionId: number,
   reviewer: string,
   decision: "approve" | "reject",
-  batchKey: string,
+  batchKey: string
 ): Promise<void> {
   if (!isPhase9LanPrimary()) return;
   await capturePhase9StockTransferRevisionReviewTx(tx, {
@@ -89,7 +96,7 @@ async function ensureNoPendingFrozenRevisions(
   companyId: number,
   batchId: number,
   decision: "DONE" | "DECLINE",
-  expectedRevisions: number[],
+  expectedRevisions: number[]
 ): Promise<{ statuses: FinalRevision[]; superseded: number; approved: number }> {
   const result = await tx.execute(sql`
     SELECT r.id AS revision_id, r.transfer_id, r.status
@@ -99,23 +106,29 @@ async function ensureNoPendingFrozenRevisions(
      ORDER BY r.transfer_id, r.id
   `);
   const statuses = result.rows as FinalRevision[];
-  const present = statuses.map(row => Number(row.revision_id)).sort((a, b) => a - b);
+  const present = statuses.map((row) => Number(row.revision_id)).sort((a, b) => a - b);
   const expected = [...expectedRevisions].sort((a, b) => a - b);
   if (JSON.stringify(present) !== JSON.stringify(expected)) {
     throw new StockTransferOrderApprovalError("STO_WA_REVISION_SCOPE", "The frozen revisions changed during approval.");
   }
   const permitted = decision === "DONE" ? new Set(["approved", "superseded"]) : new Set(["rejected"]);
-  if (statuses.some(row => !permitted.has(row.status))) {
-    throw new StockTransferOrderApprovalError("STO_WA_BATCH_STALE", "Some revisions were not resolved; rolling back the full batch.");
+  if (statuses.some((row) => !permitted.has(row.status))) {
+    throw new StockTransferOrderApprovalError(
+      "STO_WA_BATCH_STALE",
+      "Some revisions were not resolved; rolling back the full batch."
+    );
   }
   return {
     statuses,
-    approved: statuses.filter(row => row.status === "approved").length,
-    superseded: statuses.filter(row => row.status === "superseded").length,
+    approved: statuses.filter((row) => row.status === "approved").length,
+    superseded: statuses.filter((row) => row.status === "superseded").length,
   };
 }
 
-async function executeWithinTransaction(tx: DbTransaction, batchId: number): Promise<StockTransferOrderWaBatchExecution> {
+async function executeWithinTransaction(
+  tx: DbTransaction,
+  batchId: number
+): Promise<StockTransferOrderWaBatchExecution> {
   const raw = await tx.execute(sql`
     SELECT id,company_id,status,batch_key,approval_group_chat_id,authorized_phone_e164,
            whatsapp_instance_id,request_message_id
@@ -144,13 +157,19 @@ async function executeWithinTransaction(tx: DbTransaction, batchId: number): Pro
   const decision = rows[0]!.event_type === "done_received" ? "DONE" : "DECLINE";
   const senderChat = rows[0]!.sender_chat_id;
   const expectedSender = header.authorized_phone_e164.slice(1) + "@c.us";
-  if (senderChat !== expectedSender || !rows[0]!.provider_message_id ||
-      !header.whatsapp_instance_id || !header.request_message_id ||
-      rows[0]!.whatsapp_instance_id !== header.whatsapp_instance_id ||
-      rows[0]!.approval_group_chat_id !== header.approval_group_chat_id ||
-      rows[0]!.quoted_message_id !== header.request_message_id) {
-    throw new StockTransferOrderApprovalError("STO_WA_AUTH_CHANGED",
-      "The stored verified decision does not match the original group, WhatsApp instance, sender, or quoted request.");
+  if (
+    senderChat !== expectedSender ||
+    !rows[0]!.provider_message_id ||
+    !header.whatsapp_instance_id ||
+    !header.request_message_id ||
+    rows[0]!.whatsapp_instance_id !== header.whatsapp_instance_id ||
+    rows[0]!.approval_group_chat_id !== header.approval_group_chat_id ||
+    rows[0]!.quoted_message_id !== header.request_message_id
+  ) {
+    throw new StockTransferOrderApprovalError(
+      "STO_WA_AUTH_CHANGED",
+      "The stored verified decision does not match the original group, WhatsApp instance, sender, or quoted request."
+    );
   }
 
   // Hold the parent approval batch row lock while checking every frozen order,
@@ -179,7 +198,10 @@ async function executeWithinTransaction(tx: DbTransaction, batchId: number): Pro
         async (auditTx, written) => {
           await captureLanReviewIfNeeded(auditTx, companyId, revisionId, reviewerId, "approve", batchKey);
           if (written.transition !== "approved") {
-            throw new StockTransferOrderApprovalError("STO_WA_BATCH_STALE", "The selected transfer changed before approval.");
+            throw new StockTransferOrderApprovalError(
+              "STO_WA_BATCH_STALE",
+              "The selected transfer changed before approval."
+            );
           }
         },
         tx
@@ -217,23 +239,26 @@ async function executeWithinTransaction(tx: DbTransaction, batchId: number): Pro
   // Audit EACH frozen revision, including revisions merged as superseded by
   // newer edits from the same location. All audit rows share the DB transaction.
   for (const revision of summary.statuses) {
-    await writeAuditEvent({
-      userId: reviewerId,
-      username: "WhatsApp " + header.authorized_phone_e164,
-      companyId,
-      action: decision === "DONE" ? "approve" : "update",
-      tableName: "stock_transfer_revisions",
-      recordId: Number(revision.revision_id),
-      recordIdentifier: "sto-wa:" + batchKey + ":revision:" + revision.revision_id,
-      changes: {
-        status: { old: "pending", new: revision.status },
-        approvalMode: { new: "stock-transfer-order-whatsapp" },
-        batchKey: { new: batchKey },
-        transferId: { new: Number(revision.transfer_id) },
-        reviewerPhone: { new: header.authorized_phone_e164 },
-        providerMessageId: { new: rows[0]!.provider_message_id },
+    await writeAuditEvent(
+      {
+        userId: reviewerId,
+        username: "WhatsApp " + header.authorized_phone_e164,
+        companyId,
+        action: decision === "DONE" ? "approve" : "update",
+        tableName: "stock_transfer_revisions",
+        recordId: Number(revision.revision_id),
+        recordIdentifier: "sto-wa:" + batchKey + ":revision:" + revision.revision_id,
+        changes: {
+          status: { old: "pending", new: revision.status },
+          approvalMode: { new: "stock-transfer-order-whatsapp" },
+          batchKey: { new: batchKey },
+          transferId: { new: Number(revision.transfer_id) },
+          reviewerPhone: { new: header.authorized_phone_e164 },
+          providerMessageId: { new: rows[0]!.provider_message_id },
+        },
       },
-    }, tx);
+      tx
+    );
   }
 
   const newStatus = decision === "DONE" ? "approved" : "declined";
@@ -265,15 +290,23 @@ async function executeWithinTransaction(tx: DbTransaction, batchId: number): Pro
     INSERT INTO stock_transfer_order_approval_events
       (company_id,batch_id,event_type,details)
     VALUES (${companyId},${batchId},${newStatus},
-      ${JSON.stringify({ ...outcome, decisionEventId: rows[0]!.id,
-        decisionMessageId: rows[0]!.provider_message_id })}::jsonb)
+      ${JSON.stringify({
+        ...outcome,
+        decisionEventId: rows[0]!.id,
+        decisionMessageId: rows[0]!.provider_message_id,
+      })}::jsonb)
   `);
 
   if (newStatus === "approved") {
     // Freeze exact post-approval quantities while the inventory/voucher
     // transaction is still open. Later edits cannot change the delivered file.
     await freezeApprovedStockTransferOrderWorkbookTx(
-      tx, companyId, batchId, batchKey, snapshot.destinationLocationId, snapshot.transferIds
+      tx,
+      companyId,
+      batchId,
+      batchKey,
+      snapshot.destinationLocationId,
+      snapshot.transferIds
     );
     // Phase 5 will render and send the *same* final approved workbook to both
     // recipients. Persist both delivery intents in this approval transaction;
@@ -287,7 +320,10 @@ async function executeWithinTransaction(tx: DbTransaction, batchId: number): Pro
     `);
     const destinationChat = (recipientResult.rows[0] as { chat_id?: string } | undefined)?.chat_id;
     if (!destinationChat) {
-      throw new StockTransferOrderApprovalError("STO_WA_DESTINATION_CHANGED", "Frozen destination WhatsApp recipient missing.");
+      throw new StockTransferOrderApprovalError(
+        "STO_WA_DESTINATION_CHANGED",
+        "Frozen destination WhatsApp recipient missing."
+      );
     }
     await tx.execute(sql`
       INSERT INTO stock_transfer_order_approval_deliveries
@@ -349,34 +385,36 @@ async function markBusinessFailureStale(batchId: number, reason: string): Promis
  * every stock/voucher/audit change rolled back. Known domain conflicts become
  * terminal stale; transient/unexpected failures stay requested for retry.
  */
-export async function executeStockTransferOrderWaBatch(
-  batchId: number
-): Promise<StockTransferOrderWaBatchExecution> {
+export async function executeStockTransferOrderWaBatch(batchId: number): Promise<StockTransferOrderWaBatchExecution> {
   if (!Number.isSafeInteger(batchId) || batchId <= 0) {
     return { outcome: "skipped", batchId, reason: "invalid_batch_id" };
   }
   return runWithDatabaseMaintenanceScope("verified_sto_whatsapp_batch_execution", async () =>
-    runWithAuditActor({
-      actorId: "system:sto-wa-batch",
-      actorName: "Verified WhatsApp Stock Transfer Order batch",
-      reason: "Verified DONE/DECLINE approval batch " + batchId,
-      requestId: randomUUID(),
-    }, async () => {
-      try {
-        return await db.transaction(tx => executeWithinTransaction(tx, batchId));
-      } catch (error) {
-        const conflict = stockTransferOrderWaBusinessConflictCode(error);
-        if (conflict) {
-          await markBusinessFailureStale(batchId, conflict);
-          logger.warn("[STO WA] Full approval batch rejected; no partial stock changes", {
-            batchId, reason: conflict,
-          });
-          return { outcome: "skipped" as const, batchId, reason: conflict };
+    runWithAuditActor(
+      {
+        actorId: "system:sto-wa-batch",
+        actorName: "Verified WhatsApp Stock Transfer Order batch",
+        reason: "Verified DONE/DECLINE approval batch " + batchId,
+        requestId: randomUUID(),
+      },
+      async () => {
+        try {
+          return await db.transaction((tx) => executeWithinTransaction(tx, batchId));
+        } catch (error) {
+          const conflict = stockTransferOrderWaBusinessConflictCode(error);
+          if (conflict) {
+            await markBusinessFailureStale(batchId, conflict);
+            logger.warn("[STO WA] Full approval batch rejected; no partial stock changes", {
+              batchId,
+              reason: conflict,
+            });
+            return { outcome: "skipped" as const, batchId, reason: conflict };
+          }
+          // Unexpected DB/network failures are not classified as stale; leave the
+          // immutable decision queued for the durable worker to retry.
+          throw error;
         }
-        // Unexpected DB/network failures are not classified as stale; leave the
-        // immutable decision queued for the durable worker to retry.
-        throw error;
       }
-    })
+    )
   );
 }

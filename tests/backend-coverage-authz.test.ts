@@ -62,10 +62,10 @@ describe("Phase 5 authentication and authorization branches", () => {
   });
 
   it("returns 403 when a POS role attempts a non-POS accounting create", async () => {
-    await pool.query(
-      `UPDATE user_company_roles SET role = 'POS' WHERE user_id = $1 AND company_id = $2`,
-      [ctx.userId, ctx.companyId]
-    );
+    await pool.query(`UPDATE user_company_roles SET role = 'POS' WHERE user_id = $1 AND company_id = $2`, [
+      ctx.userId,
+      ctx.companyId,
+    ]);
     await selectCompany();
 
     const response = await agent.post("/api/vouchers/journal").send({
@@ -78,10 +78,10 @@ describe("Phase 5 authentication and authorization branches", () => {
     });
     expect(response.status).toBe(403);
 
-    await pool.query(
-      `UPDATE user_company_roles SET role = 'Admin' WHERE user_id = $1 AND company_id = $2`,
-      [ctx.userId, ctx.companyId]
-    );
+    await pool.query(`UPDATE user_company_roles SET role = 'Admin' WHERE user_id = $1 AND company_id = $2`, [
+      ctx.userId,
+      ctx.companyId,
+    ]);
     await selectCompany();
   });
 

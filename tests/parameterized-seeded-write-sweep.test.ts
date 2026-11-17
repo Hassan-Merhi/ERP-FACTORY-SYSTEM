@@ -219,10 +219,9 @@ describe("Phase 33 seeded parameterized write sweep", () => {
     // dedicated disposable tenant into a factory tenant without broadening the
     // shared fixture prefix registry, then restore the ERP parent-company pin.
     await pool.query("UPDATE companies SET company_type = 'factory' WHERE id = $1", [factoryCtx.companyId]);
-    await pool.query(
-      "UPDATE system_settings SET value = $1, updated_at = now() WHERE key = 'parentCompanyId'",
-      [String(erpCtx.companyId)]
-    );
+    await pool.query("UPDATE system_settings SET value = $1, updated_at = now() WHERE key = 'parentCompanyId'", [
+      String(erpCtx.companyId),
+    ]);
 
     erpAgent = await authenticatedAgent(erpCtx, ERP_PREFIX);
     factoryAgent = await authenticatedAgent(factoryCtx, FACTORY_PREFIX);

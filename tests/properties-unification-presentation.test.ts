@@ -11,7 +11,10 @@ import {
   belongsToHistoricalRentSnapshot,
 } from "../client/src/pages/properties/property-rental/historicalRentSnapshot";
 import { hasHassanPropertiesHistoricalReportingPolicy } from "../client/src/properties/config/historicalRentReportingPolicy";
-import { paymentHistoryTsv, reconciledHistoryTsv } from "../client/src/pages/properties/property-rental/paymentsReceiptMath";
+import {
+  paymentHistoryTsv,
+  reconciledHistoryTsv,
+} from "../client/src/pages/properties/property-rental/paymentsReceiptMath";
 
 describe("Phase 8 rental financial presentation", () => {
   it("requires recorded USD evidence and rejects unknown or mixed currency as USD", () => {
@@ -27,18 +30,27 @@ describe("Phase 8 rental financial presentation", () => {
   it("rejects incorrectly labeled USD TSV exports when recorded payments use other currencies", () => {
     const rows = [{ id: 1, paymentDate: "2026-11-01", amount: "50", currency: "CDF" }];
     expect(() => paymentHistoryTsv(rows)).toThrow(/mixed-currency/);
-    expect(() => reconciledHistoryTsv(rows, { aliCashLedgerId: 1, threeAccountsTotal: 5000 })).toThrow(/mixed-currency/);
+    expect(() => reconciledHistoryTsv(rows, { aliCashLedgerId: 1, threeAccountsTotal: 5000 })).toThrow(
+      /mixed-currency/
+    );
     expect(paymentHistoryTsv([{ ...rows[0], currency: "USD" }])).toContain("Cash Received (USD)");
     expect(() => paymentHistoryTsv([{ ...rows[0], currency: "" }])).toThrow(/mixed-currency/);
-    expect(() => reconciledHistoryTsv([{ ...rows[0], currency: null }], { aliCashLedgerId: 1, threeAccountsTotal: 5000 })).toThrow(/mixed-currency/);
+    expect(() =>
+      reconciledHistoryTsv([{ ...rows[0], currency: null }], { aliCashLedgerId: 1, threeAccountsTotal: 5000 })
+    ).toThrow(/mixed-currency/);
   });
 
   it("preserves calculation provenance without converting financial values", () => {
     expect(rentalReportingFigure(300, "contract-paid")).toEqual({
-      amount: 300, currency: "USD", basis: "contract-paid", asOfDate: null,
+      amount: 300,
+      currency: "USD",
+      basis: "contract-paid",
+      asOfDate: null,
     });
     expect(rentalReportingFigure(null, "reconciled-account-balances")).toMatchObject({
-      amount: null, currency: "USD", basis: "reconciled-account-balances",
+      amount: null,
+      currency: "USD",
+      basis: "reconciled-account-balances",
     });
   });
 
@@ -63,18 +75,36 @@ describe("Phase 8 rental financial presentation", () => {
 
   it("keeps historical snapshot immutable and voucher-backed, not tied to a display name", () => {
     expect(HISTORICAL_RENT_CUTOFF).toBe("2026-10-26");
-    const posted = { amount: "100", paymentDate: "2026-10-26", voucherId: 42, postingStatus: "POSTED", reconciliationCategory: "ENDED_RENT" };
+    const posted = {
+      amount: "100",
+      paymentDate: "2026-10-26",
+      voucherId: 42,
+      postingStatus: "POSTED",
+      reconciliationCategory: "ENDED_RENT",
+    };
     expect(belongsToHistoricalRentSnapshot(posted)).toBe(true);
     expect(belongsToHistoricalRentSnapshot({ ...posted, paymentDate: "2026-10-27" })).toBe(false);
     expect(belongsToHistoricalRentSnapshot({ ...posted, voucherId: null })).toBe(false);
-    expect(hasHassanPropertiesHistoricalReportingPolicy({
-      id: 13, code: "HP", companyType: "properties",
-    })).toBe(true);
-    expect(hasHassanPropertiesHistoricalReportingPolicy({
-      id: 13, code: "HP", companyType: "factory",
-    })).toBe(false);
-    expect(hasHassanPropertiesHistoricalReportingPolicy({
-      id: 13, code: "OTHER", companyType: "properties",
-    })).toBe(false);
+    expect(
+      hasHassanPropertiesHistoricalReportingPolicy({
+        id: 13,
+        code: "HP",
+        companyType: "properties",
+      })
+    ).toBe(true);
+    expect(
+      hasHassanPropertiesHistoricalReportingPolicy({
+        id: 13,
+        code: "HP",
+        companyType: "factory",
+      })
+    ).toBe(false);
+    expect(
+      hasHassanPropertiesHistoricalReportingPolicy({
+        id: 13,
+        code: "OTHER",
+        companyType: "properties",
+      })
+    ).toBe(false);
   });
 });

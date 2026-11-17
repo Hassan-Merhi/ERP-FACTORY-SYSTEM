@@ -193,9 +193,7 @@ describe("Factory container planner phase 6 API", () => {
       .send({ documentType: "NOT_A_TYPE", title: "x" });
     expect(rejected.status).toBe(400);
 
-    const listed = await agent.get(
-      `/api/factory/v5/container-plans/${planId}/containers/${containerId}/documents`
-    );
+    const listed = await agent.get(`/api/factory/v5/container-plans/${planId}/containers/${containerId}/documents`);
     expect(listed.status).toBe(200);
     expect(listed.body.documents).toHaveLength(1);
 

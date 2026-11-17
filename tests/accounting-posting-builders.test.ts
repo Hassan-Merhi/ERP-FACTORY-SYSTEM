@@ -61,7 +61,7 @@ describe("Phase 3 accounting posting builders", () => {
         clientRequestId: "transfer-request-2",
         sourceType: "simple-company-transfer",
         sourceSide: "from",
-      }),
+      })
     ).toThrow(PostingValidationError);
   });
 

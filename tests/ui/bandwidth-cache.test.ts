@@ -47,12 +47,14 @@ describe("Bandwidth Phase 3 cache contracts", () => {
 
   it("keeps full and compact reference profiles synchronized after a successful write", async () => {
     const client = new QueryClient();
-    client.setQueryData(["/api/factory/bale-products", 3], [
-      { id: 7, articleCode: "HMD10007", name: "Old", description: "full-only" },
-    ]);
-    client.setQueryData(["/api/factory/bale-products?profile=picker", 3], [
-      { id: 7, articleCode: "HMD10007", name: "Old" },
-    ]);
+    client.setQueryData(
+      ["/api/factory/bale-products", 3],
+      [{ id: 7, articleCode: "HMD10007", name: "Old", description: "full-only" }]
+    );
+    client.setQueryData(
+      ["/api/factory/bale-products?profile=picker", 3],
+      [{ id: 7, articleCode: "HMD10007", name: "Old" }]
+    );
 
     const applied = await applyReferenceMutationResponse({
       client,

@@ -110,7 +110,9 @@ describe("Phase 25 — PO import validation and atomic rejection", () => {
 
     expect(response.status).toBe(400);
     expect(response.body.message).toBe("Validation failed");
-    expect(response.body.errors).toEqual(expect.arrayContaining([expect.stringMatching(/quantity, rate and line total/i)]));
+    expect(response.body.errors).toEqual(
+      expect.arrayContaining([expect.stringMatching(/quantity, rate and line total/i)])
+    );
     expect(await importFootprint(containerNumber, fileHash)).toEqual({
       containers: 0,
       purchaseOrders: 0,

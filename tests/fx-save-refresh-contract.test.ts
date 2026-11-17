@@ -43,10 +43,10 @@ describe("Phase 3 rate-change propagation", () => {
   });
 
   it("invalidates other tabs without indiscriminately refreshing stable financial reports", () => {
-    expect(realtimeServer).toContain('broadcast(');
+    expect(realtimeServer).toContain("broadcast(");
     expect(realtimeClient).toContain('invalidation.topics.has("fx") && isFxRateDependentQuery(query.queryKey)');
     expect(realtimeClient).toContain('if (topic === "fx") return isFxRateDependentQuery(query.queryKey)');
-    expect(realtimeClient).toContain('if (isStableQueryKey(key) &&');
+    expect(realtimeClient).toContain("if (isStableQueryKey(key) &&");
   });
 
   it("prevents a live group snapshot being held at a stale company FX rate", () => {
@@ -55,17 +55,17 @@ describe("Phase 3 rate-change propagation", () => {
   });
 
   it("clears both server microcache and browser response cache dependencies", () => {
-    expect(readMicrocache).toContain('isFxRateDependentPath(req.path)');
+    expect(readMicrocache).toContain("isFxRateDependentPath(req.path)");
     expect(readMicrocache).toContain('[...(baseTopics ?? []), "fx"]');
-    expect(serverCacheReset).toContain('net-profit:${companyId}:');
-    expect(serverCacheReset).toContain('group-net-position:');
+    expect(serverCacheReset).toContain("net-profit:${companyId}:");
+    expect(serverCacheReset).toContain("group-net-position:");
     expect(refresh).toContain('invalidateBandwidthReadCaches("all")');
     expect(realtimeClient).toContain('invalidation.topics.has("fx") ? "all" : "live"');
   });
 
   it("retains report-only monetary valuation and no policy parameter shadowing", () => {
-    expect(monetaryService).toContain('const eligibility = monetaryFxEligibility({');
-    expect(monetaryService).not.toContain('const policy = monetaryFxEligibility(');
+    expect(monetaryService).toContain("const eligibility = monetaryFxEligibility({");
+    expect(monetaryService).not.toContain("const policy = monetaryFxEligibility(");
     expect(monetaryService).toContain("bookBalancesModified: false, fxVouchersPosted: false");
   });
 });

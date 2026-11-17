@@ -23,10 +23,7 @@ import { hashEvidence } from "../server/edge/edgeSyncStageProtocol.mjs";
 import { validatePhase9Event } from "../server/edge/eventProtocol.mjs";
 import { Phase9EventConflict } from "../server/edge/cloudEventStore.mjs";
 import { phase9StockTransferEnvelope } from "../server/edge/stockEnvelope.mjs";
-import {
-  phase9StockTransferApplyHandler,
-  type Phase9StockTransferEvent,
-} from "../server/edge/stockTransferApply";
+import { phase9StockTransferApplyHandler, type Phase9StockTransferEvent } from "../server/edge/stockTransferApply";
 import {
   createTenantDatabaseScope,
   runWithDatabaseScopeRuntimeContext,

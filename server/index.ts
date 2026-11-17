@@ -288,8 +288,7 @@ let startupDataReady = false;
       await runPhase3PayrollDaybookRepair();
       // Immutable inventory valuation cutover snapshots, captured after the
       // daybook pass while startup still blocks traffic to the new instance.
-      const { ensurePhase3InventoryValuationBaselines } =
-        await import("./services/accounting/inventoryValuation");
+      const { ensurePhase3InventoryValuationBaselines } = await import("./services/accounting/inventoryValuation");
       const baselinesCreated = await ensurePhase3InventoryValuationBaselines(pool);
       logger.info("[startup] ✓ Phase 3 inventory valuation cutovers ensured", { baselinesCreated });
       // Disabled by default: an explicitly reviewed one-shot historical-sales repair.

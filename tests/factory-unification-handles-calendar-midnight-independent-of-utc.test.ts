@@ -12,7 +12,9 @@ describe("Factory Phase 5 Beirut calendar", () => {
   });
   it("rejects invalid instants for display and deduplicates past dates", () => {
     expect(factoryLocalDateFromInstant("not-a-date")).toBeNull();
-    expect(factoryPastCalendarDates(["2026-11-07", "2026-11-07", "2026-11-09", "2026-11-10"], "2026-11-09")).toEqual(["2026-11-07"]);
+    expect(factoryPastCalendarDates(["2026-11-07", "2026-11-07", "2026-11-09", "2026-11-10"], "2026-11-09")).toEqual([
+      "2026-11-07",
+    ]);
   });
 });
 

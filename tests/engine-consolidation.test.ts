@@ -707,7 +707,8 @@ describe("paginated customer balances with unfinalized container charges", () =>
     expect(stream.transactions.some((row: any) => row.voucherId === heldVoucherId)).toBe(false);
     expect(stream.nextCursor).not.toBeNull();
 
-    const [party] = (await getPartyBalances(db, { companyId: factory, kind: "customer", ids: [fCustomer], memo: true })).parties;
+    const [party] = (await getPartyBalances(db, { companyId: factory, kind: "customer", ids: [fCustomer], memo: true }))
+      .parties;
     // The GL audit closing still includes the held 4500, while the
     // receivable shown by Factory Parties is 240 ledger + 610 memo = 850.
     expect(party.closing).toBe("4740.00");

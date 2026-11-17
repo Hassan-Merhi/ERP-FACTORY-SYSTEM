@@ -12,11 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useCompany } from "@/contexts/CompanyContext";
 import { RetailNav } from "./RetailNav";
 import { getJson, money, type Location } from "./retailInventoryTypes";
-import {
-  fetchRetailCustomerHistory,
-  searchRetailCustomers,
-  searchRetailSalesHistory,
-} from "@/pages/pos/retailPosApi";
+import { fetchRetailCustomerHistory, searchRetailCustomers, searchRetailSalesHistory } from "@/pages/pos/retailPosApi";
 import type { RetailCustomerSummary } from "@/pages/pos/retailTypes";
 import type { RetailSale } from "@/pages/pos/retailPosTypes";
 

@@ -15,13 +15,48 @@ const source = (): DispatchSourceInput => ({
   closureRevision: 2,
   manifestFingerprint: "a".repeat(64),
   manifest: [
-    { scanId: "200", baleId: 42, baleReference: "BALE-42", articleCode: "A100", productName: "Shirts", weightKg: "12.500" },
-    { scanId: "201", baleId: 43, baleReference: "BALE-43", articleCode: "A100", productName: "Shirts", weightKg: "13.250" },
+    {
+      scanId: "200",
+      baleId: 42,
+      baleReference: "BALE-42",
+      articleCode: "A100",
+      productName: "Shirts",
+      weightKg: "12.500",
+    },
+    {
+      scanId: "201",
+      baleId: 43,
+      baleReference: "BALE-43",
+      articleCode: "A100",
+      productName: "Shirts",
+      weightKg: "13.250",
+    },
   ],
   orderBales: [
-    { baleId: 42, baleReference: "BALE-42", articleCode: "A100", productName: "Shirts", weightKg: "12.500", priceUsed: "0.10" },
-    { baleId: 43, baleReference: "BALE-43", articleCode: "A100", productName: "Shirts", weightKg: "13.250", priceUsed: "0.20" },
-    { baleId: 44, baleReference: "BALE-44", articleCode: "B200", productName: "Jeans", weightKg: "8.000", priceUsed: "9.00" },
+    {
+      baleId: 42,
+      baleReference: "BALE-42",
+      articleCode: "A100",
+      productName: "Shirts",
+      weightKg: "12.500",
+      priceUsed: "0.10",
+    },
+    {
+      baleId: 43,
+      baleReference: "BALE-43",
+      articleCode: "A100",
+      productName: "Shirts",
+      weightKg: "13.250",
+      priceUsed: "0.20",
+    },
+    {
+      baleId: 44,
+      baleReference: "BALE-44",
+      articleCode: "B200",
+      productName: "Jeans",
+      weightKg: "8.000",
+      priceUsed: "9.00",
+    },
   ],
   activeScans: [
     { scanId: "200", baleId: 42, dispatchId: "17" },
@@ -54,9 +89,7 @@ describe("Phase 2 Factory Dispatch signed financial source", () => {
     const first = createDispatchTripFinancialSource(source());
     expect(createDispatchTripFinancialSource(source()).sourceFingerprint).toBe(first.sourceFingerprint);
     const repriced = source();
-    repriced.orderBales = repriced.orderBales.map((b) =>
-      b.baleId === 43 ? { ...b, priceUsed: "0.25" } : b
-    );
+    repriced.orderBales = repriced.orderBales.map((b) => (b.baleId === 43 ? { ...b, priceUsed: "0.25" } : b));
     expect(createDispatchTripFinancialSource(repriced).sourceFingerprint).not.toBe(first.sourceFingerprint);
     const revision = source();
     revision.closureRevision = 3;
@@ -87,19 +120,19 @@ describe("Phase 2 Factory Dispatch signed financial source", () => {
 
   it("refuses unknown article codes instead of exporting bale references", () => {
     const input = source();
-    input.orderBales = input.orderBales.map((b) => b.baleId === 42 ? { ...b, articleCode: null } : b);
+    input.orderBales = input.orderBales.map((b) => (b.baleId === 42 ? { ...b, articleCode: null } : b));
     rejectWith(input, "ARTICLE_CODE_MISSING");
   });
 
   it("refuses malformed monetary snapshots instead of treating invalid pricing as zero", () => {
     const input = source();
-    input.orderBales = input.orderBales.map((b) => b.baleId === 42 ? { ...b, priceUsed: "abc" } : b);
+    input.orderBales = input.orderBales.map((b) => (b.baleId === 42 ? { ...b, priceUsed: "abc" } : b));
     rejectWith(input, "PRICE_UNRESOLVED");
   });
 
   it("refuses changed bale weights", () => {
     const input = source();
-    input.orderBales = input.orderBales.map((b) => b.baleId === 42 ? { ...b, weightKg: "11.500" } : b);
+    input.orderBales = input.orderBales.map((b) => (b.baleId === 42 ? { ...b, weightKg: "11.500" } : b));
     rejectWith(input, "LOADING_CHANGED");
   });
 });

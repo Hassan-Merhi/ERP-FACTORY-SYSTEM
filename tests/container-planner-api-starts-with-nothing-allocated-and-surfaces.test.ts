@@ -227,8 +227,9 @@ describe("Factory container planner phase 5 API", () => {
     expect(first.body.containers).toHaveLength(2);
     expect(first.body.totalWeightKg).toBe(150);
 
-    const second = await agent
-      .get(`/api/factory/v5/container-plans/${planId}/customers/${secondCustomerId}/packing-list`);
+    const second = await agent.get(
+      `/api/factory/v5/container-plans/${planId}/customers/${secondCustomerId}/packing-list`
+    );
     expect(second.status).toBe(200);
     expect(second.body.totalQty).toBe(2);
 
@@ -278,10 +279,10 @@ describe("Factory container planner phase 5 API", () => {
     // The order now commits 3 more bales, so the plannable pool drops from 8 to
     // 5 and Phase 3 re-spreads it as 3 + 2. The 4-bale allocation on the first
     // container no longer fits and must be trimmed rather than silently kept.
-    await pool.query(
-      `UPDATE customer_proforma_lines SET quantity = 3 WHERE proforma_id = $1 AND article_code = $2`,
-      [proformaId, ARTICLE_A]
-    );
+    await pool.query(`UPDATE customer_proforma_lines SET quantity = 3 WHERE proforma_id = $1 AND article_code = $2`, [
+      proformaId,
+      ARTICLE_A,
+    ]);
 
     const reconciled = await agent.post(`/api/factory/v5/container-plans/${planId}/reconcile`).send({});
     expect(reconciled.status).toBe(200);

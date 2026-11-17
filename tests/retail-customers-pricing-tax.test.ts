@@ -308,8 +308,11 @@ describeWithDatabase("Retail Wave 2 — customers, pricing, discounts and tax", 
 
     const partyStats = await manager.get("/api/customers/stats");
     expect(partyStats.status).toBe(200);
-    expect(partyStats.body.find((row: { id: number }) => row.id === created.body.id))
-      .toMatchObject({ id: created.body.id, ledgerAccountId: customerRecord!.ledgerAccountId, balance: 0 });
+    expect(partyStats.body.find((row: { id: number }) => row.id === created.body.id)).toMatchObject({
+      id: created.body.id,
+      ledgerAccountId: customerRecord!.ledgerAccountId,
+      balance: 0,
+    });
 
     const statement = await manager.get(`/api/customers/${created.body.id}/transactions`);
     expect(statement.status).toBe(200);

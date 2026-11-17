@@ -86,7 +86,8 @@ export function RemoteMouseControllerOverlay() {
   const sessionTargetUserId = session?.targetUserId ?? null;
   const authorized = authorizationIsFresh(session?.mouseAuthorization?.expiresAt);
   const controlEnabled = !!sessionId && !!session?.capabilities.mouse && authorized;
-  const keyboardActive = !!session?.capabilities.keyboard && authorizationIsFresh(session.keyboardAuthorization?.expiresAt);
+  const keyboardActive =
+    !!session?.capabilities.keyboard && authorizationIsFresh(session.keyboardAuthorization?.expiresAt);
   const combinedEnabled = controlEnabled && keyboardActive;
 
   useEffect(() => {
@@ -547,9 +548,16 @@ export function RemoteMouseControllerOverlay() {
 
   if (portalHost.dataset.remoteControlPanelMode === "unified") {
     return createPortal(
-      <section className="space-y-2 text-sm" data-screenfeed-ignore="true" data-testid="remote-mouse-controller-overlay" data-remote-control-panel-section="mouse">
+      <section
+        className="space-y-2 text-sm"
+        data-screenfeed-ignore="true"
+        data-testid="remote-mouse-controller-overlay"
+        data-remote-control-panel-section="mouse"
+      >
         <div className="flex items-center justify-between gap-2">
-          <p className="min-w-0 text-xs text-slate-300">{combinedEnabled ? t("Mouse and keyboard active") : t("Read-only until explicitly enabled")}</p>
+          <p className="min-w-0 text-xs text-slate-300">
+            {combinedEnabled ? t("Mouse and keyboard active") : t("Read-only until explicitly enabled")}
+          </p>
           <button
             type="button"
             role="switch"
@@ -560,15 +568,25 @@ export function RemoteMouseControllerOverlay() {
             onClick={() => void (combinedEnabled ? stopCombined() : authorizeCombined())}
             className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-300 disabled:cursor-wait disabled:opacity-50 ${combinedEnabled ? "border-blue-400 bg-blue-600" : "border-slate-600 bg-slate-700"}`}
           >
-            <span className={`h-5 w-5 rounded-full bg-white shadow transition-transform ${combinedEnabled ? "translate-x-6" : "translate-x-1"}`} />
+            <span
+              className={`h-5 w-5 rounded-full bg-white shadow transition-transform ${combinedEnabled ? "translate-x-6" : "translate-x-1"}`}
+            />
           </button>
         </div>
         <p className="text-[11px] leading-relaxed text-slate-400">
           {t("ERP tab only")} · {t("Only safe search, filter and explicitly approved fields can be edited.")}
         </p>
         {passwordOpen && !combinedEnabled && (
-          <form className="space-y-2 border-t border-slate-700 pt-3" onSubmit={(event) => { event.preventDefault(); void confirmPasswordAndAuthorizeCombined(); }}>
-            <p className="text-xs text-slate-200">{t("Confirm your password to enable mouse control for up to 5 minutes.")}</p>
+          <form
+            className="space-y-2 border-t border-slate-700 pt-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void confirmPasswordAndAuthorizeCombined();
+            }}
+          >
+            <p className="text-xs text-slate-200">
+              {t("Confirm your password to enable mouse control for up to 5 minutes.")}
+            </p>
             <div className="flex gap-2">
               <Input
                 autoFocus
@@ -587,7 +605,11 @@ export function RemoteMouseControllerOverlay() {
           </form>
         )}
         {statusLabel ? <p className="text-[11px] text-slate-400">{statusLabel}</p> : null}
-        {error ? <p className="text-xs text-red-300" role="alert">{error}</p> : null}
+        {error ? (
+          <p className="text-xs text-red-300" role="alert">
+            {error}
+          </p>
+        ) : null}
       </section>,
       portalHost
     );

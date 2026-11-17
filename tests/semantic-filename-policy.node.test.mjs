@@ -39,7 +39,8 @@ function shell(dir, args) {
 }
 function verify(dir) {
   return spawnSync(process.execPath, ["scripts/verify-semantic-filename-policy.mjs"], {
-    cwd: dir, encoding: "utf8",
+    cwd: dir,
+    encoding: "utf8",
   });
 }
 function withFixture(run) {
@@ -58,7 +59,7 @@ function withFixture(run) {
 }
 
 test("numbered historical migration and explicitly approved workflow names are allowed", () => {
-  withFixture(dir => {
+  withFixture((dir) => {
     write(dir, "migrations/0001_phase7_baseline.sql", "-- historical SQL");
     assert.equal(shell(dir, ["add", "-A"]).status, 0);
     const result = verify(dir);
@@ -67,7 +68,7 @@ test("numbered historical migration and explicitly approved workflow names are a
 });
 
 test("new numbered runtime source fails the naming gate", () => {
-  withFixture(dir => {
+  withFixture((dir) => {
     write(dir, "server/phase99UnreviewedModule.ts", "export const ready = true;\n");
     assert.equal(shell(dir, ["add", "-A"]).status, 0);
     const result = verify(dir);
@@ -77,7 +78,7 @@ test("new numbered runtime source fails the naming gate", () => {
 });
 
 test("unreviewed numbered backend tests also fail", () => {
-  withFixture(dir => {
+  withFixture((dir) => {
     write(dir, "server/routes/phase77NewRoutes.test.ts", "export {};\n");
     assert.equal(shell(dir, ["add", "-A"]).status, 0);
     const result = verify(dir);
@@ -87,8 +88,12 @@ test("unreviewed numbered backend tests also fail", () => {
 });
 
 test("nonexistent workflow entrypoint causes a failing check", () => {
-  withFixture(dir => {
-    write(dir, ".github/workflows/executable-contract.yml", "name: check\njobs:\n  check:\n    steps:\n      - run: node scripts/removed-phase9-command.mjs\n");
+  withFixture((dir) => {
+    write(
+      dir,
+      ".github/workflows/executable-contract.yml",
+      "name: check\njobs:\n  check:\n    steps:\n      - run: node scripts/removed-phase9-command.mjs\n"
+    );
     assert.equal(shell(dir, ["add", "-A"]).status, 0);
     const result = verify(dir);
     assert.notEqual(result.status, 0);
@@ -97,7 +102,7 @@ test("nonexistent workflow entrypoint causes a failing check", () => {
 });
 
 test("persisted environment and database identifiers remain stable after filename changes", () => {
-  const read = p => fs.readFileSync(path.join(root, p), "utf8");
+  const read = (p) => fs.readFileSync(path.join(root, p), "utf8");
   const inventory = read("server/startup/inventoryValuationGuardedRepair.mjs");
   const writerGate = read("server/edge/writerGate.mjs");
   assert.match(inventory, /INVENTORY_VALUATION_WAVE6_REPAIR/);

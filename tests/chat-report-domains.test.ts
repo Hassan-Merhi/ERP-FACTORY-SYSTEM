@@ -21,7 +21,11 @@ function ownedQueryTypes(): string[] {
 function implementedQueryTypes(): string[] {
   return fs
     .readdirSync(resolve("server/chat/reports/implementations"))
-    .filter((name) => /^(?:financialAndParty|inventoryOperations|salesAndAssets|retailAndFactory|accountingDetail|masterDataAndJournal|auditAndTracking)ReportShard\.ts$/.test(name))
+    .filter((name) =>
+      /^(?:financialAndParty|inventoryOperations|salesAndAssets|retailAndFactory|accountingDetail|masterDataAndJournal|auditAndTracking)ReportShard\.ts$/.test(
+        name
+      )
+    )
     .flatMap((name) => [
       ...read(path.join("server/chat/reports/implementations", name)).matchAll(/case\s+"([a-z0-9_]+)"\s*:/g),
     ])
@@ -77,7 +81,11 @@ describe("Phase 6 chat reporting architecture", () => {
   it("keeps each implementation shard below the architecture threshold", () => {
     const shardFiles = fs
       .readdirSync(resolve("server/chat/reports/implementations"))
-      .filter((name) => /^(?:financialAndParty|inventoryOperations|salesAndAssets|retailAndFactory|accountingDetail|masterDataAndJournal|auditAndTracking)ReportShard\.ts$/.test(name));
+      .filter((name) =>
+        /^(?:financialAndParty|inventoryOperations|salesAndAssets|retailAndFactory|accountingDetail|masterDataAndJournal|auditAndTracking)ReportShard\.ts$/.test(
+          name
+        )
+      );
     expect(shardFiles).toHaveLength(7);
     for (const file of shardFiles) {
       expect(read(path.join("server/chat/reports/implementations", file)).split(/\r?\n/).length).toBeLessThanOrEqual(

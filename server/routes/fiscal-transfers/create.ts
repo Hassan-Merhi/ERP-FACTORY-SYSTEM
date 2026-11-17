@@ -78,8 +78,11 @@ export function registerStockTransferCreateRoutes(app: Express) {
       const companyId = req.session.currentCompanyId;
       if (workflowOrigin === "stock_transfer_order") {
         if (!companyId) return res.status(400).json({ message: "No company selected" });
-        const [company] = await db.select({ companyType: companies.companyType })
-          .from(companies).where(eq(companies.id, companyId)).limit(1);
+        const [company] = await db
+          .select({ companyType: companies.companyType })
+          .from(companies)
+          .where(eq(companies.id, companyId))
+          .limit(1);
         if (company?.companyType === "retail") {
           return res.status(403).json({
             code: "RETAIL_MANUAL_VOUCHER_TYPE_BLOCKED",

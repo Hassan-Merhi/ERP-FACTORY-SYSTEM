@@ -200,7 +200,7 @@ describe("Mobile responsiveness Phase 8 POS", () => {
     const shell = source("client/src/app/PosShell.tsx");
     expect(sidebar).toContain('html.dark [data-pos-shell="true"]');
     expect(sidebar).toContain('[data-pos-sidebar="modern"]');
-    expect(orders).toContain('html.dark [data-pos-transfer-orders]');
+    expect(orders).toContain("html.dark [data-pos-transfer-orders]");
     expect(orders).toContain('html[data-christmas-mode="on"][data-christmas-garlands="on"]');
     expect(shell).toContain("hasAdminSearch &&");
     expect(shell).toContain("pos-shell-wordmark");

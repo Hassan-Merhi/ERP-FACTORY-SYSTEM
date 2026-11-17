@@ -89,7 +89,11 @@ describe("Wave 5 Factory backend access certification", () => {
     ).toEqual({
       pageKey: "factory/monthly-production-matrix",
     });
-    for (const endpoint of ["/monthly-production-matrix/workers", "/monthly-production-matrix/bales", "/monthly-production-matrix/export-bales"]) {
+    for (const endpoint of [
+      "/monthly-production-matrix/workers",
+      "/monthly-production-matrix/bales",
+      "/monthly-production-matrix/export-bales",
+    ]) {
       expect(resolveFactoryBackendAccessRequirement(request(endpoint))).toEqual({
         pageKey: "factory/monthly-production-matrix",
       });
@@ -102,22 +106,13 @@ describe("Wave 5 Factory backend access certification", () => {
         ? { allowed: true, state: { ...normalState, pageKeys: [page] } }
         : { allowed: false, code: "FACTORY_PAGE_ACCESS_DENIED", message: "No access" }
     );
-    for (const [path, method] of [[
-      "/monthly-production-matrix",
-      "GET",
-    ], [
-      "/monthly-production-matrix/order",
-      "PUT",
-    ], [
-      "/monthly-production-matrix/workers",
-      "GET",
-    ], [
-      "/monthly-production-matrix/bales",
-      "GET",
-    ], [
-      "/monthly-production-matrix/export-bales",
-      "GET",
-    ]] as const) {
+    for (const [path, method] of [
+      ["/monthly-production-matrix", "GET"],
+      ["/monthly-production-matrix/order", "PUT"],
+      ["/monthly-production-matrix/workers", "GET"],
+      ["/monthly-production-matrix/bales", "GET"],
+      ["/monthly-production-matrix/export-bales", "GET"],
+    ] as const) {
       const { res } = response();
       const next = vi.fn();
       await enforceFactoryBackendAccess(request(path, { method }), res, next);

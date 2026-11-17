@@ -369,66 +369,66 @@ export function RemoteKeyboardControllerOverlay() {
     : null;
 
   const keyboardCapture = keyboardActive ? (
-        <div className="mt-3 space-y-2 border-t pt-3">
-          <p className="text-xs font-medium">{t("Click a safe field in the watched screen, then type here.")}</p>
-          <Input
-            ref={captureRef}
-            value=""
-            inputMode="text"
-            autoComplete="off"
-            autoCorrect="off"
-            autoCapitalize="off"
-            spellCheck={false}
-            placeholder={t("Type remote text here")}
-            className="h-9"
-            data-testid="input-remote-keyboard-capture"
-            onPaste={(event) => event.preventDefault()}
-            onCopy={(event) => event.preventDefault()}
-            onCut={(event) => event.preventDefault()}
-            onCompositionStart={() => {
-              isComposingRef.current = true;
-            }}
-            onCompositionEnd={(event) => {
-              isComposingRef.current = false;
-              const data = event.data ?? event.currentTarget.value ?? "";
-              event.currentTarget.value = "";
-              if (data) queueText(data);
-            }}
-            onInput={(event) => {
-              if (isComposingRef.current) return;
-              const input = event.currentTarget as HTMLInputElement;
-              const value = input.value;
-              if (value) {
-                input.value = "";
-                queueText(value);
-              }
-            }}
-            onBlur={() => {
-              if (keyboardActive) window.setTimeout(() => captureRef.current?.focus({ preventScroll: true }), 0);
-            }}
-            onFocus={() => setError(null)}
-            onKeyDown={(event) => {
-              if (isComposingRef.current) return;
-              if (event.ctrlKey || event.metaKey || event.altKey) {
-                event.preventDefault();
-                setError(t("Clipboard shortcuts and paste are blocked."));
-                return;
-              }
-              const special = ALLOWED_SPECIAL_KEYS.get(event.key);
-              if (special) {
-                event.preventDefault();
-                flushTextBuffer();
-                enqueueCommand({ type: "key", key: special, shiftKey: event.shiftKey });
-                return;
-              }
-              if (Array.from(event.key).length === 1) {
-                event.preventDefault();
-                queueText(event.key);
-              } else if (event.key === "Unidentified") event.preventDefault();
-            }}
-          />
-          <p className="text-[11px] text-muted-foreground">{t("Clipboard shortcuts and paste are blocked.")}</p>
-        </div>
+    <div className="mt-3 space-y-2 border-t pt-3">
+      <p className="text-xs font-medium">{t("Click a safe field in the watched screen, then type here.")}</p>
+      <Input
+        ref={captureRef}
+        value=""
+        inputMode="text"
+        autoComplete="off"
+        autoCorrect="off"
+        autoCapitalize="off"
+        spellCheck={false}
+        placeholder={t("Type remote text here")}
+        className="h-9"
+        data-testid="input-remote-keyboard-capture"
+        onPaste={(event) => event.preventDefault()}
+        onCopy={(event) => event.preventDefault()}
+        onCut={(event) => event.preventDefault()}
+        onCompositionStart={() => {
+          isComposingRef.current = true;
+        }}
+        onCompositionEnd={(event) => {
+          isComposingRef.current = false;
+          const data = event.data ?? event.currentTarget.value ?? "";
+          event.currentTarget.value = "";
+          if (data) queueText(data);
+        }}
+        onInput={(event) => {
+          if (isComposingRef.current) return;
+          const input = event.currentTarget as HTMLInputElement;
+          const value = input.value;
+          if (value) {
+            input.value = "";
+            queueText(value);
+          }
+        }}
+        onBlur={() => {
+          if (keyboardActive) window.setTimeout(() => captureRef.current?.focus({ preventScroll: true }), 0);
+        }}
+        onFocus={() => setError(null)}
+        onKeyDown={(event) => {
+          if (isComposingRef.current) return;
+          if (event.ctrlKey || event.metaKey || event.altKey) {
+            event.preventDefault();
+            setError(t("Clipboard shortcuts and paste are blocked."));
+            return;
+          }
+          const special = ALLOWED_SPECIAL_KEYS.get(event.key);
+          if (special) {
+            event.preventDefault();
+            flushTextBuffer();
+            enqueueCommand({ type: "key", key: special, shiftKey: event.shiftKey });
+            return;
+          }
+          if (Array.from(event.key).length === 1) {
+            event.preventDefault();
+            queueText(event.key);
+          } else if (event.key === "Unidentified") event.preventDefault();
+        }}
+      />
+      <p className="text-[11px] text-muted-foreground">{t("Clipboard shortcuts and paste are blocked.")}</p>
+    </div>
   ) : null;
 
   if (portalHost.dataset.remoteControlPanelMode === "unified") {
@@ -441,7 +441,11 @@ export function RemoteKeyboardControllerOverlay() {
         data-remote-control-panel-section="keyboard"
       >
         {keyboardCapture}
-        {error ? <p className="mt-2 text-xs text-red-300" role="alert">{error}</p> : null}
+        {error ? (
+          <p className="mt-2 text-xs text-red-300" role="alert">
+            {error}
+          </p>
+        ) : null}
       </section>,
       portalHost
     );

@@ -23,10 +23,7 @@ import { Phase9EventConflict } from "../server/edge/cloudEventStore.mjs";
 import { phase9PosSaleApplyHandler, type Phase9PosSaleEvent } from "../server/edge/posSaleApply";
 import { phase9PosSaleEditApplyHandler, type Phase9PosSaleEditEvent } from "../server/edge/posSaleEditApply";
 import { updatePosSale } from "../server/services/pos/edit/updateSaleService";
-import {
-  phase9PosSaleCancelApplyHandler,
-  type Phase9PosSaleCancelEvent,
-} from "../server/edge/posSaleCancelApply";
+import { phase9PosSaleCancelApplyHandler, type Phase9PosSaleCancelEvent } from "../server/edge/posSaleCancelApply";
 import request from "supertest";
 import {
   createTenantDatabaseScope,

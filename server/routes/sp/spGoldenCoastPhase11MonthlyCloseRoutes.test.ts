@@ -54,7 +54,6 @@ describe("Golden Coast Phase 11 monthly close route surface", () => {
     expect(routeSource).toContain("Profit Pending Distribution did not return to zero");
   });
 
-
   it("allows only developers to edit an unfinalized month and keeps corrections auditable", () => {
     expect(routeSource).toContain('"/api/sp/golden-coast/profit-correction"');
     expect(routeSource).toContain("requireDeveloperProfitEdit(req, res)");
