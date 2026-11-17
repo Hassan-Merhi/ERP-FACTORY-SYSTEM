@@ -6,7 +6,6 @@ import {
 } from "../server/services/security/accountMigrationRequestPolicy";
 
 const authSource = readFileSync("server/auth.ts", "utf8");
-const scopeSource = readFileSync("server/security/access/companyScopeStage.ts", "utf8");
 const accessManifest = readFileSync("config/route-access-manifest.json", "utf8");
 const migrationSource = readFileSync("server/routes/admin/import-export/account-migration.ts", "utf8");
 
@@ -45,8 +44,8 @@ describe("account migration Admin source-read authorization", () => {
     const declared = accessManifest.split("\n").filter((line) => line.includes('"account-migration-source"'));
     expect(declared).toHaveLength(1);
     expect(declared[0]).toContain('"id":"GET /api/admin/account-migration/accounts/:companyId#1"');
-    expect(scopeSource).toContain('access.crossCompany.has("account-migration-source")');
-    expect(scopeSource).toContain("await assertCompaniesAccess(context.userId, [companyId])");
+    // Enforcement of the allowance (role, then membership of the named company)
+    // is exercised in tests/access-boundary-company-scope.test.ts.
     expect(migrationSource).toContain('requireRole("Admin", "Developer")');
     expect(migrationSource).toContain("await assertCompaniesAccess(context.userId, [companyId])");
   });
