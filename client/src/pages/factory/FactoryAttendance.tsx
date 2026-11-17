@@ -64,7 +64,10 @@ export default function FactoryAttendance() {
   const { selectedCompany } = useCompany();
   // View Only / Create Only roles read attendance but never save or bulk-mark it.
   const recordChanges = useExistingRecordChangeAccess();
-  const canEditPastWithoutPassword = (dates: string[]) => canSkipAttendanceApproval(selectedCompany?.role, dates);
+  const canEditPastWithoutPassword = useCallback(
+    (dates: string[]) => canSkipAttendanceApproval(selectedCompany?.role, dates),
+    [selectedCompany?.role]
+  );
   const [mode, setMode] = useState<ViewMode>(getInitialMode);
 
   const showDailyAttendance = () => {
