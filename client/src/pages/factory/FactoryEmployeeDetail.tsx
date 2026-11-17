@@ -7,6 +7,8 @@ import { useRoute, useLocation } from "wouter";
 import { useEscapeToParent } from "@/hooks/use-escape-to-parent";
 import {
   ArrowLeft,
+  Building,
+  CreditCard,
   DollarSign,
   Calendar,
   Phone,
@@ -18,13 +20,29 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useHubQueryState } from "@/hooks/use-hub-query-state";
+import type { FactoryMyAccess } from "@shared/apiTypes";
+import { ReportExportMenu } from "@/components/export/ReportExportMenu";
+import { getAvatarColor, getInitials } from "@/pages/factory/factoryworkers/utils";
+import { PersonStatusBadge } from "@/pages/factory/people/PeopleRoster";
+import { PersonInfoCard, PersonInfoRow } from "@/pages/factory/people/PersonDetailParts";
+import { PersonAttendancePanel } from "@/pages/factory/people/PersonAttendancePanel";
+import { EmployeeAdvancesCard } from "@/pages/factory/people/EmployeeAdvancesCard";
+import { PersonFormDialog } from "@/pages/factory/people/PersonFormDialog";
+import { EmployeeFormFields } from "@/pages/factory/people/EmployeeFormFields";
+import {
+  exportPeopleTableExcel,
+  exportPeopleTablePdf,
+  printPeopleTable,
+  type PeopleExportSpec,
+} from "@/pages/factory/people/peopleExport";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
@@ -70,35 +88,13 @@ interface LedgerAccount {
   accountType: string;
 }
 
-const AVATAR_COLORS = [
-  "bg-blue-100 text-blue-700",
-  "bg-purple-100 text-purple-700",
-  "bg-emerald-100 text-emerald-700",
-  "bg-amber-100 text-amber-700",
-  "bg-rose-100 text-rose-700",
-  "bg-cyan-100 text-cyan-700",
-];
-
-function getAvatarColor(name: string) {
-  let hash = 0;
-  for (const c of name) hash = c.charCodeAt(0) + ((hash << 5) - hash);
-  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
-}
-
-function getInitials(name: string) {
-  return name
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase();
-}
-
 function fmt(val: string | number | null | undefined) {
   const n = parseFloat(String(val || 0));
   return isNaN(n) ? "$0.00" : `$${n.toFixed(2)}`;
 }
+
+const EMPLOYEE_DETAIL_TABS = ["profile", "statement", "advances", "attendance"] as const;
+type EmployeeDetailTab = (typeof EMPLOYEE_DETAIL_TABS)[number];
 
 export default function FactoryEmployeeDetail() {
   const { wrapAdminAction, AdminDialog } = useAdminOverride();
@@ -190,6 +186,33 @@ export default function FactoryEmployeeDetail() {
     staleTime: 60_000,
     refetchOnWindowFocus: false,
   });
+
+  // Tabs reuse the Employees hub access keys for Advances and Attendance.
+  const { data: myAccess } = useQuery<FactoryMyAccess>({
+    queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
+    staleTime: 5 * 60000,
+  });
+  const accessReady = myAccess?.companyId === selectedCompany?.id;
+  const hiddenTabs = accessReady && myAccess?.hasFactoryAccess === true ? myAccess.hiddenCostFields : null;
+  const showAdvancesTab = hiddenTabs !== null && !hiddenTabs.includes("hide_tab_employees_advances");
+  const showAttendanceTab = hiddenTabs !== null && !hiddenTabs.includes("hide_tab_employees_attendance");
+  const visibleDetailTabs: EmployeeDetailTab[] = [
+    "profile",
+    "statement",
+    ...(showAdvancesTab ? (["advances"] as const) : []),
+    ...(showAttendanceTab ? (["attendance"] as const) : []),
+  ];
+  const [requestedTab, setRequestedTab] = useHubQueryState<EmployeeDetailTab>({
+    key: "tab",
+    // Until access loads, keep a deep-linked tab instead of stripping it.
+    allowedValues: accessReady ? visibleDetailTabs : EMPLOYEE_DETAIL_TABS,
+    knownValues: EMPLOYEE_DETAIL_TABS,
+    defaultValue: "statement",
+    omitDefault: true,
+  });
+  const activeTab = visibleDetailTabs.includes(requestedTab) ? requestedTab : "statement";
+  const [exportBusy, setExportBusy] = useState(false);
 
   // Mutations
   const updateMutation = useMutation({
@@ -338,7 +361,50 @@ export default function FactoryEmployeeDetail() {
   const avatarColor = getAvatarColor(fullName);
   const balance = parseFloat(employee.currentBalance || "0");
 
-  // Deposits and withdrawals from statement
+  const statementRows = statement?.rows ?? [];
+  const exportStatement = async (format: "excel" | "pdf" | "print") => {
+    const spec: PeopleExportSpec<StatementRow> = {
+      title: "Employee Statement",
+      fileStem: `${fullName} statement`,
+      subtitle: [employee.code, fullName].filter(Boolean).join(" · "),
+      columns: [
+        { header: "Date", width: 14, value: (row) => formatDate(row.voucherDate) },
+        { header: "Voucher", width: 16, value: (row) => row.voucherNumber },
+        { header: "Description", width: 40, value: (row) => row.narration || row.description || "" },
+        { header: "Deposit", type: "money", value: (row) => (row.credit > 0 ? row.credit : null) },
+        { header: "Withdrawal", type: "money", value: (row) => (row.debit > 0 ? row.debit : null) },
+        { header: "Balance", type: "money", value: (row) => row.balance },
+      ],
+      rows: statementRows,
+      footer: [
+        "TOTAL",
+        "",
+        "",
+        statementRows.reduce((sum, row) => sum + (row.credit > 0 ? row.credit : 0), 0),
+        statementRows.reduce((sum, row) => sum + (row.debit > 0 ? row.debit : 0), 0),
+        statementRows.length ? statementRows[statementRows.length - 1].balance : null,
+      ],
+    };
+    if (format === "print") {
+      if (!printPeopleTable(spec)) {
+        toast({ title: "Print failed", description: "Allow pop-ups to print.", variant: "destructive" });
+      }
+      return;
+    }
+    setExportBusy(true);
+    try {
+      if (format === "excel") await exportPeopleTableExcel(spec);
+      else await exportPeopleTablePdf(spec);
+    } catch (error) {
+      toast({
+        title: "Export failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setExportBusy(false);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -347,13 +413,14 @@ export default function FactoryEmployeeDetail() {
         size="icon"
         onClick={() => navigate("/factory/payroll-hub?section=employees")}
         data-testid="button-back"
+        aria-label="Back to Employees"
       >
         <ArrowLeft className="h-4 w-4" />
       </Button>
 
       <div className="flex flex-col lg:flex-row gap-6 items-stretch lg:items-start">
         {/* Left Summary Card */}
-        <div className="w-full lg:w-64 shrink-0 space-y-4">
+        <div className="w-full lg:w-72 shrink-0 space-y-4">
           <Card>
             <CardContent className="p-5 space-y-4">
               <div className="flex flex-col items-center text-center gap-3">
@@ -368,39 +435,33 @@ export default function FactoryEmployeeDetail() {
                   </h2>
                   {employee.department && <p className="text-sm text-muted-foreground mt-0.5">{employee.department}</p>}
                 </div>
-                <Badge
-                  variant={employee.active ? "default" : "secondary"}
-                  className="no-default-active-elevate"
-                  data-testid="badge-employee-status"
-                >
-                  {employee.active ? "Active" : "Inactive"}
-                </Badge>
+                <PersonStatusBadge active={employee.active} data-testid="badge-employee-status" />
               </div>
 
-              <div className="border-t pt-3 space-y-1.5">
-                <div className="flex justify-between text-sm">
+              <div className="border-t pt-3 space-y-2">
+                <div className="flex items-center gap-2 text-sm">
                   <span className="text-muted-foreground text-xs">Code</span>
-                  <span className="font-mono text-xs" data-testid="text-employee-code">
+                  <span className="font-mono text-xs ml-auto" data-testid="text-employee-code">
                     {employee.code}
                   </span>
                 </div>
                 {employee.phone && (
-                  <div className="flex justify-between text-sm">
-                    <Phone className="h-3 w-3 text-muted-foreground shrink-0 mt-0.5" />
-                    <span className="text-xs" data-testid="text-employee-phone">
+                  <div className="flex items-center gap-2 text-sm">
+                    <Phone className="h-3 w-3 text-muted-foreground shrink-0" />
+                    <span className="text-xs ml-auto" data-testid="text-employee-phone">
                       {employee.phone}
                     </span>
                   </div>
                 )}
                 {employee.joinDate && (
-                  <div className="flex justify-between text-sm">
-                    <Calendar className="h-3 w-3 text-muted-foreground shrink-0 mt-0.5" />
-                    <span className="text-xs">Joined {formatDate(employee.joinDate)}</span>
+                  <div className="flex items-center gap-2 text-sm">
+                    <Calendar className="h-3 w-3 text-muted-foreground shrink-0" />
+                    <span className="text-xs ml-auto">Joined {formatDate(employee.joinDate)}</span>
                   </div>
                 )}
-                <div className="flex justify-between text-sm">
-                  <DollarSign className="h-3 w-3 text-muted-foreground shrink-0 mt-0.5" />
-                  <span className="text-xs font-mono">{fmt(employee.monthlySalary)} / mo</span>
+                <div className="flex items-center gap-2 text-sm">
+                  <DollarSign className="h-3 w-3 text-muted-foreground shrink-0" />
+                  <span className="text-xs font-mono ml-auto">{fmt(employee.monthlySalary)} / mo</span>
                 </div>
               </div>
 
@@ -435,7 +496,6 @@ export default function FactoryEmployeeDetail() {
                   <Button
                     variant="outline"
                     className="w-full"
-                    size="sm"
                     onClick={() => {
                       setEditForm({
                         firstName: employee.firstName,
@@ -455,7 +515,6 @@ export default function FactoryEmployeeDetail() {
                     <Button
                       variant="outline"
                       className="w-full"
-                      size="sm"
                       onClick={() => wrapAdminAction(() => recalcMutation.mutate(), "Recalculate Balance")}
                       disabled={recalcMutation.isPending}
                       data-testid="button-recalculate-balance"
@@ -474,139 +533,173 @@ export default function FactoryEmployeeDetail() {
           </Card>
         </div>
 
-        {/* Statement */}
         <div className="flex-1 min-w-0">
-          <Card>
-            <CardHeader className="pb-2 pt-4 px-5">
-              <CardTitle className="text-sm text-muted-foreground">Running Statement</CardTitle>
-            </CardHeader>
-            <CardContent className="px-5 pb-4 overflow-x-auto">
-              {stmtLoading ? (
-                <div className="space-y-2">
-                  {[...Array(5)].map((_, i) => (
-                    <Skeleton key={i} className="h-10 w-full" />
-                  ))}
-                </div>
-              ) : stmtError && !statement ? (
-                <ErrorState onAction={() => void refetchStatement()} actionLabel="Try again" />
-              ) : !statement?.rows || statement.rows.length === 0 ? (
-                <EmptyState title="No transactions yet" />
-              ) : (
-                <Table mobileLayout="cards">
-                  <TableHeader className="sticky top-0 z-30 bg-background">
-                    <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Voucher</TableHead>
-                      <TableHead>Description</TableHead>
-                      <TableHead className="text-right">Deposit</TableHead>
-                      <TableHead className="text-right">Withdrawal</TableHead>
-                      <TableHead className="text-right">Balance</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {statement.rows.map((row) => (
-                      <TableRow key={row.id} data-testid={`row-stmt-${row.id}`}>
-                        <TableCell className="text-sm">{formatDate(row.voucherDate)}</TableCell>
-                        <TableCell className="font-mono text-xs text-muted-foreground">{row.voucherNumber}</TableCell>
-                        <TableCell className="text-sm" dir="ltr">
-                          {row.narration || row.description || "—"}
-                        </TableCell>
-                        <TableCell className="text-right font-mono text-sm">
-                          {row.credit > 0 ? (
-                            <span className="text-green-600 dark:text-green-400">{fmt(row.credit)}</span>
-                          ) : (
-                            "—"
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right font-mono text-sm">
-                          {row.debit > 0 ? (
-                            <span className="text-red-600 dark:text-red-400">{fmt(row.debit)}</span>
-                          ) : (
-                            "—"
-                          )}
-                        </TableCell>
-                        <TableCell
-                          className={`text-right font-mono text-sm font-semibold ${row.balance < 0 ? "text-red-600 dark:text-red-400" : ""}`}
-                        >
-                          {fmt(row.balance)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
+          <Tabs value={activeTab} onValueChange={(value) => setRequestedTab(value as EmployeeDetailTab)}>
+            <div className="erp-mobile-scroll-tabs mb-4 pb-1">
+              <TabsList className="w-max min-w-full sm:min-w-0 sm:w-fit" aria-label="Factory employee details">
+                <TabsTrigger value="profile" data-testid="tab-profile">
+                  Profile
+                </TabsTrigger>
+                <TabsTrigger value="statement" data-testid="tab-statement">
+                  Statement
+                </TabsTrigger>
+                {showAdvancesTab && (
+                  <TabsTrigger value="advances" data-testid="tab-advances">
+                    Advances
+                  </TabsTrigger>
+                )}
+                {showAttendanceTab && (
+                  <TabsTrigger value="attendance" data-testid="tab-attendance">
+                    Attendance
+                  </TabsTrigger>
+                )}
+              </TabsList>
+            </div>
+
+            <TabsContent value="profile" className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <PersonInfoCard title="Personal">
+                  <PersonInfoRow label="First Name" value={employee.firstName} testId="text-detail-first-name" />
+                  <PersonInfoRow label="Last Name" value={employee.lastName} testId="text-detail-last-name" />
+                </PersonInfoCard>
+                <PersonInfoCard title="Contact" icon={Phone}>
+                  <PersonInfoRow label="Phone" value={employee.phone} testId="text-detail-phone" />
+                </PersonInfoCard>
+                <PersonInfoCard title="Employment" icon={Building}>
+                  <PersonInfoRow label="Employee Code" value={employee.code} testId="text-detail-code" />
+                  <PersonInfoRow label="Department" value={employee.department} testId="text-detail-department" />
+                  <PersonInfoRow
+                    label="Date Joined"
+                    value={formatDate(employee.joinDate)}
+                    testId="text-detail-joined"
+                  />
+                </PersonInfoCard>
+                <PersonInfoCard title="Compensation" icon={CreditCard}>
+                  <PersonInfoRow
+                    label="Monthly Salary"
+                    value={fmt(employee.monthlySalary)}
+                    testId="text-detail-salary"
+                  />
+                  <PersonInfoRow label="Current Balance" value={fmt(employee.currentBalance)} />
+                  <PersonInfoRow label="Total Deposits" value={fmt(employee.totalDeposits)} />
+                  <PersonInfoRow label="Total Withdrawals" value={fmt(employee.totalWithdrawals)} />
+                </PersonInfoCard>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="statement" className="space-y-4">
+              <div className="flex justify-end">
+                <ReportExportMenu
+                  busy={exportBusy}
+                  disabled={!statementRows.length}
+                  data-testid="button-statement-export"
+                  options={[
+                    { id: "excel", label: "Excel", kind: "excel", onSelect: () => exportStatement("excel") },
+                    { id: "pdf", label: "PDF", kind: "pdf", onSelect: () => exportStatement("pdf") },
+                    { id: "print", label: "Print", kind: "print", onSelect: () => exportStatement("print") },
+                  ]}
+                />
+              </div>
+              <Card>
+                <CardHeader className="pb-2 pt-4 px-5">
+                  <CardTitle className="text-sm text-muted-foreground">Running Statement</CardTitle>
+                </CardHeader>
+                <CardContent className="px-5 pb-4 overflow-x-auto">
+                  {stmtLoading ? (
+                    <div className="space-y-2">
+                      {[...Array(5)].map((_, i) => (
+                        <Skeleton key={i} className="h-10 w-full" />
+                      ))}
+                    </div>
+                  ) : stmtError && !statement ? (
+                    <ErrorState onAction={() => void refetchStatement()} actionLabel="Try again" />
+                  ) : statementRows.length === 0 ? (
+                    <EmptyState title="No transactions yet" />
+                  ) : (
+                    <Table mobileLayout="cards">
+                      <TableHeader className="sticky top-0 z-30 bg-background">
+                        <TableRow>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Voucher</TableHead>
+                          <TableHead>Description</TableHead>
+                          <TableHead className="text-right">Deposit</TableHead>
+                          <TableHead className="text-right">Withdrawal</TableHead>
+                          <TableHead className="text-right">Balance</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {statementRows.map((row) => (
+                          <TableRow key={row.id} data-testid={`row-stmt-${row.id}`}>
+                            <TableCell className="text-sm">{formatDate(row.voucherDate)}</TableCell>
+                            <TableCell className="font-mono text-xs text-muted-foreground">
+                              {row.voucherNumber}
+                            </TableCell>
+                            <TableCell className="text-sm" dir="ltr">
+                              {row.narration || row.description || "—"}
+                            </TableCell>
+                            <TableCell className="text-right font-mono text-sm tabular-nums">
+                              {row.credit > 0 ? (
+                                <span className="text-green-600 dark:text-green-400">{fmt(row.credit)}</span>
+                              ) : (
+                                "—"
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right font-mono text-sm tabular-nums">
+                              {row.debit > 0 ? (
+                                <span className="text-red-600 dark:text-red-400">{fmt(row.debit)}</span>
+                              ) : (
+                                "—"
+                              )}
+                            </TableCell>
+                            <TableCell
+                              className={`text-right font-mono text-sm font-semibold tabular-nums ${row.balance < 0 ? "text-red-600 dark:text-red-400" : ""}`}
+                            >
+                              {fmt(row.balance)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {showAdvancesTab && (
+              <TabsContent value="advances" className="space-y-4">
+                <EmployeeAdvancesCard employeeId={employee.id} formatDate={formatDate} formatAmount={fmt} />
+              </TabsContent>
+            )}
+
+            {showAttendanceTab && (
+              <TabsContent value="attendance" className="space-y-4">
+                <PersonAttendancePanel
+                  endpoint={`/api/factory/employee-attendance/employee/${employee.id}`}
+                  personName={fullName}
+                  kind="employee"
+                  formatDate={formatDate}
+                />
+              </TabsContent>
+            )}
+          </Tabs>
         </div>
       </div>
 
-      {/* Edit Employee Dialog */}
-      <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Edit Employee</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <Label>First Name</Label>
-                <Input
-                  value={editForm.firstName}
-                  onChange={(e) => setEditForm((f) => ({ ...f, firstName: e.target.value }))}
-                  data-testid="input-edit-first-name"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label>Last Name</Label>
-                <Input
-                  value={editForm.lastName}
-                  onChange={(e) => setEditForm((f) => ({ ...f, lastName: e.target.value }))}
-                  data-testid="input-edit-last-name"
-                />
-              </div>
-            </div>
-            <div className="space-y-1">
-              <Label>Department</Label>
-              <Input
-                value={editForm.department}
-                onChange={(e) => setEditForm((f) => ({ ...f, department: e.target.value }))}
-                data-testid="input-edit-department"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Phone</Label>
-              <Input
-                value={editForm.phone}
-                onChange={(e) => setEditForm((f) => ({ ...f, phone: e.target.value }))}
-                data-testid="input-edit-phone"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Monthly Salary</Label>
-              <Input
-                type="number"
-                min="0"
-                step="0.01"
-                value={editForm.monthlySalary}
-                onChange={(e) => setEditForm((f) => ({ ...f, monthlySalary: e.target.value }))}
-                data-testid="input-edit-salary"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={() => wrapAdminAction(() => updateMutation.mutate(editForm), "Save Employee")}
-              disabled={updateMutation.isPending}
-              data-testid="button-save-edit"
-            >
-              {updateMutation.isPending ? "Saving..." : "Save"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <PersonFormDialog
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        title="Edit Employee"
+        description="Update employee details"
+        onSave={() => wrapAdminAction(() => updateMutation.mutate(editForm), "Save Employee")}
+        saving={updateMutation.isPending}
+        testIds={{ dialog: "dialog-edit-employee", cancel: "button-cancel-edit", save: "button-save-edit" }}
+      >
+        <EmployeeFormFields
+          values={editForm}
+          onChange={(key, value) => setEditForm((form) => ({ ...form, [key]: value }))}
+          testIdPrefix="input-edit"
+        />
+      </PersonFormDialog>
 
       {/* Deposit Dialog */}
       <Dialog open={depositOpen} onOpenChange={setDepositOpen}>

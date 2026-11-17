@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { FACTORY_WORKERS_HUB_TABS } from "@/factory/config/navigationPresentation";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useAdminOverride } from "@/hooks/use-admin-override";
 import { useDateFormat } from "@/contexts/DateFormatContext";
@@ -22,6 +23,7 @@ interface WorkerDetailTabSettings {
   workerDetailTabAdvancesEnabled?: boolean;
   workerDetailTabBalesEnabled?: boolean;
   workerDetailTabDocumentsEnabled?: boolean;
+  workersTabAttendanceEnabled?: boolean;
 }
 
 function isHandledGlobally(error: unknown): boolean {
@@ -72,6 +74,7 @@ export function useFactoryWorkerDetailModel() {
           "hide_tab_workerdetail_advances",
           "hide_tab_workerdetail_bales",
           "hide_tab_workerdetail_documents",
+          FACTORY_WORKERS_HUB_TABS.attendance,
         ];
   const showProfile = !hiddenTabs.includes("hide_tab_workerdetail_profile");
 
@@ -83,6 +86,9 @@ export function useFactoryWorkerDetailModel() {
     tabSettings?.workerDetailTabBalesEnabled !== false && !hiddenTabs.includes("hide_tab_workerdetail_bales");
   const showDocuments =
     tabSettings?.workerDetailTabDocumentsEnabled !== false && !hiddenTabs.includes("hide_tab_workerdetail_documents");
+  // Attendance history reuses the Workers hub Attendance tab's access key and setting.
+  const showAttendance =
+    tabSettings?.workersTabAttendanceEnabled !== false && !hiddenTabs.includes(FACTORY_WORKERS_HUB_TABS.attendance);
 
   const { formatDisplayDate } = useDateFormat();
   const formatDate = (val: string | Date | null | undefined) => {
@@ -672,6 +678,7 @@ export function useFactoryWorkerDetailModel() {
     handlePhotoUpload,
     handleSkipAndEnd,
     hiddenTabs,
+    showAttendance,
     isDeveloper,
     markPaidMutation,
     myAccess,
